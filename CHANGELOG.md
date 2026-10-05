@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.6.0
+
+- A new setting, **settings → TUI → context line**, hides the line under Claude Code and Codex tabs that shows their model and how full their context is, so every tab takes one row. It is on by default.
+
 ## 0.5.2
 
 - Codex tabs now show what Codex is doing, like Claude Code tabs: `◐` while it works, `!` when it waits for your approval, `✓` when it finished while you were in another tab, `○` while it waits for your next message. `!` and `✓` also show on the workspace, project and collapsed group rows, and on the compact `≡`.
