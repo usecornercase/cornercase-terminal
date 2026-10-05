@@ -26,6 +26,7 @@ pub enum Row {
     Fetch,
     Sidebar,
     DimPanes,
+    ContextLine,
     Notifications,
     Updates,
     Token(Source),
@@ -40,7 +41,13 @@ pub enum Row {
 impl Row {
     pub fn section(&self) -> &'static str {
         match self {
-            Self::Folder | Self::Fetch | Self::Sidebar | Self::DimPanes | Self::Notifications | Self::Updates => "",
+            Self::Folder
+            | Self::Fetch
+            | Self::Sidebar
+            | Self::DimPanes
+            | Self::ContextLine
+            | Self::Notifications
+            | Self::Updates => "",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust => "Agent",
@@ -53,7 +60,7 @@ impl Row {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
             Self::Token(_) | Self::Tab(_) => Page::Issues,
-            Self::Sidebar | Self::DimPanes | Self::Notifications | Self::Updates => Page::Tui,
+            Self::Sidebar | Self::DimPanes | Self::ContextLine | Self::Notifications | Self::Updates => Page::Tui,
         }
     }
 }
@@ -189,7 +196,7 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
-        rows.extend([Row::AddAgent, Row::Sidebar, Row::DimPanes, Row::Notifications, Row::Updates]);
+        rows.extend([Row::AddAgent, Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]);
         rows.retain(|row| row.page() == self.page);
         rows
     }
@@ -267,6 +274,11 @@ impl Settings {
                 let on = !self.config.dim_inactive_panes;
                 let notice = if on { "inactive panes are dimmed" } else { "every pane looks the same" };
                 self.save(Config { dim_inactive_panes: on, ..self.config.clone() }, notice.into())
+            }
+            Row::ContextLine => {
+                let on = !self.config.context_line;
+                let notice = if on { "tabs show their model and context" } else { "tabs take one row" };
+                self.save(Config { context_line: on, ..self.config.clone() }, notice.into())
             }
             Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
@@ -646,6 +658,10 @@ impl Settings {
             Row::DimPanes => {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
                 ("inactive panes".into(), value.into(), "in a split tab".into(), false)
+            }
+            Row::ContextLine => {
+                let value = if config.context_line { "[x] model and context" } else { "[ ] hidden, tabs take one row" };
+                ("context line".into(), value.into(), "under a Claude Code or Codex tab".into(), false)
             }
             Row::Sidebar => (
                 "sidebar".into(),
@@ -1043,6 +1059,26 @@ mod tests {
         }
     }
 
+    mod context_line {
+        use super::*;
+
+        #[test]
+        fn is_a_switch() {
+            let mut s = settings();
+            go_to(&mut s, &Row::ContextLine);
+            assert!(!saved(press(&mut s, KeyCode::Enter)).context_line);
+        }
+
+        #[test]
+        fn shows_whether_it_is_on() {
+            let mut s = settings();
+            s.config.context_line = false;
+            s.open_page(Page::Tui);
+            let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
+            assert_eq!(view.rows[2].value, "[ ] hidden, tabs take one row");
+        }
+    }
+
     mod sidebar {
         use super::*;
 
@@ -1050,7 +1086,7 @@ mod tests {
         fn comes_first_on_the_tui_page() {
             let mut s = settings();
             s.open_page(Page::Tui);
-            assert_eq!(s.rows(), [Row::Sidebar, Row::DimPanes, Row::Notifications, Row::Updates]);
+            assert_eq!(s.rows(), [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]);
         }
 
         #[test]

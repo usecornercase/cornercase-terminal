@@ -58,7 +58,7 @@ import {
   watchPane,
   workspaceLabel,
 } from './model';
-import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
+import { AGENT_KINDS, Agent, type Context, Editor, type Host, type Key, type Place, Shell } from './programs';
 import { type Node, fits, panes, ratioAt, remove, setRatio, split } from './split';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
@@ -388,7 +388,11 @@ export class App {
   }
 
   tabLines(): number[][] {
-    return this.project()?.workspaces.map((w) => w.tabs.map((t) => tabLines(!!tabContext(t)))) ?? [];
+    return this.project()?.workspaces.map((w) => w.tabs.map((t) => tabLines(!!this.tabContext(t)))) ?? [];
+  }
+
+  tabContext(t: Tab): Context | null {
+    return this.config.contextLine ? tabContext(t) : null;
   }
 
   private areas() {
@@ -1309,6 +1313,7 @@ export class App {
     return [
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'where the workspaces column goes' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
+      { id: 'contextLine', section: '', label: 'context line', value: c.contextLine ? '[x] model and context' : '[ ] hidden, tabs take one row', note: 'under a Claude Code or Codex tab' },
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] once a day' : '[ ] never', note: 'asks GitHub for the latest release' },
     ];
@@ -1342,6 +1347,9 @@ export class App {
     } else if (row.id === 'trust') {
       c.trust = !c.trust;
       o.notice = c.trust ? 'trust prompts are accepted for you' : 'trust prompts are left to you';
+    } else if (row.id === 'contextLine') {
+      c.contextLine = !c.contextLine;
+      o.notice = c.contextLine ? 'tabs show their model and context' : 'tabs take one row';
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';

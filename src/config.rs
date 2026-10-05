@@ -35,6 +35,7 @@ pub struct Config {
     pub gh: String,
     pub sidebar: String,
     pub dim_inactive_panes: bool,
+    pub context_line: bool,
     pub desktop_notifications: String,
     pub check_updates: bool,
 }
@@ -56,6 +57,7 @@ impl Default for Config {
             gh: DEFAULT_GH.into(),
             sidebar: ui::Sidebar::default().id().into(),
             dim_inactive_panes: true,
+            context_line: true,
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
         }
@@ -166,6 +168,11 @@ mod tests {
         #[test]
         fn the_sidebar_starts_side_by_side() {
             assert_eq!(ui::Sidebar::from_setting(&Config::default().sidebar), ui::Sidebar::SideBySide);
+        }
+
+        #[test]
+        fn the_context_line_starts_shown() {
+            assert!(Config::default().context_line);
         }
     }
 

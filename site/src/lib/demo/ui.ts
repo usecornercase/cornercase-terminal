@@ -41,7 +41,7 @@ import {
   workspaceRows,
 } from './layout';
 import { USAGE, USAGE_PLAN, type UsageWindow } from './data';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabContext, tabLabel, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
 import type { Context } from './programs';
 import { type Divider, dividers, grab, panes } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, wrapAll } from './text';
@@ -528,7 +528,7 @@ export class Painter {
         if (status) line.push(STATUS_ICONS[status], seg(' '));
         line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
         this.band(r, line, bg);
-        const context = tabContext(t);
+        const context = app.tabContext(t);
         if (context) this.context(r, areas.pitch, context, 4 + (status ? 2 : 0));
         const grab: Target = { kind: 'tab', project: p.id, workspace: w.id, tab: t.id };
         this.region({ r, click: () => app.selectTab(spec.w, spec.t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });

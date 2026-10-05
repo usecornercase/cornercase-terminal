@@ -68,14 +68,15 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-tui"
-  crop={[2, 1, 106, 8]}
-  alt="The TUI tab: sidebar side_by_side, where the workspaces column goes; inactive panes dimmed, in a split tab; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates once a day, asks GitHub for the latest release"
+  crop={[2, 1, 106, 9]}
+  alt="The TUI tab: sidebar side_by_side, where the workspaces column goes; inactive panes dimmed, in a split tab; context line on, model and context, under a Claude Code or Codex tab; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates once a day, asks GitHub for the latest release"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **sidebar** | Where the workspaces column goes: *side_by_side* keeps two columns; *projects_on_top* and *workspaces_on_top* stack both lists in one column, which gives the panes the width of a column. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
+| **context line** | Show the model and how full its context is on a second line under a Claude Code or Codex tab. Off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Once a day*: ask GitHub for the latest release when the server starts and then daily, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 
@@ -120,6 +121,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "gh": "gh",
   "sidebar": "side_by_side",
   "dim_inactive_panes": true,
+  "context_line": true,
   "desktop_notifications": "auto",
   "check_updates": true
 }
@@ -143,6 +145,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"side_by_side"` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
+| [`context_line`](#context_line) | boolean | `true` |
 | [`desktop_notifications`](#desktop_notifications) | string | `"auto"` |
 | [`check_updates`](#check_updates) | boolean | `true` |
 
@@ -205,6 +208,10 @@ Where the workspaces column goes: `"side_by_side"` keeps two columns; `"projects
 #### `dim_inactive_panes`
 
 Whether panes you aren't typing in are dimmed, in tabs split into several panes.
+
+#### `context_line`
+
+Whether a Claude Code or Codex tab shows its model and how full its context is on a second line, such as `Opus 5.5 · 23%`. With `false` every tab takes one row.
 
 #### `desktop_notifications`
 

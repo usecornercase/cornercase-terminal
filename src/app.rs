@@ -1567,8 +1567,10 @@ impl App {
     }
 
     fn tab_lines(&self) -> Vec<Vec<u16>> {
-        let lines =
-            |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| ui::tab_lines(t.context().is_some())).collect() };
+        let shown = self.config.context_line;
+        let lines = |w: &Workspace| -> Vec<u16> {
+            w.tabs.iter().map(|t| ui::tab_lines(shown && t.context().is_some())).collect()
+        };
         self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default()
     }
 
@@ -3001,7 +3003,7 @@ impl App {
                             .map(|t| ui::TabEntry {
                                 name: t.label(&self.config),
                                 status: t.status(),
-                                context: t.context().cloned(),
+                                context: t.context().filter(|_| self.config.context_line).cloned(),
                             })
                             .collect(),
                         behind: w.behind,
@@ -5541,6 +5543,21 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn without_the_context_line_the_tab_keeps_one_row() {
+            let (mut app, rx, _dirs) = app_with(1);
+            app.config.context_line = false;
+            let claude = Claude::running(ANSWERING_CLAUDE);
+            claude.start(&mut app);
+            watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
+
+            let r = row_rect(&app, WorkspaceRow::Tab(0, 0));
+            let below = text(&rendered(&mut app, AREA), Rect { y: r.y + 1, height: 1, ..r });
+            claude.signal("quit");
+
+            assert_eq!((r.height, below.contains("Opus")), (1, false));
+        }
+
+        #[test]
         fn concurrent_codex_sessions_in_one_directory_keep_their_own_context_and_cleanup() {
             let (mut app, rx, _dirs) = app_with(1);
             let first = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
@@ -6316,7 +6333,10 @@ rm -f "$1/sessions/$$.json"
         fn a_click_on_a_tab_shows_its_rows() {
             let mut s = open();
             show(&mut s.app, Page::Tui);
-            assert_eq!(form(&s.app).rows(), [Row::Sidebar, Row::DimPanes, Row::Notifications, Row::Updates]);
+            assert_eq!(
+                form(&s.app).rows(),
+                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]
+            );
         }
 
         #[test]

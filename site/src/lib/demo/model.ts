@@ -148,6 +148,7 @@ export interface Config {
   trust: boolean;
   sidebar: string;
   dim: boolean;
+  contextLine: boolean;
   notify: string;
   updates: boolean;
   agentArgs: Record<string, string[]>;
@@ -163,6 +164,7 @@ export const defaultConfig = (): Config => ({
   trust: true,
   sidebar: 'side_by_side',
   dim: true,
+  contextLine: true,
   notify: 'auto',
   updates: true,
   agentArgs: { claude: ['--permission-mode', 'plan'] },
