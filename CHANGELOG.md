@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.3.0
+
+- Delete a group from its row: hover the group's header and click the `×` at its right end, like on a project. Right-click → **delete group** still works too.
+- Deleting a group now asks first, whichever way you start it, and says what happens to its projects: they stay open, outside the group.
+
 ## 0.2.0
 
 - Safer on shared machines: cornercase only uses a socket folder that is yours alone (it refuses one another user owns or can write to, or a symbolic link), checks that the server and every window talking to it run as you, and after an update restarts into its own program instead of the one the server names. Without `XDG_RUNTIME_DIR`, as in some SSH sessions and containers on Linux, another user of the same machine could otherwise pose as the cornercase server and see what you type.
