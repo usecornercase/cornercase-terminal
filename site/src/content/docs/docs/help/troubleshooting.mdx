@@ -78,6 +78,16 @@ You ran `cornercase` from a pane of cornercase itself, where `CORNERCASE=1` is s
 
 The server didn't come up within five seconds. The message names its log file; open it to see why. If you use `CORNERCASE_SOCKET`, check that the folder can be created and that the path is short: Unix socket paths are limited to about 100 bytes.
 
+### "refusing to use `…`: it can be written by other users"
+
+cornercase keeps its socket in a folder only you can use: `$XDG_RUNTIME_DIR/cornercase`, or `cornercase-<your uid>` in your temporary folder. It refuses a folder that belongs to another user, that other users can write to, or that is a symbolic link, because whoever controls that folder could pose as the cornercase server and see what you type. The message names the folder and what is wrong with it.
+
+Check who created it (`ls -ld` on the path), remove it, and start cornercase again: it creates a new one that only you can use. If you set `CORNERCASE_SOCKET`, point it at a socket in a folder only you can write to.
+
+### "the other end of the cornercase socket belongs to another user"
+
+The socket cornercase connected to is served by another user's process, or a cornercase server got a client from another user. cornercase refuses to talk to it. Check what is listening on that socket, and use a socket folder only you can write to.
+
 ### My session didn't come back
 
 Sessions are restored only by a **new** server, and projects or workspaces whose folders no longer exist are skipped. The session is saved two seconds after your layout last changed, so a change made right before a crash or a power cut may be missing.

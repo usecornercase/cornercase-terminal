@@ -3,7 +3,7 @@ use std::io::{self, BufRead, IsTerminal, Write, stdin, stdout};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -52,9 +52,17 @@ fn confirm(question: &str) -> bool {
     stdin().lock().read_line(&mut answer).is_ok() && matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
+enum Ending {
+    Detached,
+    Restart,
+}
+
 fn open() -> Result<()> {
     let path = protocol::socket_path();
+    protocol::check_socket_dir(&path)?;
+    let exe = std::env::current_exe();
     let stream = connect_or_start(&path)?;
+    protocol::check_peer(&stream, protocol::own_uid())?;
 
     let terminal = ratatui::init();
     let _ = execute!(
@@ -68,17 +76,19 @@ fn open() -> Result<()> {
     restore_input_modes();
     ratatui::restore();
     match result? {
-        Some(exe) => {
+        Ending::Restart => {
             wait_for_exit(&path);
-            Err(Command::new(exe).exec().into())
+            Err(Command::new(exe?).exec().into())
         }
-        None => Ok(()),
+        Ending::Detached => Ok(()),
     }
 }
 
 pub fn kill_server() -> Result<bool> {
     let path = protocol::socket_path();
+    protocol::check_socket_dir(&path)?;
     let Ok(mut stream) = UnixStream::connect(&path) else { return Ok(false) };
+    protocol::check_peer(&stream, protocol::own_uid())?;
     protocol::send(&mut stream, &ClientMessage::KillServer)?;
     while let Ok(Some(_)) = protocol::recv::<ServerMessage>(&mut stream) {}
     wait_for_exit(&path);
@@ -99,7 +109,7 @@ fn connect_or_start(path: &Path) -> Result<UnixStream> {
     let log = protocol::log_path(path);
     let start_error = |e| Error::ServerStart { log: log.clone(), source: Some(e) };
     let deadline = Instant::now() + SERVER_START_TIMEOUT;
-    let mut server = start_server(path, &log).map_err(start_error)?;
+    let mut server = start_server(&log).map_err(start_error)?;
     loop {
         if let Ok(stream) = UnixStream::connect(path) {
             reap(server);
@@ -110,14 +120,13 @@ fn connect_or_start(path: &Path) -> Result<UnixStream> {
             return Err(Error::ServerStart { log, source: None });
         }
         if matches!(server.try_wait(), Ok(Some(_))) {
-            server = start_server(path, &log).map_err(start_error)?;
+            server = start_server(&log).map_err(start_error)?;
         }
         thread::sleep(POLL);
     }
 }
 
-fn start_server(path: &Path, log: &Path) -> io::Result<Child> {
-    protocol::create_socket_dir(path)?;
+fn start_server(log: &Path) -> io::Result<Child> {
     let log = OpenOptions::new().create(true).append(true).open(log)?;
     Command::new(std::env::current_exe()?)
         .arg("server")
@@ -143,7 +152,7 @@ fn restore_input_modes() {
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags, DisableBracketedPaste, DisableMouseCapture);
 }
 
-fn attach(stream: UnixStream, terminal: &DefaultTerminal) -> Result<Option<PathBuf>> {
+fn attach(stream: UnixStream, terminal: &DefaultTerminal) -> Result<Ending> {
     let (theme, name) = query_host();
     let theme = HostTheme { truecolor: truecolor(), ..theme };
     let notify = notify::detect(name.as_deref(), |var| std::env::var(var).ok());
@@ -157,7 +166,7 @@ fn attach(stream: UnixStream, terminal: &DefaultTerminal) -> Result<Option<PathB
     receive(stream)
 }
 
-fn receive(mut stream: UnixStream) -> Result<Option<PathBuf>> {
+fn receive(mut stream: UnixStream) -> Result<Ending> {
     let mut out = stdout();
     loop {
         match protocol::recv::<ServerMessage>(&mut stream) {
@@ -167,8 +176,8 @@ fn receive(mut stream: UnixStream) -> Result<Option<PathBuf>> {
             }
             Ok(Some(ServerMessage::Rejected(reason))) => return Err(Error::Rejected(reason)),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::Rejected(INCOMPATIBLE.into())),
-            Ok(Some(ServerMessage::Restart(exe))) => return Ok(Some(exe)),
-            Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown) | None) | Err(_) => return Ok(None),
+            Ok(Some(ServerMessage::Restart(_))) => return Ok(Ending::Restart),
+            Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown) | None) | Err(_) => return Ok(Ending::Detached),
         }
     }
 }
@@ -219,4 +228,23 @@ fn spawn_signal_thread(stream: UnixStream) -> Result<()> {
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    mod restart {
+        use super::*;
+
+        #[test]
+        fn never_takes_the_path_the_server_sends() {
+            let (client, mut server) = UnixStream::pair().expect("a socket pair");
+            protocol::send(&mut server, &ServerMessage::Restart(PathBuf::from("/tmp/not-cornercase"))).expect("send");
+
+            assert!(matches!(receive(client), Ok(Ending::Restart)));
+        }
+    }
 }

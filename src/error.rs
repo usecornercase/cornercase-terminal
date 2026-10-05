@@ -24,6 +24,13 @@ pub enum Error {
     },
     #[error("a cornercase server is already running on `{0}`")]
     ServerRunning(PathBuf),
+    #[error(
+        "refusing to use `{}`: it {reason}. Remove it, or point CORNERCASE_SOCKET at a folder only you can write to",
+        path.display()
+    )]
+    UnsafeSocketDir { path: PathBuf, reason: &'static str },
+    #[error("the other end of the cornercase socket belongs to another user (uid {0})")]
+    OtherUser(u32),
     #[error("failed to start the cornercase server; see `{log}`")]
     ServerStart {
         log: PathBuf,

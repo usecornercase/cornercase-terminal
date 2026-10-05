@@ -189,7 +189,7 @@ pub fn run() -> Result<()> {
 
 fn bind(path: &Path) -> Result<(UnixListener, File)> {
     let listen_error = |source| Error::Listen { path: path.to_path_buf(), source };
-    protocol::create_socket_dir(path).map_err(listen_error)?;
+    protocol::check_socket_dir(path)?;
     let lock = lock(path)?;
     let _ = std::fs::remove_file(path);
     Ok((UnixListener::bind(path).map_err(listen_error)?, lock))
@@ -328,6 +328,10 @@ impl Server {
     }
 
     fn accept(&mut self, stream: UnixStream) {
+        if let Err(e) = protocol::check_peer(&stream, protocol::own_uid()) {
+            eprintln!("cornercase server: {e}");
+            return;
+        }
         let Ok(reader) = stream.try_clone() else { return };
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
         let id = self.next_client;

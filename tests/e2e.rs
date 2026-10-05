@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,7 +30,7 @@ impl Session {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-e2e-sock-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("create socket dir");
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).expect("create socket dir");
         Arc::new(Self { dir })
     }
 
@@ -82,12 +83,13 @@ impl Session {
     }
 
     fn run(&self, arg: &str) -> std::process::Output {
-        std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"))
-            .arg(arg)
-            .env(SOCKET_ENV, self.socket())
-            .env_remove(NESTED_ENV)
-            .output()
-            .expect("run cornercase")
+        self.command().arg(arg).output().expect("run cornercase")
+    }
+
+    fn command(&self) -> std::process::Command {
+        let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_cornercase"));
+        cmd.env(SOCKET_ENV, self.socket()).env_remove(NESTED_ENV);
+        cmd
     }
 }
 
@@ -1045,4 +1047,30 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
         s.contains("uncommitted") && s.contains("notes.txt") && s.contains("TWO")
     });
     let _ = std::fs::remove_dir_all(&repo);
+}
+
+#[test]
+fn a_socket_folder_other_users_can_write_is_refused() {
+    let session = Session::new();
+    std::fs::set_permissions(&session.dir, std::fs::Permissions::from_mode(0o777)).expect("open the folder to all");
+
+    let outputs = [Some("server"), Some("kill-server"), None].map(|arg| {
+        let mut cmd = session.command();
+        cmd.args(arg).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
+        finish_within(cmd.spawn().expect("run cornercase"), TIMEOUT)
+    });
+
+    let refused = outputs.iter().map(|out| {
+        !out.status.success() && String::from_utf8_lossy(&out.stderr).contains("can be written by other users")
+    });
+    assert_eq!(refused.collect::<Vec<_>>(), [true, true, true]);
+}
+
+fn finish_within(mut child: std::process::Child, timeout: Duration) -> std::process::Output {
+    let deadline = Instant::now() + timeout;
+    while child.try_wait().expect("check the process").is_none() && Instant::now() < deadline {
+        thread::sleep(POLL);
+    }
+    let _ = child.kill();
+    child.wait_with_output().expect("collect its output")
 }

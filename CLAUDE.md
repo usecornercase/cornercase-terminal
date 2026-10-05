@@ -64,7 +64,7 @@ src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
 src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting)
 src/search.rs     global search: candidates, ranking, state
 src/picker.rs     folder picker state
-src/process.rs    a pid's cwd, name, arguments and environment: /proc on Linux, libproc and sysctl on macOS
+src/process.rs    a pid's cwd, name, arguments and environment: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state; turns AppEvents into actions; builds the View
@@ -179,7 +179,7 @@ src/error.rs      library error type
 - The emulator is libghostty-vt: it answers terminal queries (DSR, DA, DECRQM, kitty keyboard…) that programs like fzf and nvim wait for, and reflows on resize.
 - Its types are `!Send`, so the emulator lives on the server's main thread; the reader thread only forwards bytes. Query replies go out from `on_pty_write`, ordered with the output that asked.
 - Cells keep palette indices so the outer theme applies. The client asks the outer terminal for its colours (OSC 10/11/4, then XTVERSION, then DA1 as an end marker) before starting the input thread, and every emulator uses them as defaults.
-- cwd, name and arguments of the PTY's foreground process group leader come from `process.rs`: `/proc` on Linux, `proc_pidinfo` / `proc_name` / `sysctl(KERN_PROCARGS2)` on macOS (the only `unsafe` and the only use of `libc`). In a pipeline the leader may be dead (`process::alive`), so the shell is used instead. Agent launch and detection depend on it.
+- cwd, name and arguments of the PTY's foreground process group leader come from `process.rs`: `/proc` on Linux, `proc_pidinfo` / `proc_name` / `sysctl(KERN_PROCARGS2)` on macOS (with `getpeereid`, the only `unsafe` and the only use of `libc`). In a pipeline the leader may be dead (`process::alive`), so the shell is used instead. Agent launch and detection depend on it.
 
 **Keys and mouse (`keys.rs`, `mouse.rs`)**
 - Special keys, and all keys once the program enabled kitty, go through Ghostty's encoder; a legacy encoder handles the rest. The client asks the outer terminal for kitty's disambiguate level, so `Ctrl+Enter` / `Shift+Enter` keep their modifiers.
@@ -194,11 +194,13 @@ src/error.rs      library error type
 - Every shell loses Claude Code's per-session variables (`activity::CLAUDE_SESSION_ENV`): a server started from inside Claude Code would otherwise make every pane's `claude` a child of that session and expose its messaging token. An explicit list, not a `CLAUDE_CODE_*` prefix, so user settings like `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CONFIG_DIR` pass through.
 - `Hello` carries a protocol version and build id, and the notification channel of the client's terminal; a server from another build rejects the client. Keep `ClientMessage::KillServer` and `ServerMessage::Rejected` as the first variants (`protocol::tests::compatibility`).
 - Socket: `$XDG_RUNTIME_DIR/cornercase/server.sock` or `$TMPDIR/cornercase-<uid>/server.sock`; `CORNERCASE_SOCKET` overrides it. Paths must fit in 108 bytes.
+- **The socket's folder must be the user's alone** (`protocol::check_socket_dir`): a real folder, not a symbolic link, owned by the user and not writable by group or others; it is created `0700` when missing. The client checks it before connecting or starting a server, `kill-server` before connecting, the server before binding, also under `CORNERCASE_SOCKET`. Without it, another local user could create `/tmp/cornercase-<uid>` first (no `XDG_RUNTIME_DIR` nor `TMPDIR`, as in some SSH sessions and containers) and pose as the server: read every key and send a `Restart`. Read access for others is allowed, since connecting needs write access to the socket file.
+- Both ends check the peer's uid (`protocol::check_peer` on `process::peer_uid`: `SO_PEERCRED` on Linux, `getpeereid` on macOS): the client refuses a server of another user, and the server drops another user's client, which a loose umask could otherwise let in.
 
 **Updates (`update.rs`)**
 - Release builds only (`debug_assertions` off), so `cargo run` and tests never call GitHub. The server asks `releases/latest` once a day (`check_updates` in config); a newer one shows ` ↑ x.y.z ` at the end of the settings row and a toast. The dialog shows the `## Release Notes` part of the release body (from `CHANGELOG.md`), scrolled by wheel or ↑/↓.
 - Updating downloads `cornercase-<target>.tar.gz` and its `.sha256`, unpacks with `tar` next to the binary, runs `--version` on it (a binary that cannot run here never replaces a working one), then renames it over the old one. Homebrew installs (`/Cellar/`…), a folder we cannot write and unknown platforms get a command to copy instead.
-- The running server keeps the old code. ` restart now ` saves the session, sends `ServerMessage::Restart(path)`, and each client `exec`s the new binary, which starts a new server that restores the session. A new client rejected by an older server asks `[y/N]` on the plain terminal before running `kill-server`.
+- The running server keeps the old code. ` restart now ` saves the session, sends `ServerMessage::Restart(path)`, and each client `exec`s its own executable (`current_exe`, read at start; the update replaced that file), never the path in the message, which starts a new server that restores the session. A new client rejected by an older server asks `[y/N]` on the plain terminal before running `kill-server`.
 
 **Saved session (`state.rs`)**
 - Groups (name, icon, colour, collapsed), projects (with their group's index), workspaces (with their changes base), tabs, panes (cwd), split layouts, custom names, active children, column widths (and the stacked line) and the changes panel (open, tab), in `$XDG_STATE_HOME/cornercase/session.json` (or next to the socket). Processes are not restored; each pane gets a new shell in its folder.

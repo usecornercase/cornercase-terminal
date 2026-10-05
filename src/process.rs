@@ -1,9 +1,11 @@
+use std::io;
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
 
-pub use imp::{args, cwd, env, name};
+pub use imp::{args, cwd, env, name, peer_uid};
 
 pub fn alive(pid: i32) -> bool {
     Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
@@ -43,7 +45,11 @@ fn procenv(buf: &[u8]) -> Vec<(String, String)> {
 
 #[cfg(target_os = "linux")]
 mod imp {
-    use super::{PathBuf, vars};
+    use super::{PathBuf, UnixStream, io, vars};
+
+    pub fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
+        Ok(rustix::net::sockopt::socket_peercred(socket)?.uid.as_raw())
+    }
 
     pub fn cwd(pid: i32) -> Option<PathBuf> {
         std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
@@ -68,10 +74,19 @@ mod imp {
 #[cfg(target_os = "macos")]
 mod imp {
     use std::ffi::{CStr, OsStr, c_int};
+    use std::os::fd::AsRawFd;
     use std::os::unix::ffi::OsStrExt;
     use std::ptr::null_mut;
 
-    use super::{PathBuf, procargs, procenv};
+    use super::{PathBuf, UnixStream, io, procargs, procenv};
+
+    pub fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
+        let (mut uid, mut gid) = (0, 0);
+        if unsafe { libc::getpeereid(socket.as_raw_fd(), &raw mut uid, &raw mut gid) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(uid)
+    }
 
     pub fn cwd(pid: i32) -> Option<PathBuf> {
         let mut info: libc::proc_vnodepathinfo = unsafe { std::mem::zeroed() };
@@ -119,7 +134,11 @@ mod imp {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod imp {
-    use super::PathBuf;
+    use super::{PathBuf, UnixStream, io};
+
+    pub fn peer_uid(_socket: &UnixStream) -> io::Result<u32> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 
     pub fn cwd(_pid: i32) -> Option<PathBuf> {
         None
