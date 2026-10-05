@@ -15,6 +15,39 @@ Not at the moment, on purpose. Inside cornercase's own dialogs, `Enter` confirms
 
 It overlaps: both keep shells running after you detach and split them into panes. cornercase is organised around **projects, workspaces and git worktrees**, can start **coding agents** on issues, and is driven by the mouse. If you rely on tmux's scripting or scrollback, keep using it; you can even run cornercase inside a tmux window.
 
+### Is it fast?
+
+Yes. We measured it in October 2026 on one machine, an 8-core x86_64 virtual machine running Linux, against the agent workspaces that run there, all opening the same repository with the same worktree and the same uncommitted changes (20 files, +794 −76):
+
+| | cornercase 0.1.15 | Warp 0.2026.09.30 | Orca 1.4.220 | Emdash 1.2.7 |
+| --- | --: | --: | --: | --: |
+| Open, until the workspace is usable | 34 ms | 0.45 s | 3.2 s | 8.5 s |
+| Show the changes, first time | 2 ms | 0.41 s | 1.1 s | 0.43 s |
+| Show the changes again | 2 ms | 0.09 s | 0.33 s | 0.14 s |
+| Memory | 53 MB | 432 MB | 793 MB | 1.9 GB |
+| Download | 4.8 MB | 148 MB | 219 MB | 229 MB |
+| Installed | 12 MB | 353 MB | 642 MB | 807 MB |
+
+Times run from launching the app, or clicking, until the result is on screen; they are medians of 3 to 5 runs. cornercase shows its changes instantly because it computes the diff in the background. The changes are all files at once in cornercase, Warp (code review panel) and Orca (view all), and one file in Emdash, which has no view with every file. Memory is the proportional set size (PSS) of each app's own processes, without the shells. The desktop apps ran on a virtual display without a GPU, so they rendered in software, which adds memory and time a real GPU would not; the difference is still one to two orders of magnitude. Superset (947 MB download, 2.8 GB installed) needs an account to start, so it is not in the table; Conductor and cmux run only on macOS.
+
+Against the terminal multiplexers, each with its default settings and `/bin/sh` in every pane:
+
+| | cornercase 0.1.15 | tmux 3.6 | zellij 0.45.1 |
+| --- | --: | --: | --: |
+| From the command to a prompt, server included | 33 ms | 30 ms | 368 ms |
+| Attach to a running session | 10 ms | 10 ms | 122 ms |
+| `cat` of a 51 MB text file in a pane | 0.54 s | 2.31 s | 4.20 s |
+| From a key to the screen | 2.5 ms | 0.3 ms | 12.3 ms |
+| Memory with ten shells | 16 MB | 12 MB | 189 MB |
+
+Each one ran in a 160×48 pseudo-terminal driven by a script that answers the questions a terminal answers at startup and reads the output as fast as it can. These are medians of 20 starts and attaches, 300 keys and 7 runs of `cat`. tmux puts a key on the screen faster; at under 3 ms cornercase is still well inside one frame of a 120 Hz display.
+
+### How is it different from Orca, Warp or Conductor?
+
+Orca and Warp are desktop applications that build an IDE around their terminals, with an editor, a file tree and review tools; Conductor is a desktop app for macOS. cornercase is a terminal multiplexer: it runs inside the terminal you already use, on your machine or on any server you reach over SSH, and gives every agent a worktree, a tab, a status and its diff, all one click away. It doesn't edit files or preview pages; your editor and your browser do that.
+
+It is also much lighter: it opens in 34 ms and uses about 50 MB, where the desktop apps we measured take 0.45 to 8.5 seconds and 0.4 to 1.9 GB (see [Is it fast?](#is-it-fast)). Like Orca, it keeps your agents running when you close it; Warp stops them.
+
 ### Does it work over SSH?
 
 Yes. Run `cornercase` on the remote machine: the server lives there, your shells keep running when the connection drops, and you reattach when you log in again. Copying uses OSC 52, so the text lands in your local clipboard.

@@ -1,13 +1,16 @@
 ---
+import InstallBox from './InstallBox.astro';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
 const columns: [string, [string, string][]][] = [
   [
     'Product',
     [
-      ['Features', '#features'],
-      ['Issues to agents', '#flow'],
-      ['Sessions', '#sessions'],
+      ['Demo', '#demo'],
+      ['Speed', '#speed'],
+      ['Why cornercase', '#why'],
+      ['Features', '#more'],
       ['Install', '#install'],
     ],
   ],
@@ -36,8 +39,11 @@ const columns: [string, [string, string][]][] = [
   <div class="wrap">
     <div class="cta reveal">
       <h2>Give every case<br />its own <span>corner</span>.</h2>
+      <div class="get">
+        <InstallBox />
+      </div>
       <div class="actions">
-        <a class="btn btn-primary" href="#install">Install cornercase</a>
+        <a class="btn btn-ghost" href={`${base}/docs/first-steps/`}>First steps</a>
         <a class="btn btn-ghost" href={repo}>Star on GitHub</a>
       </div>
     </div>
@@ -47,7 +53,7 @@ const columns: [string, [string, string][]][] = [
           <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
           cornercase
         </a>
-        <p>A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse.</p>
+        <p>Every agent in its own corner. In your terminal, a click away.</p>
       </div>
       {
         columns.map(([title, links]) => (
@@ -102,12 +108,19 @@ const columns: [string, [string, string][]][] = [
     background-clip: text;
   }
 
+  .get {
+    display: flex;
+    justify-content: center;
+    margin-top: 34px;
+    text-align: left;
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 12px;
-    margin-top: 34px;
+    margin-top: 22px;
   }
 
   .grid {

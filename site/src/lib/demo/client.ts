@@ -1,12 +1,21 @@
 import { CanvasView, type Cursor } from '../term/canvas';
-import type { Grid } from '../term/grid';
+import type { Grid, Rect } from '../term/grid';
 import { App } from './app';
 import type { Key } from './programs';
+
+export interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 
 export interface Mounted {
   app: App;
   view: CanvasView;
   pointTo(x: number, y: number): { left: number; top: number };
+  box(r: Rect): Box;
+  speed(times: number): void;
   destroy(): void;
 }
 
@@ -16,6 +25,8 @@ export interface MountOptions {
   build: (app: App) => void;
   narrate?: (html: string) => void;
   interactive?: boolean;
+  clock?: boolean;
+  painted?: () => void;
 }
 
 const KEYS = new Set(['Enter', 'Backspace', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End', 'PageUp', 'PageDown', 'F10']);
@@ -36,16 +47,28 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
   } catch {}
   const view = new CanvasView(canvas);
   const app = new App();
+  app.virtual = !!opts.clock;
   let last: { grid: Grid; cursor: Cursor | null } | null = null;
   let raf = 0;
   let blinkOn = true;
   let visible = true;
+  let rate = 1;
+  let clock = 0;
+  let before = 0;
+  const tick = (now: number) => {
+    clock = requestAnimationFrame(tick);
+    const dt = before ? Math.min(100, now - before) : 0;
+    before = now;
+    if (visible) app.advance(dt * rate);
+  };
+  if (opts.clock) clock = requestAnimationFrame(tick);
 
   const paint = () => {
     raf = 0;
     if (!visible) return;
     if (app.stale || !last) last = app.render();
     view.draw(last.grid, last.cursor, app.focused, blinkOn);
+    opts.painted?.();
   };
   const schedule = () => {
     if (!raf) raf = requestAnimationFrame(paint);
@@ -203,8 +226,17 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
       const box = view.cellBox(x, y);
       return { left: canvas.offsetLeft + box.left + box.width / 2, top: canvas.offsetTop + box.top + box.height / 2 };
     },
+    box(r: Rect) {
+      const a = view.cellBox(r.x, r.y);
+      const b = view.cellBox(r.x + r.w - 1, r.y + r.h - 1);
+      return { left: canvas.offsetLeft + a.left, top: canvas.offsetTop + a.top, width: b.left + b.width - a.left, height: b.top + b.height - a.top };
+    },
+    speed(times: number) {
+      rate = times;
+    },
     destroy() {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(clock);
       clearInterval(blink);
       resize.disconnect();
       seen.disconnect();

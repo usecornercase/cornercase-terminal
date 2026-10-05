@@ -1,0 +1,334 @@
+---
+import Snapshot from './Snapshot.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const procs = ['claude', 'claude', 'cargo test', 'npm run dev'];
+---
+
+<section class="section why" id="why" aria-labelledby="why-title">
+  <div class="wrap">
+    <h2 class="eyebrow" id="why-title">Why cornercase</h2>
+    <div class="cards">
+      <article class="card reveal">
+        <h3>Close it. It keeps working.</h3>
+        <figure class="diagram" aria-labelledby="diagram-caption">
+          <div class="client">
+            <span class="title">your terminal</span>
+            <span class="state on">attached</span>
+            <span class="state off">closed</span>
+          </div>
+          <svg class="wire" viewBox="0 0 20 48" preserveAspectRatio="none" aria-hidden="true"><path d="M10 0V48"></path></svg>
+          <div class="server">
+            <span class="title">
+              <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
+              cornercase server
+            </span>
+            <ul>
+              {procs.map((p) => <li><i />{p}</li>)}
+            </ul>
+          </div>
+          <figcaption id="diagram-caption" class="sr-only">
+            Your terminal attaches to the cornercase server, which runs two Claude Code agents, cargo test and npm run dev. When the
+            terminal closes, those programs keep running.
+          </figcaption>
+        </figure>
+        <p>
+          Quit. Close the window. Drop the SSH connection. Your agents keep going, and so do your tests and dev servers. Come back
+          from any terminal, even your phone, and it’s all right where you left it.
+        </p>
+        <a class="more" href={`${base}/docs/guides/sessions/`}>How it works →</a>
+      </article>
+
+      <article class="card reveal">
+        <h3>Many agents. Zero chaos.</h3>
+        <Snapshot
+          scene="status"
+          label="The projects and workspaces of cornercase: in shop, one Claude Code agent is working, one needs you and one is done; the api project shows that an agent there needs you too."
+          class="shot"
+        />
+        <p>
+          Every agent gets its own corner: its own branch, folder and tab. You always know which Claude is working
+          <b class="s working">◐</b>, which one needs you <b class="s waiting">!</b> and which one is done <b class="s done">✓</b>,
+          and you get a ping when that changes.
+        </p>
+        <a class="more" href={`${base}/docs/reference/agents/`}>Works with Claude Code, Codex, Gemini and 11 more →</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<style>
+  .section.why {
+    padding-top: clamp(24px, 3vw, 40px);
+    padding-bottom: clamp(56px, 7vw, 96px);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+    padding: clamp(22px, 2.4vw, 30px);
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--panel);
+  }
+
+  h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(25px, 2.3vw, 31px);
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+  }
+
+  .card > p {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+
+  .more {
+    margin-top: auto;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+  }
+
+  .more:hover {
+    color: var(--purple-3);
+  }
+
+  .diagram {
+    display: grid;
+    justify-items: center;
+    margin: 0;
+    padding: 18px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: radial-gradient(70% 60% at 50% 70%, rgb(135 95 255 / 0.12), transparent 75%), var(--term);
+  }
+
+  .client {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    width: min(100%, 230px);
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line-2);
+    background: var(--bg-2);
+    animation: detach 8s ease-in-out infinite;
+  }
+
+  .title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .title svg {
+    width: 12px;
+    height: 12px;
+    fill: var(--purple);
+  }
+
+  .state {
+    grid-area: 2 / 1;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .state.on {
+    color: var(--green);
+    animation: show 8s infinite;
+  }
+
+  .state.off {
+    color: var(--yellow);
+    opacity: 0;
+    animation: hide 8s infinite;
+  }
+
+  .wire {
+    display: block;
+    width: 20px;
+    height: 40px;
+    overflow: visible;
+  }
+
+  .wire path {
+    fill: none;
+    stroke: var(--purple);
+    stroke-width: 2;
+    stroke-dasharray: 5 6;
+    vector-effect: non-scaling-stroke;
+    animation:
+      flow 1.2s linear infinite,
+      cut 8s ease-in-out infinite;
+  }
+
+  .server {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 12px;
+    border-radius: 12px;
+    border: 1px solid rgb(135 95 255 / 0.55);
+    background: linear-gradient(180deg, rgb(135 95 255 / 0.14), rgb(135 95 255 / 0.04)), var(--panel);
+    box-shadow: 0 0 50px -20px rgb(135 95 255 / 0.6);
+  }
+
+  .server ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .server li {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--line-2);
+    background: var(--term);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .server li i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: alive 1.8s ease-in-out infinite;
+  }
+
+  .server li:nth-child(2) i {
+    animation-delay: 0.45s;
+  }
+
+  .server li:nth-child(3) i {
+    animation-delay: 0.9s;
+  }
+
+  .server li:nth-child(4) i {
+    animation-delay: 1.35s;
+  }
+
+  @keyframes detach {
+    0%,
+    35%,
+    85%,
+    100% {
+      opacity: 1;
+      filter: none;
+    }
+    45%,
+    75% {
+      opacity: 0.35;
+      filter: grayscale(1);
+    }
+  }
+
+  @keyframes show {
+    0%,
+    38%,
+    82%,
+    100% {
+      opacity: 1;
+    }
+    42%,
+    78% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes hide {
+    0%,
+    38%,
+    82%,
+    100% {
+      opacity: 0;
+    }
+    42%,
+    78% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes flow {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+
+  @keyframes cut {
+    0%,
+    38%,
+    82%,
+    100% {
+      opacity: 0.85;
+    }
+    42%,
+    78% {
+      opacity: 0.08;
+    }
+  }
+
+  @keyframes alive {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  .shot {
+    box-shadow: 0 20px 50px -30px rgb(0 0 0 / 0.9);
+  }
+
+  .s {
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+
+  .working {
+    color: var(--yellow);
+  }
+
+  .waiting {
+    color: #ff8700;
+  }
+
+  .done {
+    color: var(--green);
+  }
+
+  @media (max-width: 820px) {
+    .cards {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 640px;
+    }
+  }
+</style>

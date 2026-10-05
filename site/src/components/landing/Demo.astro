@@ -1,39 +1,59 @@
 ---
 import Snapshot from './Snapshot.astro';
 
-interface Props {
-  kind: 'hero' | 'flow';
-  title: string;
-  label: string;
-  fallback: string;
-}
-
-const { kind, title, label, fallback } = Astro.props;
+const chapters = ['Run them all', 'Walk away', 'See what they did', 'Your turn'];
+const label =
+  'A live simulation of cornercase: projects on the left, the workspaces of the shop project with a coding agent in each, and the active agent on the right.';
 ---
 
-<div class={`demo demo-${kind}`} data-demo={kind}>
-  <div class="window">
-    <div class="window-bar">
-      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="window-title">{title}</span>
-      <span class="live" aria-hidden="true"><i></i>live</span>
-    </div>
-    <div class="screen">
-      <Snapshot scene={fallback} label={label} bare class="fallback" />
-      <canvas role="img" aria-label={label}></canvas>
-      <textarea
-        class="keys"
-        aria-label="Keyboard input for the demo: what you type goes to the active pane"
-        autocapitalize="off"
-        autocomplete="off"
-        autocorrect="off"
-        spellcheck="false"></textarea>
-      <div class="pointer" hidden aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2.5v17.2l4.6-4.4 2.9 6.6 3-1.3-2.9-6.5h6.4z" fill="#fff" stroke="#0e0d14" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+<div class="demo" data-demo>
+  <div class="chapters" role="group" aria-label="Tour chapters">
+    {
+      chapters.map((title, i) => (
+        <button type="button" class="chapter" data-chapter={i} data-state="todo">
+          <span class="n">{i + 1}</span>
+          <span class="title">{title}</span>
+          <i class="bar" aria-hidden="true" />
+        </button>
+      ))
+    }
+  </div>
+  <div class="frame">
+    <div class="marks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="window">
+      <div class="window-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="window-title">cornercase — ~/code/shop</span>
+        <span class="live" aria-hidden="true"><i></i>interactive</span>
+      </div>
+      <div class="screen">
+        <Snapshot scene="hero" label={label} bare class="fallback" />
+        <canvas role="img" aria-label={label}></canvas>
+        <textarea
+          class="keys"
+          aria-label="Keyboard input for the demo: what you type goes to the active pane"
+          autocapitalize="off"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"></textarea>
+        <div class="spot" hidden aria-hidden="true"></div>
+        <div class="lapse" hidden aria-hidden="true">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z" fill="currentColor"></path></svg>
+          <span data-lapse></span>
+        </div>
+        <div class="pointer" hidden aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2.5v17.2l4.6-4.4 2.9 6.6 3-1.3-2.9-6.5h6.4z" fill="#fff" stroke="#0e0d14" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+        </div>
       </div>
     </div>
   </div>
-  <slot />
+  <div class="foot">
+    <p class="caption" data-caption aria-live="polite">This isn't a video. Click anything, or sit back and watch.</p>
+    <button class="replay" type="button" data-replay hidden>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      watch again
+    </button>
+  </div>
 </div>
 
 <script>
@@ -46,17 +66,102 @@ const { kind, title, label, fallback } = Astro.props;
     position: relative;
   }
 
+  .chapters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 34px;
+  }
+
+  .frame {
+    position: relative;
+  }
+
+  .chapter {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: rgb(255 255 255 / 0.02);
+    color: var(--text-3);
+    font-family: var(--font-body);
+    font-size: 14.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .chapter:hover {
+    color: var(--text);
+    border-color: var(--line-2);
+  }
+
+  .chapter .n {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgb(255 255 255 / 0.06);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .chapter .title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chapter .bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: calc(var(--p, 0) * 100%);
+    background: var(--cyan);
+  }
+
+  .chapter[data-state='active'] {
+    color: var(--text);
+    border-color: rgb(69 217 232 / 0.45);
+    background: rgb(69 217 232 / 0.06);
+  }
+
+  .chapter[data-state='active'] .n {
+    background: var(--cyan);
+    color: #07060b;
+  }
+
+  .chapter[data-state='done'] {
+    color: var(--text-2);
+  }
+
+  .chapter[data-state='done'] .bar {
+    width: 100%;
+    background: rgb(69 217 232 / 0.35);
+  }
+
   .screen {
     position: relative;
     padding: 10px 12px 12px;
-    min-height: calc(34 * 8.4px * 2.08 + 22px);
+    min-height: calc(32 * 9.6px * 2.08 + 22px);
     display: flex;
     justify-content: center;
     align-items: flex-start;
-  }
-
-  .demo-flow .screen {
-    min-height: calc(28 * 7.4px * 2.08 + 22px);
+    overflow: hidden;
+    border-radius: 0 0 var(--radius) var(--radius);
   }
 
   .screen :global(.fallback) {
@@ -95,6 +200,58 @@ const { kind, title, label, fallback } = Astro.props;
     pointer-events: none;
   }
 
+  .spot {
+    position: absolute;
+    z-index: 2;
+    border-radius: 6px;
+    outline: 1px solid rgb(69 217 232 / 0.7);
+    box-shadow: 0 0 0 200vmax rgb(7 6 11 / 0.62);
+    pointer-events: none;
+    transition:
+      left 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
+      top 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
+      width 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
+      height 0.45s cubic-bezier(0.3, 0.7, 0.2, 1);
+    animation: spot-in 0.35s ease-out;
+  }
+
+  @keyframes spot-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .lapse {
+    position: absolute;
+    z-index: 4;
+    right: 22px;
+    top: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgb(245 215 110 / 0.5);
+    background: rgb(20 18 30 / 0.92);
+    color: var(--yellow);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    animation: spot-in 0.3s ease-out;
+  }
+
+  .lapse svg {
+    width: 14px;
+    height: 14px;
+    animation: lapse 0.7s linear infinite;
+  }
+
+  @keyframes lapse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
   .live {
     display: inline-flex;
     align-items: center;
@@ -122,6 +279,66 @@ const { kind, title, label, fallback } = Astro.props;
     100% {
       box-shadow: 0 0 0 0 rgb(88 230 160 / 0);
     }
+  }
+
+  .foot {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-top: 34px;
+    padding-inline: 4px;
+  }
+
+  .caption {
+    margin: 0;
+    min-height: 2.9em;
+    max-width: 900px;
+    font-size: clamp(17px, 1.5vw, 20px);
+    line-height: 1.45;
+    font-weight: 500;
+    color: var(--text);
+    text-wrap: pretty;
+  }
+
+  .caption::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 1em;
+    margin-right: 12px;
+    vertical-align: -0.14em;
+    background: var(--cyan);
+  }
+
+  .caption :global(code) {
+    font-size: 0.85em;
+  }
+
+  .replay {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border: 1px solid rgb(69 217 232 / 0.45);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--cyan);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .replay:hover {
+    background: var(--cyan);
+    color: #07060b;
+  }
+
+  .replay svg {
+    width: 13px;
+    height: 13px;
   }
 
   .pointer {
@@ -176,7 +393,7 @@ const { kind, title, label, fallback } = Astro.props;
 
   @media (max-width: 899px) {
     .screen {
-      min-height: calc(30 * 7.6px * 2.08 + 22px);
+      min-height: calc(30 * 7.8px * 2.08 + 22px);
       padding: 8px;
     }
 
@@ -192,6 +409,20 @@ const { kind, title, label, fallback } = Astro.props;
     :global(.js) .demo:not([data-ready]) :global(.fallback) {
       visibility: hidden;
     }
+
+    .chapters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lapse {
+      right: 14px;
+      top: 12px;
+      font-size: 12.5px;
+    }
+
+    .marks {
+      display: none;
+    }
   }
 
   @media (max-width: 559px) {
@@ -199,8 +430,20 @@ const { kind, title, label, fallback } = Astro.props;
       min-height: calc(34 * 7.4px * 2.08 + 16px);
     }
 
-    .demo-flow .screen {
-      min-height: calc(30 * 7.2px * 2.08 + 16px);
+    .chapter {
+      align-items: flex-start;
+      font-size: 13px;
+      line-height: 1.3;
+      padding: 8px 10px 10px;
+    }
+
+    .chapter .title {
+      white-space: normal;
+    }
+
+    .foot {
+      flex-direction: column;
+      gap: 10px;
     }
   }
 </style>

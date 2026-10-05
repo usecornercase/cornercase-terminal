@@ -1,0 +1,181 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const tools = ['cornercase', 'Warp', 'Orca', 'Emdash'];
+const stats: [string, [number, string][]][] = [
+  ['Opening', [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']]],
+  ['First look at the changes', [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']]],
+  ['Every look after that', [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']]],
+  ['Memory', [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']]],
+  ['Download', [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']]],
+  ['On disk', [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']]],
+];
+---
+
+<section class="section stats" id="speed" aria-labelledby="speed-title">
+  <div class="wrap">
+    <div class="head reveal">
+      <p class="eyebrow">Speed</p>
+      <h2 class="h2" id="speed-title">Faaast. <em>Really faaast.</em></h2>
+      <p class="lead">
+        It opens before you can blink, and shows what your agents changed before you can click again. The other apps we tried?
+        Up to 8.5 seconds, and nearly 2 GB.
+      </p>
+    </div>
+    <div class="grid">
+      {
+        stats.map(([title, values]) => {
+          const most = Math.max(...values.map(([v]) => v));
+          return (
+            <figure class="chart reveal">
+              <figcaption>{title}</figcaption>
+              <ul>
+                {values.map(([value, label], i) => (
+                  <li class:list={{ us: i === 0 }} title={`${tools[i]}: ${label}`}>
+                    <span class="name">{tools[i]}</span>
+                    <span class="track">
+                      <span class="bar" style={`--w: ${(value / most) * 100}%`} />
+                      <span class="value">{label}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </figure>
+          );
+        })
+      }
+    </div>
+    <p class="note reveal">
+      <a href={`${base}/docs/help/faq/#is-it-fast`}>How we measured →</a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .section.stats {
+    padding-top: clamp(24px, 3vw, 40px);
+    padding-bottom: clamp(48px, 6vw, 80px);
+  }
+
+  .head {
+    max-width: 860px;
+  }
+
+  .h2 {
+    font-size: clamp(32px, 4.2vw, 56px);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: clamp(28px, 4vw, 44px);
+  }
+
+  .chart {
+    margin: 0;
+    padding: 18px 18px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  figcaption {
+    margin-bottom: 14px;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  ul {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  li:hover .name,
+  li:hover .value {
+    color: var(--text);
+  }
+
+  .name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+  }
+
+  .us .name {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .bar {
+    flex: none;
+    width: max(2px, calc(var(--w) * 0.72));
+    height: 12px;
+    border-radius: 0 4px 4px 0;
+    background: #6e6a87;
+  }
+
+  .us .bar {
+    background: var(--purple);
+  }
+
+  .value {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+
+  .us .value {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .note {
+    margin: 22px 0 0;
+    color: var(--text-3);
+    font-size: 14.5px;
+  }
+
+  .note a {
+    color: var(--text);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .note a:hover {
+    color: var(--purple-3);
+  }
+
+  @media (max-width: 1000px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

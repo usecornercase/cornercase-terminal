@@ -30,6 +30,7 @@ export interface Host {
   dirty(): void;
   exit(): void;
   place(): Place;
+  pace(): number;
 }
 
 export interface Program {
@@ -660,6 +661,12 @@ export interface Task {
   onDone?: () => void;
 }
 
+interface Run {
+  task: Task;
+  next: number;
+  pace: number;
+}
+
 export function taskFor(prompt: string, place: Place): Task {
   const p = prompt.toLowerCase();
   if (p.includes('482') || p.includes('address')) {
@@ -675,6 +682,29 @@ export function taskFor(prompt: string, place: Place): Task {
       onDone: () => {
         place.flags.fixed = true;
       },
+    };
+  }
+  if (p.includes('gift')) {
+    return {
+      steps: [
+        'Reading src/checkout.rs',
+        'Adding a GiftCard type with a balance',
+        'Applying gift cards after discounts, before tax',
+        'Running cargo test: 9 passed',
+      ],
+      result: 'Done. Gift cards work in the checkout, with tests.',
+    };
+  }
+  if (p.includes('pagina') || p.includes('cursor')) {
+    return {
+      steps: [
+        'Reading src/orders.ts and the routes',
+        'GET /orders returns every order at once',
+        'Adding a cursor and a limit of 50',
+        'Updating the API docs',
+        'Running npm test: 31 passed',
+      ],
+      result: 'Done. /orders is paginated with a cursor.',
     };
   }
   if (p.includes('dark') || p.includes('479') || p.includes('sc-48')) {
@@ -705,25 +735,28 @@ const REPLY_TOKENS = 9_000;
 
 export class Agent implements Program {
   readonly mouse = false;
-  private phase: 'boot' | 'trust' | 'ready' | 'working' = 'boot';
+  private phase: 'boot' | 'trust' | 'ready' | 'working' | 'asking' = 'boot';
   private choice = 0;
   private input = '';
   private log: Line[] = [];
   private frame = 0;
   private timers: (() => void)[] = [];
-  private spinning = false;
+  private spinner: (() => void) | null = null;
   private tokens = 0;
+  private run: Run | null = null;
+  private step: (() => void) | null = null;
+  private question = '';
 
   constructor(
     private host: Host,
     private done: () => void,
     readonly name: string,
     private args: string[],
-    opts: { trusted?: boolean; working?: string; shown?: number } = {},
+    opts: { trusted?: boolean; working?: string; shown?: number; pace?: number } = {},
   ) {
     if (opts.working) {
       this.phase = 'ready';
-      this.submit(opts.working, 2600, opts.shown ?? 0);
+      this.submit(opts.working, opts.pace ?? 2600, opts.shown ?? 0);
     } else if (opts.trusted) this.phase = 'ready';
     else this.timers.push(host.after(450, () => this.show('trust')));
   }
@@ -735,6 +768,8 @@ export class Agent implements Program {
 
   dispose(): void {
     this.timers.forEach((t) => t());
+    this.step?.();
+    this.stopSpin();
   }
 
   get trusting(): boolean {
@@ -747,6 +782,10 @@ export class Agent implements Program {
 
   get working(): boolean {
     return this.phase === 'working';
+  }
+
+  get waiting(): boolean {
+    return this.phase === 'asking';
   }
 
   get pending(): string {
@@ -762,7 +801,13 @@ export class Agent implements Program {
   }
 
   screen(): string {
-    return this.phase === 'trust' ? 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit' : '> ';
+    if (this.phase === 'trust') return 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit';
+    if (this.phase === 'asking') return `Do you want to make this edit to ${this.question}?`;
+    return '> ';
+  }
+
+  private choices(lines: Line[], options: string[]): void {
+    options.forEach((o, i) => lines.push(this.choice === i ? [seg(`❯ ${i + 1}. ${o}`, CYAN)] : plain(`  ${i + 1}. ${o}`)));
   }
 
   draw(g: Grid, r: Rect): Cursor | null {
@@ -779,14 +824,17 @@ export class Agent implements Program {
     if (this.phase === 'trust') {
       const place = this.host.place();
       lines.push(plain('Do you trust the files in this folder?'), [seg(place.root, DIMMED)], []);
-      lines.push(this.choice === 0 ? [seg('❯ 1. Yes, proceed', CYAN)] : plain('  1. Yes, proceed'));
-      lines.push(this.choice === 1 ? [seg('❯ 2. No, exit', CYAN)] : plain('  2. No, exit'));
+      this.choices(lines, ['Yes, proceed', 'No, exit']);
     }
-    if (this.phase === 'ready' || this.phase === 'working') {
+    if (this.phase === 'ready' || this.phase === 'working' || this.phase === 'asking') {
       if (!this.log.length) lines.push([seg('tip: describe the change, or paste an issue link', DIMMED)], []);
       lines.push(...this.log);
     }
     if (this.phase === 'working') lines.push([], [seg(`${SPINNER[this.frame % SPINNER.length]} working…`, { fg: 5 }), seg('  esc to interrupt', DIMMED)]);
+    if (this.phase === 'asking') {
+      lines.push([], [seg('● ', YELLOW), seg('Edit ', { add: BOLD }), seg(this.question)], [seg('  Do you want to make this edit?', { add: BOLD })]);
+      this.choices(lines, ['Yes', 'Yes, and don’t ask again this session', 'No, and tell Claude what to do differently']);
+    }
     let cursor: Cursor | null = null;
     const rows = wrapAll(lines, r.w);
     if (this.phase === 'ready') {
@@ -818,15 +866,16 @@ export class Agent implements Program {
       this.host.dirty();
       return;
     }
+    if (this.phase === 'asking') {
+      if (k.key === 'ArrowDown') this.choice = Math.min(2, this.choice + 1);
+      else if (k.key === 'ArrowUp') this.choice = Math.max(0, this.choice - 1);
+      else if (k.key === '1' || k.key === '2' || (k.key === 'Enter' && this.choice < 2)) this.answer(true);
+      else if (k.key === '3' || k.key === 'Escape' || k.key === 'Enter' || (k.ctrl && k.key === 'c')) this.answer(false);
+      this.host.dirty();
+      return;
+    }
     if (this.phase === 'working') {
-      if (k.key === 'Escape' || (k.ctrl && k.key === 'c')) {
-        this.timers.forEach((t) => t());
-        this.timers = [];
-        this.spinning = false;
-        this.log.push([seg('└ interrupted', RED)]);
-        this.phase = 'ready';
-        this.host.dirty();
-      }
+      if (k.key === 'Escape' || (k.ctrl && k.key === 'c')) this.interrupt();
       return;
     }
     if (this.phase !== 'ready') return;
@@ -844,50 +893,98 @@ export class Agent implements Program {
     this.host.dirty();
   }
 
+  setPace(pace: number): void {
+    if (this.run) this.run.pace = pace;
+  }
+
+  ask(file: string): boolean {
+    if (this.phase !== 'working') return false;
+    this.step?.();
+    this.step = null;
+    this.stopSpin();
+    this.question = file;
+    this.choice = 0;
+    this.phase = 'asking';
+    this.host.dirty();
+    return true;
+  }
+
+  private answer(yes: boolean): void {
+    if (!yes) {
+      this.log.push([seg('└ ', RED), seg(`You declined the edit to ${this.question}`, RED)]);
+      this.run = null;
+      this.phase = 'ready';
+      return;
+    }
+    this.log.push([seg('● ', MAGENTA), seg(`Edited ${this.question}`)]);
+    this.reply();
+    this.phase = 'working';
+    this.spin();
+    this.schedule();
+  }
+
+  private interrupt(): void {
+    this.step?.();
+    this.step = null;
+    this.run = null;
+    this.stopSpin();
+    this.log.push([seg('└ interrupted', RED)]);
+    this.phase = 'ready';
+    this.host.dirty();
+  }
+
   submit(prompt: string, pace: number, shown = 0): void {
-    const place = this.host.place();
-    const task = taskFor(prompt, place);
+    const task = taskFor(prompt, this.host.place());
     this.log.push([seg('> ', { fg: 6, add: BOLD }), seg(prompt, { add: BOLD })], []);
     this.phase = 'working';
     this.spin();
-    let delay = 0;
-    task.steps.slice(0, shown).forEach((step) => {
+    for (const step of task.steps.slice(0, shown)) {
       this.log.push([seg('● ', MAGENTA), seg(step)]);
       this.reply();
-    });
-    task.steps.slice(shown).forEach((step, k) => {
-      const i = k + shown;
-      delay += (pace || 900) + Math.random() * 700;
-      this.timers.push(
-        this.host.after(delay, () => {
-          this.log.push([seg('● ', MAGENTA), seg(step, i === task.steps.length - 1 ? GREEN : {})]);
-          this.reply();
-          this.host.dirty();
-        }),
-      );
-    });
-    this.timers.push(
-      this.host.after(delay + 900, () => {
-        this.log.push([], [seg('✓ ', GREEN), seg(task.result, { add: BOLD })], []);
+    }
+    this.run = { task, next: shown, pace: pace || this.host.pace() };
+    this.schedule();
+  }
+
+  private schedule(): void {
+    const run = this.run;
+    if (!run) return;
+    const { task } = run;
+    if (run.next < task.steps.length) {
+      this.step = this.host.after(run.pace + Math.random() * 700, () => {
+        const i = run.next++;
+        this.log.push([seg('● ', MAGENTA), seg(task.steps[i], i === task.steps.length - 1 ? GREEN : {})]);
         this.reply();
-        this.phase = 'ready';
-        this.spinning = false;
-        task.onDone?.();
         this.host.dirty();
-      }),
-    );
+        this.schedule();
+      });
+      return;
+    }
+    this.step = this.host.after(900, () => {
+      this.step = null;
+      this.run = null;
+      this.log.push([], [seg('✓ ', GREEN), seg(task.result, { add: BOLD })], []);
+      this.reply();
+      this.phase = 'ready';
+      this.stopSpin();
+      task.onDone?.();
+      this.host.dirty();
+    });
   }
 
   private spin(): void {
-    if (this.spinning) return;
-    this.spinning = true;
+    if (this.spinner) return;
     const tick = () => {
-      if (!this.spinning) return;
       this.frame += 1;
       this.host.dirty();
-      this.timers.push(this.host.after(110, tick));
+      this.spinner = this.host.after(110, tick);
     };
     tick();
+  }
+
+  private stopSpin(): void {
+    this.spinner?.();
+    this.spinner = null;
   }
 }
 
