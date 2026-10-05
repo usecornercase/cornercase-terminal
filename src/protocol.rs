@@ -101,12 +101,15 @@ pub fn try_lock(socket: &Path) -> io::Result<Option<File>> {
 }
 
 pub fn check_socket_dir(socket: &Path) -> Result<(), Error> {
-    let Some(dir) = socket.parent().filter(|dir| !dir.as_os_str().is_empty()) else { return Ok(()) };
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-    let meta = std::fs::symlink_metadata(dir)?;
+    let dir = match socket.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        Some(dir) => dir.to_path_buf(),
+        None => std::env::current_dir()?,
+    };
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
+    let meta = std::fs::symlink_metadata(&dir)?;
     let kind = meta.file_type();
     match unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()) {
-        Some(reason) => Err(Error::UnsafeSocketDir { path: dir.to_path_buf(), reason }),
+        Some(reason) => Err(Error::UnsafeSocketDir { path: dir, reason }),
         None => Ok(()),
     }
 }

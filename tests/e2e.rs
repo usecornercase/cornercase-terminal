@@ -1066,6 +1066,21 @@ fn a_socket_folder_other_users_can_write_is_refused() {
     assert_eq!(refused.collect::<Vec<_>>(), [true, true, true]);
 }
 
+#[test]
+fn a_bare_socket_name_is_checked_in_the_folder_it_runs_in() {
+    let session = Session::new();
+    std::fs::set_permissions(&session.dir, std::fs::Permissions::from_mode(0o777)).expect("open the folder to all");
+    let mut cmd = session.command();
+    cmd.arg("kill-server").env(SOCKET_ENV, "server.sock").current_dir(&session.dir);
+
+    let out = cmd.output().expect("run cornercase");
+
+    assert!(
+        !out.status.success() && String::from_utf8_lossy(&out.stderr).contains("can be written by other users"),
+        "{out:?}"
+    );
+}
+
 fn finish_within(mut child: std::process::Child, timeout: Duration) -> std::process::Output {
     let deadline = Instant::now() + timeout;
     while child.try_wait().expect("check the process").is_none() && Instant::now() < deadline {
