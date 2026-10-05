@@ -418,18 +418,20 @@ export class Painter {
       if (spec.kind === 'landing') return this.landing(r, landing);
       if (spec.kind === 'group') {
         const group = app.groups[spec.g];
-        const inside = app.projects.filter((p) => p.group === group.id).length;
+        const inside = app.groupSize(group.id);
         const count = group.collapsed ? ` (${inside})` : '';
         const badge = group.collapsed ? attention(app.projects.filter((p) => p.group === group.id).map(projectAttention)) : null;
         const room = r.w - 4 - closeButton(r, areas.pitch).w - 1;
         const used = 2 + count.length;
         const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - used);
-        const max = marks.segs.length ? room - used - marks.reserved : r.w - 8 - count.length;
+        const max = room - used - marks.reserved;
         const line = [seg(i === marked ? '▌ ' : '  ', CYAN), seg(group.collapsed ? '▸ ' : '▾ ', DARK), this.groupHeader(group, max), seg(count, DARK)];
         pushTags(line, marks, used + [...truncateRight(group.name, max)].length, room);
-        this.band(r, line, this.rowBackground(r, dragged(spec)));
+        const bg = this.rowBackground(r, dragged(spec));
+        this.band(r, line, bg);
         const grab: Target = { kind: 'group', group: group.id };
         this.region({ r, click: () => app.toggleGroup(spec.g), right: (x, y) => app.openGroupMenu({ x, y }, spec.g), grab, cursor: 'pointer' });
+        this.closeX(r, areas.pitch, bg, () => app.askDeleteGroup(group.id));
         return;
       }
       const pi = spec.p;
@@ -437,7 +439,7 @@ export class Painter {
       const active = pi === app.active;
       const bg = this.rowBackground(r, active || dragged(spec));
       const indent = p.group !== undefined ? '  ' : '';
-      const reserved = 6 + indent.length + (closeButton(r, areas.pitch).w - 3);
+      const reserved = 2 + indent.length + closeButton(r, areas.pitch).w + 1;
       const count = ` (${p.workspaces.length})`;
       const room = r.w - reserved;
       const badge = projectAttention(p);
@@ -568,7 +570,7 @@ export class Painter {
     if (o.kind === 'menu') return this.menu();
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
-    if (o.kind === 'remove') return this.confirm();
+    if (o.kind === 'remove' || o.kind === 'deleteGroup') return this.confirm();
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
@@ -701,15 +703,19 @@ export class Painter {
   private confirm(): void {
     const app = this.app;
     const o = app.overlay;
-    if (!o || o.kind !== 'remove') return;
+    if (!o || (o.kind !== 'remove' && o.kind !== 'deleteGroup')) return;
     const r = formArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, 'remove workspace');
+    const [title, message, submit, busy] =
+      o.kind === 'remove'
+        ? ['remove workspace', app.removeMessage(o), 'remove', o.removing]
+        : ['delete group', app.deleteGroupMessage(o.group), 'delete', false];
+    this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
-    const rows = wrapAll([[seg(app.removeMessage(o))]], c.w);
+    const rows = wrapAll([[seg(message)]], c.w);
     rows.slice(0, 4).forEach((row, i) => row.forEach((cell, x) => this.g.put(c.x + x, c.y + i, cell.ch, {})));
-    if (o.removing) this.span(c.x, c.y + 4, 'removing…', DARK);
-    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), 'remove', () => app.submitRemove(), () => app.closeOverlay());
+    if (busy) this.span(c.x, c.y + 4, 'removing…', DARK);
+    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), submit, () => app.submitConfirm(), () => app.closeOverlay());
   }
 
   private picker(): void {

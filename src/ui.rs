@@ -58,7 +58,6 @@ const CLOSE_BUTTON_WIDTH: u16 = 3;
 const COMPACT_CLOSE_WIDTH: u16 = 5;
 const TOAST_ICON: &str = " ✓ ";
 const TOAST_MARGIN: u16 = 1;
-const NAME_RESERVED_COLS: usize = 6;
 const BEHIND_ICON: &str = "↓";
 const CONTEXT_SEPARATOR: &str = " · ";
 const MIN_MODEL_WIDTH: usize = 4;
@@ -682,8 +681,8 @@ pub fn entry_row(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, row
     row_rect(&project_rows(list, pitch, rows, scroll), rows, &row)
 }
 
-pub fn close_button(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, p: usize) -> Rect {
-    row_close_button(entry_row(list, pitch, rows, scroll, SidebarRow::Project(p)), pitch)
+pub fn close_button(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, row: SidebarRow) -> Rect {
+    row_close_button(entry_row(list, pitch, rows, scroll, row), pitch)
 }
 
 pub fn new_project_button(list: Rect, pitch: u16, rows: &[SidebarRow]) -> Rect {
@@ -695,6 +694,7 @@ pub enum SidebarHit {
     Select(usize),
     Close(usize),
     Group(usize),
+    CloseGroup(usize),
     New,
 }
 
@@ -707,10 +707,12 @@ pub fn sidebar_hit(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, p
         return Some(SidebarHit::New);
     }
     let i = layout.at(pos)?;
+    let on_close = row_close_button(layout.item(i), pitch).contains(pos);
     match rows[i] {
         SidebarRow::Gap | SidebarRow::Landing => None,
+        SidebarRow::Group(g) if on_close => Some(SidebarHit::CloseGroup(g)),
         SidebarRow::Group(g) => Some(SidebarHit::Group(g)),
-        SidebarRow::Project(p) if row_close_button(layout.item(i), pitch).contains(pos) => Some(SidebarHit::Close(p)),
+        SidebarRow::Project(p) if on_close => Some(SidebarHit::Close(p)),
         SidebarRow::Project(p) => Some(SidebarHit::Select(p)),
     }
 }
@@ -3051,11 +3053,7 @@ fn draw_group(f: &mut Frame, view: &View, g: usize, r: Rect, pitch: u16, holds_a
     let room = usize::from(r.width).saturating_sub(4 + usize::from(row_close_button(r, pitch).width) + 1);
     let used = 2 + count.chars().count();
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(used));
-    let max = if marks.is_empty() {
-        usize::from(r.width).saturating_sub(NAME_RESERVED_COLS + 2 + count.chars().count())
-    } else {
-        room.saturating_sub(used + marks.reserved())
-    };
+    let max = room.saturating_sub(used + marks.reserved());
     let shown = used + truncate_right(&group.name, max).chars().count();
     let mut line = vec![
         Span::styled(marker, Style::default().fg(Color::Cyan)),
@@ -3064,7 +3062,9 @@ fn draw_group(f: &mut Frame, view: &View, g: usize, r: Rect, pitch: u16, holds_a
         Span::styled(count, Style::default().fg(Color::DarkGray)),
     ];
     marks.push_onto(&mut line, shown, room);
-    draw_band(f, r, Line::from(line), view.row_background(r, view.dragging_entry(SidebarRow::Group(g))));
+    let bg = view.row_background(r, view.dragging_entry(SidebarRow::Group(g)));
+    draw_band(f, r, Line::from(line), bg);
+    draw_row_close(f, view, r, pitch, bg);
 }
 
 fn draw_project(f: &mut Frame, view: &View, p: usize, r: Rect, pitch: u16) {
@@ -3077,9 +3077,7 @@ fn draw_project(f: &mut Frame, view: &View, p: usize, r: Rect, pitch: u16) {
     let bg = view.row_background(r, p == view.active || view.dragging_entry(SidebarRow::Project(p)));
     let indent = if entry.group.is_some() { GROUP_INDENT } else { "" };
     let count = format!(" ({})", entry.workspaces);
-    let reserved = NAME_RESERVED_COLS
-        + indent.len()
-        + usize::from(row_close_button(r, pitch).width.saturating_sub(CLOSE_BUTTON_WIDTH));
+    let reserved = 2 + indent.len() + usize::from(row_close_button(r, pitch).width) + 1;
     let room = usize::from(r.width).saturating_sub(reserved);
     let marks =
         Tags::fit(entry.status.map(status_icon).into_iter().collect(), room.saturating_sub(count.chars().count()));
@@ -3850,11 +3848,13 @@ mod tests {
             assert_eq!(sidebar_hit(list(), 1, &rows, 0, Position::new(3, list().y + row)), expected);
         }
 
-        #[test]
-        fn the_close_button_of_a_grouped_project_closes_it() {
+        #[rstest]
+        #[case::grouped_project(SidebarRow::Project(2), SidebarHit::Close(2))]
+        #[case::header(SidebarRow::Group(0), SidebarHit::CloseGroup(0))]
+        fn the_close_button_closes_its_row(#[case] row: SidebarRow, #[case] expected: SidebarHit) {
             let rows = grouped(0, false).sidebar_rows();
-            let pos = close_button(list(), 1, &rows, 0, 2).as_position();
-            assert_eq!(sidebar_hit(list(), 1, &rows, 0, pos), Some(SidebarHit::Close(2)));
+            let pos = close_button(list(), 1, &rows, 0, row).as_position();
+            assert_eq!(sidebar_hit(list(), 1, &rows, 0, pos), Some(expected));
         }
 
         #[test]
@@ -4253,7 +4253,7 @@ mod tests {
 
         #[test]
         fn close_button_out_of_view_is_empty() {
-            assert!(close_button(list(), 1, &plain(50), 0, 49).is_empty());
+            assert!(close_button(list(), 1, &plain(50), 0, SidebarRow::Project(49)).is_empty());
         }
 
         fn with_update(hover: Option<Position>) -> View<'static> {
@@ -5753,6 +5753,27 @@ mod tests {
                 .map(|c| (c.symbol().to_string(), c.bg))
                 .collect();
             assert_eq!(cells, vec![("×".into(), DARK_HOVER), ("3".into(), DARK_HOVER)]);
+        }
+
+        #[rstest]
+        fn a_hovered_group_header_shows_its_close_button(#[values(false, true)] compact: bool) {
+            let (size, nav) = if compact { (COMPACT, Some(Nav::Projects)) } else { (AREA, None) };
+            let (v, r) = hovering(View { nav, ..sample(false) }, size, Row::Group);
+            let close = row_close_button(r, layout(size, v.widths).pitch);
+            let t = render_sized(&v, size.width, size.height);
+            let cell = t.backend().buffer()[(close.x + close.width / 2, middle(close).y)].clone();
+            assert_eq!((cell.symbol(), cell.fg), ("×", Color::DarkGray));
+        }
+
+        #[test]
+        fn a_long_group_name_is_cut_before_the_close_button() {
+            let mut v = sample(false);
+            v.groups[0].name = "x".repeat(200);
+            let (v, r) = hovering(v, AREA, Row::Group);
+            let close = row_close_button(r, 1);
+            let t = render(&v);
+            let cell = |x: u16| t.backend().buffer()[(x, r.y)].symbol().to_string();
+            assert_eq!([cell(close.x - 2), cell(close.x - 1)], ["…", " "]);
         }
 
         #[test]

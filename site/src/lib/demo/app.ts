@@ -472,6 +472,32 @@ export class App {
     this.dirty();
   }
 
+  groupSize(id: number): number {
+    return this.projects.filter((p) => p.group === id).length;
+  }
+
+  askDeleteGroup(id: number): void {
+    this.overlay = { kind: 'deleteGroup', group: id };
+    this.dirty();
+  }
+
+  deleteGroupMessage(id: number): string {
+    const inside = this.groupSize(id);
+    const message = `Delete the group ${this.group(id)?.name ?? ''}?`;
+    if (inside === 0) return message;
+    if (inside === 1) return `${message} Its project stays open, ungrouped.`;
+    return `${message} Its ${inside} projects stay open, ungrouped.`;
+  }
+
+  submitConfirm(): void {
+    const o = this.overlay;
+    if (o?.kind === 'remove') return this.submitRemove();
+    if (o?.kind !== 'deleteGroup') return;
+    this.groups = this.groups.filter((g) => g.id !== o.group);
+    for (const p of this.projects) if (p.group === o.group) p.group = undefined;
+    this.closeOverlay();
+  }
+
   addGroup(name: string, colour?: number): Group {
     const n = this.groups.length;
     const group = { id: this.id(), name, icon: GROUP_ICONS[n % GROUP_ICONS.length], colour: colour ?? GROUP_COLOURS[n % GROUP_COLOURS.length], collapsed: false };
@@ -845,10 +871,8 @@ export class App {
       const p = this.projects.find((x) => x.id === a.project);
       if (p) p.group = a.group ?? undefined;
     } else if (a.kind === 'groupStyle') this.overlay = { kind: 'groupStyle', group: a.group };
-    else if (a.kind === 'deleteGroup') {
-      this.groups = this.groups.filter((g) => g.id !== a.group);
-      for (const p of this.projects) if (p.group === a.group) p.group = undefined;
-    } else if (a.kind === 'base') {
+    else if (a.kind === 'deleteGroup') this.askDeleteGroup(a.group);
+    else if (a.kind === 'base') {
       this.changesBase = a.branch;
       this.changesScroll = 0;
     } else if (a.kind === 'openProject') return this.openPicker();
@@ -2054,9 +2078,9 @@ export class App {
       this.dirty();
       return true;
     }
-    if (o.kind === 'remove') {
+    if (o.kind === 'remove' || o.kind === 'deleteGroup') {
       if (k.key === 'Escape') this.closeOverlay();
-      else if (k.key === 'Enter') this.submitRemove();
+      else if (k.key === 'Enter') this.submitConfirm();
       return true;
     }
     if (o.kind === 'search') {

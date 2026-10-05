@@ -173,6 +173,7 @@ enum MenuAction {
 const CREATE_SUBMIT: &str = "create";
 const RENAME_SUBMIT: &str = "rename";
 const REMOVE_SUBMIT: &str = "remove";
+const DELETE_SUBMIT: &str = "delete";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const PICKER_SUBMIT: &str = "open";
 const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
@@ -211,6 +212,7 @@ enum Overlay {
     Menu { at: Position, actions: Vec<MenuAction> },
     NewGroup { input: String },
     GroupStyle { group: u64 },
+    DeleteGroup { group: u64 },
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
@@ -229,6 +231,7 @@ impl Overlay {
             Self::Rename { .. } => RENAME_SUBMIT,
             Self::RemoveWorkspace { force: true, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
+            Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
             Self::Update(UpdateStep::Installed) => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
@@ -1380,6 +1383,7 @@ impl App {
                 self.overlay =
                     Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
             }
+            Some(SidebarHit::CloseGroup(g)) => self.overlay = Some(Overlay::DeleteGroup { group: self.groups[g].id }),
             None => {}
         }
     }
@@ -2211,7 +2215,7 @@ impl App {
                 }
                 actions
             }
-            Some(SidebarHit::Group(g)) => {
+            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g)) => {
                 let id = self.groups[g].id;
                 vec![MenuAction::Rename(Target::Group(id)), MenuAction::GroupStyle(id), MenuAction::DeleteGroup(id)]
             }
@@ -2378,12 +2382,7 @@ impl App {
                 }
             }
             MenuAction::GroupStyle(group) => self.overlay = Some(Overlay::GroupStyle { group }),
-            MenuAction::DeleteGroup(id) => {
-                self.groups.retain(|g| g.id != id);
-                for p in self.projects.iter_mut().filter(|p| p.group == Some(id)) {
-                    p.group = None;
-                }
-            }
+            MenuAction::DeleteGroup(group) => self.overlay = Some(Overlay::DeleteGroup { group }),
             MenuAction::OpenProject => {
                 self.nav = None;
                 self.open_picker();
@@ -2395,6 +2394,13 @@ impl App {
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
         }
         Ok(())
+    }
+
+    fn delete_group(&mut self, id: u64) {
+        self.groups.retain(|g| g.id != id);
+        for p in self.projects.iter_mut().filter(|p| p.group == Some(id)) {
+            p.group = None;
+        }
     }
 
     fn add_group(&mut self, name: String) -> u64 {
@@ -2475,6 +2481,10 @@ impl App {
             Overlay::GroupStyle { .. } | Overlay::Usage => None,
             Overlay::RemoveWorkspace { project, workspace, force, removing: false, .. } => {
                 self.remove_worktree(project, workspace, force)
+            }
+            Overlay::DeleteGroup { group } => {
+                self.delete_group(group);
+                None
             }
             Overlay::Update(step) => self.submit_update(step),
             busy => Some(busy),
@@ -3066,12 +3076,27 @@ impl App {
                     submit: overlay.submit_label(),
                 })
             }
+            Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
+                title: "delete group",
+                message: self.delete_group_message(*group)?,
+                note: None,
+                submit: overlay.submit_label(),
+            }),
             Overlay::Picker(picker) => Self::picker_view(picker, home),
             Overlay::Issues(b) => b.view(area, issues::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
+        })
+    }
+
+    fn delete_group_message(&self, id: u64) -> Option<String> {
+        let message = format!("Delete the group {}?", self.group(id)?.name);
+        Some(match self.projects.iter().filter(|p| p.group == Some(id)).count() {
+            0 => message,
+            1 => format!("{message} Its project stays open, ungrouped."),
+            n => format!("{message} Its {n} projects stay open, ungrouped."),
         })
     }
 
@@ -3546,6 +3571,10 @@ mod tests {
         Position::new(r.x + 3, r.y)
     }
 
+    fn sidebar_close(app: &App, row: SidebarRow) -> Position {
+        ui::close_button(list(), 1, &app.sidebar_rows(), app.projects_scroll, row).as_position()
+    }
+
     fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
         ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.workspaces_scroll, row)
     }
@@ -3931,17 +3960,81 @@ mod tests {
             assert_eq!(names(&app), ["work"]);
         }
 
-        #[test]
-        fn deleting_a_group_keeps_its_projects_open_and_ungrouped() {
-            let (mut app, _rx) = app();
+        fn ask_from_the_close_button(app: &mut App) {
+            let close = sidebar_close(app, SidebarRow::Group(0));
+            click(app, close);
+        }
+
+        fn ask_from_the_menu(app: &mut App) {
+            right_click_sidebar(app, SidebarRow::Group(0));
+            pick(app, "delete group");
+        }
+
+        fn confirmation(app: &App) -> Option<String> {
+            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+                ui::Overlay::Confirm(confirm) => Some(confirm.message),
+                _ => None,
+            }
+        }
+
+        fn asked_to_delete_a_group_holding_a_project() -> (App, Receiver<AppEvent>) {
+            let (mut app, rx) = app();
             new_group(&mut app, "work");
             let work = group_label(&app, 0);
             move_to(&mut app, 0, &work);
+            ask_from_the_close_button(&mut app);
+            (app, rx)
+        }
 
-            right_click_sidebar(&mut app, SidebarRow::Group(0));
-            pick(&mut app, "delete group");
+        #[rstest]
+        #[case::close_button(ask_from_the_close_button)]
+        #[case::menu(ask_from_the_menu)]
+        fn deleting_a_group_asks_first(#[case] ask: fn(&mut App)) {
+            let (mut app, _rx) = app();
+            new_group(&mut app, "work");
+
+            ask(&mut app);
+
+            assert_eq!((confirmation(&app).is_some(), names(&app)), (true, vec!["work"]));
+        }
+
+        #[rstest]
+        #[case::empty(0, "Delete the group work?")]
+        #[case::one_project(1, "Delete the group work? Its project stays open, ungrouped.")]
+        #[case::two_projects(2, "Delete the group work? Its 2 projects stay open, ungrouped.")]
+        fn the_confirmation_says_what_happens_to_its_projects(#[case] grouped: usize, #[case] expected: &str) {
+            let (mut app, _rx, _dirs) = app_with(2);
+            new_group(&mut app, "work");
+            let work = group_label(&app, 0);
+            for p in 0..grouped {
+                move_to(&mut app, p, &work);
+            }
+
+            ask_from_the_close_button(&mut app);
+
+            assert_eq!(confirmation(&app).as_deref(), Some(expected));
+        }
+
+        #[test]
+        fn confirming_deletes_the_group_and_keeps_its_projects_open_and_ungrouped() {
+            let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
+
+            click(&mut app, form_button(DELETE_SUBMIT, 0));
 
             assert_eq!((app.groups.len(), app.projects.len(), app.projects[0].group), (0, 1, None));
+        }
+
+        #[test]
+        fn cancelling_keeps_the_group() {
+            let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
+            let asked = confirmation(&app).is_some();
+
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+
+            assert_eq!(
+                (asked, app.overlay.is_none(), names(&app), app.projects[0].group.is_some()),
+                (true, true, vec!["work"], true)
+            );
         }
 
         #[test]
@@ -4005,7 +4098,7 @@ mod tests {
             let (mut app, rx, _dirs) = app_with(3);
             let second = app.projects[1].id;
 
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, 1).as_position());
+            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(1)).as_position());
 
             pump_until(&mut app, &rx, "second project closes", |a| a.projects.iter().all(|p| p.id != second));
         }
@@ -4013,7 +4106,7 @@ mod tests {
         #[test]
         fn closing_the_active_one_activates_the_previous() {
             let (mut app, rx, _dirs) = app_with(2);
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, 1).as_position());
+            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(1)).as_position());
             pump_until(&mut app, &rx, "second project closes", |a| a.projects.len() == 1);
             assert_eq!(app.active, 0);
         }
@@ -4030,7 +4123,7 @@ mod tests {
             let (mut app, rx) = app();
             let home = TempDir::new();
             app.home = Some(home.path().to_path_buf());
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, 0).as_position());
+            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(0)).as_position());
             pump_until(&mut app, &rx, "the project closes", App::is_empty);
 
             click_new_project(&mut app);
