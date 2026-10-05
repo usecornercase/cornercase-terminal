@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.1.17
+## 0.2.0
 
 - Safer on shared machines: cornercase only uses a socket folder that is yours alone (it refuses one another user owns or can write to, or a symbolic link), checks that the server and every window talking to it run as you, and after an update restarts into its own program instead of the one the server names. Without `XDG_RUNTIME_DIR`, as in some SSH sessions and containers on Linux, another user of the same machine could otherwise pose as the cornercase server and see what you type.
 - If cornercase now refuses to start and names its own socket folder, check who owns it (`ls -ld` on that folder). If it is yours, remove it (only the link, if it is a symbolic link) and start cornercase again. If it belongs to someone else, you can't remove it, and someone may be trying to pose as cornercase: tell whoever runs the machine, and meanwhile point `CORNERCASE_SOCKET` at a socket in a folder only you can write to.
