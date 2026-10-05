@@ -30,6 +30,7 @@ import { render as markdown } from './markdown';
 import {
   type Activity,
   type Config,
+  type ConfirmView,
   type Group,
   type IssuesOverlay,
   type MenuAction,
@@ -489,13 +490,40 @@ export class App {
     return `${message} Its ${inside} projects stay open, ungrouped.`;
   }
 
+  askCloseProject(id: number): void {
+    this.overlay = { kind: 'closeProject', project: id };
+    this.dirty();
+  }
+
+  closeProjectMessage(id: number): string {
+    const p = this.projects.find((x) => x.id === id);
+    if (!p) return '';
+    const tabs = p.workspaces.reduce((n, w) => n + w.tabs.length, 0);
+    let stopped = '';
+    if (tabs === 1) stopped = ' Its tab and the programs running in it are stopped.';
+    else if (tabs > 1) stopped = ` Its ${tabs} tabs and the programs running in them are stopped.`;
+    return `Close the project ${projectLabel(p)}?${stopped} Folders and worktrees stay on disk.`;
+  }
+
+  confirmView(): ConfirmView | null {
+    const o = this.overlay;
+    if (o?.kind === 'remove') return { title: 'remove workspace', message: this.removeMessage(o), submit: 'remove', note: o.removing ? 'removing…' : undefined };
+    if (o?.kind === 'deleteGroup') return { title: 'delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
+    if (o?.kind === 'closeProject') return { title: 'close project', message: this.closeProjectMessage(o.project), submit: 'close' };
+    return null;
+  }
+
   submitConfirm(): void {
     const o = this.overlay;
     if (o?.kind === 'remove') return this.submitRemove();
-    if (o?.kind !== 'deleteGroup') return;
-    this.groups = this.groups.filter((g) => g.id !== o.group);
-    for (const p of this.projects) if (p.group === o.group) p.group = undefined;
     this.closeOverlay();
+    if (o?.kind === 'closeProject') this.closeProject(o.project);
+    else if (o?.kind === 'deleteGroup') this.deleteGroup(o.group);
+  }
+
+  deleteGroup(id: number): void {
+    this.groups = this.groups.filter((g) => g.id !== id);
+    for (const p of this.projects) if (p.group === id) p.group = undefined;
   }
 
   addGroup(name: string, colour?: number): Group {
@@ -539,7 +567,8 @@ export class App {
     this.dirty();
   }
 
-  closeProject(i: number): void {
+  closeProject(id: number): void {
+    const i = this.projects.findIndex((x) => x.id === id);
     const p = this.projects[i];
     if (!p) return;
     for (const w of p.workspaces) for (const t of w.tabs) for (const pane of t.panes) pane.shell.fg?.dispose?.();
@@ -2078,7 +2107,7 @@ export class App {
       this.dirty();
       return true;
     }
-    if (o.kind === 'remove' || o.kind === 'deleteGroup') {
+    if (this.confirmView()) {
       if (k.key === 'Escape') this.closeOverlay();
       else if (k.key === 'Enter') this.submitConfirm();
       return true;

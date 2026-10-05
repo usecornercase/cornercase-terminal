@@ -462,6 +462,8 @@ fn close_button_removes_a_project() {
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
 
     app.click(ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(0)).as_position());
+    app.wait_for("it asks first", |s| s.contains("Close the project"));
+    app.click(ui::form_buttons(ui::form_area(AREA), "close")[0].as_position());
 
     app.wait_for("only the second one is left", |s| s.contains(&entry(&name)) && !s.contains(&first_entry()));
     let _ = std::fs::remove_dir_all(&dir);

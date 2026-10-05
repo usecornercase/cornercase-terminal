@@ -213,7 +213,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | --- | --- |
 | A tab | Its panes' programs are ended, then the tab goes away. |
 | A workspace | All its tabs are closed, then the workspace goes away. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
-| A project | Everything in it is closed, then the project goes away. |
+| A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. Its projects stay open, ungrouped, and nothing in them is ended. |
 
 Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty, ready for `+ new project`. Closing every project of a group keeps the group.

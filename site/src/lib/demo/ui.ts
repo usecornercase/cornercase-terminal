@@ -41,7 +41,7 @@ import {
   workspaceRows,
 } from './layout';
 import { USAGE, USAGE_PLAN, type UsageWindow } from './data';
-import { type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabContext, tabLabel, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabContext, tabLabel, tabStatus, workspaceLabel } from './model';
 import type { Context } from './programs';
 import { type Divider, dividers, grab, panes } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, wrapAll } from './text';
@@ -450,7 +450,7 @@ export class Painter {
       this.band(r, line, bg);
       const grab: Target = { kind: 'project', project: p.id };
       this.region({ r, click: () => app.selectProject(pi), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-      this.closeX(r, areas.pitch, bg, () => app.closeProject(pi));
+      this.closeX(r, areas.pitch, bg, () => app.askCloseProject(p.id));
     });
     const [above, under] = rows.hidden();
     const named = (from: number, to: number) => sidebar.slice(from, to).filter((s) => s.kind === 'group' || s.kind === 'project').length;
@@ -570,7 +570,8 @@ export class Painter {
     if (o.kind === 'menu') return this.menu();
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
-    if (o.kind === 'remove' || o.kind === 'deleteGroup') return this.confirm();
+    const confirm = this.app.confirmView();
+    if (confirm) return this.confirm(confirm);
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
@@ -700,21 +701,15 @@ export class Painter {
     this.submitButton(usageDone(r), DONE, () => app.closeOverlay());
   }
 
-  private confirm(): void {
+  private confirm({ title, message, submit, note }: ConfirmView): void {
     const app = this.app;
-    const o = app.overlay;
-    if (!o || (o.kind !== 'remove' && o.kind !== 'deleteGroup')) return;
     const r = formArea(app.cols, app.rows);
     this.backdrop(false);
-    const [title, message, submit, busy] =
-      o.kind === 'remove'
-        ? ['remove workspace', app.removeMessage(o), 'remove', o.removing]
-        : ['delete group', app.deleteGroupMessage(o.group), 'delete', false];
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     const rows = wrapAll([[seg(message)]], c.w);
     rows.slice(0, 4).forEach((row, i) => row.forEach((cell, x) => this.g.put(c.x + x, c.y + i, cell.ch, {})));
-    if (busy) this.span(c.x, c.y + 4, 'removing…', DARK);
+    if (note) this.span(c.x, c.y + 4, note, DARK);
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), submit, () => app.submitConfirm(), () => app.closeOverlay());
   }
 

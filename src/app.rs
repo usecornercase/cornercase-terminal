@@ -174,6 +174,7 @@ const CREATE_SUBMIT: &str = "create";
 const RENAME_SUBMIT: &str = "rename";
 const REMOVE_SUBMIT: &str = "remove";
 const DELETE_SUBMIT: &str = "delete";
+const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const PICKER_SUBMIT: &str = "open";
 const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
@@ -213,6 +214,7 @@ enum Overlay {
     NewGroup { input: String },
     GroupStyle { group: u64 },
     DeleteGroup { group: u64 },
+    CloseProject { project: u64 },
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
@@ -232,6 +234,7 @@ impl Overlay {
             Self::RemoveWorkspace { force: true, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
+            Self::CloseProject { .. } => CLOSE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
             Self::Update(UpdateStep::Installed) => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
@@ -1377,7 +1380,7 @@ impl App {
             Some(SidebarHit::Select(i)) => {
                 self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area);
             }
-            Some(SidebarHit::Close(i)) => self.close_project(i),
+            Some(SidebarHit::Close(i)) => self.overlay = Some(Overlay::CloseProject { project: self.projects[i].id }),
             Some(SidebarHit::Group(g)) => self.grab(Target::Group(self.groups[g].id), rect(SidebarRow::Group(g)), area),
             Some(SidebarHit::New) => {
                 self.overlay =
@@ -1388,7 +1391,8 @@ impl App {
         }
     }
 
-    fn close_project(&mut self, p: usize) {
+    fn close_project(&mut self, id: u64) {
+        let Some(p) = self.project_index(id) else { return };
         let project = &mut self.projects[p];
         project.closing = true;
         project.kill();
@@ -2486,6 +2490,10 @@ impl App {
                 self.delete_group(group);
                 None
             }
+            Overlay::CloseProject { project } => {
+                self.close_project(project);
+                None
+            }
             Overlay::Update(step) => self.submit_update(step),
             busy => Some(busy),
         };
@@ -3082,6 +3090,12 @@ impl App {
                 note: None,
                 submit: overlay.submit_label(),
             }),
+            Overlay::CloseProject { project } => ui::Overlay::Confirm(ui::Confirm {
+                title: "close project",
+                message: self.close_project_message(*project)?,
+                note: None,
+                submit: overlay.submit_label(),
+            }),
             Overlay::Picker(picker) => Self::picker_view(picker, home),
             Overlay::Issues(b) => b.view(area, issues::now()),
             Overlay::Search(search) => self.search_view(search),
@@ -3098,6 +3112,16 @@ impl App {
             1 => format!("{message} Its project stays open, ungrouped."),
             n => format!("{message} Its {n} projects stay open, ungrouped."),
         })
+    }
+
+    fn close_project_message(&self, id: u64) -> Option<String> {
+        let project = &self.projects[self.project_index(id)?];
+        let stopped = match project.workspaces.iter().map(|w| w.tabs.len()).sum::<usize>() {
+            0 => String::new(),
+            1 => " Its tab and the programs running in it are stopped.".into(),
+            n => format!(" Its {n} tabs and the programs running in them are stopped."),
+        };
+        Some(format!("Close the project {}?{stopped} Folders and worktrees stay on disk.", self.project_label(project)))
     }
 
     fn search_view(&self, search: &Search) -> ui::Overlay {
@@ -3614,6 +3638,13 @@ mod tests {
         }
     }
 
+    fn confirmation(app: &App) -> Option<String> {
+        match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+            ui::Overlay::Confirm(confirm) => Some(confirm.message),
+            _ => None,
+        }
+    }
+
     fn form_error(app: &App) -> Option<&str> {
         match &app.overlay {
             Some(Overlay::NewWorkspace { error, .. } | Overlay::RemoveWorkspace { error, .. }) => error.as_deref(),
@@ -3970,13 +4001,6 @@ mod tests {
             pick(app, "delete group");
         }
 
-        fn confirmation(app: &App) -> Option<String> {
-            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
-                ui::Overlay::Confirm(confirm) => Some(confirm.message),
-                _ => None,
-            }
-        }
-
         fn asked_to_delete_a_group_holding_a_project() -> (App, Receiver<AppEvent>) {
             let (mut app, rx) = app();
             new_group(&mut app, "work");
@@ -4077,7 +4101,19 @@ mod tests {
     }
 
     mod sidebar_clicks {
+        use rstest::rstest;
+
         use super::*;
+
+        fn ask_to_close(app: &mut App, p: usize) {
+            let close = sidebar_close(app, SidebarRow::Project(p));
+            click(app, close);
+        }
+
+        fn confirm_close(app: &mut App, p: usize) {
+            ask_to_close(app, p);
+            send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+        }
 
         #[test]
         fn new_button_opens_the_folder_picker() {
@@ -4093,20 +4129,63 @@ mod tests {
             assert_eq!(app.active, 0);
         }
 
+        #[rstest]
+        #[case::one_tab(1, " Its tab and the programs running in it are stopped.")]
+        #[case::two_tabs(2, " Its 2 tabs and the programs running in them are stopped.")]
+        fn the_confirmation_says_what_stops(#[case] tabs: usize, #[case] stopped: &str) {
+            let (mut app, _rx, _dirs) = app_with(1);
+            for _ in 1..tabs {
+                click_row(&mut app, WorkspaceRow::NewTab(0));
+            }
+
+            ask_to_close(&mut app, 0);
+
+            let label = app.project_label(&app.projects[0]);
+            let expected = format!("Close the project {label}?{stopped} Folders and worktrees stay on disk.");
+            assert_eq!(confirmation(&app), Some(expected));
+        }
+
         #[test]
-        fn close_button_closes_that_project() {
+        fn without_tabs_the_confirmation_only_asks() {
+            let (mut app, rx, _dirs) = app_with(1);
+            click_close(&mut app, WorkspaceRow::Tab(0, 0));
+            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+
+            ask_to_close(&mut app, 0);
+
+            let label = app.project_label(&app.projects[0]);
+            let expected = format!("Close the project {label}? Folders and worktrees stay on disk.");
+            assert_eq!(confirmation(&app), Some(expected));
+        }
+
+        #[test]
+        fn confirming_closes_that_project() {
             let (mut app, rx, _dirs) = app_with(3);
             let second = app.projects[1].id;
+            ask_to_close(&mut app, 1);
+            let asked = confirmation(&app).is_some();
 
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(1)).as_position());
+            click(&mut app, form_button(CLOSE_SUBMIT, 0));
 
             pump_until(&mut app, &rx, "second project closes", |a| a.projects.iter().all(|p| p.id != second));
+            assert!(asked);
+        }
+
+        #[test]
+        fn cancelling_keeps_the_project_running() {
+            let (mut app, _rx, _dirs) = app_with(2);
+            ask_to_close(&mut app, 1);
+            let asked = confirmation(&app).is_some();
+
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+
+            assert_eq!((asked, app.overlay.is_none(), app.projects[1].closing), (true, true, false));
         }
 
         #[test]
         fn closing_the_active_one_activates_the_previous() {
             let (mut app, rx, _dirs) = app_with(2);
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(1)).as_position());
+            confirm_close(&mut app, 1);
             pump_until(&mut app, &rx, "second project closes", |a| a.projects.len() == 1);
             assert_eq!(app.active, 0);
         }
@@ -4123,7 +4202,7 @@ mod tests {
             let (mut app, rx) = app();
             let home = TempDir::new();
             app.home = Some(home.path().to_path_buf());
-            click(&mut app, ui::close_button(list(), 1, &plain(2), 0, SidebarRow::Project(0)).as_position());
+            confirm_close(&mut app, 0);
             pump_until(&mut app, &rx, "the project closes", App::is_empty);
 
             click_new_project(&mut app);

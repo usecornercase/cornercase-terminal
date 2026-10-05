@@ -117,6 +117,13 @@ export interface IssuesOverlay {
   chosen: string | null;
 }
 
+export interface ConfirmView {
+  title: string;
+  message: string;
+  submit: string;
+  note?: string;
+}
+
 export type Overlay =
   | { kind: 'menu'; at: Pos; actions: MenuAction[] }
   | { kind: 'newGroup'; input: string }
@@ -125,6 +132,7 @@ export type Overlay =
   | { kind: 'rename'; target: Target; input: string }
   | { kind: 'remove'; project: number; workspace: number; removing?: boolean }
   | { kind: 'deleteGroup'; group: number }
+  | { kind: 'closeProject'; project: number }
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number }
   | { kind: 'search'; query: string; selected: number; scroll: number }
   | { kind: 'usage' }
