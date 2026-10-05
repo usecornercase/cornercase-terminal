@@ -1060,9 +1060,7 @@ fn a_socket_folder_other_users_can_write_is_refused() {
         finish_within(cmd.spawn().expect("run cornercase"), TIMEOUT)
     });
 
-    let refused = outputs.iter().map(|out| {
-        !out.status.success() && String::from_utf8_lossy(&out.stderr).contains("can be written by other users")
-    });
+    let refused = outputs.iter().map(|out| refused_with(out, KEEP_THE_FOLDER));
     assert_eq!(refused.collect::<Vec<_>>(), [true, true, true]);
 }
 
@@ -1075,10 +1073,33 @@ fn a_bare_socket_name_is_checked_in_the_folder_it_runs_in() {
 
     let out = cmd.output().expect("run cornercase");
 
-    assert!(
-        !out.status.success() && String::from_utf8_lossy(&out.stderr).contains("can be written by other users"),
-        "{out:?}"
-    );
+    assert!(refused_with(&out, KEEP_THE_FOLDER), "{out:?}");
+}
+
+#[test]
+fn cornercases_own_socket_folder_may_be_removed() {
+    let session = Session::new();
+    let own = session.dir.join(format!("cornercase-{}", cornercase::protocol::own_uid()));
+    std::fs::create_dir(&own).expect("create the folder");
+    std::fs::set_permissions(&own, std::fs::Permissions::from_mode(0o777)).expect("open the folder to all");
+    let mut cmd = session.command();
+    cmd.arg("kill-server").env_remove(SOCKET_ENV).env_remove("XDG_RUNTIME_DIR").env("TMPDIR", &session.dir);
+
+    let out = cmd.output().expect("run cornercase");
+
+    assert!(refused_with(&out, REMOVE_THE_FOLDER), "{out:?}");
+}
+
+const KEEP_THE_FOLDER: &str = "Point CORNERCASE_SOCKET at a socket in a folder only you can write to";
+const REMOVE_THE_FOLDER: &str = "If that folder is yours, remove it and start cornercase again";
+
+fn refused_with(out: &std::process::Output, advice: &str) -> bool {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let removal = stderr.to_lowercase().contains("remove");
+    !out.status.success()
+        && stderr.contains("can be written by other users")
+        && stderr.contains(advice)
+        && (advice == REMOVE_THE_FOLDER || !removal)
 }
 
 fn finish_within(mut child: std::process::Child, timeout: Duration) -> std::process::Output {

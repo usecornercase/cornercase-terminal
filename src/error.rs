@@ -24,11 +24,8 @@ pub enum Error {
     },
     #[error("a cornercase server is already running on `{0}`")]
     ServerRunning(PathBuf),
-    #[error(
-        "refusing to use `{}`: it {reason}. Remove it, or point CORNERCASE_SOCKET at a folder only you can write to",
-        path.display()
-    )]
-    UnsafeSocketDir { path: PathBuf, reason: &'static str },
+    #[error("refusing to use `{}`: it {reason}. {}", path.display(), unsafe_dir_advice(*custom))]
+    UnsafeSocketDir { path: PathBuf, reason: &'static str, custom: bool },
     #[error("the other end of the cornercase socket belongs to another user (uid {0})")]
     OtherUser(u32),
     #[error("failed to start the cornercase server; see `{log}`")]
@@ -64,3 +61,12 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+fn unsafe_dir_advice(custom: bool) -> &'static str {
+    if custom {
+        "Point CORNERCASE_SOCKET at a socket in a folder only you can write to"
+    } else {
+        "If that folder is yours, remove it and start cornercase again; \
+         if not, set CORNERCASE_SOCKET to a socket in a folder only you can write to"
+    }
+}

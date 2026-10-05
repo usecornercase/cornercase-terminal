@@ -82,12 +82,14 @@ The server didn't come up within five seconds. The message names its log file; o
 
 cornercase keeps its socket in a folder only you can use: `$XDG_RUNTIME_DIR/cornercase`, or `cornercase-<your uid>` in your temporary folder. It refuses a folder that belongs to another user, that other users can write to, or that is a symbolic link, because whoever controls that folder could pose as the cornercase server and see what you type. The message names the folder and what is wrong with it.
 
-Check who owns it with `ls -ld` on that path:
+What to do depends on where the folder comes from.
 
-- **It is yours** (other users can write to it, or it is a symbolic link): remove it and start cornercase again. It creates a new one that only you can use.
+**cornercase's own folder** (you didn't set `CORNERCASE_SOCKET`). Check who owns it with `ls -ld` on that path:
+
+- **It is yours** (other users can write to it, or it is a symbolic link): remove it and start cornercase again. It creates a new one that only you can use. If it is a symbolic link, remove only the link (`rm` on the path, without a trailing `/`), never the folder it points to.
 - **It belongs to another user**: you can't remove it, and someone may be trying to pose as cornercase. Tell whoever runs the machine. Until it is gone, point `CORNERCASE_SOCKET` at a socket in a folder only you can write to, for example `export CORNERCASE_SOCKET=~/.cornercase/server.sock`. With it set, cornercase keeps its settings and session next to that socket, so it starts with default settings and a new session (see [Files and environment](../../reference/files-and-environment/)).
 
-If the folder is the one of your own `CORNERCASE_SOCKET`, point it at a folder only you can write to. A `CORNERCASE_SOCKET` without a folder, such as `server.sock`, uses the folder you start cornercase from.
+**The folder of your own `CORNERCASE_SOCKET`**: don't remove it, since it may hold your other files. Point `CORNERCASE_SOCKET` at a socket in a folder only you can write to instead. A `CORNERCASE_SOCKET` without a folder, such as `server.sock`, uses the folder you start cornercase from.
 
 ### "the other end of the cornercase socket belongs to another user"
 
