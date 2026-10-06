@@ -62,7 +62,7 @@ Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty),
 
 Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every key once a program enables the kitty protocol; a legacy encoder for the rest. Mouse events are encoded in `mouse.rs`, in the mode and encoding the program asked for, relative to its pane.
 
-`process.rs` finds the cwd, name and arguments of a PTY's foreground process: `/proc` on Linux, `proc_pidinfo`, `proc_name` and `sysctl(KERN_PROCARGS2)` on macOS (the only `unsafe` code). Tab names, agent detection and agent launches depend on it.
+`process.rs` finds the cwd, name and arguments of a PTY's foreground process: `/proc` on Linux, `proc_pidinfo`, `proc_name` and `sysctl(KERN_PROCARGS2)` on macOS (the only `unsafe` code). Tab names, agent detection and agent launches depend on it. It also lists a process's descendants and reads their resident memory (`/proc/<pid>/statm`, `proc_pidinfo(PROC_PIDTASKINFO)`) for the memory at the end of an agent tab's line.
 
 ## State and side effects
 
@@ -88,13 +88,14 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `keys.rs`, `mouse.rs` | Key and mouse encoding for programs. |
 | `host_theme.rs` | Asking the outer terminal for its colours and its name. |
 | `notify.rs` | Desktop notifications through the outer terminal: which escape sequence each terminal understands, and how it is written. |
-| `process.rs` | A process's cwd, name, arguments and environment, per platform. |
+| `process.rs` | A process's cwd, name, arguments, environment, children and resident memory, per platform. |
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
 | `worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
 | `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST) and Linear (GraphQL), the browser state and the on-disk cache. |
 | `agents.rs` | Known agents, modes and arguments, choosing and detecting an agent, the trust prompt. |
 | `activity.rs` | What the agent in a pane is doing: Claude Code's session file and terminal title, Codex's terminal title and turns, and the finished-but-unseen mark. |
 | `context.rs`, `context/codex.rs` | Model/context lines for Claude Code and Codex. Claude uses its session transcript and configured window rules; Codex follows the process's open rollout, recorded model and latest usage/window. Both read incrementally and clear obsolete context on session changes and compaction. |
+| `memory.rs` | How much memory an agent pane uses: the resident size of its shell and everything under it, measured on a thread every 2 seconds. |
 | `usage.rs` | Claude Code's plan usage: asking `claude` for it over its control protocol, reading the answer, and the dialog's state. |
 | `launch.rs` | Starting an agent in a new tab, as a pure state machine. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |

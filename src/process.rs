@@ -5,10 +5,23 @@ use std::path::PathBuf;
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
 
-pub use imp::{all, args, children, cwd, env, name, open_files, peer_uid};
+pub use imp::{all, args, children, cwd, env, name, open_files, peer_uid, resident};
+
+const MAX_DESCENDANTS: usize = 256;
 
 pub fn alive(pid: i32) -> bool {
     Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
+}
+
+pub fn descendants(pid: i32) -> Vec<i32> {
+    let mut found = children(pid);
+    let mut at = 0;
+    while at < found.len() && found.len() < MAX_DESCENDANTS {
+        found.extend(children(found[at]));
+        at += 1;
+    }
+    found.truncate(MAX_DESCENDANTS);
+    found
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
@@ -97,6 +110,12 @@ mod imp {
         let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
         vars(environ.split(|b| *b == 0))
     }
+
+    pub fn resident(pid: i32) -> Option<u64> {
+        let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
+        let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
+        Some(pages.saturating_mul(u64::try_from(rustix::param::page_size()).ok()?))
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -148,16 +167,22 @@ mod imp {
         Ok(uid)
     }
 
+    fn pid_info<T>(pid: i32, flavor: c_int) -> Option<T> {
+        let mut info: T = unsafe { std::mem::zeroed() };
+        let size = c_int::try_from(size_of::<T>()).ok()?;
+        let read = unsafe { libc::proc_pidinfo(pid, flavor, 0, (&raw mut info).cast(), size) };
+        (read == size).then_some(info)
+    }
+
     pub fn cwd(pid: i32) -> Option<PathBuf> {
-        let mut info: libc::proc_vnodepathinfo = unsafe { std::mem::zeroed() };
-        let size = c_int::try_from(size_of::<libc::proc_vnodepathinfo>()).ok()?;
-        let read = unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDVNODEPATHINFO, 0, (&raw mut info).cast(), size) };
-        if read != size {
-            return None;
-        }
+        let info: libc::proc_vnodepathinfo = pid_info(pid, libc::PROC_PIDVNODEPATHINFO)?;
         let bytes: Vec<u8> = info.pvi_cdir.vip_path.iter().flatten().map(|c| c.cast_unsigned()).collect();
         let path = CStr::from_bytes_until_nul(&bytes).ok()?;
         (!path.is_empty()).then(|| PathBuf::from(OsStr::from_bytes(path.to_bytes())))
+    }
+
+    pub fn resident(pid: i32) -> Option<u64> {
+        pid_info(pid, libc::PROC_PIDTASKINFO).map(|info: libc::proc_taskinfo| info.pti_resident_size)
     }
 
     pub fn name(pid: i32) -> Option<String> {
@@ -227,6 +252,10 @@ mod imp {
     pub fn env(_pid: i32) -> Vec<(String, String)> {
         Vec::new()
     }
+
+    pub fn resident(_pid: i32) -> Option<u64> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -234,28 +263,51 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-
-    fn me() -> i32 {
-        i32::try_from(std::process::id()).expect("pid fits in i32")
-    }
-
-    fn gone() -> i32 {
-        let mut child = std::process::Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().expect("spawn sh");
-        child.wait().expect("wait for sh");
-        i32::try_from(child.id()).expect("pid fits in i32")
-    }
+    use crate::test_util::{exited_pid, this_pid};
 
     mod alive {
         use super::*;
 
         #[test]
         fn is_true_for_this_process() {
-            assert!(alive(me()));
+            assert!(alive(this_pid()));
         }
 
         #[test]
         fn is_false_for_a_process_that_exited() {
-            assert!(!alive(gone()));
+            assert!(!alive(exited_pid()));
+        }
+    }
+
+    mod descendants {
+        use super::*;
+        use crate::test_util::Family;
+
+        #[test]
+        fn reach_the_children_of_children() {
+            let family = Family::new();
+            let expected = [family.child().expect("a child"), family.grandchild().expect("a grandchild")];
+
+            assert_eq!(descendants(family.pid()), expected);
+        }
+
+        #[test]
+        fn are_none_for_a_process_that_exited() {
+            assert_eq!(descendants(exited_pid()), Vec::<i32>::new());
+        }
+    }
+
+    mod resident {
+        use super::*;
+
+        #[test]
+        fn is_some_memory_for_this_process() {
+            assert!(resident(this_pid()).is_some_and(|bytes| bytes > 0));
+        }
+
+        #[test]
+        fn is_none_for_a_process_that_exited() {
+            assert_eq!(resident(exited_pid()), None);
         }
     }
 
@@ -264,7 +316,7 @@ mod tests {
 
         #[test]
         fn has_the_test_binary_as_its_first_argument() {
-            let first = args(me()).into_iter().next().expect("an argument");
+            let first = args(this_pid()).into_iter().next().expect("an argument");
             let exe = std::env::current_exe().expect("current exe");
 
             assert_eq!(Path::new(&first).file_name(), exe.file_name());
@@ -274,12 +326,12 @@ mod tests {
         fn has_the_current_dir_as_its_cwd() {
             let here = std::env::current_dir().expect("current dir").canonicalize().expect("canonicalize");
 
-            assert_eq!(cwd(me()).map(|p| p.canonicalize().expect("canonicalize")), Some(here));
+            assert_eq!(cwd(this_pid()).map(|p| p.canonicalize().expect("canonicalize")), Some(here));
         }
 
         #[test]
         fn has_a_name() {
-            assert!(name(me()).is_some_and(|n| !n.is_empty()));
+            assert!(name(this_pid()).is_some_and(|n| !n.is_empty()));
         }
     }
 
@@ -298,7 +350,7 @@ mod tests {
 
         #[test]
         fn is_empty_for_a_process_that_is_gone() {
-            assert_eq!(env(gone()), Vec::new());
+            assert_eq!(env(exited_pid()), Vec::new());
         }
     }
 

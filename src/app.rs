@@ -14,6 +14,7 @@ use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, BranchPicker, Checkout, Tints};
 use crate::clipboard;
 use crate::config::{self, Config};
+use crate::context::Context;
 use crate::error::Result;
 use crate::git;
 use crate::host_theme::HostTheme;
@@ -24,6 +25,7 @@ use crate::issues::{
 };
 use crate::launch::{self, Launch, Step};
 use crate::markdown;
+use crate::memory;
 use crate::mouse;
 use crate::notify::{self, Notification};
 use crate::picker::Picker;
@@ -311,6 +313,14 @@ fn agent_in(config: &Config, dir: Option<&Path>, term: &mut Term) -> Option<(Str
     }
 }
 
+fn measure_memory(term: &mut Term, measure: bool, now: Instant) {
+    if term.agent.status().is_none() {
+        term.memory = memory::Pane::default();
+    } else if measure && let Some(pid) = term.shell_pid() {
+        term.memory.update(pid, now);
+    }
+}
+
 fn wheel(kind: MouseEventKind) -> Option<isize> {
     match kind {
         MouseEventKind::ScrollUp => Some(-WHEEL_ROWS),
@@ -542,9 +552,11 @@ impl App {
         if read {
             self.watched = Some(now);
         }
+        let measured = self.project().map(|p| p.id).filter(|_| self.config.memory_line);
         let (config, dir) = (&self.config, self.claude_dir.as_deref());
         let mut notices = Vec::new();
         for project in &mut self.projects {
+            let measure = measured == Some(project.id);
             for workspace in &mut project.workspaces {
                 for tab in &mut workspace.tabs {
                     let seen = visible == Some(tab.id);
@@ -564,6 +576,7 @@ impl App {
                         } else if seen {
                             term.agent.see();
                         }
+                        measure_memory(term, measure, now);
                     }
                 }
             }
@@ -1566,10 +1579,19 @@ impl App {
         self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
     }
 
+    fn tab_details<'a>(&self, tab: &'a Tab) -> (Option<&'a Context>, Option<u64>) {
+        (tab.context().filter(|_| self.config.context_line), tab.memory().filter(|_| self.config.memory_line))
+    }
+
     fn tab_lines(&self) -> Vec<Vec<u16>> {
-        let shown = self.config.context_line;
         let lines = |w: &Workspace| -> Vec<u16> {
-            w.tabs.iter().map(|t| ui::tab_lines(shown && t.context().is_some())).collect()
+            w.tabs
+                .iter()
+                .map(|t| {
+                    let (context, memory) = self.tab_details(t);
+                    ui::tab_lines(context, memory)
+                })
+                .collect()
         };
         self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default()
     }
@@ -3000,10 +3022,14 @@ impl App {
                         tabs: w
                             .tabs
                             .iter()
-                            .map(|t| ui::TabEntry {
-                                name: t.label(&self.config),
-                                status: t.status(),
-                                context: t.context().filter(|_| self.config.context_line).cloned(),
+                            .map(|t| {
+                                let (context, memory) = self.tab_details(t);
+                                ui::TabEntry {
+                                    name: t.label(&self.config),
+                                    status: t.status(),
+                                    context: context.cloned(),
+                                    memory,
+                                }
                             })
                             .collect(),
                         behind: w.behind,
@@ -5478,6 +5504,12 @@ rm -f "$1/sessions/$$.json"
             (r.x..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
         }
 
+        fn second_row(app: &mut App) -> (u16, String) {
+            let r = row_rect(app, WorkspaceRow::Tab(0, 0));
+            let below = text(&rendered(app, AREA), Rect { y: r.y + 1, height: 1, ..r });
+            (r.height, below.trim_end().to_string())
+        }
+
         #[test]
         fn a_tab_follows_what_claude_says_it_is_doing() {
             let (mut app, rx, _dirs) = app_with(1);
@@ -5535,11 +5567,10 @@ rm -f "$1/sessions/$$.json"
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
 
-            let r = row_rect(&app, WorkspaceRow::Tab(0, 0));
-            let below = text(&rendered(&mut app, AREA), Rect { y: r.y + 1, height: 1, ..r });
+            let (height, below) = second_row(&mut app);
             claude.signal("quit");
 
-            assert_eq!((r.height, below.trim_end()), (2, "      Opus 5.5 · 17%"));
+            assert_eq!((height, below.as_str()), (2, "      Opus 5.5 · 17%"));
         }
 
         #[test]
@@ -5550,11 +5581,71 @@ rm -f "$1/sessions/$$.json"
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
 
-            let r = row_rect(&app, WorkspaceRow::Tab(0, 0));
-            let below = text(&rendered(&mut app, AREA), Rect { y: r.y + 1, height: 1, ..r });
+            let (height, below) = second_row(&mut app);
             claude.signal("quit");
 
-            assert_eq!((r.height, below.contains("Opus")), (1, false));
+            assert_eq!((height, below.contains("Opus")), (1, false));
+        }
+
+        fn memory(app: &App) -> Option<u64> {
+            app.projects[0].workspaces[0].tabs[0].memory()
+        }
+
+        fn measured_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, Claude) {
+            let (mut app, rx, dirs) = app_with(1);
+            app.config.memory_line = true;
+            let claude = Claude::running(SILENT_CLAUDE);
+            claude.start(&mut app);
+            watch_until(&mut app, &rx, "the memory is measured", |a| memory(a).is_some());
+            (app, rx, dirs, claude)
+        }
+
+        #[test]
+        fn with_the_memory_on_an_agent_tab_shows_how_much_it_uses_under_its_name() {
+            let (mut app, _rx, _dirs, claude) = measured_claude();
+
+            let (height, below) = second_row(&mut app);
+            claude.signal("quit");
+
+            assert_eq!((height, below.ends_with(" MB")), (2, true), "{below}");
+        }
+
+        #[test]
+        fn turning_the_memory_off_gives_the_tab_its_row_back() {
+            let (mut app, _rx, _dirs, claude) = measured_claude();
+
+            app.config.memory_line = false;
+            let (height, below) = second_row(&mut app);
+            claude.signal("quit");
+
+            assert_eq!((height, below.contains(" MB")), (1, false), "{below}");
+        }
+
+        #[test]
+        fn the_memory_goes_once_the_agent_quits() {
+            let (mut app, rx, _dirs, claude) = measured_claude();
+
+            claude.signal("quit");
+
+            watch_until(&mut app, &rx, "the memory goes", |a| memory(a).is_none());
+        }
+
+        #[test]
+        fn a_split_tab_adds_up_the_memory_of_its_agents() {
+            let (mut app, rx, _dirs, claude) = measured_claude();
+            let pane = areas().pane;
+            right_click(&mut app, Position::new(pane.x + 1, pane.y + 1));
+            pick(&mut app, "split right");
+            claude.start(&mut app);
+            let panes = |a: &App| -> Vec<Option<u64>> {
+                a.projects[0].workspaces[0].tabs[0].panes.iter().map(|t| t.memory.bytes()).collect()
+            };
+            watch_until(&mut app, &rx, "both agents are measured", |a| panes(a).iter().all(Option::is_some));
+
+            let sum = panes(&app).into_iter().flatten().sum::<u64>();
+            claude.signal("quit");
+
+            assert_eq!(memory(&app), Some(sum));
         }
 
         #[test]
@@ -6335,7 +6426,7 @@ rm -f "$1/sessions/$$.json"
             show(&mut s.app, Page::Tui);
             assert_eq!(
                 form(&s.app).rows(),
-                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]
+                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::MemoryLine, Row::Notifications, Row::Updates]
             );
         }
 

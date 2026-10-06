@@ -730,6 +730,10 @@ export function taskFor(prompt: string, place: Place): Task {
 
 const AGENT_MODEL = 'Opus 5.5';
 const AGENT_WINDOW = 1_000_000;
+const MB = 1 << 20;
+const CLAUDE_MEMORY = 412 * MB;
+const CODEX_MEMORY = 168 * MB;
+const MEMORY_PER_TOKEN = 4_000;
 const PROMPT_TOKENS = 38_000;
 const REPLY_TOKENS = 9_000;
 
@@ -799,6 +803,10 @@ export class Agent implements Program {
     return this.name === 'claude' && this.tokens
       ? { model: AGENT_MODEL, percent: Math.min(100, Math.round((this.tokens / AGENT_WINDOW) * 100)) }
       : null;
+  }
+
+  get memory(): number {
+    return (this.name === 'codex' ? CODEX_MEMORY : CLAUDE_MEMORY) + this.tokens * MEMORY_PER_TOKEN;
   }
 
   private reply(): void {

@@ -15,6 +15,7 @@ use crate::context;
 use crate::emulator::Emulator;
 use crate::error::{Error, Result};
 use crate::host_theme::HostTheme;
+use crate::memory;
 use crate::process;
 use crate::protocol;
 
@@ -32,6 +33,7 @@ pub struct Term {
     pub emulator: Emulator,
     pub agent: activity::Pane,
     pub context: context::Pane,
+    pub memory: memory::Pane,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -90,6 +92,7 @@ impl Term {
             emulator,
             agent: activity::Pane::default(),
             context: context::Pane::default(),
+            memory: memory::Pane::default(),
             master: pair.master,
             writer,
             child,
@@ -115,10 +118,11 @@ impl Term {
     }
 
     pub fn foreground_pid(&self) -> Option<i32> {
-        self.master
-            .process_group_leader()
-            .filter(|pid| process::alive(*pid))
-            .or_else(|| self.child.process_id().and_then(|pid| i32::try_from(pid).ok()))
+        self.master.process_group_leader().filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
+    }
+
+    pub fn shell_pid(&self) -> Option<i32> {
+        self.child.process_id().and_then(|pid| i32::try_from(pid).ok())
     }
 
     pub fn cwd(&self) -> Option<PathBuf> {
@@ -132,7 +136,7 @@ impl Term {
     }
 
     pub fn shell_in_foreground(&self) -> bool {
-        let shell = self.child.process_id().and_then(|pid| i32::try_from(pid).ok());
+        let shell = self.shell_pid();
         shell.is_some() && self.foreground_pid() == shell
     }
 
@@ -270,6 +274,24 @@ mod tests {
             let (term, _rx) = spawn_sh_in(Some(tmp.clone()));
 
             wait_until("shell starts in requested dir", || term.cwd().as_ref() == Some(&tmp));
+        }
+    }
+
+    mod shell_pid {
+        use super::*;
+
+        #[test]
+        fn is_the_parent_of_the_program_in_the_foreground() {
+            let (mut term, _rx) = spawn_sh();
+
+            term.write(b"/bin/sleep 30\r");
+
+            wait_until("sleep runs under the shell", || {
+                term.shell_pid()
+                    .zip(term.foreground_pid())
+                    .is_some_and(|(shell, pid)| process::children(shell).contains(&pid))
+            });
+            term.write(b"\x03");
         }
     }
 

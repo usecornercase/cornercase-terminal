@@ -36,6 +36,7 @@ pub struct Config {
     pub sidebar: String,
     pub dim_inactive_panes: bool,
     pub context_line: bool,
+    pub memory_line: bool,
     pub desktop_notifications: String,
     pub check_updates: bool,
 }
@@ -58,6 +59,7 @@ impl Default for Config {
             sidebar: ui::Sidebar::default().id().into(),
             dim_inactive_panes: true,
             context_line: true,
+            memory_line: false,
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
         }
@@ -173,6 +175,11 @@ mod tests {
         #[test]
         fn the_context_line_starts_shown() {
             assert!(Config::default().context_line);
+        }
+
+        #[test]
+        fn the_memory_starts_hidden() {
+            assert!(!Config::default().memory_line);
         }
     }
 

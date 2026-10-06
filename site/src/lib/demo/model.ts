@@ -14,6 +14,7 @@ export interface Pane {
   agent?: string | null;
   activity?: Activity | null;
   context?: Context | null;
+  memory?: number | null;
   unseen?: boolean;
   since?: number;
   notified?: boolean;
@@ -149,6 +150,7 @@ export interface Config {
   sidebar: string;
   dim: boolean;
   contextLine: boolean;
+  memoryLine: boolean;
   notify: string;
   updates: boolean;
   agentArgs: Record<string, string[]>;
@@ -165,6 +167,7 @@ export const defaultConfig = (): Config => ({
   sidebar: 'side_by_side',
   dim: true,
   contextLine: true,
+  memoryLine: false,
   notify: 'auto',
   updates: true,
   agentArgs: { claude: ['--permission-mode', 'plan'] },
@@ -233,4 +236,6 @@ function mostUrgent(statuses: (Status | null)[]): Status | null {
 export const attention = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses.filter((s) => s === 'done' || s === 'waiting'));
 export const tabStatus = (t: Tab): Status | null => mostUrgent(t.panes.map(paneStatus));
 export const tabContext = (t: Tab): Context | null => activePane(t)?.context ?? t.panes.find((p) => p.context)?.context ?? null;
+export const tabMemory = (t: Tab): number | null =>
+  t.panes.reduce<number | null>((sum, p) => (p.memory == null ? sum : (sum ?? 0) + p.memory), null);
 export const projectAttention = (p: Project): Status | null => attention(p.workspaces.flatMap((w) => w.tabs.map(tabStatus)));

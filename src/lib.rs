@@ -15,6 +15,7 @@ pub mod issues;
 pub mod keys;
 pub mod launch;
 pub mod markdown;
+pub mod memory;
 pub mod mouse;
 pub mod notify;
 pub mod picker;

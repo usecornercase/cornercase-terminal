@@ -27,6 +27,7 @@ pub enum Row {
     Sidebar,
     DimPanes,
     ContextLine,
+    MemoryLine,
     Notifications,
     Updates,
     Token(Source),
@@ -46,6 +47,7 @@ impl Row {
             | Self::Sidebar
             | Self::DimPanes
             | Self::ContextLine
+            | Self::MemoryLine
             | Self::Notifications
             | Self::Updates => "",
             Self::Token(_) => "Accounts",
@@ -60,7 +62,12 @@ impl Row {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
             Self::Token(_) | Self::Tab(_) => Page::Issues,
-            Self::Sidebar | Self::DimPanes | Self::ContextLine | Self::Notifications | Self::Updates => Page::Tui,
+            Self::Sidebar
+            | Self::DimPanes
+            | Self::ContextLine
+            | Self::MemoryLine
+            | Self::Notifications
+            | Self::Updates => Page::Tui,
         }
     }
 }
@@ -196,7 +203,15 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
-        rows.extend([Row::AddAgent, Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]);
+        rows.extend([
+            Row::AddAgent,
+            Row::Sidebar,
+            Row::DimPanes,
+            Row::ContextLine,
+            Row::MemoryLine,
+            Row::Notifications,
+            Row::Updates,
+        ]);
         rows.retain(|row| row.page() == self.page);
         rows
     }
@@ -279,6 +294,11 @@ impl Settings {
                 let on = !self.config.context_line;
                 let notice = if on { "tabs show their model and context" } else { "tabs take one row" };
                 self.save(Config { context_line: on, ..self.config.clone() }, notice.into())
+            }
+            Row::MemoryLine => {
+                let on = !self.config.memory_line;
+                let notice = if on { "agent tabs show the memory they use" } else { "agent tabs hide their memory" };
+                self.save(Config { memory_line: on, ..self.config.clone() }, notice.into())
             }
             Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
@@ -663,6 +683,10 @@ impl Settings {
                 let value = if config.context_line { "[x] model and context" } else { "[ ] hidden, tabs take one row" };
                 ("context line".into(), value.into(), "under a Claude Code or Codex tab".into(), false)
             }
+            Row::MemoryLine => {
+                let value = if config.memory_line { "[x] RAM of its processes" } else { "[ ] hidden" };
+                ("memory".into(), value.into(), "under a Claude Code or Codex tab".into(), false)
+            }
             Row::Sidebar => (
                 "sidebar".into(),
                 ui::Sidebar::from_setting(&config.sidebar).id().into(),
@@ -683,19 +707,7 @@ impl Settings {
                 let value = if config.auto_accept_trust_prompt { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "\"do you trust this folder?\"".into(), false)
             }
-            Row::Kind(kind) => {
-                let args = agents::args(config, kind);
-                let modes = agents::modes(config, kind);
-                let mode = agents::mode_of(&args, &modes);
-                let extra = agents::extra_args(&args, &modes);
-                let mut value = mode.clone().unwrap_or_else(|| "default".into());
-                if !extra.is_empty() {
-                    value = format!("{value} + {}", agents::join_args(&extra));
-                }
-                let is_default = agents::resolve(config, None, None).as_deref() == Some(kind.as_str());
-                let note = if is_default { "the default agent".into() } else { String::new() };
-                (kind.clone(), value, note, mode.as_deref().is_some_and(agents::is_dangerous))
-            }
+            Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
         };
         ui::SettingsRow {
@@ -785,6 +797,20 @@ fn with_args(config: &Config, kind: &str, args: Vec<String>) -> Config {
         agent_args.insert(kind.to_string(), args);
     }
     Config { agent_args, ..config.clone() }
+}
+
+fn kind_row(config: &Config, kind: &str) -> (String, String, String, bool) {
+    let args = agents::args(config, kind);
+    let modes = agents::modes(config, kind);
+    let mode = agents::mode_of(&args, &modes);
+    let extra = agents::extra_args(&args, &modes);
+    let mut value = mode.clone().unwrap_or_else(|| "default".into());
+    if !extra.is_empty() {
+        value = format!("{value} + {}", agents::join_args(&extra));
+    }
+    let is_default = agents::resolve(config, None, None).as_deref() == Some(kind);
+    let note = if is_default { "the default agent".into() } else { String::new() };
+    (kind.to_string(), value, note, mode.as_deref().is_some_and(agents::is_dangerous))
 }
 
 #[cfg(test)]
@@ -1079,6 +1105,25 @@ mod tests {
         }
     }
 
+    mod memory_line {
+        use super::*;
+
+        #[test]
+        fn is_a_switch() {
+            let mut s = settings();
+            go_to(&mut s, &Row::MemoryLine);
+            assert!(saved(press(&mut s, KeyCode::Enter)).memory_line);
+        }
+
+        #[test]
+        fn shows_whether_it_is_on() {
+            let mut s = settings();
+            s.open_page(Page::Tui);
+            let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
+            assert_eq!((view.rows[3].label.as_str(), view.rows[3].value.as_str()), ("memory", "[ ] hidden"));
+        }
+    }
+
     mod sidebar {
         use super::*;
 
@@ -1086,7 +1131,10 @@ mod tests {
         fn comes_first_on_the_tui_page() {
             let mut s = settings();
             s.open_page(Page::Tui);
-            assert_eq!(s.rows(), [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::Notifications, Row::Updates]);
+            assert_eq!(
+                s.rows(),
+                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::MemoryLine, Row::Notifications, Row::Updates]
+            );
         }
 
         #[test]

@@ -68,15 +68,16 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-tui"
-  crop={[2, 1, 106, 9]}
-  alt="The TUI tab: sidebar side_by_side, where the workspaces column goes; inactive panes dimmed, in a split tab; context line on, model and context, under a Claude Code or Codex tab; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates once a day, asks GitHub for the latest release"
+  crop={[2, 1, 106, 10]}
+  alt="The TUI tab: sidebar side_by_side, where the workspaces column goes; inactive panes dimmed, in a split tab; context line on, model and context, under a Claude Code or Codex tab; memory hidden, under a Claude Code or Codex tab; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates once a day, asks GitHub for the latest release"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **sidebar** | Where the workspaces column goes: *side_by_side* keeps two columns; *projects_on_top* and *workspaces_on_top* stack both lists in one column, which gives the panes the width of a column. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **context line** | Show the model and how full its context is on a second line under a Claude Code or Codex tab. Off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
+| **context line** | Show the model and how full its context is on a second line under a Claude Code or Codex tab. Off, tabs take one row unless they show their memory. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
+| **memory** | Show how much memory a Claude Code or Codex tab uses at the end of that line, such as `1.2 GB`. Off by default. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Once a day*: ask GitHub for the latest release when the server starts and then daily, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 
@@ -122,6 +123,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "sidebar": "side_by_side",
   "dim_inactive_panes": true,
   "context_line": true,
+  "memory_line": false,
   "desktop_notifications": "auto",
   "check_updates": true
 }
@@ -146,6 +148,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`sidebar`](#sidebar) | string | `"side_by_side"` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
 | [`context_line`](#context_line) | boolean | `true` |
+| [`memory_line`](#memory_line) | boolean | `false` |
 | [`desktop_notifications`](#desktop_notifications) | string | `"auto"` |
 | [`check_updates`](#check_updates) | boolean | `true` |
 
@@ -211,7 +214,11 @@ Whether panes you aren't typing in are dimmed, in tabs split into several panes.
 
 #### `context_line`
 
-Whether a Claude Code or Codex tab shows its model and how full its context is on a second line, such as `Opus 5.5 · 23%`. With `false` every tab takes one row.
+Whether a Claude Code or Codex tab shows its model and how full its context is on a second line, such as `Opus 5.5 · 23%`. With `false` tabs take one row, unless [`memory_line`](#memory_line) is on.
+
+#### `memory_line`
+
+Whether a Claude Code or Codex tab shows how much memory its processes use at the end of its second line, such as `Opus 5.5 · 23% · 1.2 GB`, or `1.2 GB` alone with `context_line` off. While it is `true`, the agents of the project on screen are measured every 2 seconds. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses).
 
 #### `desktop_notifications`
 

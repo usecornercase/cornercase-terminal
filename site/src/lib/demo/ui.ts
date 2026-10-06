@@ -34,6 +34,7 @@ import {
   styleDone,
   styleIcon,
   styleLabels,
+  tabLines,
   tabsIn,
   usageArea,
   usageDone,
@@ -44,7 +45,7 @@ import { USAGE, USAGE_PLAN, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
 import type { Context } from './programs';
 import { type Divider, dividers, grab, panes } from './split';
-import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, wrapAll } from './text';
+import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
 export type Drag = { kind: 'border'; border: Border } | { kind: 'divider'; tab: Tab; divider: Divider; area: Rect };
 
@@ -82,6 +83,13 @@ const USAGE_FILLED = '█';
 const USAGE_EMPTY = '░';
 const CONTEXT_SEPARATOR = ' · ';
 const MIN_MODEL_WIDTH = 4;
+const MB = 1 << 20;
+const GB = 1 << 30;
+
+const memorySize = (bytes: number): string => {
+  const megabytes = Math.round(bytes / MB);
+  return megabytes < 1024 ? `${megabytes} MB` : `${(Math.round((bytes * 10) / GB) / 10).toFixed(1)} GB`;
+};
 
 function updated(ms: number): string {
   const minutes = Math.floor(ms / 60_000);
@@ -382,22 +390,20 @@ export class Painter {
     this.region({ r, click: act, cursor: 'pointer' });
   }
 
-  private context(row: Rect, pitch: number, context: Context, indent: number): void {
+  private details(row: Rect, pitch: number, context: Context | null, memory: number | null, indent: number): void {
     const r = intersect(rect(row.x, middle(row).y + 1, row.w, 1), row);
     const close = closeButton(row, pitch);
     const room = r.w - indent - (bottom(close) > r.y ? close.w : 0) - 1;
-    if (context.percent === null) {
-      this.line(r, [seg(' '.repeat(indent)), seg(truncateRight(context.model, Math.max(0, room)), DARK)]);
-      return;
+    const fixed: Seg[] = [];
+    if (context && context.percent !== null) {
+      const severity = severityOf(context.percent);
+      fixed.push(seg(`${context.percent}%`, severity === 'normal' ? DARK : { fg: SEVERITY[severity] }));
     }
-    const percent = `${context.percent}%`;
-    const severity = severityOf(context.percent);
-    const level: Style = severity === 'normal' ? DARK : { fg: SEVERITY[severity] };
-    const modelRoom = room - percent.length - CONTEXT_SEPARATOR.length;
-    const line: Line = [seg(' '.repeat(indent))];
-    if (modelRoom >= MIN_MODEL_WIDTH) line.push(seg(truncateRight(context.model, modelRoom), DARK), seg(CONTEXT_SEPARATOR, DARK));
-    line.push(seg(percent, level));
-    this.line(r, line);
+    if (memory !== null) fixed.push(seg(memorySize(memory), DARK));
+    const modelRoom = Math.max(0, room - width(fixed) - fixed.length * CONTEXT_SEPARATOR.length);
+    const model = context && (!fixed.length || modelRoom >= MIN_MODEL_WIDTH) ? [seg(truncateRight(context.model, modelRoom), DARK)] : [];
+    const parts = [...model, ...fixed].flatMap((part) => [seg(CONTEXT_SEPARATOR, DARK), part]).slice(1);
+    this.line(r, [seg(' '.repeat(indent)), ...parts]);
   }
 
   private groupHeader(group: Group, max: number): Line[number] {
@@ -528,8 +534,8 @@ export class Painter {
         if (status) line.push(STATUS_ICONS[status], seg(' '));
         line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
         this.band(r, line, bg);
-        const context = app.tabContext(t);
-        if (context) this.context(r, areas.pitch, context, 4 + (status ? 2 : 0));
+        const [context, memory] = [app.tabContext(t), app.tabMemory(t)];
+        if (tabLines(context, memory) > 1) this.details(r, areas.pitch, context, memory, 4 + (status ? 2 : 0));
         const grab: Target = { kind: 'tab', project: p.id, workspace: w.id, tab: t.id };
         this.region({ r, click: () => app.selectTab(spec.w, spec.t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
         this.closeX(r, areas.pitch, bg, () => app.closeTab(spec.w, spec.t));

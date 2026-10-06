@@ -61,6 +61,8 @@ const TOAST_MARGIN: u16 = 1;
 const BEHIND_ICON: &str = "↓";
 const CONTEXT_SEPARATOR: &str = " · ";
 const MIN_MODEL_WIDTH: usize = 4;
+const MB: u64 = 1 << 20;
+const GB: u64 = 1 << 30;
 const WAITING_COLOR: Color = Color::Indexed(208);
 const GROUP_INDENT: &str = "  ";
 pub const GROUP_ICONS: [char; 12] = ['●', '◉', '◐', '◆', '■', '▲', '▼', '★', '✦', '♥', '♣', '♠'];
@@ -726,8 +728,8 @@ pub enum WorkspaceRow {
     Landing,
 }
 
-pub fn tab_lines(context: bool) -> u16 {
-    1 + u16::from(context)
+pub fn tab_lines(context: Option<&Context>, memory: Option<u64>) -> u16 {
+    1 + u16::from(context.is_some() || memory.is_some())
 }
 
 pub fn workspace_rows(tabs: &[Vec<u16>]) -> Vec<WorkspaceRow> {
@@ -1720,6 +1722,13 @@ pub struct TabEntry {
     pub name: String,
     pub status: Option<Status>,
     pub context: Option<Context>,
+    pub memory: Option<u64>,
+}
+
+impl TabEntry {
+    fn lines(&self) -> u16 {
+        tab_lines(self.context.as_ref(), self.memory)
+    }
 }
 
 impl From<&str> for TabEntry {
@@ -1730,7 +1739,7 @@ impl From<&str> for TabEntry {
 
 impl From<String> for TabEntry {
     fn from(name: String) -> Self {
-        Self { name, status: None, context: None }
+        Self { name, status: None, context: None, memory: None }
     }
 }
 
@@ -1788,7 +1797,7 @@ impl View<'_> {
     }
 
     pub fn tab_lines(&self) -> Vec<Vec<u16>> {
-        self.workspaces.iter().map(|w| w.tabs.iter().map(|t| tab_lines(t.context.is_some())).collect()).collect()
+        self.workspaces.iter().map(|w| w.tabs.iter().map(TabEntry::lines).collect()).collect()
     }
 
     fn surface(&self) -> Color {
@@ -2852,8 +2861,8 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
                 }
                 line.push(Span::styled(truncate_right(&tab.name, max), style));
                 draw_band(f, r, Line::from(line), bg);
-                if let Some(context) = &tab.context {
-                    draw_context(f, r, areas.pitch, context, 4 + icon_width);
+                if tab.lines() > 1 {
+                    draw_details(f, r, areas.pitch, tab, 4 + icon_width);
                 }
                 draw_row_close(f, view, r, areas.pitch, bg);
             }
@@ -2899,33 +2908,39 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     }
 }
 
-fn draw_context(f: &mut Frame, row: Rect, pitch: u16, context: &Context, indent: usize) {
+fn draw_details(f: &mut Frame, row: Rect, pitch: u16, tab: &TabEntry, indent: usize) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let close = row_close_button(row, pitch);
     let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
     let room = usize::from(r.width).saturating_sub(indent + reserved + 1);
     let dim = Style::default().fg(Color::DarkGray);
-    let Some(used) = context.percent else {
-        let line =
-            Line::from(vec![Span::raw(" ".repeat(indent)), Span::styled(truncate_right(&context.model, room), dim)]);
-        f.render_widget(Paragraph::new(line), r);
-        return;
-    };
-    let percent = format!("{used}%");
-    let level = match Severity::of(used) {
-        Severity::Normal => dim,
-        severity => Style::default().fg(severity_color(severity)),
-    };
-    let model_room = room.saturating_sub(percent.chars().count() + CONTEXT_SEPARATOR.chars().count());
+    let percent = tab.context.as_ref().and_then(|c| c.percent).map(|used| {
+        let level = match Severity::of(used) {
+            Severity::Normal => dim,
+            severity => Style::default().fg(severity_color(severity)),
+        };
+        Span::styled(format!("{used}%"), level)
+    });
+    let memory = tab.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
+    let fixed: Vec<Span> = percent.into_iter().chain(memory).collect();
+    let model_room = room.saturating_sub(fixed.iter().map(|s| s.width() + CONTEXT_SEPARATOR.chars().count()).sum());
+    let model = tab
+        .context
+        .as_ref()
+        .filter(|_| fixed.is_empty() || model_room >= MIN_MODEL_WIDTH)
+        .map(|c| Span::styled(truncate_right(&c.model, model_room), dim));
     let mut line = vec![Span::raw(" ".repeat(indent))];
-    if model_room >= MIN_MODEL_WIDTH {
-        line.extend([
-            Span::styled(truncate_right(&context.model, model_room), dim),
-            Span::styled(CONTEXT_SEPARATOR, dim),
-        ]);
-    }
-    line.push(Span::styled(percent, level));
+    line.extend(model.into_iter().chain(fixed).flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
     f.render_widget(Paragraph::new(Line::from(line)), r);
+}
+
+fn memory_size(bytes: u64) -> String {
+    let megabytes = bytes.saturating_add(MB / 2) / MB;
+    if megabytes < 1024 {
+        return format!("{megabytes} MB");
+    }
+    let tenths = bytes.saturating_mul(10).saturating_add(GB / 2) / GB;
+    format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
 fn status_icon(status: Status) -> Span<'static> {
@@ -3185,7 +3200,7 @@ mod tests {
     }
 
     fn tabs(counts: &[usize]) -> Vec<Vec<u16>> {
-        counts.iter().map(|&n| vec![tab_lines(false); n]).collect()
+        counts.iter().map(|&n| vec![tab_lines(None, None); n]).collect()
     }
 
     fn render(view: &View) -> Terminal<TestBackend> {
@@ -4658,13 +4673,60 @@ mod tests {
         }
 
         #[rstest]
-        #[case::fits(26, "      Opus 5.5 · 17%")]
-        #[case::cuts_the_model(19, "      Opus… · 17%")]
-        #[case::keeps_the_percentage(16, "      17%")]
-        fn a_narrow_column_cuts_the_model_first(#[case] workspaces: u16, #[case] expected: &str) {
-            let v = View { widths: Widths { workspaces, ..Widths::default() }, ..with_context(Some(opus(17))) };
+        #[case::fits(26, None, "      Opus 5.5 · 17%")]
+        #[case::cuts_the_model(19, None, "      Opus… · 17%")]
+        #[case::keeps_the_percentage(16, None, "      17%")]
+        #[case::fits_with_the_memory(32, Some(GB * 12 / 10), "      Opus 5.5 · 17% · 1.2 GB")]
+        #[case::cuts_the_model_before_the_memory(30, Some(GB * 12 / 10), "      Opus 5… · 17% · 1.2 GB")]
+        #[case::drops_the_model_before_the_memory(26, Some(GB * 12 / 10), "      17% · 1.2 GB")]
+        fn a_narrow_column_cuts_the_model_first(
+            #[case] workspaces: u16,
+            #[case] memory: Option<u64>,
+            #[case] expected: &str,
+        ) {
+            let mut v = View { widths: Widths { workspaces, ..Widths::default() }, ..with_context(Some(opus(17))) };
+            v.workspaces[0].tabs[0].memory = memory;
             let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
             assert_eq!(line(&render(&v), r, 1), expected);
+        }
+
+        fn with_memory(context: Option<Context>, memory: u64) -> View<'static> {
+            let mut view = with_context(context);
+            view.workspaces[0].tabs[0].memory = Some(memory);
+            view
+        }
+
+        #[test]
+        fn memory_alone_takes_the_second_row() {
+            let v = with_memory(None, 300 * MB);
+            let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
+
+            assert_eq!((r.height, line(&render(&v), r, 1)), (2, "      300 MB".into()));
+        }
+
+        #[test]
+        fn a_model_without_usage_is_followed_by_the_memory() {
+            let v = with_memory(Some(Context { model: "gpt-5.4".into(), percent: None }), GB * 12 / 10);
+            let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
+
+            assert_eq!(line(&render(&v), r, 1), "      gpt-5.4 · 1.2 GB");
+        }
+
+        #[test]
+        fn renders_the_memory_in_the_compact_layout() {
+            let view = View { nav: Some(Nav::Workspaces), ..with_memory(Some(opus(17)), GB * 12 / 10) };
+
+            insta::assert_snapshot!(render_sized(&view, SMALL.width, SMALL.height).backend());
+        }
+
+        #[rstest]
+        #[case::megabytes(300 * MB, "300 MB")]
+        #[case::rounded_to_the_nearest_megabyte(300 * MB + MB * 6 / 10, "301 MB")]
+        #[case::nearly_a_gigabyte(GB - MB / 10, "1.0 GB")]
+        #[case::gigabytes(GB * 12 / 10, "1.2 GB")]
+        #[case::rounded_to_a_tenth(GB * 25 / 2, "12.5 GB")]
+        fn memory_reads_in_megabytes_then_gigabytes(#[case] bytes: u64, #[case] expected: &str) {
+            assert_eq!(memory_size(bytes), expected);
         }
 
         #[rstest]

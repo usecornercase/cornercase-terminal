@@ -52,6 +52,10 @@ impl Tab {
         self.pane().and_then(|t| t.context.context()).or_else(|| self.panes.iter().find_map(|t| t.context.context()))
     }
 
+    pub fn memory(&self) -> Option<u64> {
+        self.panes.iter().filter_map(|t| t.memory.bytes()).reduce(u64::saturating_add)
+    }
+
     pub fn focus(&mut self, id: u64) {
         if let Some(i) = self.panes.iter().position(|t| t.id == id) {
             self.active = i;

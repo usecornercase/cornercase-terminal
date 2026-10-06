@@ -1,4 +1,5 @@
 import { type Rect, contains, rect } from '../term/grid';
+import type { Context } from './programs';
 
 export const SIDEBAR_WIDTH = 32;
 export const WORKSPACES_WIDTH = 26;
@@ -547,7 +548,7 @@ export const closeButton = (row: Rect, pitch: number): Rect => {
   return rect(right(row) - w, row.y, Math.min(w, row.w), Math.min(pitch, row.h));
 };
 
-export const tabLines = (context: boolean): number => (context ? 2 : 1);
+export const tabLines = (context: Context | null, memory: number | null): number => (context || memory !== null ? 2 : 1);
 
 export function centered(cols: number, rows: number, w: number, h: number): Rect {
   return rect(Math.floor((cols - w) / 2), Math.floor((rows - h) / 2), w, h);
