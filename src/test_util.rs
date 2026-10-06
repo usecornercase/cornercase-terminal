@@ -161,15 +161,13 @@ impl FakeCodex {
             r#"#!/bin/sh
 exec 3>> "$1"
 while [ -d "$2" ] && [ ! -e "$2/quit" ]; do
-  if [ -e "$2/switch" ]; then
-    next=$(cat "$2/switch")
+  if mv "$2/switch" "$2/.switched" 2>/dev/null; then
+    next=$(cat "$2/.switched")
     exec 3>&-
     exec 3>> "$next"
-    rm "$2/switch"
   fi
-  if [ -e "$2/title" ]; then
-    printf '\033]0;%s\007' "$(cat "$2/title")"
-    rm "$2/title"
+  if mv "$2/title" "$2/.shown" 2>/dev/null; then
+    printf '\033]0;%s\007' "$(cat "$2/.shown")"
   fi
   sleep 0.02
 done
