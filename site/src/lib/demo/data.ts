@@ -318,10 +318,28 @@ export interface UsageWindow {
   resets: string;
 }
 
-export const USAGE_PLAN = 'max';
+export interface UsageSection {
+  agent: string;
+  plan: string;
+  windows: UsageWindow[];
+}
 
-export const USAGE: UsageWindow[] = [
-  { label: 'session (5h)', percent: 34, severity: 'normal', resets: 'resets in 2h 14m' },
-  { label: 'week', percent: 81, severity: 'warning', resets: 'resets in 3d 4h' },
-  { label: 'week · Opus', percent: 12, severity: 'normal', resets: 'resets in 3d 4h' },
+export const USAGE: UsageSection[] = [
+  {
+    agent: 'Claude Code',
+    plan: 'max',
+    windows: [
+      { label: 'session (5h)', percent: 34, severity: 'normal', resets: 'resets in 2h 14m' },
+      { label: 'week', percent: 81, severity: 'warning', resets: 'resets in 3d 4h' },
+      { label: 'week · Opus', percent: 12, severity: 'normal', resets: 'resets in 3d 4h' },
+    ],
+  },
+  {
+    agent: 'Codex',
+    plan: 'plus',
+    windows: [
+      { label: 'session (5h)', percent: 22, severity: 'normal', resets: 'resets in 3h 41m' },
+      { label: 'week', percent: 9, severity: 'normal', resets: 'resets in 5d 6h' },
+    ],
+  },
 ];

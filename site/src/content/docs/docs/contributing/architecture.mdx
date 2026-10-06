@@ -96,7 +96,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `activity.rs` | What the agent in a pane is doing: Claude Code's session file and terminal title, Codex's terminal title and turns, and the finished-but-unseen mark. |
 | `context.rs`, `context/codex.rs` | Model/context lines for Claude Code and Codex. Claude uses its session transcript and configured window rules; Codex follows the process's open rollout, recorded model and latest usage/window. Both read incrementally and clear obsolete context on session changes and compaction. |
 | `memory.rs` | How much memory an agent pane uses: the resident size of its shell and everything under it, measured on a thread every 2 seconds. |
-| `usage.rs` | Claude Code's plan usage: asking `claude` for it over its control protocol, reading the answer, and the dialog's state. |
+| `usage/` | Plan usage: `claude.rs` asks `claude` over its control protocol, `codex.rs` asks `codex app-server` over JSON-RPC; `mod.rs` runs either, reads the answer and keeps the dialog's state, one section per agent. |
 | `launch.rs` | Starting an agent in a new tab, as a pure state machine. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
 | `search.rs`, `picker.rs` | Global search; the folder picker. |

@@ -102,7 +102,7 @@ pub enum AppEvent {
     },
     UpdateChecked(Result<Option<Release>>),
     Updated(Result<()>),
-    Usage(Result<usage::Report>),
+    Usage(usage::Agent, Result<usage::Report>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1052,7 +1052,7 @@ impl App {
             AppEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
             AppEvent::UpdateChecked(result) => self.update_checked(result),
             AppEvent::Updated(result) => self.updated(result),
-            AppEvent::Usage(result) => self.usage.answered(result, Instant::now()),
+            AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::Output(id, bytes) => {
                 if let Some(launch) = self.launches.iter_mut().find(|l| l.term == id) {
                     launch.output(Instant::now());
@@ -2710,14 +2710,18 @@ impl App {
 
     fn open_usage(&mut self) {
         self.overlay = Some(Overlay::Usage);
-        if !self.usage.start() {
-            return;
+        let installed: Vec<usage::Agent> = usage::Agent::ALL
+            .into_iter()
+            .filter(|agent| agents::installed(&agents::command(&self.config, agent.kind())))
+            .collect();
+        let shown = if installed.is_empty() { usage::Agent::ALL.to_vec() } else { installed };
+        for agent in self.usage.start(shown) {
+            let command = agents::command(&self.config, agent.kind());
+            let (timeout, tx) = (self.usage_timeout, self.tx.clone());
+            std::thread::spawn(move || {
+                let _ = tx.send(AppEvent::Usage(agent, usage::probe(agent, &command, timeout)));
+            });
         }
-        let (command, timeout, tx) =
-            (agents::command(&self.config, agents::CLAUDE), self.usage_timeout, self.tx.clone());
-        std::thread::spawn(move || {
-            let _ = tx.send(AppEvent::Usage(usage::probe(&command, timeout)));
-        });
     }
 
     fn usage_view(&self) -> ui::Usage {
@@ -5996,6 +6000,7 @@ rm -f "$1/sessions/$$.json"
         fn the_usage_button_opens_the_usage_modal() {
             let (mut app, _rx) = app();
             app.config.agent_commands.insert(agents::CLAUDE.into(), "/nonexistent/claude".into());
+            app.config.agent_commands.insert(agents::CODEX.into(), "/nonexistent/codex".into());
             open_menu(&mut app);
             press(&mut app, small().back.as_position());
             press(&mut app, small().usage.as_position());
@@ -8046,14 +8051,27 @@ rm -f "$1/sessions/$$.json"
         use crate::test_util::write_executable;
 
         const ANSWER: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"limits":[{"kind":"session","percent":42,"severity":"normal","resets_at":null}]}}}}"#;
+        const CODEX_ANSWER: &str = r#"{"id":2,"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":17,"windowDurationMins":300,"resetsAt":null}}}}"#;
+
+        fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>, TempDir) {
+            let dir = TempDir::new();
+            let (mut app, rx) = empty_app();
+            for kind in [agents::CLAUDE, agents::CODEX] {
+                let command = match scripts.iter().find(|(k, _)| *k == kind) {
+                    Some((_, script)) => {
+                        let path = dir.path().join(kind);
+                        write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
+                        path.display().to_string()
+                    }
+                    None => format!("/nonexistent/{kind}"),
+                };
+                app.config.agent_commands.insert(kind.into(), command);
+            }
+            (app, rx, dir)
+        }
 
         fn with_claude(script: &str) -> (App, Receiver<AppEvent>, TempDir) {
-            let dir = TempDir::new();
-            let claude = dir.path().join("claude");
-            write_executable(&claude, &format!("#!/bin/sh\n{script}\n"));
-            let (mut app, rx) = empty_app();
-            app.config.agent_commands.insert(agents::CLAUDE.into(), claude.display().to_string());
-            (app, rx, dir)
+            with_agents(&[(agents::CLAUDE, script)])
         }
 
         fn shown(app: &App) -> Option<ui::Usage> {
@@ -8063,22 +8081,66 @@ rm -f "$1/sessions/$$.json"
             }
         }
 
-        fn windows(app: &App) -> Vec<(String, u16)> {
-            shown(app).map(|u| u.windows.into_iter().map(|w| (w.label, w.percent)).collect()).unwrap_or_default()
+        fn sections(app: &App) -> Vec<ui::UsageSection> {
+            shown(app).map(|u| u.sections).unwrap_or_default()
         }
 
-        fn note(app: &App) -> Option<ui::Note> {
-            shown(app).and_then(|u| u.note)
+        fn windows(app: &App) -> Vec<(String, u16)> {
+            sections(app).into_iter().flat_map(|s| s.windows).map(|w| (w.label, w.percent)).collect()
+        }
+
+        fn errors(app: &App) -> Vec<String> {
+            sections(app).into_iter().filter_map(|s| s.error).collect()
+        }
+
+        fn titles(app: &App) -> Vec<String> {
+            sections(app).into_iter().map(|s| s.title).collect()
         }
 
         #[test]
         fn the_button_shows_loading_then_the_windows() {
             let (mut app, rx, _dir) = with_claude(&format!("read -r a\nread -r b\necho '{ANSWER}'"));
             click(&mut app, areas().usage.as_position());
-            assert_eq!((windows(&app), note(&app)), (Vec::new(), Some(ui::Note::Busy("loading…"))));
+            let loading: Vec<(String, String)> = sections(&app).into_iter().map(|s| (s.title, s.status)).collect();
+            assert_eq!((loading, windows(&app)), (vec![("Claude Code".into(), "loading…".into())], Vec::new()));
 
             pump_until(&mut app, &rx, "the usage arrives", |a| !windows(a).is_empty());
-            assert_eq!((windows(&app), note(&app)), (vec![("session (5h)".into(), 42)], None));
+            assert_eq!((windows(&app), errors(&app)), (vec![("session (5h)".into(), 42)], Vec::new()));
+        }
+
+        #[test]
+        fn every_installed_agent_gets_a_section() {
+            let (mut app, rx, _dir) = with_agents(&[
+                (agents::CLAUDE, &format!("read -r a\nread -r b\necho '{ANSWER}'")),
+                (agents::CODEX, &format!("read -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'")),
+            ]);
+            click(&mut app, areas().usage.as_position());
+            pump_until(&mut app, &rx, "both answers arrive", |a| windows(a).len() == 2);
+            assert_eq!(
+                (titles(&app), windows(&app)),
+                (
+                    vec!["Claude Code · max plan".into(), "Codex · plus plan".into()],
+                    vec![("session (5h)".into(), 42), ("session (5h)".into(), 17)]
+                )
+            );
+        }
+
+        #[test]
+        fn an_agent_that_is_not_installed_has_no_section() {
+            let (mut app, _rx, _dir) = with_agents(&[(agents::CODEX, "exec sleep 30")]);
+            app.usage_timeout = Duration::from_millis(200);
+            click(&mut app, areas().usage.as_position());
+            assert_eq!(titles(&app), ["Codex"]);
+        }
+
+        #[test]
+        fn without_any_agent_installed_each_one_says_why() {
+            let (mut app, rx, _dir) = with_agents(&[]);
+            click(&mut app, areas().usage.as_position());
+            pump_until(&mut app, &rx, "both probes fail", |a| errors(a).len() == 2);
+            let errors = errors(&app);
+            assert!(errors[0].starts_with("usage unavailable: could not run /nonexistent/claude"), "{errors:?}");
+            assert!(errors[1].starts_with("usage unavailable: could not run /nonexistent/codex"), "{errors:?}");
         }
 
         #[test]
@@ -8086,8 +8148,8 @@ rm -f "$1/sessions/$$.json"
             let (mut app, rx, _dir) = with_claude("exec sleep 30");
             app.usage_timeout = Duration::from_millis(200);
             click(&mut app, areas().usage.as_position());
-            pump_until(&mut app, &rx, "the probe times out", |a| matches!(note(a), Some(ui::Note::Error(_))));
-            assert_eq!(note(&app), Some(ui::Note::Error("usage unavailable: claude did not answer in time".into())));
+            pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
+            assert_eq!(errors(&app), ["usage unavailable: claude did not answer in time"]);
         }
 
         #[test]
@@ -8097,7 +8159,7 @@ rm -f "$1/sessions/$$.json"
             click(&mut app, areas().usage.as_position());
             send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
             click(&mut app, areas().usage.as_position());
-            pump_until(&mut app, &rx, "the probe times out", |a| matches!(note(a), Some(ui::Note::Error(_))));
+            pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
             let runs = std::fs::read_to_string(dir.path().join("runs")).expect("the probe ran");
             assert_eq!(runs.lines().count(), 1);
         }

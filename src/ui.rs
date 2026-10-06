@@ -13,6 +13,7 @@ pub mod changes;
 
 use crate::activity::{self, Status};
 use crate::emulator::Snapshot;
+use crate::markdown;
 use crate::split::{Dir, Node};
 use crate::usage::Severity;
 
@@ -1157,25 +1158,20 @@ pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
     scroll.min(lines.saturating_sub(usize::from(update_notes(area).height)))
 }
 
-fn usage_body_height(usage: &Usage) -> u16 {
-    let windows = u16::try_from(usage.windows.len()).unwrap_or(u16::MAX).saturating_mul(3);
-    let empty = if usage.empty.is_some() { 2 } else { 0 };
-    let extra = if usage.extra.is_some() { 2 } else { 0 };
-    windows.saturating_add(empty + extra + 2)
-}
-
 pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
     let width = area.width.saturating_sub(4).min(FORM_WIDTH);
-    let height = usage_body_height(usage).saturating_add(4).min(area.height);
+    let body = form_inner(Rect::new(0, 0, width, 3)).width;
+    let lines = u16::try_from(usage_lines(usage, body).len()).unwrap_or(u16::MAX);
+    let height = lines.saturating_add(3).min(area.height);
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
 
-fn usage_rows(usage: Rect) -> [Rect; 3] {
-    Layout::vertical([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)]).areas(form_inner(usage))
+fn usage_rows(usage: Rect) -> [Rect; 2] {
+    Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(form_inner(usage))
 }
 
 pub fn usage_done(area: Rect, usage: &Usage) -> Rect {
-    update_button(usage_rows(usage_area(area, usage))[2], crate::settings::DONE)
+    update_button(usage_rows(usage_area(area, usage))[1], crate::settings::DONE)
 }
 
 pub fn picker_list(picker: Rect) -> Rect {
@@ -1560,13 +1556,17 @@ pub struct UsageWindow {
     pub resets: String,
 }
 
-pub struct Usage {
+pub struct UsageSection {
     pub title: String,
+    pub status: String,
+    pub error: Option<String>,
     pub windows: Vec<UsageWindow>,
     pub empty: Option<&'static str>,
     pub extra: Option<String>,
-    pub age: String,
-    pub note: Option<Note>,
+}
+
+pub struct Usage {
+    pub sections: Vec<UsageSection>,
 }
 
 pub struct Picker {
@@ -2190,14 +2190,22 @@ fn severity_color(severity: Severity) -> Color {
     }
 }
 
-fn usage_lines(usage: &Usage, width: u16) -> Vec<Line<'static>> {
+fn usage_section_lines(section: &UsageSection, width: usize, lines: &mut Vec<Line<'static>>) {
     let dim = Style::default().fg(Color::DarkGray);
-    let width = usize::from(width);
-    let mut lines = vec![
-        Line::from(Span::styled(usage.title.clone(), Style::default().add_modifier(Modifier::BOLD))),
+    let used = section.title.chars().count() + section.status.chars().count();
+    lines.extend([
+        Line::from(vec![
+            Span::styled(section.title.clone(), Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" ".repeat(width.saturating_sub(used))),
+            Span::styled(section.status.clone(), dim),
+        ]),
         Line::default(),
-    ];
-    for w in &usage.windows {
+    ]);
+    if let Some(error) = &section.error {
+        lines.extend(markdown::wrap_text(error, Style::default().fg(Color::Red), width));
+        lines.push(Line::default());
+    }
+    for w in &section.windows {
         let colour = Style::default().fg(severity_color(w.severity));
         let percent = format!("{}%", w.percent);
         let resets = if w.resets.is_empty() { String::new() } else { format!(" · {}", w.resets) };
@@ -2217,11 +2225,18 @@ fn usage_lines(usage: &Usage, width: u16) -> Vec<Line<'static>> {
             Line::default(),
         ]);
     }
-    if let Some(empty) = usage.empty {
+    if let Some(empty) = section.empty {
         lines.extend([Line::from(Span::styled(empty, dim)), Line::default()]);
     }
-    if let Some(extra) = &usage.extra {
+    if let Some(extra) = &section.extra {
         lines.extend([Line::from(extra.clone()), Line::default()]);
+    }
+}
+
+fn usage_lines(usage: &Usage, width: u16) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for section in &usage.sections {
+        usage_section_lines(section, usize::from(width), &mut lines);
     }
     lines
 }
@@ -2230,13 +2245,8 @@ fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     let r = usage_area(f.area(), usage);
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(USAGE_LABEL), r);
-    let [body, note, _] = usage_rows(r);
+    let [body, _] = usage_rows(r);
     f.render_widget(Paragraph::new(usage_lines(usage, body.width)), body);
-    if usage.note.is_some() {
-        draw_note(f, usage.note.as_ref(), note);
-    } else {
-        f.render_widget(Paragraph::new(Span::styled(usage.age.as_str(), Style::default().fg(Color::DarkGray))), note);
-    }
     draw_submit(f, view, usage_done(f.area(), usage), crate::settings::DONE);
 }
 
@@ -4808,9 +4818,11 @@ mod tests {
             UsageWindow { label: label.into(), percent, severity, resets: resets.into() }
         }
 
-        fn usage() -> Usage {
-            Usage {
+        fn claude_usage() -> UsageSection {
+            UsageSection {
                 title: "Claude Code · max plan".into(),
+                status: "updated 2m ago".into(),
+                error: None,
                 windows: vec![
                     usage_window("session (5h)", 7, Severity::Normal, "resets in 2h 13m"),
                     usage_window("week", 82, Severity::Warning, "resets in 3d 4h"),
@@ -4818,10 +4830,28 @@ mod tests {
                 ],
                 empty: None,
                 extra: Some("extra usage: 12.34 USD of 50.00 USD".into()),
-                age: "updated 2m ago".into(),
-                note: None,
             }
         }
+
+        fn codex_usage() -> UsageSection {
+            UsageSection {
+                title: "Codex · plus plan".into(),
+                status: "updated just now".into(),
+                error: None,
+                windows: vec![
+                    usage_window("session (5h)", 53, Severity::Normal, "resets in 4h 59m"),
+                    usage_window("week", 8, Severity::Normal, "resets in 5d 22h"),
+                ],
+                empty: None,
+                extra: None,
+            }
+        }
+
+        fn usage() -> Usage {
+            Usage { sections: vec![claude_usage()] }
+        }
+
+        const TALL: u16 = 34;
 
         #[test]
         fn renders_the_usage_windows() {
@@ -4829,9 +4859,27 @@ mod tests {
         }
 
         #[test]
-        fn renders_usage_while_loading() {
-            let loading = Usage { windows: Vec::new(), extra: None, note: Some(Note::Busy("loading…")), ..usage() };
-            insta::assert_snapshot!(render(&with(Overlay::Usage(loading))).backend());
+        fn renders_one_section_per_agent() {
+            let usage = Usage { sections: vec![claude_usage(), codex_usage()] };
+            insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, TALL).backend());
+        }
+
+        #[test]
+        fn renders_usage_while_loading_and_after_a_failure() {
+            let loading =
+                UsageSection { status: "loading…".into(), windows: Vec::new(), extra: None, ..claude_usage() };
+            let failed = UsageSection {
+                title: "Codex".into(),
+                status: String::new(),
+                error: Some(
+                    "usage unavailable: could not run /opt/codex/bin/codex: No such file or directory (os error 2)"
+                        .into(),
+                ),
+                windows: Vec::new(),
+                ..codex_usage()
+            };
+            let usage = Usage { sections: vec![loading, failed] };
+            insta::assert_snapshot!(render(&with(Overlay::Usage(usage))).backend());
         }
 
         #[rstest]
@@ -4849,6 +4897,13 @@ mod tests {
         fn the_usage_done_button_sits_on_the_last_row() {
             let r = usage_area(AREA, &usage());
             assert_eq!(usage_done(AREA, &usage()).y, r.bottom() - 2);
+        }
+
+        #[test]
+        fn a_usage_too_tall_for_the_screen_keeps_its_done_button() {
+            let usage = Usage { sections: vec![claude_usage(), codex_usage()] };
+            let r = usage_area(AREA, &usage);
+            assert_eq!((r.height, usage_done(AREA, &usage).y), (AREA.height, r.bottom() - 2));
         }
 
         #[test]

@@ -7,6 +7,11 @@ Every pull request that changes the app adds a section here for its new version.
 - A new setting, **settings → TUI → memory**, shows how much memory each Claude Code and Codex tab uses at the end of the line under its name: `Opus 5.5 · 23% · 1.2 GB`. It counts the agent and everything it started (MCP servers, language servers, background commands), as `ps` does, so take it as a guide to which agent is growing. It is off by default; while on, the tabs of the project on screen are measured every 2 seconds.
 - The model and the context on that line are now separate settings, **model** and **context**, so you can show only `Opus 5.5`, only `23%`, or neither. The `context_line` key of 0.6.0 becomes `context` in `config.json`; if you had turned it off, the model stays hidden too.
 
+## 0.6.1
+
+- The **`usage`** dialog now shows your Codex plan too, under Claude Code's: the five-hour session and the week, how much of each you've used and when it resets, plus your credits when you have some. It asks Codex itself (`codex app-server`), so the numbers are live, cost no tokens and cornercase never reads your login.
+- Only the agents you have installed get a section (with neither installed, both show and say why they couldn't run), and a Codex you haven't signed in to just says `not signed in · run codex login`. If an agent isn't on the server's `PATH`, tell cornercase where it is with `agent_commands`.
+
 ## 0.6.0
 
 - A new setting, **settings → TUI → context line**, hides the line under Claude Code and Codex tabs that shows their model and how full their context is, so every tab takes one row. It is on by default.

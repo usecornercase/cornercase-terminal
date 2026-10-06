@@ -1243,7 +1243,7 @@ export class App {
   openUsage(): void {
     this.nav = null;
     this.overlay = { kind: 'usage' };
-    this.emit('narrate', 'How much of your Claude plan is left, at a glance. No tokens spent.');
+    this.emit('narrate', 'How much of your Claude and Codex plans is left, at a glance. No tokens spent.');
     if (!this.usage.loading) {
       this.usage.loading = true;
       this.after(1500, () => {

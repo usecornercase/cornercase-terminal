@@ -51,7 +51,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `LINEAR_API_KEY` | Linear API key. Takes precedence over a saved one. |
 | `HOME` | Expands `~` in paths, and is the base of the default folders. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets it too. |
-| `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. |
+| `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. The `codex` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets the server's. |
 | `TERM_PROGRAM`, `LC_TERMINAL`, `TERM`, `KITTY_WINDOW_ID`, `KONSOLE_VERSION` | Recognising your terminal when it doesn't say its name, to send it [desktop notifications](../../guides/projects-workspaces-tabs/#notifications) it understands. |
 | `TMUX`, `STY`, `ZELLIJ` | Inside tmux, screen or Zellij, desktop notifications are a bell. |
 | `XDG_CONFIG_HOME` | Folder for `config.json` and `secrets.json`. |

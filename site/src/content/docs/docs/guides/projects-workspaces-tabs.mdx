@@ -182,17 +182,17 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 
 ### Plan usage
 
-Claude Code plans have a five-hour session limit and weekly limits. To see how close you are without opening `/usage` in one of your agents, click **`usage`** at the bottom of the projects column:
+Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column:
 
 <Screen
   name="usage"
-  alt="The usage dialog over the columns: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h, and the week for Opus at 12%"
-  caption="One bar per limit, with when it resets. The week is orange: it is getting close."
+  alt="The usage dialog over the columns: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h and the week for Opus at 12%; below it Codex on a plus plan, the five-hour session at 22% resetting in 3h 41m and the week at 9%"
+  caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
 />
 
-Each limit shows how much you have used and when it resets. The bar is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and extra usage shows below them when it is turned on. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so.
+Each agent installed on the machine gets its own section, and each limit shows how much you have used and when it resets. The bar is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
 
-The numbers come from Claude Code itself: opening the dialog runs `claude` in the background, on the machine where cornercase's server runs, and asks it for its usage. That sends no prompt and costs no tokens, and cornercase never reads your login. It takes a few seconds; meanwhile the dialog shows `loading…`, or the last numbers with how old they are. Nothing is asked while the dialog is closed. `done` or `Esc` closes it. If it says `usage unavailable`, see [Usage is unavailable](../../help/troubleshooting/#usage-is-unavailable).
+The numbers come from the agents themselves: opening the dialog runs `claude` and `codex` in the background, on the machine where cornercase's server runs, and asks each for its usage (Codex through `codex app-server`). That sends no prompt and costs no tokens, and cornercase never reads your login. It takes a second or a few; meanwhile each section shows `loading…`, or the last numbers with how old they are. Nothing is asked while the dialog is closed. An agent that isn't installed has no section, unless neither is: then both show, each saying why it couldn't run. [`agent_commands`](../../reference/agents/#your-own-agents) says where to find one that isn't on the `PATH`. `done` or `Esc` closes the dialog. If a section says `usage unavailable`, see [Usage is unavailable](../../help/troubleshooting/#usage-is-unavailable).
 
 ## Reorder
 

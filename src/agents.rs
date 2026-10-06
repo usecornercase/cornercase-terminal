@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::config::Config;
@@ -65,6 +67,21 @@ pub fn command(config: &Config, kind: &str) -> String {
         .cloned()
         .or_else(|| KNOWN.iter().find(|(k, _)| *k == kind).map(|(_, bin)| (*bin).to_string()))
         .unwrap_or_else(|| kind.to_string())
+}
+
+fn executable(path: &Path) -> bool {
+    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+fn found(program: &str, path: Option<&OsStr>) -> bool {
+    if program.contains('/') {
+        return executable(Path::new(program));
+    }
+    path.is_some_and(|path| std::env::split_paths(path).any(|dir| dir.is_absolute() && executable(&dir.join(program))))
+}
+
+pub fn installed(program: &str) -> bool {
+    found(program, std::env::var_os("PATH").as_deref())
 }
 
 pub fn modes(config: &Config, kind: &str) -> Vec<Mode> {
@@ -203,6 +220,40 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    mod installed {
+        use super::*;
+        use crate::test_util::{TempDir, write_executable};
+
+        fn bin() -> TempDir {
+            let dir = TempDir::new();
+            write_executable(&dir.path().join("codex"), "#!/bin/sh\n");
+            std::fs::write(dir.path().join("notes"), "").expect("write a plain file");
+            dir
+        }
+
+        #[test]
+        fn a_program_is_looked_up_in_the_path() {
+            let dir = bin();
+            let path = std::env::join_paths(["/nonexistent", dir.path().to_str().expect("utf-8")]).expect("a path");
+            assert_eq!(
+                [found("codex", Some(&path)), found("claude", Some(&path)), found("notes", Some(&path))],
+                [true, false, false]
+            );
+        }
+
+        #[test]
+        fn a_program_with_a_slash_is_checked_as_is() {
+            let dir = bin();
+            let codex = dir.path().join("codex").display().to_string();
+            assert_eq!([found(&codex, None), found("/nonexistent/codex", None)], [true, false]);
+        }
+
+        #[test]
+        fn without_a_path_nothing_is_found() {
+            assert!(!found("sh", None));
+        }
+    }
 
     fn strings(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| (*s).to_string()).collect()

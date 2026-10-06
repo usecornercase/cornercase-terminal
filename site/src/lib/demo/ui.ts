@@ -42,7 +42,7 @@ import {
   workspaceLayout,
   workspaceRows,
 } from './layout';
-import { USAGE, USAGE_PLAN, type UsageWindow } from './data';
+import { USAGE, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
 import { type Divider, dividers, grab, panes } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
@@ -690,26 +690,30 @@ export class Painter {
   private usage(): void {
     const app = this.app;
     const { loading, at } = app.usage;
-    const windows = at === null ? [] : USAGE;
-    const r = usageArea(app.cols, app.rows, 2 + windows.length * 3);
+    const r0 = usageArea(app.cols, app.rows, 0);
+    const width = inner(r0).w;
+    const status = loading ? 'loading…' : at === null ? '' : updated(app.now() - at);
+    const lines: Line[] = [];
+    for (const section of USAGE) {
+      const title = at === null ? section.agent : `${section.agent} · ${section.plan} plan`;
+      const room = width - [...title].length - [...status].length;
+      lines.push([seg(title, { add: BOLD }), seg(' '.repeat(Math.max(0, room))), seg(status, DARK)], []);
+      for (const w of at === null ? [] : section.windows) {
+        const colour: Style = { fg: SEVERITY[w.severity] };
+        const percent = `${w.percent}%`;
+        const resets = ` · ${w.resets}`;
+        const filled = Math.ceil((width * Math.min(w.percent, 100)) / 100);
+        const room = width - [...w.label].length - percent.length - [...resets].length;
+        lines.push([seg(w.label), seg(' '.repeat(Math.max(0, room))), seg(percent, { ...colour, add: BOLD }), seg(resets, DARK)]);
+        lines.push([seg(USAGE_FILLED.repeat(filled), colour), seg(USAGE_EMPTY.repeat(width - filled), DARK)]);
+        lines.push([]);
+      }
+    }
+    const r = usageArea(app.cols, app.rows, lines.length);
     this.backdrop(false);
     this.box(r, 'usage');
     const c = inner(r);
-    const plan = at === null ? '' : ` · ${USAGE_PLAN} plan`;
-    const lines: Line[] = [[seg(`Claude Code${plan}`, { add: BOLD })], []];
-    for (const w of windows) {
-      const colour: Style = { fg: SEVERITY[w.severity] };
-      const percent = `${w.percent}%`;
-      const resets = ` · ${w.resets}`;
-      const filled = Math.ceil((c.w * Math.min(w.percent, 100)) / 100);
-      const room = c.w - [...w.label].length - percent.length - [...resets].length;
-      lines.push([seg(w.label), seg(' '.repeat(Math.max(0, room))), seg(percent, { ...colour, add: BOLD }), seg(resets, DARK)]);
-      lines.push([seg(USAGE_FILLED.repeat(filled), colour), seg(USAGE_EMPTY.repeat(c.w - filled), DARK)]);
-      lines.push([]);
-    }
-    lines.forEach((line, i) => this.line(rect(c.x, c.y + i, c.w, 1), line));
-    const note = loading ? 'loading…' : at === null ? '' : updated(app.now() - at);
-    this.line(rect(c.x, bottom(r) - 3, c.w, 1), [seg(note, DARK)]);
+    lines.slice(0, Math.max(0, c.h - 1)).forEach((line, i) => this.line(rect(c.x, c.y + i, c.w, 1), line));
     this.submitButton(usageDone(r), DONE, () => app.closeOverlay());
   }
 

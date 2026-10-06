@@ -160,12 +160,12 @@ cornercase types the agent's command in a new shell. If the shell is still in th
 
 ### Usage is unavailable
 
-The [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs `claude` on the server's machine and waits up to ten seconds for an answer. The message after `usage unavailable` says what went wrong:
+The [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs `claude` and `codex` on the server's machine and waits up to ten seconds for each answer. The message after `usage unavailable` says what went wrong with that agent:
 
-- `could not run claude`: `claude` isn't on the `PATH` the server started with. Tell cornercase where it is with [`agent_commands`](../../reference/agents/#your-own-agents), or restart the server from a shell where `claude` is found.
-- `did not answer in time` or `exited without answering`: run `claude` yourself in a tab and check that it starts and that you are logged in. An older Claude Code may not know how to answer; update it.
-- `unexpected answer`: Claude Code answered in a shape cornercase doesn't understand, probably after a Claude Code update. Please [open an issue](https://github.com/usecornercase/cornercase-terminal/issues).
-- Any other message comes from Claude Code, or from reading its answer.
+- `could not run claude` or `could not run codex`: the agent isn't on the `PATH` the server started with. Tell cornercase where it is with [`agent_commands`](../../reference/agents/#your-own-agents), or restart the server from a shell where it is found.
+- `did not answer in time` or `exited without answering`: run the agent yourself in a tab and check that it starts and that you are logged in. An older version may not know how to answer; update it.
+- `unexpected answer`: the agent answered in a shape cornercase doesn't understand, probably after an update. Please [open an issue](https://github.com/usecornercase/cornercase-terminal/issues).
+- Any other message comes from the agent, or from reading its answer.
 
 ### The trust question isn't answered
 

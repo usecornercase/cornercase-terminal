@@ -566,7 +566,7 @@ export const issuesArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), ISSUES_WIDTH), Math.min(Math.max(0, rows - 2), ISSUES_HEIGHT));
 
 export const usageArea = (cols: number, rows: number, body: number) =>
-  centered(cols, rows, Math.min(Math.max(0, cols - 4), FORM_WIDTH), Math.min(body + 4, rows));
+  centered(cols, rows, Math.min(Math.max(0, cols - 4), FORM_WIDTH), Math.min(body + 3, rows));
 
 export const usageDone = (r: Rect): Rect => {
   const row = rect(r.x + 2, bottom(r) - 2, Math.max(0, r.w - 4), 1);
