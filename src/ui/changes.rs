@@ -61,6 +61,7 @@ pub struct View {
     pub scroll: usize,
     pub live: bool,
     pub light: bool,
+    pub muted: Color,
     pub tints: Tints,
     pub filter: Option<FilterView>,
 }
@@ -310,8 +311,8 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     }
 }
 
-fn dim() -> Style {
-    Style::default().fg(Color::DarkGray)
+fn dim(view: &View) -> Style {
+    Style::default().fg(view.muted)
 }
 
 fn hovered(hover: Option<Position>, r: Rect) -> bool {
@@ -351,26 +352,26 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
                 (Mode::Commits, Some(base)) => format!("no commits since {base}"),
                 (Mode::All, Some(base)) => format!("nothing changed since {base}"),
             };
-            put(buf, p.body.x + 1, p.body.y, &text, dim(), p.body.right());
+            put(buf, p.body.x + 1, p.body.y, &text, dim(view), p.body.right());
         } else if view.filtering().is_some_and(|f| !f.kept.contains(&true)) {
-            put(buf, p.body.x + 1, p.body.y, NO_FILE_MATCHES, dim(), p.body.right());
+            put(buf, p.body.x + 1, p.body.y, NO_FILE_MATCHES, dim(view), p.body.right());
         }
         for (row, r) in visible(area, view) {
             draw_row(buf, view, diff, row, r, hover, hovered_hunk);
         }
     }
     let line = "─".repeat(usize::from(p.separator.width));
-    put(buf, p.separator.x, p.separator.y, &line, dim(), p.separator.right());
+    put(buf, p.separator.x, p.separator.y, &line, dim(view), p.separator.right());
     let fold = fold_all(area, view);
     if !fold.is_empty() {
-        let style = if hovered(hover, fold) { Style::default().fg(Color::Black).bg(Color::Cyan) } else { dim() };
+        let style = if hovered(hover, fold) { Style::default().fg(Color::Black).bg(Color::Cyan) } else { dim(view) };
         put(buf, fold.x, fold.y, &format!(" {} ", fold_label(view)), style, fold.right());
     }
     if let Some(diff) = view.diff().filter(|d| !d.files.is_empty()) {
         let viewed = view.viewed.iter().filter(|v| **v).count();
         let text = format!("{viewed} of {} viewed", diff.files.len());
         let x = p.footer.right().saturating_sub(width(&text));
-        put(buf, x.max(fold.right() + 1), p.footer.y, &text, dim(), p.footer.right());
+        put(buf, x.max(fold.right() + 1), p.footer.y, &text, dim(view), p.footer.right());
     }
     if let Some(cursor) = cursor {
         f.set_cursor_position(cursor);
@@ -389,10 +390,11 @@ fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>)
         put(buf, r.x, r.y, &format!(" {} ", mode.label()), style, r.right());
     }
     let r = filter_button(area);
-    let style = if hovered(hover, r) || view.filter.is_some() { Style::default().fg(Color::Cyan) } else { dim() };
+    let style = if hovered(hover, r) || view.filter.is_some() { Style::default().fg(Color::Cyan) } else { dim(view) };
     put(buf, r.x + 1, r.y, FILTER_ICON, style, r.right());
     let r = close(area);
-    let style = if hovered(hover, r) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim() };
+    let style =
+        if hovered(hover, r) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(view) };
     put(buf, r.x + 1, r.y, "×", style, r.right());
 }
 
@@ -410,14 +412,14 @@ fn draw_field(
     fill(buf, row, if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE });
     let clear = clear_filter(area, view);
     let style =
-        if hovered(hover, clear) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim() };
+        if hovered(hover, clear) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(view) };
     put(buf, clear.x + 1, clear.y, "×", style, clear.right());
     let end = clear.x;
-    let accent = if filter.focused { Color::Cyan } else { Color::DarkGray };
+    let accent = if filter.focused { Color::Cyan } else { view.muted };
     let start = put(buf, row.x + 1, row.y, FILTER_ICON, Style::default().fg(accent), end) + 1;
     let room = usize::from(end.saturating_sub(start + 1));
     if filter.query.is_empty() {
-        put(buf, start, row.y, &cut(FILTER_PLACEHOLDER, room), dim(), end);
+        put(buf, start, row.y, &cut(FILTER_PLACEHOLDER, room), dim(view), end);
     }
     let query = crate::ui::truncate_left(&filter.query, room);
     let x = put(buf, start, row.y, &query, Style::default().add_modifier(Modifier::BOLD), end);
@@ -430,7 +432,7 @@ fn draw_summary(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Positio
     let end = if selector.is_empty() { row.right() } else { selector.x.saturating_sub(1) };
     match &view.body {
         Body::Loading => {
-            put(buf, row.x, row.y, LOADING, dim(), end);
+            put(buf, row.x, row.y, LOADING, dim(view), end);
         }
         Body::Failed(error) => {
             let text = cut(error, usize::from(end.saturating_sub(row.x)));
@@ -461,7 +463,7 @@ fn draw_summary(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Positio
             if selector.is_empty() && view.live {
                 let x = row.right().saturating_sub(6);
                 let x = put(buf, x, row.y, "●", Style::default().fg(Color::Green), row.right());
-                put(buf, x, row.y, " live", dim(), row.right());
+                put(buf, x, row.y, " live", dim(view), row.right());
             }
         }
     }
@@ -502,7 +504,7 @@ fn draw_row(
             let file = &diff.files[i];
             let n = gap_size(file, h);
             let digits = u16::try_from(number_width(file)).unwrap_or(3);
-            let style = if hovered(hover, r) { Style::default().fg(Color::Cyan) } else { dim() };
+            let style = if hovered(hover, r) { Style::default().fg(Color::Cyan) } else { dim(view) };
             put(buf, r.x + 3 + digits * 2, r.y, "↕", Style::default().fg(Color::Cyan), r.right());
             let label = if n == 1 { "1 unchanged line".to_string() } else { format!("{n} unchanged lines") };
             put(buf, r.x + 5 + digits * 2, r.y, &label, style, r.right());
@@ -522,14 +524,14 @@ fn draw_row(
             };
             let mut x = r.x + 1;
             if !hunk.context.is_empty() {
-                x = put(buf, x, r.y, "┄┄ ", dim(), end);
+                x = put(buf, x, r.y, "┄┄ ", dim(view), end);
                 let room = usize::from(end.saturating_sub(x + 2));
                 let context = cut(&hunk.context, room);
                 x = put(buf, x, r.y, &context, Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC), end);
                 x += 1;
             }
             let rest = usize::from(end.saturating_sub(x + 1));
-            put(buf, x, r.y, &"┄".repeat(rest), dim(), end);
+            put(buf, x, r.y, &"┄".repeat(rest), dim(view), end);
             if hovered_hunk == Some((i, h)) {
                 for (action, a) in actions(r) {
                     let style = if hovered(hover, a) {
@@ -560,28 +562,28 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     }
     let muted = viewed || !matches!(file.fold, crate::changes::diff::Fold::Open);
     if file.fold.shows_lines() {
-        put(buf, r.x + 2, r.y, if open { "▾" } else { "▸" }, dim(), r.right());
+        put(buf, r.x + 2, r.y, if open { "▾" } else { "▸" }, dim(view), r.right());
     }
-    let status = if muted { dim() } else { status_style(file.status) };
+    let status = if muted { dim(view) } else { status_style(file.status) };
     put(buf, r.x + 4, r.y, file.status.letter(), status, r.right());
 
     let check = viewed_cell(r);
     if viewed {
         put(buf, check.x + 1, r.y, "✓", Style::default().fg(Color::Green), r.right());
     } else if hovered(hover, r) {
-        let style = if hovered(hover, check) { Style::default().fg(Color::Green) } else { dim() };
+        let style = if hovered(hover, check) { Style::default().fg(Color::Green) } else { dim(view) };
         put(buf, check.x + 1, r.y, "✓", style, r.right());
     }
     let mut right: Vec<(String, Style)> = Vec::new();
     let tag = file.fold.tag().or((file.status == Status::Untracked).then_some("new"));
     if let Some(tag) = tag {
-        right.push((tag.to_string(), dim().add_modifier(Modifier::ITALIC)));
+        right.push((tag.to_string(), dim(view).add_modifier(Modifier::ITALIC)));
     }
     if file.added > 0 {
-        right.push((format!("+{}", file.added), if muted { dim() } else { Style::default().fg(Color::Green) }));
+        right.push((format!("+{}", file.added), if muted { dim(view) } else { Style::default().fg(Color::Green) }));
     }
     if file.removed > 0 {
-        right.push((format!("−{}", file.removed), if muted { dim() } else { Style::default().fg(Color::Red) }));
+        right.push((format!("−{}", file.removed), if muted { dim(view) } else { Style::default().fg(Color::Red) }));
     }
     let right_width: u16 = right.iter().map(|(t, _)| width(t) + 1).sum();
     let mut x = check.x.saturating_sub(right_width);
@@ -596,8 +598,8 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     let shown = crate::ui::truncate_left(&path, room);
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
-    let x = put(buf, start, r.y, folder, dim(), path_end);
-    let name_style = if muted { dim() } else { Style::default().fg(Color::White).add_modifier(Modifier::BOLD) };
+    let x = put(buf, start, r.y, folder, dim(view), path_end);
+    let name_style = if muted { dim(view) } else { Style::default().fg(Color::White).add_modifier(Modifier::BOLD) };
     put(buf, x, r.y, name, name_style, path_end);
 }
 
@@ -629,7 +631,7 @@ fn draw_code(
     let number = |n: Option<u32>| n.map_or_else(|| " ".repeat(digits), |n| format!("{n:>digits$}"));
     let numbers = match (tint, bar) {
         (None, Some(colour)) => Style::default().fg(colour),
-        _ => dim(),
+        _ => dim(view),
     };
     let mut x = put(buf, r.x + 1, r.y, &number(code.old), numbers, r.right());
     x = put(buf, x + 1, r.y, &number(code.new), numbers, r.right());
@@ -666,7 +668,7 @@ fn draw_code(
         }
     }
     if total > room {
-        put(buf, x, r.y, "…", dim(), end + 1);
+        put(buf, x, r.y, "…", dim(view), end + 1);
     }
 }
 
@@ -732,6 +734,7 @@ diff --git a/Cargo.lock b/Cargo.lock
             scroll: 0,
             live: true,
             light: false,
+            muted: Color::DarkGray,
             tints: TINTS,
             filter: None,
         }
@@ -856,6 +859,19 @@ diff --git a/Cargo.lock b/Cargo.lock
         #[test]
         fn an_empty_field_shows_how_to_filter() {
             insta::assert_snapshot!(render(&filtered(&sample(), ""), None).backend());
+        }
+
+        #[test]
+        fn its_placeholder_takes_the_muted_colour() {
+            let view = View { muted: Color::Indexed(243), ..filtered(&sample(), "") };
+            let field = parts(AREA, &view).field;
+            let t = render(&view, None);
+            let buf = t.backend().buffer();
+            let row: String = (field.x..field.right()).map(|x| buf[(x, field.y)].symbol().to_string()).collect();
+            let at = row.find(FILTER_PLACEHOLDER).expect("the placeholder shows");
+            let column = u16::try_from(row[..at].chars().count()).expect("column");
+
+            assert_eq!(buf[(field.x + column, field.y)].fg, Color::Indexed(243));
         }
 
         #[test]

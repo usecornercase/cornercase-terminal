@@ -3262,6 +3262,7 @@ impl App {
             sidebar: self.sidebar(),
             resizing: self.resizing,
             light: self.theme.is_light() == Some(true),
+            muted: ui::muted(&self.theme),
             tab,
             overlay,
             toast: self.toast.as_ref().map(|t| ui::Toast { message: &t.message, status: t.status }),
@@ -3529,6 +3530,7 @@ impl App {
             scroll: self.changes.scroll,
             live: model.is_some_and(|m| m.live(Instant::now())),
             light: self.theme.is_light() == Some(true),
+            muted: ui::muted(&self.theme),
             tints: Tints::of(&self.theme),
             filter,
         })
@@ -7509,6 +7511,30 @@ rm -f "$1/sessions/$$.json"
             app.restore(&saved, AREA).expect("restore");
 
             assert_eq!(app.widths, widths);
+        }
+    }
+
+    mod muted_text {
+        use libghostty_vt::style::RgbColor;
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        use ratatui::style::Color;
+
+        use super::*;
+
+        #[test]
+        fn a_terminal_that_keeps_its_palette_to_itself_gets_a_grey_that_shows() {
+            let (mut app, _rx) = empty_app();
+            app.set_theme(HostTheme {
+                background: Some(RgbColor { r: 0x1d, g: 0x20, b: 0x22 }),
+                ..HostTheme::default()
+            });
+            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
+
+            t.draw(|f| app.draw(f)).expect("draw");
+
+            let settings = areas().settings;
+            assert_eq!(t.backend().buffer()[(settings.x + 2, settings.y)].fg, Color::Indexed(243));
         }
     }
 

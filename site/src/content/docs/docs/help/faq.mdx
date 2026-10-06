@@ -76,6 +76,8 @@ In `secrets.json` next to your `config.json`, readable only by you, or in the `S
 
 Yes. cornercase asks your terminal for its colours when it starts and draws its interface with palette colours, so it follows light and dark themes. The programs in your panes get the same colours.
 
+The one exception is grey text, such as titles, the buttons at the bottom and the tree's arrows. It uses your theme's *bright black* unless that colour is too close to the background, as in Solarized Dark, or your terminal does not say what it is, as Warp does not. Then cornercase uses a fixed grey that shows on any dark or light background.
+
 ### Which platforms does it run on?
 
 Linux and macOS, on x86_64 and arm64. The prebuilt Linux binaries need glibc 2.35 or newer; elsewhere, [build from source](../../installation/#from-source).

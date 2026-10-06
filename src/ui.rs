@@ -13,6 +13,7 @@ pub mod changes;
 
 use crate::activity::{self, Status};
 use crate::emulator::Snapshot;
+use crate::host_theme::HostTheme;
 use crate::markdown;
 use crate::split::{Dir, Node};
 use crate::usage::Severity;
@@ -54,6 +55,8 @@ const DARK_SURFACE: Color = Color::Indexed(236);
 const LIGHT_SURFACE: Color = Color::Indexed(254);
 const DARK_HOVER: Color = Color::Indexed(235);
 const LIGHT_HOVER: Color = Color::Indexed(255);
+const DARK_MUTED: Color = Color::Indexed(243);
+const LIGHT_MUTED: Color = Color::Indexed(245);
 const CLOSE_BUTTON_WIDTH: u16 = 3;
 const COMPACT_CLOSE_WIDTH: u16 = 5;
 const TOAST_ICON: &str = " ✓ ";
@@ -324,7 +327,7 @@ fn right_edge(r: Rect) -> Rect {
 }
 
 fn sidebar_block() -> Block<'static> {
-    Block::default().borders(Borders::RIGHT).border_style(Style::default().fg(Color::DarkGray))
+    Block::default().borders(Borders::RIGHT)
 }
 
 fn projects_column(r: Rect) -> [Rect; 6] {
@@ -1462,7 +1465,7 @@ pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
 pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
     let width = area.width.saturating_sub(4).min(FORM_WIDTH);
     let body = form_inner(Rect::new(0, 0, width, 3)).width;
-    let lines = u16::try_from(usage_lines(usage, body).len()).unwrap_or(u16::MAX);
+    let lines = u16::try_from(usage_lines(Color::Reset, usage, body).len()).unwrap_or(u16::MAX);
     let height = lines.saturating_add(3).min(area.height);
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
@@ -2085,6 +2088,7 @@ pub struct View<'a> {
     pub sidebar: Sidebar,
     pub resizing: Option<Border>,
     pub light: bool,
+    pub muted: Color,
     pub tab: Option<TabView>,
     pub overlay: Option<Overlay>,
     pub toast: Option<Toast<'a>>,
@@ -2164,10 +2168,9 @@ pub fn draw(f: &mut Frame, view: &View) {
     let areas = layout_with(f.area(), view.widths, view.changes.is_some(), view.sidebar).shown(view.nav);
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
-        None if view.has_project => f.render_widget(
-            Paragraph::new(Span::styled(" no tab open", Style::default().fg(Color::DarkGray))),
-            areas.pane,
-        ),
+        None if view.has_project => {
+            f.render_widget(Paragraph::new(Span::styled(" no tab open", Style::default().fg(view.muted))), areas.pane);
+        }
         None => {}
     }
     if areas.compact() {
@@ -2176,9 +2179,9 @@ pub fn draw(f: &mut Frame, view: &View) {
             f.render_widget(Clear, areas.pane);
         }
     } else {
-        draw_column_border(f, areas.projects_border);
-        draw_column_border(f, areas.workspaces_border);
-        draw_separator(f, areas.stack_border);
+        draw_column_border(f, view.muted, areas.projects_border);
+        draw_column_border(f, view.muted, areas.workspaces_border);
+        draw_separator(f, view.muted, areas.stack_border);
         draw_borders(f, view, &areas);
         draw_search_bar(f, view, areas.search);
     }
@@ -2201,7 +2204,7 @@ pub fn draw(f: &mut Frame, view: &View) {
     {
         f.render_widget(Clear, areas.changes);
         let border = areas.changes_border;
-        draw_column_border(f, border);
+        draw_column_border(f, view.muted, border);
         draw_border(f, view, border, Border::Changes);
         changes::draw(f, areas.changes, panel, view.hover.filter(|_| view.overlay.is_none() && view.drag.is_none()));
     }
@@ -2219,7 +2222,7 @@ pub fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Search(_)) | None => {}
     }
     if let Some(toast) = view.toast {
-        draw_toast(f, toast);
+        draw_toast(f, view.muted, toast);
     }
 }
 
@@ -2232,9 +2235,9 @@ pub fn toast_area(area: Rect, message: &str) -> Rect {
     Rect::new(x, y, width, height)
 }
 
-fn draw_toast(f: &mut Frame, toast: Toast) {
+fn draw_toast(f: &mut Frame, muted: Color, toast: Toast) {
     let r = toast_area(f.area(), toast.message);
-    let icon = match toast.status.map(status_icon) {
+    let icon = match toast.status.map(|status| status_icon(muted, status)) {
         Some(icon) => Span::styled(format!(" {} ", icon.content), icon.style),
         None => Span::styled(TOAST_ICON, Style::default().fg(Color::Green)),
     };
@@ -2338,7 +2341,7 @@ fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     }
     let buf = f.buffer_mut();
     for ((x, y), (links, lit)) in cells {
-        let color = if lit { Color::Cyan } else { Color::DarkGray };
+        let color = if lit { Color::Cyan } else { view.muted };
         buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
     }
 }
@@ -2351,8 +2354,8 @@ fn sidebar_hovered(view: &View, r: Rect) -> bool {
     view.overlay.is_none() && view.drag.is_none() && hovered(view, r)
 }
 
-fn overlay_block(title: &str) -> Block<'_> {
-    let block = Block::bordered().border_style(Style::default().fg(Color::DarkGray));
+fn overlay_block(muted: Color, title: &str) -> Block<'_> {
+    let block = Block::bordered().border_style(Style::default().fg(muted));
     if title.is_empty() {
         block
     } else {
@@ -2363,7 +2366,7 @@ fn overlay_block(title: &str) -> Block<'_> {
 fn draw_menu(f: &mut Frame, view: &View, at: Position, items: &[String]) {
     let menu = menu_area(f.area(), at, items);
     f.render_widget(Clear, menu);
-    f.render_widget(overlay_block(""), menu);
+    f.render_widget(overlay_block(view.muted, ""), menu);
     for (i, item) in items.iter().enumerate() {
         let r = menu_item(menu, i);
         let style = if hovered(view, r) {
@@ -2378,9 +2381,9 @@ fn draw_menu(f: &mut Frame, view: &View, at: Position, items: &[String]) {
 fn draw_form(f: &mut Frame, view: &View, form: &Form) {
     let r = form_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(form.title), r);
+    f.render_widget(overlay_block(view.muted, form.title), r);
     let [label, input, hint, toggle, note, _] = form_rows(r);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
 
     f.render_widget(Paragraph::new(Span::styled(form.label, dim)), label);
     if let Some(t) = &form.toggle {
@@ -2400,7 +2403,7 @@ fn draw_form(f: &mut Frame, view: &View, form: &Form) {
     );
     f.render_widget(Paragraph::new(Span::styled(truncate_left(&form.hint, usize::from(hint.width)), dim)), hint);
 
-    draw_note(f, form.note.as_ref(), note);
+    draw_note(f, view.muted, form.note.as_ref(), note);
 
     draw_dialog_buttons(f, view, form_buttons(r, form.submit), form.submit);
 
@@ -2418,9 +2421,9 @@ fn draw_group_style(f: &mut Frame, view: &View, group: &GroupEntry) {
     let area = f.area();
     let r = form_area(area);
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(&group.name), r);
+    f.render_widget(overlay_block(view.muted, &group.name), r);
     let [icon_label, icons, colour_label, colours, last] = style_rows(area);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     f.render_widget(Paragraph::new(Span::styled("icon", dim)), icon_label);
     f.render_widget(Paragraph::new(Span::styled("colour", dim)), colour_label);
     let selected = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
@@ -2458,14 +2461,14 @@ fn draw_group_style(f: &mut Frame, view: &View, group: &GroupEntry) {
     draw_submit(f, view, done, crate::settings::DONE);
 }
 
-fn draw_note(f: &mut Frame, note: Option<&Note>, r: Rect) {
+fn draw_note(f: &mut Frame, muted: Color, note: Option<&Note>, r: Rect) {
     match note {
         Some(Note::Error(text)) => f.render_widget(
             Paragraph::new(text.as_str()).style(Style::default().fg(Color::Red)).wrap(Wrap { trim: true }),
             r,
         ),
         Some(Note::Busy(text)) => {
-            f.render_widget(Paragraph::new(Span::styled(*text, Style::default().fg(Color::DarkGray))), r);
+            f.render_widget(Paragraph::new(Span::styled(*text, Style::default().fg(muted))), r);
         }
         None => {}
     }
@@ -2474,24 +2477,24 @@ fn draw_note(f: &mut Frame, note: Option<&Note>, r: Rect) {
 fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm) {
     let r = form_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(confirm.title), r);
+    f.render_widget(overlay_block(view.muted, confirm.title), r);
     let [label, _, _, toggle, note, _] = form_rows(r);
     let message = Rect::new(label.x, label.y, label.width, toggle.bottom().saturating_sub(label.y));
     f.render_widget(Paragraph::new(confirm.message.as_str()).wrap(Wrap { trim: true }), message);
-    draw_note(f, confirm.note.as_ref(), note);
+    draw_note(f, view.muted, confirm.note.as_ref(), note);
     draw_dialog_buttons(f, view, form_buttons(r, confirm.submit), confirm.submit);
 }
 
 fn draw_update(f: &mut Frame, view: &View, update: &Update) {
     let r = picker_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block("update"), r);
+    f.render_widget(overlay_block(view.muted, "update"), r);
     let [message, notes, note, _] = update_rows(r);
     f.render_widget(Paragraph::new(update.message.as_str()).wrap(Wrap { trim: true }), message);
     let scroll = update_scroll(f.area(), update.notes.len(), update.scroll);
     let visible: Vec<Line> = update.notes.iter().skip(scroll).take(usize::from(notes.height)).cloned().collect();
     f.render_widget(Paragraph::new(visible), notes);
-    draw_note(f, update.note.as_ref(), note);
+    draw_note(f, view.muted, update.note.as_ref(), note);
     draw_dialog_buttons(f, view, update_buttons(f.area(), update.submit), update.submit);
 }
 
@@ -2503,8 +2506,8 @@ fn severity_color(severity: Severity) -> Color {
     }
 }
 
-fn usage_section_lines(section: &UsageSection, width: usize, lines: &mut Vec<Line<'static>>) {
-    let dim = Style::default().fg(Color::DarkGray);
+fn usage_section_lines(muted: Color, section: &UsageSection, width: usize, lines: &mut Vec<Line<'static>>) {
+    let dim = Style::default().fg(muted);
     let used = section.title.chars().count() + section.status.chars().count();
     lines.extend([
         Line::from(vec![
@@ -2546,10 +2549,10 @@ fn usage_section_lines(section: &UsageSection, width: usize, lines: &mut Vec<Lin
     }
 }
 
-fn usage_lines(usage: &Usage, width: u16) -> Vec<Line<'static>> {
+fn usage_lines(muted: Color, usage: &Usage, width: u16) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for section in &usage.sections {
-        usage_section_lines(section, usize::from(width), &mut lines);
+        usage_section_lines(muted, section, usize::from(width), &mut lines);
     }
     lines
 }
@@ -2557,9 +2560,9 @@ fn usage_lines(usage: &Usage, width: u16) -> Vec<Line<'static>> {
 fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     let r = usage_area(f.area(), usage);
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(USAGE_LABEL), r);
+    f.render_widget(overlay_block(view.muted, USAGE_LABEL), r);
     let [body, _] = usage_rows(r);
-    f.render_widget(Paragraph::new(usage_lines(usage, body.width)), body);
+    f.render_widget(Paragraph::new(usage_lines(view.muted, usage, body.width)), body);
     draw_submit(f, view, usage_done(f.area(), usage), crate::settings::DONE);
 }
 
@@ -2573,7 +2576,7 @@ fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
 }
 
 fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], label: &str) {
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     let cancel_style = if hovered(view, cancel) { Style::default().fg(Color::Black).bg(Color::Gray) } else { dim };
     draw_submit(f, view, submit, label);
     f.render_widget(Paragraph::new(Span::styled(format!(" {CANCEL_LABEL} "), cancel_style)), cancel);
@@ -2582,9 +2585,9 @@ fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], 
 fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
     let r = picker_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(picker.title), r);
+    f.render_widget(overlay_block(view.muted, picker.title), r);
     let [input, list, note, _] = picker_rows(r);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
 
     let max = usize::from(input.width).saturating_sub(INPUT_PROMPT.chars().count() + 1);
     let filter = truncate_left(&picker.filter, max);
@@ -2614,7 +2617,7 @@ fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
             let style = Style::default().fg(Color::Black).bg(Color::Cyan);
             (style.add_modifier(Modifier::BOLD), style)
         } else {
-            (Style::default(), Style::default().fg(Color::DarkGray))
+            (Style::default(), Style::default().fg(view.muted))
         };
         let branch = item.branch.as_deref().unwrap_or_default();
         let branch_width = branch.chars().count();
@@ -2656,14 +2659,14 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
     let area = f.area();
     let r = settings_area(area);
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block("settings"), r);
+    f.render_widget(overlay_block(view.muted, "settings"), r);
     let [_, body, edit_row, note, _] = settings_rows(r);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     let mut cursor = None;
     draw_tabs(f, view, &settings_tabs(r, &settings.tabs), &settings.tabs, settings.tab);
 
     if let Some(pick) = &settings.pick {
-        cursor = draw_input(f, Rect { height: 1, ..body }, &pick.title, &pick.filter);
+        cursor = draw_input(f, view.muted, Rect { height: 1, ..body }, &pick.title, &pick.filter);
         let list = settings_pick_list(r);
         if pick.items.is_empty() {
             f.render_widget(Paragraph::new(Span::styled(" nothing matches", dim)), list);
@@ -2705,7 +2708,7 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
     }
 
     if let Some(edit) = &settings.edit {
-        cursor = draw_input(f, edit_row, &format!("{}:", edit.label), &edit.value);
+        cursor = draw_input(f, view.muted, edit_row, &format!("{}:", edit.label), &edit.value);
     }
     let (text, style) = match &settings.note {
         Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
@@ -2720,7 +2723,7 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
 }
 
 fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bool, r: Rect) {
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     let (marker, bg) = if selected { ("› ", Style::default().bg(view.surface())) } else { ("  ", Style::default()) };
     let label_style = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
     let value_style = if row.dangerous { bg.fg(Color::Red) } else { bg };
@@ -2732,7 +2735,7 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bo
         Span::styled(format!("{label:<26}"), label_style),
         Span::styled(value.clone(), value_style),
         Span::styled(if value.is_empty() || row.note.is_empty() { String::new() } else { "  ".into() }, bg),
-        Span::styled(row.note.clone(), bg.fg(Color::DarkGray)),
+        Span::styled(row.note.clone(), bg.fg(view.muted)),
     ];
     f.render_widget(Paragraph::new(Line::from(spans)).style(bg), r);
     if !hovered(view, r) {
@@ -2755,9 +2758,9 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bo
 fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     let r = issues_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(&issues.title), r);
+    f.render_widget(overlay_block(view.muted, &issues.title), r);
     let [_, input, list, note, _] = issues_rows(r);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
 
     let cursor = match &issues.body {
         IssuesBody::Detail { lines, scroll } => {
@@ -2768,7 +2771,7 @@ fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
         }
         IssuesBody::List { filter, items, selected, scroll, empty } => {
             draw_issue_tabs(f, view, issues, r);
-            let cursor = draw_input(f, input, "", filter);
+            let cursor = draw_input(f, view.muted, input, "", filter);
             if items.is_empty() {
                 f.render_widget(Paragraph::new(Span::styled(format!(" {empty}"), dim)), list);
             }
@@ -2777,7 +2780,7 @@ fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
         }
         IssuesBody::Token { label, input: typed, help } => {
             draw_issue_tabs(f, view, issues, r);
-            let cursor = draw_input(f, input, label, typed);
+            let cursor = draw_input(f, view.muted, input, label, typed);
             let text: Vec<Line> = help.iter().map(|h| Line::from(h.as_str())).collect();
             f.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), list.inner(Margin::new(1, 0)));
             cursor
@@ -2807,7 +2810,7 @@ fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     }
 }
 
-fn draw_input(f: &mut Frame, row: Rect, label: &str, value: &str) -> Option<Position> {
+fn draw_input(f: &mut Frame, muted: Color, row: Rect, label: &str, value: &str) -> Option<Position> {
     let label = if label.is_empty() { String::new() } else { format!("{label} ") };
     let max = usize::from(row.width).saturating_sub(INPUT_PROMPT.chars().count() + label.chars().count() + 1);
     let value = truncate_left(value, max);
@@ -2815,7 +2818,7 @@ fn draw_input(f: &mut Frame, row: Rect, label: &str, value: &str) -> Option<Posi
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(INPUT_PROMPT, Style::default().fg(Color::Cyan)),
-            Span::styled(label, Style::default().fg(Color::DarkGray)),
+            Span::styled(label, Style::default().fg(muted)),
             Span::styled(value, Style::default().add_modifier(Modifier::BOLD)),
         ])),
         row,
@@ -2849,7 +2852,7 @@ fn draw_tabs(f: &mut Frame, view: &View, rects: &[Rect], names: &[&str], active:
 
 fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], selected: Option<usize>, scroll: usize) {
     let key_width = items.iter().map(|i| i.key.chars().count()).max().unwrap_or(0);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     for (i, item) in items.iter().enumerate() {
         let row = list_item(list, items.len(), scroll, i);
         if row.is_empty() {
@@ -2880,22 +2883,22 @@ fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], s
 }
 
 fn draw_sidebar(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, areas.title, "projects");
+    draw_title(f, view.muted, areas.title, "projects");
     let sidebar = view.sidebar_rows();
     let base = project_rows(areas.list, areas.pitch, &sidebar, view.projects_scroll);
     let landing = view.sidebar_landing();
     let (sidebar, line) = landed(sidebar, &base, landing, SidebarRow::Gap, SidebarRow::Landing);
     let rows = project_rows(areas.list, areas.pitch, &sidebar, base.first());
     draw_entries(f, view, &rows, &sidebar, areas.pitch);
-    draw_hidden(f, &rows, &sidebar, |r| matches!(r, SidebarRow::Group(_) | SidebarRow::Project(_)));
+    draw_hidden(f, view.muted, &rows, &sidebar, |r| matches!(r, SidebarRow::Group(_) | SidebarRow::Project(_)));
     draw_new_project(f, view, rows.button());
     draw_landing(f, line, landing.map(|l| l.spot.indent()));
 }
 
-fn draw_hidden<R: Copy>(f: &mut Frame, layout: &Rows, rows: &[R], named: impl Fn(R) -> bool) {
+fn draw_hidden<R: Copy>(f: &mut Frame, muted: Color, layout: &Rows, rows: &[R], named: impl Fn(R) -> bool) {
     let (above, below) = layout.hidden();
     let count = |range: Range<usize>| (!range.is_empty()).then(|| rows[range].iter().filter(|r| named(**r)).count());
-    draw_more(f, [more_above(layout.list), layout.more_below()], count(above), count(below));
+    draw_more(f, muted, [more_above(layout.list), layout.more_below()], count(above), count(below));
 }
 
 fn draw_new_project(f: &mut Frame, view: &View, r: Rect) {
@@ -2911,7 +2914,7 @@ fn draw_landing(f: &mut Frame, r: Rect, indent: Option<u16>) {
 }
 
 fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_separator(f, areas.separator);
+    draw_separator(f, view.muted, areas.separator);
     let mut settings = areas.settings;
     if let Some(label) = &view.update {
         let r = update_button(areas.settings, label);
@@ -2924,8 +2927,8 @@ fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
     draw_quit_button(f, view, areas.quit);
 }
 
-fn draw_column_border(f: &mut Frame, r: Rect) {
-    let line = Paragraph::new(vec![Line::from("│"); usize::from(r.height)]).style(Style::default().fg(Color::DarkGray));
+fn draw_column_border(f: &mut Frame, muted: Color, r: Rect) {
+    let line = Paragraph::new(vec![Line::from("│"); usize::from(r.height)]).style(Style::default().fg(muted));
     f.render_widget(line, r);
 }
 
@@ -2947,7 +2950,7 @@ fn draw_border(f: &mut Frame, view: &View, r: Rect, border: Border) {
 }
 
 fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     let accent = Style::default().fg(Color::Cyan);
     let line = if let Some(search) = view.search() {
         let max = usize::from(r.width).saturating_sub(SEARCH_ICON.chars().count() + 1);
@@ -2972,7 +2975,7 @@ fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
 fn draw_results(f: &mut Frame, view: &View, search: &Search, r: Rect) {
     f.render_widget(Clear, r);
     let [list, hint] = results_rows(r);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     if search.results.is_empty() {
         f.render_widget(Paragraph::new(Span::styled("  no matches", dim)), list);
     }
@@ -3032,19 +3035,29 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(button) = &view.changes_button {
         let r = areas.changes_button;
         right += r.width;
-        let style = if button.open || sidebar_hovered(view, r) { pressed } else { surface.fg(Color::DarkGray) };
+        let style = if button.open || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
         draw_band(f, r, Span::styled(centered(CHANGES_ICON, r.width), style), style);
     }
     let menu = Rect { width: areas.bar.width.saturating_sub(right), ..areas.bar };
     let icon = Rect { width: COMPACT_BUTTON_WIDTH.min(menu.width), ..menu };
     let lit = view.nav.is_some() || sidebar_hovered(view, menu);
     let style = if lit { pressed } else { surface.fg(Color::Cyan) };
-    draw_band(f, icon, menu_label(view.attention, icon.width, style, lit), style);
+    draw_band(f, icon, menu_label(view.muted, view.attention, icon.width, style, lit), style);
     let crumbs = Rect { x: icon.right() + 2, width: menu.width.saturating_sub(icon.width + 2), ..middle(menu) };
     f.render_widget(Paragraph::new(Line::from(breadcrumb(view, usize::from(crumbs.width)))), crumbs);
     let r = areas.search_button;
-    let style = if sidebar_hovered(view, r) { pressed } else { surface.fg(Color::DarkGray) };
+    let style = if sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
     draw_band(f, r, Span::styled(centered(SEARCH_ICON.trim(), r.width), style), style);
+}
+
+pub fn muted(theme: &HostTheme) -> Color {
+    if theme.muted_is_readable() {
+        Color::DarkGray
+    } else if theme.is_light() == Some(true) {
+        LIGHT_MUTED
+    } else {
+        DARK_MUTED
+    }
 }
 
 fn middle(r: Rect) -> Rect {
@@ -3090,18 +3103,18 @@ fn draw_back(f: &mut Frame, view: &View, areas: &Areas) {
         ..areas.workspaces_title
     };
     let max = usize::from(rest.width).saturating_sub(1);
-    let style = Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD);
+    let style = Style::default().fg(view.muted).add_modifier(Modifier::BOLD);
     f.render_widget(Paragraph::new(Span::styled(format!(" {}", truncate_right(name, max)), style)), middle(rest));
 }
 
-fn draw_title(f: &mut Frame, r: Rect, title: &str) {
-    let style = Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD);
+fn draw_title(f: &mut Frame, muted: Color, r: Rect, title: &str) {
+    let style = Style::default().fg(muted).add_modifier(Modifier::BOLD);
     f.render_widget(Paragraph::new(Span::styled(format!(" {title}"), style)), middle(r));
 }
 
-fn draw_separator(f: &mut Frame, r: Rect) {
+fn draw_separator(f: &mut Frame, muted: Color, r: Rect) {
     let line = "─".repeat(usize::from(r.width.saturating_sub(2)));
-    f.render_widget(Paragraph::new(Span::styled(format!(" {line}"), Style::default().fg(Color::DarkGray))), r);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {line}"), Style::default().fg(muted))), r);
 }
 
 fn button_style(view: &View, r: Rect, idle: Style, hover_bg: Color) -> Style {
@@ -3124,7 +3137,7 @@ fn draw_button(f: &mut Frame, r: Rect, indent: &str, label: &str, style: Style) 
 
 fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if areas.back.is_empty() {
-        draw_title(f, areas.workspaces_title, "workspaces");
+        draw_title(f, view.muted, areas.workspaces_title, "workspaces");
     } else {
         draw_back(f, view, areas);
     }
@@ -3134,7 +3147,7 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
 
     let list = areas.workspaces_list;
     let tabs = view.tab_lines();
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(view.muted);
     let accent = Style::default().fg(Color::Cyan);
     let base = workspace_layout(list, areas.pitch, &tabs, view.workspaces_scroll);
     let landing = view.workspaces_landing();
@@ -3163,7 +3176,7 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
         }
     }
 
-    draw_hidden(f, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
+    draw_hidden(f, view.muted, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
 
     let r = layout.button();
     draw_button(f, r, " ", "+ new workspace", button_style(view, r, accent, Color::Cyan));
@@ -3191,7 +3204,10 @@ impl Band {
 fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, entry: &WorkspaceEntry, active: bool, badge: bool) {
     let style = Style::default().fg(if active { Color::White } else { Color::Gray }).add_modifier(Modifier::BOLD);
     let room = band.room();
-    let badge = badge.then(|| activity::attention(entry.tabs.iter().map(|t| t.status))).flatten().map(status_icon);
+    let badge = badge
+        .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
+        .flatten()
+        .map(|status| status_icon(view.muted, status));
     let behind = Some(entry.behind)
         .filter(|n| *n > 0)
         .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
@@ -3207,7 +3223,7 @@ fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, entry: &Workspace
 
 fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active: bool) {
     let style = Style::default().fg(if active { Color::White } else { Color::Gray });
-    let icon = tab.status.map(status_icon);
+    let icon = tab.status.map(|status| status_icon(view.muted, status));
     let icon_width = if icon.is_some() { 2 } else { 0 };
     let indent = band.lead_width() + 2 + icon_width;
     let max = band.room().saturating_sub(2 + icon_width);
@@ -3219,7 +3235,7 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     line.push(Span::styled(truncate_right(&tab.name, max), style));
     draw_band(f, band.r, Line::from(line), band.bg);
     if tab.details.lines() > 1 {
-        draw_details(f, band.r, band.pitch, &tab.details, indent);
+        draw_details(f, view.muted, band.r, band.pitch, &tab.details, indent);
     }
     draw_row_close(f, view, band.r, band.pitch, band.bg);
 }
@@ -3227,7 +3243,7 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
 fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     let changes = view.changes_button.as_ref().filter(|_| !areas.compact());
     if view.issues {
-        draw_separator(f, areas.workspaces_separator);
+        draw_separator(f, view.muted, areas.workspaces_separator);
         let issues = match changes {
             Some(button) => {
                 let start = changes_button(areas.issues, &button.label).x;
@@ -3235,7 +3251,7 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
             }
             None => areas.issues,
         };
-        let style = button_style(view, issues, Style::default().fg(Color::DarkGray), Color::Cyan);
+        let style = button_style(view, issues, Style::default().fg(view.muted), Color::Cyan);
         draw_button(f, issues, " ", ISSUES_LABEL, style);
     }
     if let Some(button) = changes {
@@ -3243,17 +3259,17 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
         let idle = if button.open {
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(view.muted)
         };
         draw_button(f, r, "", &button.label, button_style(view, r, idle, Color::Cyan));
     }
 }
 
-fn draw_details(f: &mut Frame, row: Rect, pitch: u16, details: &Details, indent: usize) {
+fn draw_details(f: &mut Frame, muted: Color, row: Rect, pitch: u16, details: &Details, indent: usize) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let close = row_close_button(row, pitch);
     let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = Style::default().fg(muted);
     let percent = details.percent.map(|used| {
         let level = match Severity::of(used) {
             Severity::Normal => dim,
@@ -3287,9 +3303,9 @@ fn memory_size(bytes: u64) -> String {
     format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
-fn status_icon(status: Status) -> Span<'static> {
+fn status_icon(muted: Color, status: Status) -> Span<'static> {
     let (glyph, style) = match status {
-        Status::Idle => ("○", Style::default().fg(Color::DarkGray)),
+        Status::Idle => ("○", Style::default().fg(muted)),
         Status::Working => ("◐", Style::default().fg(Color::Yellow)),
         Status::Done => ("✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Status::Waiting => ("!", Style::default().fg(WAITING_COLOR).add_modifier(Modifier::BOLD)),
@@ -3301,11 +3317,11 @@ fn group_attention(view: &View, g: usize) -> Option<Status> {
     activity::attention(view.projects.iter().filter(|p| p.group == Some(g)).map(|p| p.status))
 }
 
-fn menu_label(attention: Option<Status>, width: u16, style: Style, lit: bool) -> Line<'static> {
+fn menu_label(muted: Color, attention: Option<Status>, width: u16, style: Style, lit: bool) -> Line<'static> {
     let Some(status) = attention else { return Line::from(Span::styled(centered(MENU_ICON, width), style)) };
     let width = usize::from(width);
     let left = width.saturating_sub(1) / 2;
-    let badge = status_icon(status);
+    let badge = status_icon(muted, status);
     let badge = if lit { Span::styled(badge.content, style) } else { badge };
     Line::from(vec![
         Span::styled(format!("{}{MENU_ICON} ", " ".repeat(left)), style),
@@ -3353,8 +3369,8 @@ impl Tags {
     }
 }
 
-fn draw_more(f: &mut Frame, [top, bottom]: [Rect; 2], above: Option<usize>, below: Option<usize>) {
-    let dim = Style::default().fg(Color::DarkGray);
+fn draw_more(f: &mut Frame, muted: Color, [top, bottom]: [Rect; 2], above: Option<usize>, below: Option<usize>) {
+    let dim = Style::default().fg(muted);
     for (hidden, arrow, r) in [(above, "↑", top), (below, "↓", bottom)] {
         let label = match hidden {
             None => continue,
@@ -3370,22 +3386,22 @@ fn draw_row_close(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) 
         return;
     }
     let r = row_close_button(row, pitch);
-    let style = if hovered(view, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(Color::DarkGray) };
+    let style = if hovered(view, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
     draw_band(f, r, Span::styled(centered("×", r.width), style), style);
 }
 
 fn draw_settings_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(Color::DarkGray), Color::Cyan);
+    let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
     draw_button(f, r, " ", "settings", style);
 }
 
 fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(Color::DarkGray), Color::Cyan);
+    let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
     draw_button(f, r, " ", USAGE_LABEL, style);
 }
 
 fn draw_quit_button(f: &mut Frame, view: &View, r: Rect) {
-    let style = button_style(view, r, Style::default().fg(Color::DarkGray), Color::Red);
+    let style = button_style(view, r, Style::default().fg(view.muted), Color::Red);
     draw_button(f, r, " ", "quit", style);
 }
 
@@ -3418,8 +3434,8 @@ fn marker(shown: bool) -> Span<'static> {
     Span::styled(if shown { "▌ " } else { "  " }, Style::default().fg(Color::Cyan))
 }
 
-fn arrow(folded: bool) -> Span<'static> {
-    Span::styled(if folded { "▸ " } else { "▾ " }, Style::default().fg(Color::DarkGray))
+fn arrow(muted: Color, folded: bool) -> Span<'static> {
+    Span::styled(if folded { "▸ " } else { "▾ " }, Style::default().fg(muted))
 }
 
 fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
@@ -3429,7 +3445,8 @@ fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
     } else {
         String::new()
     };
-    let badge = group.collapsed.then(|| group_attention(view, g)).flatten().map(status_icon);
+    let badge =
+        group.collapsed.then(|| group_attention(view, g)).flatten().map(|status| status_icon(view.muted, status));
     let room = band.room().saturating_sub(2);
     let used = 2 + count.chars().count();
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(used));
@@ -3437,9 +3454,9 @@ fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
     let shown = used + truncate_right(&group.name, max).chars().count();
     let mut line = band.lead;
     line.extend([
-        arrow(group.collapsed),
+        arrow(view.muted, group.collapsed),
         group_header(group, max),
-        Span::styled(count, Style::default().fg(Color::DarkGray)),
+        Span::styled(count, Style::default().fg(view.muted)),
     ]);
     marks.push_onto(&mut line, shown, room);
     draw_band(f, band.r, Line::from(line), band.bg);
@@ -3455,13 +3472,13 @@ fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: 
     };
     let count = if summary { format!(" ({})", entry.workspaces) } else { String::new() };
     let room = band.room();
-    let badge = entry.status.filter(|_| summary).map(status_icon);
+    let badge = entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status));
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(count.chars().count()));
     let max = room.saturating_sub(count.chars().count() + marks.reserved());
     let name = truncate_right(&entry.name, max);
     let shown = name.chars().count() + count.chars().count();
     let mut line = band.lead;
-    line.extend([Span::styled(name, title_style), Span::styled(count, Style::default().fg(Color::DarkGray))]);
+    line.extend([Span::styled(name, title_style), Span::styled(count, Style::default().fg(view.muted))]);
     marks.push_onto(&mut line, shown, room);
     draw_band(f, band.r, Line::from(line), band.bg);
     draw_row_close(f, view, band.r, band.pitch, band.bg);
@@ -3484,7 +3501,7 @@ fn folded(shape: &TreeShape, row: TreeRow) -> bool {
 }
 
 fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, areas.title, "projects");
+    draw_title(f, view.muted, areas.title, "projects");
     let Some(tree) = &view.tree else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);
@@ -3510,12 +3527,12 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
             TreeRow::Landing => draw_landing(f, r, indent),
             TreeRow::Group(g) => draw_group(f, view, g, band(vec![marker(mark)])),
             TreeRow::Project(p) => {
-                let band = band(vec![Span::raw(lead), marker(mark), arrow(folded(shape, row))]);
+                let band = band(vec![Span::raw(lead), marker(mark), arrow(view.muted, folded(shape, row))]);
                 draw_project_band(f, view, band, p, folded(shape, row));
             }
             TreeRow::Workspace(p, w) => {
                 let Some(entry) = workspace(p, w) else { continue };
-                let band = band(vec![Span::raw(lead), marker(mark), arrow(folded(shape, row))]);
+                let band = band(vec![Span::raw(lead), marker(mark), arrow(view.muted, folded(shape, row))]);
                 let active = p == view.active && w == view.active_workspace;
                 draw_workspace_band(f, view, band, entry, active, folded(shape, row));
             }
@@ -3524,7 +3541,7 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
                 draw_tab_band(f, view, band(vec![Span::raw(lead)]), entry, mark);
             }
             TreeRow::NewTab(..) => {
-                let style = button_style(view, r, Style::default().fg(Color::DarkGray), Color::Cyan);
+                let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
                 draw_button(f, r, &format!("{lead} "), "+ tab", style);
             }
             TreeRow::NewWorkspace(_) => {
@@ -3534,7 +3551,7 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
         }
     }
     let named = |r| matches!(r, TreeRow::Group(_) | TreeRow::Project(_) | TreeRow::Workspace(..) | TreeRow::Tab(..));
-    draw_hidden(f, &layout, &rows, named);
+    draw_hidden(f, view.muted, &layout, &rows, named);
     draw_new_project(f, view, layout.button());
     draw_landing(f, line, indent);
 }
@@ -3604,6 +3621,7 @@ mod tests {
             sidebar: Sidebar::SideBySide,
             resizing: None,
             light: false,
+            muted: Color::DarkGray,
             projects_scroll: 0,
             workspaces_scroll: 0,
             tab: None,
@@ -3737,6 +3755,7 @@ mod tests {
                 scroll: 0,
                 live: false,
                 light: false,
+                muted: Color::DarkGray,
                 tints,
                 filter: None,
             };
@@ -4365,6 +4384,34 @@ mod tests {
         }
     }
 
+    mod muted {
+        use libghostty_vt::style::RgbColor;
+        use rstest::rstest;
+
+        use super::*;
+        use crate::host_theme::HostTheme;
+
+        #[rstest]
+        #[case::unknown_background(None, Color::DarkGray)]
+        #[case::dark_without_palette(Some(RgbColor { r: 0x1d, g: 0x20, b: 0x22 }), Color::Indexed(243))]
+        #[case::light_without_palette(Some(RgbColor { r: 0xff, g: 0xff, b: 0xff }), Color::Indexed(245))]
+        fn swaps_a_bright_black_that_may_not_show_for_a_fixed_grey(
+            #[case] background: Option<RgbColor>,
+            #[case] expected: Color,
+        ) {
+            assert_eq!(muted(&HostTheme { background, ..HostTheme::default() }), expected);
+        }
+
+        #[test]
+        fn keeps_a_bright_black_that_shows() {
+            let mut theme =
+                HostTheme { background: Some(RgbColor { r: 0x28, g: 0x2a, b: 0x36 }), ..HostTheme::default() };
+            theme.palette[8] = Some(RgbColor { r: 0x62, g: 0x72, b: 0xa4 });
+
+            assert_eq!(muted(&theme), Color::DarkGray);
+        }
+    }
+
     mod tree_drawing {
         use super::*;
 
@@ -4416,6 +4463,22 @@ mod tests {
                 tree: Some(TreeView { shape, workspaces }),
                 ..view(&[])
             }
+        }
+
+        #[test]
+        fn grey_text_takes_the_muted_colour() {
+            let v = View { muted: Color::Indexed(243), ..with_tree() };
+            let t = render_sized(&v, W, TALL.height);
+            let a = layout_with(TALL, v.widths, false, Sidebar::Tree);
+            let arrow = tree_arrow(a.list, &v.tree.as_ref().expect("a tree").shape, 0, TreeRow::Project(1));
+            let first = |r: Rect| {
+                let buf = t.backend().buffer();
+                (r.x..r.right()).map(|x| &buf[(x, r.y)]).find(|c| !c.symbol().trim().is_empty()).map(|c| c.fg)
+            };
+
+            let greys = [a.title, middle(a.search), arrow, a.settings, a.usage, a.quit].map(first);
+
+            assert_eq!(greys, [Some(Color::Indexed(243)); 6]);
         }
 
         fn row_of(v: &View, row: TreeRow) -> Rect {

@@ -7,6 +7,8 @@ pub const PALETTE_LEN: usize = 256;
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
 const LIGHT_LUMINANCE: u32 = 128_000;
+const BRIGHT_BLACK: usize = 8;
+const MIN_MUTED_CONTRAST: f64 = 2.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "WireTheme", into = "WireTheme")]
@@ -74,6 +76,11 @@ impl HostTheme {
 
     pub fn is_light(&self) -> Option<bool> {
         self.background.map(|c| u32::from(c.r) * 299 + u32::from(c.g) * 587 + u32::from(c.b) * 114 >= LIGHT_LUMINANCE)
+    }
+
+    pub fn muted_is_readable(&self) -> bool {
+        self.background
+            .is_none_or(|bg| self.palette[BRIGHT_BLACK].is_some_and(|c| contrast(c, bg) >= MIN_MUTED_CONTRAST))
     }
 
     fn apply_osc(&mut self, body: &str) {
@@ -175,6 +182,19 @@ fn string_end(rest: &[u8]) -> Option<(usize, usize)> {
         (ESC, Some(b'\\')) => Some((i, 2)),
         _ => None,
     })
+}
+
+fn contrast(a: RgbColor, b: RgbColor) -> f64 {
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+fn luminance(c: RgbColor) -> f64 {
+    let linear = |v: u8| {
+        let v = f64::from(v) / 255.0;
+        if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
 }
 
 fn parse_color(value: &str) -> Option<RgbColor> {
@@ -315,6 +335,31 @@ mod tests {
         #[case::solarized_dark(Some(rgb(0x00, 0x2b, 0x36)), Some(false))]
         fn follows_background_luminance(#[case] background: Option<RgbColor>, #[case] expected: Option<bool>) {
             assert_eq!(HostTheme { background, ..HostTheme::default() }.is_light(), expected);
+        }
+    }
+
+    mod muted_is_readable {
+        use super::*;
+
+        #[rstest]
+        #[case::nothing_known(None, None, true)]
+        #[case::palette_without_background(None, Some(rgb(0x2b, 0x2b, 0x2a)), true)]
+        #[case::warp_adeberry_without_palette(Some(rgb(0x1d, 0x20, 0x22)), None, false)]
+        #[case::warp_adeberry_as_drawn(Some(rgb(0x1d, 0x20, 0x22)), Some(rgb(0x2b, 0x2b, 0x2a)), false)]
+        #[case::solarized_dark(Some(rgb(0x00, 0x2b, 0x36)), Some(rgb(0x00, 0x2b, 0x36)), false)]
+        #[case::nord(Some(rgb(0x2e, 0x34, 0x40)), Some(rgb(0x4c, 0x56, 0x6a)), false)]
+        #[case::one_dark(Some(rgb(0x28, 0x2c, 0x34)), Some(rgb(0x66, 0x66, 0x66)), true)]
+        #[case::dracula(Some(rgb(0x28, 0x2a, 0x36)), Some(rgb(0x62, 0x72, 0xa4)), true)]
+        #[case::solarized_light(Some(rgb(0xfd, 0xf6, 0xe3)), Some(rgb(0x00, 0x2b, 0x36)), true)]
+        fn needs_the_bright_black_to_stand_out_from_a_known_background(
+            #[case] background: Option<RgbColor>,
+            #[case] bright_black: Option<RgbColor>,
+            #[case] expected: bool,
+        ) {
+            let mut theme = HostTheme { background, ..HostTheme::default() };
+            theme.palette[8] = bright_black;
+
+            assert_eq!(theme.muted_is_readable(), expected);
         }
     }
 
