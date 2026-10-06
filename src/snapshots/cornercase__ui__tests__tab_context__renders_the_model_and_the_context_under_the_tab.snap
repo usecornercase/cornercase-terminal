@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-expression: render(&with_context(Some(opus(17)))).backend()
+expression: render(&with_details(opus(17))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │  no tab open                             "
 "                                                         │                                          "
@@ -18,5 +18,5 @@ expression: render(&with_context(Some(opus(17)))).backend()
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
+"  usage                        │                   todo  │                                          "
 "  quit                         │                         │                                          "

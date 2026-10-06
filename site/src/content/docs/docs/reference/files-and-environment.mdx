@@ -14,11 +14,12 @@ import { Aside } from '@astrojs/starlight/components';
 | `secrets.json` | Shortcut and Linear tokens typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
+| `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
 | `server.sock` | The Unix socket clients use to reach the server. cornercase creates its folder private to you (mode `0700`), and refuses an existing folder that another user owns or can write to, or that is a symbolic link. | `$XDG_RUNTIME_DIR/cornercase/`, or `$TMPDIR/cornercase-<uid>/` |
 | `server.lock` | Makes sure only one server runs per socket. | Next to the socket |
 | `server.log` | What the server prints: errors, failed agent launches, files a worktree couldn't copy. | Next to the socket |
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json` and `issues.json` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json` and `todos.json` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
 
 ### With `CORNERCASE_SOCKET`
 
@@ -30,6 +31,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Settings and tokens | `/tmp/cc-demo/config.json`, `secrets.json` |
 | Session | `/tmp/cc-demo/server.json` |
 | Issue cache | `/tmp/cc-demo/issues.json` |
+| TODO list | `/tmp/cc-demo/todos.json` |
 
 ### Elsewhere on disk
 
@@ -55,7 +57,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `TERM_PROGRAM`, `LC_TERMINAL`, `TERM`, `KITTY_WINDOW_ID`, `KONSOLE_VERSION` | Recognising your terminal when it doesn't say its name, to send it [desktop notifications](../../guides/projects-workspaces-tabs/#notifications) it understands. |
 | `TMUX`, `STY`, `ZELLIJ` | Inside tmux, screen or Zellij, desktop notifications are a bell. |
 | `XDG_CONFIG_HOME` | Folder for `config.json` and `secrets.json`. |
-| `XDG_STATE_HOME` | Folder for `session.json` and `issues.json`. |
+| `XDG_STATE_HOME` | Folder for `session.json`, `issues.json` and `todos.json`. |
 | `XDG_RUNTIME_DIR`, `TMPDIR` | Folder for the socket, lock and log. |
 | `CORNERCASE_RELEASES_URL` | Where the update check asks for the latest release. Meant for testing; the default is `https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest`. |
 | `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API` | Base URL of the Shortcut REST API and of the Linear GraphQL API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3` and `https://api.linear.app/graphql`. |

@@ -69,7 +69,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 - **Ids, not indices.** Every project, workspace, tab and pane gets an id from one counter. Menus, dialogs and background jobs refer to ids, so nothing breaks when the lists change underneath them.
 - **Closing is asynchronous.** Closing kills processes; a pane is removed when its shell exits, whether its PTY reader sends `Exited` or `App::refresh` finds the shell reaped first (a detached process can keep the PTY open long after the shell is gone).
 - **Pure state machines.** `issues::browser::Browser`, `settings::Settings` and `launch::Launch` contain no I/O: they take input and return actions or steps, which `App` carries out on threads. Answers carry their query and issue key, so stale ones are dropped.
-- **Saving settles.** `state::Saver` writes `session.json` only after the state has been stable for 2 seconds, and `state.rs` migrates older session versions.
+- **Saving settles.** `state::Saver` writes `session.json` (and `todos.json`) only after the state has been stable for 2 seconds, and `state.rs` migrates older session versions.
 
 ## Module map
 
@@ -98,6 +98,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `memory.rs` | How much memory an agent pane uses: the resident size of its shell and everything under it, measured on a thread every 2 seconds. |
 | `usage/` | Plan usage: `claude.rs` asks `claude` over its control protocol, `codex.rs` asks `codex app-server` over JSON-RPC; `mod.rs` runs either, reads the answer and keeps the dialog's state, one section per agent. |
 | `launch.rs` | Starting an agent in a new tab, as a pure state machine. |
+| `todo/` | The TODO list (`mod.rs`: ordering, undo, `todos.json`) and the text field with a cursor (`editor.rs`); `ui/todo.rs` draws the panel and `app/todo_panel.rs` wires it into `App`. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
 | `search.rs`, `picker.rs` | Global search; the folder picker. |
 | `settings.rs`, `config.rs`, `secrets.rs` | The settings modal; `config.json`; `secrets.json`. |

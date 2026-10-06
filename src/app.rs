@@ -36,12 +36,15 @@ use crate::settings::{self, Page, Settings, Status};
 use crate::split::{self, Dir};
 use crate::state::{self, ChangesState, IssuesState, PaneState, ProjectState, State, TabState, WorkspaceState};
 use crate::term::{SpawnOptions, Term};
+use crate::todo::{self, Todos};
 use crate::ui::changes::{self as panel, Action as HunkAction, Hit as PanelHit};
 use crate::ui::{self, FormHit, PickerHit, SidebarHit, SidebarRow, WorkspaceHit, WorkspaceRow};
 use crate::update::{self, Install, Release, Updates};
 use crate::upstream;
 use crate::usage;
 use crate::worktree;
+
+mod todo_panel;
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -187,6 +190,7 @@ const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const AUTO_SCROLL_EVERY: Duration = Duration::from_millis(150);
 const TOAST_FOR: Duration = Duration::from_secs(2);
+const UNDO_FOR: Duration = Duration::from_secs(6);
 const COPIED: &str = "copied to clipboard";
 const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 const UPDATE_SUBMIT: &str = "update";
@@ -264,8 +268,14 @@ impl Overlay {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Grab {
+    Row(Target),
+    Todo(u64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RowDrag {
-    target: Target,
+    target: Grab,
     row: Rect,
     moved: bool,
     area: Rect,
@@ -285,11 +295,16 @@ struct Toast {
     message: String,
     status: Option<activity::Status>,
     at: Instant,
+    undo: Option<todo::Removed>,
 }
 
 impl Toast {
     fn new(message: impl Into<String>, status: Option<activity::Status>) -> Self {
-        Self { message: message.into(), status, at: Instant::now() }
+        Self { message: message.into(), status, at: Instant::now(), undo: None }
+    }
+
+    fn lasts(&self) -> Duration {
+        if self.undo.is_some() { UNDO_FOR } else { TOAST_FOR }
     }
 }
 
@@ -382,6 +397,8 @@ pub struct App {
     watched: Option<Instant>,
     usage: usage::State,
     usage_timeout: Duration,
+    todos: Todos,
+    todo: todo::Panel,
 }
 
 struct Apis {
@@ -468,6 +485,8 @@ impl App {
             watched: None,
             usage: usage::State::default(),
             usage_timeout: usage::TIMEOUT,
+            todos: Todos::default(),
+            todo: todo::Panel::default(),
         }
     }
 
@@ -491,7 +510,7 @@ impl App {
     }
 
     fn layout(&self, area: Rect) -> ui::Areas {
-        ui::layout_with(area, self.widths, self.changes_shown(), self.sidebar())
+        ui::layout_with(area, self.widths, self.changes_shown() || self.todo.open, self.sidebar())
     }
 
     fn changes_target(&self) -> Option<Checkout> {
@@ -988,15 +1007,17 @@ impl App {
             widths: Some(self.widths),
             issues,
             changes,
+            todo: self.todo.open,
         }
     }
 
     pub fn restore(&mut self, saved: &State, area: Rect) -> Result<()> {
         self.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
-            self.changes.open = changes.open;
+            self.changes.open = changes.open && !saved.todo;
             self.changes.mode = changes.mode;
         }
+        self.todo.open = saved.todo;
         if let Some(issues) = &saved.issues {
             self.issue_tab = issues.tab.as_deref().and_then(IssueTab::from_id);
             self.issue_closed = issues.closed;
@@ -1134,6 +1155,7 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::Search(_)) => self.search_key(key, area),
+            None if self.todo_typing() => self.todo_key(key, area),
             None if self.filtering() => self.filter_key(key),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
@@ -1157,15 +1179,22 @@ impl App {
         if self.continue_drag(ev, &areas, area) {
             return Ok(());
         }
+        if self.toast_mouse(ev, pos, area) {
+            return Ok(());
+        }
         if self.overlay.is_some() {
             return self.overlay_mouse(ev, pos, area);
         }
-        let in_panel = self.changes_shown() && areas.changes.contains(pos);
-        if matches!(ev.kind, MouseEventKind::Down(_))
-            && !in_panel
-            && let Some(filter) = &mut self.changes.filter
-        {
-            filter.focused = false;
+        let in_panel = (self.changes_shown() || self.todo.open) && areas.changes.contains(pos);
+        if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
+            if let Some(filter) = &mut self.changes.filter {
+                filter.focused = false;
+            }
+            self.commit_todo();
+        }
+        if in_panel && self.todo.open {
+            self.todo_mouse(ev, pos, areas.changes, area);
+            return Ok(());
         }
         if in_panel {
             return self.changes_mouse(ev, pos, areas.changes, area);
@@ -1190,10 +1219,7 @@ impl App {
             }
             return Ok(());
         }
-        if areas.compact() && self.changes_target().is_some() && areas.changes_button.contains(pos) {
-            if left {
-                self.toggle_changes();
-            }
+        if self.panel_buttons(&areas, pos, left) {
             return Ok(());
         }
         if areas.bar.contains(pos) {
@@ -1213,14 +1239,6 @@ impl App {
         }
         if areas.list.contains(pos) {
             return self.list_mouse(&areas, pos, ev.kind, area);
-        }
-        if let Some(label) = self.changes_label().filter(|_| !areas.compact())
-            && ui::changes_button(areas.issues, &label).contains(pos)
-        {
-            if left {
-                self.toggle_changes();
-            }
-            return Ok(());
         }
         if areas.issues.contains(pos) {
             if left && self.issues_available() {
@@ -1254,6 +1272,26 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    fn panel_buttons(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
+        let changes = match self.changes_label() {
+            Some(_) if areas.compact() => areas.changes_button,
+            Some(label) => ui::changes_button(areas.issues, &label),
+            None => Rect::default(),
+        };
+        let todo = if areas.compact() || self.project().is_some() { areas.todo_button } else { Rect::default() };
+        let toggle: fn(&mut Self) = if changes.contains(pos) {
+            Self::toggle_changes
+        } else if todo.contains(pos) {
+            Self::toggle_todo
+        } else {
+            return false;
+        };
+        if left {
+            toggle(self);
+        }
+        true
     }
 
     fn continue_drag(&mut self, ev: MouseEvent, areas: &ui::Areas, area: Rect) -> bool {
@@ -1290,6 +1328,7 @@ impl App {
     fn toggle_nav(&mut self) {
         if self.nav.is_none() {
             self.changes.close();
+            self.close_todo();
         }
         self.nav = match self.nav {
             Some(_) => None,
@@ -1496,7 +1535,7 @@ impl App {
     }
 
     fn grab(&mut self, target: Target, row: Rect, area: Rect, fold: bool) {
-        self.row_drag = Some(RowDrag { target, row, moved: false, area, scrolled: None, fold });
+        self.row_drag = Some(RowDrag { target: Grab::Row(target), row, moved: false, area, scrolled: None, fold });
     }
 
     fn new_project_menu(&mut self, pos: Position) {
@@ -1512,17 +1551,21 @@ impl App {
             }
             MouseEventKind::Up(MouseButton::Left) => {
                 self.row_drag = None;
-                if drag.moved || !drag.row.contains(pos) {
-                    self.drop_row(drag.target, pos, area);
-                } else if drag.fold {
-                    self.toggle_fold(drag.target);
-                } else {
-                    self.click_row(drag.target);
+                let dropped = drag.moved || !drag.row.contains(pos);
+                match drag.target {
+                    Grab::Row(target) if dropped => self.drop_row(target, pos, area),
+                    Grab::Row(target) if drag.fold => self.toggle_fold(target),
+                    Grab::Row(target) => self.click_row(target),
+                    Grab::Todo(id) if dropped => self.drop_todo(id, pos, area),
+                    Grab::Todo(id) => self.click_todo(id, drag.row, pos, area),
                 }
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 if let Some(delta) = wheel(ev.kind) {
-                    self.scroll_column(areas, pos, delta);
+                    match drag.target {
+                        Grab::Row(_) => _ = self.scroll_column(areas, pos, delta),
+                        Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
+                    }
                 }
                 self.row_drag = Some(RowDrag { moved: true, area, ..drag });
             }
@@ -1758,7 +1801,13 @@ impl App {
             return;
         }
         let areas = self.layout(drag.area).shown(self.nav);
-        let sidebar = areas.tree || matches!(drag.target, Target::Group(_) | Target::Project(_));
+        let Grab::Row(target) = drag.target else {
+            if self.auto_scroll_todo(areas.changes, pos) {
+                self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+            }
+            return;
+        };
+        let sidebar = areas.tree || matches!(target, Target::Group(_) | Target::Project(_));
         let rows = if sidebar {
             self.sidebar_layout(&areas)
         } else {
@@ -2071,6 +2120,14 @@ impl App {
 
     pub fn set_issue_cache(&mut self, path: PathBuf) {
         self.issue_cache = IssueCache::new(Some(path));
+    }
+
+    pub fn set_todos(&mut self, todos: Todos) {
+        self.todos = todos;
+    }
+
+    pub fn todos_saved(&self) -> todo::Saved {
+        self.todos.saved()
     }
 
     pub fn take_host_writes(&mut self) -> Vec<Vec<u8>> {
@@ -3182,6 +3239,10 @@ impl App {
             }
             return;
         }
+        if self.todo_typing() {
+            self.todo_paste(text);
+            return;
+        }
         if self.filtering()
             && let Some(filter) = &mut self.changes.filter
         {
@@ -3238,12 +3299,15 @@ impl App {
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging })
         });
-        self.toast = self.toast.take().filter(|t| t.at.elapsed() < TOAST_FOR);
+        self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();
         let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
-        let drag =
-            self.row_drag.filter(|d| d.moved).zip(self.hover).and_then(|(d, pos)| self.drag_view(d.target, pos, area));
+        let moved = self.row_drag.filter(|d| d.moved).zip(self.hover);
+        let drag = moved.and_then(|(d, pos)| match d.target {
+            Grab::Row(target) => self.drag_view(target, pos, area),
+            Grab::Todo(id) => Some(ui::Drag::Todo(id)),
+        });
         let tree = self.drawn.tree.then(|| self.tree_view());
         let view = ui::View {
             tree,
@@ -3265,11 +3329,16 @@ impl App {
             muted: ui::muted(&self.theme),
             tab,
             overlay,
-            toast: self.toast.as_ref().map(|t| ui::Toast { message: &t.message, status: t.status }),
+            toast: self.toast.as_ref().map(|t| ui::Toast {
+                message: &t.message,
+                status: t.status,
+                undo: t.undo.is_some(),
+            }),
             nav: self.nav,
             update: self.update_label(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
+            todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
             attention,
             drag,
         };
@@ -3466,6 +3535,7 @@ impl App {
         if self.changes.open {
             self.changes.close();
         } else {
+            self.close_todo();
             self.changes.open = true;
         }
         self.nav = None;
@@ -3849,6 +3919,21 @@ mod tests {
 
     fn toast(app: &App) -> Option<&str> {
         app.toast.as_ref().map(|t| t.message.as_str())
+    }
+
+    fn screen(app: &mut App) -> String {
+        app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
+    }
+
+    fn type_in_pane(app: &mut App, rx: &Receiver<AppEvent>, word: &str) {
+        type_text(app, &format!("echo {word}-\"\"typed"));
+        send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+        wait_until("the pane gets the keys", || {
+            while let Ok(ev) = rx.try_recv() {
+                app.handle_event(ev, AREA).expect("handle event");
+            }
+            screen(app).contains(&format!("{word}-typed"))
+        });
     }
 
     fn pump_until(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
@@ -5406,6 +5491,7 @@ mod tests {
                 widths: None,
                 issues: None,
                 changes: None,
+                todo: false,
             }
         }
 
@@ -7346,6 +7432,7 @@ rm -f "$1/sessions/$$.json"
                 widths: None,
                 issues: None,
                 changes: None,
+                todo: false,
             };
 
             app.restore(&saved, AREA).expect("restore");
@@ -7506,6 +7593,7 @@ rm -f "$1/sessions/$$.json"
                 widths: Some(widths),
                 issues: None,
                 changes: None,
+                todo: false,
             };
 
             app.restore(&saved, AREA).expect("restore");
@@ -7949,10 +8037,6 @@ rm -f "$1/sessions/$$.json"
                 pump(s);
                 s.app.launches.is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
             });
-        }
-
-        fn screen(app: &mut App) -> String {
-            app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
         }
 
         fn to_tab_after_open(s: &mut Setup, tab: IssueTab) {
@@ -8974,21 +9058,6 @@ rm -f "$1/sessions/$$.json"
             app.changes.filter.as_ref().map(changes::filter::Filter::query)
         }
 
-        fn screen(app: &mut App) -> String {
-            app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
-        }
-
-        fn type_in_pane(app: &mut App, rx: &Receiver<AppEvent>, word: &str) {
-            type_text(app, &format!("echo {word}-\"\"typed"));
-            send_key(app, KeyCode::Enter, KeyModifiers::NONE);
-            wait_until("the pane gets the keys", || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
-                screen(app).contains(&format!("{word}-typed"))
-            });
-        }
-
         #[test]
         fn keys_go_to_the_field_until_a_click_in_the_pane() {
             let repo = repo_with_edit();
@@ -9077,6 +9146,236 @@ rm -f "$1/sessions/$$.json"
             app.hunk_action(&target, &file, 0, HunkAction::Open, AREA).expect("open");
             let workspace = &app.projects[0].workspaces[0];
             assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
+        }
+    }
+    mod todo_panel {
+        use super::*;
+        use crate::ui::todo as panel;
+
+        fn tap(app: &mut App, at: impl Fn(&App) -> Rect) {
+            let pos = at(app).as_position();
+            click(app, pos);
+        }
+
+        fn open(app: &mut App) {
+            tap(app, |a| a.layout(AREA).todo_button);
+        }
+
+        fn panel_area(app: &App) -> Rect {
+            app.layout(AREA).changes
+        }
+
+        fn view(app: &App) -> panel::View {
+            app.todo_view(panel_area(app))
+        }
+
+        fn rows(app: &App) -> ui::Rows {
+            panel::rows(panel_area(app), &view(app))
+        }
+
+        fn item_row(app: &App, i: usize) -> Rect {
+            rows(app).item(i)
+        }
+
+        fn new_todo(app: &mut App) {
+            tap(app, |a| rows(a).button());
+        }
+
+        fn add(app: &mut App, texts: &[&str]) {
+            new_todo(app);
+            for text in texts {
+                submit_text(app, text);
+            }
+            send_key(app, KeyCode::Esc, KeyModifiers::NONE);
+        }
+
+        fn texts(app: &App) -> Vec<String> {
+            app.todos.items().iter().map(|i| if i.done { format!("[x] {}", i.text) } else { i.text.clone() }).collect()
+        }
+
+        fn undo(app: &mut App, message: &str) {
+            click(app, ui::toast_undo(AREA, ui::Toast { message, status: None, undo: true }).as_position());
+        }
+
+        fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(1);
+            open(&mut app);
+            (app, rx, dirs)
+        }
+
+        #[test]
+        fn the_button_opens_the_list_beside_the_pane() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            let before = app.layout(AREA).pane.width;
+            open(&mut app);
+            assert_eq!((app.todo.open, app.layout(AREA).pane.width < before), (true, true));
+        }
+
+        #[test]
+        fn the_close_button_hides_the_panel() {
+            let (mut app, _rx, _dirs) = opened();
+            tap(&mut app, |a| panel::close(panel_area(a)));
+            assert!(!app.todo.open);
+        }
+
+        #[test]
+        fn the_todo_and_changes_panels_take_turns() {
+            let repo = git_repo(&[("README", "hi")]);
+            let (mut app, _rx) = app_in(repo.path(), no_config());
+            open(&mut app);
+            tap(&mut app, |a| ui::changes_button(a.layout(AREA).issues, &a.changes_label().expect("changes")));
+            assert_eq!((app.todo.open, app.changes.open), (false, true));
+            open(&mut app);
+            assert_eq!((app.todo.open, app.changes.open), (true, false));
+        }
+
+        #[test]
+        fn the_compact_bar_has_a_button_too() {
+            let small = Rect { width: 80, ..AREA };
+            let (mut app, _rx, _dirs) = app_with(1);
+            click_in(&mut app, ui::layout(small, ui::Widths::default()).todo_button.as_position(), small);
+            assert!(app.todo.open);
+        }
+
+        #[test]
+        fn enter_adds_an_item_and_keeps_the_field_open_for_the_next() {
+            let (mut app, _rx, _dirs) = opened();
+            new_todo(&mut app);
+            submit_text(&mut app, "fix login");
+            submit_text(&mut app, "write docs");
+            let field = app.todo.field.as_ref().map(|f| f.editor.text());
+            assert_eq!((texts(&app), field), (vec!["fix login".into(), "write docs".into()], Some(String::new())));
+        }
+
+        #[test]
+        fn enter_on_an_empty_field_closes_it() {
+            let (mut app, _rx, _dirs) = opened();
+            new_todo(&mut app);
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+        }
+
+        #[test]
+        fn esc_drops_what_was_typed() {
+            let (mut app, _rx, _dirs) = opened();
+            new_todo(&mut app);
+            type_text(&mut app, "renew the domain");
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, Vec::<String>::new()));
+        }
+
+        #[test]
+        fn a_pasted_text_goes_into_the_field() {
+            let (mut app, _rx, _dirs) = opened();
+            new_todo(&mut app);
+            app.handle_event(AppEvent::Input(Event::Paste("call\nthe bank".into())), AREA).expect("paste");
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            assert_eq!(texts(&app), ["call the bank"]);
+        }
+
+        #[test]
+        fn a_press_on_the_pane_saves_the_field_and_gives_the_keys_back() {
+            let (mut app, rx, _dirs) = opened();
+            new_todo(&mut app);
+            type_text(&mut app, "renew the domain");
+            click(&mut app, areas().pane.as_position());
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["renew the domain".into()]));
+            type_in_pane(&mut app, &rx, "shell");
+        }
+
+        #[test]
+        fn clicking_the_text_edits_it_with_the_cursor_where_clicked() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["fix logn"]);
+            let row = item_row(&app, 0);
+            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
+            assert_eq!(app.todo.field.as_ref().map(|f| f.editor.cursor()), Some(7));
+            submit_text(&mut app, "i");
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["fix login".into()]));
+        }
+
+        #[test]
+        fn arrows_move_the_cursor_in_the_field() {
+            let (mut app, _rx, _dirs) = opened();
+            new_todo(&mut app);
+            type_text(&mut app, "fix logn");
+            send_key(&mut app, KeyCode::Left, KeyModifiers::NONE);
+            submit_text(&mut app, "i");
+            type_text(&mut app, "x");
+            send_key(&mut app, KeyCode::Home, KeyModifiers::NONE);
+            send_key(&mut app, KeyCode::Delete, KeyModifiers::NONE);
+            submit_text(&mut app, "F");
+            assert_eq!(texts(&app), ["fix login", "F"]);
+        }
+
+        #[test]
+        fn checking_an_item_moves_it_to_the_bottom() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a", "b"]);
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            assert_eq!(texts(&app), ["b", "[x] a"]);
+        }
+
+        #[test]
+        fn deleting_an_item_shows_a_toast_that_undoes_it() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a", "b"]);
+            tap(&mut app, |a| panel::delete(item_row(a, 0)));
+            assert_eq!((texts(&app), toast(&app)), (vec!["b".into()], Some("deleted")));
+            undo(&mut app, "deleted");
+            assert_eq!((texts(&app), toast(&app)), (vec!["a".into(), "b".into()], None));
+        }
+
+        #[test]
+        fn the_undo_toast_lasts_longer_than_the_others() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a"]);
+            tap(&mut app, |a| panel::delete(item_row(a, 0)));
+            assert_eq!(app.toast.as_ref().map(Toast::lasts), Some(UNDO_FOR));
+        }
+
+        #[test]
+        fn clearing_done_items_can_be_undone() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a", "b", "c"]);
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
+            assert_eq!((texts(&app), toast(&app)), (vec!["c".into()], Some("cleared 2 done")));
+            undo(&mut app, "cleared 2 done");
+            assert_eq!(texts(&app), ["c", "[x] a", "[x] b"]);
+        }
+
+        #[test]
+        fn dragging_an_item_reorders_the_list() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a", "b", "c"]);
+            let (from, to) = (item_row(&app, 0), item_row(&app, 2).as_position());
+            press(&mut app, from.as_position());
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), to);
+            assert_eq!(view(&app).drag, Some((app.todos.items()[0].id, Some(3))));
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), to);
+            assert_eq!((texts(&app), app.todo.field.is_none()), (vec!["b".into(), "c".into(), "a".into()], true));
+        }
+
+        #[test]
+        fn the_list_is_the_same_in_every_project() {
+            let (mut app, _rx, _dirs) = app_with(2);
+            open(&mut app);
+            add(&mut app, &["anywhere"]);
+            app.active = 0;
+            assert_eq!(view(&app).items.len(), 1);
+        }
+
+        #[test]
+        fn the_panel_and_the_list_come_back_after_a_restart() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a"]);
+            let (state, saved) = (app.state(), app.todos_saved());
+            let (mut back, _rx2) = empty_app();
+            back.set_todos(Todos::from(saved));
+            back.restore(&state, AREA).expect("restore");
+            assert_eq!((state.todo, back.todo.open, texts(&back)), (true, true, vec!["a".into()]));
         }
     }
 }

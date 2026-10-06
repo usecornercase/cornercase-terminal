@@ -2,6 +2,7 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains } from '../term/grid';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
+import { TodoPanel, todoWidth } from './todo';
 import {
   type Border,
   GROUP_COLOURS,
@@ -170,6 +171,11 @@ export class App {
   changesBase = BASES[0];
   changesScroll = 0;
   changesFilter: { query: string; focused: boolean } | null = null;
+  todo = new TodoPanel([
+    ['fix the 500 on /returns when the address has no second line', false],
+    ['reply to the design review', false],
+    ['bump the returns API client', true],
+  ]);
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
   nav: 'projects' | 'workspaces' | null = null;
@@ -180,7 +186,7 @@ export class App {
   workspacesScroll = 0;
   overlay: Overlay | null = null;
   hover: Pos | null = null;
-  toast: { text: string; until: number; status?: Status } | null = null;
+  toast: { text: string; until: number; status?: Status; undo?: () => void } | null = null;
   focused = false;
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
@@ -462,8 +468,8 @@ export class App {
     };
   }
 
-  private areas() {
-    return layout(this.cols, this.rows, this.widths, this.nav, this.changesShown(), this.sidebar());
+  areas() {
+    return layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar());
   }
 
   rowDragView(): RowDragView | null {
@@ -813,7 +819,12 @@ export class App {
   toggleNav(): void {
     this.nav = this.nav ? null : 'projects';
     if (this.nav) this.changesOpen = false;
+    if (this.nav) this.closeTodo();
     this.dirty();
+  }
+
+  panelShown(): boolean {
+    return this.changesShown() || this.todo.open;
   }
 
   changesShown(): boolean {
@@ -840,10 +851,88 @@ export class App {
 
   toggleChanges(): void {
     this.changesOpen = !this.changesOpen;
+    if (this.changesOpen) this.closeTodo();
     if (this.changesFilter) this.changesFilter.focused = false;
     this.nav = null;
     if (this.changesOpen) this.emit('narrate', 'Everything this workspace changed, right next to its agent. Hover a hunk to open it, copy it or send it back.');
     this.dirty();
+  }
+
+  toggleTodo(): void {
+    if (this.todo.open) this.closeTodo();
+    else {
+      this.changesOpen = false;
+      this.todo.open = true;
+      this.emit('narrate', 'Your TODO list, next to the shells it is about. Click a line to edit it, [ ] to tick it off.');
+    }
+    this.nav = null;
+    this.dirty();
+  }
+
+  private closeTodo(): void {
+    this.todo.commit();
+    this.todo.open = false;
+  }
+
+  todoTyping(): boolean {
+    return !this.overlay && this.todo.open && !!this.todo.field;
+  }
+
+  addTodo(): void {
+    this.todo.commit();
+    this.todo.edit(null);
+    this.dirty();
+  }
+
+  editTodo(id: number, line: number, col: number): void {
+    this.todo.commit();
+    const item = this.todo.item(id);
+    if (!item) return;
+    this.todo.edit(id, item.text);
+    this.placeTodoCursor(line, col);
+  }
+
+  placeTodoCursor(line: number, col: number): void {
+    this.todo.place(todoWidth(this), line, col);
+    this.dirty();
+  }
+
+  toggleTodoItem(id: number): void {
+    this.todo.commit();
+    this.todo.toggle(id);
+    this.dirty();
+  }
+
+  deleteTodo(id: number): void {
+    this.todo.commit();
+    this.todo.remove(id);
+    this.undoToast('deleted');
+  }
+
+  clearDoneTodos(): void {
+    this.todo.commit();
+    const n = this.todo.clearDone();
+    if (n) this.undoToast(`cleared ${n} done`);
+    else this.dirty();
+  }
+
+  private undoToast(text: string): void {
+    this.toast = { text, until: this.now() + 6000, undo: () => this.undoTodo() };
+    this.after(6050, () => this.dirty());
+    this.dirty();
+  }
+
+  undoTodo(): void {
+    this.todo.restore();
+    this.toast = null;
+    this.dirty();
+  }
+
+  scrollTodo(value: number): boolean {
+    const changed = this.todo.scroll !== value;
+    this.todo.scroll = value;
+    if (changed) this.dirty();
+    return changed;
   }
 
   openChangesFilter(): void {
@@ -2065,7 +2154,7 @@ export class App {
     if (this.dragging && buttons & 1) {
       if (this.dragging.kind === 'border') {
         const { border } = this.dragging;
-        const total = border === 'changes' ? this.cols : mainWidth(this.widths, this.cols, this.changesShown());
+        const total = border === 'changes' ? this.cols : mainWidth(this.widths, this.cols, this.panelShown());
         this.widths =
           border !== 'changes' && this.sidebar() !== 'side_by_side'
             ? draggedStacked(this.widths, border, x, y, total, this.rows)
@@ -2102,6 +2191,7 @@ export class App {
       return;
     }
     if (this.changesFilter && !this.overlay && !(this.changesShown() && contains(this.areas().changes, x, y))) this.changesFilter.focused = false;
+    if (this.todo.field && !this.overlay && !(this.todo.open && contains(this.areas().changes, x, y))) this.todo.commit();
     const region = this.hit(x, y, (r) => !!(r.click || r.right || r.drag || r.pane));
     if (!region) return;
     if (region.drag && button === 0) {
@@ -2198,6 +2288,11 @@ export class App {
       this.dirty();
       return;
     }
+    if (this.todoTyping()) {
+      this.todo.type(text);
+      this.dirty();
+      return;
+    }
     if (this.filteringChanges() && this.changesFilter) {
       this.changesFilter.query += text.replace(/\s+/g, ' ');
       this.changesScroll = 0;
@@ -2223,6 +2318,11 @@ export class App {
     }
     const o = this.overlay;
     if (o) return this.overlayKey(o, k);
+    if (this.todoTyping()) {
+      this.todo.key(k, todoWidth(this));
+      this.dirty();
+      return true;
+    }
     if (this.filteringChanges()) return this.changesFilterKey(k);
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;

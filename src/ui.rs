@@ -3,6 +3,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use ratatui::Frame;
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -10,6 +11,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use serde::{Deserialize, Serialize};
 
 pub mod changes;
+pub mod todo;
 
 use crate::activity::{self, Status};
 use crate::emulator::Snapshot;
@@ -26,7 +28,7 @@ pub const MIN_PANE_WIDTH: u16 = 20;
 pub const COMPACT_WIDTH: u16 = 90;
 pub const COMPACT_PITCH: u16 = 3;
 pub const MIN_STACK_SECTION: u16 = 5;
-const STACK_FOOTER: u16 = 5;
+const STACK_FOOTER: u16 = 6;
 const COMPACT_BUTTON_WIDTH: u16 = 7;
 const HEADER_HEIGHT: u16 = 2;
 const GAP: u16 = 1;
@@ -50,6 +52,9 @@ const USAGE_LABEL: &str = "usage";
 const USAGE_FILLED: &str = "█";
 const USAGE_EMPTY: &str = "░";
 const CHANGES_ICON: &str = "±";
+const TODO_ICON: &str = "☐";
+pub const TODO_LABEL: &str = "todo";
+const UNDO_LABEL: &str = "undo";
 const BRAND_COLOR: Color = Color::Indexed(99);
 const DARK_SURFACE: Color = Color::Indexed(236);
 const LIGHT_SURFACE: Color = Color::Indexed(254);
@@ -264,6 +269,7 @@ pub struct Areas {
     pub changes: Rect,
     pub changes_border: Rect,
     pub changes_button: Rect,
+    pub todo_button: Rect,
 }
 
 impl Areas {
@@ -344,17 +350,18 @@ fn projects_column(r: Rect) -> [Rect; 6] {
     [title, list, separator, settings, usage, quit]
 }
 
-fn workspaces_column(r: Rect) -> [Rect; 4] {
-    let [title, _, list, separator, issues, _] = Layout::vertical([
+fn workspaces_column(r: Rect) -> [Rect; 5] {
+    let [title, _, list, separator, issues, todo, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(GAP),
         Constraint::Min(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .areas(r);
-    [title, list, separator, issues]
+    [title, list, separator, issues, todo]
 }
 
 fn below_header(r: Rect) -> Rect {
@@ -403,7 +410,7 @@ fn wide_layout(area: Rect, widths: Widths) -> Areas {
     let search = search_area(header);
     let sidebar = below_header(left);
     let [title, list, separator, settings, usage, quit] = projects_column(sidebar_block().inner(sidebar));
-    let [workspaces_title, workspaces_list, workspaces_separator, issues] =
+    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)));
     Areas {
         pitch: 1,
@@ -432,6 +439,7 @@ fn wide_layout(area: Rect, widths: Widths) -> Areas {
         changes: Rect::default(),
         changes_border: Rect::default(),
         changes_button: Rect::default(),
+        todo_button: changes_button(todo, TODO_LABEL),
     }
 }
 
@@ -451,7 +459,7 @@ fn one_column(area: Rect, widths: Widths) -> (Areas, Rect) {
     let room = stack_room(inner);
     let footer_y = inner.bottom().saturating_sub(STACK_FOOTER).max(room.y);
     let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
-    let [separator, issues, settings, usage, quit] = Layout::vertical([Constraint::Length(1); 5]).areas(footer);
+    let [separator, issues, todo, settings, usage, quit] = Layout::vertical([Constraint::Length(1); 6]).areas(footer);
     let frame = Areas {
         pitch: 1,
         search,
@@ -465,6 +473,7 @@ fn one_column(area: Rect, widths: Widths) -> (Areas, Rect) {
         results,
         pane,
         projects_border: right_edge(column),
+        todo_button: changes_button(todo, TODO_LABEL),
         ..Areas::default()
     };
     (frame, Rect { height: footer_y - room.y, ..room })
@@ -510,8 +519,10 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
     let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
     let search_width = COMPACT_BUTTON_WIDTH.min(bar.width);
     let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
-    let changes_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
-    let changes_button = Rect { x: search_button.x - changes_width, width: changes_width, ..bar };
+    let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
+    let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
+    let changes_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
+    let changes_button = Rect { x: todo_button.x - changes_width, width: changes_width, ..bar };
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
     let column = |footer: u16| {
         Layout::vertical([
@@ -555,6 +566,7 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
         changes: if changes { below } else { Rect::default() },
         changes_border: Rect::default(),
         changes_button,
+        todo_button,
     }
 }
 
@@ -1035,6 +1047,7 @@ pub enum Drag {
     Sidebar(SidebarRow, Option<Landing>),
     Workspaces(WorkspaceRow, Option<Landing>),
     Tree(TreeRow, Option<Landing>),
+    Todo(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2062,6 +2075,7 @@ pub struct ChangesButton {
 pub struct Toast<'a> {
     pub message: &'a str,
     pub status: Option<Status>,
+    pub undo: bool,
 }
 
 pub struct TabView {
@@ -2096,6 +2110,7 @@ pub struct View<'a> {
     pub update: Option<String>,
     pub changes: Option<changes::View>,
     pub changes_button: Option<ChangesButton>,
+    pub todo: Option<todo::View>,
     pub attention: Option<Status>,
     pub drag: Option<Drag>,
     pub tree: Option<TreeView>,
@@ -2165,7 +2180,8 @@ impl View<'_> {
 }
 
 pub fn draw(f: &mut Frame, view: &View) {
-    let areas = layout_with(f.area(), view.widths, view.changes.is_some(), view.sidebar).shown(view.nav);
+    let panel = view.changes.is_some() || view.todo.is_some();
+    let areas = layout_with(f.area(), view.widths, panel, view.sidebar).shown(view.nav);
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
         None if view.has_project => {
@@ -2199,14 +2215,17 @@ pub fn draw(f: &mut Frame, view: &View) {
     if view.has_project && [areas.workspaces_separator, areas.issues].iter().any(|r| !r.is_empty()) {
         draw_issues_row(f, view, &areas);
     }
-    if let Some(panel) = &view.changes
-        && !areas.changes.is_empty()
-    {
+    if panel && !areas.changes.is_empty() {
         f.render_widget(Clear, areas.changes);
         let border = areas.changes_border;
         draw_column_border(f, view.muted, border);
         draw_border(f, view, border, Border::Changes);
-        changes::draw(f, areas.changes, panel, view.hover.filter(|_| view.overlay.is_none() && view.drag.is_none()));
+        let hover = view.hover.filter(|_| view.overlay.is_none());
+        match (&view.changes, &view.todo) {
+            (Some(changes), _) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
+            (None, Some(todo)) => todo::draw(f, areas.changes, todo, hover),
+            (None, None) => {}
+        }
     }
     match &view.overlay {
         Some(Overlay::Menu { at, items }) => draw_menu(f, view, *at, items),
@@ -2222,12 +2241,13 @@ pub fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Search(_)) | None => {}
     }
     if let Some(toast) = view.toast {
-        draw_toast(f, view.muted, toast);
+        draw_toast(f, view, toast);
     }
 }
 
-pub fn toast_area(area: Rect, message: &str) -> Rect {
-    let text = TOAST_ICON.chars().count() + message.chars().count() + 1;
+pub fn toast_area(area: Rect, toast: Toast) -> Rect {
+    let undo = if toast.undo { UNDO_LABEL.chars().count() + 3 } else { 0 };
+    let text = TOAST_ICON.chars().count() + toast.message.chars().count() + 1 + undo;
     let width = u16::try_from(text).unwrap_or(u16::MAX).saturating_add(2).min(area.width);
     let height = 3.min(area.height);
     let x = area.right().saturating_sub(width + TOAST_MARGIN).max(area.x);
@@ -2235,9 +2255,18 @@ pub fn toast_area(area: Rect, message: &str) -> Rect {
     Rect::new(x, y, width, height)
 }
 
-fn draw_toast(f: &mut Frame, muted: Color, toast: Toast) {
-    let r = toast_area(f.area(), toast.message);
-    let icon = match toast.status.map(|status| status_icon(muted, status)) {
+pub fn toast_undo(area: Rect, toast: Toast) -> Rect {
+    if !toast.undo {
+        return Rect::default();
+    }
+    let r = toast_area(area, toast).inner(Margin::new(1, 1));
+    let width = button_width(UNDO_LABEL).min(r.width);
+    Rect { x: r.right().saturating_sub(width + 1), width, ..r }
+}
+
+fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
+    let r = toast_area(f.area(), toast);
+    let icon = match toast.status.map(|status| status_icon(view.muted, status)) {
         Some(icon) => Span::styled(format!(" {} ", icon.content), icon.style),
         None => Span::styled(TOAST_ICON, Style::default().fg(Color::Green)),
     };
@@ -2245,6 +2274,16 @@ fn draw_toast(f: &mut Frame, muted: Color, toast: Toast) {
     f.render_widget(Clear, r);
     f.render_widget(Block::bordered().border_style(border), r);
     f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(toast.message)])), r.inner(Margin::new(1, 1)));
+    let undo = toast_undo(f.area(), toast);
+    if !undo.is_empty() {
+        let lit = view.hover.is_some_and(|p| undo.contains(p));
+        let style = if lit {
+            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        };
+        f.render_widget(Paragraph::new(Span::styled(format!(" {UNDO_LABEL} "), style)), undo);
+    }
 }
 
 fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
@@ -2348,6 +2387,35 @@ fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
 
 fn hovered(view: &View, r: Rect) -> bool {
     view.hover.is_some_and(|p| r.contains(p))
+}
+
+fn dim(muted: Color) -> Style {
+    Style::default().fg(muted)
+}
+
+fn hovered_at(hover: Option<Position>, r: Rect) -> bool {
+    hover.is_some_and(|p| r.contains(p))
+}
+
+fn put(buf: &mut Buffer, x: u16, y: u16, text: &str, style: Style, end: u16) -> u16 {
+    if x >= end {
+        return x;
+    }
+    buf.set_stringn(x, y, text, usize::from(end - x), style).0
+}
+
+fn draw_close(buf: &mut Buffer, r: Rect, hover: Option<Position>, muted: Color) {
+    let style =
+        if hovered_at(hover, r) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(muted) };
+    put(buf, r.x + 1, r.y, "×", style, r.right());
+}
+
+fn action_style(lit: bool) -> Style {
+    if lit {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Cyan)
+    }
 }
 
 fn sidebar_hovered(view: &View, r: Rect) -> bool {
@@ -3031,7 +3099,10 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
         return;
     }
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
-    let mut right = areas.search_button.width;
+    let r = areas.todo_button;
+    let mut right = areas.search_button.width + r.width;
+    let style = if view.todo.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
+    draw_band(f, r, Span::styled(centered(TODO_ICON, r.width), style), style);
     if let Some(button) = &view.changes_button {
         let r = areas.changes_button;
         right += r.width;
@@ -3255,14 +3326,20 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
         draw_button(f, issues, " ", ISSUES_LABEL, style);
     }
     if let Some(button) = changes {
-        let r = changes_button(areas.issues, &button.label);
-        let idle = if button.open {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(view.muted)
-        };
-        draw_button(f, r, "", &button.label, button_style(view, r, idle, Color::Cyan));
+        draw_panel_button(f, view, changes_button(areas.issues, &button.label), &button.label, button.open);
     }
+    if !areas.compact() {
+        draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
+    }
+}
+
+fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: bool) {
+    let idle = if open {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(view.muted)
+    };
+    draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
 }
 
 fn draw_details(f: &mut Frame, muted: Color, row: Rect, pitch: u16, details: &Details, indent: usize) {
@@ -3631,6 +3708,7 @@ mod tests {
             update: None,
             changes: None,
             changes_button: None,
+            todo: None,
             attention: None,
             drag: None,
             tree: None,
@@ -3740,7 +3818,10 @@ mod tests {
         fn a_compact_panel_covers_the_screen_below_the_bar() {
             let small = Rect { width: 80, ..BIG };
             let a = layout_with(small, Widths::default(), true, Sidebar::SideBySide);
-            assert_eq!((a.changes, a.changes_button.right()), (a.pane, a.search_button.x));
+            assert_eq!(
+                (a.changes, a.changes_button.right(), a.todo_button.right()),
+                (a.pane, a.todo_button.x, a.search_button.x)
+            );
         }
 
         fn with_panel() -> View<'static> {
@@ -3782,6 +3863,33 @@ mod tests {
             let issues_x = layout(Rect::new(0, 0, 140, 16), Widths::default()).issues.x + 2;
             let buffer = t.backend().buffer();
             assert_eq!((buffer[(issues_x, r.y)].bg, buffer[(r.x + 1, r.y)].bg), (Color::Reset, Color::Cyan));
+        }
+
+        fn with_todo() -> View<'static> {
+            let item = |id: u64, text: &str, done: bool| todo::Item { id, text: text.into(), done, editing: None };
+            let panel = todo::View {
+                items: vec![
+                    item(1, "fix the login bug in safari", false),
+                    item(2, "renew the domain", false),
+                    item(3, "write docs", true),
+                ],
+                scroll: 0,
+                adding: None,
+                light: false,
+                muted: Color::DarkGray,
+                drag: None,
+            };
+            View { changes: None, todo: Some(panel), ..with_panel() }
+        }
+
+        #[test]
+        fn draws_the_todo_panel_and_its_button() {
+            insta::assert_snapshot!(render_sized(&with_todo(), 140, 18).backend());
+        }
+
+        #[test]
+        fn a_compact_todo_panel_covers_the_screen_below_the_bar() {
+            insta::assert_snapshot!(render_sized(&with_todo(), 80, 18).backend());
         }
 
         #[test]
@@ -4108,16 +4216,16 @@ mod tests {
             let a = stacked(Sidebar::ProjectsOnTop);
             assert_eq!(
                 (a.list.bottom(), a.stack_border.y, a.workspaces_title.y),
-                (HEADER_HEIGHT + 11, HEADER_HEIGHT + 11, HEADER_HEIGHT + 12)
+                (HEADER_HEIGHT + 10, HEADER_HEIGHT + 10, HEADER_HEIGHT + 11)
             );
         }
 
         #[test]
-        fn one_footer_holds_issues_settings_usage_and_quit() {
+        fn one_footer_holds_issues_todo_settings_usage_and_quit() {
             let a = stacked(Sidebar::WorkspacesOnTop);
             assert_eq!(
-                (a.separator.y, a.issues.y, a.settings.y, a.usage.y, a.quit.y, a.workspaces_separator),
-                (25, 26, 27, 28, 29, Rect::default())
+                (a.separator.y, a.issues.y, a.todo_button.y, a.settings.y, a.usage.y, a.quit.y, a.workspaces_separator),
+                (24, 25, 26, 27, 28, 29, Rect::default())
             );
         }
 
@@ -4131,7 +4239,7 @@ mod tests {
         }
 
         #[rstest]
-        #[case::line(Position::new(3, HEADER_HEIGHT + 11), Some(Border::Stack))]
+        #[case::line(Position::new(3, HEADER_HEIGHT + 10), Some(Border::Stack))]
         #[case::column(Position::new(SIDEBAR_WIDTH - 1, 2), Some(Border::Projects))]
         #[case::list(Position::new(3, HEADER_HEIGHT + 4), None)]
         fn hit_finds_the_line_and_the_column_border(#[case] pos: Position, #[case] expected: Option<Border>) {
@@ -4237,8 +4345,8 @@ mod tests {
         fn one_list_runs_from_its_title_to_the_footer() {
             let a = tree();
             assert_eq!(
-                (a.title.y, a.list.y, a.list.bottom(), a.separator.y, a.issues.y, a.quit.y),
-                (HEADER_HEIGHT, HEADER_HEIGHT + 2, 25, 25, 26, 29)
+                (a.title.y, a.list.y, a.list.bottom(), a.separator.y, a.issues.y, a.todo_button.y, a.quit.y),
+                (HEADER_HEIGHT, HEADER_HEIGHT + 2, 24, 24, 25, 26, 29)
             );
         }
 
@@ -5931,23 +6039,40 @@ mod tests {
     mod toast {
         use super::*;
 
+        fn copied() -> Toast<'static> {
+            Toast { message: "copied to clipboard", status: None, undo: false }
+        }
+
+        #[test]
+        fn an_undo_button_sits_at_its_end() {
+            let toast = Toast { message: "deleted", status: None, undo: true };
+            let (r, undo) = (toast_area(AREA, toast), toast_undo(AREA, toast));
+            let t = render(&View { toast: Some(toast), ..view(&["~"]) });
+            let text: String = (undo.x..undo.right()).map(|x| t.backend().buffer()[(x, undo.y)].symbol()).collect();
+            assert_eq!((text.as_str(), undo.right(), undo.y), (" undo ", r.right() - 2, r.y + 1));
+        }
+
+        #[test]
+        fn without_undo_there_is_no_button() {
+            assert_eq!(toast_undo(AREA, copied()), Rect::default());
+        }
+
         #[test]
         fn sits_in_the_bottom_right_corner() {
-            let r = toast_area(AREA, "copied to clipboard");
+            let r = toast_area(AREA, copied());
             assert_eq!((r.right(), r.bottom(), r.height), (W - 1, H - 1, 3));
         }
 
         #[test]
         fn fits_a_small_screen() {
             let small = Rect::new(0, 0, 10, 2);
-            assert_eq!(toast_area(small, "copied to clipboard"), small);
+            assert_eq!(toast_area(small, copied()), small);
         }
 
         #[test]
         fn renders_over_the_pane() {
             let snap = screen(b"$ echo hello\r\nhello\r\n$ ");
-            let toast = Toast { message: "copied to clipboard", status: None };
-            let v = View { tab: Some(single(snap)), toast: Some(toast), ..view(&["~"]) };
+            let v = View { tab: Some(single(snap)), toast: Some(copied()), ..view(&["~"]) };
             insta::assert_snapshot!(render(&v).backend());
         }
 
@@ -5955,9 +6080,9 @@ mod tests {
         #[case::waiting(Status::Waiting, "!", WAITING_COLOR)]
         #[case::done(Status::Done, "✓", Color::Green)]
         fn about_an_agent_shows_its_status(#[case] status: Status, #[case] glyph: &str, #[case] colour: Color) {
-            let message = "claude needs you in shop › main";
-            let r = toast_area(AREA, message);
-            let v = View { toast: Some(Toast { message, status: Some(status) }), ..view(&["~"]) };
+            let toast = Toast { message: "claude needs you in shop › main", status: Some(status), undo: false };
+            let r = toast_area(AREA, toast);
+            let v = View { toast: Some(toast), ..view(&["~"]) };
             let t = render(&v);
             let (icon, border) = (&t.backend().buffer()[(r.x + 2, r.y + 1)], &t.backend().buffer()[(r.x, r.y)]);
             assert_eq!((icon.symbol(), icon.fg, border.fg), (glyph, colour, colour));

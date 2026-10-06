@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 4609
 expression: "render_sized(&v, W, TALL.height).backend()"
 ---
 "  ⌕ search pro │  no tab open                                                                       "
@@ -26,9 +27,9 @@ expression: "render_sized(&v, W, TALL.height).backend()"
 "               │                                                                                    "
 "               │                                                                                    "
 "               │                                                                                    "
-"               │                                                                                    "
 " ───────────── │                                                                                    "
 "  issues       │                                                                                    "
+"         todo  │                                                                                    "
 "  settings     │                                                                                    "
 "  usage        │                                                                                    "
 "  quit         │                                                                                    "

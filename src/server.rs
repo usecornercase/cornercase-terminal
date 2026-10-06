@@ -23,6 +23,7 @@ use crate::host_theme::HostTheme;
 use crate::notify::Channel;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state::{self, Saver};
+use crate::todo;
 
 const TICK: Duration = Duration::from_millis(500);
 const ISSUE_CACHE_FILE: &str = "issues.json";
@@ -152,6 +153,7 @@ struct Server {
     started: bool,
     build: String,
     saver: Saver,
+    todo_saver: Saver<todo::Saved>,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
 }
@@ -169,6 +171,9 @@ pub fn run() -> Result<()> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
     let mut app = App::new(shell, HostTheme::default(), config::path(), app_tx);
     app.set_issue_cache(state::path().with_file_name(ISSUE_CACHE_FILE));
+    let todos = todo::load(&todo::path(&state::path()));
+    let todo_saver = Saver::new(todo::path(&state::path()), Some(todos.saved()));
+    app.set_todos(todos);
     let mut server = Server {
         app,
         clients: Vec::new(),
@@ -178,6 +183,7 @@ pub fn run() -> Result<()> {
         started: false,
         build: protocol::build_id(),
         saver: Saver::new(state::path(), None),
+        todo_saver,
         restart: None,
         tx,
     };
@@ -283,6 +289,9 @@ impl Server {
             && let Err(e) = self.saver.observe(self.app.state(), Instant::now())
         {
             eprintln!("cornercase server: failed to save the session: {e}");
+        }
+        if let Err(e) = self.todo_saver.observe(self.app.todos_saved(), Instant::now()) {
+            eprintln!("cornercase server: failed to save the todo lists: {e}");
         }
     }
 
@@ -440,6 +449,11 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
+        if let Err(e) =
+            self.todo_saver.observe(self.app.todos_saved(), Instant::now()).and_then(|()| self.todo_saver.flush())
+        {
+            eprintln!("cornercase server: failed to save the todo lists: {e}");
+        }
         if self.restart.is_some()
             && self.started
             && let Err(e) = state::save(&state::path(), &self.app.state())

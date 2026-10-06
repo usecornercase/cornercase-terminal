@@ -59,6 +59,7 @@ export default defineConfig({
             { label: 'Panes and splits', slug: 'docs/guides/panes-and-splits' },
             { label: 'Git worktrees', slug: 'docs/guides/worktrees' },
             { label: 'Changes panel', slug: 'docs/guides/changes' },
+            { label: 'TODO list', slug: 'docs/guides/todo' },
             { label: 'Issues and agents', slug: 'docs/guides/issues-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },

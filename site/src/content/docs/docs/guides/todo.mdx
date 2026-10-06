@@ -1,0 +1,51 @@
+---
+title: TODO list
+description: Keep your TODO list next to your shells, add, edit, tick off and reorder items with the mouse, and undo a deletion.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
+
+Every programmer keeps a TODO list somewhere: a notebook, a `TODO.md`, a text file on the desktop. cornercase keeps one next to the shells and agents it is about, in a column on the right of the pane.
+
+<Screen
+  name="todo"
+  alt="cornercase with the shop project active: git log in the pane, and the todo panel on the right with 4 items left (fix the 500 on /returns when the address has no second line; add a test for Address::first_line, hovered with its delete button; reply to the design review; update the release notes) and two done ones struck through below, with clear done in the header"
+  caption="The list, with the items left to do on top and the done ones below."
+/>
+
+## Open and close it
+
+Click **`todo`** at the bottom of the sidebar, under `changes`, to open the panel, and again (or **`×`** in the panel) to close it. It takes the same column as the [changes panel](../changes/), so only one of them shows at a time: opening one closes the other. Drag its left border to make it wider or narrower, like the changes panel.
+
+In the [compact layout](../small-terminals/), a **`☐`** button in the top bar opens it over the whole screen.
+
+There is one list, the same whichever project or workspace is active. The header shows how many items are left to do. When the list is longer than the panel, the wheel scrolls it and `↑ n more` / `↓ n more` show how many items are hidden.
+
+## Add, edit and check items
+
+- **Add**: click **`+ new todo`** at the bottom of the list, type, and press `Enter`. The field stays open for the next item; press `Enter` on an empty field, or `Esc`, to close it.
+- **Edit**: click an item's text. The cursor goes where you clicked; `Enter` saves, `Esc` leaves the text as it was. Saving an empty text keeps the old one.
+- **Check**: click **`[ ]`**. A done item is dimmed and struck through, and goes to the bottom of the list; uncheck it and it goes back to the end of the items left to do.
+- **Reorder**: drag an item up or down. A line shows where it will land; done items stay below the others.
+
+<Screen
+  name="todo-add"
+  crop={[95, 0, 45, 14]}
+  alt="The todo panel with a field at the bottom of the list holding the text ask legal about the new return window, wrapped onto two lines"
+  caption="A new item being typed. Long items wrap onto more lines."
+/>
+
+While a field is open, the keys go to it instead of your program: type, paste, move with `←` `→`, `↑` `↓` across the lines of a long item, `Home` and `End`, and delete with `Backspace` and `Delete`. A pasted text with several lines becomes one item. A click anywhere outside the field saves it and gives the keys back to the program in the active pane.
+
+## Delete items, and undo
+
+Hover an item and click **`×`** to delete it. Done items can go all at once with **`clear done`** in the header. Either way nothing asks first: a message at the bottom right says what went, with an **`undo`** button that puts it back where it was for a few seconds.
+
+## Where the list is kept
+
+The list is saved in `todos.json`, next to the [saved session](../sessions/#what-is-saved), and every attached client sees the same one.
+
+<Aside type="note">
+The list is plain notes. It doesn't sync with GitHub, Shortcut or Linear; that is what [issues](../issues-and-agents/) are for.
+</Aside>

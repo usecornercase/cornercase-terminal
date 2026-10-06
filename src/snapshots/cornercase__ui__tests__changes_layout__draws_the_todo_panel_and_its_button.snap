@@ -1,0 +1,22 @@
+---
+source: src/ui.rs
+expression: "render_sized(&with_todo(), 140, 18).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │  no tab open                             │ todo 2                clear done   ×  "
+"                                                         │                                          │                                       "
+" projects                      │ workspaces              │                                          │ [ ] fix the login bug in safari       "
+"                               │                         │                                          │ [ ] renew the domain                  "
+"▌ shop (1)                     │  main                   │                                          │ [x] write docs                        "
+"                               │  ▌ zsh                  │                                          │                                       "
+"  + new project                │    + tab                │                                          │  + new todo                           "
+"                               │                         │                                          │                                       "
+"                               │  + new workspace        │                                          │                                       "
+"                               │                         │                                          │                                       "
+"                               │                         │                                          │                                       "
+"                               │                         │                                          │                                       "
+"                               │                         │                                          │                                       "
+"                               │                         │                                          │                                       "
+" ───────────────────────────── │ ─────────────────────── │                                          │                                       "
+"  settings                     │  issues      changes 3  │                                          │                                       "
+"  usage                        │                   todo  │                                          │                                       "
+"  quit                         │                         │                                          │                                       "

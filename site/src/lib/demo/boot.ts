@@ -141,7 +141,7 @@ function estimate(steps: Step[]): number {
 }
 
 function spotArea(app: App, spot: Spot): Rect {
-  const a = layout(app.cols, app.rows, app.widths, app.nav, app.changesShown(), app.sidebar());
+  const a = layout(app.cols, app.rows, app.widths, app.nav, app.panelShown(), app.sidebar());
   if (spot === 'sidebar') return a.sidebar;
   if (spot === 'workspaces') return a.workspaces;
   if (spot === 'pane') return a.pane;

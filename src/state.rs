@@ -26,6 +26,8 @@ pub struct State {
     pub issues: Option<IssuesState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changes: Option<ChangesState>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub todo: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +163,7 @@ impl From<V2State> for State {
             widths: None,
             issues: None,
             changes: None,
+            todo: false,
         }
     }
 }
@@ -226,18 +229,18 @@ pub fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {
 }
 
 #[derive(Debug)]
-pub struct Saver {
+pub struct Saver<T = State> {
     path: PathBuf,
-    saved: Option<State>,
-    pending: Option<(State, Instant)>,
+    saved: Option<T>,
+    pending: Option<(T, Instant)>,
 }
 
-impl Saver {
-    pub fn new(path: PathBuf, saved: Option<State>) -> Self {
+impl<T: PartialEq + Serialize> Saver<T> {
+    pub fn new(path: PathBuf, saved: Option<T>) -> Self {
         Self { path, saved, pending: None }
     }
 
-    pub fn observe(&mut self, state: State, now: Instant) -> io::Result<()> {
+    pub fn observe(&mut self, state: T, now: Instant) -> io::Result<()> {
         if self.saved.as_ref() == Some(&state) {
             self.pending = None;
             return Ok(());
@@ -251,6 +254,14 @@ impl Saver {
                 }
             }
             _ => self.pending = Some((state, now)),
+        }
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> io::Result<()> {
+        if let Some((state, _)) = self.pending.take() {
+            save(&self.path, &state)?;
+            self.saved = Some(state);
         }
         Ok(())
     }
@@ -288,6 +299,7 @@ mod tests {
             widths: None,
             issues: None,
             changes: None,
+            todo: false,
         }
     }
 
@@ -518,6 +530,17 @@ mod tests {
             saver.observe(state(&["/a"]), t0 + SETTLE).expect("observe");
 
             assert!(!path.exists());
+        }
+
+        #[test]
+        fn flushing_saves_a_state_that_has_not_settled_yet() {
+            let tmp = TempDir::new();
+            let (mut saver, path) = saver(&tmp);
+
+            saver.observe(state(&["/a"]), Instant::now()).expect("observe");
+            saver.flush().expect("flush");
+
+            assert_eq!(load(&path), Some(state(&["/a"])));
         }
     }
 }

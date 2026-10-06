@@ -78,7 +78,11 @@ impl Session {
     }
 
     fn wait_for_saved(&self, what: &str, cond: impl Fn(&str) -> bool) {
-        let path = self.dir.join("server.json");
+        self.wait_for_file("server.json", what, cond);
+    }
+
+    fn wait_for_file(&self, name: &str, what: &str, cond: impl Fn(&str) -> bool) {
+        let path = self.dir.join(name);
         let deadline = Instant::now() + TIMEOUT;
         while !cond(&std::fs::read_to_string(&path).unwrap_or_default()) {
             assert!(Instant::now() < deadline, "timed out waiting for: {what}");
@@ -724,6 +728,29 @@ fn a_smaller_client_sees_the_frame_cut_off() {
         assert!(Instant::now() < deadline, "the small client does not show the cut frame\n{}", small.text());
         thread::sleep(POLL);
     }
+}
+
+#[test]
+fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
+    let mut app = Harness::start();
+    app.click(areas().todo_button.as_position());
+    app.wait_for("the todo panel opens", |s| s.contains("+ new todo"));
+    let panel = ui::layout_with(AREA, ui::Widths::default(), true, ui::Sidebar::default()).changes;
+    let view = ui::todo::View {
+        items: Vec::new(),
+        scroll: 0,
+        adding: None,
+        light: false,
+        muted: ratatui::style::Color::DarkGray,
+        drag: None,
+    };
+    let button = ui::todo::rows(panel, &view).button();
+
+    app.click(button.as_position());
+    app.send(b"buy milk\r");
+
+    app.wait_for("the item shows", |s| s.contains("[ ] buy milk"));
+    app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("buy milk"));
 }
 
 #[test]

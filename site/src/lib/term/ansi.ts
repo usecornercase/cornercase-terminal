@@ -1,4 +1,4 @@
-import { BOLD, DIM, Grid, INVERSE, ITALIC, UNDERLINE } from './grid';
+import { BOLD, DIM, Grid, INVERSE, ITALIC, STRIKE, UNDERLINE } from './grid';
 import { DEFAULT, rgb } from './palette';
 
 interface Pen {
@@ -7,8 +7,8 @@ interface Pen {
   attr: number;
 }
 
-const ATTRS: Record<number, number> = { 1: BOLD, 2: DIM, 3: ITALIC, 4: UNDERLINE, 7: INVERSE };
-const CLEARS: Record<number, number> = { 22: BOLD | DIM, 23: ITALIC, 24: UNDERLINE, 27: INVERSE };
+const ATTRS: Record<number, number> = { 1: BOLD, 2: DIM, 3: ITALIC, 4: UNDERLINE, 7: INVERSE, 9: STRIKE };
+const CLEARS: Record<number, number> = { 22: BOLD | DIM, 23: ITALIC, 24: UNDERLINE, 27: INVERSE, 29: STRIKE };
 
 function color(params: number[], i: number): [number, number] {
   if (params[i + 1] === 5) return [params[i + 2] ?? 0, i + 2];

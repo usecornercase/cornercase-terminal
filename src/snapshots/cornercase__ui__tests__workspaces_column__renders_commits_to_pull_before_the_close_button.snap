@@ -18,5 +18,5 @@ expression: render(&v).backend()
 "                               │  + new workspace        │                                          "
 " ───────────────────────────── │                         │                                          "
 "  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
+"  usage                        │                   todo  │                                          "
 "  quit                         │                         │                                          "

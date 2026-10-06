@@ -2,6 +2,7 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, contains, rect } from '../term/grid';
 import type { App } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
+import { drawTodo } from './todo';
 import {
   type Areas,
   type Border,
@@ -49,6 +50,7 @@ import {
   usageDone,
   workspaceLayout,
   workspaceRows,
+  TODO_LABEL,
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
@@ -92,6 +94,7 @@ const STATUS_ICONS: Record<Status, Seg> = {
   waiting: seg('!', { fg: 208, add: BOLD }),
 };
 const BRAND = 99;
+const UNDO = 'undo';
 const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 208, critical: 1 };
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
 const USAGE_FILLED = '█';
@@ -187,7 +190,7 @@ export class Painter {
       this.outer();
       return { regions: this.regions, cursor: this.cursor, areas: null };
     }
-    const areas = layout(app.cols, app.rows, app.widths, app.nav, app.changesShown(), app.sidebar());
+    const areas = layout(app.cols, app.rows, app.widths, app.nav, app.panelShown(), app.sidebar());
     this.pane(areas);
     if (areas.compact) {
       this.bar(areas);
@@ -202,8 +205,9 @@ export class Painter {
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
+    else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     this.overlay(areas);
-    if (app.toast) this.toast(app.toast.text, app.toast.status);
+    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo);
     return { regions: this.regions, cursor: this.cursor, areas };
   }
 
@@ -355,7 +359,10 @@ export class Painter {
       return;
     }
     const showChanges = hasChanges(app.workspace());
-    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - (showChanges ? areas.changesButton.w : 0), r.h);
+    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showChanges ? areas.changesButton.w : 0), r.h);
+    const todo = areas.todoButton;
+    this.band(todo, [seg(centered('☐', todo.w))], app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
+    this.region({ r: todo, click: () => app.toggleTodo(), cursor: 'pointer' });
     if (showChanges) {
       const c = areas.changesButton;
       this.band(c, [seg(centered('±', c.w))], app.changesOpen || this.sidebarHovered(c) ? PRESSED : { fg: 8, bg: this.surface });
@@ -654,6 +661,11 @@ export class Painter {
       const idle: Style = app.changesOpen ? { fg: 6, add: BOLD } : DARK;
       this.button(r, '', label, this.buttonStyle(r, idle, 6));
       this.region({ r, click: () => app.toggleChanges(), cursor: 'pointer' });
+    }
+    if (!areas.compact) {
+      const r = areas.todoButton;
+      this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
+      this.region({ r, click: () => app.toggleTodo(), cursor: 'pointer' });
     }
   }
 
@@ -1031,9 +1043,9 @@ export class Painter {
     if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
-  private toast(message: string, status?: Status): void {
+  private toast(message: string, status?: Status, undo?: () => void): void {
     const app = this.app;
-    const w = Math.min(3 + [...message].length + 1 + 2, app.cols);
+    const w = Math.min(3 + [...message].length + 1 + (undo ? UNDO.length + 3 : 0) + 2, app.cols);
     const h = Math.min(3, app.rows);
     const r = rect(Math.max(0, app.cols - w - 1), Math.max(0, app.rows - h - 1), w, h);
     const icon = status ? STATUS_ICONS[status] : seg('✓', { fg: 2 });
@@ -1041,6 +1053,10 @@ export class Painter {
     this.g.box(r, { fg: icon.s?.fg ?? 2 });
     const x = this.span(r.x + 1, r.y + 1, ` ${icon.t} `, icon.s ?? {});
     this.span(x, r.y + 1, message, {}, right(r) - 1 - x);
+    if (!undo) return;
+    const b = intersect(rect(right(r) - UNDO.length - 4, r.y + 1, UNDO.length + 2, 1), r);
+    this.span(b.x, b.y, ` ${UNDO} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
+    this.region({ r: b, click: undo, cursor: 'pointer' });
   }
 }
 

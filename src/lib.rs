@@ -29,6 +29,7 @@ pub mod settings;
 pub mod split;
 pub mod state;
 pub mod term;
+pub mod todo;
 pub mod ui;
 pub mod update;
 pub mod upstream;

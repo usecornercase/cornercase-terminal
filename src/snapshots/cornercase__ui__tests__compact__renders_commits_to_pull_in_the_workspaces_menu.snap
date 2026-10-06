@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: render_small(&v).backend()
 ---
 "                                                                                "
-"   ≡     cornercase › feat/login › claude                                   ⌕   "
+"   ≡     cornercase › feat/login › claude                            ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

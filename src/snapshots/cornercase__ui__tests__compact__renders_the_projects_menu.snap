@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: "render_small(&in_a_project(Some(Nav::Projects))).backend()"
 ---
 "                                                                                "
-"   ≡     cornercase › feat/login › claude                                   ⌕   "
+"   ≡     cornercase › feat/login › claude                            ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

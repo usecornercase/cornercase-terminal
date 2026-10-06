@@ -5,6 +5,7 @@ export const DIM = 2;
 export const ITALIC = 4;
 export const UNDERLINE = 8;
 export const INVERSE = 16;
+export const STRIKE = 32;
 
 export interface Cell {
   ch: string;

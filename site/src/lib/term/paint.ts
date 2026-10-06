@@ -1,5 +1,5 @@
 import { glyph, isGlyph } from './glyphs';
-import { BOLD, DIM, type Grid, INVERSE, ITALIC, UNDERLINE } from './grid';
+import { BOLD, DIM, type Grid, INVERSE, ITALIC, STRIKE, UNDERLINE } from './grid';
 import { DEFAULT, type Theme, bg as bgColor, fg as fgColor, theme as defaultTheme } from './palette';
 
 export type Op =
@@ -65,6 +65,9 @@ export function paint(grid: Grid, m: Metrics): Op[] {
       const italic = (cell.attr & ITALIC) !== 0;
       if (cell.attr & UNDERLINE) {
         shapes.push({ k: 'rect', x, y: snap(y + m.ch - Math.max(m.lw, 1) * 2), w: m.cw, h: m.lw, fill, alpha });
+      }
+      if (cell.attr & STRIKE) {
+        shapes.push({ k: 'rect', x, y: snap(y + m.ch / 2), w: m.cw, h: m.lw, fill, alpha });
       }
       if (isGlyph(cell.ch)) {
         flushText();

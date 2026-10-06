@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 4603
 expression: "render_sized(&with_tree(), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspace │  no tab open                                                       "
@@ -26,9 +27,9 @@ expression: "render_sized(&with_tree(), W, TALL.height).backend()"
 "                               │                                                                    "
 "                               │                                                                    "
 "                               │                                                                    "
-"                               │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  issues                       │                                                                    "
+"                         todo  │                                                                    "
 "  settings                     │                                                                    "
 "  usage                        │                                                                    "
 "  quit                         │                                                                    "

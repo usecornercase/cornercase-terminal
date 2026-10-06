@@ -336,15 +336,19 @@ function rows(app: App, files: FileDiff[], kept: Set<number> | null): Row[] {
   return out;
 }
 
+export function drawPanelBorder(p: Painter, areas: Areas): void {
+  const app = p.app;
+  const border = areas.changesBorder;
+  if (isEmpty(border)) return;
+  const lit = (app.dragging?.kind === 'border' && app.dragging.border === 'changes') || p.sidebarHovered(border);
+  for (let y = border.y; y < bottom(border); y++) p.g.put(border.x, y, '│', { fg: lit ? 6 : 8 });
+  p.region({ r: border, drag: { kind: 'border', border: 'changes' }, double: () => app.resetBorder('changes'), cursor: 'col-resize' });
+}
+
 export function drawChanges(p: Painter, areas: Areas): void {
   const app = p.app;
   const g = p.g;
-  const border = areas.changesBorder;
-  if (!isEmpty(border)) {
-    const lit = (app.dragging?.kind === 'border' && app.dragging.border === 'changes') || p.sidebarHovered(border);
-    for (let y = border.y; y < bottom(border); y++) g.put(border.x, y, '│', { fg: lit ? 6 : 8 });
-    p.region({ r: border, drag: { kind: 'border', border: 'changes' }, double: () => app.resetBorder('changes'), cursor: 'col-resize' });
-  }
+  drawPanelBorder(p, areas);
   const area = areas.changes;
   g.clear(area);
   const inner = rect(area.x + 1, area.y, Math.max(0, area.w - 2), area.h);
