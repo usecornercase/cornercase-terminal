@@ -14,7 +14,6 @@ use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, BranchPicker, Checkout, Tints};
 use crate::clipboard;
 use crate::config::{self, Config};
-use crate::context::Context;
 use crate::error::Result;
 use crate::git;
 use crate::host_theme::HostTheme;
@@ -552,7 +551,7 @@ impl App {
         if read {
             self.watched = Some(now);
         }
-        let measured = self.project().map(|p| p.id).filter(|_| self.config.memory_line);
+        let measured = self.project().map(|p| p.id).filter(|_| self.config.memory);
         let (config, dir) = (&self.config, self.claude_dir.as_deref());
         let mut notices = Vec::new();
         for project in &mut self.projects {
@@ -1579,20 +1578,17 @@ impl App {
         self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
     }
 
-    fn tab_details<'a>(&self, tab: &'a Tab) -> (Option<&'a Context>, Option<u64>) {
-        (tab.context().filter(|_| self.config.context_line), tab.memory().filter(|_| self.config.memory_line))
+    fn tab_details(&self, tab: &Tab) -> ui::Details {
+        let context = tab.context();
+        ui::Details {
+            model: context.filter(|_| self.config.model).map(|c| c.model.clone()),
+            percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
+            memory: tab.memory().filter(|_| self.config.memory),
+        }
     }
 
     fn tab_lines(&self) -> Vec<Vec<u16>> {
-        let lines = |w: &Workspace| -> Vec<u16> {
-            w.tabs
-                .iter()
-                .map(|t| {
-                    let (context, memory) = self.tab_details(t);
-                    ui::tab_lines(context, memory)
-                })
-                .collect()
-        };
+        let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default()
     }
 
@@ -3022,14 +3018,10 @@ impl App {
                         tabs: w
                             .tabs
                             .iter()
-                            .map(|t| {
-                                let (context, memory) = self.tab_details(t);
-                                ui::TabEntry {
-                                    name: t.label(&self.config),
-                                    status: t.status(),
-                                    context: context.cloned(),
-                                    memory,
-                                }
+                            .map(|t| ui::TabEntry {
+                                name: t.label(&self.config),
+                                status: t.status(),
+                                details: self.tab_details(t),
                             })
                             .collect(),
                         behind: w.behind,
@@ -5560,9 +5552,18 @@ rm -f "$1/sessions/$$.json"
             assert_eq!((bar.as_str(), status(&app, 0, 0)), ("   ≡ ✓ ", Some(Status::Idle)));
         }
 
-        #[test]
-        fn a_tab_running_claude_shows_its_model_and_context_under_its_name() {
+        #[rstest]
+        #[case::both(true, true, (2, "      Opus 5.5 · 17%"))]
+        #[case::the_model_alone(true, false, (2, "      Opus 5.5"))]
+        #[case::the_context_alone(false, true, (2, "      17%"))]
+        #[case::neither(false, false, (1, "    + tab"))]
+        fn a_tab_running_claude_shows_its_model_and_context_under_its_name(
+            #[case] model: bool,
+            #[case] context: bool,
+            #[case] expected: (u16, &str),
+        ) {
             let (mut app, rx, _dirs) = app_with(1);
+            (app.config.model, app.config.context) = (model, context);
             let claude = Claude::running(ANSWERING_CLAUDE);
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
@@ -5570,21 +5571,7 @@ rm -f "$1/sessions/$$.json"
             let (height, below) = second_row(&mut app);
             claude.signal("quit");
 
-            assert_eq!((height, below.as_str()), (2, "      Opus 5.5 · 17%"));
-        }
-
-        #[test]
-        fn without_the_context_line_the_tab_keeps_one_row() {
-            let (mut app, rx, _dirs) = app_with(1);
-            app.config.context_line = false;
-            let claude = Claude::running(ANSWERING_CLAUDE);
-            claude.start(&mut app);
-            watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
-
-            let (height, below) = second_row(&mut app);
-            claude.signal("quit");
-
-            assert_eq!((height, below.contains("Opus")), (1, false));
+            assert_eq!((height, below.as_str()), expected);
         }
 
         fn memory(app: &App) -> Option<u64> {
@@ -5593,7 +5580,7 @@ rm -f "$1/sessions/$$.json"
 
         fn measured_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, Claude) {
             let (mut app, rx, dirs) = app_with(1);
-            app.config.memory_line = true;
+            app.config.memory = true;
             let claude = Claude::running(SILENT_CLAUDE);
             claude.start(&mut app);
             watch_until(&mut app, &rx, "the memory is measured", |a| memory(a).is_some());
@@ -5614,7 +5601,7 @@ rm -f "$1/sessions/$$.json"
         fn turning_the_memory_off_gives_the_tab_its_row_back() {
             let (mut app, _rx, _dirs, claude) = measured_claude();
 
-            app.config.memory_line = false;
+            app.config.memory = false;
             let (height, below) = second_row(&mut app);
             claude.signal("quit");
 
@@ -6298,7 +6285,7 @@ rm -f "$1/sessions/$$.json"
 
     mod settings {
         use super::*;
-        use crate::settings::Row;
+        use crate::settings::{Detail, Row};
         use crate::test_util::FakeHttp;
 
         const MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
@@ -6426,7 +6413,15 @@ rm -f "$1/sessions/$$.json"
             show(&mut s.app, Page::Tui);
             assert_eq!(
                 form(&s.app).rows(),
-                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::MemoryLine, Row::Notifications, Row::Updates]
+                [
+                    Row::Sidebar,
+                    Row::DimPanes,
+                    Row::Detail(Detail::Model),
+                    Row::Detail(Detail::Context),
+                    Row::Detail(Detail::Memory),
+                    Row::Notifications,
+                    Row::Updates
+                ]
             );
         }
 

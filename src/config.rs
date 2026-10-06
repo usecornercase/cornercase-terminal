@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::notify;
@@ -35,8 +36,9 @@ pub struct Config {
     pub gh: String,
     pub sidebar: String,
     pub dim_inactive_panes: bool,
-    pub context_line: bool,
-    pub memory_line: bool,
+    pub model: bool,
+    pub context: bool,
+    pub memory: bool,
     pub desktop_notifications: String,
     pub check_updates: bool,
 }
@@ -58,8 +60,9 @@ impl Default for Config {
             gh: DEFAULT_GH.into(),
             sidebar: ui::Sidebar::default().id().into(),
             dim_inactive_panes: true,
-            context_line: true,
-            memory_line: false,
+            model: true,
+            context: true,
+            memory: false,
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
         }
@@ -92,7 +95,22 @@ pub fn path() -> PathBuf {
 }
 
 pub fn load(path: &Path) -> Config {
-    std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
+    let Some(mut value) = std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()) else {
+        return Config::default();
+    };
+    if let Value::Object(keys) = &mut value {
+        migrate(keys);
+    }
+    serde_json::from_value(value).unwrap_or_default()
+}
+
+fn migrate(keys: &mut Map<String, Value>) {
+    if let Some(old) = keys.remove("context_line") {
+        keys.entry("context").or_insert(old);
+    }
+    if let Some(context) = keys.get("context").cloned() {
+        keys.entry("model").or_insert(context);
+    }
 }
 
 pub fn save(path: &Path, config: &Config) -> io::Result<()> {
@@ -173,13 +191,26 @@ mod tests {
         }
 
         #[test]
-        fn the_context_line_starts_shown() {
-            assert!(Config::default().context_line);
+        fn an_agent_tab_starts_with_its_model_and_context_but_not_its_memory() {
+            let c = Config::default();
+            assert_eq!((c.model, c.context, c.memory), (true, true, false));
         }
 
-        #[test]
-        fn the_memory_starts_hidden() {
-            assert!(!Config::default().memory_line);
+        #[rstest]
+        #[case::nothing_set("{}", (true, true))]
+        #[case::the_switch_of_0_6_off(r#"{"context_line": false}"#, (false, false))]
+        #[case::the_context_off(r#"{"context": false}"#, (false, false))]
+        #[case::the_model_set_apart(r#"{"context": false, "model": true}"#, (true, false))]
+        #[case::the_context_set_apart(r#"{"model": false}"#, (false, true))]
+        #[case::the_new_key_wins(r#"{"context_line": false, "context": true}"#, (true, true))]
+        fn a_missing_model_follows_the_context(#[case] file: &str, #[case] expected: (bool, bool)) {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("config.json");
+            std::fs::write(&path, file).expect("write");
+
+            let config = load(&path);
+
+            assert_eq!((config.model, config.context), expected);
         }
     }
 

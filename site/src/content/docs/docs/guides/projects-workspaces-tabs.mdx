@@ -128,7 +128,7 @@ Other agents don't get an icon yet.
 
 ### How full the context is
 
-Claude Code and Codex tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. To hide it, turn off **settings → TUI → context line**; tabs then take one row, unless they show their [memory](#how-much-memory-an-agent-uses).
+Claude Code and Codex tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → TUI → model** and **settings → TUI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -156,7 +156,7 @@ The variables are read from the running `claude` and from the `env` of its setti
 
 ### How much memory an agent uses
 
-Turn on **settings → TUI → memory** and Claude Code and Codex tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the context line off. Other tabs keep one row.
+Turn on **settings → TUI → memory** and Claude Code and Codex tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
 
 It is the resident memory of everything running in the tab's agent panes: the shell, the agent and whatever the agent started, such as MCP servers, language servers and background commands. Memory shared by several of those processes is counted once for each of them, as `ps` counts it, so the figure can be higher than what your system monitor shows; take it as a guide to which agent is growing, not an exact count. It is measured every 2 seconds, only for the project on screen and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
 

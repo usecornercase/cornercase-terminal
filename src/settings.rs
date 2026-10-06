@@ -26,8 +26,7 @@ pub enum Row {
     Fetch,
     Sidebar,
     DimPanes,
-    ContextLine,
-    MemoryLine,
+    Detail(Detail),
     Notifications,
     Updates,
     Token(Source),
@@ -46,8 +45,7 @@ impl Row {
             | Self::Fetch
             | Self::Sidebar
             | Self::DimPanes
-            | Self::ContextLine
-            | Self::MemoryLine
+            | Self::Detail(_)
             | Self::Notifications
             | Self::Updates => "",
             Self::Token(_) => "Accounts",
@@ -62,12 +60,59 @@ impl Row {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
             Self::Token(_) | Self::Tab(_) => Page::Issues,
-            Self::Sidebar
-            | Self::DimPanes
-            | Self::ContextLine
-            | Self::MemoryLine
-            | Self::Notifications
-            | Self::Updates => Page::Tui,
+            Self::Sidebar | Self::DimPanes | Self::Detail(_) | Self::Notifications | Self::Updates => Page::Tui,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Detail {
+    Model,
+    Context,
+    Memory,
+}
+
+impl Detail {
+    fn on(self, config: &Config) -> bool {
+        match self {
+            Self::Model => config.model,
+            Self::Context => config.context,
+            Self::Memory => config.memory,
+        }
+    }
+
+    fn switch(self, config: &mut Config) -> &mut bool {
+        match self {
+            Self::Model => &mut config.model,
+            Self::Context => &mut config.context,
+            Self::Memory => &mut config.memory,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Model => "model",
+            Self::Context => "context",
+            Self::Memory => "memory",
+        }
+    }
+
+    fn note(self) -> &'static str {
+        match self {
+            Self::Model => "under a Claude Code or Codex tab, such as Opus 5.5",
+            Self::Context => "how full its context is, such as 23%",
+            Self::Memory => "the RAM its processes use, such as 1.2 GB",
+        }
+    }
+
+    fn notice(self, on: bool) -> &'static str {
+        match (self, on) {
+            (Self::Model, true) => "agent tabs show their model",
+            (Self::Model, false) => "agent tabs hide their model",
+            (Self::Context, true) => "agent tabs show how full their context is",
+            (Self::Context, false) => "agent tabs hide their context",
+            (Self::Memory, true) => "agent tabs show the memory they use",
+            (Self::Memory, false) => "agent tabs hide their memory",
         }
     }
 }
@@ -207,8 +252,9 @@ impl Settings {
             Row::AddAgent,
             Row::Sidebar,
             Row::DimPanes,
-            Row::ContextLine,
-            Row::MemoryLine,
+            Row::Detail(Detail::Model),
+            Row::Detail(Detail::Context),
+            Row::Detail(Detail::Memory),
             Row::Notifications,
             Row::Updates,
         ]);
@@ -290,15 +336,11 @@ impl Settings {
                 let notice = if on { "inactive panes are dimmed" } else { "every pane looks the same" };
                 self.save(Config { dim_inactive_panes: on, ..self.config.clone() }, notice.into())
             }
-            Row::ContextLine => {
-                let on = !self.config.context_line;
-                let notice = if on { "tabs show their model and context" } else { "tabs take one row" };
-                self.save(Config { context_line: on, ..self.config.clone() }, notice.into())
-            }
-            Row::MemoryLine => {
-                let on = !self.config.memory_line;
-                let notice = if on { "agent tabs show the memory they use" } else { "agent tabs hide their memory" };
-                self.save(Config { memory_line: on, ..self.config.clone() }, notice.into())
+            Row::Detail(detail) => {
+                let mut config = self.config.clone();
+                let on = !detail.on(&config);
+                *detail.switch(&mut config) = on;
+                self.save(config, detail.notice(on).into())
             }
             Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
@@ -679,13 +721,9 @@ impl Settings {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
                 ("inactive panes".into(), value.into(), "in a split tab".into(), false)
             }
-            Row::ContextLine => {
-                let value = if config.context_line { "[x] model and context" } else { "[ ] hidden, tabs take one row" };
-                ("context line".into(), value.into(), "under a Claude Code or Codex tab".into(), false)
-            }
-            Row::MemoryLine => {
-                let value = if config.memory_line { "[x] RAM of its processes" } else { "[ ] hidden" };
-                ("memory".into(), value.into(), "under a Claude Code or Codex tab".into(), false)
+            Row::Detail(detail) => {
+                let value = if detail.on(config) { "[x] shown" } else { "[ ] hidden" };
+                (detail.label().into(), value.into(), detail.note().into(), false)
             }
             Row::Sidebar => (
                 "sidebar".into(),
@@ -1085,42 +1123,31 @@ mod tests {
         }
     }
 
-    mod context_line {
+    mod agent_tabs {
+        use rstest::rstest;
+
         use super::*;
 
-        #[test]
-        fn is_a_switch() {
+        #[rstest]
+        #[case::model(Detail::Model, |c: &Config| c.model)]
+        #[case::context(Detail::Context, |c: &Config| c.context)]
+        #[case::memory(Detail::Memory, |c: &Config| c.memory)]
+        fn each_part_is_a_switch(#[case] detail: Detail, #[case] on: fn(&Config) -> bool) {
             let mut s = settings();
-            go_to(&mut s, &Row::ContextLine);
-            assert!(!saved(press(&mut s, KeyCode::Enter)).context_line);
+            let before = on(&s.config);
+            go_to(&mut s, &Row::Detail(detail));
+            assert_eq!(on(&saved(press(&mut s, KeyCode::Enter))), !before);
         }
 
         #[test]
-        fn shows_whether_it_is_on() {
+        fn show_whether_each_part_is_on() {
             let mut s = settings();
-            s.config.context_line = false;
+            s.config.context = false;
             s.open_page(Page::Tui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-            assert_eq!(view.rows[2].value, "[ ] hidden, tabs take one row");
-        }
-    }
-
-    mod memory_line {
-        use super::*;
-
-        #[test]
-        fn is_a_switch() {
-            let mut s = settings();
-            go_to(&mut s, &Row::MemoryLine);
-            assert!(saved(press(&mut s, KeyCode::Enter)).memory_line);
-        }
-
-        #[test]
-        fn shows_whether_it_is_on() {
-            let mut s = settings();
-            s.open_page(Page::Tui);
-            let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-            assert_eq!((view.rows[3].label.as_str(), view.rows[3].value.as_str()), ("memory", "[ ] hidden"));
+            let rows: Vec<(&str, &str)> =
+                view.rows[2..5].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+            assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
         }
     }
 
@@ -1133,7 +1160,15 @@ mod tests {
             s.open_page(Page::Tui);
             assert_eq!(
                 s.rows(),
-                [Row::Sidebar, Row::DimPanes, Row::ContextLine, Row::MemoryLine, Row::Notifications, Row::Updates]
+                [
+                    Row::Sidebar,
+                    Row::DimPanes,
+                    Row::Detail(Detail::Model),
+                    Row::Detail(Detail::Context),
+                    Row::Detail(Detail::Memory),
+                    Row::Notifications,
+                    Row::Updates
+                ]
             );
         }
 

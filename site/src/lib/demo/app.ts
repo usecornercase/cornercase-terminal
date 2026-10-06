@@ -21,6 +21,7 @@ import {
   sidebarDrop,
   sidebarLayout,
   sidebarRows,
+  type Details,
   tabLines,
   workspaceDrop,
   workspaceLayout,
@@ -59,7 +60,7 @@ import {
   watchPane,
   workspaceLabel,
 } from './model';
-import { AGENT_KINDS, Agent, type Context, Editor, type Host, type Key, type Place, Shell } from './programs';
+import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
 import { type Node, fits, panes, ratioAt, remove, setRatio, split } from './split';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
@@ -124,6 +125,16 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
 };
 
 const WATCHED = ['claude', 'codex'];
+const DETAILS = [
+  ['model', 'under a Claude Code or Codex tab, such as Opus 5.5'],
+  ['context', 'how full its context is, such as 23%'],
+  ['memory', 'the RAM its processes use, such as 1.2 GB'],
+] as const;
+const DETAIL_NOTICES = {
+  model: ['agent tabs show their model', 'agent tabs hide their model'],
+  context: ['agent tabs show how full their context is', 'agent tabs hide their context'],
+  memory: ['agent tabs show the memory they use', 'agent tabs hide their memory'],
+} as const;
 
 function agentIn(pane: Pane): Agent | null {
   const fg = pane.shell.fg;
@@ -270,7 +281,7 @@ export class App {
 
   private watchAgents(): void {
     const visible = this.visibleTab();
-    const measured = this.config.memoryLine ? this.project() : undefined;
+    const measured = this.config.memory ? this.project() : undefined;
     const now = this.now();
     for (const p of this.projects) {
       for (const w of p.workspaces) {
@@ -392,15 +403,17 @@ export class App {
   }
 
   tabLines(): number[][] {
-    return this.project()?.workspaces.map((w) => w.tabs.map((t) => tabLines(this.tabContext(t), this.tabMemory(t)))) ?? [];
+    return this.project()?.workspaces.map((w) => w.tabs.map((t) => tabLines(this.tabDetails(t)))) ?? [];
   }
 
-  tabContext(t: Tab): Context | null {
-    return this.config.contextLine ? tabContext(t) : null;
-  }
-
-  tabMemory(t: Tab): number | null {
-    return this.config.memoryLine ? tabMemory(t) : null;
+  tabDetails(t: Tab): Details {
+    const c = this.config;
+    const context = tabContext(t);
+    return {
+      model: c.model ? (context?.model ?? null) : null,
+      percent: c.context ? (context?.percent ?? null) : null,
+      memory: c.memory ? tabMemory(t) : null,
+    };
   }
 
   private areas() {
@@ -1321,8 +1334,7 @@ export class App {
     return [
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'where the workspaces column goes' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
-      { id: 'contextLine', section: '', label: 'context line', value: c.contextLine ? '[x] model and context' : '[ ] hidden, tabs take one row', note: 'under a Claude Code or Codex tab' },
-      { id: 'memoryLine', section: '', label: 'memory', value: c.memoryLine ? '[x] RAM of its processes' : '[ ] hidden', note: 'under a Claude Code or Codex tab' },
+      ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] once a day' : '[ ] never', note: 'asks GitHub for the latest release' },
     ];
@@ -1356,12 +1368,9 @@ export class App {
     } else if (row.id === 'trust') {
       c.trust = !c.trust;
       o.notice = c.trust ? 'trust prompts are accepted for you' : 'trust prompts are left to you';
-    } else if (row.id === 'contextLine') {
-      c.contextLine = !c.contextLine;
-      o.notice = c.contextLine ? 'tabs show their model and context' : 'tabs take one row';
-    } else if (row.id === 'memoryLine') {
-      c.memoryLine = !c.memoryLine;
-      o.notice = c.memoryLine ? 'agent tabs show the memory they use' : 'agent tabs hide their memory';
+    } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
+      c[row.id] = !c[row.id];
+      o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';

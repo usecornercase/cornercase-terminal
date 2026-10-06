@@ -149,8 +149,9 @@ export interface Config {
   trust: boolean;
   sidebar: string;
   dim: boolean;
-  contextLine: boolean;
-  memoryLine: boolean;
+  model: boolean;
+  context: boolean;
+  memory: boolean;
   notify: string;
   updates: boolean;
   agentArgs: Record<string, string[]>;
@@ -166,8 +167,9 @@ export const defaultConfig = (): Config => ({
   trust: true,
   sidebar: 'side_by_side',
   dim: true,
-  contextLine: true,
-  memoryLine: false,
+  model: true,
+  context: true,
+  memory: false,
   notify: 'auto',
   updates: true,
   agentArgs: { claude: ['--permission-mode', 'plan'] },
