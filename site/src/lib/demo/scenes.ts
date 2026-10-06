@@ -22,6 +22,7 @@ export const SCENES: Record<string, Scene> = {
     rows: 24,
     build: (app) => {
       app.widths = { projects: 22, workspaces: 26 };
+      app.config.sidebar = 'side_by_side';
       world(app);
       const shop = app.projects[0];
       shop.active = 0;

@@ -69,12 +69,12 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 <Screen
   name="settings-tui"
   crop={[2, 1, 106, 11]}
-  alt="The TUI tab: sidebar side_by_side, where the workspaces column goes; inactive panes dimmed, in a split tab; model shown, under a Claude Code or Codex tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
+  alt="The TUI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; inactive panes dimmed, in a split tab; model shown, under a Claude Code or Codex tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
 />
 
 | Row | What it sets |
 | --- | --- |
-| **sidebar** | Where the workspaces column goes: *side_by_side* keeps two columns; *projects_on_top* and *workspaces_on_top* stack both lists in one column, which gives the panes the width of a column. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
+| **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
 | **model** | Show the model of a Claude Code or Codex tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
@@ -121,7 +121,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "auto_accept_trust_prompt": true,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
-  "sidebar": "side_by_side",
+  "sidebar": "projects_on_top",
   "dim_inactive_panes": true,
   "model": true,
   "context": true,
@@ -147,7 +147,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`auto_accept_trust_prompt`](#auto_accept_trust_prompt) | boolean | `true` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
-| [`sidebar`](#sidebar) | string | `"side_by_side"` |
+| [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
 | [`model`](#model) | boolean | `true` |
 | [`context`](#context) | boolean | `true` |
@@ -209,7 +209,7 @@ The GitHub CLI to run for GitHub issues: a name looked up in your `PATH`, or a p
 
 #### `sidebar`
 
-Where the workspaces column goes: `"side_by_side"` keeps two columns; `"projects_on_top"` and `"workspaces_on_top"` stack both lists in one column, the first one named on top. An unknown value counts as `"side_by_side"`. It applies from 90 columns up; below that the [compact layout](../../guides/small-terminals/) shows one list at a time.
+How projects, workspaces and tabs are laid out: `"projects_on_top"` and `"workspaces_on_top"` stack both lists in one column, the first one named on top; `"side_by_side"` gives each its own column; `"tree"` shows [one list](../../guides/projects-workspaces-tabs/#the-tree) with every project, its workspaces and their tabs. An unknown value counts as the default, `"projects_on_top"`; before 0.8.0 the default was `"side_by_side"`, and a `config.json` that already names it keeps it. It applies from 90 columns up; below that the [compact layout](../../guides/small-terminals/) shows one list at a time.
 
 #### `dim_inactive_panes`
 

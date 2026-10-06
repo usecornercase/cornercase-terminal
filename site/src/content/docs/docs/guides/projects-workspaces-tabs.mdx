@@ -250,10 +250,16 @@ When a program ends by itself, for example when you type `exit`, its pane closes
 
 - **Scroll** a column with the mouse wheel when it has more rows than fit. `↑ n more` and `↓ n more` tell you what is hidden, and the `+` buttons stay at the bottom.
 - **Resize** a column by dragging the border on its right. The panes follow live. Double-click a border to reset that column to its default width.
-- **Stack** both lists in one column with **settings → TUI → sidebar**: *projects_on_top* or *workspaces_on_top*. The panes get the width of the workspaces column. Drag the line between the lists to share the height, and double-click it to split it in half again.
+- **Pick a layout** in **settings → TUI → sidebar**:
+  - *projects_on_top* (the default) puts both lists in one column, the projects above the active project's workspaces, so the panes get the most room;
+  - *workspaces_on_top* swaps the two;
+  - *side_by_side* gives each list its own column;
+  - *tree* shows [one list](#the-tree) with every project, its workspaces and their tabs.
+
+  Between stacked lists, drag the line to share the height, and double-click it to split it in half again.
 - The active project and tab are marked with a cyan bar `▌` on a highlighted background; the active workspace's name is brighter than the others.
 
-Column widths, and the line of a stacked sidebar, are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
+Column widths, the line between stacked lists and what is folded in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
 
 <Screen
   name="sidebar-stacked"
@@ -261,6 +267,26 @@ Column widths, and the line of a stacked sidebar, are saved with your session. O
   alt="One column with the projects on top, shop active above api, infra and notes, and the workspaces of shop below a line, main with two bash tabs and feat/login, then issues, changes, settings, usage and quit at the bottom; the pane takes the rest of the width"
   caption="Projects on top: both lists in one column, and the panes get the room of the second one."
 />
+
+### The tree
+
+With **settings → TUI → sidebar** set to *tree*, one list holds your groups, every project, their workspaces and their tabs, indented one step per level. A tab in another project is one click away, and the agents of every open project show what they are doing at once.
+
+<Screen
+  name="sidebar-tree"
+  crop={[0, 0, 44, 30]}
+  alt="One list: the work group with web-shop open, its main workspace with the server tab marked active and a bash tab, + tab, feat/dark-mode folded and + new workspace, then orders-api folded with one workspace; the personal group with blog folded and dotfiles open with its default workspace; + new project, then issues, changes, settings, usage and quit at the bottom"
+  caption="The tree: open what you work on, fold the rest."
+/>
+
+- Click **`▾`** to fold a project or a workspace and **`▸`** to open it again. A click on the rest of its row opens it and unfolds it. Group headers fold as everywhere else.
+- A folded project shows how many workspaces it has, and a folded project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
+- The cyan bar `▌` marks the tab on screen, or the row that hides it while folded.
+- Each project ends with **`+ new workspace`** and each workspace with **`+ tab`**: adding a tab under another project switches to it.
+- Drag rows to reorder them: projects among projects and groups, workspaces within their project, tabs within their workspace, as in the other layouts.
+- What you fold is saved with your session. Opening a project or a tab from search, or switching to it, unfolds the way to it.
+
+Below 90 columns the [compact layout](../small-terminals/) shows its usual menu, projects then workspaces.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

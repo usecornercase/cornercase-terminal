@@ -71,6 +71,79 @@ export function activeRow(rows: SidebarRow[], active: number, group: number | nu
   return own >= 0 ? own : rows.findIndex((r) => r.kind === 'group' && r.g === group);
 }
 
+export interface WorkspaceShape {
+  collapsed: boolean;
+  tabs: number[];
+}
+
+export interface ProjectShape {
+  group: number | null;
+  collapsed: boolean;
+  workspaces: WorkspaceShape[];
+}
+
+export interface TreeShape {
+  groups: boolean[];
+  projects: ProjectShape[];
+}
+
+export type TreeRow =
+  | { kind: 'gap' }
+  | { kind: 'group'; g: number }
+  | { kind: 'project'; p: number }
+  | { kind: 'ws'; p: number; w: number }
+  | { kind: 'tab'; p: number; w: number; t: number }
+  | { kind: 'newTab'; p: number; w: number }
+  | { kind: 'newWorkspace'; p: number }
+  | { kind: 'landing' };
+
+export function treeRows(shape: TreeShape): TreeRow[] {
+  return sidebarRows(shape.projects.map((p) => p.group), shape.groups).flatMap((row): TreeRow[] => {
+    if (row.kind !== 'project') return [row];
+    const p = row.p;
+    const project = shape.projects[p];
+    if (project.collapsed) return [row];
+    const workspaces = project.workspaces.flatMap((workspace, w): TreeRow[] => [
+      { kind: 'ws', p, w },
+      ...(workspace.collapsed ? [] : [...workspace.tabs.map((_, t): TreeRow => ({ kind: 'tab', p, w, t })), { kind: 'newTab', p, w } as TreeRow]),
+    ]);
+    return [row, ...workspaces, { kind: 'newWorkspace', p }];
+  });
+}
+
+function treeHeight(shape: TreeShape, row: TreeRow): number {
+  if (row.kind === 'gap' || row.kind === 'landing') return GAP;
+  if (row.kind === 'tab') return Math.max(1, shape.projects[row.p]?.workspaces[row.w]?.tabs[row.t] ?? 1);
+  return 1;
+}
+
+export function treeDepth(shape: TreeShape, row: TreeRow): number {
+  if (row.kind === 'gap' || row.kind === 'landing' || row.kind === 'group') return 0;
+  const project = shape.projects[row.p]?.group != null ? 1 : 0;
+  if (row.kind === 'project') return project;
+  return row.kind === 'ws' || row.kind === 'newWorkspace' ? project + 1 : project + 2;
+}
+
+export const treeIndent = (shape: TreeShape, row: TreeRow): number => 2 + 2 * treeDepth(shape, row);
+
+export const arrowIn = (r: Rect, shape: TreeShape, row: TreeRow): Rect =>
+  row.kind === 'group' || row.kind === 'project' || row.kind === 'ws' ? intersect(rect(r.x + treeIndent(shape, row), r.y, 2, 1), r) : EMPTY;
+
+export const treeLayout = (list: Rect, shape: TreeShape, rows: TreeRow[], scroll: number) =>
+  new Rows(list, rows.map((r) => treeHeight(shape, r)), 1, scroll);
+
+export function treeActiveRow(rows: TreeRow[], shape: TreeShape, p: number, w: number, t: number | null): number {
+  const group = shape.projects[p]?.group ?? null;
+  const nearest: TreeRow[] = [{ kind: 'ws', p, w }, { kind: 'project', p }];
+  if (t !== null) nearest.unshift({ kind: 'tab', p, w, t });
+  if (group !== null) nearest.push({ kind: 'group', g: group });
+  for (const row of nearest) {
+    const i = rows.findIndex((r) => sameRow(r, row));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
 export interface Widths {
   projects: number;
   workspaces: number;
@@ -79,11 +152,12 @@ export interface Widths {
 }
 
 export type Border = 'projects' | 'workspaces' | 'stack' | 'changes';
-export type Sidebar = 'side_by_side' | 'projects_on_top' | 'workspaces_on_top';
+export type Sidebar = 'side_by_side' | 'projects_on_top' | 'workspaces_on_top' | 'tree';
 export const SIDEBARS: [Sidebar, string][] = [
   ['side_by_side', 'projects and workspaces in two columns'],
   ['projects_on_top', 'one column, workspaces below projects'],
   ['workspaces_on_top', 'one column, projects below workspaces'],
+  ['tree', 'one list: projects, workspaces and tabs'],
 ];
 export const MIN_STACK_SECTION = 5;
 const STACK_FOOTER = 5;
@@ -135,6 +209,7 @@ export function dragged(w: Widths, border: Border, x: number, total: number): Wi
 
 export interface Areas {
   compact: boolean;
+  tree: boolean;
   pitch: number;
   bar: Rect;
   search: Rect;
@@ -173,7 +248,8 @@ function column(r: Rect, lead: number): [Rect, Rect, Rect, Rect, Rect, Rect] {
 }
 
 export function layout(cols: number, rows: number, widths: Widths, nav: Nav, changes = false, sidebar: Sidebar = 'side_by_side'): Areas {
-  const main = (c: number): Areas => (sidebar === 'side_by_side' ? wide(c, rows, widths) : stacked(c, rows, widths, sidebar));
+  const main = (c: number): Areas =>
+    sidebar === 'side_by_side' ? wide(c, rows, widths) : sidebar === 'tree' ? treeColumn(c, rows, widths) : stacked(c, rows, widths, sidebar);
   const areas = cols < COMPACT_WIDTH ? compact(cols, rows, changes) : changes ? withChanges(cols, rows, widths, main) : main(cols);
   if (!areas.compact) return areas;
   const projects = nav === 'projects' ? areas : { ...areas, sidebar: EMPTY, title: EMPTY, list: EMPTY, separator: EMPTY, settings: EMPTY, usage: EMPTY, quit: EMPTY };
@@ -199,6 +275,7 @@ function wide(cols: number, rows: number, widths: Widths): Areas {
   const [workspacesTitle, workspacesList, workspacesSeparator, issues] = column(rect(projects, HEADER_HEIGHT, workspaces - 1, sidebar.h), 1);
   return {
     compact: false,
+    tree: false,
     pitch: 1,
     bar: EMPTY,
     search: rect(1, 0, header.w - 2, 1),
@@ -250,46 +327,68 @@ function section(r: Rect): [Rect, Rect] {
   return [rect(r.x, r.y, r.w, Math.min(1, r.h)), rect(r.x, r.y + 1 + GAP, r.w, Math.max(0, r.h - 1 - GAP))];
 }
 
-function stacked(cols: number, rows: number, widths: Widths, sidebar: Sidebar): Areas {
+function oneColumn(cols: number, rows: number, widths: Widths): [Areas, Rect] {
   const width = stackedWidth(widths, cols);
   const inner = width - 1;
-  const room = stackRoom(rows);
-  const topH = topRows(widths, room);
-  const top = rect(0, HEADER_HEIGHT, inner, topH);
-  const line = rect(0, HEADER_HEIGHT + topH, inner, 1);
-  const under = rect(0, bottom(line), inner, room - topH);
-  const [projects, workspaces] = sidebar === 'workspaces_on_top' ? [under, top] : [top, under];
-  const [title, list] = section(projects);
-  const [workspacesTitle, workspacesList] = section(workspaces);
-  const footer = bottom(under);
-  return {
+  const footer = HEADER_HEIGHT + stackRoom(rows) + 1;
+  const frame: Areas = {
     compact: false,
+    tree: false,
     pitch: 1,
     bar: EMPTY,
     search: rect(1, 0, inner - 2, 1),
     searchButton: rect(1, 0, inner - 2, 1),
     back: EMPTY,
-    sidebar: { ...projects, w: width },
-    title,
-    list,
+    sidebar: rect(0, 0, width, rows),
+    title: EMPTY,
+    list: EMPTY,
     separator: rect(0, footer, inner, 1),
     settings: rect(0, footer + 2, inner, 1),
     usage: rect(0, footer + 3, inner, 1),
     quit: rect(0, footer + 4, inner, 1),
-    workspaces: { ...workspaces, w: width },
-    workspacesTitle,
-    workspacesList,
+    workspaces: EMPTY,
+    workspacesTitle: EMPTY,
+    workspacesList: EMPTY,
     workspacesSeparator: EMPTY,
     issues: rect(0, footer + 1, inner, 1),
     results: rect(0, HEADER_HEIGHT, inner, Math.max(0, rows - HEADER_HEIGHT)),
     pane: rect(width + PANE_PADDING, 0, Math.max(1, cols - width - PANE_PADDING), rows),
     projectsBorder: rect(width - 1, 0, 1, rows),
     workspacesBorder: EMPTY,
-    stackBorder: line,
+    stackBorder: EMPTY,
     changes: EMPTY,
     changesBorder: EMPTY,
     changesButton: EMPTY,
   };
+  return [frame, rect(0, HEADER_HEIGHT, inner, footer - HEADER_HEIGHT)];
+}
+
+function stacked(cols: number, rows: number, widths: Widths, sidebar: Sidebar): Areas {
+  const [frame, sections] = oneColumn(cols, rows, widths);
+  const room = Math.max(0, sections.h - 1);
+  const topH = topRows(widths, room);
+  const top = rect(0, sections.y, sections.w, topH);
+  const line = rect(0, sections.y + topH, sections.w, 1);
+  const under = rect(0, bottom(line), sections.w, room - topH);
+  const [projects, workspaces] = sidebar === 'workspaces_on_top' ? [under, top] : [top, under];
+  const [title, list] = section(projects);
+  const [workspacesTitle, workspacesList] = section(workspaces);
+  return {
+    ...frame,
+    sidebar: { ...projects, w: frame.sidebar.w },
+    title,
+    list,
+    workspaces: { ...workspaces, w: frame.sidebar.w },
+    workspacesTitle,
+    workspacesList,
+    stackBorder: line,
+  };
+}
+
+function treeColumn(cols: number, rows: number, widths: Widths): Areas {
+  const [frame, sections] = oneColumn(cols, rows, widths);
+  const [title, list] = section(sections);
+  return { ...frame, tree: true, sidebar: { ...sections, w: frame.sidebar.w }, title, list };
 }
 
 function compact(cols: number, rows: number, changes: boolean): Areas {
@@ -306,6 +405,7 @@ function compact(cols: number, rows: number, changes: boolean): Areas {
   const [first, second] = [Math.round(cols / 3), Math.round((2 * cols) / 3)];
   return {
     compact: true,
+    tree: false,
     pitch,
     bar,
     search: bar,
@@ -441,7 +541,7 @@ export interface Landing {
 
 export const landingIndent = (spot: Spot): number => ((spot.kind === 'project' && spot.group !== null) || spot.kind === 'tab' ? 4 : 2);
 
-function groupOf(rows: SidebarRow[], i: number): number | null {
+function groupOf(rows: (SidebarRow | TreeRow)[], i: number): number | null {
   for (let j = i; j >= 0; j--) {
     const r = rows[j];
     if (r.kind === 'group') return r.g;
@@ -449,11 +549,14 @@ function groupOf(rows: SidebarRow[], i: number): number | null {
   return null;
 }
 
-function projectSpot(rows: SidebarRow[], dragged: number, at: number): Spot {
-  const below = at === dragged ? at + 1 : at;
+function projectSpot(rows: (SidebarRow | TreeRow)[], [from, to]: [number, number], at: number): Spot {
+  const outside = (j: number) => j < from || j >= to;
+  let below = at;
+  while (below < rows.length && !outside(below)) below += 1;
   const next = rows[below];
   if (next?.kind === 'project') return { kind: 'project', group: groupOf(rows, below), before: next.p };
-  const k = at - 1 === dragged ? at - 2 : at - 1;
+  let k = at - 1;
+  while (k >= 0 && !outside(k)) k -= 1;
   const group = k < 0 ? null : rows[k].kind === 'gap' ? groupOf(rows, k - 1) : groupOf(rows, k);
   return { kind: 'project', group, before: null };
 }
@@ -493,7 +596,7 @@ export function sidebarDrop(list: Rect, pitch: number, rows: SidebarRow[], scrol
     if (r.kind === 'project') return i < d ? i : i + 1;
     return r.kind === 'group' ? i + 1 : i;
   });
-  return at === null ? null : { at, spot: projectSpot(rows, d, at) };
+  return at === null ? null : { at, spot: projectSpot(rows, [d, d + 1], at) };
 }
 
 export function workspaceDrop(list: Rect, pitch: number, tabs: number[][], scroll: number, dragged: WorkspaceRow, x: number, y: number): Landing | null {
@@ -506,17 +609,87 @@ export function workspaceDrop(list: Rect, pitch: number, tabs: number[][], scrol
     return found && { at: found[0], spot: { kind: 'workspace', before: found[1] } };
   }
   if (dragged.kind !== 'tab') return null;
-  const header = rows.findIndex((r) => r.kind === 'ws' && r.w === dragged.w);
-  const newTab = rows.findIndex((r) => r.kind === 'new' && r.w === dragged.w);
+  const tab = (r: WorkspaceRow) => (r.kind === 'tab' && r.w === dragged.w ? r.t : null);
+  return siblingDrop(rows, layout, x, y, [{ kind: 'ws', w: dragged.w }, { kind: 'new', w: dragged.w }], tab, dragged.t);
+}
+
+function siblingDrop<R extends { kind: string }>(rows: R[], layout: Rows, x: number, y: number, [first, last]: [R, R], tab: (r: R) => number | null, t: number): Landing | null {
+  const header = rows.findIndex((r) => sameRow(r, first));
+  const end = rows.findIndex((r) => sameRow(r, last));
+  if (header < 0 || end < 0) return null;
   const at = layout.boundary(x, y, (i) => {
-    const r = rows[i];
-    if (r.kind === 'tab' && r.w === dragged.w) return r.t === dragged.t ? null : r.t < dragged.t ? i : i + 1;
-    return i <= header ? header + 1 : newTab;
+    const u = tab(rows[i]);
+    if (u === null) return i <= header ? header + 1 : end;
+    return u === t ? null : u < t ? i : i + 1;
   });
   if (at === null) return null;
-  const clamped = Math.max(header + 1, Math.min(newTab, at));
+  const clamped = Math.max(header + 1, Math.min(end, at));
   return { at: clamped, spot: { kind: 'tab', before: clamped - header - 1 } };
 }
+
+function inside(parent: TreeRow, row: TreeRow): boolean {
+  if (parent.kind === 'project') return (row.kind === 'ws' || row.kind === 'tab' || row.kind === 'newTab' || row.kind === 'newWorkspace') && row.p === parent.p;
+  if (parent.kind === 'ws') return (row.kind === 'tab' || row.kind === 'newTab') && row.p === parent.p && row.w === parent.w;
+  return false;
+}
+
+function blockEnd(rows: TreeRow[], i: number): number {
+  let j = i + 1;
+  while (j < rows.length && inside(rows[i], rows[j])) j += 1;
+  return j;
+}
+
+function owner(rows: TreeRow[], i: number, isOwner: (r: TreeRow) => boolean): number {
+  for (let j = i; j >= 0; j--) if (isOwner(rows[j]) && (j === i || inside(rows[j], rows[i]))) return j;
+  return i;
+}
+
+function blockDropAt(rows: TreeRow[], layout: Rows, x: number, y: number, d: number, isOwner: (r: TreeRow) => boolean): number | null {
+  const end = blockEnd(rows, d);
+  const at = layout.boundary(x, y, (i) => {
+    const o = owner(rows, i, isOwner);
+    if (o >= d && o < end) return null;
+    if (isOwner(rows[o])) return o < d ? o : blockEnd(rows, o);
+    return rows[o].kind === 'group' ? o + 1 : o;
+  });
+  if (at === null) return null;
+  const o = owner(rows, Math.min(at, rows.length - 1), isOwner);
+  return at < rows.length && o < at && isOwner(rows[o]) ? blockEnd(rows, o) : at;
+}
+
+function treeWorkspaceDrop(rows: TreeRow[], layout: Rows, x: number, y: number, p: number, d: number): Landing | null {
+  const header = rows.findIndex((r) => r.kind === 'project' && r.p === p);
+  const end = rows.findIndex((r) => r.kind === 'newWorkspace' && r.p === p);
+  const found = blockDropAt(rows, layout, x, y, d, (r) => r.kind === 'ws' && r.p === p);
+  if (found === null || header < 0 || end < 0) return null;
+  const at = Math.max(header + 1, Math.min(end, found));
+  const index = (r: TreeRow) => (r.kind === 'ws' && r.p === p ? r.w : null);
+  const before = rows.slice(at, end).map(index).find((w) => w !== null) ?? rows.slice(header, end).filter((r) => index(r) !== null).length;
+  return { at, spot: { kind: 'workspace', before } };
+}
+
+export function treeDrop(list: Rect, shape: TreeShape, scroll: number, dragged: TreeRow, x: number, y: number): Landing | null {
+  const rows = treeRows(shape);
+  const layout = treeLayout(list, shape, rows, scroll);
+  const d = rows.findIndex((r) => sameRow(r, dragged));
+  if (d < 0) return null;
+  if (dragged.kind === 'group') {
+    const found = blockDrop(rows, layout, x, y, d, (r) => r.kind === 'gap', (r) => (r.kind === 'group' ? r.g : null));
+    return found && { at: found[0], spot: { kind: 'group', before: found[1] } };
+  }
+  if (dragged.kind === 'project') {
+    const at = blockDropAt(rows, layout, x, y, d, (r) => r.kind === 'project');
+    return at === null ? null : { at, spot: projectSpot(rows, [d, blockEnd(rows, d)], at) };
+  }
+  if (dragged.kind === 'ws') return treeWorkspaceDrop(rows, layout, x, y, dragged.p, d);
+  if (dragged.kind !== 'tab') return null;
+  const { p, w } = dragged;
+  const tab = (r: TreeRow) => (r.kind === 'tab' && r.p === p && r.w === w ? r.t : null);
+  return siblingDrop(rows, layout, x, y, [{ kind: 'ws', p, w }, { kind: 'newTab', p, w }], tab, dragged.t);
+}
+
+export const treeLandingIndent = (shape: TreeShape, dragged: TreeRow, spot: Spot): number =>
+  dragged.kind === 'ws' || dragged.kind === 'tab' ? treeIndent(shape, dragged) : landingIndent(spot);
 
 export const sameRow = <R extends { kind: string }>(a: R, b: R): boolean => JSON.stringify(a) === JSON.stringify(b);
 

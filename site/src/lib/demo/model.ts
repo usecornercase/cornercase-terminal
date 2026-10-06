@@ -42,6 +42,7 @@ export interface Workspace {
   active: number;
   flags: Place['flags'];
   behind?: number;
+  collapsed?: boolean;
 }
 
 export interface Group {
@@ -62,6 +63,7 @@ export interface Project {
   tree: Tree;
   workspaces: Workspace[];
   active: number;
+  collapsed?: boolean;
 }
 
 export type Target =
@@ -165,7 +167,7 @@ export const defaultConfig = (): Config => ({
   agent: 'claude',
   submit: false,
   trust: true,
-  sidebar: 'side_by_side',
+  sidebar: 'projects_on_top',
   dim: true,
   model: true,
   context: true,

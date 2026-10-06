@@ -10,7 +10,7 @@ use crate::protocol;
 use crate::split::Node;
 use crate::ui::{GroupEntry, Widths};
 
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 pub const SETTLE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -56,6 +56,8 @@ pub struct ProjectState {
     pub workspaces: Vec<WorkspaceState>,
     #[serde(default)]
     pub active: usize,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -70,6 +72,8 @@ pub struct WorkspaceState {
     pub active: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,7 +102,15 @@ impl WorkspaceState {
             active: 0,
             layout: None,
         });
-        Self { path, name: None, worktree: false, tabs: tabs.collect(), active, base: None }
+        Self { path, name: None, worktree: false, tabs: tabs.collect(), active, base: None, collapsed: false }
+    }
+}
+
+impl State {
+    fn folded(self) -> Self {
+        let active = self.active;
+        let projects = self.projects.into_iter().enumerate().map(|(i, p)| ProjectState { collapsed: i != active, ..p });
+        Self { version: VERSION, projects: projects.collect(), ..self }
     }
 }
 
@@ -131,7 +143,14 @@ impl From<V2State> for State {
             .map(|w| {
                 let cwds = w.terminals.into_iter().map(|t| t.cwd).collect();
                 let workspace = WorkspaceState::plain(w.path.clone(), cwds, w.active);
-                ProjectState { path: w.path, name: w.name, group: None, workspaces: vec![workspace], active: 0 }
+                ProjectState {
+                    path: w.path,
+                    name: w.name,
+                    group: None,
+                    workspaces: vec![workspace],
+                    active: 0,
+                    collapsed: false,
+                }
             })
             .collect();
         Self {
@@ -189,9 +208,10 @@ pub fn path() -> PathBuf {
 pub fn load(path: &Path) -> Option<State> {
     let text = std::fs::read_to_string(path).ok()?;
     match serde_json::from_str::<Versioned>(&text).ok()?.version {
-        3 | VERSION => serde_json::from_str(&text).ok().map(|state| State { version: VERSION, ..state }),
-        2 => serde_json::from_str::<V2State>(&text).ok().map(State::from),
-        1 => serde_json::from_str::<V1State>(&text).ok().map(|v1| State::from(V2State::from(v1))),
+        VERSION => serde_json::from_str(&text).ok(),
+        3 | 4 => serde_json::from_str::<State>(&text).ok().map(State::folded),
+        2 => serde_json::from_str::<V2State>(&text).ok().map(|v2| State::from(v2).folded()),
+        1 => serde_json::from_str::<V1State>(&text).ok().map(|v1| State::from(V2State::from(v1)).folded()),
         _ => None,
     }
 }
@@ -243,7 +263,20 @@ mod tests {
 
     fn project(dir: &str) -> ProjectState {
         let workspace = WorkspaceState::plain(PathBuf::from(dir), vec![Some(PathBuf::from(dir))], 0);
-        ProjectState { path: PathBuf::from(dir), name: None, group: None, workspaces: vec![workspace], active: 0 }
+        ProjectState {
+            path: PathBuf::from(dir),
+            name: None,
+            group: None,
+            workspaces: vec![workspace],
+            active: 0,
+            collapsed: false,
+        }
+    }
+
+    fn folded(mut state: State) -> State {
+        let active = state.active;
+        state.projects.iter_mut().enumerate().for_each(|(i, p)| p.collapsed = i != active);
+        state
     }
 
     fn state(dirs: &[&str]) -> State {
@@ -339,6 +372,32 @@ mod tests {
         }
 
         #[test]
+        fn round_trips_what_is_folded() {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("session.json");
+            let mut saved = state(&["/a", "/b"]);
+            saved.projects[1].collapsed = true;
+            saved.projects[0].workspaces[0].collapsed = true;
+
+            save(&path, &saved).expect("save");
+
+            assert_eq!(load(&path), Some(saved));
+        }
+
+        #[test]
+        fn version_4_files_open_with_only_the_active_project_unfolded() {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("session.json");
+            let v4 = r#"{"version":4,"projects":[{"path":"/a","workspaces":[{"path":"/a","tabs":[{"panes":[{"cwd":"/a"}]}]}]},
+                {"path":"/b","workspaces":[{"path":"/b","tabs":[{"panes":[{"cwd":"/b"}]}]}]}],"active":1}"#;
+            std::fs::write(&path, v4).expect("write");
+
+            let collapsed: Vec<bool> = load(&path).expect("load").projects.iter().map(|p| p.collapsed).collect();
+
+            assert_eq!(collapsed, [true, false]);
+        }
+
+        #[test]
         fn version_3_files_load_with_every_project_ungrouped() {
             let tmp = TempDir::new();
             let path = tmp.path().join("session.json");
@@ -346,7 +405,7 @@ mod tests {
                 {"path":"/b","workspaces":[{"path":"/b","tabs":[{"panes":[{"cwd":"/b"}]}]}]}],"active":1}"#;
             std::fs::write(&path, v3).expect("write");
 
-            assert_eq!(load(&path), Some(State { active: 1, ..state(&["/a", "/b"]) }));
+            assert_eq!(load(&path), Some(folded(State { active: 1, ..state(&["/a", "/b"]) })));
         }
 
         #[test]
@@ -362,7 +421,7 @@ mod tests {
             expected.projects[1].workspaces[0] =
                 WorkspaceState::plain("/b".into(), vec![Some("/b".into()), Some("/b/src".into())], 1);
             expected.active = 1;
-            assert_eq!(load(&path), Some(expected));
+            assert_eq!(load(&path), Some(folded(expected)));
         }
 
         #[test]
@@ -375,7 +434,7 @@ mod tests {
             let mut expected = state(&["/a", "/b"]);
             expected.projects[1].name = Some("api".into());
             expected.active = 1;
-            assert_eq!(load(&path), Some(expected));
+            assert_eq!(load(&path), Some(folded(expected)));
         }
 
         #[test]

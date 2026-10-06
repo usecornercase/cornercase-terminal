@@ -728,7 +728,7 @@ impl Settings {
             Row::Sidebar => (
                 "sidebar".into(),
                 ui::Sidebar::from_setting(&config.sidebar).id().into(),
-                "where the workspaces column goes".into(),
+                "how projects, workspaces and tabs are laid out".into(),
                 false,
             ),
             Row::Notifications => (
@@ -782,7 +782,7 @@ impl Settings {
             let choices = self.pick_choices();
             let title = match &pick.row {
                 Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
-                Row::Sidebar => "Where should the workspaces column go?".to_string(),
+                Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
                 Row::Notifications => "How should your terminal notify you?".to_string(),
                 Row::Kind(kind) => format!("How should {kind} start?"),
                 _ => "Which agent do you want to set up?".to_string(),
@@ -1193,12 +1193,12 @@ mod tests {
         }
 
         #[test]
-        fn an_unknown_value_shows_as_side_by_side() {
+        fn an_unknown_value_shows_as_the_default() {
             let mut s = settings();
             s.config.sidebar = "sideways".into();
             s.open_page(Page::Tui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-            assert_eq!(view.rows[0].value, "side_by_side");
+            assert_eq!(view.rows[0].value, "projects_on_top");
         }
     }
 

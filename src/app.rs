@@ -270,6 +270,7 @@ struct RowDrag {
     moved: bool,
     area: Rect,
     scrolled: Option<Instant>,
+    fold: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -335,6 +336,7 @@ pub struct App {
     projects_scroll: usize,
     workspaces_scroll: usize,
     followed: Focus,
+    drawn: ui::Areas,
     nav: Option<ui::Nav>,
     next_id: u64,
     detach: bool,
@@ -420,6 +422,7 @@ impl App {
             projects_scroll: 0,
             workspaces_scroll: 0,
             followed: Focus::default(),
+            drawn: ui::Areas::default(),
             nav: None,
             next_id: 1,
             detach: false,
@@ -551,12 +554,14 @@ impl App {
         if read {
             self.watched = Some(now);
         }
-        let measured = self.project().map(|p| p.id).filter(|_| self.config.memory);
-        let (config, dir) = (&self.config, self.claude_dir.as_deref());
+        let active = self.project().map(|p| p.id);
+        let open = self.tree_open();
+        let (config, dir, tree) = (&self.config, self.claude_dir.as_deref(), self.drawn.tree);
         let mut notices = Vec::new();
-        for project in &mut self.projects {
-            let measure = measured == Some(project.id);
+        for (project, open) in self.projects.iter_mut().zip(open) {
+            let shown = if tree { open } else { active == Some(project.id) };
             for workspace in &mut project.workspaces {
+                let measure = config.memory && shown && !(tree && workspace.collapsed);
                 for tab in &mut workspace.tabs {
                     let seen = visible == Some(tab.id);
                     for term in &mut tab.panes {
@@ -798,19 +803,28 @@ impl App {
     }
 
     fn follow(&mut self, area: Rect) {
+        let areas = self.layout(area);
+        let relayout = areas.tree != self.drawn.tree;
+        self.drawn = areas;
         let focus = self.focus();
-        if focus == self.followed {
+        let before = std::mem::replace(&mut self.followed, focus);
+        if focus == before && !relayout {
             return;
         }
-        let areas = self.layout(area);
-        if focus.project != self.followed.project {
+        if before.project.is_some() && (focus.project, focus.workspace) != (before.project, before.workspace) {
+            self.unfold_focus();
+        }
+        if areas.tree {
+            self.reveal_in_tree(areas.list);
+            return;
+        }
+        if focus.project != before.project || relayout {
             let sidebar = self.sidebar_rows();
             let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.projects_scroll);
             if let Some(i) = self.active_row(&sidebar) {
                 self.projects_scroll = rows.reveal(i);
             }
         }
-        self.followed = focus;
         let Some(project) = self.project() else { return };
         let w = project.active;
         let mut shown = vec![WorkspaceRow::Workspace(w)];
@@ -824,6 +838,32 @@ impl App {
                 let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.workspaces_scroll);
                 self.workspaces_scroll = layout.reveal(i);
             }
+        }
+    }
+
+    fn reveal_in_tree(&mut self, list: Rect) {
+        let Some(project) = self.project() else { return };
+        let (p, w) = (self.active, project.active);
+        let t = project.workspace().filter(|w| !w.tabs.is_empty()).map(|w| w.active);
+        let shape = self.tree_shape();
+        let rows = ui::tree_rows(&shape);
+        let shown =
+            [rows.iter().position(|r| *r == ui::TreeRow::Project(p)), ui::tree_active_row(&rows, &shape, (p, w, t))];
+        for i in shown.into_iter().flatten() {
+            self.projects_scroll = ui::tree_layout_rows(list, &shape, &rows, self.projects_scroll).reveal(i);
+        }
+    }
+
+    fn unfold_focus(&mut self) {
+        let tree = self.drawn.tree;
+        let Some(project) = self.projects.get_mut(self.active) else { return };
+        project.collapsed = false;
+        if let Some(workspace) = project.workspace_mut() {
+            workspace.collapsed = false;
+        }
+        let group = project.group;
+        if tree && let Some(entry) = group.and_then(|id| self.group_mut(id)) {
+            entry.collapsed = false;
         }
     }
 
@@ -923,9 +963,11 @@ impl App {
                             })
                             .collect(),
                         active: w.active,
+                        collapsed: w.collapsed,
                     })
                     .collect(),
                 active: p.active,
+                collapsed: p.collapsed,
             })
             .collect();
         let chosen = self.issue_tab.is_some() || self.issue_closed || self.issue_people != People::default();
@@ -972,6 +1014,7 @@ impl App {
             }
             let mut project = Project::new(self.take_id(), path, saved_project.name.clone());
             project.group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
+            project.collapsed = saved_project.collapsed;
             for saved_ws in &saved_project.workspaces {
                 if let Some(workspace) = self.restore_workspace(saved_ws, area)? {
                     project.workspaces.push(workspace);
@@ -994,6 +1037,7 @@ impl App {
         }
         let mut workspace = Workspace::new(self.take_id(), path.clone(), saved.name.clone(), saved.worktree);
         workspace.base.clone_from(&saved.base);
+        workspace.collapsed = saved.collapsed;
         for saved_tab in saved.tabs.iter().filter(|t| !t.panes.is_empty()) {
             let mut panes = Vec::new();
             for pane in &saved_tab.panes {
@@ -1159,12 +1203,7 @@ impl App {
             return Ok(());
         }
         if areas.list.contains(pos) {
-            if left {
-                self.click_projects(areas.list, areas.pitch, pos, area);
-            } else if right {
-                self.open_project_menu(areas.list, areas.pitch, pos);
-            }
-            return Ok(());
+            return self.list_mouse(&areas, pos, ev.kind, area);
         }
         if let Some(label) = self.changes_label().filter(|_| !areas.compact())
             && ui::changes_button(areas.issues, &label).contains(pos)
@@ -1197,6 +1236,17 @@ impl App {
         Ok(())
     }
 
+    fn list_mouse(&mut self, areas: &ui::Areas, pos: Position, kind: MouseEventKind, area: Rect) -> Result<()> {
+        match (kind, areas.tree) {
+            (MouseEventKind::Down(MouseButton::Left), true) => return self.click_tree(areas.list, pos, area),
+            (MouseEventKind::Down(MouseButton::Right), true) => self.open_tree_menu(areas.list, pos),
+            (MouseEventKind::Down(MouseButton::Left), false) => self.click_projects(areas.list, areas.pitch, pos, area),
+            (MouseEventKind::Down(MouseButton::Right), false) => self.open_project_menu(areas.list, areas.pitch, pos),
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn continue_drag(&mut self, ev: MouseEvent, areas: &ui::Areas, area: Rect) -> bool {
         if let Some(border) = self.resizing {
             self.drag_border(border, ev, area);
@@ -1216,8 +1266,7 @@ impl App {
     fn scroll_column(&mut self, areas: &ui::Areas, pos: Position, delta: isize) -> bool {
         let items = if areas.pitch > 1 { delta.signum() } else { delta };
         if areas.sidebar.contains(pos) {
-            let rows = ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.projects_scroll);
-            self.projects_scroll = rows.scrolled(items);
+            self.projects_scroll = self.sidebar_layout(areas).scrolled(items);
             true
         } else if areas.workspaces.contains(pos) {
             let tabs = self.tab_lines();
@@ -1415,15 +1464,14 @@ impl App {
         let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.projects_scroll, row);
         match ui::sidebar_hit(list, pitch, &rows, self.projects_scroll, pos) {
             Some(SidebarHit::Select(i)) => {
-                self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area);
+                self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area, false);
             }
-            Some(SidebarHit::Close(i)) => self.overlay = Some(Overlay::CloseProject { project: self.projects[i].id }),
-            Some(SidebarHit::Group(g)) => self.grab(Target::Group(self.groups[g].id), rect(SidebarRow::Group(g)), area),
-            Some(SidebarHit::New) => {
-                self.overlay =
-                    Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
+            Some(SidebarHit::Close(i)) => self.close_row(ui::TreeRow::Project(i)),
+            Some(SidebarHit::Group(g)) => {
+                self.grab(Target::Group(self.groups[g].id), rect(SidebarRow::Group(g)), area, false);
             }
-            Some(SidebarHit::CloseGroup(g)) => self.overlay = Some(Overlay::DeleteGroup { group: self.groups[g].id }),
+            Some(SidebarHit::New) => self.new_project_menu(pos),
+            Some(SidebarHit::CloseGroup(g)) => self.close_row(ui::TreeRow::Group(g)),
             None => {}
         }
     }
@@ -1438,8 +1486,12 @@ impl App {
         }
     }
 
-    fn grab(&mut self, target: Target, row: Rect, area: Rect) {
-        self.row_drag = Some(RowDrag { target, row, moved: false, area, scrolled: None });
+    fn grab(&mut self, target: Target, row: Rect, area: Rect, fold: bool) {
+        self.row_drag = Some(RowDrag { target, row, moved: false, area, scrolled: None, fold });
+    }
+
+    fn new_project_menu(&mut self, pos: Position) {
+        self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
     }
 
     fn drag_row(&mut self, drag: RowDrag, ev: MouseEvent, areas: &ui::Areas, area: Rect) {
@@ -1453,6 +1505,8 @@ impl App {
                 self.row_drag = None;
                 if drag.moved || !drag.row.contains(pos) {
                     self.drop_row(drag.target, pos, area);
+                } else if drag.fold {
+                    self.toggle_fold(drag.target);
                 } else {
                     self.click_row(drag.target);
                 }
@@ -1478,6 +1532,7 @@ impl App {
                 if let Some(p) = self.project_index(id) {
                     self.active = p;
                     self.nav = self.nav.map(|_| ui::Nav::Workspaces);
+                    self.unfold_focus();
                 }
             }
             Target::Workspace(project, workspace) => {
@@ -1489,8 +1544,146 @@ impl App {
         }
     }
 
+    fn toggle_fold(&mut self, target: Target) {
+        match target {
+            Target::Project(id) => {
+                if let Some(p) = self.project_index(id) {
+                    self.projects[p].collapsed = !self.projects[p].collapsed;
+                }
+            }
+            Target::Workspace(project, workspace) => {
+                if let Some((p, w)) = self.workspace_index(project, workspace) {
+                    let workspace = &mut self.projects[p].workspaces[w];
+                    workspace.collapsed = !workspace.collapsed;
+                }
+            }
+            Target::Group(_) | Target::Tab(..) => self.click_row(target),
+        }
+    }
+
+    fn tree_open(&self) -> Vec<bool> {
+        let folded = |id: u64| self.group(id).is_some_and(|g| g.collapsed);
+        self.projects.iter().map(|p| !p.collapsed && !p.group.is_some_and(folded)).collect()
+    }
+
+    fn tree_shape(&self) -> ui::TreeShape {
+        let groups = self.groups.iter().map(|g| g.entry.collapsed).collect();
+        let projects =
+            self.projects.iter().zip(self.project_groups()).zip(self.tree_open()).map(|((p, group), open)| {
+                let workspaces = p.workspaces.iter().map(|w| ui::WorkspaceShape {
+                    collapsed: w.collapsed,
+                    tabs: if open && !w.collapsed {
+                        w.tabs.iter().map(|t| self.tab_details(t).lines()).collect()
+                    } else {
+                        Vec::new()
+                    },
+                });
+                ui::ProjectShape { group, collapsed: p.collapsed, workspaces: workspaces.collect() }
+            });
+        ui::TreeShape { groups, projects: projects.collect() }
+    }
+
+    fn sidebar_layout(&self, areas: &ui::Areas) -> ui::Rows {
+        if areas.tree {
+            self.tree_layout(areas.list)
+        } else {
+            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.projects_scroll)
+        }
+    }
+
+    fn tree_layout(&self, list: Rect) -> ui::Rows {
+        let shape = self.tree_shape();
+        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.projects_scroll)
+    }
+
+    fn tree_target(&self, row: ui::TreeRow) -> Option<Target> {
+        let project = |p: usize| self.projects.get(p);
+        Some(match row {
+            ui::TreeRow::Group(g) => Target::Group(self.groups.get(g)?.id),
+            ui::TreeRow::Project(p) => Target::Project(project(p)?.id),
+            ui::TreeRow::Workspace(p, w) => {
+                let project = project(p)?;
+                Target::Workspace(project.id, project.workspaces.get(w)?.id)
+            }
+            ui::TreeRow::Tab(p, w, t) => {
+                let project = project(p)?;
+                let workspace = project.workspaces.get(w)?;
+                Target::Tab(project.id, workspace.id, workspace.tabs.get(t)?.id)
+            }
+            _ => return None,
+        })
+    }
+
+    fn tree_row_of(&self, target: Target) -> Option<ui::TreeRow> {
+        Some(match target {
+            Target::Group(id) => ui::TreeRow::Group(self.group_index(id)?),
+            Target::Project(id) => ui::TreeRow::Project(self.project_index(id)?),
+            Target::Workspace(project, workspace) => {
+                let (p, w) = self.workspace_index(project, workspace)?;
+                ui::TreeRow::Workspace(p, w)
+            }
+            Target::Tab(project, workspace, tab) => {
+                let (p, w) = self.workspace_index(project, workspace)?;
+                let t = self.projects[p].workspaces[w].tabs.iter().position(|t| t.id == tab)?;
+                ui::TreeRow::Tab(p, w, t)
+            }
+        })
+    }
+
+    fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
+        let shape = self.tree_shape();
+        let scroll = self.projects_scroll;
+        match ui::tree_hit(list, &shape, scroll, pos) {
+            Some(hit @ (ui::TreeHit::Select(row) | ui::TreeHit::Fold(row))) => {
+                if let Some(target) = self.tree_target(row) {
+                    let rect = ui::tree_row(list, &shape, scroll, row);
+                    self.grab(target, rect, area, matches!(hit, ui::TreeHit::Fold(_)));
+                }
+            }
+            Some(ui::TreeHit::Close(row)) => self.close_row(row),
+            Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
+            Some(ui::TreeHit::NewWorkspace(p)) => self.ask_new_workspace(p),
+            Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
+            None => {}
+        }
+        Ok(())
+    }
+
+    fn close_row(&mut self, row: ui::TreeRow) {
+        match row {
+            ui::TreeRow::Group(g) => self.overlay = Some(Overlay::DeleteGroup { group: self.groups[g].id }),
+            ui::TreeRow::Project(p) => self.overlay = Some(Overlay::CloseProject { project: self.projects[p].id }),
+            ui::TreeRow::Workspace(p, w) => self.close_workspace(p, w),
+            ui::TreeRow::Tab(p, w, t) => self.close_tab(p, w, t),
+            _ => {}
+        }
+    }
+
+    fn close_tab(&mut self, p: usize, w: usize, t: usize) {
+        for term in &mut self.projects[p].workspaces[w].tabs[t].panes {
+            term.kill();
+        }
+    }
+
+    fn ask_new_workspace(&mut self, p: usize) {
+        let project = &self.projects[p];
+        let worktree = git::is_repo_root(&project.path).then_some(true);
+        self.overlay = Some(Overlay::NewWorkspace {
+            project: project.id,
+            input: String::new(),
+            worktree,
+            error: None,
+            creating: false,
+        });
+    }
+
     fn drag_view(&self, target: Target, pos: Position, area: Rect) -> Option<ui::Drag> {
         let areas = self.layout(area).shown(self.nav);
+        let row = self.tree_row_of(target)?;
+        if areas.tree {
+            let shape = self.tree_shape();
+            return Some(ui::Drag::Tree(row, ui::tree_drop(areas.list, &shape, self.projects_scroll, row, pos)));
+        }
         let sidebar = |row: SidebarRow| {
             let rows = self.sidebar_rows();
             ui::Drag::Sidebar(row, ui::sidebar_drop(areas.list, areas.pitch, &rows, self.projects_scroll, row, pos))
@@ -1499,47 +1692,37 @@ impl App {
             let (list, tabs) = (areas.workspaces_list, self.tab_lines());
             ui::Drag::Workspaces(row, ui::workspace_drop(list, areas.pitch, &tabs, self.workspaces_scroll, row, pos))
         };
-        match target {
-            Target::Group(id) => Some(sidebar(SidebarRow::Group(self.group_index(id)?))),
-            Target::Project(id) => Some(sidebar(SidebarRow::Project(self.project_index(id)?))),
-            Target::Workspace(project, workspace) => {
-                let (_, w) = self.workspace_index(project, workspace).filter(|(p, _)| *p == self.active)?;
-                Some(workspaces(WorkspaceRow::Workspace(w)))
-            }
-            Target::Tab(project, workspace, tab) => {
-                let (p, w) = self.workspace_index(project, workspace).filter(|(p, _)| *p == self.active)?;
-                let t = self.projects[p].workspaces[w].tabs.iter().position(|t| t.id == tab)?;
-                Some(workspaces(WorkspaceRow::Tab(w, t)))
-            }
+        match row {
+            ui::TreeRow::Group(g) => Some(sidebar(SidebarRow::Group(g))),
+            ui::TreeRow::Project(p) => Some(sidebar(SidebarRow::Project(p))),
+            ui::TreeRow::Workspace(p, w) if p == self.active => Some(workspaces(WorkspaceRow::Workspace(w))),
+            ui::TreeRow::Tab(p, w, t) if p == self.active => Some(workspaces(WorkspaceRow::Tab(w, t))),
+            _ => None,
         }
     }
 
     fn drop_row(&mut self, target: Target, pos: Position, area: Rect) {
-        let Some(ui::Drag::Sidebar(_, Some(landing)) | ui::Drag::Workspaces(_, Some(landing))) =
-            self.drag_view(target, pos, area)
+        let Some(
+            ui::Drag::Sidebar(_, Some(landing))
+            | ui::Drag::Workspaces(_, Some(landing))
+            | ui::Drag::Tree(_, Some(landing)),
+        ) = self.drag_view(target, pos, area)
         else {
             return;
         };
-        match (target, landing.spot) {
-            (Target::Group(id), ui::Spot::Group(before)) => {
-                if let Some(g) = self.group_index(id) {
-                    move_before(&mut self.groups, g, before, None);
-                }
+        let Some(row) = self.tree_row_of(target) else { return };
+        match (row, landing.spot) {
+            (ui::TreeRow::Group(g), ui::Spot::Group(before)) => move_before(&mut self.groups, g, before, None),
+            (ui::TreeRow::Project(p), ui::Spot::Project { group, before }) => {
+                self.move_project(self.projects[p].id, group, before);
             }
-            (Target::Project(id), ui::Spot::Project { group, before }) => self.move_project(id, group, before),
-            (Target::Workspace(project, workspace), ui::Spot::Workspace(before)) => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
-                    let project = &mut self.projects[p];
-                    move_before(&mut project.workspaces, w, before, Some(&mut project.active));
-                }
+            (ui::TreeRow::Workspace(p, w), ui::Spot::Workspace(before)) => {
+                let project = &mut self.projects[p];
+                move_before(&mut project.workspaces, w, before, Some(&mut project.active));
             }
-            (Target::Tab(project, workspace, tab), ui::Spot::Tab(before)) => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
-                    let workspace = &mut self.projects[p].workspaces[w];
-                    if let Some(t) = workspace.tabs.iter().position(|t| t.id == tab) {
-                        move_before(&mut workspace.tabs, t, before, Some(&mut workspace.active));
-                    }
-                }
+            (ui::TreeRow::Tab(p, w, t), ui::Spot::Tab(before)) => {
+                let workspace = &mut self.projects[p].workspaces[w];
+                move_before(&mut workspace.tabs, t, before, Some(&mut workspace.active));
             }
             _ => {}
         }
@@ -1566,9 +1749,9 @@ impl App {
             return;
         }
         let areas = self.layout(drag.area).shown(self.nav);
-        let sidebar = matches!(drag.target, Target::Group(_) | Target::Project(_));
+        let sidebar = areas.tree || matches!(drag.target, Target::Group(_) | Target::Project(_));
         let rows = if sidebar {
-            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.projects_scroll)
+            self.sidebar_layout(&areas)
         } else {
             ui::workspace_layout(areas.workspaces_list, areas.pitch, &self.tab_lines(), self.workspaces_scroll)
         };
@@ -1607,31 +1790,17 @@ impl App {
         match hit {
             Some(WorkspaceHit::Workspace(w)) => {
                 let target = Target::Workspace(project.id, project.workspaces[w].id);
-                self.grab(target, rect(WorkspaceRow::Workspace(w)), area);
+                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, false);
             }
             Some(WorkspaceHit::CloseWorkspace(w)) => self.close_workspace(p, w),
             Some(WorkspaceHit::Tab(w, t)) => {
                 let workspace = &project.workspaces[w];
                 let target = Target::Tab(project.id, workspace.id, workspace.tabs[t].id);
-                self.grab(target, rect(WorkspaceRow::Tab(w, t)), area);
+                self.grab(target, rect(WorkspaceRow::Tab(w, t)), area, false);
             }
-            Some(WorkspaceHit::CloseTab(w, t)) => {
-                for term in &mut self.projects[p].workspaces[w].tabs[t].panes {
-                    term.kill();
-                }
-            }
+            Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
             Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
-            Some(WorkspaceHit::NewWorkspace) => {
-                let project = &self.projects[p];
-                let worktree = git::is_repo_root(&project.path).then_some(true);
-                self.overlay = Some(Overlay::NewWorkspace {
-                    project: project.id,
-                    input: String::new(),
-                    worktree,
-                    error: None,
-                    creating: false,
-                });
-            }
+            Some(WorkspaceHit::NewWorkspace) => self.ask_new_workspace(p),
             None => {}
         }
         Ok(())
@@ -1665,6 +1834,7 @@ impl App {
         workspace.tabs.push(tab);
         workspace.active = workspace.tabs.len() - 1;
         project.active = w;
+        self.active = p;
         Ok(())
     }
 
@@ -2125,7 +2295,6 @@ impl App {
                 self.launches.push(Launch::new(term.id, start.spec, Instant::now()));
             }
         }
-        self.active = p;
         Ok(())
     }
 
@@ -2246,28 +2415,49 @@ impl App {
         let Some(p) = self.project_index(project) else { return };
         self.active = p;
         let project = &mut self.projects[p];
-        let Some(w) = workspace.and_then(|id| project.workspaces.iter().position(|w| w.id == id)) else { return };
-        project.active = w;
-        let workspace = &mut project.workspaces[w];
-        if let Some(t) = tab.and_then(|id| workspace.tabs.iter().position(|t| t.id == id)) {
-            workspace.active = t;
+        if let Some(w) = workspace.and_then(|id| project.workspaces.iter().position(|w| w.id == id)) {
+            project.active = w;
+            let workspace = &mut project.workspaces[w];
+            if let Some(t) = tab.and_then(|id| workspace.tabs.iter().position(|t| t.id == id)) {
+                workspace.active = t;
+            }
         }
+        self.unfold_focus();
     }
 
     fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.projects_scroll, pos) {
-            Some(SidebarHit::Select(i) | SidebarHit::Close(i)) => {
-                let id = self.projects[i].id;
-                let mut actions = vec![MenuAction::Rename(Target::Project(id))];
-                if !self.groups.is_empty() {
-                    actions.push(MenuAction::MoveToGroup(id));
-                }
-                actions
-            }
-            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g)) => {
-                let id = self.groups[g].id;
-                vec![MenuAction::Rename(Target::Group(id)), MenuAction::GroupStyle(id), MenuAction::DeleteGroup(id)]
-            }
+            Some(SidebarHit::Select(i) | SidebarHit::Close(i)) => self.project_menu(i),
+            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g)) => self.group_menu(g),
+            _ => return,
+        };
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
+    }
+
+    fn project_menu(&self, p: usize) -> Vec<MenuAction> {
+        let id = self.projects[p].id;
+        let mut actions = vec![MenuAction::Rename(Target::Project(id))];
+        if !self.groups.is_empty() {
+            actions.push(MenuAction::MoveToGroup(id));
+        }
+        actions
+    }
+
+    fn group_menu(&self, g: usize) -> Vec<MenuAction> {
+        let id = self.groups[g].id;
+        vec![MenuAction::Rename(Target::Group(id)), MenuAction::GroupStyle(id), MenuAction::DeleteGroup(id)]
+    }
+
+    fn open_tree_menu(&mut self, list: Rect, pos: Position) {
+        let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row)) =
+            ui::tree_hit(list, &self.tree_shape(), self.projects_scroll, pos)
+        else {
+            return;
+        };
+        let actions = match (row, self.tree_target(row)) {
+            (ui::TreeRow::Group(g), _) => self.group_menu(g),
+            (ui::TreeRow::Project(p), _) => self.project_menu(p),
+            (_, Some(target)) => vec![MenuAction::Rename(target)],
             _ => return,
         };
         self.overlay = Some(Overlay::Menu { at: pos, actions });
@@ -3000,10 +3190,10 @@ impl App {
     }
 
     pub fn draw(&mut self, f: &mut Frame) {
-        if !self.layout(f.area()).compact() {
+        self.follow(f.area());
+        if !self.drawn.compact() {
             self.nav = None;
         }
-        self.follow(f.area());
         let projects = self
             .projects
             .iter()
@@ -3019,22 +3209,11 @@ impl App {
         let (has_project, workspaces, active_workspace, active_tab) = match self.project() {
             Some(p) => (
                 true,
-                p.workspaces
-                    .iter()
-                    .map(|w| ui::WorkspaceEntry {
-                        name: w.label(),
-                        tabs: w
-                            .tabs
-                            .iter()
-                            .map(|t| ui::TabEntry {
-                                name: t.label(&self.config),
-                                status: t.status(),
-                                details: self.tab_details(t),
-                            })
-                            .collect(),
-                        behind: w.behind,
-                    })
-                    .collect(),
+                if self.drawn.tree {
+                    Vec::new()
+                } else {
+                    p.workspaces.iter().map(|w| self.workspace_entry(w)).collect()
+                },
                 p.active,
                 p.workspace().filter(|w| !w.tabs.is_empty()).map(|w| w.active),
             ),
@@ -3056,7 +3235,9 @@ impl App {
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
         let drag =
             self.row_drag.filter(|d| d.moved).zip(self.hover).and_then(|(d, pos)| self.drag_view(d.target, pos, area));
+        let tree = self.drawn.tree.then(|| self.tree_view());
         let view = ui::View {
+            tree,
             groups,
             projects,
             active: self.active,
@@ -3083,6 +3264,45 @@ impl App {
             drag,
         };
         ui::draw(f, &view);
+    }
+
+    fn tab_entry(&self, t: &Tab) -> ui::TabEntry {
+        ui::TabEntry { name: t.label(&self.config), status: t.status(), details: self.tab_details(t) }
+    }
+
+    fn workspace_entry(&self, w: &Workspace) -> ui::WorkspaceEntry {
+        ui::WorkspaceEntry {
+            name: w.label(),
+            tabs: w.tabs.iter().map(|t| self.tab_entry(t)).collect(),
+            behind: w.behind,
+        }
+    }
+
+    fn tree_view(&self) -> ui::TreeView {
+        let shape = self.tree_shape();
+        let rows = ui::tree_rows(&shape);
+        let (above, below) = ui::tree_layout_rows(self.drawn.list, &shape, &rows, self.projects_scroll).hidden();
+        let shown = &rows[above.end..below.start];
+        let open = self.tree_open();
+        let workspaces = self.projects.iter().enumerate().map(|(p, project)| {
+            let entry = |(w, workspace): (usize, &Workspace)| {
+                let tab = |(t, tab): (usize, &Tab)| {
+                    if shown.contains(&ui::TreeRow::Tab(p, w, t)) {
+                        self.tab_entry(tab)
+                    } else {
+                        ui::TabEntry { status: tab.status(), ..ui::TabEntry::from("") }
+                    }
+                };
+                let named = shown.contains(&ui::TreeRow::Workspace(p, w));
+                ui::WorkspaceEntry {
+                    name: if named { workspace.label() } else { String::new() },
+                    tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
+                    behind: workspace.behind,
+                }
+            };
+            if open[p] { project.workspaces.iter().enumerate().map(entry).collect() } else { Vec::new() }
+        });
+        ui::TreeView { workspaces: workspaces.collect(), shape }
     }
 
     fn overlay_view(&self, overlay: &Overlay, area: Rect) -> Option<ui::Overlay> {
@@ -3572,9 +3792,15 @@ mod tests {
         std::env::temp_dir().join("cornercase-test-no-config").join("config.json")
     }
 
-    fn empty_app() -> (App, Receiver<AppEvent>) {
+    fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
         let (tx, rx) = mpsc::channel();
-        (App::new("/bin/sh".into(), HostTheme::default(), no_config(), tx), rx)
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
+        app.config.sidebar = ui::Sidebar::SideBySide.id().into();
+        (app, rx)
+    }
+
+    fn empty_app() -> (App, Receiver<AppEvent>) {
+        new_app(no_config())
     }
 
     fn app() -> (App, Receiver<AppEvent>) {
@@ -3593,8 +3819,7 @@ mod tests {
     }
 
     fn app_in(dir: &Path, config_path: PathBuf) -> (App, Receiver<AppEvent>) {
-        let (tx, rx) = mpsc::channel();
-        let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
+        let (mut app, rx) = new_app(config_path);
         app.open_project(dir.to_path_buf(), AREA).expect("open project");
         (app, rx)
     }
@@ -5122,11 +5347,12 @@ mod tests {
                 tabs: tabs.collect(),
                 active: 0,
                 base: None,
+                collapsed: false,
             }
         }
 
         fn project(path: &Path, workspaces: Vec<WorkspaceState>) -> ProjectState {
-            ProjectState { path: path.to_path_buf(), name: None, group: None, workspaces, active: 0 }
+            ProjectState { path: path.to_path_buf(), name: None, group: None, workspaces, active: 0, collapsed: false }
         }
 
         fn saved(projects: Vec<ProjectState>, active: usize) -> State {
@@ -5159,6 +5385,39 @@ mod tests {
             assert_eq!((app.projects.len(), app.active, app.projects[0].active), (2, 0, 1));
             assert_eq!(workspace_labels(&app), ["default", "other"]);
             wait_until("the active tab starts in its folder", || term(&app, 0).cwd() == Some(a_path.join("sub")));
+        }
+
+        #[test]
+        fn what_was_folded_stays_folded() {
+            let (a, b) = (TempDir::new(), TempDir::new());
+            let (a_path, b_path) = (canonical(&a), canonical(&b));
+            let (mut app, _rx) = empty_app();
+            let mut folded = workspace(&a_path, vec![None]);
+            folded.collapsed = true;
+            let mut other = project(&b_path, vec![workspace(&b_path, vec![None])]);
+            other.collapsed = true;
+            let state = saved(vec![project(&a_path, vec![folded, workspace(&a_path, vec![None])]), other], 0);
+
+            app.restore(&state, AREA).expect("restore");
+            let again = app.state();
+
+            let folds = |s: &State| -> Vec<(bool, Vec<bool>)> {
+                s.projects.iter().map(|p| (p.collapsed, p.workspaces.iter().map(|w| w.collapsed).collect())).collect()
+            };
+            assert_eq!(folds(&again), folds(&state));
+        }
+
+        #[test]
+        fn the_first_draw_keeps_a_folded_active_project_folded() {
+            let dir = TempDir::new();
+            let (mut app, _rx) = empty_app();
+            let mut folded = project(&canonical(&dir), vec![workspace(&canonical(&dir), vec![None])]);
+            folded.collapsed = true;
+            app.restore(&saved(vec![folded], 0), AREA).expect("restore");
+
+            app.follow(AREA);
+
+            assert!(app.projects[0].collapsed);
         }
 
         #[test]
@@ -5641,6 +5900,23 @@ rm -f "$1/sessions/$$.json"
             claude.signal("quit");
 
             assert_eq!(memory(&app), Some(sum));
+        }
+
+        #[test]
+        fn the_tree_measures_the_agents_of_every_open_project() {
+            let (mut app, rx, _dirs) = app_with(2);
+            app.config.memory = true;
+            app.config.sidebar = ui::Sidebar::Tree.id().into();
+            let claude = Claude::running(SILENT_CLAUDE);
+            for p in 0..2 {
+                app.active = p;
+                claude.start(&mut app);
+            }
+            rendered(&mut app, Rect::new(0, 0, 100, 30));
+
+            let measured = |a: &App| a.projects.iter().all(|p| p.workspaces[0].tabs[0].memory().is_some());
+            watch_until(&mut app, &rx, "the agents of both projects are measured", measured);
+            claude.signal("quit");
         }
 
         #[test]
@@ -7010,6 +7286,7 @@ rm -f "$1/sessions/$$.json"
                 tabs: vec![tab],
                 active: 0,
                 base: None,
+                collapsed: false,
             };
             let project = ProjectState {
                 path: dir.path().to_path_buf(),
@@ -7017,6 +7294,7 @@ rm -f "$1/sessions/$$.json"
                 group: None,
                 workspaces: vec![workspace],
                 active: 0,
+                collapsed: false,
             };
             let saved = State {
                 version: state::VERSION,
@@ -7170,8 +7448,14 @@ rm -f "$1/sessions/$$.json"
             let dir = TempDir::new();
             let (mut app, _rx) = empty_app();
             let widths = ui::Widths { projects: 40, workspaces: 20, ..ui::Widths::default() };
-            let project =
-                ProjectState { path: dir.path().to_path_buf(), name: None, group: None, workspaces: vec![], active: 0 };
+            let project = ProjectState {
+                path: dir.path().to_path_buf(),
+                name: None,
+                group: None,
+                workspaces: vec![],
+                active: 0,
+                collapsed: false,
+            };
             let saved = State {
                 groups: Vec::new(),
                 version: state::VERSION,
@@ -7185,6 +7469,174 @@ rm -f "$1/sessions/$$.json"
             app.restore(&saved, AREA).expect("restore");
 
             assert_eq!(app.widths, widths);
+        }
+    }
+
+    mod tree_sidebar {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        use super::*;
+        use crate::ui::TreeRow;
+
+        const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
+
+        fn drawn(app: &mut App) {
+            let mut t = Terminal::new(TestBackend::new(TALL.width, TALL.height)).expect("test backend");
+            t.draw(|f| app.draw(f)).expect("draw");
+        }
+
+        fn tree(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(n);
+            app.config.sidebar = ui::Sidebar::Tree.id().into();
+            drawn(&mut app);
+            (app, rx, dirs)
+        }
+
+        fn list() -> Rect {
+            ui::layout_with(TALL, ui::Widths::default(), false, ui::Sidebar::Tree).list
+        }
+
+        fn row(app: &App, row: TreeRow) -> Rect {
+            ui::tree_row(list(), &app.tree_shape(), app.projects_scroll, row)
+        }
+
+        fn click_at(app: &mut App, pos: Position) {
+            click_in(app, pos, TALL);
+            drawn(app);
+        }
+
+        fn click_name(app: &mut App, r: TreeRow) {
+            let r = row(app, r);
+            click_at(app, Position::new(r.x + 10, r.y));
+        }
+
+        fn click_arrow(app: &mut App, r: TreeRow) {
+            let arrow = ui::tree_arrow(list(), &app.tree_shape(), app.projects_scroll, r);
+            click_at(app, arrow.as_position());
+        }
+
+        fn ids(app: &App, p: usize) -> (u64, u64, u64) {
+            let project = &app.projects[p];
+            let workspace = &project.workspaces[0];
+            (project.id, workspace.id, workspace.tabs[0].id)
+        }
+
+        #[test]
+        fn the_arrow_folds_a_project_and_its_name_opens_it() {
+            let (mut app, _rx, _dirs) = tree(2);
+            click_arrow(&mut app, TreeRow::Project(0));
+            let folded = (app.projects[0].collapsed, app.active);
+
+            click_name(&mut app, TreeRow::Project(0));
+
+            assert_eq!((folded, app.projects[0].collapsed, app.active), ((true, 1), false, 0));
+        }
+
+        #[test]
+        fn the_arrow_folds_a_workspace() {
+            let (mut app, _rx, _dirs) = tree(1);
+            click_arrow(&mut app, TreeRow::Workspace(0, 0));
+            assert!(app.projects[0].workspaces[0].collapsed);
+        }
+
+        #[test]
+        fn a_tab_of_another_project_is_one_click_away() {
+            let (mut app, _rx, _dirs) = tree(2);
+            click_name(&mut app, TreeRow::Tab(0, 0, 0));
+            assert_eq!(app.active, 0);
+        }
+
+        #[test]
+        fn adding_a_tab_under_another_project_switches_to_it() {
+            let (mut app, _rx, _dirs) = tree(2);
+            click_name(&mut app, TreeRow::NewTab(0, 0));
+            let workspace = &app.projects[0].workspaces[0];
+            assert_eq!((app.active, workspace.tabs.len(), workspace.active), (0, 2, 1));
+        }
+
+        #[test]
+        fn a_new_workspace_under_another_project_is_asked_for_that_project() {
+            let (mut app, _rx, _dirs) = tree(2);
+            click_name(&mut app, TreeRow::NewWorkspace(0));
+            let asked =
+                matches!(app.overlay, Some(Overlay::NewWorkspace { project, .. }) if project == app.projects[0].id);
+            assert_eq!((asked, app.active), (true, 1));
+        }
+
+        #[test]
+        fn closing_a_project_asks_first() {
+            let (mut app, _rx, _dirs) = tree(2);
+            let close = ui::tree_close(list(), &app.tree_shape(), 0, TreeRow::Project(0));
+            click_at(&mut app, close.as_position());
+            assert!(matches!(app.overlay, Some(Overlay::CloseProject { project }) if project == app.projects[0].id));
+        }
+
+        #[test]
+        fn a_tab_of_another_project_can_be_renamed_from_its_menu() {
+            let (mut app, _rx, _dirs) = tree(2);
+            let r = row(&app, TreeRow::Tab(0, 0, 0));
+            mouse_in(&mut app, MouseEventKind::Down(MouseButton::Right), Position::new(r.x + 10, r.y), TALL);
+            assert_eq!(menu_labels(&app), ["rename tab"]);
+        }
+
+        #[test]
+        fn a_tab_dragged_in_another_project_moves_there() {
+            let (mut app, _rx, _dirs) = tree(2);
+            app.add_tab(0, 0, AREA).expect("add a tab");
+            app.active = 1;
+            drawn(&mut app);
+            let tabs = |app: &App| -> Vec<u64> { app.projects[0].workspaces[0].tabs.iter().map(|t| t.id).collect() };
+            let before = tabs(&app);
+            let (from, to) = (row(&app, TreeRow::Tab(0, 0, 1)), row(&app, TreeRow::Tab(0, 0, 0)));
+
+            mouse_in(&mut app, MouseEventKind::Down(MouseButton::Left), Position::new(from.x + 10, from.y), TALL);
+            mouse_in(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(to.x + 10, to.y), TALL);
+            mouse_in(&mut app, MouseEventKind::Up(MouseButton::Left), Position::new(to.x + 10, to.y), TALL);
+
+            assert_eq!(tabs(&app), [before[1], before[0]]);
+        }
+
+        #[test]
+        fn a_search_result_unfolds_the_way_to_it() {
+            let (mut app, _rx, _dirs) = tree(2);
+            let id = app.take_id();
+            app.groups.push(Group {
+                id,
+                entry: ui::GroupEntry { name: "work".into(), icon: '●', colour: 4, collapsed: true },
+            });
+            app.projects[0].group = Some(id);
+            app.projects[0].collapsed = true;
+            app.projects[0].workspaces[0].collapsed = true;
+            let (project, workspace, tab) = ids(&app, 0);
+
+            app.goto(Goto::Place { project, workspace: Some(workspace), tab: Some(tab) });
+
+            let folds =
+                (app.groups[0].entry.collapsed, app.projects[0].collapsed, app.projects[0].workspaces[0].collapsed);
+            assert_eq!(folds, (false, false, false));
+        }
+
+        #[test]
+        fn a_search_result_for_the_folded_active_project_unfolds_it() {
+            let (mut app, _rx, _dirs) = tree(1);
+            app.projects[0].collapsed = true;
+            let project = app.projects[0].id;
+
+            app.goto(Goto::Place { project, workspace: None, tab: None });
+
+            assert!(!app.projects[0].collapsed);
+        }
+
+        #[test]
+        fn switching_to_the_tree_shows_the_active_tab() {
+            let (mut app, _rx, _dirs) = app_with(10);
+            drawn(&mut app);
+            app.config.sidebar = ui::Sidebar::Tree.id().into();
+
+            drawn(&mut app);
+
+            assert!(!row(&app, TreeRow::Tab(9, 0, 0)).is_empty());
         }
     }
 

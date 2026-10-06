@@ -35,11 +35,9 @@ const prompted = (app: App): boolean => {
 
 const reveal = (scroll: number): Step => ({
   run: (app) => {
-    if (compact(app)) {
-      app.nav = 'workspaces';
-      app.workspacesScroll = scroll;
-      app.dirty();
-    }
+    if (compact(app)) app.nav = 'workspaces';
+    app.workspacesScroll = scroll;
+    app.dirty();
   },
 });
 

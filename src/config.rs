@@ -186,8 +186,8 @@ mod tests {
         }
 
         #[test]
-        fn the_sidebar_starts_side_by_side() {
-            assert_eq!(ui::Sidebar::from_setting(&Config::default().sidebar), ui::Sidebar::SideBySide);
+        fn the_sidebar_starts_with_projects_on_top() {
+            assert_eq!(ui::Sidebar::from_setting(&Config::default().sidebar), ui::Sidebar::ProjectsOnTop);
         }
 
         #[test]

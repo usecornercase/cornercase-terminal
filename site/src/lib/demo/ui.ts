@@ -8,9 +8,11 @@ import {
   activeRow,
   GROUP_COLOURS,
   GROUP_ICONS,
-  type Landing,
+  type Rows,
   type SidebarRow,
+  type TreeRow,
   type WorkspaceRow,
+  arrowIn,
   DONE,
   bottom,
   buttonWidth,
@@ -37,6 +39,12 @@ import {
   type Details,
   tabLines,
   tabsIn,
+  treeActiveRow,
+  treeDepth,
+  treeIndent,
+  treeLandingIndent,
+  treeLayout,
+  treeRows,
   usageArea,
   usageDone,
   workspaceLayout,
@@ -65,6 +73,13 @@ export interface Frame {
   regions: Region[];
   cursor: Cursor | null;
   areas: Areas | null;
+}
+
+interface Band {
+  r: Rect;
+  pitch: number;
+  lead: Seg[];
+  bg: Style;
 }
 
 const DARK: Style = { fg: 8 };
@@ -100,6 +115,8 @@ function updated(ms: number): string {
 const INPUT_PROMPT = '› ';
 
 const middle = (r: Rect): Rect => rect(r.x, r.y + Math.floor(Math.max(0, r.h - 1) / 2), r.w, Math.min(r.h, 1));
+const marker = (shown: boolean): Seg => seg(shown ? '▌ ' : '  ', CYAN);
+const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 
 export class Painter {
   readonly regions: Region[] = [];
@@ -124,9 +141,8 @@ export class Painter {
     return !this.app.overlay && !this.app.rowDrag?.moved && this.hovered(r);
   }
 
-  private landing(r: Rect, landing: Landing | null): void {
-    if (!landing || isEmpty(r)) return;
-    const indent = landingIndent(landing.spot);
+  private landing(r: Rect, indent: number | null): void {
+    if (indent === null || isEmpty(r)) return;
     this.g.clear(rect(r.x, r.y, r.w, 1));
     this.span(r.x + indent, r.y, '─'.repeat(Math.max(0, r.w - indent - 1)), CYAN, Math.max(0, r.w - indent));
   }
@@ -180,8 +196,11 @@ export class Painter {
       this.borders(areas);
       this.searchBar(areas.search);
     }
-    if (!isEmpty(areas.sidebar)) this.sidebar(areas);
+    if (areas.tree) this.tree(areas);
+    else if (!isEmpty(areas.sidebar)) this.sidebar(areas);
+    if ([areas.separator, areas.settings, areas.usage, areas.quit].some((r) => !isEmpty(r))) this.footer(areas);
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
+    if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
     this.overlay(areas);
     if (app.toast) this.toast(app.toast.text, app.toast.status);
@@ -371,10 +390,12 @@ export class Painter {
     this.line(middle(r), [seg(` ${text}`, { fg: 8, add: BOLD })]);
   }
 
-  private more(top: Rect, below: Rect, above: number, under: number): void {
+  private more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
+    const [above, under] = rows.hidden();
+    const count = (from: number, to: number) => specs.slice(from, to).filter(named).length;
     for (const [n, arrow, r] of [
-      [above, '↑', top],
-      [under, '↓', below],
+      [above && count(0, above), '↑', moreAbove(list)],
+      [under && count(specs.length - under, specs.length), '↓', rows.moreBelow()],
     ] as const) {
       if (!n || isEmpty(r)) continue;
       this.g.clear(rect(r.x, r.y, r.w, 1));
@@ -412,6 +433,95 @@ export class Painter {
     return seg(`${group.icon} ${truncateRight(group.name, max)}`, { fg: group.colour, add: BOLD });
   }
 
+  private room(b: Band): number {
+    return b.r.w - width(b.lead) - closeButton(b.r, b.pitch).w - 1;
+  }
+
+  private groupRow(b: Band, g: number): void {
+    const app = this.app;
+    const group = app.groups[g];
+    const count = group.collapsed ? ` (${app.groupSize(group.id)})` : '';
+    const badge = group.collapsed ? attention(app.projects.filter((p) => p.group === group.id).map(projectAttention)) : null;
+    const room = this.room(b) - 2;
+    const used = 2 + count.length;
+    const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - used);
+    const max = room - used - marks.reserved;
+    const line = [...b.lead, arrow(group.collapsed), this.groupHeader(group, max), seg(count, DARK)];
+    pushTags(line, marks, used + [...truncateRight(group.name, max)].length, room);
+    this.band(b.r, line, b.bg);
+    const grab: Target = { kind: 'group', group: group.id };
+    this.region({ r: b.r, click: () => app.toggleGroup(g), right: (x, y) => app.openGroupMenu({ x, y }, g), grab, cursor: 'pointer' });
+    this.closeX(b.r, b.pitch, b.bg, () => app.askDeleteGroup(group.id));
+  }
+
+  private projectRow(b: Band, p: number, summary: boolean, click: (x: number, y: number) => void): void {
+    const app = this.app;
+    const project = app.projects[p];
+    const count = summary ? ` (${project.workspaces.length})` : '';
+    const room = this.room(b);
+    const badge = summary ? projectAttention(project) : null;
+    const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - count.length);
+    const name = truncateRight(projectLabel(project), room - count.length - marks.reserved);
+    const line = [...b.lead, seg(name, p === app.active ? { fg: 15, add: BOLD } : { fg: 7 }), seg(count, DARK)];
+    pushTags(line, marks, [...name].length + count.length, room);
+    this.band(b.r, line, b.bg);
+    const grab: Target = { kind: 'project', project: project.id };
+    this.region({ r: b.r, click, right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
+    this.closeX(b.r, b.pitch, b.bg, () => app.askCloseProject(project.id));
+  }
+
+  private workspaceRow(b: Band, p: number, w: number, badge: boolean, click: (x: number, y: number) => void): void {
+    const app = this.app;
+    const project = app.projects[p];
+    const ws = project.workspaces[w];
+    const style: Style = p === app.active && w === project.active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
+    const room = this.room(b);
+    const status = badge ? attention(ws.tabs.map(tabStatus)) : null;
+    const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
+    const marks = fitTags([...(status ? [STATUS_ICONS[status]] : []), ...behind], room);
+    const name = truncateRight(workspaceLabel(ws), room - marks.reserved);
+    const line = [...b.lead, seg(name, style)];
+    pushTags(line, marks, [...name].length, room);
+    this.band(b.r, line, b.bg);
+    const grab: Target = { kind: 'workspace', project: project.id, workspace: ws.id };
+    this.region({ r: b.r, click, right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
+    this.closeX(b.r, b.pitch, b.bg, () => app.closeWorkspace(p, w));
+  }
+
+  private tabRow(b: Band, p: number, w: number, t: number, active: boolean): void {
+    const app = this.app;
+    const project = app.projects[p];
+    const ws = project.workspaces[w];
+    const tab = ws.tabs[t];
+    const status = tabStatus(tab);
+    const icon = status ? 2 : 0;
+    const name = truncateRight(tabLabel(tab), this.room(b) - 2 - icon);
+    const line = [...b.lead, marker(active)];
+    if (status) line.push(STATUS_ICONS[status], seg(' '));
+    line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
+    this.band(b.r, line, b.bg);
+    const details = app.tabDetails(tab);
+    if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + 2 + icon);
+    const grab: Target = { kind: 'tab', project: project.id, workspace: ws.id, tab: tab.id };
+    this.region({ r: b.r, click: () => app.selectTab(p, w, t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
+    this.closeX(b.r, b.pitch, b.bg, () => app.closeTab(p, w, t));
+  }
+
+  private newTab(r: Rect, indent: string, p: number, w: number): void {
+    this.button(r, indent, '+ tab', this.buttonStyle(r, DARK, 6));
+    this.region({ r, click: () => this.app.addTab(p, w), cursor: 'pointer' });
+  }
+
+  private newWorkspace(r: Rect, indent: string, p: number): void {
+    this.button(r, indent, '+ new workspace', this.buttonStyle(r, CYAN, 6));
+    this.region({ r, click: () => this.app.openNewWorkspace(p), cursor: 'pointer' });
+  }
+
+  private newProject(b: Rect): void {
+    this.button(b, ' ', '+ new project', this.buttonStyle(b, CYAN, 6));
+    this.region({ r: b, click: (x, y) => this.app.openNewMenu({ x, y }), cursor: 'pointer' });
+  }
+
   private sidebar(areas: Areas): void {
     const app = this.app;
     this.title(areas.title, 'projects');
@@ -419,60 +529,70 @@ export class Painter {
     const base = sidebarLayout(areas.list, areas.pitch, all, app.projectsScroll);
     const drag = app.rowDragView();
     const landing = drag?.list === 'sidebar' ? drag.landing : null;
+    const indent = landing && landingIndent(landing.spot);
     const dragged = (row: SidebarRow) => drag?.list === 'sidebar' && sameRow(drag.row, row);
     const [sidebar, line] = landed(all, base, landing, { kind: 'landing' } as SidebarRow);
     const rows = sidebarLayout(areas.list, areas.pitch, sidebar, base.first());
     const marked = activeRow(sidebar, app.active, app.groupIndex(app.project()?.group));
+    const pitch = areas.pitch;
     this.region({ r: areas.list, wheel: (dy) => app.scrollProjects(base, dy) });
     sidebar.forEach((spec, i) => {
       const r = rows.item(i);
       if (isEmpty(r) || spec.kind === 'gap') return;
-      if (spec.kind === 'landing') return this.landing(r, landing);
-      if (spec.kind === 'group') {
-        const group = app.groups[spec.g];
-        const inside = app.groupSize(group.id);
-        const count = group.collapsed ? ` (${inside})` : '';
-        const badge = group.collapsed ? attention(app.projects.filter((p) => p.group === group.id).map(projectAttention)) : null;
-        const room = r.w - 4 - closeButton(r, areas.pitch).w - 1;
-        const used = 2 + count.length;
-        const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - used);
-        const max = room - used - marks.reserved;
-        const line = [seg(i === marked ? '▌ ' : '  ', CYAN), seg(group.collapsed ? '▸ ' : '▾ ', DARK), this.groupHeader(group, max), seg(count, DARK)];
-        pushTags(line, marks, used + [...truncateRight(group.name, max)].length, room);
-        const bg = this.rowBackground(r, dragged(spec));
-        this.band(r, line, bg);
-        const grab: Target = { kind: 'group', group: group.id };
-        this.region({ r, click: () => app.toggleGroup(spec.g), right: (x, y) => app.openGroupMenu({ x, y }, spec.g), grab, cursor: 'pointer' });
-        this.closeX(r, areas.pitch, bg, () => app.askDeleteGroup(group.id));
-        return;
-      }
-      const pi = spec.p;
-      const p = app.projects[pi];
-      const active = pi === app.active;
-      const bg = this.rowBackground(r, active || dragged(spec));
-      const indent = p.group !== undefined ? '  ' : '';
-      const reserved = 2 + indent.length + closeButton(r, areas.pitch).w + 1;
-      const count = ` (${p.workspaces.length})`;
-      const room = r.w - reserved;
-      const badge = projectAttention(p);
-      const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - count.length);
-      const name = truncateRight(projectLabel(p), room - count.length - marks.reserved);
-      const line = [seg(active ? '▌ ' : '  ', CYAN), seg(indent), seg(name, active ? { fg: 15, add: BOLD } : { fg: 7 }), seg(count, DARK)];
-      pushTags(line, marks, [...name].length + count.length, room);
-      this.band(r, line, bg);
-      const grab: Target = { kind: 'project', project: p.id };
-      this.region({ r, click: () => app.selectProject(pi), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-      this.closeX(r, areas.pitch, bg, () => app.askCloseProject(p.id));
+      if (spec.kind === 'landing') return this.landing(r, indent);
+      if (spec.kind === 'group') return this.groupRow({ r, pitch, lead: [marker(i === marked)], bg: this.rowBackground(r, dragged(spec)) }, spec.g);
+      const active = spec.p === app.active;
+      const lead = [marker(active), seg(app.projects[spec.p].group !== undefined ? '  ' : '')];
+      this.projectRow({ r, pitch, lead, bg: this.rowBackground(r, active || dragged(spec)) }, spec.p, true, () => app.selectProject(spec.p));
     });
-    const [above, under] = rows.hidden();
-    const named = (from: number, to: number) => sidebar.slice(from, to).filter((s) => s.kind === 'group' || s.kind === 'project').length;
-    this.more(moreAbove(areas.list), rows.moreBelow(), above ? named(0, above) : 0, under ? named(sidebar.length - under, sidebar.length) : 0);
-    const b = rows.buttonRect();
-    this.button(b, ' ', '+ new project', this.buttonStyle(b, CYAN, 6));
-    this.region({ r: b, click: (x, y) => app.openNewMenu({ x, y }), cursor: 'pointer' });
-    this.landing(line, landing);
-    if (!areas.compact) this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}`, DARK)]);
-    else this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))} `, DARK)]);
+    this.more(areas.list, rows, sidebar, (s) => s.kind === 'group' || s.kind === 'project');
+    this.newProject(rows.buttonRect());
+    this.landing(line, indent);
+  }
+
+  private tree(areas: Areas): void {
+    const app = this.app;
+    this.title(areas.title, 'projects');
+    const shape = app.treeShape();
+    const base = treeLayout(areas.list, shape, treeRows(shape), app.projectsScroll);
+    const drag = app.rowDragView();
+    const landing = drag?.list === 'tree' ? drag.landing : null;
+    const indent = landing && drag?.list === 'tree' ? treeLandingIndent(shape, drag.row, landing.spot) : null;
+    const dragged = (row: TreeRow) => drag?.list === 'tree' && sameRow(drag.row, row);
+    const [all, line] = landed(treeRows(shape), base, landing, { kind: 'landing' } as TreeRow);
+    const rows = treeLayout(areas.list, shape, all, base.first());
+    const p = app.project();
+    const w = p?.workspaces[p.active];
+    const marked = p ? treeActiveRow(all, shape, app.active, p.active, w?.tabs.length ? w.active : null) : -1;
+    const folded = (row: TreeRow) => (row.kind === 'project' ? shape.projects[row.p].collapsed : row.kind === 'ws' && !!shape.projects[row.p].workspaces[row.w]?.collapsed);
+    const pitch = 1;
+    this.region({ r: areas.list, wheel: (dy) => app.scrollProjects(base, dy) });
+    all.forEach((row, i) => {
+      const r = rows.item(i);
+      if (isEmpty(r) || row.kind === 'gap') return;
+      if (row.kind === 'landing') return this.landing(r, indent);
+      const mark = i === marked;
+      const bg = this.rowBackground(r, mark || dragged(row));
+      const lead = [seg(' '.repeat(2 * treeDepth(shape, row))), marker(mark), arrow(folded(row))];
+      const fold = arrowIn(r, shape, row);
+      const button = ' '.repeat(treeIndent(shape, row) - 1);
+      if (row.kind === 'group') this.groupRow({ r, pitch, lead: [marker(mark)], bg }, row.g);
+      else if (row.kind === 'project') {
+        this.projectRow({ r, pitch, lead, bg }, row.p, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p) : app.selectProject(row.p)));
+      } else if (row.kind === 'ws') {
+        this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
+      } else if (row.kind === 'tab') this.tabRow({ r, pitch, lead: lead.slice(0, 1), bg }, row.p, row.w, row.t, mark);
+      else if (row.kind === 'newTab') this.newTab(r, button, row.p, row.w);
+      else this.newWorkspace(r, button, row.p);
+    });
+    this.more(areas.list, rows, all, (r) => r.kind === 'group' || r.kind === 'project' || r.kind === 'ws' || r.kind === 'tab');
+    this.newProject(rows.buttonRect());
+    this.landing(line, indent);
+  }
+
+  private footer(areas: Areas): void {
+    const app = this.app;
+    this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, DARK)]);
     this.button(areas.settings, ' ', 'settings', this.buttonStyle(areas.settings, DARK, 6));
     this.region({ r: areas.settings, click: () => app.openSettings(), cursor: 'pointer' });
     this.button(areas.usage, ' ', 'usage', this.buttonStyle(areas.usage, DARK, 6));
@@ -501,58 +621,29 @@ export class Painter {
     const base = workspaceLayout(list, areas.pitch, all, tabs, app.workspacesScroll);
     const drag = app.rowDragView();
     const landing = drag?.list === 'workspaces' ? drag.landing : null;
+    const indent = landing && landingIndent(landing.spot);
     const dragged = (row: WorkspaceRow) => drag?.list === 'workspaces' && sameRow(drag.row, row);
     const [rowsSpec, line] = landed(all, base, landing, { kind: 'landing' } as WorkspaceRow);
     const rows = workspaceLayout(list, areas.pitch, rowsSpec, tabs, base.first());
+    const pitch = areas.pitch;
     this.region({ r: list, wheel: (dy) => app.scrollWorkspaces(base, dy) });
     rowsSpec.forEach((spec, i) => {
       const r = rows.item(i);
       if (isEmpty(r) || spec.kind === 'gap') return;
-      if (spec.kind === 'landing') return this.landing(r, landing);
-      const closeWidth = closeButton(r, areas.pitch).w;
-      if (spec.kind === 'ws') {
-        const w = p.workspaces[spec.w];
-        const style: Style = spec.w === p.active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
-        const room = r.w - 2 - closeWidth - 1;
-        const badge = attention(w.tabs.map(tabStatus));
-        const behind = app.config.fetchMinutes && w.behind ? [seg(`↓${w.behind}`, { fg: 3 })] : [];
-        const marks = fitTags([...(badge ? [STATUS_ICONS[badge]] : []), ...behind], room);
-        const name = truncateRight(workspaceLabel(w), room - marks.reserved);
-        const segs = [seg(`  ${name}`, style)];
-        pushTags(segs, marks, [...name].length, room);
-        const bg = this.rowBackground(r, dragged(spec));
-        this.band(r, segs, bg);
-        const grab: Target = { kind: 'workspace', project: p.id, workspace: w.id };
-        this.region({ r, click: () => app.selectWorkspace(spec.w), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-        this.closeX(r, areas.pitch, bg, () => app.closeWorkspace(spec.w));
-      } else if (spec.kind === 'tab') {
-        const w = p.workspaces[spec.w];
-        const t = w.tabs[spec.t];
-        const active = spec.w === p.active && spec.t === w.active;
-        const bg = this.rowBackground(r, active || dragged(spec));
-        const status = tabStatus(t);
-        const name = truncateRight(tabLabel(t), r.w - 4 - (status ? 2 : 0) - closeWidth - 1);
-        const line = [seg('  '), seg(active ? '▌ ' : '  ', CYAN)];
-        if (status) line.push(STATUS_ICONS[status], seg(' '));
-        line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
-        this.band(r, line, bg);
-        const details = app.tabDetails(t);
-        if (tabLines(details) > 1) this.details(r, areas.pitch, details, 4 + (status ? 2 : 0));
-        const grab: Target = { kind: 'tab', project: p.id, workspace: w.id, tab: t.id };
-        this.region({ r, click: () => app.selectTab(spec.w, spec.t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-        this.closeX(r, areas.pitch, bg, () => app.closeTab(spec.w, spec.t));
-      } else {
-        this.button(r, '   ', '+ tab', this.buttonStyle(r, DARK, 6));
-        this.region({ r, click: () => app.addTab(spec.w), cursor: 'pointer' });
-      }
+      if (spec.kind === 'landing') return this.landing(r, indent);
+      if (spec.kind === 'ws') this.workspaceRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, dragged(spec)) }, app.active, spec.w, true, () => app.selectWorkspace(app.active, spec.w));
+      else if (spec.kind === 'tab') {
+        const active = spec.w === p.active && spec.t === p.workspaces[spec.w].active;
+        this.tabRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, active || dragged(spec)) }, app.active, spec.w, spec.t, active);
+      } else this.newTab(r, '   ', app.active, spec.w);
     });
-    const [above, under] = rows.hidden();
-    const named = (from: number, to: number) => rowsSpec.slice(from, to).filter((r) => r.kind === 'ws' || r.kind === 'tab').length;
-    this.more(moreAbove(list), rows.moreBelow(), above ? named(0, above) : 0, under ? named(rowsSpec.length - under, rowsSpec.length) : 0);
-    const b = rows.buttonRect();
-    this.button(b, ' ', '+ new workspace', this.buttonStyle(b, CYAN, 6));
-    this.region({ r: b, click: () => app.openNewWorkspace(), cursor: 'pointer' });
-    this.landing(line, landing);
+    this.more(list, rows, rowsSpec, (r) => r.kind === 'ws' || r.kind === 'tab');
+    this.newWorkspace(rows.buttonRect(), ' ', app.active);
+    this.landing(line, indent);
+  }
+
+  private issuesRow(areas: Areas): void {
+    const app = this.app;
     this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, DARK)]);
     this.button(areas.issues, ' ', 'issues', this.buttonStyle(areas.issues, DARK, 6));
     this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
