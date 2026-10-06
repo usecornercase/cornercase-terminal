@@ -3119,6 +3119,7 @@ impl App {
         let project = &mut self.projects[p];
         project.workspaces.push(workspace);
         project.active = project.workspaces.len() - 1;
+        self.active = p;
         Ok(())
     }
 
@@ -7716,6 +7717,16 @@ rm -f "$1/sessions/$$.json"
             let asked =
                 matches!(app.overlay, Some(Overlay::NewWorkspace { project, .. }) if project == app.projects[0].id);
             assert_eq!((asked, app.active), (true, 1));
+        }
+
+        #[test]
+        fn a_plain_workspace_created_under_another_project_is_shown() {
+            let (mut app, _rx, _dirs) = tree(2);
+            click_name(&mut app, TreeRow::NewWorkspace(0));
+
+            submit_text(&mut app, "spike");
+
+            assert_eq!((app.active, app.projects[0].workspaces.len(), app.projects[0].active), (0, 2, 1));
         }
 
         #[test]

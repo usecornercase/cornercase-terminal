@@ -1229,6 +1229,7 @@ export class App {
       const w = o.worktree ? this.addWorkspace(p, name, true) : this.addWorkspace(p, p.workspaces[0]?.branch ?? 'main', false, name);
       w.tabs.push(this.newTab([this.newPane(p, w)]));
       p.active = p.workspaces.length - 1;
+      this.active = this.projects.indexOf(p);
       this.overlay = null;
       this.emit('narrate', o.worktree ? `A fresh copy of the repo on ${name}, .env included.` : 'A new workspace in the project folder.');
       this.dirty();
