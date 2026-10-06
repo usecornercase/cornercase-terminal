@@ -67,7 +67,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 ## State and side effects
 
 - **Ids, not indices.** Every project, workspace, tab and pane gets an id from one counter. Menus, dialogs and background jobs refer to ids, so nothing breaks when the lists change underneath them.
-- **Closing is asynchronous.** Closing kills processes; the item is removed when the `Exited` events arrive.
+- **Closing is asynchronous.** Closing kills processes; a pane is removed when its shell exits, whether its PTY reader sends `Exited` or `App::refresh` finds the shell reaped first (a detached process can keep the PTY open long after the shell is gone).
 - **Pure state machines.** `issues::browser::Browser`, `settings::Settings` and `launch::Launch` contain no I/O: they take input and return actions or steps, which `App` carries out on threads. Answers carry their query and issue key, so stale ones are dropped.
 - **Saving settles.** `state::Saver` writes `session.json` only after the state has been stable for 2 seconds, and `state.rs` migrates older session versions.
 

@@ -144,8 +144,14 @@ impl Term {
         self.foreground_pid().map(process::args).unwrap_or_default()
     }
 
+    pub fn exited(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(Some(_)))
+    }
+
     pub fn kill(&mut self) {
-        let _ = self.child.kill();
+        if !self.exited() {
+            let _ = self.child.kill();
+        }
     }
 }
 

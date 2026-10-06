@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.7.2
+
+- A tab no longer gets stuck as `?` after you close it, or after its shell exits, while a process it started keeps running in the background. It happened when a program detached itself from the shell, such as Neovim's server outliving its window when the tab closed under it, and the tab could not be closed again. Now the tab goes as soon as its shell ends, as in tmux.
+
 ## 0.7.1
 
 - cornercase now looks for a new version every hour instead of once a day, so a release reaches you the same morning. It is still one small request to GitHub (plus the changelog once a new version is out), and **settings → TUI → check for updates** still turns it off.

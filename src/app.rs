@@ -535,6 +535,7 @@ impl App {
     }
 
     pub fn refresh(&mut self, now: Instant) {
+        self.reap();
         self.drive_launches(now);
         self.watch_agents(now);
         self.check_updates(now);
@@ -1058,6 +1059,14 @@ impl App {
         let Some(p) = self.projects.iter_mut().position(|p| p.remove_term(id)) else { return };
         if self.projects[p].closing && !self.projects[p].has_terms() {
             self.remove_project(p);
+        }
+    }
+
+    fn reap(&mut self) {
+        let exited: Vec<u64> =
+            self.projects.iter_mut().flat_map(Project::terms_mut).filter_map(|t| t.exited().then_some(t.id)).collect();
+        for id in exited {
+            self.remove(id);
         }
     }
 
@@ -4870,6 +4879,37 @@ mod tests {
             click_close(&mut app, WorkspaceRow::Tab(0, 1));
 
             pump_until(&mut app, &rx, "second tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
+        }
+
+        struct Orphan(PathBuf);
+
+        impl Drop for Orphan {
+            fn drop(&mut self) {
+                if let Ok(pid) = std::fs::read_to_string(&self.0) {
+                    let _ = std::process::Command::new("kill").arg(pid.trim()).status();
+                }
+            }
+        }
+
+        #[test]
+        fn closing_one_whose_terminal_a_detached_process_keeps_open_closes_it() {
+            let (mut app, rx, dirs) = app_with(1);
+            click_row(&mut app, WorkspaceRow::NewTab(0));
+            let orphan = Orphan(dirs[0].path().join("pid"));
+            type_line(&mut app, &format!("(trap '' HUP; exec sleep 30) & echo $! > {}", orphan.0.display()));
+            wait_until("the detached process starts", || {
+                std::fs::read_to_string(&orphan.0).is_ok_and(|pid| pid.ends_with('\n'))
+            });
+
+            click_close(&mut app, WorkspaceRow::Tab(0, 1));
+
+            wait_until("the tab closes", || {
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                app.refresh(Instant::now());
+                app.projects[0].workspaces[0].tabs.len() == 1
+            });
         }
 
         #[test]
