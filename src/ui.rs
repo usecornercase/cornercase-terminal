@@ -2912,7 +2912,6 @@ fn draw_details(f: &mut Frame, row: Rect, pitch: u16, tab: &TabEntry, indent: us
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let close = row_close_button(row, pitch);
     let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
-    let room = usize::from(r.width).saturating_sub(indent + reserved + 1);
     let dim = Style::default().fg(Color::DarkGray);
     let percent = tab.context.as_ref().and_then(|c| c.percent).map(|used| {
         let level = match Severity::of(used) {
@@ -2923,7 +2922,11 @@ fn draw_details(f: &mut Frame, row: Rect, pitch: u16, tab: &TabEntry, indent: us
     });
     let memory = tab.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
     let fixed: Vec<Span> = percent.into_iter().chain(memory).collect();
-    let model_room = room.saturating_sub(fixed.iter().map(|s| s.width() + CONTEXT_SEPARATOR.chars().count()).sum());
+    let separator = CONTEXT_SEPARATOR.chars().count();
+    let fixed_width = fixed.iter().map(|s| s.width() + separator).sum::<usize>();
+    let free = usize::from(r.width).saturating_sub(reserved + 1);
+    let indent = indent.min(free.saturating_sub(fixed_width.saturating_sub(separator)));
+    let model_room = free.saturating_sub(indent + fixed_width);
     let model = tab
         .context
         .as_ref()
@@ -4679,6 +4682,7 @@ mod tests {
         #[case::fits_with_the_memory(32, Some(GB * 12 / 10), "      Opus 5.5 · 17% · 1.2 GB")]
         #[case::cuts_the_model_before_the_memory(30, Some(GB * 12 / 10), "      Opus 5… · 17% · 1.2 GB")]
         #[case::drops_the_model_before_the_memory(26, Some(GB * 12 / 10), "      17% · 1.2 GB")]
+        #[case::moves_left_to_keep_the_memory(16, Some(GB * 12 / 10), "  17% · 1.2 GB")]
         fn a_narrow_column_cuts_the_model_first(
             #[case] workspaces: u16,
             #[case] memory: Option<u64>,

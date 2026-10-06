@@ -393,17 +393,19 @@ export class Painter {
   private details(row: Rect, pitch: number, context: Context | null, memory: number | null, indent: number): void {
     const r = intersect(rect(row.x, middle(row).y + 1, row.w, 1), row);
     const close = closeButton(row, pitch);
-    const room = r.w - indent - (bottom(close) > r.y ? close.w : 0) - 1;
+    const free = r.w - (bottom(close) > r.y ? close.w : 0) - 1;
     const fixed: Seg[] = [];
     if (context && context.percent !== null) {
       const severity = severityOf(context.percent);
       fixed.push(seg(`${context.percent}%`, severity === 'normal' ? DARK : { fg: SEVERITY[severity] }));
     }
     if (memory !== null) fixed.push(seg(memorySize(memory), DARK));
-    const modelRoom = Math.max(0, room - width(fixed) - fixed.length * CONTEXT_SEPARATOR.length);
+    const fixedWidth = width(fixed) + fixed.length * CONTEXT_SEPARATOR.length;
+    const shift = Math.max(0, Math.min(indent, free - Math.max(0, fixedWidth - CONTEXT_SEPARATOR.length)));
+    const modelRoom = Math.max(0, free - shift - fixedWidth);
     const model = context && (!fixed.length || modelRoom >= MIN_MODEL_WIDTH) ? [seg(truncateRight(context.model, modelRoom), DARK)] : [];
     const parts = [...model, ...fixed].flatMap((part) => [seg(CONTEXT_SEPARATOR, DARK), part]).slice(1);
-    this.line(r, [seg(' '.repeat(indent)), ...parts]);
+    this.line(r, [seg(' '.repeat(shift)), ...parts]);
   }
 
   private groupHeader(group: Group, max: number): Line[number] {
