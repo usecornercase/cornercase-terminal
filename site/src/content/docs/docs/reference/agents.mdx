@@ -121,7 +121,7 @@ Starting an agent is done by driving the shell in a new tab, the same way you wo
 | Step | Waits until | Then |
 | --- | --- | --- |
 | 1. Shell | The shell's output has been quiet for 0.3 s (at most 5 s). | Types the command line and `Enter`. |
-| 2. Agent | The agent is in the foreground, has drawn something besides the command line, and its screen has been quiet for 1 s (at most 30 s). | Answers a trust question, if there is one, and waits again; otherwise pastes the prompt. |
+| 2. Agent | The agent is in the foreground, has drawn something besides the command line, and its screen has been quiet for 1 s (at most 30 s). | If it asks whether you trust the folder, waits for your answer (or answers it, when **trust prompts** is on) and waits again; otherwise pastes the prompt. |
 | 3. Send | The screen has been quiet for 0.3 s after pasting. | Presses `Enter`, only when **send the prompt** is on. |
 
 If the shell is still in the foreground 3 s after the command was typed, the agent didn't start (for example, the command doesn't exist), and cornercase stops there. The reason goes to the server log.
@@ -130,12 +130,17 @@ The prompt is pasted with bracketed paste when the agent supports it. When the p
 
 ## Trust prompts
 
-Many agents ask whether you trust a folder the first time they run in it, and a new worktree is always a new folder. With **trust prompts** on (`auto_accept_trust_prompt`), cornercase answers yes for you:
+Many agents ask whether you trust a folder the first time they run in it, and a new worktree is always a new folder. Saying yes lets the agent use the repository's own agent configuration, such as project settings, hooks and MCP servers.
 
-- It recognises the question with `trust_prompt_pattern`, a regular expression matched without regard to case against the agent's screen. The default matches phrases like *trust the files*, *trust this folder*, *do you trust* and *yes, proceed*.
+By default the question is left to you. cornercase recognises it and waits: the prompt is pasted only once you have answered and the agent's screen is quiet again. If you answer no, the agent exits and nothing is typed.
+
+It recognises the question with `trust_prompt_pattern`, a regular expression matched without regard to case against the last 15 non-blank lines of the agent's screen, where agents draw it. The default matches phrases like *trust the files*, *trust this folder*, *do you trust* and *yes, proceed*. An invalid pattern never matches.
+
+With **trust prompts** on (`accept_trust_prompts`), cornercase answers yes for you:
+
 - If the screen shows a menu, marked with `❯`, `›`, `>`, `▸` or `→`, and the marked option isn't the *yes* one, cornercase moves the selection to the nearest option containing the word *yes* with the arrow keys, then presses `Enter`. Some agents highlight *No* by default, which is why.
 - It answers at most four times per launch, and never the same screen twice.
 
 <Aside type="caution">
-A trust prompt is there to protect you from running an agent in a folder you don't know. cornercase only answers it for agents it starts itself, in your own projects. Turn it off in **settings → Agents → trust prompts** if you prefer to answer yourself. An invalid `trust_prompt_pattern` never matches.
+A trust prompt protects you from running a repository's agent configuration before you have looked at it. With **trust prompts** on, a repository with hostile agent settings runs them as soon as you start an issue in it, without you seeing the question. Turn it on only if you trust every repository you start agents in.
 </Aside>

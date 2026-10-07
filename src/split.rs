@@ -26,13 +26,29 @@ pub struct Divider {
     pub dir: Dir,
     pub area: Rect,
     pub line: Rect,
+    min: (u16, u16),
+}
+
+fn gap(dir: Dir) -> u16 {
+    match dir {
+        Dir::Right => 1 + PADDING,
+        Dir::Down => 1,
+    }
+}
+
+fn leaf_min(dir: Dir) -> u16 {
+    match dir {
+        Dir::Right => MIN_COLS,
+        Dir::Down => MIN_ROWS,
+    }
 }
 
 fn span(area: Rect, dir: Dir) -> (u16, u16) {
-    match dir {
-        Dir::Right => (area.width, (1 + PADDING).min(area.width)),
-        Dir::Down => (area.height, area.height.min(1)),
-    }
+    let total = match dir {
+        Dir::Right => area.width,
+        Dir::Down => area.height,
+    };
+    (total, gap(dir).min(total))
 }
 
 impl Divider {
@@ -44,10 +60,10 @@ impl Divider {
     }
 }
 
-pub fn split_rect(area: Rect, dir: Dir, ratio: f32) -> (Rect, Rect, Rect) {
+fn divide(area: Rect, dir: Dir, ratio: f32, min: (u16, u16)) -> (Rect, Rect, Rect) {
     let (total, gap) = span(area, dir);
     let room = total - gap;
-    let first = first_size(room, ratio);
+    let first = first_size(room, ratio, min);
     let second = room - first;
     match dir {
         Dir::Right => (
@@ -68,12 +84,17 @@ pub fn split_rect(area: Rect, dir: Dir, ratio: f32) -> (Rect, Rect, Rect) {
     clippy::cast_sign_loss,
     reason = "the ratio is clamped to 0..=1, so the product fits in the u16 it came from"
 )]
-fn first_size(room: u16, ratio: f32) -> u16 {
+fn first_size(room: u16, ratio: f32, min: (u16, u16)) -> u16 {
     if room < 2 {
         return room;
     }
+    let (low, high) = bounds(room, min);
     let size = (f32::from(room) * ratio.clamp(0.0, 1.0)).round() as u16;
-    size.clamp(1, room - 1)
+    size.clamp(low, high)
+}
+
+fn bounds(room: u16, (first, second): (u16, u16)) -> (u16, u16) {
+    if first.saturating_add(second) <= room { (first, room - second) } else { (1, room - 1) }
 }
 
 pub fn ratio_at(divider: &Divider, pos: Position) -> f32 {
@@ -86,17 +107,14 @@ pub fn ratio_at(divider: &Divider, pos: Position) -> f32 {
     if room < 2 {
         return HALF;
     }
-    let first = at.saturating_sub(start).clamp(1, room - 1);
+    let (low, high) = bounds(room, divider.min);
+    let first = at.saturating_sub(start).clamp(low, high);
     f32::from(first) / f32::from(room)
 }
 
 pub fn fits(area: Rect, dir: Dir) -> bool {
     let (total, gap) = span(area, dir);
-    let min = match dir {
-        Dir::Right => MIN_COLS,
-        Dir::Down => MIN_ROWS,
-    };
-    total - gap >= min * 2
+    total - gap >= leaf_min(dir) * 2
 }
 
 impl<T: Copy + PartialEq> Node<T> {
@@ -126,31 +144,57 @@ impl<T: Copy + PartialEq> Node<T> {
         match self {
             Self::Leaf(id) => panes.push((*id, area)),
             Self::Split { dir, ratio, first, second } => {
-                let (a, b, _) = split_rect(area, *dir, *ratio);
+                let (a, b, _) = divide(area, *dir, *ratio, Self::sides(*dir, first, second));
                 first.collect_panes(a, panes);
                 second.collect_panes(b, panes);
             }
         }
     }
 
-    pub fn pane(&self, area: Rect, id: T) -> Option<Rect> {
-        self.panes(area).into_iter().find(|(p, _)| *p == id).map(|(_, r)| r)
+    fn sides(dir: Dir, first: &Self, second: &Self) -> (u16, u16) {
+        (first.min_size(dir), second.min_size(dir))
     }
 
-    pub fn pane_at(&self, area: Rect, pos: Position) -> Option<T> {
-        self.panes(area).into_iter().find(|(_, r)| r.contains(pos)).map(|(id, _)| id)
+    fn min_size(&self, along: Dir) -> u16 {
+        match self {
+            Self::Leaf(_) => leaf_min(along),
+            Self::Split { dir, first, second, .. } if *dir == along => {
+                first.min_size(along).saturating_add(gap(along)).saturating_add(second.min_size(along))
+            }
+            Self::Split { first, second, .. } => first.min_size(along).max(second.min_size(along)),
+        }
+    }
+
+    pub fn has_room(&self, area: Rect) -> bool {
+        matches!(self, Self::Leaf(_))
+            || (area.width >= self.min_size(Dir::Right) && area.height >= self.min_size(Dir::Down))
+    }
+
+    pub fn visible(&self, area: Rect, active: T) -> Vec<(T, Rect)> {
+        if self.has_room(area) { self.panes(area) } else { vec![(active, area)] }
+    }
+
+    pub fn pane(&self, area: Rect, active: T, id: T) -> Option<Rect> {
+        self.visible(area, active).into_iter().find(|(p, _)| *p == id).map(|(_, r)| r)
+    }
+
+    pub fn pane_at(&self, area: Rect, active: T, pos: Position) -> Option<T> {
+        self.visible(area, active).into_iter().find(|(_, r)| r.contains(pos)).map(|(id, _)| id)
     }
 
     pub fn dividers(&self, area: Rect) -> Vec<Divider> {
         let mut dividers = Vec::new();
-        self.collect_dividers(area, &mut Vec::new(), &mut dividers);
+        if self.has_room(area) {
+            self.collect_dividers(area, &mut Vec::new(), &mut dividers);
+        }
         dividers
     }
 
     fn collect_dividers(&self, area: Rect, path: &mut Vec<bool>, dividers: &mut Vec<Divider>) {
         let Self::Split { dir, ratio, first, second } = self else { return };
-        let (a, b, line) = split_rect(area, *dir, *ratio);
-        dividers.push(Divider { path: path.clone(), dir: *dir, area, line });
+        let min = Self::sides(*dir, first, second);
+        let (a, b, line) = divide(area, *dir, *ratio, min);
+        dividers.push(Divider { path: path.clone(), dir: *dir, area, line, min });
         path.push(false);
         first.collect_dividers(a, path, dividers);
         path.pop();
@@ -288,25 +332,98 @@ mod tests {
         }
 
         #[test]
-        fn halves_never_shrink_to_nothing() {
+        fn halves_never_shrink_below_their_minimum() {
             let mut node = pair(Dir::Right);
             node.set_ratio(&[], 0.0);
-            assert_eq!(node.panes(AREA)[0].1.width, 1);
+            assert_eq!(node.panes(AREA)[0].1.width, MIN_COLS);
         }
 
         #[test]
         fn a_pane_is_found_under_the_mouse() {
-            assert_eq!(three().pane_at(AREA, Position::new(40, 20)), Some(3));
+            assert_eq!(three().pane_at(AREA, 1, Position::new(40, 20)), Some(3));
         }
 
         #[test]
         fn the_divider_is_not_a_pane() {
-            assert_eq!(pair(Dir::Right).pane_at(AREA, Position::new(30, 5)), None);
+            assert_eq!(pair(Dir::Right).pane_at(AREA, 1, Position::new(30, 5)), None);
         }
 
         #[test]
         fn the_blank_column_after_the_divider_also_grabs_it() {
             assert_eq!(pair(Dir::Right).divider_at(AREA, Position::new(31, 5)).map(|d| d.path), Some(vec![]));
+        }
+    }
+
+    mod room {
+        use super::*;
+
+        const NARROW: Rect = Rect { width: 15, ..AREA };
+
+        fn stacked() -> Node<u64> {
+            let mut node = pair(Dir::Down);
+            node.split(2, Dir::Down, 3);
+            node
+        }
+
+        #[rstest]
+        #[case::a_pane(Node::Leaf(1), (MIN_COLS, MIN_ROWS))]
+        #[case::side_by_side(pair(Dir::Right), (2 * MIN_COLS + 2, MIN_ROWS))]
+        #[case::one_above_the_other(pair(Dir::Down), (MIN_COLS, 2 * MIN_ROWS + 1))]
+        #[case::nested(three(), (2 * MIN_COLS + 2, 2 * MIN_ROWS + 1))]
+        fn a_tree_needs_room_for_every_pane(#[case] node: Node<u64>, #[case] expected: (u16, u16)) {
+            assert_eq!((node.min_size(Dir::Right), node.min_size(Dir::Down)), expected);
+        }
+
+        #[test]
+        fn dragging_the_outer_divider_to_the_edge_keeps_the_nested_panes() {
+            let mut node = stacked();
+            let outer = node.dividers(AREA).remove(0);
+            node.set_ratio(&outer.path, ratio_at(&outer, Position::new(AREA.x, AREA.bottom() - 1)));
+            assert!(node.panes(AREA).iter().all(|(_, r)| r.height >= MIN_ROWS), "{:?}", node.panes(AREA));
+        }
+
+        #[test]
+        fn dragging_to_the_other_edge_keeps_the_first_pane() {
+            let mut node = pair(Dir::Right);
+            let divider = node.dividers(AREA).remove(0);
+            node.set_ratio(&divider.path, ratio_at(&divider, Position::new(AREA.x, 5)));
+            assert_eq!(node.panes(AREA)[0].1.width, MIN_COLS);
+        }
+
+        #[test]
+        fn a_smaller_area_keeps_every_pane_while_the_tree_fits() {
+            let mut node = stacked();
+            node.set_ratio(&[], 0.9);
+            let low = Rect { height: stacked().min_size(Dir::Down), ..AREA };
+            assert!(node.panes(low).iter().all(|(_, r)| r.height >= MIN_ROWS), "{:?}", node.panes(low));
+        }
+
+        #[test]
+        fn with_room_every_pane_shows() {
+            assert_eq!(three().visible(AREA, 3), three().panes(AREA));
+        }
+
+        #[test]
+        fn without_room_for_every_pane_only_the_active_one_shows() {
+            assert_eq!(three().visible(NARROW, 3), vec![(3, NARROW)]);
+        }
+
+        #[test]
+        fn a_single_pane_always_shows() {
+            let tiny = Rect { width: 3, height: 1, ..AREA };
+            assert_eq!(Node::Leaf(1).visible(tiny, 1), vec![(1, tiny)]);
+        }
+
+        #[test]
+        fn without_room_there_are_no_dividers() {
+            assert_eq!(three().dividers(NARROW), Vec::new());
+        }
+
+        #[test]
+        fn without_room_the_hidden_panes_have_no_place() {
+            let tree = three();
+            let under = tree.pane_at(NARROW, 3, Position::new(NARROW.x, NARROW.y));
+            assert_eq!((tree.pane(NARROW, 3, 1), tree.pane(NARROW, 3, 3), under), (None, Some(NARROW), Some(3)));
         }
     }
 

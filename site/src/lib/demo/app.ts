@@ -69,7 +69,7 @@ import {
   workspaceLabel,
 } from './model';
 import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
-import { type Node, fits, panes, ratioAt, remove, setRatio, split } from './split';
+import { type Node, fits, ratioAt, remove, setRatio, split, visible } from './split';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
@@ -705,7 +705,7 @@ export class App {
 
   confirmView(): ConfirmView | null {
     const o = this.overlay;
-    if (o?.kind === 'remove') return { title: 'remove workspace', message: this.removeMessage(o), submit: 'remove', note: o.removing ? 'removing…' : undefined };
+    if (o?.kind === 'remove') return { title: 'remove workspace', message: this.removeMessage(o), submit: 'remove' };
     if (o?.kind === 'deleteGroup') return { title: 'delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
     if (o?.kind === 'closeProject') return { title: 'close project', message: this.closeProjectMessage(o.project), submit: 'close' };
     if (o?.kind === 'closeWorkspace') return { title: 'close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
@@ -861,22 +861,28 @@ export class App {
 
   submitRemove(): void {
     const o = this.overlay;
-    if (!o || o.kind !== 'remove' || o.removing) return;
-    o.removing = true;
+    if (!o || o.kind !== 'remove') return;
+    this.overlay = null;
+    const p = this.projects.find((x) => x.id === o.project);
+    const w = p?.workspaces.find((x) => x.id === o.workspace);
+    if (!p || !w) return this.dirty();
+    for (const t of w.tabs) for (const pane of t.panes) pane.shell.fg?.dispose?.();
+    w.tabs = [];
+    w.removing = true;
+    const at = p.workspaces.indexOf(w);
+    if (p.active === at) {
+      const others = [...p.workspaces.keys()].filter((i) => i < at).reverse().concat([...p.workspaces.keys()].filter((i) => i > at));
+      const next = others.find((i) => !p.workspaces[i].removing);
+      if (next !== undefined) p.active = next;
+    }
     this.dirty();
-    this.after(700, () => {
-      const p = this.projects.find((x) => x.id === o.project);
-      if (p) {
-        const i = p.workspaces.findIndex((x) => x.id === o.workspace);
-        if (i >= 0) {
-          const [w] = p.workspaces.splice(i, 1);
-          for (const t of w.tabs) for (const pane of t.panes) pane.shell.fg?.dispose?.();
-          p.active = Math.max(0, Math.min(p.active, p.workspaces.length - 1));
-          this.emit('narrate', `Workspace removed. Don’t worry, the branch ${w.branch} is still there.`);
-        }
-      }
-      this.overlay = null;
-      this.dirty();
+    this.after(1800, () => {
+      const i = p.workspaces.indexOf(w);
+      if (i < 0) return;
+      p.workspaces.splice(i, 1);
+      if (p.active > i) p.active -= 1;
+      this.notify(`removed ${workspaceLabel(w)}`);
+      this.emit('narrate', `Workspace removed. Don’t worry, the branch ${w.branch} is still there.`);
     });
   }
 
@@ -1445,10 +1451,10 @@ export class App {
     else pane.rightClicks = !pane.rightClicks;
   }
 
-  openPaneMenu(at: Pos, tab: Tab, pane: Pane, area: Rect): void {
+  openPaneMenu(at: Pos, tab: Tab, pane: Pane, area: Rect, alone: boolean): void {
     const actions: PaneAction[] = [];
-    if (fits(area, 'right')) actions.push('split right');
-    if (fits(area, 'down')) actions.push('split down');
+    if (!alone && fits(area, 'right')) actions.push('split right');
+    if (!alone && fits(area, 'down')) actions.push('split down');
     actions.push(pane.rightClicks ? 'use this menu on right-click' : 'send right-clicks to the pane');
     actions.push('close pane');
     tab.active = pane.id;
@@ -1752,7 +1758,7 @@ export class App {
       const rows: SettingsRow[] = [
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
-        { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: '"do you trust this folder?"' },
+        { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
       ];
       for (const kind of this.listedKinds()) {
         const mode = this.modeOf(kind);
@@ -2414,20 +2420,21 @@ export class App {
       this.emit('narrate', `Starting ${command}…`);
       pane.shell.type(command);
     });
-    let stage: 'agent' | 'trusted' | 'pasted' = 'agent';
+    let stage: 'agent' | 'asked' | 'trusted' | 'pasted' = 'agent';
     let waited = 0;
     const watch = () => {
-      waited += 150;
       const agent = pane.shell.fg instanceof Agent ? pane.shell.fg : null;
+      if (!(stage === 'asked' && agent?.trusting)) waited += 150;
       if (stage === 'agent' && agent?.trusting) {
-        if (!this.config.trust) {
-          this.emit('narrate', 'The agent asks if you trust this folder. Your call (settings › Agents).');
-          return;
+        if (this.config.trust) {
+          stage = 'trusted';
+          this.emit('narrate', '“Do you trust this folder?” Yes, answered for you.');
+          this.after(650, () => agent.key({ key: 'Enter' }));
+        } else {
+          stage = 'asked';
+          this.emit('narrate', 'The agent asks if you trust this folder. Your call: answer it, and the issue follows.');
         }
-        stage = 'trusted';
-        this.emit('narrate', '“Do you trust this folder?” Yes, answered for you.');
-        this.after(650, () => agent.key({ key: 'Enter' }));
-      } else if ((stage === 'trusted' || stage === 'agent') && agent?.ready) {
+      } else if (stage !== 'pasted' && agent?.ready) {
         stage = 'pasted';
         this.after(450, () => {
           agent.paste(prompt);
@@ -2600,9 +2607,9 @@ export class App {
       return;
     }
     if (region.pane) {
-      const { pane, rect, tab } = region.pane;
+      const { pane, rect, tab, alone } = region.pane;
       if (button === 2) {
-        this.openPaneMenu({ x, y }, tab, pane, rect);
+        this.openPaneMenu({ x, y }, tab, pane, rect, alone);
         return;
       }
       if (tab.active !== pane.id) {
@@ -2934,6 +2941,6 @@ export class App {
   }
 
   panesOf(t: Tab, area: Rect): [number, Rect][] {
-    return panes(t.layout, area);
+    return visible(t.layout, area, t.active);
   }
 }

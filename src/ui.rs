@@ -78,6 +78,7 @@ const TOAST_ICON: &str = " ✓ ";
 const BUG_ICON: &str = " ✗ ";
 const TOAST_MARGIN: u16 = 1;
 const BEHIND_ICON: &str = "↓";
+const REMOVING_LABEL: &str = "removing…";
 const CONTEXT_SEPARATOR: &str = " · ";
 const MIN_MODEL_WIDTH: usize = 4;
 const MB: u64 = 1 << 20;
@@ -844,6 +845,17 @@ pub enum WorkspaceHit {
     NewWorkspace,
 }
 
+impl WorkspaceHit {
+    pub fn workspace(self) -> Option<usize> {
+        match self {
+            Self::Workspace(w) | Self::CloseWorkspace(w) | Self::Tab(w, _) | Self::CloseTab(w, _) | Self::NewTab(w) => {
+                Some(w)
+            }
+            Self::NewWorkspace => None,
+        }
+    }
+}
+
 pub fn workspace_hit(list: Rect, pitch: u16, tabs: &[Vec<u16>], scroll: usize, pos: Position) -> Option<WorkspaceHit> {
     if !list.contains(pos) {
         return None;
@@ -903,6 +915,25 @@ pub enum TreeHit {
     NewTab(usize, usize),
     NewWorkspace(usize),
     NewProject,
+}
+
+impl TreeRow {
+    fn workspace(self) -> Option<(usize, usize)> {
+        match self {
+            Self::Workspace(p, w) | Self::Tab(p, w, _) => Some((p, w)),
+            _ => None,
+        }
+    }
+}
+
+impl TreeHit {
+    pub fn workspace(self) -> Option<(usize, usize)> {
+        match self {
+            Self::Fold(row) | Self::Select(row) | Self::Close(row) => row.workspace(),
+            Self::NewTab(p, w) => Some((p, w)),
+            Self::NewWorkspace(_) | Self::NewProject => None,
+        }
+    }
 }
 
 pub fn tree_rows(shape: &TreeShape) -> Vec<TreeRow> {
@@ -2055,6 +2086,7 @@ pub struct WorkspaceEntry {
     pub name: String,
     pub tabs: Vec<TabEntry>,
     pub behind: u32,
+    pub removing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2400,7 +2432,7 @@ fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
 }
 
 fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
-    let panes = tab.layout.panes(area);
+    let panes = tab.layout.visible(area, tab.active);
     let split = panes.len() > 1;
     for (i, pane) in panes {
         let Some(screen) = tab.screens.get(i) else { continue };
@@ -3404,8 +3436,10 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
                     draw_rail(f, r);
                 }
             }
-            WorkspaceRow::NewTab(_) => {
-                draw_button(f, r, "   ", "+ tab", button_style(view, r, dim, Color::Cyan));
+            WorkspaceRow::NewTab(w) => {
+                if !view.workspaces[w].removing {
+                    draw_button(f, r, "   ", "+ tab", button_style(view, r, dim, Color::Cyan));
+                }
                 draw_guide(f, view.line(), guide, r, Guide::End);
             }
         }
@@ -3479,23 +3513,34 @@ impl Band {
 }
 
 fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, entry: &WorkspaceEntry, active: bool, badge: bool) {
-    let style = Style::default().fg(if active { Color::White } else { Color::Gray }).add_modifier(Modifier::BOLD);
+    let colour = match (entry.removing, active) {
+        (true, _) => view.muted,
+        (false, true) => Color::White,
+        (false, false) => Color::Gray,
+    };
+    let style = Style::default().fg(colour).add_modifier(Modifier::BOLD);
     let room = band.room();
-    let badge = badge
-        .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
-        .flatten()
-        .map(|status| status_icon(view.muted, status));
-    let behind = Some(entry.behind)
-        .filter(|n| *n > 0)
-        .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-    let marks = Tags::fit(badge.into_iter().chain(behind).collect(), room);
+    let marks = if entry.removing {
+        Tags::fit(vec![Span::styled(REMOVING_LABEL, Style::default().fg(view.muted))], room)
+    } else {
+        let badge = badge
+            .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
+            .flatten()
+            .map(|status| status_icon(view.muted, status));
+        let behind = Some(entry.behind)
+            .filter(|n| *n > 0)
+            .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
+        Tags::fit(badge.into_iter().chain(behind).collect(), room)
+    };
     let name = truncate_right(&entry.name, room.saturating_sub(marks.reserved()));
     let used = name.chars().count();
     let mut line = band.lead;
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    draw_row_close(f, view, band.r, band.pitch, band.bg);
+    if !entry.removing {
+        draw_row_close(f, view, band.r, band.pitch, band.bg);
+    }
 }
 
 fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active: bool) {
@@ -3806,10 +3851,7 @@ fn tree_guide(r: Rect, shape: &TreeShape, row: TreeRow) -> u16 {
 }
 
 fn tree_among_tabs(rows: &[TreeRow], i: usize) -> Option<TreeRow> {
-    let above = i.checked_sub(1).and_then(|j| rows.get(j)).and_then(|row| match row {
-        TreeRow::Workspace(p, w) | TreeRow::Tab(p, w, _) => Some((*p, *w)),
-        _ => None,
-    });
+    let above = i.checked_sub(1).and_then(|j| rows.get(j)).and_then(|row| row.workspace());
     let below = rows.get(i + 1).and_then(|row| match row {
         TreeRow::Tab(p, w, _) | TreeRow::NewTab(p, w) => Some((*p, *w)),
         _ => None,
@@ -3863,9 +3905,11 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
                 draw_tab_band(f, view, band(vec![marker(mark), Span::raw(lead)]), entry, mark);
                 draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::Tee);
             }
-            TreeRow::NewTab(..) => {
-                let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-                draw_button(f, r, &format!("{lead} "), "+ tab", style);
+            TreeRow::NewTab(p, w) => {
+                if !workspace(p, w).is_some_and(|entry| entry.removing) {
+                    let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
+                    draw_button(f, r, &format!("{lead} "), "+ tab", style);
+                }
                 draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::End);
             }
             TreeRow::NewWorkspace(_) => {
@@ -4101,7 +4145,12 @@ mod tests {
             View {
                 has_project: true,
                 issues: true,
-                workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0 }],
+                workspaces: vec![WorkspaceEntry {
+                    name: "main".into(),
+                    tabs: vec!["zsh".into()],
+                    behind: 0,
+                    removing: false,
+                }],
                 active_tab: Some(0),
                 changes: Some(panel),
                 changes_button: Some(ChangesButton { label: "changes 3".into(), open: true }),
@@ -4533,8 +4582,13 @@ mod tests {
                 active_tab: Some(0),
                 sidebar,
                 workspaces: vec![
-                    WorkspaceEntry { name: "login".into(), tabs: vec!["claude".into(), "nvim".into()], behind: 0 },
-                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0 },
+                    WorkspaceEntry {
+                        name: "login".into(),
+                        tabs: vec!["claude".into(), "nvim".into()],
+                        behind: 0,
+                        removing: false,
+                    },
+                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false },
                 ],
                 ..view(&["tmp", "api", "cornercase"])
             };
@@ -4809,8 +4863,18 @@ mod tests {
             let workspaces = vec![
                 Vec::new(),
                 vec![
-                    WorkspaceEntry { name: "main".into(), tabs: vec![claude, "zsh".into()], behind: 0 },
-                    WorkspaceEntry { name: "issue-50-reorder".into(), tabs: vec![finished], behind: 2 },
+                    WorkspaceEntry {
+                        name: "main".into(),
+                        tabs: vec![claude, "zsh".into()],
+                        behind: 0,
+                        removing: false,
+                    },
+                    WorkspaceEntry {
+                        name: "issue-50-reorder".into(),
+                        tabs: vec![finished],
+                        behind: 2,
+                        removing: false,
+                    },
                 ],
                 Vec::new(),
             ];
@@ -5192,8 +5256,13 @@ mod tests {
             View {
                 has_project: true,
                 workspaces: vec![
-                    WorkspaceEntry { name: "feat/login".into(), tabs: vec!["claude".into(), "nvim".into()], behind: 0 },
-                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0 },
+                    WorkspaceEntry {
+                        name: "feat/login".into(),
+                        tabs: vec!["claude".into(), "nvim".into()],
+                        behind: 0,
+                        removing: false,
+                    },
+                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false },
                 ],
                 active_tab: Some(0),
                 nav,
@@ -5456,7 +5525,12 @@ mod tests {
         fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
             let v = View {
                 has_project: true,
-                workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into(); 10], behind: 0 }],
+                workspaces: vec![WorkspaceEntry {
+                    name: "main".into(),
+                    tabs: vec!["zsh".into(); 10],
+                    behind: 0,
+                    removing: false,
+                }],
                 active_tab: Some(0),
                 ..view(&["cornercase"])
             };
@@ -5575,8 +5649,13 @@ mod tests {
             View {
                 has_project: true,
                 workspaces: vec![
-                    WorkspaceEntry { name: "login".into(), tabs: vec!["claude".into(), "nvim".into()], behind: 0 },
-                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0 },
+                    WorkspaceEntry {
+                        name: "login".into(),
+                        tabs: vec!["claude".into(), "nvim".into()],
+                        behind: 0,
+                        removing: false,
+                    },
+                    WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false },
                 ],
                 active_tab,
                 ..view(&["cornercase"])
@@ -5651,6 +5730,13 @@ mod tests {
             insta::assert_snapshot!(render(&v).backend());
         }
 
+        #[test]
+        fn renders_a_workspace_being_removed_without_its_buttons() {
+            let mut v = View { hover: Some(at(0)), active_workspace: 1, ..with_workspaces(Some(0)) };
+            v.workspaces[0] = WorkspaceEntry { behind: 3, removing: true, tabs: Vec::new(), name: "login".into() };
+            insta::assert_snapshot!(render(&v).backend());
+        }
+
         #[rstest]
         #[case::nothing_to_pull("login", 0, "  login")]
         #[case::some("login", 3, "  login            ↓3")]
@@ -5676,7 +5762,7 @@ mod tests {
         #[test]
         fn an_empty_workspace_says_so_in_the_pane() {
             let v = View {
-                workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: Vec::new(), behind: 0 }],
+                workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: Vec::new(), behind: 0, removing: false }],
                 ..with_workspaces(None)
             };
             let text: String =
@@ -5711,11 +5797,13 @@ mod tests {
                             "nvim".into(),
                         ],
                         behind: 2,
+                        removing: false,
                     },
                     WorkspaceEntry {
                         name: "main".into(),
                         tabs: vec![tab("claude", Some(Status::Done)), tab("claude", Some(Status::Idle))],
                         behind: 0,
+                        removing: false,
                     },
                 ],
                 active_tab: Some(0),
@@ -5846,7 +5934,12 @@ mod tests {
             let claude = TabEntry { status: Some(Status::Working), details, ..TabEntry::from("claude") };
             View {
                 has_project: true,
-                workspaces: vec![WorkspaceEntry { name: "login".into(), tabs: vec![claude, "nvim".into()], behind: 0 }],
+                workspaces: vec![WorkspaceEntry {
+                    name: "login".into(),
+                    tabs: vec![claude, "nvim".into()],
+                    behind: 0,
+                    removing: false,
+                }],
                 active_tab: Some(0),
                 ..view(&["shop"])
             }
@@ -6323,6 +6416,12 @@ mod tests {
         fn panes_are_drawn_with_dividers_that_join() {
             let v = View { tab: Some(three(true)), ..view(&["~"]) };
             insta::assert_snapshot!(render(&v).backend());
+        }
+
+        #[test]
+        fn without_room_for_every_pane_only_the_active_one_is_drawn() {
+            let v = View { tab: Some(three(true)), ..view(&["~"]) };
+            insta::assert_snapshot!(render_sized(&v, W, 6).backend());
         }
 
         #[test]
@@ -7166,6 +7265,7 @@ mod tests {
                     name: "login".into(),
                     tabs: vec!["claude".into(), "nvim".into()],
                     behind: 3,
+                    removing: false,
                 }],
                 active_tab: Some(0),
                 light,

@@ -19,9 +19,9 @@ use crate::git;
 use crate::keys;
 use crate::launch::{self, Launch};
 use crate::notify::{self, Notification};
-use crate::project::{Project, Tab, Workspace};
+use crate::project::{Phase, Project, Tab, Workspace};
 use crate::search::Goto;
-use crate::split::{self, Dir};
+use crate::split::Dir;
 use crate::term::{self, Term};
 use crate::ui;
 use crate::update;
@@ -58,6 +58,11 @@ impl Requests {
     fn key(&mut self) -> u64 {
         self.next += 1;
         self.next
+    }
+
+    fn take(&mut self, key: u64) -> Option<Pending> {
+        let found = self.pending.iter().position(|p| p.key == key)?;
+        Some(self.pending.remove(found))
     }
 }
 
@@ -561,7 +566,7 @@ impl App {
                 place(self, p, None, None)
             }
             Item::Workspace(id) => {
-                let (p, w) = self.workspace_position(id).ok_or_else(|| none("workspace", id))?;
+                let (p, w) = self.usable_workspace(id)?;
                 place(self, p, Some(w), None)
             }
             Item::Tab(id) => {
@@ -612,7 +617,7 @@ impl App {
                 .workspaces
                 .iter()
                 .enumerate()
-                .filter(|(_, w)| !w.closing)
+                .filter(|(_, w)| !w.closing())
                 .map(|(w, ws)| workspace_info(w, ws, project.active))
                 .collect(),
         });
@@ -693,8 +698,17 @@ impl App {
         Ok(Some(json(&Done { ids, ..Done::default() })))
     }
 
+    fn usable_workspace(&self, id: u64) -> Result<(usize, usize), String> {
+        let (p, w) = self.workspace_position(id).ok_or_else(|| none("workspace", id))?;
+        match self.projects[p].workspaces[w].phase {
+            Phase::Open => Ok((p, w)),
+            Phase::Removing(_) => Err(format!("workspace {id} is being removed")),
+            Phase::Closing => Err(format!("workspace {id} is closing")),
+        }
+    }
+
     fn workspace_on(&self, p: usize, branch: &str) -> Option<u64> {
-        let workspaces = self.projects[p].workspaces.iter().filter(|w| !w.closing);
+        let workspaces = self.projects[p].workspaces.iter().filter(|w| w.open());
         workspaces.into_iter().find(|w| git::branch(&w.path).as_deref() == Some(branch)).map(|w| w.id)
     }
 
@@ -777,7 +791,7 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let (p, w) = match new.workspace {
-            Some(id) => self.workspace_position(id).ok_or_else(|| none("workspace", id))?,
+            Some(id) => self.usable_workspace(id)?,
             None => self.here_workspace(caller)?,
         };
         let t = self.push_tab(p, w, area, name_of(new.name)).map_err(|e| e.to_string())?;
@@ -802,8 +816,7 @@ impl App {
         let pane = self.target(caller, split.pane, None)?;
         let (p, w, t) = self.locate(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
-        let rect = self.projects[p].workspaces[w].tabs[t].layout.pane(self.layout(area).pane, pane);
-        if !rect.is_some_and(|r| split::fits(r, dir)) {
+        if !self.projects[p].workspaces[w].tabs[t].can_split(self.layout(area).pane, pane, dir) {
             return Err(format!("pane {pane} is too small to split {way}"));
         }
         let new =
@@ -831,7 +844,7 @@ impl App {
         let spec = launch::Spec { command: agents::command_line(&self.config, &kind), prompt, submit: true };
         let name = name_of(start.name);
         let (p, w) = if let Some(id) = start.workspace {
-            self.workspace_position(id).ok_or_else(|| none("workspace", id))?
+            self.usable_workspace(id)?
         } else if let Some(branch) = start.worktree.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
             let p = self.here(caller).project.ok_or(NO_PROJECT)?;
             let open = self.workspace_on(p, branch).and_then(|id| self.workspace_position(id));
@@ -976,13 +989,17 @@ impl App {
                 self.projects[p].workspaces[w].tabs[t].panes.iter_mut().for_each(Term::kill);
             }
             Item::Workspace(id) => {
-                let (p, w) = self.workspace_position(id).ok_or_else(|| none("workspace", id))?;
+                let (p, w) = self.usable_workspace(id)?;
                 if close.remove_worktree {
                     if !self.projects[p].workspaces[w].worktree {
                         return Err(format!("workspace {id} is not a git worktree"));
                     }
                     let key = self.requests.key();
-                    self.spawn_removal(p, w, close.force, Some(key));
+                    if close.force {
+                        self.start_removal(self.projects[p].id, id, true, Some(key));
+                    } else {
+                        self.spawn_check(p, w, Some(key));
+                    }
                     let pending = Pending {
                         client: Some(client),
                         key,
@@ -1009,12 +1026,22 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    pub(super) fn worktree_gone(&mut self, key: u64, project: u64, workspace: u64, result: error::Result<()>) {
-        let found = self.requests.pending.iter().position(|p| p.key == key);
-        let pending = found.map(|i| self.requests.pending.remove(i));
-        if result.is_ok() {
-            self.drop_workspace(project, workspace);
+    pub(super) fn removal_checked(&mut self, key: u64, project: u64, workspace: u64, changed: bool) {
+        if !changed && self.start_removal(project, workspace, false, Some(key)) {
+            return;
         }
+        let Some(pending) = self.requests.take(key) else { return };
+        let message = if changed {
+            format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
+        } else {
+            self.usable_workspace(workspace).err().unwrap_or_else(|| none("workspace", workspace))
+        };
+        self.answer(pending.client, Err(message));
+    }
+
+    pub(super) fn worktree_gone(&mut self, key: u64, project: u64, workspace: u64, result: error::Result<()>) {
+        let pending = self.requests.take(key);
+        self.settle_removal(project, workspace, result.is_ok());
         let Some(pending) = pending else { return };
         self.answer(pending.client, result.map(|()| json(&Done::default())).map_err(|e| e.to_string()));
     }
@@ -1030,7 +1057,7 @@ impl App {
                 Target::Project(id)
             }
             Some(Item::Workspace(id)) => {
-                let (p, _) = self.workspace_position(id).ok_or_else(|| none("workspace", id))?;
+                let (p, _) = self.usable_workspace(id)?;
                 Target::Workspace(self.projects[p].id, id)
             }
             Some(Item::Tab(id)) => self.tab_target(self.locate_tab(id)).ok_or_else(|| none("tab", id))?,

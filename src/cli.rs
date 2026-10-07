@@ -57,8 +57,9 @@ const NEW_TAB_HELP: &str = "Examples:
 const SPLIT_HELP: &str = "Examples:
   cornercase split -- htop
   cornercase split --pane 7 --down -- tail -f server.log";
-const START_HELP: &str = "The agent starts with its command and arguments from settings → agents, and its folder trust
-question is answered when the settings allow it. Once it is ready, the prompt is pasted and
+const START_HELP: &str = "The agent starts with its command and arguments from settings → agents. If it asks whether
+you trust the folder, the question waits for your answer unless settings → agents accept it for
+you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
 --wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting
 (it needs an answer).

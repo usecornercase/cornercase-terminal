@@ -60,6 +60,10 @@ pub fn remove(repo: &Path, path: &Path, force: bool) -> Result<()> {
     check(git(repo, args)?).map(drop)
 }
 
+pub fn changed(path: &Path) -> Result<bool> {
+    check(git(path, ["--no-optional-locks", "status", "--porcelain"])?).map(|out| !out.is_empty())
+}
+
 pub fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
     command(repo, args).stdin(Stdio::null()).output().map_err(Error::RunGit)
 }
@@ -295,6 +299,19 @@ mod tests {
             remove(repo.path(), &path, true).expect("remove");
 
             assert!(!path.exists());
+        }
+
+        #[rstest]
+        #[case::nothing(None, false)]
+        #[case::an_edited_file(Some("README"), true)]
+        #[case::a_new_file(Some("notes.txt"), true)]
+        fn changes_are_what_makes_git_refuse(#[case] written: Option<&str>, #[case] expected: bool) {
+            let (_repo, _tmp, path) = with_worktree();
+            if let Some(name) = written {
+                std::fs::write(path.join(name), "changed").expect("write file");
+            }
+
+            assert_eq!(changed(&path).expect("git status"), expected);
         }
     }
 }

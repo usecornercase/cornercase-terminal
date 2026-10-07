@@ -1130,8 +1130,8 @@ fn a_workspace_with_its_own_worktree_is_created_and_removed() {
     app.wait_for("it asks first", |s| s.contains("remove workspace"));
     app.click(ui::form_buttons(ui::form_area(AREA), "remove")[0].as_position());
 
-    app.wait_for("the workspace goes away", |s| !s.contains("e2e/login") && !s.contains("remove workspace"));
-    assert!(!checkout.exists(), "the checkout is still there");
+    app.wait_for("git removes it and says so", |s| s.contains("removed e2e/login") && !s.contains("remove workspace"));
+    assert!(!app.row(y).contains("e2e/login") && !checkout.exists(), "the row or the checkout is still there");
     let _ = std::fs::remove_dir_all(&repo);
 }
 
@@ -1179,6 +1179,10 @@ fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
     app.wait_for_raw("the URL reaches the outer terminal's clipboard", |raw| raw.contains(&osc52));
     app.send(b"\r");
 
+    app.wait_for("the agent asks whether to trust the folder", |s| {
+        s.contains("#7 Fix the login") && s.contains("Do you trust the files") && !s.contains("cancel")
+    });
+    app.send(b"\r");
     app.wait_for("the agent starts in the issue workspace with the prompt typed", |s| {
         s.contains("#7 Fix the login") && s.contains("agent ready> https://") && !s.contains("cancel")
     });
@@ -1241,7 +1245,9 @@ fn a_pane_splits_from_its_menu_and_closes_on_exit() {
     let mut app = Harness::start();
     let at = Position::new(pane().x + 2, pane().y + 2);
     let items = ["split right", "split down", "send right-clicks to the pane", "close pane"];
-    let (_, right, divider) = split::split_rect(pane(), Dir::Right, split::HALF);
+    let mut layout = split::Node::Leaf(0);
+    layout.split(0, Dir::Right, 1);
+    let (right, divider) = (layout.panes(pane())[1].1, layout.dividers(pane())[0].line);
 
     app.right_click(at);
     app.wait_for("the pane menu opens", |s| s.contains("split right"));

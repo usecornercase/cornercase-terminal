@@ -41,6 +41,7 @@ pub struct Launch {
     trusted_screen: Option<String>,
     echo: String,
     undrawn: bool,
+    asked: bool,
 }
 
 pub struct Seen<'a> {
@@ -49,6 +50,13 @@ pub struct Seen<'a> {
     pub application_cursor: bool,
     pub screen: &'a mut dyn FnMut() -> String,
     pub trust_prompt: &'a dyn Fn(&str) -> bool,
+    pub trust: Trust,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trust {
+    LeftToYou,
+    Accepted,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,6 +81,7 @@ impl Launch {
             trusted_screen: None,
             echo: String::new(),
             undrawn: false,
+            asked: false,
         }
     }
 
@@ -85,8 +94,16 @@ impl Launch {
     }
 
     pub fn output(&mut self, now: Instant) {
+        if self.asked {
+            self.since = now;
+        }
         self.output = Some(now);
         self.undrawn = false;
+        self.asked = false;
+    }
+
+    pub fn waits_for_you(&self) -> bool {
+        self.asked
     }
 
     pub fn submits(&self) -> bool {
@@ -127,6 +144,7 @@ impl Launch {
                     Step::Wait
                 }
             }
+            Stage::Agent if self.asked => Step::Wait,
             Stage::Agent => {
                 let latest = now.duration_since(self.since) >= AGENT_LATEST;
                 if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
@@ -137,15 +155,19 @@ impl Launch {
                     self.undrawn = true;
                     return Step::Wait;
                 }
-                if self.trusts < MAX_TRUSTS
-                    && self.trusted_screen.as_ref() != Some(&screen)
-                    && (seen.trust_prompt)(&screen)
-                {
-                    self.trusts += 1;
-                    let keys = answer_keys(&screen, seen.application_cursor);
-                    self.trusted_screen = Some(screen);
-                    self.next(Stage::Agent, now);
-                    return Step::Write(keys);
+                if (seen.trust_prompt)(&screen) {
+                    if seen.trust == Trust::LeftToYou {
+                        self.next(Stage::Agent, now);
+                        self.asked = true;
+                        return Step::Wait;
+                    }
+                    if self.trusts < MAX_TRUSTS && self.trusted_screen.as_ref() != Some(&screen) {
+                        self.trusts += 1;
+                        let keys = answer_keys(&screen, seen.application_cursor);
+                        self.trusted_screen = Some(screen);
+                        self.next(Stage::Agent, now);
+                        return Step::Write(keys);
+                    }
                 }
                 let Some(prompt) = &self.spec.prompt else { return Step::Done(Vec::new()) };
                 let text = if self.spec.submit && seen.bracketed_paste { prompt.clone() } else { one_line(prompt) };
@@ -219,6 +241,7 @@ mod tests {
     struct World {
         shell: bool,
         bracketed: bool,
+        trust: Trust,
         screen: String,
     }
 
@@ -232,16 +255,21 @@ mod tests {
             application_cursor: false,
             screen: &mut read,
             trust_prompt: &trust,
+            trust: world.trust,
         };
         launch.step(now, &mut seen)
     }
 
     fn shell() -> World {
-        World { shell: true, bracketed: false, screen: "$ ".into() }
+        World { shell: true, bracketed: false, trust: Trust::Accepted, screen: "$ ".into() }
     }
 
     fn agent(screen: &str) -> World {
-        World { shell: false, bracketed: true, screen: screen.into() }
+        World { shell: false, bracketed: true, trust: Trust::Accepted, screen: screen.into() }
+    }
+
+    fn asking_you(screen: &str) -> World {
+        World { trust: Trust::LeftToYou, ..agent(screen) }
     }
 
     fn started(submit: bool) -> (Launch, Instant) {
@@ -358,6 +386,50 @@ mod tests {
         let (mut launch, t) = started(false);
         step(&mut launch, t + AGENT_QUIET, &agent("Do you trust the files?"));
         assert!(matches!(step(&mut launch, t + 2 * AGENT_QUIET, &agent("Do you trust the files?")), Step::Done(_)));
+    }
+
+    #[test]
+    fn leaves_the_trust_question_to_you_unless_told_to_accept_it() {
+        let (mut launch, t) = started(false);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &asking_you("Do you trust the files?")), Step::Wait);
+    }
+
+    #[test]
+    fn never_types_into_a_trust_question_left_to_you() {
+        let (mut launch, t) = started(false);
+        let asked = asking_you("Do you trust the files?");
+        step(&mut launch, t + AGENT_QUIET, &asked);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET + AGENT_LATEST, &asked), Step::Wait);
+    }
+
+    #[test]
+    fn a_launch_waiting_for_you_needs_no_polling_until_the_agent_prints() {
+        let (mut launch, t) = started(false);
+        step(&mut launch, t + AGENT_QUIET, &asking_you("Do you trust the files?"));
+        let parked = launch.waits_for_you();
+
+        launch.output(t + 2 * AGENT_QUIET);
+
+        assert_eq!((parked, launch.waits_for_you()), (true, false));
+    }
+
+    #[test]
+    fn an_answer_given_much_later_still_gets_its_quiet_second() {
+        let (mut launch, t) = started(false);
+        step(&mut launch, t + AGENT_QUIET, &asking_you("Do you trust the files?"));
+        let answered = t + 100 * AGENT_LATEST;
+
+        launch.output(answered);
+
+        assert_eq!(step(&mut launch, answered + 100 * MS, &asking_you("> ")), Step::Wait);
+    }
+
+    #[test]
+    fn pastes_the_prompt_once_you_have_answered_the_trust_question() {
+        let (mut launch, t) = started(false);
+        step(&mut launch, t + AGENT_QUIET, &asking_you("Do you trust the files?"));
+        launch.output(t + 5 * AGENT_QUIET);
+        assert!(matches!(step(&mut launch, t + 6 * AGENT_QUIET, &asking_you("> ")), Step::Done(_)));
     }
 
     #[test]

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use ratatui::layout::{Position, Rect};
+
 use crate::activity::Status;
 use crate::config::Config;
 use crate::context::Context;
@@ -62,6 +64,22 @@ impl Tab {
         }
     }
 
+    pub fn shown(&self, area: Rect) -> Vec<(u64, Rect)> {
+        self.pane().map(|t| self.layout.visible(area, t.id)).unwrap_or_default()
+    }
+
+    pub fn rect(&self, area: Rect, id: u64) -> Option<Rect> {
+        self.layout.pane(area, self.pane()?.id, id)
+    }
+
+    pub fn pane_at(&self, area: Rect, pos: Position) -> Option<u64> {
+        self.layout.pane_at(area, self.pane()?.id, pos)
+    }
+
+    pub fn can_split(&self, area: Rect, id: u64, dir: Dir) -> bool {
+        self.layout.has_room(area) && self.rect(area, id).is_some_and(|r| split::fits(r, dir))
+    }
+
     pub fn split(&mut self, target: u64, dir: Dir, term: Term, focus: bool) {
         if self.layout.split(target, dir, term.id) {
             self.panes.push(term);
@@ -112,10 +130,17 @@ pub struct Workspace {
     pub worktree: bool,
     pub tabs: Vec<Tab>,
     pub active: usize,
-    pub closing: bool,
+    pub phase: Phase,
     pub behind: u32,
     pub base: Option<String>,
     pub collapsed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Phase {
+    Open,
+    Removing(String),
+    Closing,
 }
 
 impl Workspace {
@@ -127,11 +152,27 @@ impl Workspace {
             worktree,
             tabs: Vec::new(),
             active: 0,
-            closing: false,
+            phase: Phase::Open,
             behind: 0,
             base: None,
             collapsed: false,
         }
+    }
+
+    pub fn open(&self) -> bool {
+        self.phase == Phase::Open
+    }
+
+    pub fn closing(&self) -> bool {
+        self.phase == Phase::Closing
+    }
+
+    pub fn removing(&self) -> bool {
+        matches!(self.phase, Phase::Removing(_))
+    }
+
+    pub fn start_removing(&mut self) {
+        self.phase = Phase::Removing(self.label());
     }
 
     pub fn tab(&self) -> Option<&Tab> {
@@ -151,6 +192,9 @@ impl Workspace {
     }
 
     pub fn label(&self) -> String {
+        if let Phase::Removing(label) = &self.phase {
+            return label.clone();
+        }
         self.name.clone().or_else(|| crate::git::branch(&self.path)).unwrap_or_else(|| "default".into())
     }
 
@@ -211,10 +255,20 @@ impl Project {
 
     pub fn remove_term(&mut self, id: u64) -> bool {
         let Some(w) = self.workspaces.iter_mut().position(|w| w.remove_term(id)) else { return false };
-        if self.workspaces[w].closing && self.workspaces[w].tabs.is_empty() {
+        if self.workspaces[w].closing() && self.workspaces[w].tabs.is_empty() {
             self.remove_workspace(w);
         }
         true
+    }
+
+    pub fn step_off(&mut self, w: usize) {
+        if self.active != w {
+            return;
+        }
+        let mut others = (0..w).rev().chain(w + 1..self.workspaces.len());
+        if let Some(other) = others.find(|&o| self.workspaces[o].open()) {
+            self.active = other;
+        }
     }
 
     pub fn remove_workspace(&mut self, w: usize) {

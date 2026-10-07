@@ -501,7 +501,7 @@ impl App {
         root: &Path,
     ) -> Option<(u16, Range<u16>)> {
         let term = tab.pane()?;
-        let pane = tab.layout.pane(pane_area, term.id)?;
+        let pane = tab.rect(pane_area, term.id)?;
         if !pane.contains(hover) {
             return None;
         }

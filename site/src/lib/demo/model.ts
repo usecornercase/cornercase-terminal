@@ -43,6 +43,7 @@ export interface Workspace {
   flags: Place['flags'];
   behind?: number;
   collapsed?: boolean;
+  removing?: boolean;
 }
 
 export interface Group {
@@ -134,7 +135,7 @@ export type Overlay =
   | { kind: 'groupStyle'; group: number }
   | { kind: 'newWorkspace'; project: number; input: string; worktree: boolean | null; error?: string; creating?: boolean }
   | { kind: 'rename'; target: Target; input: string }
-  | { kind: 'remove'; project: number; workspace: number; removing?: boolean }
+  | { kind: 'remove'; project: number; workspace: number }
   | { kind: 'deleteGroup'; group: number }
   | { kind: 'closeProject'; project: number }
   | { kind: 'closeWorkspace'; project: number; workspace: number }
@@ -171,7 +172,7 @@ export const defaultConfig = (): Config => ({
   fetchMinutes: 5,
   agent: 'claude',
   submit: false,
-  trust: true,
+  trust: false,
   sidebar: 'projects_on_top',
   dim: true,
   model: true,

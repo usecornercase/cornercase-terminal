@@ -9,6 +9,7 @@ pub const CLAUDE: &str = "claude";
 pub const CODEX: &str = "codex";
 pub const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
+const TRUST_LINES: usize = 15;
 const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
@@ -205,12 +206,24 @@ pub fn detect(config: &Config, argv: &[String]) -> Option<String> {
     })
 }
 
-pub fn trust_prompt(config: &Config, screen: &str) -> bool {
-    config.auto_accept_trust_prompt
-        && regex::RegexBuilder::new(&config.trust_prompt_pattern)
-            .case_insensitive(true)
-            .build()
-            .is_ok_and(|re| re.is_match(screen))
+#[derive(Debug, Default)]
+pub struct TrustPrompt {
+    compiled: Option<(String, Option<regex::Regex>)>,
+}
+
+impl TrustPrompt {
+    pub fn regex(&mut self, pattern: &str) -> Option<&regex::Regex> {
+        if self.compiled.as_ref().is_none_or(|(compiled, _)| compiled != pattern) {
+            let regex = regex::RegexBuilder::new(pattern).case_insensitive(true).build().ok();
+            self.compiled = Some((pattern.to_string(), regex));
+        }
+        self.compiled.as_ref().and_then(|(_, regex)| regex.as_ref())
+    }
+}
+
+pub fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().filter(|line| !line.trim().is_empty()).collect();
+    regex.is_match(&lines[lines.len().saturating_sub(TRUST_LINES)..].join("\n"))
 }
 
 #[cfg(test)]
@@ -403,20 +416,42 @@ mod tests {
     mod trust {
         use super::*;
 
+        fn asks(pattern: &str, screen: &str) -> bool {
+            TrustPrompt::default().regex(pattern).is_some_and(|re| asks_trust(re, screen))
+        }
+
         #[test]
         fn recognises_claudes_folder_question() {
-            assert!(trust_prompt(&config(), "Do you trust the files in this folder?\n❯ 1. Yes, proceed"));
+            assert!(asks(DEFAULT_TRUST_PROMPT, "Do you trust the files in this folder?\n❯ 1. Yes, proceed"));
         }
 
         #[test]
         fn ignores_other_screens() {
-            assert!(!trust_prompt(&config(), "> How can I help?"));
+            assert!(!asks(DEFAULT_TRUST_PROMPT, "> How can I help?"));
         }
 
         #[test]
-        fn can_be_turned_off() {
-            let c = Config { auto_accept_trust_prompt: false, ..config() };
-            assert!(!trust_prompt(&c, "Do you trust the files in this folder?"));
+        fn looks_only_at_the_last_lines_of_the_screen() {
+            let screen = format!("$ cat notes\ndo you trust me?\n{}> How can I help?", "line\n".repeat(TRUST_LINES));
+            assert!(!asks(DEFAULT_TRUST_PROMPT, &screen));
+        }
+
+        #[test]
+        fn blank_lines_do_not_push_the_question_out() {
+            let screen = format!("Do you trust the files in this folder?{}❯ 1. Yes, proceed", "\n".repeat(40));
+            assert!(asks(DEFAULT_TRUST_PROMPT, &screen));
+        }
+
+        #[test]
+        fn an_invalid_pattern_never_matches() {
+            assert!(!asks("trust(", "Do you trust the files?"));
+        }
+
+        #[test]
+        fn follows_a_changed_pattern() {
+            let mut trust = TrustPrompt::default();
+            trust.regex(DEFAULT_TRUST_PROMPT);
+            assert!(trust.regex("how can i help").is_some_and(|re| asks_trust(re, "> How can I help?")));
         }
     }
 }

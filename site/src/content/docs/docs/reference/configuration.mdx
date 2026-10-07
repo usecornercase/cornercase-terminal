@@ -30,14 +30,14 @@ The modal has four tabs. Click a row, or select it and press `Enter`, to change 
 <Screen
   name="settings-agents"
   crop={[2, 1, 106, 28]}
-  alt="The Agents tab: default agent claude, send the prompt unticked, trust prompts accepted, and how each agent starts: claude in plan mode, codex and gemini in their default mode, plus another agent"
+  alt="The Agents tab: default agent claude, send the prompt unticked, trust prompts left to you, and how each agent starts: claude in plan mode, codex and gemini in their default mode, plus another agent"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
-| **trust prompts** | On: cornercase answers "do you trust this folder?" questions when it starts an agent. |
+| **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
 
@@ -124,7 +124,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "agent_commands": {},
   "prompt": "{url}",
   "submit": false,
-  "auto_accept_trust_prompt": true,
+  "accept_trust_prompts": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "sidebar": "projects_on_top",
@@ -153,7 +153,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`agent_commands`](#agent_commands) | object | `{}` |
 | [`prompt`](#prompt) | string | `"{url}"` |
 | [`submit`](#submit) | boolean | `false` |
-| [`auto_accept_trust_prompt`](#auto_accept_trust_prompt) | boolean | `true` |
+| [`accept_trust_prompts`](#accept_trust_prompts) | boolean | `false` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
@@ -212,13 +212,13 @@ The [prompt template](../prompt/) handed to an agent started on an issue. Placeh
 
 `true` sends the prompt for you; `false` leaves it typed at the agent's prompt for you to send.
 
-#### `auto_accept_trust_prompt`
+#### `accept_trust_prompts`
 
-Whether cornercase answers the agent's "do you trust this folder?" question when it starts one.
+Whether cornercase answers yes to the agent's "do you trust this folder?" question when it starts one. Off by default: you answer, and the prompt waits until you have. Older versions called this key `auto_accept_trust_prompt` and had it on; that key is ignored now, so it is off until you turn it on again. See [Trust prompts](../agents/#trust-prompts).
 
 #### `trust_prompt_pattern`
 
-The regular expression, matched without regard to case against the agent's screen, that recognises a trust question. The default is:
+The regular expression, matched without regard to case against the last 15 non-blank lines of the agent's screen, that recognises a trust question. The default is:
 
 ```text
 trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed

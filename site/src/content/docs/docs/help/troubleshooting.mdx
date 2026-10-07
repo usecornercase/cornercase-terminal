@@ -194,7 +194,11 @@ The [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs `clau
 
 ### The trust question isn't answered
 
-Check that **settings → Agents → trust prompts** is on. If your agent words the question differently, extend `trust_prompt_pattern` in [`config.json`](../../reference/agents/#trust-prompts) so it matches.
+By default it is left to you: answer it in the tab, and the prompt is pasted once the agent is ready. To have cornercase answer it, turn on **settings → Agents → trust prompts**. If it is on and your agent words the question differently, extend `trust_prompt_pattern` in [`config.json`](../../reference/agents/#trust-prompts) so it matches.
+
+### The prompt never shows up after the trust question
+
+cornercase waits while the question is on screen. If your agent's normal screen happens to match `trust_prompt_pattern` in its last lines, cornercase keeps waiting: narrow the pattern in [`config.json`](../../reference/agents/#trust-prompts).
 
 ### The prompt isn't sent
 

@@ -34,7 +34,7 @@ pub struct Config {
     pub agent_commands: BTreeMap<String, String>,
     pub prompt: String,
     pub submit: bool,
-    pub auto_accept_trust_prompt: bool,
+    pub accept_trust_prompts: bool,
     pub trust_prompt_pattern: String,
     pub gh: String,
     pub sidebar: String,
@@ -61,7 +61,7 @@ impl Default for Config {
             agent_commands: BTreeMap::new(),
             prompt: DEFAULT_PROMPT.into(),
             submit: false,
-            auto_accept_trust_prompt: true,
+            accept_trust_prompts: false,
             trust_prompt_pattern: agents::DEFAULT_TRUST_PROMPT.into(),
             gh: DEFAULT_GH.into(),
             sidebar: ui::Sidebar::default().id().into(),
@@ -206,6 +206,17 @@ mod tests {
         fn an_agent_tab_starts_with_its_model_and_context_but_not_its_memory() {
             let c = Config::default();
             assert_eq!((c.model, c.context, c.memory), (true, true, false));
+        }
+
+        #[rstest]
+        #[case::nothing_set("{}")]
+        #[case::accepted_before_the_rename(r#"{"auto_accept_trust_prompt": true}"#)]
+        fn trust_prompts_are_left_to_you(#[case] file: &str) {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("config.json");
+            std::fs::write(&path, file).expect("write");
+
+            assert!(!load(&path).accept_trust_prompts);
         }
 
         #[rstest]

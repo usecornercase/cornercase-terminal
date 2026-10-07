@@ -109,9 +109,9 @@ Hover the workspace and click its `×`. Because removing the workspace also dele
   alt="The remove workspace dialog: Remove the workspace feat/login and delete its worktree folder ~/.cornercase/worktrees/shop/feat-login? The branch is kept."
 />
 
-**remove** runs `git worktree remove` on the checkout. When it succeeds, the workspace's programs are ended and the workspace disappears.
+While the dialog is open, cornercase checks the checkout for modified or untracked files, which git would refuse to delete. If it finds some, the dialog says so and the button becomes **remove anyway**, which runs `git worktree remove --force` and throws those changes away. Click **cancel** to keep the worktree and save your work first.
 
-If the checkout has modified or untracked files, git refuses. cornercase shows git's message and the button becomes **remove anyway**, which runs `git worktree remove --force` and throws those changes away. Click **cancel** to keep the worktree and save your work first.
+**remove** closes the dialog at once, so you can go on working while the folder is deleted, which takes a while for a checkout with `node_modules` or build output. The workspace's programs are ended first, and its row stays, dimmed, with `removing…` at its end until git has finished; meanwhile it can't be opened. If it was the workspace on screen, the view moves to the nearest one, above it when there is one. When git is done, the row goes and a message says `removed <workspace>`. If git refuses after all, for example because the worktree is locked or a file changed in the meantime, the row comes back without its tabs and a message gives git's reason; click its `×` again to **remove anyway**. You can remove several worktrees at once.
 
 <Aside type="note" title="Branches are never deleted">
 Removing a worktree only deletes its folder. The branch and its commits stay in the repository; delete the branch yourself with `git branch -d` when you no longer need it.

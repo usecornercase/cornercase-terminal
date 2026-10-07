@@ -27,11 +27,15 @@ const close: Step = {
   },
 };
 
-const prompted = (app: App): boolean => {
+const activeAgent = (app: App): Agent | null => {
   const tab = app.tab();
-  const agent = tab ? activePane(tab)?.shell.fg : null;
-  return agent instanceof Agent && agent.pending.includes('https://');
+  const fg = tab ? activePane(tab)?.shell.fg : null;
+  return fg instanceof Agent ? fg : null;
 };
+
+const trusting = (app: App): boolean => activeAgent(app)?.trusting ?? false;
+
+const prompted = (app: App): boolean => activeAgent(app)?.pending.includes('https://') ?? false;
 
 const reveal = (scroll: number): Step => ({
   run: (app) => {
@@ -55,6 +59,9 @@ export const CHAPTERS: Step[][] = [
     { click: '#482' },
     { wait: 1600 },
     { click: 'start   agent', dx: 1, orKey: 'Enter' },
+    { until: trusting, timeout: 12000 },
+    { wait: 1400 },
+    { key: 'Enter' },
     { until: prompted, timeout: 12000 },
     { wait: 700 },
     { key: 'Enter' },

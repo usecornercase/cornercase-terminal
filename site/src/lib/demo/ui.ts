@@ -56,7 +56,7 @@ import {
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
-import { type Divider, dividers, grab, panes } from './split';
+import { type Divider, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
 export type Drag = { kind: 'border'; border: Border } | { kind: 'divider'; tab: Tab; divider: Divider; area: Rect };
@@ -70,7 +70,7 @@ export interface Region {
   grab?: Target;
   wheel?: (dy: number) => boolean;
   cursor?: string;
-  pane?: { pane: Pane; rect: Rect; tab: Tab };
+  pane?: { pane: Pane; rect: Rect; tab: Tab; alone: boolean };
 }
 
 export interface Frame {
@@ -301,8 +301,9 @@ export class Painter {
 
   private tab(tab: Tab, area: Rect): void {
     const app = this.app;
-    const list = panes(tab.layout, area);
+    const list = visible(tab.layout, area, tab.active);
     const split = list.length > 1;
+    const alone = !hasRoom(tab.layout, area);
     for (const [id, r] of list) {
       const pane = tab.panes.find((p) => p.id === id);
       if (!pane) continue;
@@ -316,7 +317,7 @@ export class Painter {
       if (sel && sel.pane === id) {
         for (const [x, y] of app.selectedCells(r)) this.g.style(x, y, { add: INVERSE });
       }
-      this.region({ r, pane: { pane, rect: r, tab }, cursor: pane.shell.mouse ? 'default' : 'text' });
+      this.region({ r, pane: { pane, rect: r, tab, alone }, cursor: pane.shell.mouse ? 'default' : 'text' });
       if (link) this.region({ r: rect(link.start, link.y, link.end - link.start, 1), cursor: 'pointer' });
     }
     this.dividers(tab, area);
@@ -558,15 +559,18 @@ export class Painter {
     const app = this.app;
     const project = app.projects[p];
     const ws = project.workspaces[w];
-    const style: Style = p === app.active && w === project.active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
+    const active = p === app.active && w === project.active;
+    const style: Style = ws.removing ? { fg: 8, add: BOLD } : active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
     const room = this.room(b);
     const status = badge ? attention(ws.tabs.map(tabStatus)) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
-    const marks = fitTags([...(status ? [STATUS_ICONS[status]] : []), ...behind], room);
+    const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [STATUS_ICONS[status]] : []), ...behind];
+    const marks = fitTags(tags, room);
     const name = truncateRight(workspaceLabel(ws), room - marks.reserved);
     const line = [...b.lead, seg(name, style)];
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
+    if (ws.removing) return;
     const grab: Target = { kind: 'workspace', project: project.id, workspace: ws.id };
     this.region({ r: b.r, click, right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
     this.closeX(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseWorkspace(p, w) : app.closeWorkspace(p, w)));
@@ -592,6 +596,7 @@ export class Painter {
   }
 
   private newTab(r: Rect, indent: string, p: number, w: number): void {
+    if (this.app.projects[p]?.workspaces[w]?.removing) return;
     this.button(r, indent, '+ tab', this.buttonStyle(r, DARK, 6));
     this.region({ r, click: () => this.app.addTab(p, w), cursor: 'pointer' });
   }

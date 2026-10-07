@@ -23,7 +23,7 @@ use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::{
     self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
 };
-use crate::launch::{self, Launch, Step};
+use crate::launch::{self, Launch, Step, Trust};
 use crate::markdown;
 use crate::memory;
 use crate::mouse;
@@ -31,7 +31,7 @@ use crate::notify::{self, Notification};
 use crate::panics;
 use crate::picker::Picker;
 use crate::process;
-use crate::project::{Group, Project, Tab, Workspace, move_before, shift_active};
+use crate::project::{Group, Phase, Project, Tab, Workspace, move_before, shift_active};
 use crate::restart;
 use crate::search::{self, Candidate, Goto, Kind, Search};
 use crate::secrets;
@@ -60,6 +60,12 @@ pub enum AppEvent {
         project: u64,
         result: Result<PathBuf>,
         start: Option<Start>,
+        request: Option<u64>,
+    },
+    WorktreeChecked {
+        project: u64,
+        workspace: u64,
+        changed: bool,
         request: Option<u64>,
     },
     WorktreeRemoved {
@@ -220,6 +226,7 @@ const REMOVE_SUBMIT: &str = "remove";
 const DELETE_SUBMIT: &str = "delete";
 const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
+const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
 const PICKER_SUBMIT: &str = "open";
 const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
 const WORKTREE_TOGGLE: &str = "with its own worktree";
@@ -269,7 +276,7 @@ enum Overlay {
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
-    RemoveWorkspace { project: u64, workspace: u64, error: Option<String>, force: bool, removing: bool },
+    RemoveWorkspace { project: u64, workspace: u64, check: Check },
     Picker(Picker),
     Issues(Box<Browser>),
     Search(Search),
@@ -282,7 +289,7 @@ impl Overlay {
     fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
-            Self::RemoveWorkspace { force: true, .. } => FORCE_REMOVE_SUBMIT,
+            Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseProject { .. } | Self::CloseWorkspace { .. } | Self::CloseTab { .. } => CLOSE_SUBMIT,
@@ -313,11 +320,19 @@ impl Overlay {
     }
 
     fn busy(&self) -> bool {
-        matches!(self, Self::NewWorkspace { creating: true, .. } | Self::RemoveWorkspace { removing: true, .. })
+        matches!(self, Self::NewWorkspace { creating: true, .. })
             || matches!(self, Self::Issues(b) if b.starting)
             || matches!(self, Self::Settings(s) if s.busy())
             || matches!(self, Self::Update(UpdateStep::Updating))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Check {
+    Running,
+    Confirmed,
+    Clean,
+    Changed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -471,6 +486,7 @@ pub struct App {
     env_tokens: HashMap<Source, String>,
     secrets_path: PathBuf,
     launches: Vec<Launch>,
+    trust_prompt: agents::TrustPrompt,
     fetched: HashMap<u64, Instant>,
     counting: HashSet<u64>,
     counted: Option<Instant>,
@@ -567,6 +583,7 @@ impl App {
             env_tokens: env_tokens(),
             secrets_path,
             launches: Vec::new(),
+            trust_prompt: agents::TrustPrompt::default(),
             fetched: HashMap::new(),
             counting: HashSet::new(),
             counted: None,
@@ -655,7 +672,7 @@ impl App {
         let pane = self.layout(area).pane;
         let tabs = self.projects.iter_mut().flat_map(|p| &mut p.workspaces).flat_map(|w| &mut w.tabs);
         for tab in tabs {
-            for (id, r) in tab.layout.panes(pane) {
+            for (id, r) in tab.shown(pane) {
                 if let Some(term) = tab.panes.iter_mut().find(|t| t.id == id) {
                     term.resize(r.height.max(1), r.width.max(1));
                 }
@@ -678,7 +695,7 @@ impl App {
 
     pub fn tick(&self, now: Instant) -> Option<Duration> {
         let drag = self.row_drag.filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
-        let launch = (!self.launches.is_empty()).then_some(LAUNCH_EVERY);
+        let launch = self.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         [drag, launch, self.next_request(now)].into_iter().flatten().min()
     }
 
@@ -821,8 +838,9 @@ impl App {
         if self.launches.is_empty() {
             return;
         }
-        let config = &self.config;
-        let trust = |screen: &str| agents::trust_prompt(config, screen);
+        let regex = self.trust_prompt.regex(&self.config.trust_prompt_pattern);
+        let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
+        let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
         let mut finished = Vec::new();
         for (i, launch) in self.launches.iter_mut().enumerate() {
             let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == launch.term) else {
@@ -839,7 +857,8 @@ impl App {
                 bracketed_paste,
                 application_cursor,
                 screen: &mut screen,
-                trust_prompt: &trust,
+                trust_prompt: &asks,
+                trust,
             };
             match launch.step(now, &mut seen) {
                 Step::Wait => {}
@@ -879,7 +898,7 @@ impl App {
                 .rev()
                 .filter(|&w| {
                     let ws = &project.workspaces[w];
-                    ws.worktree && ws.tabs.is_empty() && !ws.path.is_dir()
+                    ws.worktree && ws.open() && ws.tabs.is_empty() && !ws.path.is_dir()
                 })
                 .collect();
             for w in gone {
@@ -1296,6 +1315,12 @@ impl App {
             AppEvent::WorktreeCreated { project, result, start, request: None } => {
                 self.worktree_created(project, result, start, area)?;
             }
+            AppEvent::WorktreeChecked { project, workspace, changed, request: Some(key) } => {
+                self.removal_checked(key, project, workspace, changed);
+            }
+            AppEvent::WorktreeChecked { project, workspace, changed, request: None } => {
+                self.worktree_checked(project, workspace, changed);
+            }
             AppEvent::WorktreeRemoved { project, workspace, result, request: Some(key) } => {
                 self.worktree_gone(key, project, workspace, result);
             }
@@ -1535,7 +1560,7 @@ impl App {
         } else if self.files.selecting.is_some() {
             self.drag_lines(ev, areas.changes);
         } else if let Some(term) = self.selecting {
-            let pane = self.tab().and_then(|t| t.layout.pane(areas.pane, term)).unwrap_or(areas.pane);
+            let pane = self.tab().and_then(|t| t.rect(areas.pane, term)).unwrap_or(areas.pane);
             self.drag_selection(term, ev, pane);
         } else if let Some(drag) = self.row_drag {
             self.drag_row(drag, ev, areas, area);
@@ -1578,16 +1603,15 @@ impl App {
         let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
         let right = ev.kind == MouseEventKind::Down(MouseButton::Right);
         let Some(tab) = self.tab() else { return };
-        let (tab_id, layout) = (tab.id, &tab.layout);
         let continues_inside = matches!(ev.kind, MouseEventKind::Drag(_) | MouseEventKind::Up(_));
-        if !continues_inside && let Some(divider) = layout.divider_at(area, pos) {
+        if !continues_inside && let Some(divider) = tab.layout.divider_at(area, pos) {
             if left {
-                self.press_divider(tab_id, divider.path, Instant::now());
+                self.press_divider(tab.id, divider.path, Instant::now());
             }
             return;
         }
         let Some(active) = tab.pane().map(|t| t.id) else { return };
-        let under = layout.pane_at(area, pos);
+        let under = tab.pane_at(area, pos);
         if !continues_inside {
             let Some(id) = under else { return };
             let program_takes_right = tab.right_clicks_to_pane(id)
@@ -1608,7 +1632,7 @@ impl App {
             }
         }
         let Some(tab) = self.tab() else { return };
-        let Some(pane) = tab.pane().and_then(|t| tab.layout.pane(area, t.id)) else { return };
+        let Some(pane) = tab.pane().and_then(|t| tab.rect(area, t.id)) else { return };
         let Some(at) = pane_cell(pane, ev) else { return };
         if self.link_click(ev, at) {
             return;
@@ -1689,12 +1713,14 @@ impl App {
 
     fn open_pane_menu(&mut self, pane: u64, at: Position, area: Rect) {
         let Some(tab) = self.tab() else { return };
-        let Some(r) = tab.layout.pane(area, pane) else { return };
+        if tab.rect(area, pane).is_none() {
+            return;
+        }
         let right_clicks =
             if tab.right_clicks_to_pane(pane) { PaneAction::RightClicksToMenu } else { PaneAction::RightClicksToPane };
         let actions = [Dir::Right, Dir::Down]
             .into_iter()
-            .filter(|&d| split::fits(r, d))
+            .filter(|&d| tab.can_split(area, pane, d))
             .map(PaneAction::Split)
             .chain([right_clicks, PaneAction::Close])
             .map(|a| MenuAction::Pane(pane, a))
@@ -1939,7 +1965,7 @@ impl App {
     fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
         let shape = self.tree_shape();
         let scroll = self.projects_scroll;
-        match ui::tree_hit(list, &shape, scroll, pos) {
+        match self.tree_hit(list, &shape, pos) {
             Some(hit @ (ui::TreeHit::Select(row) | ui::TreeHit::Fold(row))) => {
                 if let Some(target) = self.tree_target(row) {
                     let rect = ui::tree_row(list, &shape, scroll, row);
@@ -2092,7 +2118,7 @@ impl App {
             return Ok(());
         }
         let tabs = self.tab_lines();
-        let hit = ui::workspace_hit(list, pitch, &tabs, self.workspaces_scroll, pos);
+        let hit = self.workspace_hit(list, pitch, &tabs, pos);
         if matches!(hit, Some(WorkspaceHit::NewTab(_) | WorkspaceHit::NewWorkspace)) {
             self.nav = None;
         }
@@ -2135,13 +2161,11 @@ impl App {
     }
 
     fn close_workspace(&mut self, p: usize, w: usize) {
-        let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
         if self.projects[p].workspaces[w].worktree {
-            self.overlay =
-                Some(Overlay::RemoveWorkspace { project, workspace, error: None, force: false, removing: false });
+            self.ask_removal(p, w);
             return;
         }
-        self.drop_workspace(project, workspace);
+        self.drop_workspace(self.projects[p].id, self.projects[p].workspaces[w].id);
     }
 
     fn add_tab(&mut self, p: usize, w: usize, area: Rect) -> Result<()> {
@@ -2276,7 +2300,7 @@ impl App {
                 places.push(Place { project: project.id, workspace: None, label: name, worktree: true });
                 continue;
             }
-            for (w, workspace) in project.workspaces.iter().enumerate().filter(|(_, w)| !w.closing) {
+            for (w, workspace) in project.workspaces.iter().enumerate().filter(|(_, w)| w.open()) {
                 if p == self.active && w == project.active {
                     here = places.len();
                 }
@@ -2730,7 +2754,7 @@ impl App {
                 context: group.map(|g| self.groups[g].entry.name.clone()).unwrap_or_default(),
                 keys: vec![project.clone()],
             });
-            for w in &p.workspaces {
+            for w in p.workspaces.iter().filter(|w| w.open()) {
                 let label = w.label();
                 let mut keys = vec![label.clone()];
                 keys.extend(w.name.as_ref().and_then(|_| git::branch(&w.path)));
@@ -2860,7 +2884,7 @@ impl App {
 
     fn open_tree_menu(&mut self, list: Rect, pos: Position) {
         let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row)) =
-            ui::tree_hit(list, &self.tree_shape(), self.projects_scroll, pos)
+            self.tree_hit(list, &self.tree_shape(), pos)
         else {
             return;
         };
@@ -2875,7 +2899,7 @@ impl App {
 
     fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let Some(project) = self.project() else { return };
-        let target = match ui::workspace_hit(list, pitch, &self.tab_lines(), self.workspaces_scroll, pos) {
+        let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
             Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w)) => {
                 Target::Workspace(project.id, project.workspaces[w].id)
             }
@@ -3128,9 +3152,7 @@ impl App {
                 Some(Overlay::GroupStyle { group: self.add_group(input.trim().to_string()) })
             }
             Overlay::GroupStyle { .. } | Overlay::Usage => None,
-            Overlay::RemoveWorkspace { project, workspace, force, removing: false, .. } => {
-                self.remove_worktree(project, workspace, force)
-            }
+            Overlay::RemoveWorkspace { project, workspace, check } => self.confirm_removal(project, workspace, check),
             Overlay::DeleteGroup { group } => {
                 self.delete_group(group);
                 None
@@ -3550,41 +3572,104 @@ impl App {
         Ok(())
     }
 
-    fn remove_worktree(&mut self, project: u64, workspace: u64, force: bool) -> Option<Overlay> {
-        let (p, w) = self.workspace_index(project, workspace)?;
-        self.spawn_removal(p, w, force, None);
-        Some(Overlay::RemoveWorkspace { project, workspace, error: None, force, removing: true })
+    fn removing(&self, p: usize, w: usize) -> bool {
+        self.projects.get(p).and_then(|p| p.workspaces.get(w)).is_some_and(Workspace::removing)
     }
 
-    fn spawn_removal(&self, p: usize, w: usize, force: bool, request: Option<u64>) {
+    fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &[Vec<u16>], pos: Position) -> Option<WorkspaceHit> {
+        ui::workspace_hit(list, pitch, tabs, self.workspaces_scroll, pos)
+            .filter(|hit| !hit.workspace().is_some_and(|w| self.removing(self.active, w)))
+    }
+
+    fn tree_hit(&self, list: Rect, shape: &ui::TreeShape, pos: Position) -> Option<ui::TreeHit> {
+        ui::tree_hit(list, shape, self.projects_scroll, pos)
+            .filter(|hit| !hit.workspace().is_some_and(|(p, w)| self.removing(p, w)))
+    }
+
+    fn ask_removal(&mut self, p: usize, w: usize) {
+        let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
+        self.spawn_check(p, w, None);
+        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running });
+    }
+
+    fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
-        let (repo, path, tx) = (project.path.clone(), project.workspaces[w].path.clone(), self.tx.clone());
+        let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
         std::thread::spawn(move || {
-            let result = panics::job(|| worktree::remove(&repo, &path, force));
-            let _ = tx.send(AppEvent::WorktreeRemoved { project: id, workspace, result, request });
+            let changed = matches!(panics::job(|| worktree::changed(&path)), Ok(true));
+            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, changed, request });
         });
     }
 
-    fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<()>) {
-        if let Err(e) = result {
-            if let Some(Overlay::RemoveWorkspace { error, force, removing, .. }) = &mut self.overlay {
-                *error = Some(e.to_string());
-                *force = true;
-                *removing = false;
-            }
+    fn confirm_removal(&mut self, project: u64, workspace: u64, check: Check) -> Option<Overlay> {
+        if matches!(check, Check::Running | Check::Confirmed) {
+            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed });
+        }
+        self.start_removal(project, workspace, check == Check::Changed, None);
+        None
+    }
+
+    fn worktree_checked(&mut self, project: u64, workspace: u64, changed: bool) {
+        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check }) = &mut self.overlay else {
+            return;
+        };
+        if (*asked, *shown) != (project, workspace) {
             return;
         }
-        if matches!(self.overlay, Some(Overlay::RemoveWorkspace { .. })) {
-            self.overlay = None;
+        match (*check, changed) {
+            (Check::Running | Check::Confirmed, true) => *check = Check::Changed,
+            (Check::Running, false) => *check = Check::Clean,
+            (Check::Confirmed, false) => {
+                self.overlay = None;
+                self.start_removal(project, workspace, false, None);
+            }
+            (Check::Clean | Check::Changed, _) => {}
         }
-        self.drop_workspace(project, workspace);
+    }
+
+    fn start_removal(&mut self, project: u64, workspace: u64, force: bool, request: Option<u64>) -> bool {
+        let Some((p, w)) = self.workspace_index(project, workspace) else { return false };
+        let target = &mut self.projects[p].workspaces[w];
+        if !target.open() {
+            return false;
+        }
+        target.start_removing();
+        target.kill();
+        self.projects[p].step_off(w);
+        let (repo, path, tx) =
+            (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
+        std::thread::spawn(move || {
+            let result = panics::job(|| worktree::remove(&repo, &path, force));
+            let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
+        });
+        true
+    }
+
+    fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<()>) {
+        let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
+        let toast = match result {
+            Ok(()) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
+            Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
+        };
+        self.toast = Some(toast);
+    }
+
+    fn settle_removal(&mut self, project: u64, workspace: u64, removed: bool) -> Option<String> {
+        let (p, w) = self.workspace_index(project, workspace)?;
+        let name = self.projects[p].workspaces[w].label();
+        if removed {
+            self.drop_workspace(project, workspace);
+        } else {
+            self.projects[p].workspaces[w].phase = Phase::Open;
+        }
+        Some(name)
     }
 
     fn drop_workspace(&mut self, project: u64, workspace: u64) {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return };
         let workspace = &mut self.projects[p].workspaces[w];
-        workspace.closing = true;
+        workspace.phase = Phase::Closing;
         workspace.kill();
         if workspace.tabs.is_empty() {
             self.projects[p].remove_workspace(w);
@@ -3739,6 +3824,7 @@ impl App {
             name: w.label(),
             tabs: w.tabs.iter().map(|t| self.tab_entry(t)).collect(),
             behind: w.behind,
+            removing: w.removing(),
         }
     }
 
@@ -3762,6 +3848,7 @@ impl App {
                     name: if named { workspace.label() } else { String::new() },
                     tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
                     behind: workspace.behind,
+                    removing: workspace.removing(),
                 }
             };
             if open[p] { project.workspaces.iter().enumerate().map(entry).collect() } else { Vec::new() }
@@ -3811,7 +3898,7 @@ impl App {
                 note: None,
                 submit: RENAME_SUBMIT,
             }),
-            Overlay::RemoveWorkspace { project, workspace, error, removing, .. } => {
+            Overlay::RemoveWorkspace { project, workspace, check } => {
                 let (label, path) = self
                     .workspace_index(*project, *workspace)
                     .map(|(p, w)| {
@@ -3824,7 +3911,11 @@ impl App {
                     message: format!(
                         "Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."
                     ),
-                    note: if *removing { Some(ui::Note::Busy("removing…")) } else { note(error) },
+                    note: match check {
+                        Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                        Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                        Check::Running | Check::Clean => None,
+                    },
                     submit: overlay.submit_label(),
                 })
             }
@@ -4465,7 +4556,8 @@ mod tests {
 
     fn form_error(app: &App) -> Option<&str> {
         match &app.overlay {
-            Some(Overlay::NewWorkspace { error, .. } | Overlay::RemoveWorkspace { error, .. }) => error.as_deref(),
+            Some(Overlay::NewWorkspace { error, .. }) => error.as_deref(),
+            Some(Overlay::RemoveWorkspace { check: Check::Changed, .. }) => Some(UNCOMMITTED),
             _ => None,
         }
     }
@@ -5654,6 +5746,7 @@ mod tests {
 
     mod remove_worktree {
         use super::*;
+        use crate::test_util::git;
 
         struct Setup {
             app: App,
@@ -5665,6 +5758,12 @@ mod tests {
         }
 
         fn with_worktree() -> Setup {
+            let mut s = opened();
+            ask(&mut s);
+            s
+        }
+
+        fn opened() -> Setup {
             let repo = git_repo(&[("README", "hi")]);
             let (worktrees, config, config_path) = with_worktrees_config();
             let (mut app, rx) = app_in(repo.path(), config_path);
@@ -5673,9 +5772,22 @@ mod tests {
             submit_text(&mut app, "wt");
             pump_until(&mut app, &rx, "the workspace opens", |a| a.projects[0].workspaces.len() == 2);
             let path = app.projects[0].workspaces[1].path.clone();
-            let close = row_close(&app, WorkspaceRow::Workspace(1));
-            click(&mut app, close);
             Setup { app, rx, repo, path, _worktrees: worktrees, _config: config }
+        }
+
+        fn ask(s: &mut Setup) {
+            let close = row_close(&s.app, WorkspaceRow::Workspace(1));
+            click(&mut s.app, close);
+        }
+
+        fn checked(s: &mut Setup) {
+            pump_until(&mut s.app, &s.rx, "git status answers", |a| {
+                matches!(a.overlay, Some(Overlay::RemoveWorkspace { check: Check::Clean | Check::Changed, .. }))
+            });
+        }
+
+        fn gone(s: &mut Setup) {
+            pump_until(&mut s.app, &s.rx, "the workspace goes away", |a| a.projects[0].workspaces.len() == 1);
         }
 
         fn branch_exists(repo: &Path, branch: &str) -> bool {
@@ -5704,31 +5816,134 @@ mod tests {
         }
 
         #[test]
-        fn confirming_deletes_the_checkout_and_keeps_the_branch() {
+        fn confirming_closes_the_dialog_at_once_and_marks_the_row() {
             let mut s = with_worktree();
+            checked(&mut s);
 
             click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
 
-            pump_until(&mut s.app, &s.rx, "the workspace goes away", |a| a.projects[0].workspaces.len() == 1);
+            assert_eq!((s.app.overlay.is_none(), s.app.removing(0, 1), s.app.projects[0].active), (true, true, 0));
+        }
+
+        #[test]
+        fn the_row_goes_once_git_is_done_and_the_branch_stays() {
+            let mut s = with_worktree();
+            checked(&mut s);
+
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            gone(&mut s);
             assert_eq!(
-                (s.app.overlay.is_none(), s.path.exists(), branch_exists(s.repo.path(), "wt")),
-                (true, false, true)
+                (toast(&s.app), s.path.exists(), branch_exists(s.repo.path(), "wt")),
+                (Some("removed wt"), false, true)
             );
         }
 
         #[test]
-        fn changes_make_it_offer_remove_anyway() {
+        fn confirming_before_git_status_answers_waits_for_it() {
             let mut s = with_worktree();
-            std::fs::write(s.path.join("README"), "changed").expect("edit file");
 
-            send_key(&mut s.app, KeyCode::Enter, KeyModifiers::NONE);
-            pump_until(&mut s.app, &s.rx, "git refuses", |a| form_error(a).is_some());
-            assert_eq!(s.app.overlay.as_ref().map(Overlay::submit_label), Some(FORCE_REMOVE_SUBMIT));
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+            let waits = matches!(s.app.overlay, Some(Overlay::RemoveWorkspace { check: Check::Confirmed, .. }));
+
+            gone(&mut s);
+            assert!(waits && !s.path.exists());
+        }
+
+        #[test]
+        fn a_row_being_removed_does_not_react_to_clicks() {
+            let mut s = with_worktree();
+            checked(&mut s);
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            click_row(&mut s.app, WorkspaceRow::Workspace(1));
+
+            assert_eq!(s.app.projects[0].active, 0);
+        }
+
+        #[test]
+        fn a_row_being_removed_opens_no_menu() {
+            let mut s = with_worktree();
+            checked(&mut s);
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            right_click_row(&mut s.app, WorkspaceRow::Workspace(1));
+
+            assert!(s.app.overlay.is_none());
+        }
+
+        #[test]
+        fn the_row_stays_until_git_answers_even_once_the_folder_is_gone() {
+            let mut s = with_worktree();
+            checked(&mut s);
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+            wait_until("git deletes the folder", || !s.path.exists());
+            let shells: Vec<u64> = s.app.projects[0].workspaces[1].terms().map(|t| t.id).collect();
+            for id in shells {
+                s.app.remove(id);
+            }
+
+            s.app.sync_worktrees();
+
+            assert!(s.app.removing(0, 1));
+        }
+
+        #[test]
+        fn the_row_keeps_its_name_while_git_deletes_the_folder() {
+            let mut s = with_worktree();
+            checked(&mut s);
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            wait_until("git deletes the folder", || !s.path.exists());
+
+            assert_eq!(s.app.projects[0].workspaces[1].label(), "wt");
+        }
+
+        #[test]
+        fn a_row_being_removed_is_not_a_search_result() {
+            let mut s = with_worktree();
+            checked(&mut s);
+            let id = s.app.projects[0].workspaces[1].id;
+
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            let found = s.app.search_candidates().into_iter().map(|c| c.goto);
+            assert!(!found.into_iter().any(|g| matches!(g, Goto::Place { workspace: Some(w), .. } if w == id)));
+        }
+
+        #[test]
+        fn changes_make_the_dialog_offer_remove_anyway_from_the_start() {
+            let mut s = opened();
+            std::fs::write(s.path.join("notes.txt"), "draft").expect("write file");
+            ask(&mut s);
+
+            checked(&mut s);
+            assert_eq!(
+                (form_error(&s.app).is_some(), s.app.overlay.as_ref().map(Overlay::submit_label)),
+                (true, Some(FORCE_REMOVE_SUBMIT))
+            );
 
             click(&mut s.app, form_button(FORCE_REMOVE_SUBMIT, 0));
 
-            pump_until(&mut s.app, &s.rx, "the workspace goes away", |a| a.projects[0].workspaces.len() == 1);
+            gone(&mut s);
             assert!(!s.path.exists());
+        }
+
+        #[test]
+        fn a_refused_removal_brings_the_row_back_and_says_why() {
+            let mut s = opened();
+            git(s.repo.path(), &["worktree", "lock", &s.path.display().to_string()]);
+            ask(&mut s);
+            checked(&mut s);
+
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+
+            pump_until(&mut s.app, &s.rx, "git refuses", |a| !a.projects[0].workspaces[1].removing());
+            assert!(toast(&s.app).is_some_and(|t| t.contains("locked")), "{:?}", toast(&s.app));
+            pump_until(&mut s.app, &s.rx, "its shells stopped", |a| a.projects[0].workspaces[1].tabs.is_empty());
+            ask(&mut s);
+            checked(&mut s);
+            assert!(s.path.exists() && matches!(s.app.overlay, Some(Overlay::RemoveWorkspace { .. })));
         }
     }
 
@@ -7018,7 +7233,7 @@ rm -f "$1/sessions/$$.json"
             app.projects[0].active = 1;
             type_in_pane(&mut app, &rx, "still");
 
-            assert_eq!((asked, app.projects[0].workspaces[1].closing), (true, false));
+            assert_eq!((asked, app.projects[0].workspaces[1].closing()), (true, false));
         }
 
         #[test]
@@ -7893,48 +8108,45 @@ rm -f "$1/sessions/$$.json"
             (app, rx)
         }
 
-        fn with_an_empty_active_pane() -> (App, Receiver<AppEvent>, Position) {
-            let (mut app, rx) = split_down_twice();
-            let line = divider(&app).line;
-            drag(&mut app, Position::new(line.x + 1, line.y), Position::new(line.x + 1, pane().bottom() - 1));
-            assert_eq!((tab(&app).active, rects(&app)[2].height), (2, 0));
-            let top = inside(rects(&app)[0]);
-            (app, rx, top)
+        const LOW: Rect = Rect { height: 8, ..AREA };
+
+        fn sizes(app: &App) -> Vec<(u16, u16)> {
+            tab(app).panes.iter().map(|t| t.emulator.size().expect("a size")).collect()
         }
 
         #[test]
-        fn a_middle_click_while_the_active_pane_has_no_room_is_dropped() {
-            let (mut app, _rx, top) = with_an_empty_active_pane();
-
-            mouse_down(&mut app, MouseButton::Middle, top);
-            mouse(&mut app, MouseEventKind::Up(MouseButton::Middle), top);
-
-            assert_eq!(tab(&app).active, 2);
-        }
-
-        #[test]
-        fn a_drag_from_the_sidebar_while_the_active_pane_has_no_room_is_dropped() {
-            let (mut app, _rx, top) = with_an_empty_active_pane();
-
-            press(&mut app, entry_pos());
-            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), top);
-
-            assert_eq!(tab(&app).active, 2);
-        }
-
-        #[test]
-        fn a_selection_whose_pane_loses_all_its_room_ignores_the_drag() {
+        fn dragging_the_outer_divider_to_the_edge_keeps_every_pane() {
             let (mut app, _rx) = split_down_twice();
-            let id = tab(&app).panes[2].id;
-            let bottom = inside(rects(&app)[2]);
-            press(&mut app, bottom);
-            let small = Rect { height: 4, ..AREA };
-            let shrunk = tab(&app).layout.pane(app.layout(small).pane, id).expect("the pane is still there");
-            assert!(shrunk.is_empty());
+            let line = divider(&app).line;
 
-            mouse_in(&mut app, MouseEventKind::Drag(MouseButton::Left), shrunk.as_position(), small);
+            drag(&mut app, Position::new(line.x + 1, line.y), Position::new(line.x + 1, pane().bottom() - 1));
 
-            assert_eq!(app.selecting, Some(id));
+            assert!(rects(&app).iter().all(|r| r.height >= split::MIN_ROWS), "{:?}", rects(&app));
+        }
+
+        #[test]
+        fn a_client_too_small_for_every_pane_shows_only_the_active_one() {
+            let (mut app, _rx) = split_down_twice();
+            let before = sizes(&app);
+            let area = app.layout(LOW).pane;
+
+            app.resize(LOW);
+
+            let active = tab(&app).pane().expect("an active pane").id;
+            assert_eq!(
+                (tab(&app).shown(area), sizes(&app)),
+                (vec![(active, area)], vec![before[0], before[1], (area.height, area.width)])
+            );
+        }
+
+        #[test]
+        fn a_pane_shown_alone_for_lack_of_room_cannot_be_split() {
+            let (mut app, _rx) = split_down_twice();
+            let at = inside(app.layout(LOW).pane);
+
+            mouse_in(&mut app, MouseEventKind::Down(MouseButton::Right), at, LOW);
+
+            assert_eq!(menu_labels(&app), ["send right-clicks to the pane", "close pane"]);
         }
 
         #[rstest::rstest]
@@ -8543,7 +8755,8 @@ rm -f "$1/sessions/$$.json"
         const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
             "updated_at":"2026-09-30T00:00:00Z"}],"next":null}"#;
 
-        const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\nprintf '\\033[2J\\033[H'\n\
+        const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+            printf '%s' \"$answer\" > answered\nprintf '\\033[2J\\033[H'\n\
             printf 'agent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
 
         struct Setup {
@@ -8566,6 +8779,7 @@ rm -f "$1/sessions/$$.json"
                 agent: "fake".into(),
                 agent_commands: [("fake".to_string(), agent.display().to_string())].into(),
                 gh: gh.display().to_string(),
+                accept_trust_prompts: true,
                 ..Config::default()
             };
             config::save(&config_path, &settings).expect("write config");
@@ -8928,6 +9142,37 @@ rm -f "$1/sessions/$$.json"
                 start(&mut s);
                 wait_typed(&mut s, &format!("agent ready> {URL}"));
                 assert_eq!(got(&s), None);
+            }
+
+            #[test]
+            fn a_launch_waiting_for_your_answer_lets_the_server_sleep() {
+                let mut s = listing();
+                s.app.config.accept_trust_prompts = Config::default().accept_trust_prompts;
+                start(&mut s);
+
+                wait_until_within("the launch waits for you", LAUNCH_WAIT, || {
+                    pump(&mut s);
+                    s.app.launches.iter().all(Launch::waits_for_you) && !s.app.launches.is_empty()
+                });
+
+                assert_eq!(s.app.tick(Instant::now()), None);
+            }
+
+            #[test]
+            fn by_default_you_answer_the_trust_question_and_then_the_prompt_is_typed() {
+                let mut s = listing();
+                s.app.config.accept_trust_prompts = Config::default().accept_trust_prompts;
+                start(&mut s);
+                wait_until_within("the agent asks", LAUNCH_WAIT, || {
+                    pump(&mut s);
+                    screen(&mut s.app).contains("Do you trust the files")
+                });
+
+                "yes".chars().for_each(|c| send_key(&mut s.app, KeyCode::Char(c), KeyModifiers::NONE));
+                enter(&mut s);
+
+                wait_typed(&mut s, &format!("agent ready> {URL}"));
+                assert_eq!(std::fs::read_to_string(checkout(&s).join("answered")).ok().as_deref(), Some("yes"));
             }
 
             #[test]
@@ -11305,22 +11550,77 @@ rm -f "$s"
                 assert!(workspace.path.starts_with(worktrees.path()), "{}", workspace.path.display());
             }
 
+            fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
+                ask(app, None, worktree("feat/x"));
+                let id = done(answered(app, rx, "git makes the worktree")).ids.workspace.expect("the workspace");
+                let (p, w) = app.workspace_position(id).expect("it");
+                (id, app.projects[p].workspaces[w].path.clone())
+            }
+
+            fn remove(id: u64) -> Command {
+                Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false })
+            }
+
             #[test]
             fn removing_it_deletes_the_checkout() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
-                ask(&mut app, None, worktree("feat/x"));
-                let made = done(answered(&mut app, &rx, "git makes the worktree"));
-                let id = made.ids.workspace.expect("the workspace");
-                let path = app.projects[0].workspaces.iter().find(|w| w.id == id).map(|w| w.path.clone()).expect("it");
+                let (id, path) = made(&mut app, &rx);
 
-                let close = wire::Close { item: Item::Workspace(id), remove_worktree: true, force: false };
-                ask(&mut app, None, Command::Close(close));
+                ask(&mut app, None, remove(id));
                 done(answered(&mut app, &rx, "git removes the worktree"));
 
-                pump_until(&mut app, &rx, "the workspace goes", |a| {
-                    a.projects[0].workspaces.iter().all(|w| w.id != id)
-                });
+                pump_until(&mut app, &rx, "the workspace goes", |a| a.workspace_position(id).is_none());
                 assert!(!path.exists());
+            }
+
+            #[test]
+            fn a_worktree_already_being_removed_is_refused() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, _) = made(&mut app, &rx);
+                app.start_removal(app.projects[0].id, id, false, None);
+
+                let message = error(now(&mut app, None, remove(id)));
+
+                assert!(message.contains("is being removed"), "{message}");
+            }
+
+            #[test]
+            fn no_tab_opens_in_a_worktree_being_removed() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, _) = made(&mut app, &rx);
+                app.start_removal(app.projects[0].id, id, false, None);
+
+                let new = wire::NewTab { workspace: Some(id), ..wire::NewTab::default() };
+                let message = error(now(&mut app, None, Command::NewTab(new)));
+
+                assert!(message.contains("is being removed"), "{message}");
+            }
+
+            #[test]
+            fn a_removal_that_starts_while_git_status_runs_is_not_started_twice() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, _) = made(&mut app, &rx);
+                ask(&mut app, None, remove(id));
+
+                app.start_removal(app.projects[0].id, id, false, None);
+
+                let message = error(answered(&mut app, &rx, "git status answers"));
+                assert!(message.contains("is being removed"), "{message}");
+            }
+
+            #[test]
+            fn a_worktree_with_changes_is_refused_before_anything_stops() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+
+                ask(&mut app, None, remove(id));
+                let message = error(answered(&mut app, &rx, "git status answers"));
+
+                let (p, w) = app.workspace_position(id).expect("it stays");
+                let workspace = &app.projects[p].workspaces[w];
+                assert!(message.contains("--force"), "{message}");
+                assert_eq!((workspace.removing(), workspace.tabs.len(), path.exists()), (false, 1, true));
             }
 
             #[test]

@@ -91,7 +91,7 @@ cornercase start codex --prompt-file task.md --wait --timeout 1800
 git diff | cornercase start claude --prompt-file -
 ```
 
-`start` does what **start** does in the [issue browser](../issues-and-agents/#the-launch): it opens a tab, types the agent's command with its arguments and mode from **settings → Agents**, answers its folder trust question when the settings allow it, and once the agent is ready pastes the prompt and presses Enter. It returns then, printing the pane's id, or fails if the agent never shows up.
+`start` does what **start** does in the [issue browser](../issues-and-agents/#the-launch): it opens a tab, types the agent's command with its arguments and mode from **settings → Agents**, waits for its folder trust question to be answered (by you, unless **trust prompts** is on), and once the agent is ready pastes the prompt and presses Enter. It returns then, printing the pane's id, or fails if the agent never shows up.
 
 - **Which agent**: the one you name (`claude`, `codex`, `gemini` or any [other kind](../../reference/agents/)); without one, the default from **settings → Agents**, or, when that is *auto*, the agent running in the pane the command runs in.
 - **Where**: a new tab in the workspace the command runs in; in another workspace with `--workspace ID`; or with `--worktree BRANCH`, in the workspace on that branch, made as a new worktree when there is none.
@@ -150,7 +150,7 @@ cornercase rename --workspace 5 ''
 cornercase focus --pane 12
 ```
 
-- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too (`--force` when git refuses because of changes), and the branch is never deleted.
+- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. The branch is never deleted.
 - `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
 

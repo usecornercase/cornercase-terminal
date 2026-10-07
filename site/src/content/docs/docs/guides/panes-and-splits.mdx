@@ -39,10 +39,14 @@ You can split a pane again and again; the dividers join up like in Ghostty. When
 ## Focus, resize and dim
 
 - **Click a pane** to make it active. That first click only moves the focus; it is not sent to the program.
-- **Drag a divider** to resize the panes on both sides. It lights up cyan while you hover or drag it. **Double-click** a divider to split the space in half again.
+- **Drag a divider** to resize the panes on both sides. It lights up cyan while you hover or drag it, and stops where a pane on either side, including panes split inside it, would get smaller than 10 columns or 3 rows. **Double-click** a divider to split the space in half again.
 - **Inactive panes are dimmed** so you always know where your keys go. You can turn this off in **settings → TUI → inactive panes**.
 
 Programs are told about every size change, and Ghostty's emulator reflows their output, so long lines rewrap instead of being cut.
+
+### When the tab gets too small
+
+When the terminal shrinks, for example when you attach from a phone, the panes shrink too, each down to 10 columns and 3 rows. If even that doesn't fit, the tab shows only its active pane, over the whole tab, until there is room again. The other panes keep running at their last size, and the tab goes back to its splits, with the same proportions, as soon as they fit. Meanwhile the pane menu offers no split.
 
 ## The keyboard
 

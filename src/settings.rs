@@ -367,9 +367,9 @@ impl Settings {
                 self.save(Config { check_updates: on, ..self.config.clone() }, notice.into())
             }
             Row::Trust => {
-                let on = !self.config.auto_accept_trust_prompt;
+                let on = !self.config.accept_trust_prompts;
                 let notice = if on { "trust prompts are accepted for you" } else { "trust prompts are left to you" };
-                self.save(Config { auto_accept_trust_prompt: on, ..self.config.clone() }, notice.into())
+                self.save(Config { accept_trust_prompts: on, ..self.config.clone() }, notice.into())
             }
             Row::Kind(kind) => {
                 let modes = agents::modes(&self.config, &kind);
@@ -801,8 +801,8 @@ impl Settings {
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
             }
             Row::Trust => {
-                let value = if config.auto_accept_trust_prompt { "[x] accepted for you" } else { "[ ] left to you" };
-                ("trust prompts".into(), value.into(), "\"do you trust this folder?\"".into(), false)
+                let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
+                ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
@@ -1399,8 +1399,8 @@ mod tests {
             go_to(&mut s, &Row::Submit);
             let submit = saved(press(&mut s, KeyCode::Enter)).submit;
             go_to(&mut s, &Row::Trust);
-            let trust = saved(press(&mut s, KeyCode::Enter)).auto_accept_trust_prompt;
-            assert_eq!((submit, trust), (true, false));
+            let trust = saved(press(&mut s, KeyCode::Enter)).accept_trust_prompts;
+            assert_eq!((submit, trust), (true, true));
         }
 
         #[test]
