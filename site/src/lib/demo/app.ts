@@ -836,17 +836,18 @@ export class App {
     const project = this.projects[p];
     const ws = project?.workspaces[w];
     if (!ws) return;
+    if (project.workspaces.filter((x) => !x.removing).length === 1) {
+      for (const t of ws.tabs) for (const pane of t.panes) pane.shell.fg?.dispose?.();
+      ws.tabs = [];
+      this.dirty();
+      return;
+    }
     if (ws.worktree) {
       this.overlay = { kind: 'remove', project: project.id, workspace: ws.id };
       this.dirty();
       return;
     }
     for (const t of ws.tabs) for (const pane of t.panes) pane.shell.fg?.dispose?.();
-    if (project.workspaces.length === 1) {
-      ws.tabs = [];
-      this.dirty();
-      return;
-    }
     project.workspaces.splice(w, 1);
     project.active = Math.max(0, Math.min(project.active, project.workspaces.length - 1));
     this.dirty();
