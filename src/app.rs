@@ -3597,7 +3597,7 @@ impl App {
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
         std::thread::spawn(move || {
-            let changed = matches!(panics::job(|| worktree::changed(&path)), Ok(true));
+            let changed = !matches!(panics::job(|| worktree::changed(&path)), Ok(false));
             let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, changed, request });
         });
     }
@@ -5927,6 +5927,17 @@ mod tests {
 
             gone(&mut s);
             assert!(!s.path.exists());
+        }
+
+        #[test]
+        fn a_git_status_that_fails_counts_as_changes() {
+            let mut s = opened();
+            std::fs::write(s.path.join(".git"), "not a gitfile").expect("break the checkout");
+            ask(&mut s);
+
+            checked(&mut s);
+
+            assert_eq!(s.app.overlay.as_ref().map(Overlay::submit_label), Some(FORCE_REMOVE_SUBMIT));
         }
 
         #[test]
