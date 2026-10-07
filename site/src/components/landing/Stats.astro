@@ -2,9 +2,12 @@
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const tools = ['cornercase', 'Warp', 'Orca', 'Emdash'];
 const stats: [string, [number, string][]][] = [
-  ['Opening', [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']]],
+  ['Opening the app', [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']]],
   ['First look at the changes', [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']]],
   ['Every look after that', [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']]],
+  ['Opening a file', [[0.14, '140 ms'], [0.65, '650 ms'], [1.33, '1.3 s'], [0.47, '470 ms']]],
+  ['Finding a file by name', [[0.019, '19 ms'], [0.3, '300 ms'], [0.19, '190 ms'], [0, 'none']]],
+  ['Searching the files', [[0.069, '69 ms'], [0.43, '430 ms'], [0.49, '490 ms'], [0.1, '100 ms']]],
   ['Memory', [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']]],
   ['Download', [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']]],
   ['On disk', [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']]],
@@ -17,8 +20,8 @@ const stats: [string, [number, string][]][] = [
       <p class="eyebrow">Speed</p>
       <h2 class="h2" id="speed-title">Faaast. <em>Really faaast.</em></h2>
       <p class="lead">
-        It opens before you can blink, and shows what your agents changed before you can click again. The other apps we tried?
-        Up to 8.5 seconds, and nearly 2 GB.
+        It opens before you can blink, and shows what your agents changed, opens a file or finds one before you can click
+        again. The other apps we tried? Up to 8.5 seconds, and nearly 2 GB.
       </p>
     </div>
     <div class="grid">
@@ -33,7 +36,7 @@ const stats: [string, [number, string][]][] = [
                   <li class:list={{ us: i === 0 }} title={`${tools[i]}: ${label}`}>
                     <span class="name">{tools[i]}</span>
                     <span class="track">
-                      <span class="bar" style={`--w: ${(value / most) * 100}%`} />
+                      {value > 0 && <span class="bar" style={`--w: ${(value / most) * 100}%`} />}
                       <span class="value">{label}</span>
                     </span>
                   </li>

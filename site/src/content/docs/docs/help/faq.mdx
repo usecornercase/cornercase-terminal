@@ -34,6 +34,17 @@ Yes. We measured it in October 2026 on one machine, an 8-core x86_64 virtual mac
 
 Times run from launching the app, or clicking, until the result is on screen; they are medians of 3 to 5 runs. cornercase shows its changes instantly because it computes the diff in the background. The changes are all files at once in cornercase, Warp (code review panel) and Orca (view all), and one file in Emdash, which has no view with every file. Memory is the proportional set size (PSS) of each app's own processes, without the shells. The desktop apps ran on a virtual display without a GPU, so they rendered in software, which adds memory and time a real GPU would not; the difference is still one to two orders of magnitude. Superset (947 MB download, 2.8 GB installed) needs an account to start, so it is not in the table; Conductor and cmux run only on macOS.
 
+Opening and searching files, in a clone of Orca's own repository (32,255 files) with a TypeScript file of 3,472 lines, each query typed in one go:
+
+| | cornercase 0.11.5 | Warp 0.2026.09.30 | Orca 1.4.222 | Emdash 1.2.7 |
+| --- | --: | --: | --: | --: |
+| Open a file, until it is coloured | 0.14 s | 0.65 s | 1.33 s | 0.47 s |
+| Open it again | 0.08 s | 0.57 s | 0.39 s | 0.21 s |
+| Find a file by its name | 19 ms | 0.30 s | 0.19 s | none |
+| Search the text of every file (472 matches) | 69 ms | 0.43 s | 0.49 s | 0.10 s |
+
+These are medians of 5 to 7 runs, from the click, or the query arriving, until the result is on screen. cornercase shows the file's text in 15 ms and colours it after; Warp shows both at once. Warp shows the first matches at 0.43 s and all of them at 1.6 s. The name is found in each app's quick open (Emdash has none); Orca's lists the first 20,001 files, so in this repository it could not find the file we opened, and we searched a name it lists.
+
 Against the terminal multiplexers, each with its default settings and `/bin/sh` in every pane:
 
 | | cornercase 0.1.15 | tmux 3.6 | zellij 0.45.1 |
