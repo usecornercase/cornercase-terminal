@@ -70,7 +70,7 @@ The bar at the top of the panel searches the whole workspace, skipping what git 
 
 By default it searches the **text** of the files: each line that holds what you typed, grouped by file, with what matched highlighted. Case is ignored unless you type an uppercase letter. Binary files are skipped, and the search stops at the first 1,000 matches. Opening a match opens the file at that line, selected, with every match highlighted.
 
-Click **`▤`** at the right of the bar to search file **names** instead, and again to go back to the text. Type the letters of a path in order: `retadd` finds `src/returns/address.rs`. The best 200 files show, best first, with the letters that matched in cyan.
+Click **`▤`** at the right of the bar to search file **names** instead, and again to go back to the text. Type the letters of a path in order: `retadd` finds `src/returns/address.rs`. The best 200 files show, best first, with the letters that matched in cyan; between two equally good matches the shorter file name wins, so `workspace-session` puts `workspace-session.ts` before `workspace-session-handler.ts`.
 
 <Screen
   name="files-names"

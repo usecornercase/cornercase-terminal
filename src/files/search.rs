@@ -59,8 +59,12 @@ pub fn names(paths: &[String], query: &str) -> Vec<Name> {
         .enumerate()
         .filter_map(|(i, path)| pattern.score(Utf32Str::new(path, &mut buf), &mut matcher).map(|score| (score, i)))
         .collect();
+    let file_name = |i: usize| paths[i].rsplit('/').next().map_or(0, str::len);
     scored.sort_unstable_by(|a, b| {
-        b.0.cmp(&a.0).then_with(|| paths[a.1].len().cmp(&paths[b.1].len())).then_with(|| a.1.cmp(&b.1))
+        b.0.cmp(&a.0)
+            .then_with(|| file_name(a.1).cmp(&file_name(b.1)))
+            .then_with(|| paths[a.1].len().cmp(&paths[b.1].len()))
+            .then_with(|| a.1.cmp(&b.1))
     });
     scored.truncate(MAX_NAMES);
     scored
@@ -199,6 +203,17 @@ mod tests {
         let paths = paths(&["src/relay/pty-handler.test.ts", "src/relay/pty-handler.ts", "docs/handbook.md"]);
         let found: Vec<String> = names(&paths, "ptyhandler").into_iter().map(|n| n.path).collect();
         assert_eq!(found, ["src/relay/pty-handler.ts", "src/relay/pty-handler.test.ts"]);
+    }
+
+    #[test]
+    fn puts_the_file_whose_name_is_the_query_before_longer_names_in_shorter_paths() {
+        let paths = paths(&[
+            "src/relay/workspace-session-handler.ts",
+            "src/shared/workspace-session-schema.ts",
+            "src/renderer/src/lib/workspace-session.ts",
+        ]);
+        let found: Vec<String> = names(&paths, "workspace-session").into_iter().map(|n| n.path).collect();
+        assert_eq!(found[0], "src/renderer/src/lib/workspace-session.ts");
     }
 
     #[test]
