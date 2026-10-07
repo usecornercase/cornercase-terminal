@@ -6,8 +6,12 @@ use std::time::{Duration, Instant};
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 
-pub fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
-    let deadline = Instant::now() + TIMEOUT;
+pub fn wait_until(what: &str, cond: impl FnMut() -> bool) {
+    wait_until_within(what, TIMEOUT, cond);
+}
+
+pub fn wait_until_within(what: &str, timeout: Duration, mut cond: impl FnMut() -> bool) {
+    let deadline = Instant::now() + timeout;
     while !cond() {
         assert!(Instant::now() < deadline, "timed out waiting for: {what}");
         std::thread::sleep(POLL);

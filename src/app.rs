@@ -4123,7 +4123,7 @@ mod tests {
     use std::sync::mpsc::{self, Receiver};
 
     use super::*;
-    use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until};
+    use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
     use crate::ui::WorkspaceRow;
 
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
@@ -8470,8 +8470,10 @@ rm -f "$1/sessions/$$.json"
             s.app.refresh(Instant::now());
         }
 
+        const LAUNCH_WAIT: Duration = Duration::from_secs(20);
+
         fn wait_typed(s: &mut Setup, text: &str) {
-            wait_until("the command is typed", || {
+            wait_until_within("the command is typed", LAUNCH_WAIT, || {
                 pump(s);
                 s.app.launches.is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
             });
@@ -8772,7 +8774,7 @@ rm -f "$1/sessions/$$.json"
                 s.app.config.submit = true;
                 start(&mut s);
 
-                wait_until("the agent gets the prompt", || {
+                wait_until_within("the agent gets the prompt", LAUNCH_WAIT, || {
                     pump(&mut s);
                     got(&s).as_deref() == Some(URL)
                 });

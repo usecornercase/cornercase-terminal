@@ -82,7 +82,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 ## Agents (`agents.rs`, `launch.rs`)
 
 - Config: `agent` (`auto` = the one running in the tab, else ask), `agent_args`, `agent_modes`, `agent_commands`, `prompt` (placeholders like `{url}`, `{key}`, `{title}`), `submit`, `auto_accept_trust_prompt`, `trust_prompt_pattern`.
-- `launch::Launch` types the command once the shell is quiet, waits until the agent is in the foreground and the screen is quiet, answers the trust prompt, then pastes the prompt. Readiness is a heuristic.
+- `launch::Launch` types the command once the shell is quiet, waits until the agent is in the foreground, has drawn something and its screen is quiet, answers the trust prompt, then pastes the prompt. Readiness is a heuristic. "Drawn something" means the screen is no longer the shell's screen plus the command's echo (or part of it), compared without whitespace (`Launch::echo`): the quiet second used to count from the echo, so an agent that took over a second to draw (a loaded machine, a cold start) got the prompt before its trust question and read it as the answer (#34). A screen that is not the prompt plus the command (zsh's `RPROMPT` on the same line, a line scrolled off the top) counts as drawn, as before. `AGENT_LATEST` (30 s) still types the prompt into an agent that never draws.
 - The trust prompt may highlight "No" by default (Claude Code does), so `answer_keys` moves the selection to the "yes" option before pressing Enter.
 
 ## Agent status (`activity.rs`)

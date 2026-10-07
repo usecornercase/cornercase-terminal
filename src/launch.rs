@@ -39,6 +39,8 @@ pub struct Launch {
     output: Option<Instant>,
     trusts: u8,
     trusted_screen: Option<String>,
+    echo: String,
+    undrawn: bool,
 }
 
 pub struct Seen<'a> {
@@ -69,6 +71,8 @@ impl Launch {
             output: None,
             trusts: 0,
             trusted_screen: None,
+            echo: String::new(),
+            undrawn: false,
         }
     }
 
@@ -82,6 +86,7 @@ impl Launch {
 
     pub fn output(&mut self, now: Instant) {
         self.output = Some(now);
+        self.undrawn = false;
     }
 
     pub fn submits(&self) -> bool {
@@ -96,6 +101,7 @@ impl Launch {
         self.stage = stage;
         self.since = now;
         self.output = None;
+        self.undrawn = false;
     }
 
     pub fn step(&mut self, now: Instant, seen: &mut Seen) -> Step {
@@ -110,6 +116,7 @@ impl Launch {
                 if !self.agent {
                     return Step::Done(typed);
                 }
+                self.echo = compact(&(seen.screen)()) + &compact(&self.spec.command);
                 self.next(Stage::Agent, now);
                 Step::Write(typed)
             }
@@ -121,11 +128,15 @@ impl Launch {
                 }
             }
             Stage::Agent => {
-                let ready = self.quiet(now) >= AGENT_QUIET || now.duration_since(self.since) >= AGENT_LATEST;
-                if !ready {
+                let latest = now.duration_since(self.since) >= AGENT_LATEST;
+                if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
                     return Step::Wait;
                 }
                 let screen = (seen.screen)();
+                if !latest && only_echo(&screen, &self.echo) {
+                    self.undrawn = true;
+                    return Step::Wait;
+                }
                 if self.trusts < MAX_TRUSTS
                     && self.trusted_screen.as_ref() != Some(&screen)
                     && (seen.trust_prompt)(&screen)
@@ -157,6 +168,15 @@ impl Launch {
     }
 }
 
+fn compact(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+fn only_echo(screen: &str, echo: &str) -> bool {
+    let mut echo = echo.chars();
+    screen.chars().filter(|c| !c.is_whitespace()).all(|c| echo.next() == Some(c))
+}
+
 fn option_text(line: &str) -> &str {
     line.trim_start_matches(|c: char| c.is_whitespace() || "│┃║|".contains(c))
 }
@@ -186,6 +206,8 @@ pub fn answer_keys(screen: &str, application_cursor: bool) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     const MS: Duration = Duration::from_millis(1);
@@ -253,6 +275,31 @@ mod tests {
         let (mut launch, t) = started(false);
         launch.output(t + 500 * MS);
         assert_eq!(step(&mut launch, t + 1200 * MS, &agent("> ")), Step::Wait);
+    }
+
+    #[rstest]
+    #[case::the_typed_command("$ claude --permission-mode plan")]
+    #[case::part_of_its_echo("$ claude --perm")]
+    #[case::nothing("")]
+    fn waits_while_the_screen_shows_only(#[case] screen: &str) {
+        let (mut launch, t) = started(false);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &agent(screen)), Step::Wait);
+    }
+
+    #[test]
+    fn answers_the_trust_question_once_the_agent_draws_it() {
+        let (mut launch, t) = started(false);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &agent("$ claude --permission-mode plan")), Step::Wait);
+        launch.output(t + 2 * AGENT_QUIET);
+        let asked = agent("$ claude --permission-mode plan\nDo you trust the files?");
+        assert_eq!(step(&mut launch, t + 3 * AGENT_QUIET, &asked), Step::Write(b"\r".to_vec()));
+    }
+
+    #[test]
+    fn a_silent_agent_gets_the_prompt_after_the_longest_wait() {
+        let (mut launch, t) = started(false);
+        let silent = agent("$ claude --permission-mode plan");
+        assert!(matches!(step(&mut launch, t + AGENT_LATEST, &silent), Step::Done(_)));
     }
 
     #[test]
