@@ -25,6 +25,7 @@ use crate::split::Dir;
 use crate::term::{self, Term};
 use crate::ui;
 use crate::update;
+use crate::worktree;
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
@@ -76,7 +77,7 @@ struct Pending {
 
 enum Stage {
     Worktree(Then),
-    Removing,
+    Removing { force: bool },
     Launch(Option<Condition>),
     Watch(Watch),
 }
@@ -175,6 +176,13 @@ fn sized(area: Option<Rect>) -> Result<Rect, String> {
 
 fn none(kind: &str, id: u64) -> String {
     format!("there is no {kind} {id}; `cornercase status` lists them")
+}
+
+fn shell_quote(path: &str) -> String {
+    if !path.is_empty() && path.chars().all(|c| c.is_ascii_alphanumeric() || "/._~+-".contains(c)) {
+        return path.to_string();
+    }
+    format!("'{}'", path.replace('\'', "'\\''"))
 }
 
 fn duration(seconds: f64, what: &str) -> Result<Duration, String> {
@@ -362,7 +370,7 @@ impl App {
     fn waiting_on(&self, stage: &Stage, pane: u64) -> String {
         let watch = match stage {
             Stage::Worktree(_) => return "git is still creating the worktree".into(),
-            Stage::Removing => return "git is still removing the worktree".into(),
+            Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Launch(_) => return format!("pane {pane} is still starting"),
             Stage::Watch(watch) => watch,
         };
@@ -995,17 +1003,13 @@ impl App {
                         return Err(format!("workspace {id} is not a git worktree"));
                     }
                     let key = self.requests.key();
-                    if close.force {
-                        self.start_removal(self.projects[p].id, id, true, Some(key));
-                    } else {
-                        self.spawn_check(p, w, Some(key));
-                    }
+                    self.spawn_check(p, w, Some(key));
                     let pending = Pending {
                         client: Some(client),
                         key,
                         timeout: None,
                         done: Done::default(),
-                        stage: Stage::Removing,
+                        stage: Stage::Removing { force: close.force },
                     };
                     self.requests.pending.push(pending);
                     return Ok(None);
@@ -1026,17 +1030,34 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    pub(super) fn removal_checked(&mut self, key: u64, project: u64, workspace: u64, changed: bool) {
-        if !changed && self.start_removal(project, workspace, false, Some(key)) {
+    pub(super) fn removal_checked(&mut self, key: u64, project: u64, workspace: u64, status: &worktree::Status) {
+        let force =
+            self.requests.pending.iter().any(|p| p.key == key && matches!(p.stage, Stage::Removing { force: true }));
+        let clear = status.lock.is_none() && (force || !status.changed);
+        if clear && self.start_removal(project, workspace, force, false, Some(key)) {
             return;
         }
         let Some(pending) = self.requests.take(key) else { return };
-        let message = if changed {
+        let message = if let Some(lock) = &status.lock {
+            self.locked(workspace, lock)
+        } else if status.changed && !force {
             format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
         } else {
             self.usable_workspace(workspace).err().unwrap_or_else(|| none("workspace", workspace))
         };
         self.answer(pending.client, Err(message));
+    }
+
+    fn locked(&self, workspace: u64, lock: &worktree::Lock) -> String {
+        let path = self
+            .workspace_position(workspace)
+            .map(|(p, w)| self.projects[p].workspaces[w].path.display().to_string())
+            .unwrap_or_default();
+        let reason = if lock.reason.is_empty() { String::new() } else { format!(" ({})", lock.reason) };
+        format!(
+            "workspace {workspace} is locked{reason}; unlock it with `git worktree unlock {}` to remove it",
+            shell_quote(&path)
+        )
     }
 
     pub(super) fn worktree_gone(&mut self, key: u64, project: u64, workspace: u64, result: error::Result<()>) {
@@ -1125,6 +1146,20 @@ mod tests {
     use crate::host_theme::HostTheme;
     use crate::test_util::TempDir;
 
+    mod shell_quote {
+        use rstest::rstest;
+
+        use super::super::shell_quote;
+
+        #[rstest]
+        #[case::plain("/home/me/wt-1.x", "/home/me/wt-1.x")]
+        #[case::a_space("/home/me/my wt", "'/home/me/my wt'")]
+        #[case::a_single_quote("/home/it's", "'/home/it'\\''s'")]
+        fn paths_are_quoted_for_a_shell(#[case] path: &str, #[case] expected: &str) {
+            assert_eq!(shell_quote(path), expected);
+        }
+    }
+
     mod answer_lost_requests {
         use super::*;
 
@@ -1133,8 +1168,13 @@ mod tests {
             let dir = TempDir::new();
             let (tx, _rx) = mpsc::channel();
             let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), tx);
-            let removing =
-                Pending { client: Some(1), key: 1, timeout: None, done: Done::default(), stage: Stage::Removing };
+            let removing = Pending {
+                client: Some(1),
+                key: 1,
+                timeout: None,
+                done: Done::default(),
+                stage: Stage::Removing { force: false },
+            };
             app.requests.pending.push(removing);
             app.requests.open.extend([1, 2]);
 

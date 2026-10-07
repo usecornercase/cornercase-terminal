@@ -150,7 +150,7 @@ cornercase rename --workspace 5 ''
 cornercase focus --pane 12
 ```
 
-- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. The branch is never deleted.
+- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
 - `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
 

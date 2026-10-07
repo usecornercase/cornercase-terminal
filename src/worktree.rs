@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use crate::error::{Error, Result};
+use crate::process;
 
 pub const INCLUDE_FILE: &str = ".worktreeinclude";
 const DEFAULT_SLUG: &str = "worktree";
@@ -51,7 +52,10 @@ pub fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn remove(repo: &Path, path: &Path, force: bool) -> Result<()> {
+pub fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
+    if unlock && !matches!(lock(path), Ok(None)) {
+        check(git(repo, [OsStr::new("worktree"), "unlock".as_ref(), path.as_os_str()])?)?;
+    }
     let mut args = vec![OsStr::new("worktree"), "remove".as_ref()];
     if force {
         args.push("--force".as_ref());
@@ -62,6 +66,46 @@ pub fn remove(repo: &Path, path: &Path, force: bool) -> Result<()> {
 
 pub fn changed(path: &Path) -> Result<bool> {
     check(git(path, ["--no-optional-locks", "status", "--porcelain"])?).map(|out| !out.is_empty())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lock {
+    pub reason: String,
+    pub holder: Option<Holder>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Holder {
+    Running(i32),
+    Gone(i32),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Status {
+    pub changed: bool,
+    pub lock: Option<Lock>,
+}
+
+pub fn status(path: &Path) -> Status {
+    Status { changed: !matches!(changed(path), Ok(false)), lock: lock(path).ok().flatten() }
+}
+
+pub fn lock(path: &Path) -> Result<Option<Lock>> {
+    let out = check(git(path, ["rev-parse", "--absolute-git-dir"])?)?;
+    let dir = Path::new(OsStr::from_bytes(out.trim_ascii_end())).join("locked");
+    let reason = match std::fs::read_to_string(dir) {
+        Ok(reason) => reason.trim().to_string(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let holder = pid_in(&reason).map(|pid| if process::alive(pid) { Holder::Running(pid) } else { Holder::Gone(pid) });
+    Ok(Some(Lock { reason, holder }))
+}
+
+fn pid_in(reason: &str) -> Option<i32> {
+    let (_, after) = reason.split_once("pid ")?;
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
 }
 
 pub fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
@@ -261,8 +305,22 @@ mod tests {
         }
     }
 
+    mod pid_in {
+        use super::*;
+
+        #[rstest]
+        #[case::claude_code("claude session wt (pid 69184 start Wed Oct  7 09:10:42 2026)", Some(69184))]
+        #[case::no_pid("on a usb disk", None)]
+        #[case::pid_without_a_number("pid abc", None)]
+        #[case::empty("", None)]
+        fn finds_the_pid_a_reason_names(#[case] reason: &str, #[case] expected: Option<i32>) {
+            assert_eq!(pid_in(reason), expected);
+        }
+    }
+
     mod remove {
         use super::*;
+        use crate::test_util::{exited_pid, this_pid};
 
         fn with_worktree() -> (TempDir, TempDir, PathBuf) {
             let repo = git_repo(&[("README", "hi")]);
@@ -272,11 +330,100 @@ mod tests {
             (repo, tmp, path)
         }
 
+        fn locked(repo: &Path, path: &Path, reason: Option<&str>) {
+            let path = path.display().to_string();
+            match reason {
+                Some(reason) => git(repo, &["worktree", "lock", "--reason", reason, &path]),
+                None => git(repo, &["worktree", "lock", &path]),
+            }
+        }
+
+        #[test]
+        fn an_unlocked_checkout_has_no_lock() {
+            let (_repo, _tmp, path) = with_worktree();
+
+            assert_eq!(lock(&path).expect("read lock"), None);
+        }
+
+        #[test]
+        fn lock_gives_the_reason() {
+            let (repo, _tmp, path) = with_worktree();
+            locked(repo.path(), &path, Some("on a usb disk"));
+
+            assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: "on a usb disk".into(), holder: None }));
+        }
+
+        #[test]
+        fn lock_without_a_reason_has_an_empty_one() {
+            let (repo, _tmp, path) = with_worktree();
+            locked(repo.path(), &path, None);
+
+            assert_eq!(lock(&path).expect("read lock"), Some(Lock { reason: String::new(), holder: None }));
+        }
+
+        #[test]
+        fn a_pid_in_the_reason_that_is_gone_is_a_lock_left_behind() {
+            let (repo, _tmp, path) = with_worktree();
+            let pid = exited_pid();
+            locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start Wed Oct  7 09:10:42 2026)")));
+
+            assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Gone(pid)));
+        }
+
+        #[test]
+        fn a_pid_in_the_reason_that_runs_holds_the_lock() {
+            let (repo, _tmp, path) = with_worktree();
+            let pid = this_pid();
+            locked(repo.path(), &path, Some(&format!("claude session wt (pid {pid} start …)")));
+
+            assert_eq!(lock(&path).expect("read lock").and_then(|l| l.holder), Some(Holder::Running(pid)));
+        }
+
+        #[test]
+        fn status_reports_changes_and_the_lock_together() {
+            let (repo, _tmp, path) = with_worktree();
+            std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+            locked(repo.path(), &path, Some("busy"));
+
+            let status = status(&path);
+
+            assert_eq!((status.changed, status.lock.map(|l| l.reason)), (true, Some("busy".into())));
+        }
+
+        #[test]
+        fn a_locked_checkout_is_refused_without_unlock() {
+            let (repo, _tmp, path) = with_worktree();
+            locked(repo.path(), &path, Some("busy"));
+
+            let result = remove(repo.path(), &path, true, false);
+
+            assert!(matches!(result, Err(Error::Git(_))) && path.exists(), "{result:?}");
+        }
+
+        #[test]
+        fn unlock_removes_a_locked_checkout_and_keeps_the_branch() {
+            let (repo, _tmp, path) = with_worktree();
+            locked(repo.path(), &path, Some("busy"));
+
+            remove(repo.path(), &path, false, true).expect("remove");
+
+            assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
+        }
+
+        #[test]
+        fn unlock_removes_a_checkout_whose_lock_is_already_gone() {
+            let (repo, _tmp, path) = with_worktree();
+
+            remove(repo.path(), &path, false, true).expect("remove");
+
+            assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
+        }
+
         #[test]
         fn deletes_a_clean_checkout_and_keeps_the_branch() {
             let (repo, _tmp, path) = with_worktree();
 
-            remove(repo.path(), &path, false).expect("remove");
+            remove(repo.path(), &path, false, false).expect("remove");
 
             assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
         }
@@ -286,7 +433,7 @@ mod tests {
             let (repo, _tmp, path) = with_worktree();
             std::fs::write(path.join("README"), "changed").expect("edit file");
 
-            let result = remove(repo.path(), &path, false);
+            let result = remove(repo.path(), &path, false, false);
 
             assert!(matches!(result, Err(Error::Git(_))) && path.exists(), "{result:?}");
         }
@@ -296,7 +443,7 @@ mod tests {
             let (repo, _tmp, path) = with_worktree();
             std::fs::write(path.join("README"), "changed").expect("edit file");
 
-            remove(repo.path(), &path, true).expect("remove");
+            remove(repo.path(), &path, true, false).expect("remove");
 
             assert!(!path.exists());
         }

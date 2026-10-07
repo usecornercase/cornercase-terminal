@@ -65,7 +65,7 @@ pub enum AppEvent {
     WorktreeChecked {
         project: u64,
         workspace: u64,
-        changed: bool,
+        status: worktree::Status,
         request: Option<u64>,
     },
     WorktreeRemoved {
@@ -227,6 +227,9 @@ const DELETE_SUBMIT: &str = "delete";
 const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
+const UNLOCK_SUBMIT: &str = "unlock and remove";
+const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
+const MAX_LOCK_REASON: usize = 100;
 const PICKER_SUBMIT: &str = "open";
 const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
 const WORKTREE_TOGGLE: &str = "with its own worktree";
@@ -276,7 +279,7 @@ enum Overlay {
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
-    RemoveWorkspace { project: u64, workspace: u64, check: Check },
+    RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
     Picker(Picker),
     Issues(Box<Browser>),
     Search(Search),
@@ -289,6 +292,7 @@ impl Overlay {
     fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
+            Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
@@ -426,6 +430,21 @@ fn measure_memory(term: &mut Term, measure: bool, now: Instant) {
     } else if measure && let Some(pid) = term.shell_pid() {
         term.memory.update(pid, now);
     }
+}
+
+fn lock_message(label: &str, lock: &worktree::Lock) -> String {
+    let reason = ui::truncate_right(&lock.reason, MAX_LOCK_REASON);
+    let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
+    format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept.")
+}
+
+fn lock_note(lock: &worktree::Lock, changed: bool) -> Option<String> {
+    let holder = lock.holder.map(|holder| match holder {
+        worktree::Holder::Gone(pid) => format!("Process {pid} is gone; the lock was left behind."),
+        worktree::Holder::Running(pid) => format!("Process {pid} still runs and may be using it."),
+    });
+    let parts: Vec<String> = holder.into_iter().chain(changed.then(|| UNCOMMITTED_TOO.to_string())).collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
 }
 
 fn stopped_tabs(tabs: usize) -> String {
@@ -1330,11 +1349,11 @@ impl App {
             AppEvent::WorktreeCreated { project, result, start, request: None } => {
                 self.worktree_created(project, result, start, area)?;
             }
-            AppEvent::WorktreeChecked { project, workspace, changed, request: Some(key) } => {
-                self.removal_checked(key, project, workspace, changed);
+            AppEvent::WorktreeChecked { project, workspace, status, request: Some(key) } => {
+                self.removal_checked(key, project, workspace, &status);
             }
-            AppEvent::WorktreeChecked { project, workspace, changed, request: None } => {
-                self.worktree_checked(project, workspace, changed);
+            AppEvent::WorktreeChecked { project, workspace, status, request: None } => {
+                self.worktree_checked(project, workspace, status);
             }
             AppEvent::WorktreeRemoved { project, workspace, result, request: Some(key) } => {
                 self.worktree_gone(key, project, workspace, result);
@@ -3298,7 +3317,9 @@ impl App {
                 Some(Overlay::GroupStyle { group: self.add_group(input.trim().to_string()) })
             }
             Overlay::GroupStyle { .. } | Overlay::Usage => None,
-            Overlay::RemoveWorkspace { project, workspace, check } => self.confirm_removal(project, workspace, check),
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.confirm_removal(project, workspace, check, lock.is_some())
+            }
             Overlay::DeleteGroup { group } => {
                 self.delete_group(group);
                 None
@@ -3735,7 +3756,7 @@ impl App {
     fn ask_removal(&mut self, p: usize, w: usize) {
         let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
         self.spawn_check(p, w, None);
-        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running });
+        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running, lock: None });
     }
 
     fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
@@ -3743,38 +3764,37 @@ impl App {
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
         std::thread::spawn(move || {
-            let changed = !matches!(panics::job(|| worktree::changed(&path)), Ok(false));
-            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, changed, request });
+            let status =
+                panics::job(|| Ok(worktree::status(&path))).unwrap_or(worktree::Status { changed: true, lock: None });
+            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, status, request });
         });
     }
 
-    fn confirm_removal(&mut self, project: u64, workspace: u64, check: Check) -> Option<Overlay> {
+    fn confirm_removal(&mut self, project: u64, workspace: u64, check: Check, unlock: bool) -> Option<Overlay> {
         if matches!(check, Check::Running | Check::Confirmed) {
-            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed });
+            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed, lock: None });
         }
-        self.start_removal(project, workspace, check == Check::Changed, None);
+        self.start_removal(project, workspace, check == Check::Changed, unlock, None);
         None
     }
 
-    fn worktree_checked(&mut self, project: u64, workspace: u64, changed: bool) {
-        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check }) = &mut self.overlay else {
+    fn worktree_checked(&mut self, project: u64, workspace: u64, status: worktree::Status) {
+        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check, lock }) = &mut self.overlay else {
             return;
         };
-        if (*asked, *shown) != (project, workspace) {
+        if (*asked, *shown) != (project, workspace) || !matches!(check, Check::Running | Check::Confirmed) {
             return;
         }
-        match (*check, changed) {
-            (Check::Running | Check::Confirmed, true) => *check = Check::Changed,
-            (Check::Running, false) => *check = Check::Clean,
-            (Check::Confirmed, false) => {
-                self.overlay = None;
-                self.start_removal(project, workspace, false, None);
-            }
-            (Check::Clean | Check::Changed, _) => {}
+        let go_on = *check == Check::Confirmed && !status.changed && status.lock.is_none();
+        *check = if status.changed { Check::Changed } else { Check::Clean };
+        *lock = status.lock;
+        if go_on {
+            self.overlay = None;
+            self.start_removal(project, workspace, false, false, None);
         }
     }
 
-    fn start_removal(&mut self, project: u64, workspace: u64, force: bool, request: Option<u64>) -> bool {
+    fn start_removal(&mut self, project: u64, workspace: u64, force: bool, unlock: bool, request: Option<u64>) -> bool {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return false };
         let target = &mut self.projects[p].workspaces[w];
         if !target.open() {
@@ -3786,7 +3806,7 @@ impl App {
         let (repo, path, tx) =
             (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
         std::thread::spawn(move || {
-            let result = panics::job(|| worktree::remove(&repo, &path, force));
+            let result = panics::job(|| worktree::remove(&repo, &path, force, unlock));
             let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
         });
         true
@@ -4052,26 +4072,8 @@ impl App {
                 note: None,
                 submit: RENAME_SUBMIT,
             }),
-            Overlay::RemoveWorkspace { project, workspace, check } => {
-                let (label, path) = self
-                    .workspace_index(*project, *workspace)
-                    .map(|(p, w)| {
-                        let ws = &self.projects[p].workspaces[w];
-                        (ws.label(), ui::display_path(&ws.path, home))
-                    })
-                    .unwrap_or_default();
-                ui::Overlay::Confirm(ui::Confirm {
-                    title: "remove workspace",
-                    message: format!(
-                        "Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."
-                    ),
-                    note: match check {
-                        Check::Confirmed => Some(ui::Note::Busy("checking…")),
-                        Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
-                        Check::Running | Check::Clean => None,
-                    },
-                    submit: overlay.submit_label(),
-                })
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())
             }
             Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
                 title: "delete group",
@@ -4104,6 +4106,35 @@ impl App {
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
         })
+    }
+
+    fn remove_view(
+        &self,
+        project: u64,
+        workspace: u64,
+        check: Check,
+        lock: Option<&worktree::Lock>,
+        submit: &'static str,
+    ) -> ui::Overlay {
+        let (label, path) = self
+            .workspace_index(project, workspace)
+            .map(|(p, w)| {
+                let ws = &self.projects[p].workspaces[w];
+                (ws.label(), ui::display_path(&ws.path, self.home.as_deref()))
+            })
+            .unwrap_or_default();
+        let (message, note) = match lock {
+            Some(lock) => (lock_message(&label, lock), lock_note(lock, check == Check::Changed).map(ui::Note::Error)),
+            None => (
+                format!("Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."),
+                match check {
+                    Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                    Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                    Check::Running | Check::Clean => None,
+                },
+            ),
+        };
+        ui::Overlay::Confirm(ui::Confirm { title: "remove workspace", message, note, submit })
     }
 
     fn delete_group_message(&self, id: u64) -> Option<String> {
@@ -5901,7 +5932,7 @@ mod tests {
 
     mod remove_worktree {
         use super::*;
-        use crate::test_util::git;
+        use crate::test_util::{exited_pid, git};
 
         struct Setup {
             app: App,
@@ -6095,21 +6126,146 @@ mod tests {
             assert_eq!(s.app.overlay.as_ref().map(Overlay::submit_label), Some(FORCE_REMOVE_SUBMIT));
         }
 
+        fn lock(s: &Setup, reason: &str) {
+            git(s.repo.path(), &["worktree", "lock", "--reason", reason, &s.path.display().to_string()]);
+        }
+
+        fn note(app: &App) -> Option<String> {
+            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+                ui::Overlay::Confirm(ui::Confirm { note: Some(ui::Note::Error(text)), .. }) => Some(text),
+                _ => None,
+            }
+        }
+
+        fn submit(app: &App) -> Option<&'static str> {
+            app.overlay.as_ref().map(Overlay::submit_label)
+        }
+
+        #[test]
+        fn a_lock_makes_the_dialog_say_so_before_anything_stops() {
+            let mut s = opened();
+            lock(&s, "on a usb disk");
+            ask(&mut s);
+
+            checked(&mut s);
+
+            let message = confirmation(&s.app).expect("a confirmation");
+            assert!(message.contains("is locked: on a usb disk"), "{message}");
+            assert_eq!((submit(&s.app), s.app.projects[0].workspaces[1].tabs.is_empty()), (Some(UNLOCK_SUBMIT), false));
+        }
+
+        #[test]
+        fn a_lock_left_by_a_process_that_is_gone_says_so() {
+            let mut s = opened();
+            lock(&s, &format!("claude session wt (pid {} start Wed Oct  7 09:10:42 2026)", exited_pid()));
+            ask(&mut s);
+
+            checked(&mut s);
+
+            assert!(
+                note(&s.app).is_some_and(|n| n.contains("is gone; the lock was left behind")),
+                "{:?}",
+                note(&s.app)
+            );
+        }
+
+        #[test]
+        fn unlock_and_remove_deletes_a_locked_worktree_and_keeps_the_branch() {
+            let mut s = opened();
+            lock(&s, "busy");
+            ask(&mut s);
+            checked(&mut s);
+
+            click(&mut s.app, form_button(UNLOCK_SUBMIT, 0));
+
+            gone(&mut s);
+            assert_eq!((s.path.exists(), branch_exists(s.repo.path(), "wt")), (false, true));
+        }
+
+        #[test]
+        fn unlock_and_remove_deletes_a_locked_worktree_with_changes() {
+            let mut s = opened();
+            std::fs::write(s.path.join("notes.txt"), "draft").expect("write file");
+            lock(&s, "busy");
+            ask(&mut s);
+            checked(&mut s);
+            assert!(note(&s.app).is_some_and(|n| n.contains("uncommitted")), "{:?}", note(&s.app));
+
+            click(&mut s.app, form_button(UNLOCK_SUBMIT, 0));
+
+            gone(&mut s);
+            assert!(!s.path.exists());
+        }
+
+        #[test]
+        fn confirming_before_git_status_answers_stops_at_a_lock() {
+            let mut s = opened();
+            lock(&s, "busy");
+            ask(&mut s);
+
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+            checked(&mut s);
+
+            assert_eq!(
+                (submit(&s.app), s.app.removing(0, 1), s.app.projects[0].workspaces[1].tabs.is_empty()),
+                (Some(UNLOCK_SUBMIT), false, false)
+            );
+        }
+
         #[test]
         fn a_refused_removal_brings_the_row_back_and_says_why() {
             let mut s = opened();
-            git(s.repo.path(), &["worktree", "lock", &s.path.display().to_string()]);
             ask(&mut s);
             checked(&mut s);
+            std::fs::write(s.path.join("notes.txt"), "draft").expect("write file");
 
             click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
 
             pump_until(&mut s.app, &s.rx, "git refuses", |a| !a.projects[0].workspaces[1].removing());
-            assert!(toast(&s.app).is_some_and(|t| t.contains("locked")), "{:?}", toast(&s.app));
+            assert!(toast(&s.app).is_some_and(|t| t.contains("modified or untracked")), "{:?}", toast(&s.app));
             pump_until(&mut s.app, &s.rx, "its shells stopped", |a| a.projects[0].workspaces[1].tabs.is_empty());
             ask(&mut s);
             checked(&mut s);
             assert!(s.path.exists() && matches!(s.app.overlay, Some(Overlay::RemoveWorkspace { .. })));
+        }
+    }
+
+    mod lock_text {
+        use super::*;
+        use rstest::rstest;
+
+        use crate::worktree::{Holder, Lock};
+
+        fn lock(reason: &str, holder: Option<Holder>) -> Lock {
+            Lock { reason: reason.into(), holder }
+        }
+
+        #[rstest]
+        #[case::with_a_reason(
+            "busy",
+            "The worktree of wt is locked: busy. Unlock it and delete its folder? The branch is kept."
+        )]
+        #[case::without_one("", "The worktree of wt is locked. Unlock it and delete its folder? The branch is kept.")]
+        fn the_message_names_the_reason(#[case] reason: &str, #[case] expected: &str) {
+            assert_eq!(lock_message("wt", &lock(reason, None)), expected);
+        }
+
+        #[rstest]
+        #[case::gone(Some(Holder::Gone(7)), false, Some("Process 7 is gone; the lock was left behind."))]
+        #[case::running(Some(Holder::Running(7)), false, Some("Process 7 still runs and may be using it."))]
+        #[case::nobody(None, false, None)]
+        #[case::nobody_with_changes(None, true, Some("It has uncommitted changes, which are deleted."))]
+        #[case::gone_with_changes(
+            Some(Holder::Gone(7)),
+            true,
+            Some("Process 7 is gone; the lock was left behind. It has uncommitted changes, which are deleted.")
+        )]
+        fn the_note_says_who_holds_it(
+            #[case] holder: Option<Holder>,
+            #[case] changed: bool,
+            #[case] expected: Option<&str>,
+        ) {
+            assert_eq!(lock_note(&lock("busy", holder), changed).as_deref(), expected);
         }
     }
 
@@ -11953,6 +12109,7 @@ rm -f "$s"
 
         mod worktrees {
             use super::*;
+            use crate::test_util::git;
 
             fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
                 let repo = git_repo(&[("README", "hi")]);
@@ -12010,7 +12167,7 @@ rm -f "$s"
             fn a_worktree_already_being_removed_is_refused() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
                 let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let message = error(now(&mut app, None, remove(id)));
 
@@ -12021,7 +12178,7 @@ rm -f "$s"
             fn no_tab_opens_in_a_worktree_being_removed() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
                 let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let new = wire::NewTab { workspace: Some(id), ..wire::NewTab::default() };
                 let message = error(now(&mut app, None, Command::NewTab(new)));
@@ -12035,7 +12192,7 @@ rm -f "$s"
                 let (id, _) = made(&mut app, &rx);
                 ask(&mut app, None, remove(id));
 
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let message = error(answered(&mut app, &rx, "git status answers"));
                 assert!(message.contains("is being removed"), "{message}");
@@ -12054,6 +12211,61 @@ rm -f "$s"
                 let workspace = &app.projects[p].workspaces[w];
                 assert!(message.contains("--force"), "{message}");
                 assert_eq!((workspace.removing(), workspace.tabs.len(), path.exists()), (false, 1, true));
+            }
+
+            fn force_remove(id: u64) -> Command {
+                Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true })
+            }
+
+            fn lock(repo: &Path, path: &Path) {
+                git(repo, &["worktree", "lock", "--reason", "on a usb disk", &path.display().to_string()]);
+            }
+
+            fn untouched(app: &App, id: u64, path: &Path) -> bool {
+                let (p, w) = app.workspace_position(id).expect("it stays");
+                let workspace = &app.projects[p].workspaces[w];
+                workspace.open() && !workspace.tabs.is_empty() && path.exists()
+            }
+
+            #[test]
+            fn a_locked_worktree_is_refused_before_anything_stops() {
+                let (mut app, rx, repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                lock(repo.path(), &path);
+
+                ask(&mut app, None, remove(id));
+                let message = error(answered(&mut app, &rx, "git status answers"));
+
+                assert!(
+                    message.contains("is locked (on a usb disk)") && message.contains("git worktree unlock"),
+                    "{message}"
+                );
+                assert!(untouched(&app, id, &path));
+            }
+
+            #[test]
+            fn force_does_not_unlock_a_locked_worktree() {
+                let (mut app, rx, repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                lock(repo.path(), &path);
+
+                ask(&mut app, None, force_remove(id));
+                let message = error(answered(&mut app, &rx, "git status answers"));
+
+                assert!(message.contains("is locked"), "{message}");
+                assert!(untouched(&app, id, &path));
+            }
+
+            #[test]
+            fn force_removes_a_worktree_with_changes() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+
+                ask(&mut app, None, force_remove(id));
+                done(answered(&mut app, &rx, "git removes the worktree"));
+
+                assert!(!path.exists());
             }
 
             #[test]
