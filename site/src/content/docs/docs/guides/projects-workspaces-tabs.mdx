@@ -117,7 +117,7 @@ When Claude Code or Codex runs in a tab, an icon before the tab's name tells you
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
-So that a finished or waiting agent in another project doesn't go unnoticed, `!` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, `!` wins over `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen.
+So that a finished or waiting agent in another project doesn't go unnoticed, `!` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, `!` wins over `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
 
 cornercase reads what each agent reports about itself. Nothing is installed and none of the agents' settings change.
 
@@ -259,7 +259,7 @@ When a program ends by itself, for example when you type `exit`, its pane closes
   Between stacked lists, drag the line to share the height, and double-click it to split it in half again.
 - The active project and tab are marked with a cyan bar `▌` on the left edge and a highlighted background; the active workspace's name is brighter than the others. Each workspace's tabs hang from it on thin tree lines.
 
-Column widths, the line between stacked lists and what is folded in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
+Column widths, the line between stacked lists, the height of the [agents section](#the-agents-section) and what is folded in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
 
 <Screen
   name="sidebar-stacked"
@@ -287,6 +287,26 @@ With **settings → TUI → sidebar** set to *tree*, one list holds your groups,
 - What you fold is saved with your session. Opening a project or a tab from search, or switching to it, unfolds the way to it.
 
 Below 90 columns the [compact layout](../small-terminals/) shows its usual menu, projects then workspaces.
+
+### The agents section
+
+Turn on **settings → TUI → agents section** to list every Claude Code and Codex running in any project at the bottom of the sidebar, one row per agent:
+
+<Screen
+  name="sidebar-agents"
+  crop={[0, 0, 32, 34]}
+  alt="The stacked sidebar with an agents section at the bottom, above the footer: shop › feat/login waiting for you, claude, Opus 5.5 at 23%; api working, codex, gpt-5.5 at 41%, marked as the agent on screen; notes idle, claude, Sonnet 5.5 at 2%"
+  caption="Every agent in one list: click one to jump to it."
+/>
+
+- Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude` or `codex`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
+- **Click a row** to jump to that agent: its project, workspace and tab open and its pane gets the focus, even in a split tab, whatever project you were in. In the [tree](#the-tree) the way to it unfolds.
+- The agent on screen is marked with the cyan bar `▌`.
+- Rows keep the order of the sidebar, so they don't move under your pointer; the icon tells you which one waits. When no agent runs, the section says *no agents running* instead of disappearing.
+- **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.
+- In a narrow sidebar the model goes first, then the workspace; the icon and the project stay.
+
+It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code and Codex are listed, since other agents don't report what they are doing.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

@@ -339,6 +339,7 @@ enum Check {
 enum Grab {
     Row(Target),
     Todo(u64),
+    Agent(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -449,6 +450,7 @@ pub struct App {
     active: usize,
     projects_scroll: usize,
     workspaces_scroll: usize,
+    agents_scroll: usize,
     followed: Focus,
     drawn: ui::Areas,
     nav: Option<ui::Nav>,
@@ -546,6 +548,7 @@ impl App {
             active: 0,
             projects_scroll: 0,
             workspaces_scroll: 0,
+            agents_scroll: 0,
             followed: Focus::default(),
             drawn: ui::Areas::default(),
             nav: None,
@@ -646,7 +649,7 @@ impl App {
     }
 
     fn layout(&self, area: Rect) -> ui::Areas {
-        ui::layout_with(area, self.widths, self.panel_shown(), self.sidebar())
+        ui::full_layout(area, self.widths, self.panel_shown(), self.sidebar(), self.config.agents_section)
     }
 
     fn panel_shown(&self) -> bool {
@@ -1483,9 +1486,18 @@ impl App {
             }
             return Ok(());
         }
-        if areas.back.contains(pos) {
+        if let Some(nav) = [(areas.back, ui::Nav::Projects), (areas.agents_button, ui::Nav::Agents)]
+            .into_iter()
+            .find_map(|(r, nav)| r.contains(pos).then_some(nav))
+        {
             if left {
-                self.nav = Some(ui::Nav::Projects);
+                self.nav = Some(nav);
+            }
+            return Ok(());
+        }
+        if areas.agents.contains(pos) {
+            if left && areas.agents_list.contains(pos) {
+                self.press_agent(&areas, pos, area);
             }
             return Ok(());
         }
@@ -1572,7 +1584,10 @@ impl App {
 
     fn scroll_column(&mut self, areas: &ui::Areas, pos: Position, delta: isize) -> bool {
         let items = if areas.pitch > 1 { delta.signum() } else { delta };
-        if areas.sidebar.contains(pos) {
+        if areas.agents.contains(pos) {
+            self.agents_scroll = self.agent_layout(areas).scrolled(items);
+            true
+        } else if areas.sidebar.contains(pos) {
             self.projects_scroll = self.sidebar_layout(areas).scrolled(items);
             true
         } else if areas.workspaces.contains(pos) {
@@ -1776,8 +1791,10 @@ impl App {
             let main = Rect { width: self.widths.main_width(area.width, self.panel_shown()), ..area };
             self.widths = match border {
                 ui::Border::Changes => self.widths.dragged(border, ev.column, area.width),
+                ui::Border::Agents => self.agents_dragged(ev.row, area),
                 _ if self.sidebar().stacked() => {
-                    self.widths.stacked_dragged(border, Position::new(ev.column, ev.row), main)
+                    let pos = Position::new(ev.column, ev.row);
+                    self.widths.stacked_dragged(border, pos, main, self.config.agents_section)
                 }
                 _ => self.widths.dragged(border, ev.column, main.width),
             };
@@ -1838,12 +1855,14 @@ impl App {
                     Grab::Row(target) => self.click_row(target),
                     Grab::Todo(id) if dropped => self.drop_todo(id, pos, area),
                     Grab::Todo(id) => self.click_todo(id, drag.row, pos, area),
+                    Grab::Agent(_) if dropped => {}
+                    Grab::Agent(pane) => self.jump_to_pane(pane),
                 }
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 if let Some(delta) = wheel(ev.kind) {
                     match drag.target {
-                        Grab::Row(_) => _ = self.scroll_column(areas, pos, delta),
+                        Grab::Row(_) | Grab::Agent(_) => _ = self.scroll_column(areas, pos, delta),
                         Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
                     }
                 }
@@ -2081,11 +2100,15 @@ impl App {
             return;
         }
         let areas = self.layout(drag.area).shown(self.nav);
-        let Grab::Row(target) = drag.target else {
-            if self.auto_scroll_todo(areas.changes, pos) {
-                self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+        let target = match drag.target {
+            Grab::Row(target) => target,
+            Grab::Todo(_) => {
+                if self.auto_scroll_todo(areas.changes, pos) {
+                    self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+                }
+                return;
             }
-            return;
+            Grab::Agent(_) => return,
         };
         let sidebar = areas.tree || matches!(target, Target::Group(_) | Target::Project(_));
         let rows = if sidebar {
@@ -2106,6 +2129,82 @@ impl App {
             percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
             memory: tab.memory().filter(|_| self.config.memory),
         }
+    }
+
+    fn agent_places(&self) -> Vec<(usize, usize, usize, usize)> {
+        let unfolded = vec![false; self.groups.len()];
+        let order = ui::sidebar_rows(&self.project_groups(), &unfolded);
+        let mut places = Vec::new();
+        for p in order.into_iter().filter_map(|row| if let SidebarRow::Project(p) = row { Some(p) } else { None }) {
+            for (w, workspace) in self.projects[p].workspaces.iter().enumerate() {
+                for (t, tab) in workspace.tabs.iter().enumerate() {
+                    let agents = tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some());
+                    places.extend(agents.map(|(i, _)| (p, w, t, i)));
+                }
+            }
+        }
+        places
+    }
+
+    fn agents_view(&self) -> ui::AgentsView {
+        let focus = self.focus();
+        let entries = self.agent_places().into_iter().map(|(p, w, t, i)| {
+            let project = &self.projects[p];
+            let workspace = &project.workspaces[w];
+            let tab = &workspace.tabs[t];
+            let term = &tab.panes[i];
+            let context = term.context.context();
+            ui::AgentEntry {
+                status: term.agent.status(),
+                agent: term.agent.agent().unwrap_or_default().to_string(),
+                project: self.project_label(project),
+                workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
+                details: ui::Details {
+                    model: context.filter(|_| self.config.model).map(|c| c.model.clone()),
+                    percent: context.and_then(|c| c.percent).filter(|_| self.config.context),
+                    memory: None,
+                },
+                active: focus.tab == Some(tab.id) && tab.active == i,
+            }
+        });
+        ui::AgentsView { entries: entries.collect(), scroll: self.agents_scroll }
+    }
+
+    fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
+        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_places().len(), self.agents_scroll)
+    }
+
+    fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
+        let places = self.agent_places();
+        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.agents_scroll);
+        let Some(i) = ui::agent_hit(list, pitch, places.len(), scroll, pos) else { return };
+        let (p, w, t, pane) = places[i];
+        let pane = self.projects[p].workspaces[w].tabs[t].panes[pane].id;
+        let row = ui::agent_row(list, pitch, places.len(), scroll, i);
+        self.row_drag =
+            Some(RowDrag { target: Grab::Agent(pane), row, moved: false, area, scrolled: None, fold: false });
+    }
+
+    fn jump_to_pane(&mut self, pane: u64) {
+        let place = self.projects.iter().find_map(|project| {
+            project.workspaces.iter().find_map(|workspace| {
+                let tab = workspace.tabs.iter().find(|t| t.panes.iter().any(|term| term.id == pane))?;
+                Some(Goto::Place { project: project.id, workspace: Some(workspace.id), tab: Some(tab.id) })
+            })
+        });
+        let Some(place) = place else { return };
+        self.goto(place);
+        if let Some(tab) = self.tab_mut() {
+            tab.focus(pane);
+        }
+    }
+
+    fn agents_dragged(&self, row: u16, area: Rect) -> ui::Widths {
+        let bottom = self.layout(area).agents.bottom();
+        let wanted = ui::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.widths };
+        let (panel, sidebar) = (self.panel_shown(), self.sidebar());
+        let rows = ui::full_layout(area, wanted, panel, sidebar, true).agents.height;
+        ui::Widths { agents: Some(rows), ..wanted }
     }
 
     fn tab_lines(&self) -> Vec<Vec<u16>> {
@@ -3780,10 +3879,13 @@ impl App {
         let drag = moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),
+            Grab::Agent(_) => None,
         });
         let tree = self.drawn.tree.then(|| self.tree_view());
+        let agents = self.config.agents_section.then(|| self.agents_view());
         let view = ui::View {
             tree,
+            agents,
             groups,
             projects,
             active: self.active,
@@ -7014,6 +7116,142 @@ rm -f "$1/sessions/$$.json"
 
             assert_eq!(toast(&w.app), Some("codex needs you in shop]0;evil › default"));
         }
+
+        mod agents_section {
+            use super::*;
+
+            const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
+            const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 30 };
+
+            fn statuses(app: &App) -> Vec<Option<Status>> {
+                app.agents_view().entries.iter().map(|e| e.status).collect()
+            }
+
+            fn agent_pos(app: &App, area: Rect, i: usize) -> Position {
+                let a = app.layout(area).shown(app.nav);
+                let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.agents_scroll, i);
+                Position::new(r.x + 4, r.y + r.height / 2)
+            }
+
+            fn focus(app: &App) -> (usize, Option<u64>) {
+                (app.active, app.term().map(|t| t.id))
+            }
+
+            fn two_agents() -> (App, Receiver<AppEvent>, Vec<TempDir>, Claude, FakeCodex) {
+                let (mut app, rx, dirs) = app_with(2);
+                app.config.agents_section = true;
+                app.active = 0;
+                let claude = Claude::running(SILENT_CLAUDE);
+                claude.start(&mut app);
+                pump_until(&mut app, &rx, "claude runs", |a| runs(a, agents::CLAUDE));
+                app.active = 1;
+                let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
+                type_line(&mut app, &codex.command_line());
+                watch_until(&mut app, &rx, "both agents are listed", |a| a.agent_places().len() == 2);
+                (app, rx, dirs, claude, codex)
+            }
+
+            #[test]
+            fn lists_every_agent_and_a_click_shows_its_pane() {
+                let (mut app, rx, _dirs, claude, codex) = two_agents();
+                let pane = app.layout(TALL).pane;
+                let codex_pane = app.term().map(|t| t.id);
+                right_click(&mut app, Position::new(pane.x + 1, pane.y + 1));
+                pick(&mut app, "split right");
+                app.active = 0;
+                rendered(&mut app, TALL);
+                let agents: Vec<String> = app.agents_view().entries.into_iter().map(|e| e.agent).collect();
+
+                let at = agent_pos(&app, TALL, 1);
+                click_in(&mut app, at, TALL);
+                let shown = focus(&app);
+                claude.signal("quit");
+                codex.signal("quit", "");
+                drop(rx);
+
+                assert_eq!((agents, shown), (vec!["claude".to_string(), "codex".to_string()], (1, codex_pane)));
+            }
+
+            #[test]
+            fn the_rows_follow_an_agent_as_it_starts_changes_and_quits() {
+                let (mut app, rx, _dirs) = app_with(1);
+                app.config.agents_section = true;
+                let claude = Claude::new();
+                let before = statuses(&app);
+
+                claude.start(&mut app);
+                watch_until(&mut app, &rx, "claude works", |a| statuses(a) == [Some(Status::Working)]);
+                claude.signal("finish");
+                watch_until(&mut app, &rx, "claude goes idle", |a| statuses(a) == [Some(Status::Idle)]);
+                claude.signal("quit");
+                watch_until(&mut app, &rx, "the row goes", |a| statuses(a).is_empty());
+
+                assert_eq!(before, []);
+            }
+
+            #[test]
+            fn the_switch_shows_and_hides_the_section() {
+                let (mut app, _rx, _dirs) = app_with(1);
+                let off = text(&rendered(&mut app, TALL), app.layout(TALL).agents_list).trim().to_string();
+
+                app.config.agents_section = true;
+                let list = app.layout(TALL).agents_list;
+                let on = text(&rendered(&mut app, TALL), list).trim().to_string();
+
+                assert_eq!((off.as_str(), on.as_str()), ("", "no agents running"));
+            }
+
+            #[test]
+            fn dragging_its_line_resizes_it_and_the_session_keeps_it() {
+                let (mut app, _rx, _dirs) = app_with(1);
+                app.config.agents_section = true;
+                let line = app.layout(TALL).agents_border;
+                let before = app.layout(TALL).agents.height;
+
+                mouse_in(&mut app, MouseEventKind::Down(MouseButton::Left), Position::new(3, line.y), TALL);
+                mouse_in(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(3, line.y - 3), TALL);
+                mouse_in(&mut app, MouseEventKind::Up(MouseButton::Left), Position::new(3, line.y - 3), TALL);
+
+                assert_eq!(
+                    (app.layout(TALL).agents.height, app.state().widths.and_then(|w| w.agents)),
+                    (before + 3, Some(before + 3))
+                );
+            }
+
+            #[test]
+            fn the_wheel_scrolls_it() {
+                let (mut app, rx, _dirs, claude, codex) = two_agents();
+                let area = Rect { height: 20, ..TALL };
+                let at = app.layout(area).agents_list.as_position();
+
+                mouse_in(&mut app, MouseEventKind::ScrollDown, at, area);
+                let scroll = app.agents_scroll;
+                claude.signal("quit");
+                codex.signal("quit", "");
+                drop(rx);
+
+                assert_eq!(scroll, 1);
+            }
+
+            #[test]
+            fn compact_mode_opens_it_from_the_projects_menu_and_a_click_shows_the_pane() {
+                let (mut app, rx, _dirs, claude, codex) = two_agents();
+                let claude_pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
+                app.nav = Some(ui::Nav::Projects);
+                rendered(&mut app, SMALL);
+
+                let button = app.layout(SMALL).shown(app.nav).agents_button.as_position();
+                click_in(&mut app, button, SMALL);
+                let nav = app.nav;
+                let at = agent_pos(&app, SMALL, 0);
+                click_in(&mut app, at, SMALL);
+                claude.signal("quit");
+                codex.signal("quit", "");
+                drop(rx);
+
+                assert_eq!((nav, app.nav, focus(&app)), (Some(ui::Nav::Agents), None, (0, Some(claude_pane))));
+            }
+        }
     }
 
     mod compact {
@@ -7651,6 +7889,7 @@ rm -f "$1/sessions/$$.json"
                 form(&s.app).rows(),
                 [
                     Row::Sidebar,
+                    Row::AgentsSection,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),

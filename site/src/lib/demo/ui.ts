@@ -1,6 +1,6 @@
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
-import type { App } from './app';
+import type { AgentRow, App } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawTodo } from './todo';
@@ -8,6 +8,8 @@ import {
   type Areas,
   type Border,
   activeRow,
+  AGENTS_LABEL,
+  agentLayout,
   GROUP_COLOURS,
   GROUP_ICONS,
   type Rows,
@@ -26,7 +28,6 @@ import {
   issuesArea,
   landed,
   landingIndent,
-  layout,
   menuArea,
   moreAbove,
   pickerArea,
@@ -68,6 +69,7 @@ export interface Region {
   double?: () => void;
   drag?: Drag;
   grab?: Target;
+  hold?: boolean;
   wheel?: (dy: number) => boolean;
   cursor?: string;
   pane?: { pane: Pane; rect: Rect; tab: Tab; alone: boolean };
@@ -102,6 +104,9 @@ const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
 const NO_TAB = 'no tab open';
+const AGENTS_TITLE = 'agents';
+const NO_AGENTS = 'no agents running';
+const MIN_WORKSPACE_WIDTH = 4;
 const NO_TAB_HINT = ' opens a shell here';
 const TAGLINE = 'every agent in its own corner';
 const WELCOME_HINT = ' opens a folder';
@@ -255,7 +260,7 @@ export class Painter {
       this.outer();
       return { regions: this.regions, cursor: this.cursor, areas: null };
     }
-    const areas = layout(app.cols, app.rows, app.widths, app.nav, app.panelShown(), app.sidebar());
+    const areas = app.areas();
     this.pane(areas);
     if (areas.compact) {
       this.bar(areas);
@@ -266,6 +271,7 @@ export class Painter {
     }
     if (areas.tree) this.tree(areas);
     else if (!isEmpty(areas.sidebar)) this.sidebar(areas);
+    if (app.config.agentsSection) this.agents(areas);
     if ([areas.separator, areas.settings, areas.usage, areas.quit].some((r) => !isEmpty(r))) this.footer(areas);
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
@@ -496,21 +502,23 @@ export class Painter {
     this.region({ r, click: act, cursor: 'pointer' });
   }
 
-  private details(row: Rect, pitch: number, d: Details, indent: number): void {
+  private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null): void {
     const r = intersect(rect(row.x, middle(row).y + 1, row.w, 1), row);
     const close = closeButton(row, pitch);
     const free = r.w - (bottom(close) > r.y ? close.w : 0) - 1;
+    const lead: Seg[] = agent === null ? [] : [seg(agent, DARK)];
     const fixed: Seg[] = [];
     if (d.percent !== null) {
       const severity = severityOf(d.percent);
       fixed.push(seg(`${d.percent}%`, severity === 'normal' ? DARK : { fg: SEVERITY[severity] }));
     }
     if (d.memory !== null) fixed.push(seg(memorySize(d.memory), DARK));
-    const fixedWidth = width(fixed) + fixed.length * CONTEXT_SEPARATOR.length;
+    const fixedWidth = width([...lead, ...fixed]) + (lead.length + fixed.length) * CONTEXT_SEPARATOR.length;
     const shift = Math.max(0, Math.min(indent, free - Math.max(0, fixedWidth - CONTEXT_SEPARATOR.length)));
     const modelRoom = Math.max(0, free - shift - fixedWidth);
-    const model = d.model !== null && (!fixed.length || modelRoom >= MIN_MODEL_WIDTH) ? [seg(truncateRight(d.model, modelRoom), DARK)] : [];
-    const parts = [...model, ...fixed].flatMap((part) => [seg(CONTEXT_SEPARATOR, DARK), part]).slice(1);
+    const shown = (!fixed.length && !lead.length) || modelRoom >= MIN_MODEL_WIDTH;
+    const model = d.model !== null && shown ? [seg(truncateRight(d.model, modelRoom), DARK)] : [];
+    const parts = [...lead, ...model, ...fixed].flatMap((part) => [seg(CONTEXT_SEPARATOR, DARK), part]).slice(1);
     this.line(r, [seg(' '.repeat(shift)), ...parts]);
   }
 
@@ -696,6 +704,60 @@ export class Painter {
     this.landing(line, indent);
   }
 
+  private agents(areas: Areas): void {
+    const app = this.app;
+    if (isEmpty(areas.agents)) {
+      const b = areas.agentsButton;
+      if (isEmpty(b)) return;
+      this.button(b, '', AGENTS_LABEL, this.buttonStyle(b, CYAN, 6));
+      this.region({ r: b, click: () => app.navTo('agents'), cursor: 'pointer' });
+      return;
+    }
+    const line = areas.agentsBorder;
+    if (!isEmpty(line)) {
+      const lit = (app.dragging?.kind === 'border' && app.dragging.border === 'agents') || this.sidebarHovered(line);
+      this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit ? 6 : this.lineColour })]);
+      this.region({ r: line, drag: { kind: 'border', border: 'agents' }, double: () => app.resetBorder('agents'), cursor: 'row-resize' });
+    }
+    if (areas.compact) this.back(areas, AGENTS_TITLE);
+    else this.title(areas.agentsTitle, AGENTS_TITLE);
+    const list = areas.agentsList;
+    const entries = app.agentRows();
+    const rows = agentLayout(list, areas.pitch, entries.length, app.agentsScroll);
+    if (!entries.length) {
+      const first = middle(rect(list.x, list.y, list.w, Math.min(areas.pitch, list.h)));
+      this.span(first.x, first.y, `  ${NO_AGENTS}`, DARK, first.w);
+    }
+    this.region({ r: list, wheel: (dy) => app.scrollAgents(rows, dy) });
+    entries.forEach((entry, i) => {
+      const r = rows.item(i);
+      if (isEmpty(r)) return;
+      this.agentRow(r, areas.pitch, entry);
+      this.region({ r, click: () => app.jumpToPane(entry.pane), hold: true, cursor: 'pointer' });
+    });
+    this.more(list, rows, entries, () => true);
+  }
+
+  private agentRow(r: Rect, pitch: number, entry: AgentRow): void {
+    const bg = this.rowBackground(r, entry.active);
+    const line: Line = [marker(entry.active), STATUS_ICONS[entry.status], seg(' ')];
+    const indent = width(line);
+    const room = Math.max(0, r.w - indent - 1);
+    line.push(...agentPlace(entry, room, { fg: entry.active ? 15 : 7 }));
+    this.band(r, line, bg);
+    this.details(r, pitch, entry.details, indent, entry.agent);
+    if (entry.active) this.rail(r);
+  }
+
+  private back(areas: Areas, name: string): void {
+    const style = this.buttonStyle(areas.back, CYAN, 6);
+    this.button(areas.back, '', '‹ projects', style);
+    this.region({ r: areas.back, click: () => this.app.navTo('projects'), cursor: 'pointer' });
+    const restX = right(areas.back);
+    const m = middle(areas.back);
+    this.span(restX, m.y, ` ${truncateRight(name, Math.max(0, right(areas.bar) - restX - 1))}`, { fg: 8, add: BOLD });
+  }
+
   private footer(areas: Areas): void {
     const app = this.app;
     this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, { fg: this.lineColour })]);
@@ -710,15 +772,7 @@ export class Painter {
   private workspaces(areas: Areas): void {
     const app = this.app;
     if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'workspaces');
-    else {
-      const style = this.buttonStyle(areas.back, CYAN, 6);
-      this.button(areas.back, '', '‹ projects', style);
-      this.region({ r: areas.back, click: () => app.navTo('projects'), cursor: 'pointer' });
-      const restX = right(areas.back);
-      const name = app.project() ? projectLabel(app.project()!) : '';
-      const m = middle(areas.workspacesTitle);
-      this.span(restX, m.y, ` ${truncateRight(name, Math.max(0, right(m) - restX - 1))}`, { fg: 8, add: BOLD });
-    }
+    else this.back(areas, app.project() ? projectLabel(app.project()!) : '');
     const p = app.project();
     if (!p) return;
     const list = areas.workspacesList;
@@ -1182,6 +1236,13 @@ export class Painter {
     this.span(b.x, b.y, ` ${UNDO} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
     this.region({ r: b, click: undo, cursor: 'pointer' });
   }
+}
+
+function agentPlace(entry: AgentRow, room: number, name: Style): Line {
+  const project = [...entry.project].length;
+  const rest = room - (project + 3);
+  if (entry.workspace !== null && rest >= MIN_WORKSPACE_WIDTH) return [seg(entry.project, name), seg(' › ', DARK), seg(truncateRight(entry.workspace, rest), name)];
+  return [seg(truncateRight(entry.project, room), name)];
 }
 
 function amongTabs(rows: WorkspaceRow[], i: number): boolean {

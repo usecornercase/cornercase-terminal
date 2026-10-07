@@ -25,6 +25,7 @@ pub enum Row {
     Folder,
     Fetch,
     Sidebar,
+    AgentsSection,
     DimPanes,
     Detail(Detail),
     Notifications,
@@ -47,6 +48,7 @@ impl Row {
             Self::Folder
             | Self::Fetch
             | Self::Sidebar
+            | Self::AgentsSection
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
@@ -64,7 +66,12 @@ impl Row {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
             Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
-            Self::Sidebar | Self::DimPanes | Self::Detail(_) | Self::Notifications | Self::Updates => Page::Tui,
+            Self::Sidebar
+            | Self::AgentsSection
+            | Self::DimPanes
+            | Self::Detail(_)
+            | Self::Notifications
+            | Self::Updates => Page::Tui,
         }
     }
 }
@@ -261,6 +268,7 @@ impl Settings {
         rows.extend([
             Row::AddAgent,
             Row::Sidebar,
+            Row::AgentsSection,
             Row::DimPanes,
             Row::Detail(Detail::Model),
             Row::Detail(Detail::Context),
@@ -306,6 +314,14 @@ impl Settings {
         }
     }
 
+    fn flip(&mut self, switch: fn(&mut Config) -> &mut bool, [on, off]: [&str; 2]) -> Action {
+        let mut config = self.config.clone();
+        let value = switch(&mut config);
+        *value = !*value;
+        let notice = if *value { on } else { off };
+        self.save(config, notice.into())
+    }
+
     pub fn activate(&mut self) -> Action {
         let Some(row) = self.row() else { return Action::None };
         self.notice = None;
@@ -340,14 +356,14 @@ impl Settings {
                 Action::None
             }
             Row::Submit => {
-                let submit = !self.config.submit;
-                let notice = if submit { "the prompt is sent for you" } else { "the prompt is typed; you press Enter" };
-                self.save(Config { submit, ..self.config.clone() }, notice.into())
+                self.flip(|c| &mut c.submit, ["the prompt is sent for you", "the prompt is typed; you press Enter"])
             }
+            Row::AgentsSection => self.flip(
+                |c| &mut c.agents_section,
+                ["the sidebar lists every agent", "the sidebar no longer lists agents"],
+            ),
             Row::DimPanes => {
-                let on = !self.config.dim_inactive_panes;
-                let notice = if on { "inactive panes are dimmed" } else { "every pane looks the same" };
-                self.save(Config { dim_inactive_panes: on, ..self.config.clone() }, notice.into())
+                self.flip(|c| &mut c.dim_inactive_panes, ["inactive panes are dimmed", "every pane looks the same"])
             }
             Row::Detail(detail) => {
                 let mut config = self.config.clone();
@@ -357,20 +373,14 @@ impl Settings {
             }
             Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
-            Row::Updates => {
-                let on = !self.config.check_updates;
-                let notice = if on {
-                    "cornercase looks for new versions"
-                } else {
-                    "cornercase no longer looks for new versions"
-                };
-                self.save(Config { check_updates: on, ..self.config.clone() }, notice.into())
-            }
-            Row::Trust => {
-                let on = !self.config.accept_trust_prompts;
-                let notice = if on { "trust prompts are accepted for you" } else { "trust prompts are left to you" };
-                self.save(Config { accept_trust_prompts: on, ..self.config.clone() }, notice.into())
-            }
+            Row::Updates => self.flip(
+                |c| &mut c.check_updates,
+                ["cornercase looks for new versions", "cornercase no longer looks for new versions"],
+            ),
+            Row::Trust => self.flip(
+                |c| &mut c.accept_trust_prompts,
+                ["trust prompts are accepted for you", "trust prompts are left to you"],
+            ),
             Row::Kind(kind) => {
                 let modes = agents::modes(&self.config, &kind);
                 if modes.is_empty() {
@@ -775,6 +785,10 @@ impl Settings {
             Row::Submit => {
                 let value = if config.submit { "[x] sent for you" } else { "[ ] typed, you press Enter" };
                 ("send the prompt".into(), value.into(), String::new(), false)
+            }
+            Row::AgentsSection => {
+                let value = if config.agents_section { "[x] shown" } else { "[ ] hidden" };
+                ("agents section".into(), value.into(), "every running agent in the sidebar".into(), false)
             }
             Row::DimPanes => {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
@@ -1267,6 +1281,18 @@ mod tests {
         }
     }
 
+    mod agents_section {
+        use super::*;
+
+        #[test]
+        fn is_a_switch_that_starts_off() {
+            let mut s = settings();
+            let before = s.config.agents_section;
+            go_to(&mut s, &Row::AgentsSection);
+            assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).agents_section), (false, true));
+        }
+    }
+
     mod agent_tabs {
         use rstest::rstest;
 
@@ -1290,7 +1316,7 @@ mod tests {
             s.open_page(Page::Tui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
             let rows: Vec<(&str, &str)> =
-                view.rows[2..5].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+                view.rows[3..6].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
             assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
         }
     }
@@ -1306,6 +1332,7 @@ mod tests {
                 s.rows(),
                 [
                     Row::Sidebar,
+                    Row::AgentsSection,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),

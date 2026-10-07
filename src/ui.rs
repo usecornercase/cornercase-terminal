@@ -47,6 +47,11 @@ const SEARCH_ICON: &str = " ⌕ ";
 const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
 const MENU_ICON: &str = "≡";
 const BACK_LABEL: &str = "‹ projects";
+pub const AGENTS_LABEL: &str = "agents ›";
+const AGENTS_TITLE: &str = "agents";
+const NO_AGENTS: &str = "no agents running";
+const AGENT_LINES: u16 = 2;
+const MIN_WORKSPACE_WIDTH: usize = 4;
 pub const CRUMB_SEPARATOR: &str = " › ";
 pub const CANCEL_LABEL: &str = "cancel";
 const ISSUES_LABEL: &str = "issues";
@@ -97,6 +102,7 @@ pub enum Border {
     Projects,
     Workspaces,
     Stack,
+    Agents,
     Changes,
 }
 
@@ -151,11 +157,13 @@ pub struct Widths {
     pub changes: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agents: Option<u16>,
 }
 
 impl Default for Widths {
     fn default() -> Self {
-        Self { projects: SIDEBAR_WIDTH, workspaces: WORKSPACES_WIDTH, changes: None, stack: None }
+        Self { projects: SIDEBAR_WIDTH, workspaces: WORKSPACES_WIDTH, changes: None, stack: None, agents: None }
     }
 }
 
@@ -200,7 +208,7 @@ impl Widths {
                 let max = total.saturating_sub(PANE_PADDING + MIN_PANE_WIDTH + 2 * MIN_COLUMN_WIDTH);
                 Self { changes: Some(total.saturating_sub(x).clamp(changes::MIN_WIDTH.min(max), max)), ..self }
             }
-            Border::Stack => self,
+            Border::Stack | Border::Agents => self,
         }
     }
 
@@ -210,6 +218,7 @@ impl Widths {
             Border::Projects => Self { projects: SIDEBAR_WIDTH, ..self },
             Border::Workspaces => Self { workspaces: WORKSPACES_WIDTH, ..self },
             Border::Stack => Self { stack: None, ..self },
+            Border::Agents => Self { agents: None, ..self },
             Border::Changes => Self { changes: None, ..self },
         }
     }
@@ -225,21 +234,43 @@ impl Widths {
         self.stack.unwrap_or(room / 2).clamp(MIN_STACK_SECTION, room - MIN_STACK_SECTION)
     }
 
+    pub fn agents_rows(self, room: u16, keep: u16) -> u16 {
+        if room < keep + MIN_STACK_SECTION {
+            return room / 3;
+        }
+        self.agents.unwrap_or(room / 3).clamp(MIN_STACK_SECTION, room - keep)
+    }
+
     #[must_use]
-    pub fn stacked_dragged(self, border: Border, pos: Position, area: Rect) -> Self {
+    pub fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool) -> Self {
         match border {
             Border::Projects => {
                 let max = columns_room(area.width).max(MIN_COLUMN_WIDTH);
                 Self { projects: pos.x.saturating_add(1).clamp(MIN_COLUMN_WIDTH, max), ..self }
             }
             Border::Stack => {
-                let room = stack_room(area);
+                let mut room = stack_room(area);
+                if agents {
+                    let [rest, ..] = split_agents(Rect { height: room.height + 1, ..room }, self, STACKED_KEEP);
+                    room.height = rest.height.saturating_sub(1);
+                }
                 let wanted = Self { stack: Some(pos.y.saturating_sub(room.y)), ..self };
                 Self { stack: Some(wanted.top_rows(room.height)), ..self }
             }
-            Border::Workspaces | Border::Changes => self,
+            Border::Workspaces | Border::Agents | Border::Changes => self,
         }
     }
+}
+
+const STACKED_KEEP: u16 = 2 * MIN_STACK_SECTION + 1;
+
+fn split_agents(r: Rect, widths: Widths, keep: u16) -> [Rect; 3] {
+    let room = r.height.saturating_sub(1);
+    let rows = widths.agents_rows(room, keep);
+    let rest = Rect { height: room - rows, ..r };
+    let line = Rect { y: rest.bottom(), height: r.height.min(1), ..r };
+    let agents = Rect { y: line.bottom(), height: rows, ..r };
+    [rest, line, agents]
 }
 
 fn stack_room(column: Rect) -> Rect {
@@ -251,6 +282,7 @@ fn stack_room(column: Rect) -> Rect {
 pub enum Nav {
     Projects,
     Workspaces,
+    Agents,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -278,6 +310,11 @@ pub struct Areas {
     pub projects_border: Rect,
     pub workspaces_border: Rect,
     pub stack_border: Rect,
+    pub agents: Rect,
+    pub agents_title: Rect,
+    pub agents_list: Rect,
+    pub agents_border: Rect,
+    pub agents_button: Rect,
     pub changes: Rect,
     pub changes_border: Rect,
     pub changes_button: Rect,
@@ -291,12 +328,13 @@ impl Areas {
             Border::Projects => self.projects_border,
             Border::Workspaces => self.workspaces_border,
             Border::Stack => self.stack_border,
+            Border::Agents => self.agents_border,
             Border::Changes => self.changes_border,
         }
     }
 
     pub fn border_hit(&self, pos: Position) -> Option<Border> {
-        [Border::Projects, Border::Workspaces, Border::Stack, Border::Changes]
+        [Border::Projects, Border::Workspaces, Border::Stack, Border::Agents, Border::Changes]
             .into_iter()
             .find(|&b| self.border(b).contains(pos))
     }
@@ -322,10 +360,11 @@ impl Areas {
                 settings: hidden,
                 usage: hidden,
                 quit: hidden,
+                agents_button: hidden,
                 ..self
             }
         };
-        if nav == Some(Nav::Workspaces) {
+        let workspaces = if nav == Some(Nav::Workspaces) {
             projects
         } else {
             Self {
@@ -334,9 +373,14 @@ impl Areas {
                 workspaces_list: hidden,
                 workspaces_separator: hidden,
                 issues: hidden,
-                back: hidden,
+                back: if nav == Some(Nav::Agents) { projects.back } else { hidden },
                 ..projects
             }
+        };
+        if nav == Some(Nav::Agents) {
+            workspaces
+        } else {
+            Self { agents: hidden, agents_title: hidden, agents_list: hidden, ..workspaces }
         }
     }
 }
@@ -386,13 +430,17 @@ pub fn layout(area: Rect, widths: Widths) -> Areas {
 }
 
 pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) -> Areas {
+    full_layout(area, widths, changes, sidebar, false)
+}
+
+pub fn full_layout(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar, agents: bool) -> Areas {
     if area.width < COMPACT_WIDTH {
-        return compact_layout(area, changes);
+        return compact_layout(area, changes, agents);
     }
     let columns = |r: Rect| match sidebar {
-        Sidebar::SideBySide => wide_layout(r, widths),
-        Sidebar::Tree => tree_layout(r, widths),
-        Sidebar::ProjectsOnTop | Sidebar::WorkspacesOnTop => stacked_layout(r, widths, sidebar),
+        Sidebar::SideBySide => wide_layout(r, widths, agents),
+        Sidebar::Tree => tree_layout(r, widths, agents),
+        Sidebar::ProjectsOnTop | Sidebar::WorkspacesOnTop => stacked_layout(r, widths, sidebar, agents),
     };
     if !changes {
         return columns(area);
@@ -408,7 +456,17 @@ fn search_area(header: Rect) -> Rect {
     Rect { height: header.height.min(1), ..header }.inner(Margin::new(1, 0))
 }
 
-fn wide_layout(area: Rect, widths: Widths) -> Areas {
+fn agents_section(r: Rect, widths: Widths, keep: u16, agents: bool) -> (Rect, Areas) {
+    if !agents {
+        return (r, Areas::default());
+    }
+    let [rest, line, section_rect] = split_agents(r, widths, keep);
+    let [agents_title, agents_list] = section(section_rect);
+    let areas = Areas { agents: section_rect, agents_title, agents_list, agents_border: line, ..Areas::default() };
+    (rest, areas)
+}
+
+fn wide_layout(area: Rect, widths: Widths, agents: bool) -> Areas {
     let Widths { projects, workspaces, .. } = widths.fit(area.width);
     let [columns, _, pane] = Layout::horizontal([
         Constraint::Length(projects + workspaces),
@@ -423,6 +481,9 @@ fn wide_layout(area: Rect, widths: Widths) -> Areas {
     let search = search_area(header);
     let sidebar = below_header(left);
     let [title, list, separator, settings, usage, quit] = projects_column(sidebar_block().inner(sidebar));
+    let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
+    let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
+    let [title, list] = if agents { section(lists) } else { [title, list] };
     let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)));
     Areas {
@@ -454,6 +515,7 @@ fn wide_layout(area: Rect, widths: Widths) -> Areas {
         changes_button: Rect::default(),
         todo_button: changes_button(todo, TODO_LABEL),
         files_button: files_button(todo),
+        ..agents_areas
     }
 }
 
@@ -463,7 +525,7 @@ fn section(r: Rect) -> [Rect; 2] {
     [title, list]
 }
 
-fn one_column(area: Rect, widths: Widths) -> (Areas, Rect) {
+fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool) -> (Areas, Rect) {
     let column = Rect { width: widths.stacked_width(area.width), ..area };
     let pane_x = column.right().saturating_add(PANE_PADDING).min(area.right());
     let pane = Rect { x: pane_x, width: area.right() - pane_x, ..area };
@@ -491,11 +553,19 @@ fn one_column(area: Rect, widths: Widths) -> (Areas, Rect) {
         files_button: files_button(todo),
         ..Areas::default()
     };
-    (frame, Rect { height: footer_y - room.y, ..room })
+    let (sections, section) = agents_section(Rect { height: footer_y - room.y, ..room }, widths, keep, agents);
+    let frame = Areas {
+        agents: Rect { x: column.x, width: column.width, ..section.agents },
+        agents_title: section.agents_title,
+        agents_list: section.agents_list,
+        agents_border: section.agents_border,
+        ..frame
+    };
+    (frame, sections)
 }
 
-fn stacked_layout(area: Rect, widths: Widths, sidebar: Sidebar) -> Areas {
-    let (frame, sections) = one_column(area, widths);
+fn stacked_layout(area: Rect, widths: Widths, sidebar: Sidebar, agents: bool) -> Areas {
+    let (frame, sections) = one_column(area, widths, STACKED_KEEP, agents);
     let room = Rect { height: sections.height.saturating_sub(1), ..sections };
     let top_rows = widths.top_rows(room.height);
     let top = Rect { height: top_rows, ..room }.intersection(sections);
@@ -517,8 +587,8 @@ fn stacked_layout(area: Rect, widths: Widths, sidebar: Sidebar) -> Areas {
     }
 }
 
-fn tree_layout(area: Rect, widths: Widths) -> Areas {
-    let (frame, sections) = one_column(area, widths);
+fn tree_layout(area: Rect, widths: Widths, agents: bool) -> Areas {
+    let (frame, sections) = one_column(area, widths, MIN_STACK_SECTION, agents);
     let [title, list] = section(sections);
     Areas {
         tree: true,
@@ -529,7 +599,7 @@ fn tree_layout(area: Rect, widths: Widths) -> Areas {
     }
 }
 
-fn compact_layout(area: Rect, changes: bool) -> Areas {
+fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
     let pitch = COMPACT_PITCH;
     let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
     let search_width = COMPACT_BUTTON_WIDTH.min(bar.width);
@@ -556,6 +626,11 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
         Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1)]).areas(footer);
     let [workspaces_title, _, workspaces_list, workspaces_separator, issues] = column(pitch);
     let back = Rect { width: button_width(BACK_LABEL) + 2, ..workspaces_title }.intersection(workspaces_title);
+    let [agents_title, _, agents_list] =
+        Layout::vertical([Constraint::Length(pitch), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
+    let agents_width = (button_width(AGENTS_LABEL) + 2).min(title.width);
+    let agents_button = Rect { x: title.right() - agents_width, width: agents_width, ..title };
+    let shown = |r: Rect| if agents { r } else { Rect::default() };
     Areas {
         pitch,
         tree: false,
@@ -580,6 +655,11 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
         projects_border: Rect::default(),
         workspaces_border: Rect::default(),
         stack_border: Rect::default(),
+        agents: shown(below),
+        agents_title: shown(agents_title),
+        agents_list: shown(agents_list),
+        agents_border: Rect::default(),
+        agents_button: shown(agents_button),
         changes: if changes { below } else { Rect::default() },
         changes_border: Rect::default(),
         changes_button,
@@ -874,6 +954,18 @@ pub fn workspace_hit(list: Rect, pitch: u16, tabs: &[Vec<u16>], scroll: usize, p
         WorkspaceRow::Tab(w, t) => WorkspaceHit::Tab(w, t),
         WorkspaceRow::NewTab(w) => WorkspaceHit::NewTab(w),
     })
+}
+
+pub fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
+    Rows { list, heights: vec![pitch.max(AGENT_LINES); agents], button: 0, scroll }
+}
+
+pub fn agent_row(list: Rect, pitch: u16, agents: usize, scroll: usize, i: usize) -> Rect {
+    agent_rows(list, pitch, agents, scroll).item(i)
+}
+
+pub fn agent_hit(list: Rect, pitch: u16, agents: usize, scroll: usize, pos: Position) -> Option<usize> {
+    agent_rows(list, pitch, agents, scroll).at(pos)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -2126,6 +2218,21 @@ pub struct TreeView {
     pub workspaces: Vec<Vec<WorkspaceEntry>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentEntry {
+    pub status: Option<Status>,
+    pub agent: String,
+    pub project: String,
+    pub workspace: Option<String>,
+    pub details: Details,
+    pub active: bool,
+}
+
+pub struct AgentsView {
+    pub entries: Vec<AgentEntry>,
+    pub scroll: usize,
+}
+
 pub struct ChangesButton {
     pub label: String,
     pub open: bool,
@@ -2183,6 +2290,7 @@ pub struct View<'a> {
     pub attention: Option<Status>,
     pub drag: Option<Drag>,
     pub tree: Option<TreeView>,
+    pub agents: Option<AgentsView>,
 }
 
 impl View<'_> {
@@ -2258,7 +2366,7 @@ impl View<'_> {
 
 pub fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
-    let areas = layout_with(f.area(), view.widths, panel, view.sidebar).shown(view.nav);
+    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some()).shown(view.nav);
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
         None if view.has_project => draw_no_tab(f, view.muted, areas.pane),
@@ -2281,6 +2389,9 @@ pub fn draw(f: &mut Frame, view: &View) {
         draw_tree(f, view, &areas);
     } else if !areas.sidebar.is_empty() {
         draw_sidebar(f, view, &areas);
+    }
+    if let Some(agents) = &view.agents {
+        draw_agents(f, view, agents, &areas);
     }
     if [areas.separator, areas.settings, areas.usage, areas.quit].iter().any(|r| !r.is_empty()) {
         draw_footer(f, view, &areas);
@@ -3346,15 +3457,11 @@ fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
     vec![Span::styled(head, bold), Span::styled(rest, Style::default().fg(Color::Gray))]
 }
 
-fn draw_back(f: &mut Frame, view: &View, areas: &Areas) {
+fn draw_back(f: &mut Frame, view: &View, areas: &Areas, name: &str) {
     let style = button_style(view, areas.back, Style::default().fg(Color::Cyan), Color::Cyan);
     draw_button(f, areas.back, "", BACK_LABEL, style);
-    let name = view.projects.get(view.active).filter(|_| view.has_project).map(|p| p.name.as_str()).unwrap_or_default();
-    let rest = Rect {
-        x: areas.back.right(),
-        width: areas.workspaces_title.right().saturating_sub(areas.back.right()),
-        ..areas.workspaces_title
-    };
+    let rest =
+        Rect { x: areas.back.right(), width: areas.bar.right().saturating_sub(areas.back.right()), ..areas.back };
     let max = usize::from(rest.width).saturating_sub(1);
     let style = Style::default().fg(view.muted).add_modifier(Modifier::BOLD);
     f.render_widget(Paragraph::new(Span::styled(format!(" {}", truncate_right(name, max)), style)), middle(rest));
@@ -3392,7 +3499,8 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if areas.back.is_empty() {
         draw_title(f, view.muted, areas.workspaces_title, "workspaces");
     } else {
-        draw_back(f, view, areas);
+        let name = view.projects.get(view.active).filter(|_| view.has_project).map(|p| p.name.as_str());
+        draw_back(f, view, areas, name.unwrap_or_default());
     }
     if !view.has_project {
         return;
@@ -3556,7 +3664,7 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     line.push(Span::styled(truncate_right(&tab.name, max), style));
     draw_band(f, band.r, Line::from(line), band.bg);
     if tab.details.lines() > 1 {
-        draw_details(f, view.muted, band.r, band.pitch, &tab.details, indent);
+        draw_details(f, view.muted, (band.r, band.pitch), &tab.details, None, indent);
     }
     draw_row_close(f, view, band.r, band.pitch, band.bg);
 }
@@ -3593,7 +3701,14 @@ fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: boo
     draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
 }
 
-fn draw_details(f: &mut Frame, muted: Color, row: Rect, pitch: u16, details: &Details, indent: usize) {
+fn draw_details(
+    f: &mut Frame,
+    muted: Color,
+    (row, pitch): (Rect, u16),
+    details: &Details,
+    agent: Option<&str>,
+    indent: usize,
+) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
     let close = row_close_button(row, pitch);
     let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
@@ -3606,19 +3721,21 @@ fn draw_details(f: &mut Frame, muted: Color, row: Rect, pitch: u16, details: &De
         Span::styled(format!("{used}%"), level)
     });
     let memory = details.memory.map(|bytes| Span::styled(memory_size(bytes), dim));
+    let lead = agent.map(|agent| Span::styled(agent.to_string(), dim));
     let fixed: Vec<Span> = percent.into_iter().chain(memory).collect();
     let separator = CONTEXT_SEPARATOR.chars().count();
-    let fixed_width = fixed.iter().map(|s| s.width() + separator).sum::<usize>();
+    let fixed_width = lead.iter().chain(&fixed).map(|s| s.width() + separator).sum::<usize>();
     let free = usize::from(r.width).saturating_sub(reserved + 1);
     let indent = indent.min(free.saturating_sub(fixed_width.saturating_sub(separator)));
     let model_room = free.saturating_sub(indent + fixed_width);
     let model = details
         .model
         .as_ref()
-        .filter(|_| fixed.is_empty() || model_room >= MIN_MODEL_WIDTH)
+        .filter(|_| (fixed.is_empty() && lead.is_none()) || model_room >= MIN_MODEL_WIDTH)
         .map(|model| Span::styled(truncate_right(model, model_room), dim));
+    let parts = lead.into_iter().chain(model).chain(fixed);
     let mut line = vec![Span::raw(" ".repeat(indent))];
-    line.extend(model.into_iter().chain(fixed).flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
+    line.extend(parts.flat_map(|part| [Span::styled(CONTEXT_SEPARATOR, dim), part]).skip(1));
     f.render_widget(Paragraph::new(Line::from(line)), r);
 }
 
@@ -3830,6 +3947,67 @@ fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: 
     draw_row_close(f, view, band.r, band.pitch, band.bg);
 }
 
+fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas: &Areas) {
+    if areas.agents.is_empty() {
+        if !areas.agents_button.is_empty() {
+            let style = button_style(view, areas.agents_button, Style::default().fg(Color::Cyan), Color::Cyan);
+            draw_button(f, areas.agents_button, "", AGENTS_LABEL, style);
+        }
+        return;
+    }
+    draw_separator(f, view.line(), areas.agents_border);
+    draw_border(f, view, areas.agents_border, Border::Agents);
+    if areas.compact() {
+        draw_back(f, view, areas, AGENTS_TITLE);
+    } else {
+        draw_title(f, view.muted, areas.agents_title, AGENTS_TITLE);
+    }
+    let list = areas.agents_list;
+    let rows = agent_rows(list, areas.pitch, agents.entries.len(), agents.scroll);
+    if agents.entries.is_empty() {
+        let first = Rect { height: areas.pitch.min(list.height), ..list };
+        f.render_widget(Paragraph::new(Span::styled(format!("  {NO_AGENTS}"), dim(view.muted))), middle(first));
+    }
+    for (i, entry) in agents.entries.iter().enumerate() {
+        let r = rows.item(i);
+        if !r.is_empty() {
+            draw_agent(f, view, r, areas.pitch, entry);
+        }
+    }
+    let indices: Vec<usize> = (0..agents.entries.len()).collect();
+    draw_hidden(f, view.muted, &rows, &indices, |_| true);
+}
+
+fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &AgentEntry) {
+    let bg = view.row_background(r, entry.active);
+    let mut line = vec![marker(entry.active)];
+    if let Some(status) = entry.status {
+        line.extend([status_icon(view.muted, status), Span::raw(" ")]);
+    }
+    let indent = line.iter().map(Span::width).sum::<usize>();
+    let room = usize::from(r.width).saturating_sub(indent + 1);
+    let colour = if entry.active { Color::White } else { Color::Gray };
+    line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
+    draw_band(f, r, Line::from(line), bg);
+    draw_details(f, view.muted, (r, pitch), &entry.details, Some(&entry.agent), indent);
+    if entry.active {
+        draw_rail(f, r);
+    }
+}
+
+fn agent_place(entry: &AgentEntry, room: usize, name: Style, separator: Style) -> Vec<Span<'static>> {
+    let project = entry.project.chars().count();
+    let rest = room.saturating_sub(project + CRUMB_SEPARATOR.chars().count());
+    match entry.workspace.as_deref().filter(|_| rest >= MIN_WORKSPACE_WIDTH) {
+        Some(workspace) => vec![
+            Span::styled(entry.project.clone(), name),
+            Span::styled(CRUMB_SEPARATOR, separator),
+            Span::styled(truncate_right(workspace, rest), name),
+        ],
+        None => vec![Span::styled(truncate_right(&entry.project, room), name)],
+    }
+}
+
 fn tree_landing_indent(shape: &TreeShape, dragged: TreeRow, spot: Spot) -> u16 {
     match dragged {
         TreeRow::Workspace(..) | TreeRow::Tab(..) => tree_indent(shape, dragged),
@@ -4007,6 +4185,7 @@ mod tests {
             attention: None,
             drag: None,
             tree: None,
+            agents: None,
         }
     }
 
@@ -4283,7 +4462,7 @@ mod tests {
     mod widths {
         use super::*;
 
-        const WIDE: Widths = Widths { projects: 40, workspaces: 30, changes: None, stack: None };
+        const WIDE: Widths = Widths { projects: 40, workspaces: 30, changes: None, stack: None, agents: None };
 
         #[test]
         fn the_changes_panel_takes_half_of_the_free_space_up_to_its_default() {
@@ -4404,19 +4583,19 @@ mod tests {
         #[test]
         fn dragging_the_line_puts_it_under_the_mouse() {
             let widths =
-                Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED);
+                Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED, false);
             assert_eq!(widths.stack, Some(12));
         }
 
         #[test]
         fn the_stacked_column_can_take_the_room_of_the_workspaces_column() {
-            let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(59, 6), STACKED);
+            let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(59, 6), STACKED, false);
             assert_eq!(widths.projects, 60);
         }
 
         #[test]
         fn the_stacked_column_leaves_room_for_the_pane() {
-            let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(W - 1, 6), STACKED);
+            let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(W - 1, 6), STACKED, false);
             assert_eq!(widths.stacked_width(W), W - PANE_PADDING - MIN_PANE_WIDTH);
         }
 
@@ -7626,6 +7805,247 @@ mod tests {
             let t = render(&dragging(grouped(), Drag::Sidebar(SidebarRow::Project(0), landing)));
             let cell = &t.backend().buffer()[(list().x + 5, row(3))];
             assert_eq!((cell.symbol(), cell.fg), ("─", Color::Cyan));
+        }
+    }
+
+    mod agents_section {
+        use super::*;
+
+        const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
+
+        fn with_agents(sidebar: Sidebar) -> Areas {
+            full_layout(TALL, Widths::default(), false, sidebar, true)
+        }
+
+        fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, details: Details) -> AgentEntry {
+            AgentEntry {
+                status: Some(status),
+                agent: agent.into(),
+                project: project.into(),
+                workspace: workspace.map(String::from),
+                details,
+                active: false,
+            }
+        }
+
+        fn details(model: &str, percent: Option<u16>) -> Details {
+            Details { model: Some(model.into()), percent, memory: None }
+        }
+
+        fn entries() -> Vec<AgentEntry> {
+            vec![
+                agent(
+                    Status::Waiting,
+                    "claude",
+                    "cornercase",
+                    Some("issue-98-remove-in-background"),
+                    details("Opus 5.5", Some(23)),
+                ),
+                AgentEntry {
+                    active: true,
+                    ..agent(Status::Working, "codex", "website", None, details("gpt-5.5", Some(41)))
+                },
+                agent(Status::Done, "claude", "api", Some("main"), Details::default()),
+            ]
+        }
+
+        fn shown(sidebar: Sidebar, entries: Vec<AgentEntry>) -> View<'static> {
+            let folded = ProjectShape { collapsed: true, ..ProjectShape::default() };
+            let tree =
+                TreeView { shape: TreeShape { groups: Vec::new(), projects: vec![folded; 3] }, workspaces: Vec::new() };
+            View {
+                has_project: true,
+                issues: true,
+                active: 1,
+                active_tab: Some(0),
+                sidebar,
+                workspaces: vec![WorkspaceEntry {
+                    name: "default".into(),
+                    tabs: vec!["codex".into()],
+                    behind: 0,
+                    removing: false,
+                }],
+                tree: (sidebar == Sidebar::Tree).then_some(tree),
+                agents: Some(AgentsView { entries, scroll: 0 }),
+                ..view(&["cornercase", "website", "api"])
+            }
+        }
+
+        #[rstest]
+        #[case::side_by_side(Sidebar::SideBySide)]
+        #[case::projects_on_top(Sidebar::ProjectsOnTop)]
+        #[case::workspaces_on_top(Sidebar::WorkspacesOnTop)]
+        #[case::tree(Sidebar::Tree)]
+        fn sits_below_the_lists_and_above_the_footer(#[case] sidebar: Sidebar) {
+            let a = with_agents(sidebar);
+            let clear = |r: Rect| !r.intersects(a.agents) && !r.intersects(a.agents_border);
+            assert_eq!(
+                (clear(a.list), clear(a.workspaces_list), a.agents_title.y, a.agents.bottom()),
+                (true, true, a.agents_border.bottom(), a.separator.y)
+            );
+        }
+
+        #[rstest]
+        #[case::side_by_side(Sidebar::SideBySide)]
+        #[case::projects_on_top(Sidebar::ProjectsOnTop)]
+        #[case::workspaces_on_top(Sidebar::WorkspacesOnTop)]
+        #[case::tree(Sidebar::Tree)]
+        fn leaves_the_pane_as_it_was(#[case] sidebar: Sidebar) {
+            assert_eq!(with_agents(sidebar).pane, layout_with(TALL, Widths::default(), false, sidebar).pane);
+        }
+
+        #[test]
+        fn takes_a_third_of_the_room_by_default() {
+            assert_eq!(with_agents(Sidebar::ProjectsOnTop).agents.height, 7);
+        }
+
+        #[rstest]
+        #[case::too_tall(Some(100), 10)]
+        #[case::too_short(Some(1), MIN_STACK_SECTION)]
+        #[case::saved(Some(8), 8)]
+        fn keeps_its_height_within_both_lists_minimum(#[case] saved: Option<u16>, #[case] rows: u16) {
+            let widths = Widths { agents: saved, ..Widths::default() };
+            let a = full_layout(TALL, widths, false, Sidebar::ProjectsOnTop, true);
+            assert_eq!((a.agents.height, a.list.height >= 1, a.workspaces_list.height >= 1), (rows, true, true));
+        }
+
+        #[test]
+        fn the_stack_line_cannot_be_dragged_into_it() {
+            let widths = Widths::default().stacked_dragged(Border::Stack, Position::new(5, 28), TALL, true);
+            let a = full_layout(TALL, widths, false, Sidebar::ProjectsOnTop, true);
+            assert_eq!((widths.stack, a.workspaces_list.bottom() <= a.agents_border.y), (Some(8), true));
+        }
+
+        #[rstest]
+        #[case::side_by_side(Sidebar::SideBySide)]
+        #[case::stacked(Sidebar::ProjectsOnTop)]
+        #[case::tree(Sidebar::Tree)]
+        fn its_line_is_a_border(#[case] sidebar: Sidebar) {
+            let line = with_agents(sidebar).agents_border;
+            assert_eq!(with_agents(sidebar).border_hit(Position::new(line.x + 2, line.y)), Some(Border::Agents));
+        }
+
+        #[test]
+        fn a_double_click_on_its_line_resets_it() {
+            assert_eq!(Widths { agents: Some(9), ..Widths::default() }.reset(Border::Agents).agents, None);
+        }
+
+        #[test]
+        fn a_click_on_the_second_line_of_a_row_hits_that_agent() {
+            let list = with_agents(Sidebar::ProjectsOnTop).agents_list;
+            let row = agent_row(list, 1, 3, 0, 1);
+            assert_eq!(agent_hit(list, 1, 3, 0, Position::new(row.x + 3, row.y + 1)), Some(1));
+        }
+
+        #[test]
+        fn rows_below_the_section_are_counted() {
+            let a = with_agents(Sidebar::ProjectsOnTop);
+            let t = render_sized(&shown(Sidebar::ProjectsOnTop, [entries(), entries()].concat()), W, TALL.height);
+            assert_eq!(row_text(&t, agent_rows(a.agents_list, 1, 6, 0).more_below()).trim(), "↓ 4 more");
+        }
+
+        #[test]
+        fn the_agent_on_screen_gets_the_rail_and_the_surface() {
+            let a = with_agents(Sidebar::ProjectsOnTop);
+            let row = agent_row(a.agents_list, 1, 3, 0, 1);
+            let t = render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W, TALL.height);
+            let cell = &t.backend().buffer()[(row.x, row.y + 1)];
+            assert_eq!((cell.symbol(), cell.fg, cell.bg), ("▌", Color::Cyan, DARK_SURFACE));
+        }
+
+        #[test]
+        fn a_hovered_row_is_filled() {
+            let a = with_agents(Sidebar::ProjectsOnTop);
+            let row = agent_row(a.agents_list, 1, 3, 0, 0);
+            let v = View { hover: Some(Position::new(row.x + 4, row.y)), ..shown(Sidebar::ProjectsOnTop, entries()) };
+            let t = render_sized(&v, W, TALL.height);
+            assert_eq!(t.backend().buffer()[(row.right() - 2, row.y + 1)].bg, DARK_HOVER);
+        }
+
+        #[rstest]
+        #[case::wide(30, "! cornercase › issue-98-re…")]
+        #[case::without_the_workspace(18, "! cornercase")]
+        #[case::cut(12, "! corner…")]
+        fn a_narrow_row_drops_the_workspace_then_cuts_the_project(#[case] width: u16, #[case] expected: &str) {
+            let r = Rect::new(0, 0, width, 2);
+            let mut t = Terminal::new(TestBackend::new(width, 2)).expect("test backend");
+            let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+            t.draw(|f| draw_agent(f, &v, r, 1, &entries()[0])).expect("draw");
+            assert_eq!(row_text(&t, Rect { height: 1, ..r }).trim(), expected);
+        }
+
+        #[test]
+        fn compact_mode_shows_it_as_a_third_menu() {
+            let small = full_layout(SMALL, Widths::default(), false, Sidebar::ProjectsOnTop, true);
+            let agents = small.shown(Some(Nav::Agents));
+            let projects = small.shown(Some(Nav::Projects));
+            assert_eq!(
+                (agents.agents_list.is_empty(), agents.list.is_empty(), agents.workspaces_list.is_empty()),
+                (false, true, true)
+            );
+            assert_eq!((agents.back.is_empty(), agents.agents_button.is_empty()), (false, true));
+            assert_eq!((projects.agents_list.is_empty(), projects.agents_button.is_empty()), (true, false));
+        }
+
+        #[test]
+        fn compact_mode_has_no_agents_button_when_it_is_off() {
+            assert!(layout(SMALL, Widths::default()).shown(Some(Nav::Projects)).agents_button.is_empty());
+        }
+
+        #[test]
+        fn renders_side_by_side() {
+            insta::assert_snapshot!(render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_projects_on_top() {
+            insta::assert_snapshot!(render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_workspaces_on_top() {
+            let v = shown(Sidebar::WorkspacesOnTop, entries());
+            insta::assert_snapshot!(render_sized(&v, W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_the_tree() {
+            insta::assert_snapshot!(render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_in_a_narrow_column() {
+            let v = View {
+                widths: Widths { projects: MIN_COLUMN_WIDTH + 4, ..Widths::default() },
+                ..shown(Sidebar::ProjectsOnTop, entries())
+            };
+            insta::assert_snapshot!(render_sized(&v, W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_no_agents_running() {
+            insta::assert_snapshot!(render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W, TALL.height).backend());
+        }
+
+        #[test]
+        fn renders_the_compact_agents_menu() {
+            let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, entries()) };
+            insta::assert_snapshot!(render_sized(&v, SMALL.width, SMALL.height).backend());
+        }
+
+        #[test]
+        fn renders_the_compact_projects_menu_with_its_button() {
+            let v = View { nav: Some(Nav::Projects), ..shown(Sidebar::ProjectsOnTop, entries()) };
+            insta::assert_snapshot!(render_sized(&v, SMALL.width, SMALL.height).backend());
+        }
+
+        #[test]
+        fn short_terminals_do_not_panic() {
+            for sidebar in Sidebar::ALL {
+                for height in 1..=TALL.height {
+                    render_sized(&shown(sidebar, entries()), W, height);
+                }
+            }
         }
     }
 }

@@ -153,6 +153,7 @@ export interface Config {
   submit: boolean;
   trust: boolean;
   sidebar: string;
+  agentsSection: boolean;
   dim: boolean;
   model: boolean;
   context: boolean;
@@ -174,6 +175,7 @@ export const defaultConfig = (): Config => ({
   submit: false,
   trust: false,
   sidebar: 'projects_on_top',
+  agentsSection: false,
   dim: true,
   model: true,
   context: true,

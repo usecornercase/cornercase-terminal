@@ -9,6 +9,7 @@ import {
   GROUP_COLOURS,
   GROUP_ICONS,
   type Landing,
+  type Nav,
   type Rows,
   SIDEBARS,
   type Sidebar,
@@ -18,6 +19,7 @@ import {
   type Widths,
   type WorkspaceRow,
   activeRow,
+  bottom,
   dragged,
   draggedStacked,
   layout,
@@ -59,6 +61,7 @@ import {
   activePane,
   attention,
   defaultConfig,
+  paneStatus,
   followAgent,
   projectLabel,
   tabContext,
@@ -155,6 +158,16 @@ interface Focus {
   tree: boolean;
 }
 
+export interface AgentRow {
+  pane: number;
+  status: Status;
+  agent: string;
+  project: string;
+  workspace: string | null;
+  details: Details;
+  active: boolean;
+}
+
 export type RowDragView =
   | { list: 'sidebar'; row: SidebarRow; landing: Landing | null }
   | { list: 'workspaces'; row: WorkspaceRow; landing: Landing | null }
@@ -224,19 +237,20 @@ export class App {
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
-  nav: 'projects' | 'workspaces' | null = null;
+  nav: Nav = null;
   groups: Group[] = [];
   projects: Project[] = [];
   active = 0;
   projectsScroll = 0;
   workspacesScroll = 0;
+  agentsScroll = 0;
   overlay: Overlay | null = null;
   hover: Pos | null = null;
   toast: { text: string; until: number; status?: Status; undo?: () => void } | null = null;
   focused = false;
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
-  rowDrag: { target: Target; row: Rect; moved: boolean; click?: () => void; scrolled: number } | null = null;
+  rowDrag: { target: Target | null; row: Rect; moved: boolean; click?: () => void; scrolled: number } | null = null;
   detached = false;
   scripted = false;
   agentPace = 900;
@@ -504,6 +518,56 @@ export class App {
     return tab < 0 ? null : { kind: 'tab', p, w, t: tab };
   }
 
+  agentRows(): AgentRow[] {
+    const order = sidebarRows(
+      this.projects.map((p) => this.groupIndex(p.group)),
+      this.groups.map(() => false),
+    );
+    const c = this.config;
+    const focused = this.tab();
+    return order.flatMap((row) => {
+      if (row.kind !== 'project') return [];
+      const p = this.projects[row.p];
+      return p.workspaces.flatMap((w) =>
+        w.tabs.flatMap((t) =>
+          t.panes.flatMap((pane): AgentRow[] => {
+            const status = paneStatus(pane);
+            if (!status) return [];
+            return [
+              {
+                pane: pane.id,
+                status,
+                agent: pane.agent ?? '',
+                project: projectLabel(p),
+                workspace: p.workspaces.length > 1 ? workspaceLabel(w) : null,
+                details: { model: c.model ? (pane.context?.model ?? null) : null, percent: c.context ? (pane.context?.percent ?? null) : null, memory: null },
+                active: t === focused && t.active === pane.id,
+              },
+            ];
+          }),
+        ),
+      );
+    });
+  }
+
+  jumpToPane(id: number): void {
+    const found = this.findPane(id);
+    if (!found) return;
+    const p = this.projects.indexOf(found.p);
+    this.goto(p, found.p.workspaces.indexOf(found.w), found.w.tabs.indexOf(found.t));
+    found.t.active = id;
+    this.selection = null;
+    this.emit('select', 'tab');
+    this.dirty();
+  }
+
+  private agentsDragged(y: number): Widths {
+    const end = bottom(this.areas().agents);
+    const wanted = { ...this.widths, agents: Math.max(0, end - (y + 1)) };
+    const rows = layout(this.cols, this.rows, wanted, this.nav, this.panelShown(), this.sidebar(), true).agents.h;
+    return { ...wanted, agents: rows };
+  }
+
   tabDetails(t: Tab): Details {
     const c = this.config;
     const context = tabContext(t);
@@ -515,13 +579,13 @@ export class App {
   }
 
   areas() {
-    return layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar());
+    return layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection);
   }
 
   rowDragView(): RowDragView | null {
     const d = this.rowDrag;
     const h = this.hover;
-    if (!d?.moved || !h) return null;
+    if (!d?.moved || !h || !d.target) return null;
     const areas = this.areas();
     const row = this.treeRowOf(d.target);
     if (!row) return null;
@@ -567,7 +631,7 @@ export class App {
   private autoScroll(): void {
     const d = this.rowDrag;
     const h = this.hover;
-    if (!d?.moved || !h || this.now() - d.scrolled < AUTO_SCROLL_EVERY) return;
+    if (!d?.moved || !d.target || !h || this.now() - d.scrolled < AUTO_SCROLL_EVERY) return;
     const areas = this.areas();
     const shape = this.treeShape();
     const sidebar = areas.tree || d.target.kind === 'group' || d.target.kind === 'project';
@@ -587,7 +651,7 @@ export class App {
 
   private follow(): void {
     const p = this.project();
-    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar());
+    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection);
     const focus: Focus = { project: p?.id ?? null, workspace: this.workspace()?.id ?? null, tab: this.tab()?.id ?? null, tree };
     const before = this.followed;
     if (focus.project === before.project && focus.workspace === before.workspace && focus.tab === before.tab && tree === before.tree) return;
@@ -905,7 +969,7 @@ export class App {
   }
 
   resetBorder(border: Border): void {
-    const reset = { projects: 32, workspaces: 26, stack: null, changes: null }[border];
+    const reset = { projects: 32, workspaces: 26, stack: null, agents: null, changes: null }[border];
     this.widths = { ...this.widths, [border]: reset };
     this.dirty();
   }
@@ -1326,7 +1390,7 @@ export class App {
     w.active = w.tabs.length - 1;
   }
 
-  navTo(nav: 'projects' | 'workspaces'): void {
+  navTo(nav: Exclude<Nav, null>): void {
     this.nav = nav;
     this.dirty();
   }
@@ -1335,6 +1399,14 @@ export class App {
     const next = rows.scrolled(dy);
     if (next === this.projectsScroll) return false;
     this.projectsScroll = next;
+    this.dirty();
+    return true;
+  }
+
+  scrollAgents(rows: Rows, dy: number): boolean {
+    const next = rows.scrolled(dy);
+    if (next === this.agentsScroll) return false;
+    this.agentsScroll = next;
     this.dirty();
     return true;
   }
@@ -1796,6 +1868,7 @@ export class App {
     }
     return [
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'how projects, workspaces and tabs are laid out' },
+      { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
@@ -1834,6 +1907,9 @@ export class App {
     } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
       c[row.id] = !c[row.id];
       o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
+    } else if (row.id === 'agents') {
+      c.agentsSection = !c.agentsSection;
+      o.notice = c.agentsSection ? 'the sidebar lists every agent' : 'the sidebar no longer lists agents';
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
@@ -2514,7 +2590,7 @@ export class App {
   }
 
   cursorAt(x: number, y: number): string {
-    if (this.rowDrag?.moved) return 'grabbing';
+    if (this.rowDrag?.moved && this.rowDrag.target) return 'grabbing';
     return this.hit(x, y, (r) => !!r.cursor)?.cursor ?? 'default';
   }
 
@@ -2546,9 +2622,11 @@ export class App {
         const { border } = this.dragging;
         const total = border === 'changes' ? this.cols : mainWidth(this.widths, this.cols, this.panelShown());
         this.widths =
-          border !== 'changes' && this.sidebar() !== 'side_by_side'
-            ? draggedStacked(this.widths, border, x, y, total, this.rows)
-            : dragged(this.widths, border, x, total);
+          border === 'agents'
+            ? this.agentsDragged(y)
+            : border !== 'changes' && this.sidebar() !== 'side_by_side'
+              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection)
+              : dragged(this.widths, border, x, total);
       }
       else {
         const { tab, divider } = this.dragging;
@@ -2602,9 +2680,9 @@ export class App {
       this.dirty();
       return;
     }
-    if (region.grab && button === 0) {
+    if ((region.grab || region.hold) && button === 0) {
       const click = region.click;
-      this.rowDrag = { target: region.grab, row: region.r, moved: false, click: click && (() => click(x, y)), scrolled: 0 };
+      this.rowDrag = { target: region.grab ?? null, row: region.r, moved: false, click: click && (() => click(x, y)), scrolled: 0 };
       return;
     }
     if (region.pane) {
@@ -2646,7 +2724,7 @@ export class App {
     this.linkPress = null;
     const drag = this.rowDrag;
     if (drag) {
-      if (drag.moved) this.dropRow(drag.target);
+      if (drag.moved && drag.target) this.dropRow(drag.target);
       this.rowDrag = null;
       if (!drag.moved) drag.click?.();
       this.dirty();

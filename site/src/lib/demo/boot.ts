@@ -1,7 +1,7 @@
 import { type Rect, rect } from '../term/grid';
 import type { App } from './app';
 import { type Mounted, mount, richText } from './client';
-import { isEmpty, layout } from './layout';
+import { isEmpty } from './layout';
 import { activePane } from './model';
 import { Agent } from './programs';
 import { type Player, type Spot, type Step, play } from './tour';
@@ -148,7 +148,7 @@ function estimate(steps: Step[]): number {
 }
 
 function spotArea(app: App, spot: Spot): Rect {
-  const a = layout(app.cols, app.rows, app.widths, app.nav, app.panelShown(), app.sidebar());
+  const a = app.areas();
   if (spot === 'sidebar') return a.sidebar;
   if (spot === 'workspaces') return a.workspaces;
   if (spot === 'pane') return a.pane;
