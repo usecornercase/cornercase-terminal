@@ -115,22 +115,29 @@ fn line(matcher: &RegexMatcher, number: u64, raw: &str) -> Line {
 }
 
 pub fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> Text {
-    let Some(finder) = matcher(query) else { return Text::default() };
-    let (next, total) = (AtomicUsize::new(0), AtomicUsize::new(0));
-    let found = Mutex::new(Vec::new());
     let threads = std::thread::available_parallelism().map_or(4, NonZero::get).min(MAX_THREADS);
+    text_on(root, paths, query, cancel, threads)
+}
+
+fn text_on(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool, threads: usize) -> Text {
+    let Some(finder) = matcher(query) else { return Text::default() };
+    let (next, seen) = (AtomicUsize::new(0), AtomicUsize::new(0));
+    let found = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
         for _ in 0..threads {
             scope.spawn(|| {
                 let mut searcher =
                     SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
-                while !cancel.load(Ordering::Relaxed) && total.load(Ordering::Relaxed) < MAX_MATCHES {
+                while !cancel.load(Ordering::Relaxed) && seen.load(Ordering::Relaxed) <= MAX_MATCHES {
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(path) = paths.get(i) else { break };
                     let mut lines = Vec::new();
                     let sink = Lossy(|number, raw| {
-                        lines.push(line(&finder, number, raw));
-                        Ok(total.fetch_add(1, Ordering::Relaxed) + 1 < MAX_MATCHES)
+                        let kept = seen.fetch_add(1, Ordering::Relaxed) < MAX_MATCHES;
+                        if kept {
+                            lines.push(line(&finder, number, raw));
+                        }
+                        Ok(kept)
                     });
                     let _ = searcher.search_path(&finder, root.join(path), sink);
                     if !lines.is_empty() {
@@ -144,7 +151,7 @@ pub fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> 
     files.sort_unstable_by_key(|(i, _)| *i);
     let files: Vec<Found> = files.into_iter().map(|(_, f)| f).collect();
     let matches = files.iter().map(|f| f.lines.len()).sum();
-    Text { files, matches, capped: total.into_inner() >= MAX_MATCHES }
+    Text { files, matches, capped: seen.into_inner() > MAX_MATCHES }
 }
 
 pub fn occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
@@ -230,6 +237,31 @@ mod tests {
         let repo = git_repo(&[("a.txt", &"x\n".repeat(MAX_MATCHES + 50))]);
         let text = text(repo.path(), &paths(&["a.txt"]), "x", &AtomicBool::new(false));
         assert_eq!((text.matches, text.capped), (MAX_MATCHES, true));
+    }
+
+    #[test]
+    fn exactly_the_cap_is_not_cut() {
+        let repo = git_repo(&[("a.txt", &"x\n".repeat(MAX_MATCHES))]);
+        let text = text(repo.path(), &paths(&["a.txt"]), "x", &AtomicBool::new(false));
+        assert_eq!((text.matches, text.capped), (MAX_MATCHES, false));
+    }
+
+    #[test]
+    fn a_match_past_the_cap_in_the_next_file_counts_as_cut() {
+        let repo = git_repo(&[("a.txt", &"x\n".repeat(MAX_MATCHES)), ("b.txt", "x\n")]);
+        let text = text_on(repo.path(), &paths(&["a.txt", "b.txt"]), "x", &AtomicBool::new(false), 1);
+        assert_eq!((text.matches, text.capped), (MAX_MATCHES, true));
+    }
+
+    #[test]
+    fn threads_never_keep_more_than_the_cap() {
+        let names: Vec<String> = (0..32).map(|i| format!("{i:02}.txt")).collect();
+        let body = "x\n".repeat(100);
+        let files: Vec<(&str, &str)> = names.iter().map(|n| (n.as_str(), body.as_str())).collect();
+        let repo = git_repo(&files);
+        let text = text_on(repo.path(), &names, "x", &AtomicBool::new(false), MAX_THREADS);
+        let kept: usize = text.files.iter().map(|f| f.lines.len()).sum();
+        assert_eq!((kept, text.capped), (MAX_MATCHES, true));
     }
 
     #[test]
