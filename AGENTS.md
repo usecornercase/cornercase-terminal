@@ -60,6 +60,7 @@ src/client.rs     the UI process: terminal setup/teardown, colour query, starts 
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client
 src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
 src/state.rs      the saved session as JSON, migrations, and the Saver that writes it (or todos.json) once it settles
+src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), `~` expansion, validation
 src/settings.rs   the settings modal's state; returns Actions for App

@@ -25,6 +25,7 @@ pub mod picker;
 pub mod process;
 pub mod project;
 pub mod protocol;
+pub mod restart;
 pub mod search;
 pub mod secrets;
 pub mod server;

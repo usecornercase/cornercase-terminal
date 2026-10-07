@@ -1,17 +1,15 @@
 use std::fmt::Write as _;
 use std::io::{self, Read as _};
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::control::{self, Done, Item, ProjectInfo, Report, Request, Response, TodoList, Until};
+use crate::client::{answer, ask};
+use crate::control::{self, Done, Item, ProjectInfo, Report, TodoList, Until};
 use crate::error::{Error, Result};
 use crate::keys;
-use crate::protocol::{self, ClientMessage, ServerMessage};
-use crate::{client, server, ui};
+use crate::{client, restart, server, ui};
 
 pub const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
 
@@ -506,8 +504,11 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return client::update(update.check, update.yes),
         Command::KillServer => {
+            let running = client::running_now();
             if !client::kill_server()? {
                 eprintln!("no cornercase server is running");
+            } else if let Some(line) = running.as_deref().and_then(restart::stopped) {
+                println!("{line}");
             }
         }
         Command::Server => server::run()?,
@@ -658,39 +659,6 @@ fn run_todo(action: TodoAction) -> Result<()> {
         TodoAction::Done { id } => ask("todo", control::Command::Todo(control::Todo::Done(id))).map(drop),
         TodoAction::Rm { id } => ask("todo", control::Command::Todo(control::Todo::Rm(id))).map(drop),
     }
-}
-
-fn ask(name: &'static str, command: control::Command) -> Result<Value> {
-    let path = protocol::socket_path();
-    protocol::check_socket_dir(&path)?;
-    let mut stream = UnixStream::connect(&path).map_err(|_| Error::NoServer)?;
-    protocol::check_peer(&stream, protocol::own_uid())?;
-    let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
-    let server = std::env::var(control::SERVER_ENV).ok();
-    let request =
-        serde_json::to_string(&Request { caller, server, command }).map_err(|e| Error::Control(e.to_string()))?;
-    protocol::send(&mut stream, &ClientMessage::Request(request))?;
-    loop {
-        match protocol::recv::<ServerMessage>(&mut stream) {
-            Ok(Some(ServerMessage::Response(text))) => {
-                return match serde_json::from_str(&text) {
-                    Ok(Response::Ok(value)) => Ok(value),
-                    Ok(Response::Error(message)) => Err(Error::Control(message)),
-                    Err(e) => Err(Error::Control(format!("cannot read the server's answer: {e}"))),
-                };
-            }
-            Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
-            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
-            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => {}
-            Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
-                return Err(Error::ServerGone);
-            }
-        }
-    }
-}
-
-fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
-    serde_json::from_value(value).map_err(|e| Error::Control(format!("cannot read the server's answer: {e}")))
 }
 
 fn print_json(value: &Value) -> Result<()> {

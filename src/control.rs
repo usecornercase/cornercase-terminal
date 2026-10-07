@@ -307,6 +307,7 @@ pub struct PaneInfo {
     pub program: Option<String>,
     pub agent: Option<String>,
     pub status: Option<String>,
+    pub shell: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,
     pub active: bool,
