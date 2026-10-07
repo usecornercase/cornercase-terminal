@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.10
+
+- An agents section for the sidebar: every Claude Code and Codex running in any project, one row each, with its status (`!` waiting for you, `✓` done, `◐` working, `○` idle), its project and workspace, and its model and how full its context is. Click a row to jump straight to that agent, whatever project you're in. Turn it on in **Settings → TUI → agents section**. It sits at the bottom of the sidebar in every layout, and you can drag the line above it to make it taller or shorter. On a narrow terminal it's a third menu: ` agents › ` in the projects menu.
+
 ## 0.11.9
 
 - Move a pane within its tab by dragging it with the right button onto another pane: near an edge it goes to that side, in the middle the two swap. The part it would take is tinted while you drag, the programs keep running, and `Esc` cancels. Two panes side by side become one above the other by dropping one on the other's bottom edge. A right-click without moving still opens the pane menu, now on release.
