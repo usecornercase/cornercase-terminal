@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.2
+
+- A shell that can't start while your session is restored, for example in a folder you can no longer enter, no longer cuts the restore short and loses the rest: every other project, workspace and tab comes back, a message names the projects that lost a tab, and `server.log` says which folder failed and why. If no shell could start at all, one opens in the folder you started cornercase from. The session as it was saved is kept in `session.json.bak`.
+- Starting an agent on an issue no longer types the prompt too early when the agent is slow to start, on a busy machine or the first run after an update, for example. cornercase used to paste it before the agent had asked whether you trust the folder, and the prompt became the answer. It now waits until the agent has drawn something.
+
 ## 0.11.1
 
 - With **memory** on, an agent tab now shows the memory its agent really uses: on macOS the figure Activity Monitor shows, on Linux each process's private memory, including what was swapped out. Code that several processes share, such as the agent's own program, used to be counted again for every process, so the figure was about twice what the agent costs; a fresh Claude Code tab now shows about 200 MB instead of 440 MB.
