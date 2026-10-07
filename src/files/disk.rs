@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fs;
 use std::io;
+use std::io::Read as _;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -85,20 +86,29 @@ pub struct Read {
 }
 
 pub fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
+    let meta = fs::metadata(path).ok();
     let stamp =
-        fs::metadata(path).map_or(GONE, |meta| Stamp { modified: meta.modified().ok(), len: meta.len(), found: true });
+        meta.as_ref().map_or(GONE, |meta| Stamp { modified: meta.modified().ok(), len: meta.len(), found: true });
     if previous == Some(stamp) {
         return None;
     }
     let content = |language, body| Content { stamp, language, body };
     let plain = |body| Some(Read { content: content(None, body), source: None });
-    if !stamp.found {
-        return plain(Body::Missing);
+    let Some(meta) = meta else { return plain(Body::Missing) };
+    if !meta.is_file() {
+        return plain(Body::Binary);
     }
     if stamp.len > MAX_BYTES {
         return plain(Body::TooLarge(stamp.len));
     }
-    let Ok(bytes) = fs::read(path) else { return plain(Body::Missing) };
+    let mut bytes = Vec::new();
+    if fs::File::open(path).and_then(|file| file.take(MAX_BYTES + 1).read_to_end(&mut bytes)).is_err() {
+        return plain(Body::Missing);
+    }
+    let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if size > MAX_BYTES {
+        return plain(Body::TooLarge(size));
+    }
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {
         return plain(Body::Binary);
     }
@@ -185,5 +195,13 @@ mod tests {
         let gone = super::read(&path, Some(read.content.stamp)).expect("read again");
         assert_eq!(gone.content.body, Body::Missing);
         assert!(super::read(&path, Some(gone.content.stamp)).is_none());
+    }
+
+    #[test]
+    fn a_device_behind_a_link_is_not_read() {
+        let dir = TempDir::new();
+        let path = dir.path().join("null");
+        std::os::unix::fs::symlink("/dev/null", &path).expect("link");
+        assert_eq!(read(&path, None).expect("read").content.body, Body::Binary);
     }
 }
