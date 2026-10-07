@@ -59,17 +59,21 @@ A server that is already running never restores: reattaching just shows what is 
 cornercase kill-server
 ```
 
-This ends every shell and program in every pane, and closes all attached clients. If no server is running, it says `no cornercase server is running`. The server also stops when it receives `SIGTERM` or `SIGINT`; it ignores `SIGHUP`, so a closed terminal or SSH connection doesn't take it down.
+This ends every shell and program in every pane, and closes all attached clients. When something was running, it says what it stopped, such as `stopped 1 agent and 2 other programs`. If no server is running, it says `no cornercase server is running`. The server also stops when it receives `SIGTERM` or `SIGINT`; it ignores `SIGHUP`, so a closed terminal or SSH connection doesn't take it down.
 
 ## Updating cornercase
 
-When you [update](../../installation/#update) from the app, its last step, **restart now**, saves your session, restarts the server on the new binary and reopens every attached terminal on it. [`cornercase update`](../../reference/command-line/#cornercase-update) does the same from a shell when you answer `y`. Your layout comes back from the saved session; programs that were running, agents included, are stopped, and each pane starts a new shell in its folder.
+When you [update](../../installation/#update) from the app, its last step, **restart now**, saves your session, restarts the server on the new binary and reopens every attached terminal on it. [`cornercase update`](../../reference/command-line/#cornercase-update) does the same from a shell when you answer `y`. Your layout comes back from the saved session; programs that were running, agents included, are stopped, and each pane starts a new shell in its folder. Before restarting, cornercase says what is running right now, so you can wait for an agent to finish first: how many agents are working or waiting for you, and which other programs run where. Panes sitting at their shell prompt aren't listed.
 
 A client only attaches to a server built from the same binary. If you skip the restart, or update with Homebrew or by rebuilding, the old server keeps running and the next `cornercase` asks:
 
 ```text
 The running cornercase server comes from another build; cornercase was probably updated.
-Restart it now? Its terminals close, and your session comes back with new shells in the same folders. [y/N]
+Restarting stops every program running in cornercase's terminals. Running now: 2 agents (1 working,
+1 waiting for you) and 1 other program (`npm` in shop › main). Your projects, workspaces, tabs and
+splits come back, each tab with a new shell in its folder. To pick up a Claude Code conversation
+afterwards, run `claude --continue` in its tab.
+Restart it now? [y/N]
 ```
 
 Save your work in the panes and answer `y`. Answer anything else to keep the old server for now; restart it later with `cornercase kill-server`, then `cornercase`.

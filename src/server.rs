@@ -27,6 +27,8 @@ use crate::state::{self, Saver};
 use crate::todo;
 
 const TICK: Duration = Duration::from_millis(500);
+const FRAME: Duration = Duration::from_millis(16);
+const SAVE_EVERY: Duration = Duration::from_millis(500);
 const ISSUE_CACHE_FILE: &str = "issues.json";
 const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 const CLEAR_SCREEN: &[u8] = b"\x1b[H\x1b[2J";
@@ -45,6 +47,7 @@ enum ServerEvent {
 enum Step {
     Refresh,
     Answer,
+    Flush,
     Draw,
     Save,
     Event(ServerEvent),
@@ -166,6 +169,11 @@ struct Server {
     todo_saver: Saver<todo::Saved>,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
+    drawn: Option<Instant>,
+    printed_at: Option<Instant>,
+    changed: bool,
+    printed: bool,
+    observed: Option<Instant>,
 }
 
 pub fn run() -> Result<()> {
@@ -280,6 +288,11 @@ impl Server {
             todo_saver,
             restart: None,
             tx,
+            drawn: None,
+            printed_at: None,
+            changed: true,
+            printed: false,
+            observed: None,
         }
     }
 
@@ -289,13 +302,21 @@ impl Server {
 
     fn serve_with(&mut self, rx: &Receiver<ServerEvent>, run: impl Fn(&mut Self, Step) -> ControlFlow<()>) {
         loop {
-            for step in [Step::Refresh, Step::Answer, Step::Draw, Step::Save] {
+            for step in [Step::Refresh, Step::Answer, Step::Flush] {
                 self.contain(step, &run);
             }
-            let tick = self.app.tick(Instant::now()).map_or(TICK, |tick| tick.min(TICK));
+            if self.due(Instant::now()) {
+                self.contain(Step::Draw, &run);
+            }
+            self.contain(Step::Save, &run);
+            let now = Instant::now();
+            let tick = [self.app.tick(now), self.next_frame(now)].into_iter().flatten().fold(TICK, Duration::min);
             let first = match rx.recv_timeout(tick) {
                 Ok(ev) => Some(ev),
-                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Timeout) => {
+                    self.changed = true;
+                    None
+                }
                 Err(RecvTimeoutError::Disconnected) => return,
             };
             for ev in first.into_iter().chain(std::iter::from_fn(|| rx.try_recv().ok())) {
@@ -310,8 +331,9 @@ impl Server {
         match step {
             Step::Refresh => self.app.refresh(Instant::now()),
             Step::Answer => self.answer(),
+            Step::Flush => self.flush(),
             Step::Draw => self.draw(),
-            Step::Save => self.save(),
+            Step::Save => self.save(Instant::now()),
             Step::Event(ev) => return self.handle(ev),
         }
         ControlFlow::Continue(())
@@ -326,6 +348,7 @@ impl Server {
                 self.app.reset_interaction();
             }
             if drawing && let Some(area) = self.area {
+                self.changed = true;
                 for client in &mut self.clients {
                     client.reset_screen(area);
                 }
@@ -344,19 +367,23 @@ impl Server {
         }
     }
 
-    fn save(&mut self) {
+    fn save(&mut self, now: Instant) {
+        if self.observed.is_some_and(|at| now.saturating_duration_since(at) < SAVE_EVERY) {
+            return;
+        }
+        self.observed = Some(now);
         if self.started
-            && let Err(e) = self.saver.observe(self.app.state(), Instant::now())
+            && let Err(e) = self.saver.observe(self.app.state(), now)
         {
             eprintln!("cornercase server: failed to save the session: {e}");
         }
-        if let Err(e) = self.todo_saver.observe(self.app.todos_saved(), Instant::now()) {
+        if let Err(e) = self.todo_saver.observe(self.app.todos_saved(), now) {
             eprintln!("cornercase server: failed to save the todo lists: {e}");
         }
     }
 
-    fn draw(&mut self) {
-        let Self { app, clients, area, .. } = self;
+    fn flush(&mut self) {
+        let Self { app, clients, .. } = self;
         for bytes in app.take_host_writes() {
             for client in clients.iter().filter(|c| c.screen.is_some()) {
                 client.send(ServerMessage::Frame(bytes.clone()));
@@ -367,6 +394,27 @@ impl Server {
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
+    }
+
+    fn due(&self, now: Instant) -> bool {
+        let since = |at: Option<Instant>| at.map_or(Duration::MAX, |at| now.saturating_duration_since(at));
+        self.changed || since(self.drawn) >= TICK || (self.printed && since(self.printed_at) >= FRAME)
+    }
+
+    fn next_frame(&self, now: Instant) -> Option<Duration> {
+        let at = self.printed_at.filter(|_| self.printed)?;
+        Some(FRAME.saturating_sub(now.saturating_duration_since(at)))
+    }
+
+    fn draw(&mut self) {
+        let now = Instant::now();
+        self.drawn = Some(now);
+        if self.printed {
+            self.printed_at = Some(now);
+        }
+        self.changed = false;
+        self.printed = false;
+        let Self { app, clients, area, .. } = self;
         let Some(area) = *area else { return };
         app.resize(area);
         for screen in clients.iter_mut().filter_map(|c| c.screen.as_mut()) {
@@ -375,6 +423,10 @@ impl Server {
     }
 
     fn handle(&mut self, ev: ServerEvent) -> ControlFlow<()> {
+        match &ev {
+            ServerEvent::App(AppEvent::Output(id, _)) => self.printed = self.printed || self.app.shows(*id),
+            _ => self.changed = true,
+        }
         match ev {
             ServerEvent::Message(_, ClientMessage::KillServer) | ServerEvent::Shutdown => return ControlFlow::Break(()),
             ServerEvent::App(ev) => self.handle_app(ev),
@@ -679,6 +731,13 @@ mod tests {
                 Self { server, rx, client, _dir: dir }
             }
 
+            pub(super) fn shows_frame(&self, bytes: &[u8]) {
+                wait_until("the frame arrives", || {
+                    std::iter::from_fn(|| self.client.frames.try_recv().ok())
+                        .any(|msg| matches!(msg, ServerMessage::Frame(frame) if frame == bytes))
+                });
+            }
+
             fn serve(
                 self,
                 run: impl Fn(&mut Server, Step) -> ControlFlow<()>,
@@ -825,6 +884,116 @@ mod tests {
             let attached = Attached::with(dir, &saved);
 
             assert_eq!(attached.server.app.state().projects.len(), 1);
+        }
+    }
+
+    mod drawing {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        use super::a_bug::Attached;
+        use super::*;
+        use crate::clipboard;
+        use crate::control::{Report, Response};
+
+        fn drawn_just_now(attached: &mut Attached) -> Instant {
+            attached.server.draw();
+            attached.server.drawn.expect("a frame was drawn")
+        }
+
+        fn shown_pane(attached: &mut Attached) -> u64 {
+            let server = &mut attached.server;
+            server.app.request(1, r#"{"command":"status","args":{}}"#, server.area, Instant::now());
+            let (_, text) = server.app.take_answers().pop().expect("an answer");
+            let Ok(Response::Ok(value)) = serde_json::from_str(&text) else { panic!("status failed: {text}") };
+            let report: Report = serde_json::from_value(value).expect("a report");
+            report.projects[0].workspaces[0].tabs[0].panes[0].id
+        }
+
+        #[test]
+        fn output_nobody_can_see_draws_nothing() {
+            let mut attached = Attached::new();
+            let now = drawn_just_now(&mut attached);
+
+            let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(u64::MAX, b"hidden".to_vec())));
+
+            assert!(!attached.server.due(now));
+        }
+
+        #[test]
+        fn output_on_screen_draws_at_most_once_a_frame() {
+            let mut attached = Attached::new();
+            let pane = shown_pane(&mut attached);
+            let now = drawn_just_now(&mut attached);
+            attached.server.printed_at = Some(now);
+
+            let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, b"shown".to_vec())));
+
+            let server = &attached.server;
+            assert_eq!((server.due(now), server.due(now + FRAME), server.next_frame(now)), (false, true, Some(FRAME)));
+        }
+
+        #[test]
+        fn input_draws_at_once() {
+            let mut attached = Attached::new();
+            let now = drawn_just_now(&mut attached);
+            let key = Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+
+            let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Event(key)));
+
+            assert!(attached.server.due(now));
+        }
+
+        #[test]
+        fn a_key_does_not_hold_back_its_echo() {
+            let mut attached = Attached::new();
+            let pane = shown_pane(&mut attached);
+            drawn_just_now(&mut attached);
+            let key = Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+            let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Event(key)));
+            attached.server.draw();
+
+            let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, b"a".to_vec())));
+
+            assert!(attached.server.due(Instant::now()));
+        }
+
+        #[test]
+        fn a_quiet_server_still_draws_every_tick() {
+            let mut attached = Attached::new();
+            let now = drawn_just_now(&mut attached);
+
+            assert_eq!((attached.server.due(now), attached.server.due(now + TICK)), (false, true));
+        }
+
+        #[test]
+        fn output_nobody_can_see_still_sends_what_it_copied() {
+            let mut attached = Attached::new();
+            let pane = shown_pane(&mut attached);
+            let server = &mut attached.server;
+            server.app.request(1, r#"{"command":"new-tab","args":{"focus":true}}"#, server.area, Instant::now());
+            drawn_just_now(&mut attached);
+            let copy = b"\x1b]52;c;aGVsbG8=\x07".to_vec();
+
+            let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, copy)));
+            attached.server.flush();
+
+            assert!(!attached.server.app.shows(pane));
+            attached.shows_frame(&clipboard::osc52("hello"));
+        }
+
+        #[test]
+        fn a_settled_session_is_still_saved() {
+            let mut attached = Attached::new();
+            let session = attached.server.session.clone();
+            std::fs::remove_file(&session).expect("forget the saved session");
+            attached.server.saver = Saver::new(session.clone(), None);
+            let t0 = Instant::now();
+
+            attached.server.save(t0);
+            attached.server.save(t0 + SAVE_EVERY / 2);
+            attached.server.save(t0 + state::SETTLE + SAVE_EVERY);
+
+            assert!(session.exists(), "the session settles and is written");
         }
     }
 }

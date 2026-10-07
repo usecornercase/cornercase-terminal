@@ -51,6 +51,7 @@ pub struct Term {
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
+    interactive: bool,
 }
 
 pub struct SpawnOptions<'a> {
@@ -118,6 +119,7 @@ impl Term {
             writer,
             child,
             size: (rows, cols),
+            interactive: args.is_empty(),
         })
     }
 
@@ -168,7 +170,7 @@ impl Term {
 
     pub fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
-        shell.is_some() && self.foreground_pid() == shell
+        self.interactive && shell.is_some() && self.foreground_pid() == shell
     }
 
     pub fn foreground_args(&self) -> Vec<String> {
@@ -276,11 +278,15 @@ mod tests {
     const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
     fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
+        spawn_with(&[], cwd)
+    }
+
+    fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
         let (tx, rx) = mpsc::channel();
         let opts = SpawnOptions {
             id: 1,
             shell: "/bin/sh",
-            args: &[],
+            args,
             env: &[],
             rows: 24,
             cols: 80,
@@ -301,6 +307,24 @@ mod tests {
             }
         }
         term.emulator.snapshot().expect("snapshot").contents()
+    }
+
+    mod shell_in_foreground {
+        use super::*;
+
+        #[test]
+        fn an_idle_shell_is() {
+            let (term, _rx) = spawn_sh();
+            wait_until("the shell is at its prompt", || term.shell_in_foreground());
+        }
+
+        #[test]
+        fn a_pane_started_with_a_command_never_is() {
+            let (term, _rx) = spawn_with(&["-c".into(), "exec sleep 30".into()], None);
+            wait_until("sleep runs", || term.foreground_pid().and_then(process::name).as_deref() == Some("sleep"));
+
+            assert!(!term.shell_in_foreground());
+        }
     }
 
     mod spawn {

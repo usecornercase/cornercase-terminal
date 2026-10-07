@@ -15,24 +15,28 @@ use crossterm::event::{
 use crossterm::execute;
 use ratatui::DefaultTerminal;
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
+use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::host_theme::{HostTheme, ThemeProbe};
 use crate::notify;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::restart;
 use crate::update::{self, CURRENT, Install, Outcome};
 
 const THEME_QUERY_TIMEOUT: Duration = Duration::from_secs(1);
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
+const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 const INCOMPATIBLE: &str = "the running cornercase server is incompatible with this build. \
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
-const RESTART: &str =
-    "Restart it now? Its terminals close, and your session comes back with new shells in the same folders. [y/N] ";
+const RESTART: &str = "Restart it now? [y/N] ";
 const INSIDE: &str = "This terminal is one of them, so it closes too.";
 
 pub fn run() -> Result<()> {
@@ -40,7 +44,13 @@ pub fn run() -> Result<()> {
         return Err(Error::Nested);
     }
     match open() {
-        Err(Error::Rejected(_)) if stdin().is_terminal() && confirm(&format!("{OTHER_BUILD}\n{RESTART}")) => {
+        Err(Error::Rejected(_))
+            if stdin().is_terminal()
+                && confirm(&format!(
+                    "{OTHER_BUILD}\n{}\n{RESTART}",
+                    restart::confirmation(running_now().as_deref())
+                )) =>
+        {
             kill_server()?;
             open()
         }
@@ -85,6 +95,55 @@ fn open() -> Result<()> {
         }
         Ending::Detached => Ok(()),
     }
+}
+
+fn connect() -> Result<UnixStream> {
+    let path = protocol::socket_path();
+    protocol::check_socket_dir(&path)?;
+    let stream = UnixStream::connect(&path).map_err(|_| Error::NoServer)?;
+    protocol::check_peer(&stream, protocol::own_uid())?;
+    Ok(stream)
+}
+
+pub fn ask(name: &'static str, command: control::Command) -> Result<Value> {
+    ask_on(connect()?, name, command)
+}
+
+fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
+    let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
+    let server = std::env::var(control::SERVER_ENV).ok();
+    let request =
+        serde_json::to_string(&Request { caller, server, command }).map_err(|e| Error::Control(e.to_string()))?;
+    protocol::send(&mut stream, &ClientMessage::Request(request))?;
+    loop {
+        match protocol::recv::<ServerMessage>(&mut stream) {
+            Ok(Some(ServerMessage::Response(text))) => {
+                return match serde_json::from_str(&text) {
+                    Ok(Response::Ok(value)) => Ok(value),
+                    Ok(Response::Error(message)) => Err(Error::Control(message)),
+                    Err(e) => Err(Error::Control(format!("cannot read the server's answer: {e}"))),
+                };
+            }
+            Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
+            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
+            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => {}
+            Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
+                return Err(Error::ServerGone);
+            }
+        }
+    }
+}
+
+pub fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
+    serde_json::from_value(value).map_err(|e| Error::Control(format!("cannot read the server's answer: {e}")))
+}
+
+pub fn running_now() -> Option<Vec<restart::Running>> {
+    let stream = connect().ok()?;
+    stream.set_read_timeout(Some(STATUS_TIMEOUT)).ok()?;
+    let value = ask_on(stream, "status", control::Command::Status(control::Status {})).ok()?;
+    let report: control::Report = answer(value).ok()?;
+    Some(restart::from_report(&report))
 }
 
 pub fn kill_server() -> Result<bool> {
@@ -161,13 +220,21 @@ fn offer_restart(yes: bool) -> Result<()> {
     }
     let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
     let note = if inside { format!(" {INSIDE}") } else { String::new() };
-    let question = format!("The running cornercase server still runs {CURRENT}.{note}\n{RESTART}");
+    let running = if yes || stdin().is_terminal() { running_now() } else { None };
+    let stops = restart::confirmation(running.as_deref());
+    let question = format!("The running cornercase server still runs {CURRENT}.{note}\n{stops}\n{RESTART}");
     if yes || (stdin().is_terminal() && confirm(&question)) {
+        if yes {
+            println!("{stops}");
+        }
         if inside {
             println!("restarting the cornercase server");
         }
         if restart_server()? {
             println!("restarted the cornercase server; your session comes back the next time cornercase starts");
+            if let Some(line) = running.as_deref().and_then(restart::stopped) {
+                println!("{line}");
+            }
         }
     } else {
         println!(

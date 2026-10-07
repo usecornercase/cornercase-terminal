@@ -47,8 +47,8 @@ const SEARCH_ICON: &str = " ⌕ ";
 const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
 const MENU_ICON: &str = "≡";
 const BACK_LABEL: &str = "‹ projects";
-const CRUMB_SEPARATOR: &str = " › ";
-const CANCEL_LABEL: &str = "cancel";
+pub const CRUMB_SEPARATOR: &str = " › ";
+pub const CANCEL_LABEL: &str = "cancel";
 const ISSUES_LABEL: &str = "issues";
 const USAGE_LABEL: &str = "usage";
 const USAGE_BAR: &str = "━";
@@ -1374,11 +1374,11 @@ pub fn update_button(settings: Rect, label: &str) -> Rect {
 }
 
 pub fn form_buttons(form: Rect, submit: &str) -> [Rect; 2] {
-    buttons_in(form_rows(form)[5], submit)
+    buttons_in(form_rows(form)[5], submit, CANCEL_LABEL)
 }
 
-fn buttons_in(row: Rect, submit: &str) -> [Rect; 2] {
-    let cancel_width = button_width(CANCEL_LABEL);
+fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
+    let cancel_width = button_width(cancel);
     let submit_width = button_width(submit);
     let cancel = Rect::new(row.right().saturating_sub(cancel_width), row.y, cancel_width, 1).intersection(row);
     let submit = Rect::new(cancel.x.saturating_sub(submit_width + 1), row.y, submit_width, 1).intersection(row);
@@ -1488,8 +1488,8 @@ pub fn update_notes(area: Rect) -> Rect {
     update_rows(picker_area(area))[1]
 }
 
-pub fn update_buttons(area: Rect, submit: &str) -> [Rect; 2] {
-    buttons_in(update_rows(picker_area(area))[3], submit)
+pub fn update_buttons(area: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
+    buttons_in(update_rows(picker_area(area))[3], submit, cancel)
 }
 
 pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
@@ -1517,7 +1517,7 @@ pub fn picker_list(picker: Rect) -> Rect {
 }
 
 pub fn picker_buttons(picker: Rect, submit: &str) -> [Rect; 2] {
-    buttons_in(picker_rows(picker)[3], submit)
+    buttons_in(picker_rows(picker)[3], submit, CANCEL_LABEL)
 }
 
 fn first_visible(list: Rect, items: usize, scroll: usize) -> usize {
@@ -1885,6 +1885,7 @@ pub struct Update {
     pub scroll: usize,
     pub note: Option<Note>,
     pub submit: &'static str,
+    pub cancel: &'static str,
 }
 
 pub struct UsageWindow {
@@ -2606,7 +2607,7 @@ fn draw_form(f: &mut Frame, view: &View, form: &Form) {
 
     draw_note(f, view.muted, form.note.as_ref(), note);
 
-    draw_dialog_buttons(f, view, form_buttons(r, form.submit), form.submit);
+    draw_dialog_buttons(f, view, form_buttons(r, form.submit), form.submit, CANCEL_LABEL);
 
     if !matches!(form.note, Some(Note::Busy(_))) && cursor_x < input.right() {
         f.set_cursor_position(Position::new(cursor_x, input.y));
@@ -2683,7 +2684,7 @@ fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm) {
     let message = Rect::new(label.x, label.y, label.width, toggle.bottom().saturating_sub(label.y));
     f.render_widget(Paragraph::new(confirm.message.as_str()).wrap(Wrap { trim: true }), message);
     draw_note(f, view.muted, confirm.note.as_ref(), note);
-    draw_dialog_buttons(f, view, form_buttons(r, confirm.submit), confirm.submit);
+    draw_dialog_buttons(f, view, form_buttons(r, confirm.submit), confirm.submit, CANCEL_LABEL);
 }
 
 fn draw_update(f: &mut Frame, view: &View, update: &Update) {
@@ -2696,7 +2697,7 @@ fn draw_update(f: &mut Frame, view: &View, update: &Update) {
     let visible: Vec<Line> = update.notes.iter().skip(scroll).take(usize::from(notes.height)).cloned().collect();
     f.render_widget(Paragraph::new(visible), notes);
     draw_note(f, view.muted, update.note.as_ref(), note);
-    draw_dialog_buttons(f, view, update_buttons(f.area(), update.submit), update.submit);
+    draw_dialog_buttons(f, view, update_buttons(f.area(), update.submit, update.cancel), update.submit, update.cancel);
 }
 
 fn severity_color(severity: Severity) -> Color {
@@ -2786,10 +2787,10 @@ fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
 }
 
-fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], label: &str) {
+fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], label: &str, cancel_label: &str) {
     draw_submit(f, view, submit, label);
     let style = dialog_button_style(view, cancel, false);
-    f.render_widget(Paragraph::new(Span::styled(format!(" {CANCEL_LABEL} "), style)), cancel);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {cancel_label} "), style)), cancel);
 }
 
 fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
@@ -2855,7 +2856,7 @@ fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
         ),
     }
 
-    draw_dialog_buttons(f, view, picker_buttons(r, picker.submit), picker.submit);
+    draw_dialog_buttons(f, view, picker_buttons(r, picker.submit), picker.submit, CANCEL_LABEL);
 
     if cursor_x < input.right() {
         f.set_cursor_position(Position::new(cursor_x, input.y));
@@ -6188,6 +6189,7 @@ mod tests {
                 scroll: 30,
                 note: Some(Note::Busy("downloading…")),
                 submit: "update",
+                cancel: CANCEL_LABEL,
             };
             insta::assert_snapshot!(render(&with(Overlay::Update(update))).backend());
         }

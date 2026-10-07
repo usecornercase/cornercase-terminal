@@ -578,7 +578,7 @@ impl App {
         Ok(())
     }
 
-    fn report(&self, caller: Option<u64>) -> Report {
+    pub(super) fn report(&self, caller: Option<u64>) -> Report {
         let caller = caller.filter(|id| self.locate(*id).is_some());
         let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
             id: tab.id,
@@ -638,6 +638,7 @@ impl App {
             program: term.program(&self.config),
             agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
+            at_prompt: Some(term.shell_in_foreground()),
             model: context.map(|c| c.model.clone()),
             context: context.and_then(|c| c.percent),
             active,

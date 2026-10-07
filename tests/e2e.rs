@@ -9,7 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use cornercase::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
-use cornercase::control::{PANE_ENV, Report};
+use cornercase::control::{PANE_ENV, PaneInfo, Report};
 use cornercase::protocol::{NESTED_ENV, SOCKET_ENV};
 use cornercase::split::{self, Dir};
 use cornercase::ui::{self, SidebarRow, WorkspaceRow};
@@ -131,18 +131,27 @@ impl Session {
         String::from_utf8_lossy(&out.stdout).trim_end().to_string()
     }
 
-    fn wait_for_working(&self) {
+    fn wait_for_report(&self, what: &str, cond: impl Fn(Report) -> bool) {
         let deadline = Instant::now() + TIMEOUT;
-        let working = |report: Report| {
-            let panes =
-                report.projects.into_iter().flat_map(|p| p.workspaces).flat_map(|w| w.tabs).flat_map(|t| t.panes);
-            panes.into_iter().any(|p| p.status.as_deref() == Some("working"))
-        };
-        while !working(self.report()) {
-            assert!(Instant::now() < deadline, "timed out waiting for: an agent at work");
+        while !cond(self.report()) {
+            assert!(Instant::now() < deadline, "timed out waiting for: {what}");
             thread::sleep(POLL);
         }
     }
+
+    fn wait_for_working(&self) {
+        self.wait_for_report("an agent at work", |report| {
+            panes(report).any(|p| p.status.as_deref() == Some("working"))
+        });
+    }
+
+    fn wait_for_program(&self, program: &str) {
+        self.wait_for_report(program, |report| panes(report).any(|p| p.program.as_deref() == Some(program)));
+    }
+}
+
+fn panes(report: Report) -> impl Iterator<Item = PaneInfo> {
+    report.projects.into_iter().flat_map(|p| p.workspaces).flat_map(|w| w.tabs).flat_map(|t| t.panes)
 }
 
 impl Drop for Session {
@@ -850,6 +859,17 @@ fn quitting_one_client_leaves_the_others_attached() {
 }
 
 #[test]
+fn kill_server_says_what_it_stopped() {
+    let mut app = Harness::start();
+    app.send(b"sleep 600\r");
+    app.session.wait_for_program("sleep");
+
+    let out = app.session.run("kill-server");
+
+    assert!(String::from_utf8_lossy(&out.stdout).contains("stopped 1 program"), "{out:?}");
+}
+
+#[test]
 fn kill_server_closes_every_client() {
     let mut first = Harness::start();
     let mut second = first.attach(ROWS, COLS);
@@ -941,6 +961,8 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
     app.send(b"echo old-\"\"shell\r");
     app.wait_for("the old shell answers", |s| s.contains("old-shell"));
+    app.send(b"sleep 600\r");
+    app.session.wait_for_program("sleep");
     let marker = bin.with_file_name("new-client-ran");
     let new = format!(
         "#!/bin/sh\n[ \"$1\" = --version ] && exec echo 'cornercase 99.0.0'\n[ $# -eq 0 ] && touch '{}'\nexec '{}' \"$@\"\n",
@@ -960,6 +982,7 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     assert!(out.status.success(), "{out:?}");
     assert!(stdout.contains(&format!("updated cornercase {} → 99.0.0", update::CURRENT)), "{stdout}");
     assert!(stdout.contains("restarted the cornercase server"), "{stdout}");
+    assert!(stdout.contains("1 program (`sleep` in ") && stdout.contains("stopped 1 program"), "{stdout}");
     assert_eq!(std::fs::read_to_string(&bin).expect("the new binary"), new);
     app.wait_for("the client comes back with both projects and new shells", |s| {
         !s.contains("old-shell") && s.contains(&first_entry()) && s.contains(&entry(&name))

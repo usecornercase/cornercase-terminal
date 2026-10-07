@@ -32,6 +32,7 @@ use crate::panics;
 use crate::picker::Picker;
 use crate::process;
 use crate::project::{Group, Project, Tab, Workspace, move_before, shift_active};
+use crate::restart;
 use crate::search::{self, Candidate, Goto, Kind, Search};
 use crate::secrets;
 use crate::settings::{self, Page, Settings, Status};
@@ -237,6 +238,7 @@ const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 const UPDATE_SUBMIT: &str = "update";
 const RETRY_UPDATE_SUBMIT: &str = "try again";
 const RESTART_SUBMIT: &str = "restart now";
+const LATER: &str = "later";
 const COPY_COMMAND_SUBMIT: &str = "copy command";
 const RESTART_LABEL: &str = "↻ restart";
 const COMPARE_SUBMIT: &str = "compare";
@@ -289,6 +291,13 @@ impl Overlay {
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
             _ => CREATE_SUBMIT,
+        }
+    }
+
+    fn cancel_label(&self) -> &'static str {
+        match self {
+            Self::Update(UpdateStep::Installed) => LATER,
+            _ => ui::CANCEL_LABEL,
         }
     }
 
@@ -467,6 +476,8 @@ pub struct App {
     counted: Option<Instant>,
     updates: Updates,
     update_scroll: usize,
+    restart_list: Vec<restart::Running>,
+    listed: Option<Instant>,
     restart: bool,
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
@@ -561,6 +572,8 @@ impl App {
             counted: None,
             updates: Updates::from_env(),
             update_scroll: 0,
+            restart_list: Vec::new(),
+            listed: None,
             restart: false,
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
@@ -671,6 +684,11 @@ impl App {
 
     pub fn refresh(&mut self, now: Instant) {
         self.reap();
+        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed)))
+            && self.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
+        {
+            self.list_running(now);
+        }
         self.drive_launches(now);
         self.watch_agents(now);
         self.check_requests(now);
@@ -942,6 +960,10 @@ impl App {
 
     fn visible_tab(&self) -> Option<u64> {
         self.focus().tab.filter(|_| self.nav.is_none())
+    }
+
+    pub fn shows(&self, pane: u64) -> bool {
+        self.nav.is_none() && self.tab().is_some_and(|t| t.panes.iter().any(|p| p.id == pane))
     }
 
     fn focus(&self) -> Focus {
@@ -3179,6 +3201,15 @@ impl App {
         }
     }
 
+    fn running(&self) -> Vec<restart::Running> {
+        restart::from_report(&self.report(None))
+    }
+
+    fn list_running(&mut self, now: Instant) {
+        self.restart_list = self.running();
+        self.listed = Some(now);
+    }
+
     fn update_label(&self) -> Option<String> {
         if self.updates.installed {
             return Some(RESTART_LABEL.into());
@@ -3193,6 +3224,9 @@ impl App {
             Install::Command(command) => UpdateStep::Manual(command),
         };
         self.update_scroll = 0;
+        if step == UpdateStep::Installed {
+            self.list_running(Instant::now());
+        }
         self.overlay = Some(Overlay::Update(step));
     }
 
@@ -3205,7 +3239,7 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
-        let [submit, cancel] = ui::update_buttons(area, overlay.submit_label());
+        let [submit, cancel] = ui::update_buttons(area, overlay.submit_label(), overlay.cancel_label());
         if submit.contains(pos) {
             self.submit_form(area)?;
         } else if cancel.contains(pos) {
@@ -3222,10 +3256,13 @@ impl App {
     }
 
     fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
+        let width = usize::from(ui::update_notes(area).width);
+        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed))) {
+            return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
+        }
         let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
             return Vec::new();
         };
-        let width = usize::from(ui::update_notes(area).width);
         let notes: Vec<String> =
             release.notes.iter().map(|(version, notes)| format!("**What's new in {version}**\n\n{notes}")).collect();
         markdown::render(&notes.join("\n\n"), width)
@@ -3261,6 +3298,8 @@ impl App {
         let step = match result {
             Ok(()) => {
                 self.updates.installed = true;
+                self.update_scroll = 0;
+                self.list_running(Instant::now());
                 UpdateStep::Installed
             }
             Err(e) => UpdateStep::Failed(e.to_string()),
@@ -3274,10 +3313,7 @@ impl App {
         let version = self.updates.available.as_ref().map_or("", |r| r.version.as_str());
         let current = update::CURRENT;
         let message = match step {
-            UpdateStep::Installed => format!(
-                "cornercase {version} is installed. Restart to use it: your session comes back, \
-                 with new shells in the same folders."
-            ),
+            UpdateStep::Installed => format!("cornercase {version} is installed. Restart to use it."),
             UpdateStep::Manual(command) => {
                 format!("cornercase {version} is out (you have {current}). Update it with:\n{command}")
             }
@@ -3297,9 +3333,10 @@ impl App {
             UpdateStep::Failed(error) => Some(ui::Note::Error(error.clone())),
             _ => None,
         };
-        let submit = Overlay::Update(step.clone()).submit_label();
+        let overlay = Overlay::Update(step.clone());
+        let (submit, cancel) = (overlay.submit_label(), overlay.cancel_label());
         let notes = self.update_notes(area);
-        ui::Overlay::Update(ui::Update { message, notes, scroll: self.update_scroll, note, submit })
+        ui::Overlay::Update(ui::Update { message, notes, scroll: self.update_scroll, note, submit, cancel })
     }
 
     fn open_usage(&mut self) {
@@ -5824,6 +5861,20 @@ mod tests {
         }
     }
 
+    mod shows {
+        use super::*;
+
+        #[test]
+        fn only_the_panes_of_the_tab_on_screen() {
+            let (mut app, _rx) = app();
+            let first = app.term().expect("a pane").id;
+            app.add_tab(0, 0, AREA).expect("add a tab");
+            let second = app.term().expect("the new pane").id;
+
+            assert_eq!((app.shows(first), app.shows(second), app.shows(u64::MAX)), (false, true, false));
+        }
+    }
+
     mod restore {
         use super::*;
 
@@ -6613,6 +6664,19 @@ rm -f "$1/sessions/$$.json"
             fn told(&mut self) -> (Option<String>, Vec<Notification>) {
                 (toast(&self.app).map(str::to_owned), self.app.take_notifications())
             }
+        }
+
+        #[test]
+        fn a_restart_names_the_agent_at_work_and_the_other_program() {
+            let mut w = Watched::start(agents::CLAUDE, true);
+            type_line(&mut w.app, "sleep 30");
+            pump_until(&mut w.app, &w.rx, "sleep runs", |a| {
+                a.term().and_then(|t| t.program(&a.config)).as_deref() == Some("sleep")
+            });
+
+            let text = restart::confirmation(Some(&w.app.running()));
+
+            assert!(text.contains("1 agent (1 working)") && text.contains("1 other program (`sleep` in "), "{text}");
         }
 
         fn runs(app: &App, agent: &str) -> bool {
@@ -9198,6 +9262,53 @@ rm -f "$1/sessions/$$.json"
             send_key(app, KeyCode::Enter, KeyModifiers::NONE);
         }
 
+        fn installed(app: &mut App) -> String {
+            app.updates.installed = true;
+            open(app);
+            let Some(ui::Overlay::Update(update)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
+                panic!("the update dialog");
+            };
+            update.message
+        }
+
+        #[test]
+        fn nothing_running_is_said_before_restarting() {
+            let (mut app, _rx) = found(replaced());
+            app.open_here(AREA).expect("open a project");
+            wait_until("the shell is at its prompt", || app.term().is_some_and(Term::shell_in_foreground));
+
+            installed(&mut app);
+
+            assert!(shown_notes(&app).join(" ").contains("Nothing is running in your terminals."));
+        }
+
+        #[test]
+        fn the_whole_restart_list_is_shown() {
+            let (mut app, _rx) = found(replaced());
+            app.open_here(AREA).expect("open a project");
+            type_line(&mut app, "sleep 30");
+            wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+
+            let message = installed(&mut app);
+
+            let notes = shown_notes(&app).join(" ");
+            assert_eq!(message, "cornercase 9.0.0 is installed. Restart to use it.");
+            assert!(
+                notes.contains("sleep in") && notes.contains("each tab with a new shell in its folder."),
+                "{notes}"
+            );
+        }
+
+        #[test]
+        fn later_closes_without_restarting() {
+            let (mut app, _rx) = found(replaced());
+            installed(&mut app);
+
+            click(&mut app, ui::update_buttons(AREA, RESTART_SUBMIT, LATER)[1].as_position());
+
+            assert_eq!((app.overlay.is_none(), app.take_restart()), (true, None));
+        }
+
         #[test]
         fn a_newer_release_shows_a_button_and_a_toast() {
             let (app, _rx) = found(replaced());
@@ -9256,15 +9367,26 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn the_restart_list_starts_at_its_top() {
+            let notes: Vec<String> = (0..60).map(|i| format!("- change {i}")).collect();
+            let (mut app, _rx) = with_notes(&notes.join("\n"));
+            mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
+
+            app.handle_event(AppEvent::Updated(Ok(())), AREA).expect("handle the update");
+
+            assert_eq!((step(&app), app.update_scroll), (Some(&UpdateStep::Installed), 0));
+        }
+
+        #[test]
         fn the_dialog_buttons_update_and_cancel() {
             let (mut app, _rx) = found(replaced());
             open(&mut app);
-            let [_, cancel] = ui::update_buttons(AREA, UPDATE_SUBMIT);
+            let [_, cancel] = ui::update_buttons(AREA, UPDATE_SUBMIT, ui::CANCEL_LABEL);
             click(&mut app, cancel.as_position());
             assert!(app.overlay.is_none());
 
             open(&mut app);
-            let [submit, _] = ui::update_buttons(AREA, UPDATE_SUBMIT);
+            let [submit, _] = ui::update_buttons(AREA, UPDATE_SUBMIT, ui::CANCEL_LABEL);
             click(&mut app, submit.as_position());
             assert_eq!(step(&app), Some(&UpdateStep::Updating));
         }
