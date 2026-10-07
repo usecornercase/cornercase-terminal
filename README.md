@@ -7,7 +7,7 @@
 
 A terminal multiplexer for working on several projects at once, each with its own git worktrees and coding agents. Every action is a mouse button, so you never need to learn a prefix key.
 
-![cornercase with the shop project open: its workspaces in the sidebar, Claude Code working on issue #482 in one pane and the failing test in a split below](.github/screenshot.png)
+![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away; close the terminal, they keep working.](site/public/og.png)
 
 **Website and documentation:** https://usecornercase.dev
 
