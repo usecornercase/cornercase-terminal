@@ -370,8 +370,7 @@ impl App {
                     viewer.selection = Some((anchor, line));
                 }
             }
-            MouseEventKind::Up(_) => self.files.selecting = None,
-            _ => {}
+            _ => self.files.selecting = None,
         }
     }
 

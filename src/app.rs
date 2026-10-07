@@ -10153,6 +10153,18 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn a_selection_whose_release_was_lost_ends_at_the_next_event() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "src/main.rs");
+            let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
+            press(&mut app, first);
+            mouse(&mut app, MouseEventKind::Moved, last);
+            click(&mut app, last);
+            assert_eq!(file(&app).selection, Some((3, 3)));
+        }
+
+        #[test]
         fn copy_takes_the_selected_lines() {
             let repo = repo();
             let (mut app, rx) = opened(&repo);
