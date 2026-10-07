@@ -30,7 +30,7 @@ export const theme: Theme = {
     '#7ae6f0',
     '#f6f4ff',
   ],
-  overrides: { 99: '#875fff', 235: '#191723', 236: '#23212f', 254: '#e6e4ee' },
+  overrides: { 99: '#875fff', 235: '#191723', 236: '#23212f', 239: '#454357', 254: '#e6e4ee' },
 };
 
 const hex = (n: number): string => n.toString(16).padStart(2, '0');

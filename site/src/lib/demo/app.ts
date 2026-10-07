@@ -951,7 +951,7 @@ export class App {
     else {
       this.changesOpen = false;
       this.todo.open = true;
-      this.emit('narrate', 'Your TODO list, next to the shells it is about. Click a line to edit it, [ ] to tick it off.');
+      this.emit('narrate', 'Your TODO list, next to the shells it is about. Click a line to edit it, ○ to tick it off.');
     }
     this.nav = null;
     this.dirty();

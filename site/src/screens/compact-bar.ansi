@@ -1,28 +1,28 @@
-[38;5;6m[48;5;236m       [39m                                    [38;5;8m                     
-[38;5;6m   ≡   [39m  [1m[38;5;15mshop[0m[38;5;7m[48;5;236m › main › nvim[39m                [38;5;8m   ±      ☐      ⌕   
-[38;5;6m       [39m                                    [38;5;8m                     
-[39m[49m  1 [1muse[0m serde::Deserialize;
-  2
-  3 #[derive(Debug, Deserialize)]
-  4 [1mpub[0m [1mstruct[0m [38;5;12mAddress[39m {
-  5     [1mpub[0m lines: Vec<String>,
-  6     [1mpub[0m city: String,
-  7     [1mpub[0m postcode: String,
-  8 }
-  9
- 10 [1mimpl[0m Address {
- 11     [1mpub[0m [1mfn[0m [38;5;14mfirst_line[39m(&self) -> &str {
- 12         self.lines.[38;5;14mfirst[39m().[38;5;14munwrap[39m()
- 13     }
- 14 }
-~
-~
-~
-~
-~
-~
-~
-~
-~
-[7msrc/returns/address.rs                        12,1           All
-[0m
+[0;38;5;6;48;5;236m       [0;48;5;236m                                    [0;38;5;8;48;5;236m                     [0m
+[0;38;5;6;48;5;236m   ≡   [0;48;5;236m  [0;1;38;5;15;48;5;236mshop[0;38;5;7;48;5;236m › main › nvim[0;48;5;236m                [0;38;5;8;48;5;236m   ±      ☐      ⌕   [0m
+[0;38;5;6;48;5;236m       [0;48;5;236m                                    [0;38;5;8;48;5;236m                     [0m
+[0m  1 [0;1muse[0m serde::Deserialize;                                     [0m
+[0m  2                                                             [0m
+[0m  3 #[derive(Debug, Deserialize)]                               [0m
+[0m  4 [0;1mpub[0m [0;1mstruct[0m [0;38;5;12mAddress[0m {                                        [0m
+[0m  5     [0;1mpub[0m lines: Vec<String>,                                 [0m
+[0m  6     [0;1mpub[0m city: String,                                       [0m
+[0m  7     [0;1mpub[0m postcode: String,                                   [0m
+[0m  8 }                                                           [0m
+[0m  9                                                             [0m
+[0m 10 [0;1mimpl[0m Address {                                              [0m
+[0m 11     [0;1mpub[0m [0;1mfn[0m [0;38;5;14mfirst_line[0m(&self) -> &str {                      [0m
+[0m 12         self.lines.[0;38;5;14mfirst[0m().[0;38;5;14munwrap[0m()                         [0m
+[0m 13     }                                                       [0m
+[0m 14 }                                                           [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0m~                                                               [0m
+[0;7msrc/returns/address.rs                        12,1           All[0m
+[0m                                                                [0m

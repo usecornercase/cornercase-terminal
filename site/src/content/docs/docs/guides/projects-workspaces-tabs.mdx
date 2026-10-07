@@ -190,7 +190,7 @@ Claude Code and Codex plans have a five-hour session limit and a weekly limit. T
   caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
 />
 
-Each agent installed on the machine gets its own section, and each limit shows how much you have used and when it resets. The bar is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
+Each agent installed on the machine gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
 
 The numbers come from the agents themselves: opening the dialog runs `claude` and `codex` in the background, on the machine where cornercase's server runs, and asks each for its usage (Codex through `codex app-server`). That sends no prompt and costs no tokens, and cornercase never reads your login. It takes a second or a few; meanwhile each section shows `loading…`, or the last numbers with how old they are. Nothing is asked while the dialog is closed. An agent that isn't installed has no section, unless neither is: then both show, each saying why it couldn't run. [`agent_commands`](../../reference/agents/#your-own-agents) says where to find one that isn't on the `PATH`. `done` or `Esc` closes the dialog. If a section says `usage unavailable`, see [Usage is unavailable](../../help/troubleshooting/#usage-is-unavailable).
 
@@ -242,7 +242,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. Its projects stay open, ungrouped, and nothing in them is ended. |
 
-Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty, ready for `+ new project`. Closing every project of a group keeps the group.
+Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ new project` opens a folder. Closing every project of a group keeps the group.
 
 When a program ends by itself, for example when you type `exit`, its pane closes; when the last pane of a tab closes, so does the tab.
 
@@ -257,7 +257,7 @@ When a program ends by itself, for example when you type `exit`, its pane closes
   - *tree* shows [one list](#the-tree) with every project, its workspaces and their tabs.
 
   Between stacked lists, drag the line to share the height, and double-click it to split it in half again.
-- The active project and tab are marked with a cyan bar `▌` on a highlighted background; the active workspace's name is brighter than the others.
+- The active project and tab are marked with a cyan bar `▌` on the left edge and a highlighted background; the active workspace's name is brighter than the others. Each workspace's tabs hang from it on thin tree lines.
 
 Column widths, the line between stacked lists and what is folded in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
 
@@ -281,7 +281,7 @@ With **settings → TUI → sidebar** set to *tree*, one list holds your groups,
 
 - Click **`▾`** to fold a project or a workspace and **`▸`** to open it again. A click on the rest of its row opens it and unfolds it. Group headers fold as everywhere else.
 - A folded project shows how many workspaces it has, and a folded project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
-- The cyan bar `▌` marks the tab on screen, or the row that hides it while folded.
+- The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while folded. Tabs hang from their workspace's arrow on thin tree lines.
 - Each project ends with **`+ new workspace`** and each workspace with **`+ tab`**: adding a tab under another project switches to it.
 - Drag rows to reorder them: projects among projects and groups, workspaces within their project, tabs within their workspace, as in the other layouts.
 - What you fold is saved with your session. Opening a project or a tab from search, or switching to it, unfolds the way to it.
