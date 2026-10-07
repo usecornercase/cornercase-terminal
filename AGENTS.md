@@ -81,7 +81,7 @@ src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
 src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps)
 src/search.rs     global search: candidates, ranking, state
 src/picker.rs     folder picker state
-src/process.rs    a pid's cwd, name, arguments, environment, descendants and resident memory: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
+src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel; app/control.rs answers the commands for scripts and keeps their waits

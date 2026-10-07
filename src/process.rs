@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
 
-pub use imp::{all, args, children, cwd, env, name, open_files, peer_uid, resident};
+pub use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid};
 
 const MAX_DESCENDANTS: usize = 256;
 
@@ -35,6 +35,14 @@ fn vars<'a>(entries: impl Iterator<Item = &'a [u8]>) -> Vec<(String, String)> {
         .collect()
 }
 
+#[cfg(any(target_os = "linux", test))]
+fn status_footprint(status: &str) -> Option<u64> {
+    let kib = |key: &str| -> Option<u64> {
+        status.lines().find_map(|line| line.strip_prefix(key))?.trim().strip_suffix("kB")?.trim().parse().ok()
+    };
+    Some(kib("RssAnon:")?.saturating_add(kib("VmSwap:").unwrap_or(0)).saturating_mul(1024))
+}
+
 #[cfg(any(target_os = "macos", test))]
 fn procargs_strings(buf: &[u8]) -> Option<(usize, impl Iterator<Item = &[u8]>)> {
     let (argc, rest) = buf.split_first_chunk::<4>()?;
@@ -58,7 +66,7 @@ fn procenv(buf: &[u8]) -> Vec<(String, String)> {
 
 #[cfg(target_os = "linux")]
 mod imp {
-    use super::{PathBuf, UnixStream, io, vars};
+    use super::{PathBuf, UnixStream, io, status_footprint, vars};
 
     pub fn all() -> Vec<i32> {
         std::fs::read_dir("/proc")
@@ -111,10 +119,8 @@ mod imp {
         vars(environ.split(|b| *b == 0))
     }
 
-    pub fn resident(pid: i32) -> Option<u64> {
-        let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
-        let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
-        Some(pages.saturating_mul(u64::try_from(rustix::param::page_size()).ok()?))
+    pub fn footprint(pid: i32) -> Option<u64> {
+        status_footprint(&std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)
     }
 }
 
@@ -181,8 +187,10 @@ mod imp {
         (!path.is_empty()).then(|| PathBuf::from(OsStr::from_bytes(path.to_bytes())))
     }
 
-    pub fn resident(pid: i32) -> Option<u64> {
-        pid_info(pid, libc::PROC_PIDTASKINFO).map(|info: libc::proc_taskinfo| info.pti_resident_size)
+    pub fn footprint(pid: i32) -> Option<u64> {
+        let mut info: libc::rusage_info_v0 = unsafe { std::mem::zeroed() };
+        let read = unsafe { libc::proc_pid_rusage(pid, libc::RUSAGE_INFO_V0, (&raw mut info).cast()) };
+        (read == 0).then_some(info.ri_phys_footprint)
     }
 
     pub fn name(pid: i32) -> Option<String> {
@@ -253,7 +261,7 @@ mod imp {
         Vec::new()
     }
 
-    pub fn resident(_pid: i32) -> Option<u64> {
+    pub fn footprint(_pid: i32) -> Option<u64> {
         None
     }
 }
@@ -297,17 +305,56 @@ mod tests {
         }
     }
 
-    mod resident {
+    mod footprint {
+        use std::ptr::null_mut;
+
+        use rustix::mm::{MapFlags, ProtFlags, mmap, munmap};
+
         use super::*;
+        use crate::test_util::TempDir;
+
+        const SIZE: usize = 64 << 20;
+        const HALF: u64 = 32 << 20;
 
         #[test]
         fn is_some_memory_for_this_process() {
-            assert!(resident(this_pid()).is_some_and(|bytes| bytes > 0));
+            assert!(footprint(this_pid()).is_some_and(|bytes| bytes > 0));
+        }
+
+        #[test]
+        fn counts_memory_the_process_writes() {
+            let before = footprint(this_pid()).expect("before");
+
+            let written = std::hint::black_box(vec![1_u8; SIZE]);
+            let after = footprint(this_pid()).expect("after");
+            drop(written);
+
+            assert!(after.saturating_sub(before) > HALF, "{before} -> {after}");
+        }
+
+        #[test]
+        fn leaves_out_a_file_the_process_only_reads() {
+            let dir = TempDir::new();
+            let path = dir.path().join("mapped");
+            std::fs::write(&path, vec![1_u8; SIZE]).expect("write the file");
+            let file = std::fs::File::open(&path).expect("open the file");
+            let before = footprint(this_pid()).expect("before");
+
+            let map = unsafe { mmap(null_mut(), SIZE, ProtFlags::READ, MapFlags::SHARED, &file, 0) }.expect("map");
+            let read: usize = (0..SIZE)
+                .step_by(4096)
+                .map(|at| usize::from(unsafe { map.cast::<u8>().add(at).read_volatile() }))
+                .sum();
+            let after = footprint(this_pid()).expect("after");
+            unsafe { munmap(map, SIZE) }.expect("unmap");
+
+            assert_eq!(read, SIZE / 4096);
+            assert!(after.saturating_sub(before) < HALF, "{before} -> {after}");
         }
 
         #[test]
         fn is_none_for_a_process_that_exited() {
-            assert_eq!(resident(exited_pid()), None);
+            assert_eq!(footprint(exited_pid()), None);
         }
     }
 
@@ -392,6 +439,21 @@ mod tests {
             let buf = buffer(2, b"/usr/bin/env\0\0env\0A=1\0B=2\0");
 
             assert_eq!(procenv(&buf), [("B".to_string(), "2".to_string())]);
+        }
+    }
+
+    mod status {
+        use rstest::rstest;
+
+        use super::*;
+
+        #[rstest]
+        #[case::anonymous_memory_and_swap("RssAnon:\t     128 kB\nRssFile:\t    1664 kB\nVmSwap:\t      64 kB\n", Some(192 * 1024))]
+        #[case::no_swap_line("Name:\tsleep\nRssAnon:\t     128 kB\n", Some(128 * 1024))]
+        #[case::no_anonymous_memory_line("Name:\tkworker\nState:\tI (idle)\n", None)]
+        #[case::a_value_that_is_not_a_number("RssAnon:\t     lots kB\n", None)]
+        fn footprint_is_anonymous_memory_plus_swap(#[case] text: &str, #[case] expected: Option<u64>) {
+            assert_eq!(status_footprint(text), expected);
         }
     }
 }
