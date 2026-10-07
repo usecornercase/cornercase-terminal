@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.8
+
+- Clicking the checkbox of a TODO item while you edit its text now checks it, keeping what you typed. Before, the click only moved the cursor, and you had to leave the field first.
+
 ## 0.11.7
 
 - Searching file names in the files panel puts the file you name first: `workspace-session` now lists `workspace-session.ts` before `workspace-session-handler.ts`, even when the longer name sits in a shallower folder. Between two equally good matches the shorter file name wins.
