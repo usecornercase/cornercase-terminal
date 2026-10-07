@@ -147,8 +147,8 @@ function ops(a: string[], b: string[]): Op[] {
   let j = 0;
   while (i < n || j < m) {
     if (i < n && j < m && a[i] === b[j]) out.push({ kind: ' ', a: i++, b: j++ });
-    else if (j < m && (i >= n || lcs[i][j + 1] >= lcs[i + 1][j])) out.push({ kind: '+', b: j++ });
-    else out.push({ kind: '-', a: i++ });
+    else if (i < n && (j >= m || lcs[i + 1][j] >= lcs[i][j + 1])) out.push({ kind: '-', a: i++ });
+    else out.push({ kind: '+', b: j++ });
   }
   return out;
 }
@@ -258,7 +258,7 @@ function mix(a: string, b: string, t: number): number {
   return rgb(ch(0), ch(1), ch(2));
 }
 
-const TINTS = {
+export const TINTS = {
   dark: { removed: mix('#0e0d14', '#ff6b8b', 0.16), added: mix('#0e0d14', '#58e6a0', 0.14), removedWord: mix('#0e0d14', '#ff6b8b', 0.38), addedWord: mix('#0e0d14', '#58e6a0', 0.34) },
   light: { removed: mix('#fbfaf6', '#d6336c', 0.12), added: mix('#fbfaf6', '#2b8a3e', 0.13), removedWord: mix('#fbfaf6', '#d6336c', 0.28), addedWord: mix('#fbfaf6', '#2b8a3e', 0.3) },
 };

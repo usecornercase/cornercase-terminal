@@ -1,7 +1,8 @@
 import type { Cursor } from '../term/canvas';
-import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, contains, rect } from '../term/grid';
+import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
 import type { App } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
+import { drawFiles } from './files';
 import { drawTodo } from './todo';
 import {
   type Areas,
@@ -51,6 +52,7 @@ import {
   workspaceLayout,
   workspaceRows,
   TODO_LABEL,
+  FILES_LABEL,
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
@@ -269,6 +271,7 @@ export class Painter {
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
+    else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
     this.overlay(areas);
     if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo);
     return { regions: this.regions, cursor: this.cursor, areas };
@@ -307,11 +310,14 @@ export class Painter {
       const cursor = pane.shell.draw(this.g, r, app.focused && active && !app.overlay);
       if (active && !app.overlay && cursor) this.cursor = cursor;
       if (split && !active && app.config.dim) this.g.fill(r, { add: DIM });
+      const link = active ? app.hoveredLink(pane, r, this.g) : null;
+      if (link) for (let x = link.start; x < link.end; x++) this.g.style(x, link.y, { fg: 6, add: UNDERLINE });
       const sel = app.selection;
       if (sel && sel.pane === id) {
         for (const [x, y] of app.selectedCells(r)) this.g.style(x, y, { add: INVERSE });
       }
       this.region({ r, pane: { pane, rect: r, tab }, cursor: pane.shell.mouse ? 'default' : 'text' });
+      if (link) this.region({ r: rect(link.start, link.y, link.end - link.start, 1), cursor: 'pointer' });
     }
     this.dividers(tab, area);
   }
@@ -423,10 +429,16 @@ export class Painter {
       return;
     }
     const showChanges = hasChanges(app.workspace());
-    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showChanges ? areas.changesButton.w : 0), r.h);
+    const showFiles = !!app.project();
+    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
     const todo = areas.todoButton;
     this.band(todo, [seg(centered('☐', todo.w))], app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
     this.region({ r: todo, click: () => app.toggleTodo(), cursor: 'pointer' });
+    if (showFiles) {
+      const f = areas.filesButton;
+      this.band(f, [seg(centered('▤', f.w))], app.filesShown() || this.sidebarHovered(f) ? PRESSED : { fg: 8, bg: this.surface });
+      this.region({ r: f, click: () => app.toggleFiles(), cursor: 'pointer' });
+    }
     if (showChanges) {
       const c = areas.changesButton;
       this.band(c, [seg(centered('±', c.w))], app.changesOpen || this.sidebarHovered(c) ? PRESSED : { fg: 8, bg: this.surface });
@@ -760,6 +772,9 @@ export class Painter {
       const r = areas.todoButton;
       this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
       this.region({ r, click: () => app.toggleTodo(), cursor: 'pointer' });
+      const f = areas.filesButton;
+      this.button(f, '', FILES_LABEL, this.buttonStyle(f, app.filesShown() ? { fg: 6, add: BOLD } : DARK, 6));
+      this.region({ r: f, click: () => app.toggleFiles(), cursor: 'pointer' });
     }
   }
 

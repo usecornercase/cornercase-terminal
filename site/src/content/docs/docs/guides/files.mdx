@@ -1,0 +1,107 @@
+---
+title: Files panel
+description: Browse, read and search a workspace's files next to its panes, with git's marks in the tree and beside each line, and open any path a program prints with a click.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
+
+The files panel shows the files of the active workspace in a column on the right of its panes: a tree to browse them, a viewer to read them in your terminal's colours, and a bar to search their names or their text. Git's marks are everywhere, so you see at a glance what an agent touched, and the lines you pick go back to the agent with a click.
+
+<Screen
+  name="files"
+  alt="cornercase with the issue-482-returns-page workspace active: git status in the pane, and the files panel on the right with the search bar and the tree, src and src/returns open, address.rs and mod.rs marked M in yellow, tests.rs marked A in green, and a yellow dot on both folders"
+  caption="The files of an issue worktree, with what changed marked in the tree."
+/>
+
+## Open and close it
+
+Click **`files`** at the bottom of the sidebar, under `issues`, to open the panel, and again (or **`×`** in the panel) to close it. It takes the same column as the [changes panel](../changes/) and the [TODO panel](../todo/), so only one of them shows at a time: opening one closes the others. Drag its left border to make it wider or narrower.
+
+In the [compact layout](../small-terminals/), a **`▤`** button in the top bar opens it over the whole screen.
+
+The panel follows the active workspace, and each workspace keeps its own open folders, search and open file, so switching back finds them as you left them. Worktrees show their own files. The panel works in any folder, git or not; the marks need git.
+
+## Browse
+
+The tree starts at the workspace's folder, folders first. Click a folder to open or close it, a file to read it, and use the wheel to scroll. Hidden files such as `.env` are listed; files git ignores, such as `target/` or `node_modules/`, are not. New files show up within two seconds, so you see what an agent creates as it goes.
+
+In a git workspace, a changed file gets its status in its colour: `M` for modified, `A` for added or new. A folder holding changes gets a `●`, yellow, or green when everything in it is new. The marks follow the [changes panel](../changes/): what isn't committed yet, or, when you pick **commits** or **all** there, what the branch changed.
+
+## Read a file
+
+<Screen
+  name="files-file"
+  crop={[95, 0, 45, 20]}
+  alt="The viewer on src/returns/address.rs: lines 11 and 12 selected and marked with a blue bar as changed, the two lines they replaced shown in red above them, and open, ask agent and copy at the top"
+  caption="Lines 11 and 12 changed; the lines they replaced are shown above them."
+/>
+
+The header shows the file's path, its number of lines and its language; **`‹`** goes back to the tree.
+
+- Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
+- Beside the line numbers, git's marks show what changed: a green `▎` on added lines, a blue `▎` on changed ones, and a red `▁` under the line after which lines were deleted (`▔` when they were at the top). A new file is green all the way down.
+- Click the mark of a changed or deleted block to see the lines that were there before, in red, and again to hide them.
+- The viewer follows the file on disk: when an agent edits it, you see the new version within a second, marks included.
+- Binary files, files over 8 MB and files that are gone say so instead of showing their content.
+
+To change a file, use **open**: the panel only reads.
+
+### Pick lines and act on them
+
+Click a line to select it, or press and drag over several. The header says which, such as `lines 11–12`, and its buttons act on them:
+
+| Button | Does |
+| --- | --- |
+| **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
+| **ask agent** | Types a reference such as `src/returns/address.rs:11-12 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
+| **copy** | Copies the selected lines to your clipboard, or the file's path when nothing is selected. |
+
+## Search
+
+The bar at the top of the panel searches the whole workspace, skipping what git ignores. Click it and type: what you type goes to the bar instead of your pane, and results show as you type. An empty bar shows the tree again.
+
+<Screen
+  name="files-search"
+  crop={[95, 0, 45, 10]}
+  alt="The search bar holding first_line: 3 matches in 3 files, each file's path followed by its matching line with its number and first_line highlighted in yellow"
+  caption="Searching the text: every matching line, grouped by file."
+/>
+
+By default it searches the **text** of the files: each line that holds what you typed, grouped by file, with what matched highlighted. Case is ignored unless you type an uppercase letter. Binary files are skipped, and the search stops at the first 1,000 matches. Opening a match opens the file at that line, selected, with every match highlighted.
+
+Click **`▤`** at the right of the bar to search file **names** instead, and again to go back to the text. Type the letters of a path in order: `retadd` finds `src/returns/address.rs`. The best 200 files show, best first, with the letters that matched in cyan.
+
+<Screen
+  name="files-names"
+  crop={[95, 0, 45, 5]}
+  alt="The search bar in file name mode, with the ▤ button lit and retadd typed: 1 file, src/returns/address.rs, with r, e, t, a, d, d highlighted"
+/>
+
+| Keys | Do |
+| --- | --- |
+| Type, paste, `Backspace` | Change the search. |
+| `↑` `↓` | Pick a result. |
+| `Enter` | Opens the picked result. |
+| `Esc` | Clears the bar and gives the keys back to your pane. |
+
+**`×`** in the bar clears it too. A click in a pane gives the keys back and keeps the search; a click on the bar takes them again.
+
+## Paths in your panes are links
+
+When a program prints the path of a file in the workspace, hovering it underlines it, and clicking it opens the file in the files panel, opening the panel if it was closed. Claude Code's `Update(src/app.rs)`, a compiler's `src/main.rs:12:5`, `git status` and `grep -n` all work.
+
+<Screen
+  name="files-link"
+  crop={[47, 0, 93, 7]}
+  alt="A pane showing the output of grep -rn first_line src, with src/returns/address.rs:11 underlined in cyan under the pointer"
+/>
+
+- A line number after the path opens the file at that line, selected, so **ask agent** takes it at once: `:12`, `:12:5`, a range like `:12-20`, or GitHub's `#L12-L20`.
+- A path is looked up from the folder of the program that printed it, then from the workspace's root. Folders, and files outside the workspace, aren't links.
+- In a program that doesn't use the mouse, pressing and dragging over a path still selects text, as anywhere else.
+- In a program that uses the mouse, such as Claude Code in its full-screen mode, a click on a path that releases on the same spot opens the file, and the program doesn't see it; if you drag, the program gets the press and the drag as usual.
+
+<Aside type="tip">
+The panel stays quick on large repositories: it reads only the folders you open, keeps the list of files for the search up to date in the background, and searches the text on several threads with ripgrep's own search code.
+</Aside>

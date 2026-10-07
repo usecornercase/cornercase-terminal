@@ -3,6 +3,7 @@ import { BOLD, Grid, type Rect, contains } from '../term/grid';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_COLOURS,
@@ -219,6 +220,8 @@ export class App {
     ['reply to the design review', false],
     ['bump the returns API client', true],
   ]);
+  files = new FilesPanel();
+  private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
   nav: 'projects' | 'workspaces' | null = null;
@@ -906,13 +909,16 @@ export class App {
 
   toggleNav(): void {
     this.nav = this.nav ? null : 'projects';
-    if (this.nav) this.changesOpen = false;
-    if (this.nav) this.closeTodo();
+    if (this.nav) {
+      this.changesOpen = false;
+      this.closeTodo();
+      this.files.close();
+    }
     this.dirty();
   }
 
   panelShown(): boolean {
-    return this.changesShown() || this.todo.open;
+    return this.changesShown() || this.todo.open || this.filesShown();
   }
 
   changesShown(): boolean {
@@ -939,7 +945,10 @@ export class App {
 
   toggleChanges(): void {
     this.changesOpen = !this.changesOpen;
-    if (this.changesOpen) this.closeTodo();
+    if (this.changesOpen) {
+      this.closeTodo();
+      this.files.close();
+    }
     if (this.changesFilter) this.changesFilter.focused = false;
     this.nav = null;
     if (this.changesOpen) this.emit('narrate', 'Everything this workspace changed, right next to its agent. Hover a hunk to open it, copy it or send it back.');
@@ -950,6 +959,7 @@ export class App {
     if (this.todo.open) this.closeTodo();
     else {
       this.changesOpen = false;
+      this.files.close();
       this.todo.open = true;
       this.emit('narrate', 'Your TODO list, next to the shells it is about. Click a line to edit it, ○ to tick it off.');
     }
@@ -1021,6 +1031,188 @@ export class App {
     this.todo.scroll = value;
     if (changed) this.dirty();
     return changed;
+  }
+
+  filesShown(): boolean {
+    return this.files.open && !!this.workspace();
+  }
+
+  filesMap(): Map<string, string> {
+    const p = this.project();
+    const w = this.workspace();
+    return workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+  }
+
+  private filesPlace(): FilesPlace | null {
+    const w = this.workspace();
+    return w ? this.files.place(w.id) : null;
+  }
+
+  toggleFiles(): void {
+    if (this.files.open) this.files.close();
+    else {
+      this.openFiles();
+      this.emit('narrate', 'Every file of the workspace in your terminal’s colours, with git’s marks in the tree and beside each line. Type to search the text, ▤ for names.');
+    }
+    this.nav = null;
+    this.dirty();
+  }
+
+  private openFiles(): void {
+    if (this.files.open) return;
+    this.changesOpen = false;
+    this.closeTodo();
+    this.files.open = true;
+  }
+
+  filesTyping(): boolean {
+    const place = this.filesPlace();
+    return !this.overlay && this.filesShown() && !!place && typing(place);
+  }
+
+  focusFilesBar(): void {
+    const place = this.filesPlace();
+    if (place) place.focused = true;
+    this.dirty();
+  }
+
+  toggleFilesMode(): void {
+    const place = this.filesPlace();
+    if (!place) return;
+    place.mode = place.mode === 'name' ? 'text' : 'name';
+    this.editFilesQuery(place.query);
+  }
+
+  editFilesQuery(query: string): void {
+    const place = this.filesPlace();
+    if (place) Object.assign(place, { query, focused: true, selected: 0, scroll: 0 });
+    this.dirty();
+  }
+
+  scrollFiles(dy: number, max: number): boolean {
+    const place = this.filesPlace();
+    if (!place) return false;
+    const before = place.viewer ? place.viewer.scroll : wanted(place) ? place.scroll : place.treeScroll;
+    const after = Math.max(0, Math.min(max, Math.min(before, max) + dy));
+    if (place.viewer) place.viewer.scroll = after;
+    else if (wanted(place)) place.scroll = after;
+    else place.treeScroll = after;
+    if (after !== before) this.dirty();
+    return after !== before;
+  }
+
+  toggleFilesFolder(path: string): void {
+    const place = this.filesPlace();
+    if (place && !place.expanded.delete(path)) place.expanded.add(path);
+    this.dirty();
+  }
+
+  showFile(path: string, lines: [number, number] | null = null, find: string | null = null): void {
+    const place = this.filesPlace();
+    if (place) viewFile(place, path, lines, find);
+    this.files.selecting = null;
+    this.dirty();
+  }
+
+  openFound(i: number): void {
+    const place = this.filesPlace();
+    if (!place) return;
+    const query = wanted(place);
+    const rows = foundRows(this.filesMap(), place);
+    const row = rows.slice(i).find((r) => r.kind !== 'file');
+    place.focused = false;
+    place.selected = selectable(rows).filter((r) => r < i).length;
+    if (row?.kind === 'name') this.showFile(row.path);
+    else if (row?.kind === 'line') this.showFile(row.path, [row.n, row.n], query);
+    else this.dirty();
+  }
+
+  private moveFound(place: FilesPlace, delta: number): void {
+    const rows = foundRows(this.filesMap(), place);
+    const all = selectable(rows);
+    if (!all.length) return;
+    const last = all.length - 1;
+    place.selected = Math.max(0, Math.min(last, Math.min(place.selected, last) + delta));
+    const row = all[place.selected];
+    const header = row > 0 && rows[row - 1].kind === 'file' ? 1 : 0;
+    const shown = Math.max(1, this.areas().changes.h - 3);
+    if (row - header < place.scroll) place.scroll = row - header;
+    else if (row >= place.scroll + shown) place.scroll = row + 1 - shown;
+  }
+
+  private filesKey(k: Key): boolean {
+    const place = this.filesPlace();
+    if (!place) return false;
+    const ch = this.typed(k);
+    if (k.key === 'Escape') Object.assign(place, { query: '', focused: false, selected: 0, scroll: 0 });
+    else if (k.key === 'Enter') {
+      const i = selectable(foundRows(this.filesMap(), place))[place.selected];
+      if (i !== undefined) this.openFound(i);
+    } else if (k.key === 'ArrowUp' || k.key === 'ArrowDown') this.moveFound(place, k.key === 'ArrowUp' ? -1 : 1);
+    else if (k.key === 'Backspace') this.editFilesQuery([...place.query].slice(0, -1).join(''));
+    else if (ch) this.editFilesQuery(place.query + ch);
+    this.dirty();
+    return true;
+  }
+
+  closeFile(): void {
+    const place = this.filesPlace();
+    if (place) place.viewer = null;
+    this.files.selecting = null;
+    this.dirty();
+  }
+
+  toggleFileBlock(key: number): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (viewer && !viewer.unfolded.delete(key)) viewer.unfolded.add(key);
+    this.dirty();
+  }
+
+  selectFileLine(n: number): void {
+    const viewer = this.filesPlace()?.viewer;
+    if (!viewer) return;
+    viewer.selection = [n, n];
+    this.files.selecting = n;
+    this.dirty();
+  }
+
+  fileAction(action: FileAction): void {
+    const p = this.project();
+    const w = this.workspace();
+    const viewer = this.filesPlace()?.viewer;
+    if (!p || !w || !viewer) return;
+    const sel = viewer.selection && ordered(viewer.selection);
+    const files = this.filesMap();
+    if (action === 'open') this.openInEditor(p, w, viewer.path, files.get(viewer.path) ?? '', sel ? sel[0] : 1);
+    else if (action === 'ask agent') this.askAgent(w, !sel ? viewer.path : sel[0] === sel[1] ? `${viewer.path}:${sel[0]}` : `${viewer.path}:${sel[0]}-${sel[1]}`);
+    else {
+      this.emit('copy', selectedText(files, viewer));
+      this.notify('copied to clipboard');
+    }
+    this.dirty();
+  }
+
+  private openLink(link: PathLink): void {
+    this.openFiles();
+    this.nav = null;
+    this.showFile(link.path, link.lines);
+    this.emit('narrate', 'A path printed in a pane is a link: it opens here, at its line.');
+  }
+
+  private linkUnder(pane: Pane, r: Rect, x: number, y: number, grid: Grid): PathLink | null {
+    const w = this.workspace();
+    if (!w || !contains(r, x, y)) return null;
+    const row = Array.from({ length: r.w }, (_, i) => grid.at(r.x + i, y)?.ch ?? ' ');
+    const link = linkAt(row, x - r.x);
+    const path = link && resolveLink(link.path, pane.shell.cwd, w.root, this.filesMap());
+    return link && path ? { start: r.x + link.start, end: r.x + link.end, path, lines: link.lines } : null;
+  }
+
+  hoveredLink(pane: Pane, r: Rect, grid: Grid): { y: number; start: number; end: number } | null {
+    const h = this.hover;
+    if (!h || this.overlay || this.rowDrag || this.selection || this.dragging) return null;
+    const link = this.linkUnder(pane, r, h.x, h.y, grid);
+    return link && { y: h.y, start: link.start, end: link.end };
   }
 
   openChangesFilter(): void {
@@ -1101,25 +1293,30 @@ export class App {
     if (action === 'copy') {
       this.emit('copy', hunk.lines.map((l) => `${l.kind}${l.text}`).join('\n'));
       this.notify('copied to clipboard');
-    } else if (action === 'ask agent') {
-      const tab = w.tabs.find((t) => t.panes.some((pane) => pane.shell.fg instanceof Agent));
-      const pane = tab?.panes.find((x) => x.shell.fg instanceof Agent);
-      if (!tab || !pane) {
-        this.emit('copy', `${f.change.path}:${lines}`);
-        this.notify('no agent here, so the reference is copied');
-        return;
-      }
-      w.active = w.tabs.indexOf(tab);
-      tab.active = pane.id;
-      pane.shell.paste(`${f.change.path}:${lines} `);
-      this.notify('sent to the agent');
-    } else {
-      const pane = this.newPane(p, w);
-      pane.shell.start(new Editor(this.host(p, w, () => pane.id), () => pane.shell.finish(), f.change.path, f.change.after, Number(lines.split('-')[0]) - 1));
-      w.tabs.push(this.newTab([pane]));
-      w.active = w.tabs.length - 1;
-    }
+    } else if (action === 'ask agent') this.askAgent(w, `${f.change.path}:${lines}`);
+    else this.openInEditor(p, w, f.change.path, f.change.after, Number(lines.split('-')[0]));
     this.dirty();
+  }
+
+  private askAgent(w: Workspace, reference: string): void {
+    const tab = w.tabs.find((t) => t.panes.some((pane) => pane.shell.fg instanceof Agent));
+    const pane = tab?.panes.find((x) => x.shell.fg instanceof Agent);
+    if (!tab || !pane) {
+      this.emit('copy', reference);
+      this.notify('no agent here, so the reference is copied');
+      return;
+    }
+    w.active = w.tabs.indexOf(tab);
+    tab.active = pane.id;
+    pane.shell.paste(`${reference} `);
+    this.notify('sent to the agent');
+  }
+
+  private openInEditor(p: Project, w: Workspace, path: string, text: string, line: number): void {
+    const pane = this.newPane(p, w);
+    pane.shell.start(new Editor(this.host(p, w, () => pane.id), () => pane.shell.finish(), path, text, line - 1));
+    w.tabs.push(this.newTab([pane]));
+    w.active = w.tabs.length - 1;
   }
 
   navTo(nav: 'projects' | 'workspaces'): void {
@@ -2316,6 +2513,18 @@ export class App {
   pointerMove(x: number, y: number, buttons: number): void {
     const prev = this.hover;
     this.hover = { x, y };
+    const press = this.linkPress;
+    if (press && (press.at.x !== x || press.at.y !== y)) {
+      this.linkPress = null;
+      press.held?.();
+    }
+    if (this.files.selecting !== null && buttons & 1) {
+      const line = lineNear(this, y);
+      const viewer = this.filesPlace()?.viewer;
+      if (line !== null && viewer) viewer.selection = [this.files.selecting, line];
+      this.dirty();
+      return;
+    }
     if (this.rowDrag) {
       if (buttons === 1) {
         this.rowDrag.moved ||= !contains(this.rowDrag.row, x, y);
@@ -2365,6 +2574,7 @@ export class App {
     }
     if (this.changesFilter && !this.overlay && !(this.changesShown() && contains(this.areas().changes, x, y))) this.changesFilter.focused = false;
     if (this.todo.field && !this.overlay && !(this.todo.open && contains(this.areas().changes, x, y))) this.todo.commit();
+    if (!this.overlay && !(this.filesShown() && contains(this.areas().changes, x, y))) this.files.unfocus();
     const region = this.hit(x, y, (r) => !!(r.click || r.right || r.drag || r.pane));
     if (!region) return;
     if (region.drag && button === 0) {
@@ -2401,10 +2611,16 @@ export class App {
         this.dirty();
         return;
       }
-      if (pane.shell.mouse && pane.shell.fg?.click) {
-        pane.shell.fg.click(x - rect.x, y - rect.y);
+      const link = button === 0 ? this.linkUnder(pane, rect, x, y, this.grid) : null;
+      const press = (held: (() => void) | null) => link && { at: { x, y }, link, held };
+      const fg = pane.shell.fg;
+      if (pane.shell.mouse && fg?.click) {
+        const forward = () => fg.click?.(x - rect.x, y - rect.y);
+        this.linkPress = press(forward);
+        if (!link) forward();
         return;
       }
+      this.linkPress = press(null);
       this.selection = { pane: pane.id, from: { x, y }, to: { x, y }, rect };
       this.dirty();
       return;
@@ -2417,6 +2633,9 @@ export class App {
   }
 
   pointerUp(): void {
+    this.files.selecting = null;
+    const press = this.linkPress;
+    this.linkPress = null;
     const drag = this.rowDrag;
     if (drag) {
       if (drag.moved) this.dropRow(drag.target);
@@ -2430,6 +2649,10 @@ export class App {
       this.dirty();
       return;
     }
+    if (press?.held) {
+      this.openLink(press.link);
+      return;
+    }
     const s = this.selection;
     if (s) {
       const moved = s.from.x !== s.to.x || s.from.y !== s.to.y;
@@ -2439,7 +2662,7 @@ export class App {
           this.emit('copy', text);
           this.notify('copied to clipboard');
         }
-      }
+      } else if (press) this.openLink(press.link);
       this.selection = null;
       this.dirty();
     }
@@ -2464,6 +2687,10 @@ export class App {
     if (this.todoTyping()) {
       this.todo.type(text);
       this.dirty();
+      return;
+    }
+    if (this.filesTyping()) {
+      this.editFilesQuery((this.filesPlace()?.query ?? '') + text.replace(/\p{Cc}/gu, ''));
       return;
     }
     if (this.filteringChanges() && this.changesFilter) {
@@ -2496,6 +2723,7 @@ export class App {
       this.dirty();
       return true;
     }
+    if (this.filesTyping()) return this.filesKey(k);
     if (this.filteringChanges()) return this.changesFilterKey(k);
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;

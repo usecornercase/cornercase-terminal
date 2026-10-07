@@ -236,6 +236,7 @@ export interface Areas {
   changesBorder: Rect;
   changesButton: Rect;
   todoButton: Rect;
+  filesButton: Rect;
 }
 
 function column(r: Rect, lead: number): [Rect, Rect, Rect, Rect, Rect, Rect] {
@@ -303,11 +304,14 @@ function wide(cols: number, rows: number, widths: Widths): Areas {
     changesBorder: EMPTY,
     changesButton: EMPTY,
     todoButton: todoButton(todo),
+    filesButton: filesButton(todo),
   };
 }
 
 export const TODO_LABEL = 'todo';
 const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
+export const FILES_LABEL = 'files';
+const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
 
 export const stackedWidth = (w: Widths, total: number): number =>
   Math.max(MIN_COLUMN_WIDTH, Math.min(w.projects, Math.max(0, total - (PANE_PADDING + MIN_PANE_WIDTH))));
@@ -365,6 +369,7 @@ function oneColumn(cols: number, rows: number, widths: Widths): [Areas, Rect] {
     changesBorder: EMPTY,
     changesButton: EMPTY,
     todoButton: todoButton(rect(0, footer + 2, inner, 1)),
+    filesButton: filesButton(rect(0, footer + 2, inner, 1)),
   };
   return [frame, rect(0, HEADER_HEIGHT, inner, footer - HEADER_HEIGHT)];
 }
@@ -436,7 +441,8 @@ function compact(cols: number, rows: number, changes: boolean): Areas {
     stackBorder: EMPTY,
     changes: changes ? below : EMPTY,
     changesBorder: EMPTY,
-    changesButton: rect(Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH)), pitch),
+    changesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),
+    filesButton: rect(Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH)), pitch),
     todoButton: rect(Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth)), pitch),
   };
 }

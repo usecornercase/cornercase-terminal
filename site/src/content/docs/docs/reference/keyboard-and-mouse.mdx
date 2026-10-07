@@ -5,7 +5,7 @@ description: Every mouse gesture cornercase understands, and the few keys it use
 
 import { Aside } from '@astrojs/starlight/components';
 
-cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field and the TODO panel's text field (and `Esc` while you drag a row), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
 
 ## The mouse
 
@@ -30,6 +30,7 @@ cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own
 | Double-click | That line | Splits the height in half again. |
 | Click | `settings`, `usage`, `quit`, `issues` | Opens the settings, shows your [Claude Code and Codex plan usage](../../guides/projects-workspaces-tabs/#plan-usage), detaches, opens the issue browser. |
 | Click | `changes` (or `±` in the compact bar) | Opens or closes the [changes panel](../../guides/changes/). Only in git workspaces. |
+| Click | `files` (or `▤` in the compact bar) | Opens or closes the [files panel](../../guides/files/). |
 | Click | `todo` (or `☐` in the compact bar) | Opens or closes the [TODO panel](../../guides/todo/). |
 | Click | `↑ 0.2.0` or `↻ restart` at the end of the `settings` row | Opens the [update](../../installation/#update) dialog. Only there when a new version is out. |
 | Click | The search bar | Starts a [search](../../guides/search/). |
@@ -43,6 +44,7 @@ cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own
 | Drag | A divider between panes | Resizes the panes. |
 | Double-click | A divider | Splits the space in half again. |
 | Press, drag, release | Text, when the program doesn't use the mouse | Selects the text and copies it to your clipboard. |
+| Hover, then click | A path to a file of the workspace, in the active pane | Underlines it, then opens the file in the [files panel](../../guides/files/#paths-in-your-panes-are-links), at its line when the path has one. |
 | Anything | A program that uses the mouse | Passed to the program, relative to its pane. |
 
 Programs that use the mouse get clicks, releases, drags, movement and the wheel, depending on what they asked for, in the encoding they asked for (SGR, UTF-8 or the original X10 one). Right-clicks still open the pane menu unless you chose **send right-clicks to the pane** for that pane. See [Panes and splits](../../guides/panes-and-splits/).
@@ -65,6 +67,25 @@ Programs that use the mouse get clicks, releases, drags, movement and the wheel,
 
 See [Changes panel](../../guides/changes/).
 
+### Files panel
+
+| Gesture | Where | Does |
+| --- | --- | --- |
+| Click | A folder, a file | Opens or closes the folder, reads the file. |
+| Click | `‹` | Goes back to the tree, or to the search results. |
+| Click, or press and drag | The lines of a file | Selects a line, or several. |
+| Click | A change mark (`▎`, `▁`, `▔`) | Shows or hides the lines it replaced or deleted. |
+| Click | `open`, `ask agent`, `copy` | Opens the file in your editor, types its path and selected lines into the workspace's agent, copies the selected lines. |
+| Click | The search bar | Gives it the keys. |
+| Click | `▤` | Searches file names instead of the text, or the text again. |
+| Click | `×` in the search bar | Clears the search. |
+| Click | A result | Opens the file, at the line of a text match. |
+| Click | `×` | Closes the panel. |
+| Wheel | The panel | Scrolls the tree, the results or the file. |
+| Drag, double-click | The panel's left border | Resizes it, gives it back its automatic width. |
+
+See [Files panel](../../guides/files/).
+
 ### TODO panel
 
 | Gesture | Where | Does |
@@ -86,7 +107,7 @@ Click buttons and rows to use them. In lists (the folder picker, the issue brows
 
 ## Keys inside cornercase's dialogs
 
-While a dialog, the search, the settings, the issue browser, the changes panel's filter field or a TODO field is open, the keys below drive it instead of your program.
+While a dialog, the search, the settings, the issue browser, the changes panel's filter field, the files panel's search bar or a TODO field is open, the keys below drive it instead of your program.
 
 | Where | Keys |
 | --- | --- |
@@ -100,6 +121,7 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Issue | `Enter` starts it. `↑` `↓` `PgUp` `PgDn` `Space` `Home` `End` scroll. `Esc` or `←` go back. |
 | Agent, place and person pickers | Type to filter. `↑` `↓` select. `Enter` picks. `Esc` goes back. |
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it. A click in a pane gives the keys back too. |
+| Files panel search | Type to search. `↑` `↓` pick a result. `Enter` opens it. `Esc` clears the search and gives the keys back to your program. A click in a pane gives them back too and keeps the search. |
 | TODO field | Type, paste. `←` `→` move the cursor, `↑` `↓` move across the lines of a long item, `Home` `End` go to its start and end, `Backspace` `Delete` delete. `Enter` saves (a new item keeps the field open for the next one), `Esc` cancels. A click outside the field saves it and gives the keys back. |
 | Branch to compare with | Type to filter. `↑` `↓` select. `Enter` picks the selected branch. `Esc` closes. |
 | Settings | `Enter` or `Space` change the selected row. `↑` `↓` select. `Tab` `→` / `Shift+Tab` `←` switch tabs. `Shift+↑` `Shift+↓` reorder sources. `Delete` removes a saved token. `Esc` closes. |
