@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.9
+
+- Move a pane within its tab by dragging it with the right button onto another pane: near an edge it goes to that side, in the middle the two swap. The part it would take is tinted while you drag, the programs keep running, and `Esc` cancels. Two panes side by side become one above the other by dropping one on the other's bottom edge. A right-click without moving still opens the pane menu, now on release.
+
 ## 0.11.8
 
 - Clicking the checkbox of a TODO item while you edit its text now checks it, keeping what you typed. Before, the click only moved the cursor, and you had to leave the field first.
