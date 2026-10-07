@@ -1,0 +1,10 @@
+---
+source: src/ui/files.rs
+assertion_line: 733
+expression: render(&names())
+---
+  files  ~/projects/shop                     ×
+  ⌕ main                                  ×  ▤
+  2 files
+▌ src/main.rs
+  docs/maintaining.md

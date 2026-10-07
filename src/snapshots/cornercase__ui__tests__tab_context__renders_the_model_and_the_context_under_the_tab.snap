@@ -18,5 +18,5 @@ expression: render(&with_details(opus(17))).backend()
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  settings                     │                         │                                          "
-"  usage                        │                   todo  │                                          "
+"  usage                        │  files            todo  │                                          "
 "  quit                         │                         │                                          "

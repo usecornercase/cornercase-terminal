@@ -15,6 +15,7 @@ use crate::changes::{self, BranchPicker, Checkout, Tints};
 use crate::clipboard;
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
+use crate::files;
 use crate::git;
 use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
@@ -46,6 +47,7 @@ use crate::usage;
 use crate::worktree;
 
 mod control;
+mod files_panel;
 mod todo_panel;
 
 #[derive(Debug)]
@@ -110,6 +112,35 @@ pub enum AppEvent {
         file: std::sync::Arc<ChangedFile>,
         hunk: usize,
         lines: Vec<changes::GapLine>,
+    },
+    FilesListed {
+        workspace: u64,
+        generation: u64,
+        folders: Vec<(String, Option<Vec<files::disk::Entry>>)>,
+    },
+    FileRead {
+        workspace: u64,
+        generation: u64,
+        path: String,
+        content: Option<files::disk::Content>,
+        done: bool,
+    },
+    FilesIndexed {
+        workspace: u64,
+        generation: u64,
+        paths: Vec<String>,
+    },
+    NamesFound {
+        workspace: u64,
+        generation: u64,
+        search: files::Search,
+        found: Vec<files::search::Name>,
+    },
+    TextFound {
+        workspace: u64,
+        generation: u64,
+        search: files::Search,
+        found: files::search::Text,
     },
     UpdateChecked(Result<Option<Release>>),
     Updated(Result<()>),
@@ -296,6 +327,14 @@ struct RowDrag {
     fold: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LinkPress {
+    term: u64,
+    at: Position,
+    target: files::link::Target,
+    held: Option<MouseEvent>,
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Focus {
     project: Option<u64>,
@@ -389,6 +428,7 @@ pub struct App {
     divider_drag: Option<(u64, Vec<bool>)>,
     divider_click: Option<(u64, Vec<bool>, Instant)>,
     selecting: Option<u64>,
+    link_press: Option<LinkPress>,
     row_drag: Option<RowDrag>,
     toast: Option<Toast>,
     overlay: Option<Overlay>,
@@ -427,6 +467,7 @@ pub struct App {
     usage_timeout: Duration,
     todos: Todos,
     todo: todo::Panel,
+    files: files::Panel,
     requests: control::Requests,
 }
 
@@ -481,6 +522,7 @@ impl App {
             divider_drag: None,
             divider_click: None,
             selecting: None,
+            link_press: None,
             row_drag: None,
             toast: None,
             overlay: None,
@@ -519,6 +561,7 @@ impl App {
             usage_timeout: usage::TIMEOUT,
             todos: Todos::default(),
             todo: todo::Panel::default(),
+            files: files::Panel::default(),
             requests: control::Requests::default(),
         }
     }
@@ -550,7 +593,10 @@ impl App {
         self.resizing = None;
         self.divider_drag = None;
         self.selecting = None;
+        self.link_press = None;
         self.todo.field = None;
+        self.files.selecting = None;
+        self.files.unfocus();
         if let Some(filter) = &mut self.changes.filter {
             filter.focused = false;
         }
@@ -561,7 +607,11 @@ impl App {
     }
 
     fn layout(&self, area: Rect) -> ui::Areas {
-        ui::layout_with(area, self.widths, self.changes_shown() || self.todo.open, self.sidebar())
+        ui::layout_with(area, self.widths, self.panel_shown(), self.sidebar())
+    }
+
+    fn panel_shown(&self) -> bool {
+        self.changes_shown() || self.todo.open || self.files_shown()
     }
 
     fn changes_target(&self) -> Option<Checkout> {
@@ -612,6 +662,7 @@ impl App {
         self.watch_agents(now);
         self.check_requests(now);
         self.check_updates(now);
+        self.refresh_files(now);
         self.refresh_changes(now);
         self.auto_scroll(now);
         if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
@@ -619,6 +670,7 @@ impl App {
         }
         self.synced = Some(now);
         self.sync_worktrees();
+        self.forget_files();
         self.count_behind(now);
     }
 
@@ -1075,16 +1127,18 @@ impl App {
             issues,
             changes,
             todo: self.todo.open,
+            files: self.files.open,
         }
     }
 
     pub fn restore(&mut self, saved: &State, area: Rect) -> Result<()> {
         self.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
-            self.changes.open = changes.open && !saved.todo;
+            self.changes.open = changes.open && !saved.todo && !saved.files;
             self.changes.mode = changes.mode;
         }
-        self.todo.open = saved.todo;
+        self.todo.open = saved.todo && !saved.files;
+        self.files.open = saved.files;
         if let Some(issues) = &saved.issues {
             self.issue_tab = issues.tab.as_deref().and_then(IssueTab::from_id);
             self.issue_closed = issues.closed;
@@ -1225,6 +1279,19 @@ impl App {
             }
             AppEvent::Branches { workspace, branches, default } => self.branches_listed(workspace, branches, default),
             AppEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
+            AppEvent::FilesListed { workspace, generation, folders } => {
+                self.files.listed(workspace, generation, folders);
+            }
+            AppEvent::FileRead { workspace, generation, path, content, done } => {
+                self.files.read(workspace, generation, &path, content, done);
+            }
+            AppEvent::FilesIndexed { workspace, generation, paths } => self.files.indexed(workspace, generation, paths),
+            AppEvent::NamesFound { workspace, generation, search, found } => {
+                self.files.named(workspace, generation, search, found);
+            }
+            AppEvent::TextFound { workspace, generation, search, found } => {
+                self.files.grepped(workspace, generation, search, found);
+            }
             AppEvent::UpdateChecked(result) => self.update_checked(result),
             AppEvent::Updated(result) => self.updated(result),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
@@ -1257,6 +1324,7 @@ impl App {
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::Search(_)) => self.search_key(key, area),
             None if self.todo_typing() => self.todo_key(key, area),
+            None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
@@ -1286,16 +1354,20 @@ impl App {
         if self.overlay.is_some() {
             return self.overlay_mouse(ev, pos, area);
         }
-        let in_panel = (self.changes_shown() || self.todo.open) && areas.changes.contains(pos);
+        let in_panel = self.panel_shown() && areas.changes.contains(pos);
         if matches!(ev.kind, MouseEventKind::Down(_)) && !in_panel {
             if let Some(filter) = &mut self.changes.filter {
                 filter.focused = false;
             }
             self.commit_todo();
+            self.files.unfocus();
         }
         if in_panel && self.todo.open {
             self.todo_mouse(ev, pos, areas.changes, area);
             return Ok(());
+        }
+        if in_panel && self.files_shown() {
+            return self.files_mouse(ev, pos, areas.changes, area);
         }
         if in_panel {
             return self.changes_mouse(ev, pos, areas.changes, area);
@@ -1382,10 +1454,13 @@ impl App {
             None => Rect::default(),
         };
         let todo = if areas.compact() || self.project().is_some() { areas.todo_button } else { Rect::default() };
+        let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
         } else if todo.contains(pos) {
             Self::toggle_todo
+        } else if files.contains(pos) {
+            Self::toggle_files
         } else {
             return false;
         };
@@ -1400,6 +1475,8 @@ impl App {
             self.drag_border(border, ev, area);
         } else if self.divider_drag.is_some() {
             self.drag_divider(ev, areas.pane);
+        } else if self.files.selecting.is_some() {
+            self.drag_lines(ev, areas.changes);
         } else if let Some(term) = self.selecting {
             let pane = self.tab().and_then(|t| t.layout.pane(areas.pane, term)).unwrap_or(areas.pane);
             self.drag_selection(term, ev, pane);
@@ -1430,6 +1507,7 @@ impl App {
         if self.nav.is_none() {
             self.changes.close();
             self.close_todo();
+            self.files.close();
         }
         self.nav = match self.nav {
             Some(_) => None,
@@ -1475,17 +1553,23 @@ impl App {
         let Some(tab) = self.tab() else { return };
         let Some(pane) = tab.pane().and_then(|t| tab.layout.pane(area, t.id)) else { return };
         let Some(at) = pane_cell(pane, ev) else { return };
-
+        if self.link_click(ev, at) {
+            return;
+        }
         let Some(term) = self.term_mut() else { return };
-        let mode = term.emulator.mouse_mode();
-        if mode == mouse::MouseMode::None && left {
+        if term.emulator.mouse_mode() == mouse::MouseMode::None && left {
             let id = term.id;
             if term.emulator.start_selection(at).is_ok() {
                 self.selecting = Some(id);
             }
             return;
         }
-        let bytes = mouse::encode(&ev, at.x, at.y, mode, term.emulator.mouse_encoding());
+        self.forward_mouse(ev, at);
+    }
+
+    fn forward_mouse(&mut self, ev: MouseEvent, at: Position) {
+        let Some(term) = self.term_mut() else { return };
+        let bytes = mouse::encode(&ev, at.x, at.y, term.emulator.mouse_mode(), term.emulator.mouse_encoding());
         if let Some(bytes) = bytes {
             term.write(&bytes);
         }
@@ -1496,8 +1580,12 @@ impl App {
             self.selecting = None;
             return;
         };
+        let at = pane_cell(pane, ev);
         if ev.kind == MouseEventKind::Drag(MouseButton::Left) {
-            if let Some(at) = pane_cell(pane, ev)
+            if self.link_press.as_ref().is_some_and(|p| Some(p.at) != at) {
+                self.link_press = None;
+            }
+            if let Some(at) = at
                 && term.emulator.extend_selection(at).is_err()
             {
                 self.selecting = None;
@@ -1507,6 +1595,9 @@ impl App {
         self.selecting = None;
         if let Ok(Some(text)) = term.emulator.finish_selection() {
             copy(&mut self.host_writes, &mut self.toast, &text);
+        }
+        if let Some(press) = self.link_press.take().filter(|p| p.term == id && Some(p.at) == at) {
+            self.open_link(&press.target);
         }
     }
 
@@ -1599,7 +1690,7 @@ impl App {
 
     fn drag_border(&mut self, border: ui::Border, ev: MouseEvent, area: Rect) {
         if ev.kind == MouseEventKind::Drag(MouseButton::Left) {
-            let main = Rect { width: self.widths.main_width(area.width, self.changes_shown()), ..area };
+            let main = Rect { width: self.widths.main_width(area.width, self.panel_shown()), ..area };
             self.widths = match border {
                 ui::Border::Changes => self.widths.dragged(border, ev.column, area.width),
                 _ if self.sidebar().stacked() => {
@@ -3459,6 +3550,10 @@ impl App {
             self.todo_paste(text);
             return;
         }
+        if self.files_typing() {
+            self.files_paste(text);
+            return;
+        }
         if self.filtering()
             && let Some(filter) = &mut self.changes.filter
         {
@@ -3507,11 +3602,18 @@ impl App {
         let overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
         let dim_inactive = self.config.dim_inactive_panes;
         let dragging = self.divider_drag.clone();
+        let pane_area = self.layout(area).shown(self.nav).pane;
+        let still = self.overlay.is_none() && self.row_drag.is_none() && self.selecting.is_none() && dragging.is_none();
+        let pointer = self.hover.filter(|_| still);
+        let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout.map(&|id| tab.panes.iter().position(|t| t.id == id))?;
-            let screens = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
+            let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging })
+            let link = pointer
+                .zip(root.as_deref())
+                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root));
+            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();
@@ -3549,6 +3651,7 @@ impl App {
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
             todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            files: if self.files_shown() { self.files_view() } else { None },
             attention,
             drag,
         };
@@ -3766,6 +3869,7 @@ impl App {
             self.changes.close();
         } else {
             self.close_todo();
+            self.files.close();
             self.changes.open = true;
         }
         self.nav = None;
@@ -5722,6 +5826,7 @@ mod tests {
                 issues: None,
                 changes: None,
                 todo: false,
+                files: false,
             }
         }
 
@@ -7776,6 +7881,7 @@ rm -f "$1/sessions/$$.json"
                 issues: None,
                 changes: None,
                 todo: false,
+                files: false,
             };
 
             app.restore(&saved, AREA).expect("restore");
@@ -7937,6 +8043,7 @@ rm -f "$1/sessions/$$.json"
                 issues: None,
                 changes: None,
                 todo: false,
+                files: false,
             };
 
             app.restore(&saved, AREA).expect("restore");
@@ -9645,6 +9752,383 @@ rm -f "$1/sessions/$$.json"
             assert_eq!((workspace.tabs.len(), workspace.active), (tabs + 1, tabs));
         }
     }
+    mod files_panel {
+        use super::*;
+        use crate::changes::diff::Status;
+        use crate::files::Mark;
+        use crate::ui::changes::Action;
+        use crate::ui::files::{self as panel, Screen};
+
+        fn repo() -> TempDir {
+            git_repo(&[("README.md", "# shop\n"), ("src/main.rs", "fn main() {\n    run();\n}\n")])
+        }
+
+        fn panel_area(app: &App) -> Rect {
+            app.layout(AREA).changes
+        }
+
+        fn view(app: &App) -> panel::View {
+            app.files_view().expect("the panel has a workspace")
+        }
+
+        fn open(app: &mut App) {
+            let pos = app.layout(AREA).files_button.as_position();
+            click(app, pos);
+        }
+
+        fn settle(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&panel::View) -> bool) {
+            wait_until(what, || {
+                app.refresh(Instant::now());
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                cond(&view(app))
+            });
+        }
+
+        fn tree_rows(view: &panel::View) -> Vec<String> {
+            match &view.screen {
+                Screen::Tree(tree) => tree.rows.iter().map(|r| r.path.clone()).collect(),
+                Screen::Search(_) | Screen::File(_) => Vec::new(),
+            }
+        }
+
+        fn opened(repo: &TempDir) -> (App, Receiver<AppEvent>) {
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            open(&mut app);
+            settle(&mut app, &rx, "the workspace is listed", |v| !tree_rows(v).is_empty());
+            (app, rx)
+        }
+
+        fn row_pos(app: &App, path: &str) -> Position {
+            let view = view(app);
+            let Screen::Tree(tree) = &view.screen else { panic!("the tree shows") };
+            let i = tree.rows.iter().position(|r| r.path == path).expect("the row is listed");
+            let body = panel::parts(panel_area(app)).body;
+            Position::new(body.x + 4, body.y + u16::try_from(i - tree.scroll).expect("the row is on screen"))
+        }
+
+        fn file(app: &App) -> panel::FileView {
+            match view(app).screen {
+                Screen::File(file) => file,
+                Screen::Tree(_) | Screen::Search(_) => panic!("a file shows"),
+            }
+        }
+
+        fn lines(view: &panel::View) -> Vec<String> {
+            match &view.screen {
+                Screen::File(file) => file.content.as_ref().map(|c| c.lines().to_vec()).unwrap_or_default(),
+                Screen::Tree(_) | Screen::Search(_) => Vec::new(),
+            }
+        }
+
+        fn line_pos(app: &App, line: u32) -> Position {
+            let view = view(app);
+            let body = panel::parts(panel_area(app)).body;
+            let row = panel::row_of(&view, line) - file(app).scroll;
+            Position::new(body.x + 2, body.y + u16::try_from(row).expect("the line is on screen"))
+        }
+
+        fn action_pos(app: &App, action: Action) -> Position {
+            panel::action(panel_area(app), action).as_position()
+        }
+
+        fn show(app: &mut App, rx: &Receiver<AppEvent>, path: &str) {
+            if let Some((folder, _)) = path.rsplit_once('/') {
+                let pos = row_pos(app, folder);
+                click(app, pos);
+                settle(app, rx, "the folder is listed", |v| tree_rows(v).iter().any(|r| r == path));
+            }
+            let pos = row_pos(app, path);
+            click(app, pos);
+            settle(
+                app,
+                rx,
+                "the file is read",
+                |v| matches!(&v.screen, Screen::File(f) if f.content.as_ref().is_some_and(|c| c.styles().is_some())),
+            );
+        }
+
+        #[test]
+        fn the_button_opens_the_tree_beside_the_pane() {
+            let repo = repo();
+            let (mut app, _rx) = app_in(repo.path(), no_config());
+            let before = app.layout(AREA).pane.width;
+            open(&mut app);
+            assert_eq!((app.files.open, app.layout(AREA).pane.width < before), (true, true));
+        }
+
+        #[test]
+        fn the_files_todo_and_changes_panels_take_turns() {
+            let repo = repo();
+            let (mut app, _rx) = app_in(repo.path(), no_config());
+            open(&mut app);
+            let todo = app.layout(AREA).todo_button.as_position();
+            click(&mut app, todo);
+            assert_eq!((app.files.open, app.todo.open), (false, true));
+            open(&mut app);
+            assert_eq!((app.files.open, app.todo.open), (true, false));
+            let changes = ui::changes_button(app.layout(AREA).issues, &app.changes_label().expect("a changes button"));
+            click(&mut app, changes.as_position());
+            assert_eq!((app.files.open, app.changes.open), (false, true));
+        }
+
+        #[test]
+        fn the_compact_bar_has_a_button_too() {
+            let small = Rect { width: 80, ..AREA };
+            let repo = repo();
+            let (mut app, _rx) = app_in(repo.path(), no_config());
+            click_in(&mut app, ui::layout(small, ui::Widths::default()).files_button.as_position(), small);
+            assert!(app.files.open);
+        }
+
+        #[test]
+        fn lists_folders_first_and_opens_them() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            assert_eq!(tree_rows(&view(&app)), ["src", "README.md"]);
+            let pos = row_pos(&app, "src");
+            click(&mut app, pos);
+            settle(&mut app, &rx, "the folder is listed", |v| tree_rows(v).len() == 3);
+            assert_eq!(tree_rows(&view(&app)), ["src", "src/main.rs", "README.md"]);
+        }
+
+        #[test]
+        fn a_file_shows_with_colours_and_back_returns_to_it() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "README.md");
+            assert_eq!(lines(&view(&app)), ["# shop"]);
+            let back = panel::back(panel_area(&app)).as_position();
+            click(&mut app, back);
+            assert!(matches!(&view(&app).screen, Screen::Tree(t) if t.last.as_deref() == Some("README.md")));
+        }
+
+        #[test]
+        fn marks_what_changed_like_the_changes_panel() {
+            let repo = repo();
+            std::fs::write(repo.path().join("src/main.rs"), "fn main() {\n    start();\n}\n").expect("edit");
+            let (mut app, rx) = opened(&repo);
+            settle(
+                &mut app,
+                &rx,
+                "the folder shows the change",
+                |v| matches!(&v.screen, Screen::Tree(t) if t.rows.first().and_then(|r| r.status) == Some(Status::Modified)),
+            );
+            show(&mut app, &rx, "src/main.rs");
+            settle(
+                &mut app,
+                &rx,
+                "the edited line is marked",
+                |v| matches!(&v.screen, Screen::File(f) if f.gutter.as_ref().and_then(|g| g.mark(2)) == Some(Mark::Modified)),
+            );
+            let mark = Position::new(panel_area(&app).x + 2 + 3, line_pos(&app, 2).y);
+            click(&mut app, mark);
+            assert_eq!(file(&app).unfolded, HashSet::from([2]));
+        }
+
+        #[test]
+        fn dragging_over_the_numbers_selects_lines_for_the_agent() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "src/main.rs");
+            let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
+            press(&mut app, first);
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), last);
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), last);
+            assert_eq!(file(&app).selection, Some((1, 3)));
+            let ask = action_pos(&app, Action::Ask);
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("src/main.rs:1-3")));
+            assert_eq!(toast(&app), Some(NO_AGENT));
+        }
+
+        #[test]
+        fn copy_takes_the_selected_lines() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "src/main.rs");
+            let pos = line_pos(&app, 2);
+            click(&mut app, pos);
+            let copy = action_pos(&app, Action::Copy);
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("    run();")));
+        }
+
+        #[test]
+        fn the_viewer_follows_edits() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "README.md");
+            std::fs::write(repo.path().join("README.md"), "# shop\nsells socks\n").expect("edit");
+            settle(&mut app, &rx, "the edit shows", |v| lines(v).len() == 2);
+        }
+
+        fn results(view: &panel::View) -> Vec<panel::Found> {
+            match &view.screen {
+                Screen::Search(search) => search.rows.clone(),
+                Screen::Tree(_) | Screen::File(_) => Vec::new(),
+            }
+        }
+
+        fn search(app: &mut App, rx: &Receiver<AppEvent>, mode: files::Mode, query: &str) {
+            let button = if mode == files::Mode::Name { panel::mode_button } else { panel::field };
+            let pos = button(panel_area(app)).as_position();
+            click(app, pos);
+            type_text(app, query);
+            settle(app, rx, "the search answers", |v| !results(v).is_empty());
+        }
+
+        #[test]
+        fn a_name_search_finds_the_file_and_enter_opens_it() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Name, "main");
+            let paths: Vec<panel::Found> = results(&view(&app));
+            assert!(matches!(&paths[..], [panel::Found::Name { path, .. }] if path == "src/main.rs"), "{paths:?}");
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            settle(&mut app, &rx, "the file opens", |v| !lines(v).is_empty());
+            assert_eq!(file(&app).path, "src/main.rs");
+        }
+
+        #[test]
+        fn a_text_search_opens_the_file_at_the_line() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "run");
+            let found = results(&view(&app));
+            let row = found.iter().position(|r| matches!(r, panel::Found::Line { number: 2, .. })).expect("line 2");
+            let body = panel::parts(panel_area(&app)).body;
+            click(&mut app, Position::new(body.x + 4, body.y + u16::try_from(row).expect("on screen")));
+            let opened = file(&app);
+            assert_eq!(
+                (opened.path.as_str(), opened.selection, opened.find.as_deref()),
+                ("src/main.rs", Some((2, 2)), Some("run"))
+            );
+            let back = panel::back(panel_area(&app)).as_position();
+            click(&mut app, back);
+            assert!(!results(&view(&app)).is_empty(), "back returns to the results");
+        }
+
+        #[test]
+        fn the_search_field_takes_the_keys_until_a_press_outside() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Name, "ma");
+            assert_eq!(
+                app.files
+                    .query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"))
+                    .map(|q| q.text.as_str()),
+                Some("ma")
+            );
+            click(&mut app, areas().pane.as_position());
+            type_text(&mut app, "x");
+            let query = app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"));
+            assert_eq!(query.map(|q| (q.text.as_str(), q.focused)), Some(("ma", false)));
+        }
+
+        #[test]
+        fn escape_goes_back_to_the_tree() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "shop");
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            assert!(matches!(view(&app).screen, Screen::Tree(_)));
+        }
+
+        #[test]
+        fn the_open_panel_is_saved() {
+            let repo = repo();
+            let (mut app, _rx) = app_in(repo.path(), no_config());
+            open(&mut app);
+            let saved = app.state();
+            assert!(saved.files);
+            let (mut restored, _rx) = empty_app();
+            restored.restore(&saved, AREA).expect("restore");
+            assert_eq!((restored.files.open, restored.todo.open, restored.changes.open), (true, false, false));
+        }
+    }
+
+    mod path_links {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        use ratatui::style::Modifier;
+
+        use super::*;
+
+        fn showing(repo: &TempDir, text: &str) -> (App, Receiver<AppEvent>) {
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{text}").as_bytes());
+            (app, rx)
+        }
+
+        fn repo() -> TempDir {
+            git_repo(&[("src/main.rs", "fn main() {\n    run();\n}\n")])
+        }
+
+        fn cell(col: u16, row: u16) -> Position {
+            Position::new(areas().pane.x + col, areas().pane.y + row)
+        }
+
+        fn shown(app: &App) -> Option<(String, Option<(u32, u32)>)> {
+            let workspace = app.project()?.workspace()?.id;
+            app.files.viewer(workspace).map(|v| (v.path.clone(), v.selection))
+        }
+
+        fn written(app: &App) -> bool {
+            app.term().is_some_and(|t| t.input_at.is_some())
+        }
+
+        #[test]
+        fn a_click_on_a_path_opens_it_at_its_lines() {
+            let repo = repo();
+            let (mut app, _rx) = showing(&repo, "look at src/main.rs:2-3");
+            click(&mut app, cell(12, 0));
+            assert!(app.files.open);
+            assert_eq!(shown(&app), Some(("src/main.rs".to_string(), Some((2, 3)))));
+        }
+
+        #[test]
+        fn text_that_names_no_file_is_a_plain_click() {
+            let repo = repo();
+            let (mut app, _rx) = showing(&repo, "see src/gone.rs here");
+            click(&mut app, cell(6, 0));
+            assert!(!app.files.open);
+        }
+
+        #[test]
+        fn a_program_reading_the_mouse_does_not_get_the_click() {
+            let repo = repo();
+            let (mut app, _rx) = showing(&repo, "\x1b[?1000h\x1b[?1006hsrc/main.rs");
+            app.term_mut().expect("a pane").input_at = None;
+            click(&mut app, cell(3, 0));
+            assert_eq!((shown(&app).map(|s| s.0).as_deref(), written(&app)), (Some("src/main.rs"), false));
+        }
+
+        #[test]
+        fn a_drag_from_a_path_still_reaches_the_program() {
+            let repo = repo();
+            let (mut app, _rx) = showing(&repo, "\x1b[?1002h\x1b[?1006hsrc/main.rs");
+            app.term_mut().expect("a pane").input_at = None;
+            press(&mut app, cell(3, 0));
+            assert!(!written(&app), "the press waits");
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), cell(8, 0));
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), cell(8, 0));
+            assert_eq!((app.files.open, written(&app)), (false, true));
+        }
+
+        #[test]
+        fn the_path_under_the_pointer_is_underlined() {
+            let repo = repo();
+            let (mut app, _rx) = showing(&repo, "open src/main.rs now");
+            mouse(&mut app, MouseEventKind::Moved, cell(7, 0));
+            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
+            t.draw(|f| app.draw(f)).expect("draw");
+            let lined = |col: u16| t.backend().buffer()[cell(col, 0)].modifier.contains(Modifier::UNDERLINED);
+            assert_eq!([lined(4), lined(5), lined(15), lined(16)], [false, true, true, false]);
+        }
+    }
+
     mod todo_panel {
         use super::*;
         use crate::ui::todo as panel;

@@ -1,0 +1,13 @@
+---
+source: src/ui/files.rs
+assertion_line: 738
+expression: render(&texts())
+---
+  files  ~/projects/shop                     ×
+  ⌕ run                                   ×  ▤
+  2 files
+  src/main.rs                                 2
+      2  run();
+▌     9  fn run() {}
+  README.md                                   1
+      4  cargo run

@@ -28,7 +28,7 @@ expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).b
 "  + new workspace              │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  issues                       │                                                                    "
-"                         todo  │                                                                    "
+"  files                  todo  │                                                                    "
 "  settings                     │                                                                    "
 "  usage                        │                                                                    "
 "  quit                         │                                                                    "

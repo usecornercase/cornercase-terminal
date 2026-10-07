@@ -48,6 +48,7 @@ impl App {
             self.close_todo();
         } else {
             self.changes.close();
+            self.files.close();
             self.todo.open = true;
         }
         self.nav = None;

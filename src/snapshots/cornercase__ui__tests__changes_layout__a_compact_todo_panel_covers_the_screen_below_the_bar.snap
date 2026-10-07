@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: "render_sized(&with_todo(), 80, 18).backend()"
 ---
 "                                                                                "
-"   ≡     shop › main › zsh                                    ±      ☐      ⌕   "
+"   ≡     shop › main › zsh                             ±      ▤      ☐      ⌕   "
 "                                                                                "
 " todo 2                                                         clear done   ×  "
 "                                                                                "

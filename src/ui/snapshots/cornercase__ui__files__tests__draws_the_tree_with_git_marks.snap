@@ -1,0 +1,13 @@
+---
+source: src/ui/files.rs
+assertion_line: 681
+expression: render(&tree())
+---
+  files  ~/projects/shop                     ×
+  ⌕ text in the files                        ▤
+
+  ▾ src                                      ●
+    ▸ ui                                     ●
+      main.rs                                M
+▌     lib.rs
+    README.md

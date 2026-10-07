@@ -12,6 +12,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use serde::{Deserialize, Serialize};
 
 pub mod changes;
+pub mod files;
 pub mod todo;
 
 use crate::activity::{self, Status};
@@ -53,6 +54,7 @@ const USAGE_LABEL: &str = "usage";
 const USAGE_BAR: &str = "━";
 const CHANGES_ICON: &str = "±";
 const TODO_ICON: &str = "☐";
+const FILES_ICON: &str = "▤";
 pub const TODO_LABEL: &str = "todo";
 const UNDO_LABEL: &str = "undo";
 const NO_TAB: &str = "no tab open";
@@ -279,6 +281,7 @@ pub struct Areas {
     pub changes_border: Rect,
     pub changes_button: Rect,
     pub todo_button: Rect,
+    pub files_button: Rect,
 }
 
 impl Areas {
@@ -449,6 +452,7 @@ fn wide_layout(area: Rect, widths: Widths) -> Areas {
         changes_border: Rect::default(),
         changes_button: Rect::default(),
         todo_button: changes_button(todo, TODO_LABEL),
+        files_button: files_button(todo),
     }
 }
 
@@ -483,6 +487,7 @@ fn one_column(area: Rect, widths: Widths) -> (Areas, Rect) {
         pane,
         projects_border: right_edge(column),
         todo_button: changes_button(todo, TODO_LABEL),
+        files_button: files_button(todo),
         ..Areas::default()
     };
     (frame, Rect { height: footer_y - room.y, ..room })
@@ -530,8 +535,10 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
     let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
     let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
     let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
-    let changes_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
-    let changes_button = Rect { x: todo_button.x - changes_width, width: changes_width, ..bar };
+    let files_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
+    let files_button = Rect { x: todo_button.x - files_width, width: files_width, ..bar };
+    let changes_width = COMPACT_BUTTON_WIDTH.min(files_button.x.saturating_sub(bar.x));
+    let changes_button = Rect { x: files_button.x - changes_width, width: changes_width, ..bar };
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
     let column = |footer: u16| {
         Layout::vertical([
@@ -576,6 +583,7 @@ fn compact_layout(area: Rect, changes: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button,
         todo_button,
+        files_button,
     }
 }
 
@@ -1356,6 +1364,10 @@ pub fn changes_button(issues: Rect, label: &str) -> Rect {
     Rect { x: issues.right().saturating_sub(width + 1), width, ..issues }.intersection(issues)
 }
 
+pub fn files_button(row: Rect) -> Rect {
+    Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
+}
+
 pub fn update_button(settings: Rect, label: &str) -> Rect {
     let width = button_width(label).min(settings.width);
     Rect { x: settings.right() - width, width, ..settings }
@@ -2106,6 +2118,7 @@ pub struct TabView {
     pub active: usize,
     pub dim_inactive: bool,
     pub dragging: Option<Vec<bool>>,
+    pub link: Option<(u16, Range<u16>)>,
 }
 
 pub struct View<'a> {
@@ -2133,6 +2146,7 @@ pub struct View<'a> {
     pub changes: Option<changes::View>,
     pub changes_button: Option<ChangesButton>,
     pub todo: Option<todo::View>,
+    pub files: Option<files::View>,
     pub attention: Option<Status>,
     pub drag: Option<Drag>,
     pub tree: Option<TreeView>,
@@ -2150,11 +2164,11 @@ impl View<'_> {
     }
 
     fn surface(&self) -> Color {
-        if self.light { LIGHT_SURFACE } else { DARK_SURFACE }
+        surface_colour(self.light)
     }
 
     fn hover_fill(&self) -> Color {
-        if self.light { LIGHT_HOVER } else { DARK_HOVER }
+        hover_colour(self.light)
     }
 
     fn line(&self) -> Color {
@@ -2210,7 +2224,7 @@ impl View<'_> {
 }
 
 pub fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some();
+    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
     let areas = layout_with(f.area(), view.widths, panel, view.sidebar).shown(view.nav);
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
@@ -2250,10 +2264,11 @@ pub fn draw(f: &mut Frame, view: &View) {
         draw_column_border(f, view.line(), border);
         draw_border(f, view, border, Border::Changes);
         let hover = view.hover.filter(|_| view.overlay.is_none());
-        match (&view.changes, &view.todo) {
-            (Some(changes), _) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
-            (None, Some(todo)) => todo::draw(f, areas.changes, todo, hover),
-            (None, None) => {}
+        match (&view.changes, &view.todo, &view.files) {
+            (Some(changes), _, _) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
+            (None, Some(todo), _) => todo::draw(f, areas.changes, todo, hover),
+            (None, None, Some(files)) => files::draw(f, areas.changes, files, hover),
+            (None, None, None) => {}
         }
     }
     if view.overlay.as_ref().is_some_and(Overlay::is_modal) {
@@ -2390,6 +2405,10 @@ fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
         let Some(screen) = tab.screens.get(i) else { continue };
         let active = i == tab.active;
         draw_screen(f, screen, pane, active && view.overlay.is_none(), split && !active && tab.dim_inactive);
+        if let Some((row, cols)) = tab.link.as_ref().filter(|_| active) {
+            let r = Rect::new(pane.x + cols.start, pane.y + row, cols.end - cols.start, 1).intersection(pane);
+            f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
+        }
     }
     draw_dividers(f, view, tab, area);
 }
@@ -3216,6 +3235,12 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let mut right = areas.search_button.width + r.width;
     let style = if view.todo.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
     draw_band(f, r, Span::styled(centered(TODO_ICON, r.width), style), style);
+    if view.has_project {
+        let r = areas.files_button;
+        right += r.width;
+        let style = if view.files.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
+        draw_band(f, r, Span::styled(centered(FILES_ICON, r.width), style), style);
+    }
     if let Some(button) = &view.changes_button {
         let r = areas.changes_button;
         right += r.width;
@@ -3236,6 +3261,14 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
 
 fn line_colour(light: bool) -> Color {
     if light { LIGHT_LINE } else { DARK_LINE }
+}
+
+fn surface_colour(light: bool) -> Color {
+    if light { LIGHT_SURFACE } else { DARK_SURFACE }
+}
+
+fn hover_colour(light: bool) -> Color {
+    if light { LIGHT_HOVER } else { DARK_HOVER }
 }
 
 pub fn muted(theme: &HostTheme) -> Color {
@@ -3501,6 +3534,7 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     }
     if !areas.compact() {
         draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
+        draw_panel_button(f, view, areas.files_button, files::LABEL, view.files.is_some());
     }
 }
 
@@ -3924,6 +3958,7 @@ mod tests {
             changes: None,
             changes_button: None,
             todo: None,
+            files: None,
             attention: None,
             drag: None,
             tree: None,
@@ -3974,7 +4009,14 @@ mod tests {
     }
 
     fn single(screen: Snapshot) -> TabView {
-        TabView { layout: Node::Leaf(0), screens: vec![screen], active: 0, dim_inactive: true, dragging: None }
+        TabView {
+            layout: Node::Leaf(0),
+            screens: vec![screen],
+            active: 0,
+            dim_inactive: true,
+            dragging: None,
+            link: None,
+        }
     }
 
     fn close_x() -> u16 {
@@ -4034,8 +4076,8 @@ mod tests {
             let small = Rect { width: 80, ..BIG };
             let a = layout_with(small, Widths::default(), true, Sidebar::SideBySide);
             assert_eq!(
-                (a.changes, a.changes_button.right(), a.todo_button.right()),
-                (a.pane, a.todo_button.x, a.search_button.x)
+                (a.changes, a.changes_button.right(), a.files_button.right(), a.todo_button.right()),
+                (a.pane, a.files_button.x, a.todo_button.x, a.search_button.x)
             );
         }
 
@@ -6263,7 +6305,7 @@ mod tests {
             layout.split(0, Dir::Right, 1);
             layout.split(1, Dir::Down, 2);
             let screens = vec![screen(b"$ left"), screen(b"$ top"), screen(b"$ bottom")];
-            TabView { layout, screens, active: 1, dim_inactive, dragging: None }
+            TabView { layout, screens, active: 1, dim_inactive, dragging: None, link: None }
         }
 
         fn style_at(v: &View, at: Position) -> Style {

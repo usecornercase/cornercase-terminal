@@ -1,0 +1,11 @@
+---
+source: src/ui/files.rs
+expression: "render(&opened(None, &[]))"
+---
+  ‹  src/main.rs                             ×
+  4 lines · rust      open   ask agent   copy
+
+   1   fn main() {
+   2 ▎     run();
+   3       done();
+   4   }

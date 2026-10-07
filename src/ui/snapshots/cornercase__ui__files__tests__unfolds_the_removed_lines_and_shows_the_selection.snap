@@ -1,0 +1,12 @@
+---
+source: src/ui/files.rs
+expression: "render(&opened(Some((3, 2)), &[2]))"
+---
+  ‹  src/main.rs                             ×
+  lines 2–3           open   ask agent   copy
+
+   1   fn main() {
+     -     old();
+   2 ▎     run();
+   3       done();
+   4   }

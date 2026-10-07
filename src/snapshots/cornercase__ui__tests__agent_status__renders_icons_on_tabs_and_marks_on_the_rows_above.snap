@@ -18,5 +18,5 @@ expression: render(&with_agents()).backend()
 "                               │  + new workspace        │                                          "
 " ───────────────────────────── │                         │                                          "
 "  settings                     │                         │                                          "
-"  usage                        │                   todo  │                                          "
+"  usage                        │  files            todo  │                                          "
 "  quit                         │                         │                                          "

@@ -147,14 +147,6 @@ pub fn drop(area: Rect, view: &View, dragged: u64, pos: Position) -> Option<usiz
     Some(if view.items[from].done { before.clamp(split, view.items.len()) } else { before.min(split) })
 }
 
-fn surface(view: &View) -> Color {
-    if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE }
-}
-
-fn hover_fill(view: &View) -> Color {
-    if view.light { super::LIGHT_HOVER } else { super::DARK_HOVER }
-}
-
 pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let hover = hover.filter(|_| view.drag.is_none());
     draw_header(f.buffer_mut(), area, view, hover);
@@ -231,12 +223,12 @@ fn text_area(row: Rect) -> Rect {
 
 fn draw_field(buf: &mut Buffer, view: &View, editor: &Editor, r: Rect, width: usize, mark: &str) -> Option<Position> {
     let field = text_area(r);
-    buf.set_style(field, Style::default().bg(surface(view)));
+    buf.set_style(field, Style::default().bg(super::surface_colour(view.light)));
     put(buf, r.x + 2, r.y, mark, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), r.right());
     let text: Vec<char> = editor.text().chars().collect();
     let x = field.x + 1;
     if text.is_empty() {
-        put(buf, x, r.y, PLACEHOLDER, dim(view.muted).bg(surface(view)), field.right());
+        put(buf, x, r.y, PLACEHOLDER, dim(view.muted).bg(super::surface_colour(view.light)), field.right());
     }
     for (line, range) in editor.lines(width).into_iter().enumerate() {
         let y = r.y.saturating_add(height(line));
@@ -244,7 +236,7 @@ fn draw_field(buf: &mut Buffer, view: &View, editor: &Editor, r: Rect, width: us
             break;
         }
         let part: String = text[range].iter().collect();
-        put(buf, x, y, &part, Style::default().bg(surface(view)), field.right());
+        put(buf, x, y, &part, Style::default().bg(super::surface_colour(view.light)), field.right());
     }
     let (line, col) = editor.position(width);
     let at = Position::new(x.saturating_add(height(col)), r.y.saturating_add(height(line)));
@@ -261,7 +253,7 @@ fn draw_item(
     dragged: bool,
 ) -> Option<Position> {
     let lit = hovered(hover, row) && item.editing.is_none();
-    let bg = if lit { Style::default().bg(hover_fill(view)) } else { Style::default() };
+    let bg = if lit { Style::default().bg(super::hover_colour(view.light)) } else { Style::default() };
     if lit {
         buf.set_style(row, bg);
     }

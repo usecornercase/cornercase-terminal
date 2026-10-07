@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
-"   ≡     shop › login › codex                                        ☐      ⌕   "
+"   ≡     shop › login › codex                                 ▤      ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

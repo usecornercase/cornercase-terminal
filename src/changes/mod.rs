@@ -79,6 +79,7 @@ struct FileKey {
 #[derive(Debug, Default)]
 pub struct Panel {
     pub open: bool,
+    pub watched: bool,
     pub mode: Mode,
     pub scroll: usize,
     pub workspace: Option<u64>,
@@ -111,7 +112,7 @@ impl Panel {
         if self.loading.is_some_and(|(_, _, at)| now.duration_since(at) < GIVE_UP_AFTER) {
             return None;
         }
-        let every = if self.open { OPEN_EVERY } else { CLOSED_EVERY };
+        let every = if self.open || self.watched { OPEN_EVERY } else { CLOSED_EVERY };
         let current = self.model(target.workspace, target.base.as_deref());
         let recent = self.requested.get(&target.workspace).is_some_and(|at| now.duration_since(*at) < every);
         if current.is_some() && recent {

@@ -35,7 +35,7 @@ pub enum Action {
 impl Action {
     pub const ALL: [Self; 3] = [Self::Open, Self::Ask, Self::Copy];
 
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Open => "open",
             Self::Ask => "ask agent",
@@ -245,7 +245,7 @@ fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
         .collect()
 }
 
-fn actions(row: Rect) -> Vec<(Action, Rect)> {
+pub(super) fn actions(row: Rect) -> Vec<(Action, Rect)> {
     let mut right = row.right().saturating_sub(1);
     let mut out: Vec<(Action, Rect)> = Action::ALL
         .into_iter()
@@ -312,10 +312,6 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     }
 }
 
-fn surface(view: &View) -> Color {
-    if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE }
-}
-
 fn fill(buf: &mut Buffer, r: Rect, bg: Color) {
     buf.set_style(r, Style::default().bg(bg));
 }
@@ -371,7 +367,7 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
 
 fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) {
     for (mode, r) in tabs(area) {
-        let style = super::tab_style(mode == view.mode, hovered(hover, r), surface(view));
+        let style = super::tab_style(mode == view.mode, hovered(hover, r), super::surface_colour(view.light));
         put(buf, r.x, r.y, &format!(" {} ", mode.label()), style, r.right());
     }
     let r = filter_button(area);
@@ -392,7 +388,7 @@ fn draw_field(
     if row.is_empty() {
         return None;
     }
-    fill(buf, row, surface(view));
+    fill(buf, row, super::surface_colour(view.light));
     let clear = clear_filter(area, view);
     let style = if hovered(hover, clear) {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
@@ -538,7 +534,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     let open = !view.folded.get(i).copied().unwrap_or(true);
     let viewed = view.viewed.get(i).copied().unwrap_or(false);
     if open {
-        fill(buf, r, surface(view));
+        fill(buf, r, super::surface_colour(view.light));
         put(buf, r.x + 1, r.y, "▌", Style::default().fg(Color::Cyan), r.right());
     }
     let muted = viewed || !matches!(file.fold, crate::changes::diff::Fold::Open);

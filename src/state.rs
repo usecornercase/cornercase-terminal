@@ -28,6 +28,8 @@ pub struct State {
     pub changes: Option<ChangesState>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub todo: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub files: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,6 +166,7 @@ impl From<V2State> for State {
             issues: None,
             changes: None,
             todo: false,
+            files: false,
         }
     }
 }
@@ -300,6 +303,7 @@ mod tests {
             issues: None,
             changes: None,
             todo: false,
+            files: false,
         }
     }
 
