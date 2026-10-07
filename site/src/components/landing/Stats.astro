@@ -1,16 +1,63 @@
 ---
+import type { Measure, Weight } from '../../lib/speed';
+import Race from './Race.astro';
+import Weigh from './Weigh.astro';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const tools = ['cornercase', 'Warp', 'Orca', 'Emdash'];
-const stats: [string, [number, string][]][] = [
-  ['Opening the app', [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']]],
-  ['First look at the changes', [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']]],
-  ['Every look after that', [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']]],
-  ['Opening a file', [[0.14, '140 ms'], [0.65, '650 ms'], [1.33, '1.3 s'], [0.47, '470 ms']]],
-  ['Finding a file by name', [[0.019, '19 ms'], [0.3, '300 ms'], [0.19, '190 ms'], [0, 'none']]],
-  ['Searching the files', [[0.069, '69 ms'], [0.43, '430 ms'], [0.49, '490 ms'], [0.1, '100 ms']]],
-  ['Memory', [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']]],
-  ['Download', [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']]],
-  ['On disk', [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']]],
+const times: Measure[] = [
+  {
+    title: 'Opening the app',
+    what: 'From launching it until the workspace is usable.',
+    values: [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']],
+  },
+  {
+    title: 'First look at the changes',
+    what: 'From the click until the changes are on screen: 20 files, +794 −76.',
+    values: [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']],
+  },
+  {
+    title: 'Every look after that',
+    what: 'The same changes, shown again.',
+    values: [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']],
+  },
+  {
+    title: 'Opening a file',
+    what: 'From the click until a file of 3,472 lines is on screen, coloured.',
+    values: [[0.14, '140 ms'], [0.65, '650 ms'], [1.33, '1.3 s'], [0.47, '470 ms']],
+  },
+  {
+    title: 'Finding a file by name',
+    what: 'From the query until the file shows up, among 32,255 files.',
+    values: [[0.019, '19 ms'], [0.3, '300 ms'], [0.19, '190 ms'], [0, 'no quick open']],
+  },
+  {
+    title: 'Searching the files',
+    what: 'From the query until the matches show, across 32,255 files.',
+    values: [[0.069, '69 ms'], [0.43, '430 ms'], [0.49, '490 ms'], [0.1, '100 ms']],
+  },
+];
+const sizes: Weight[] = [
+  {
+    title: 'Memory',
+    what: 'What each app’s own processes use, without the shells.',
+    less: 'less memory',
+    next: 'lightest',
+    values: [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']],
+  },
+  {
+    title: 'Download',
+    what: 'What you download to install it.',
+    less: 'smaller download',
+    next: 'smallest',
+    values: [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']],
+  },
+  {
+    title: 'On disk',
+    what: 'The space it takes once installed.',
+    less: 'less disk space',
+    next: 'smallest',
+    values: [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']],
+  },
 ];
 ---
 
@@ -18,40 +65,46 @@ const stats: [string, [number, string][]][] = [
   <div class="wrap">
     <div class="head reveal">
       <p class="eyebrow">Speed</p>
-      <h2 class="h2" id="speed-title">Faaast. <em>Really faaast.</em></h2>
+      <h2 class="h2 stretch" id="speed-title" aria-label="Faaast. Really faaast.">
+        <span aria-hidden="true">
+          <span class="word">F<span class="a">a</span><span class="x" style="--k: 1">a</span><span class="x" style="--k: 2">a</span><span class="tail">st.</span></span>{' '}
+          <em><span class="word">Really</span>{' '}<span class="word">f<span class="a">a</span><span class="x" style="--k: 1">a</span><span class="x" style="--k: 2">a</span><span class="tail">st.</span></span></em>
+        </span>
+      </h2>
       <p class="lead">
         It opens before you can blink, and shows what your agents changed, opens a file or finds one before you can click
         again. The other apps we tried? Up to 8.5 seconds, and nearly 2 GB.
       </p>
     </div>
-    <div class="grid">
-      {
-        stats.map(([title, values]) => {
-          const most = Math.max(...values.map(([v]) => v));
-          return (
-            <figure class="chart reveal">
-              <figcaption>{title}</figcaption>
-              <ul>
-                {values.map(([value, label], i) => (
-                  <li class:list={{ us: i === 0 }} title={`${tools[i]}: ${label}`}>
-                    <span class="name">{tools[i]}</span>
-                    <span class="track">
-                      {value > 0 && <span class="bar" style={`--w: ${(value / most) * 100}%`} />}
-                      <span class="value">{label}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </figure>
-          );
-        })
-      }
-    </div>
+    <Race measures={times} />
+    <Weigh measures={sizes} />
     <p class="note reveal">
       <a href={`${base}/docs/help/faq/#is-it-fast`}>How we measured →</a>
     </p>
   </div>
 </section>
+
+<script>
+  for (const title of document.querySelectorAll<HTMLElement>('.stretch')) {
+    const measure = () => {
+      const a = title.querySelector<HTMLElement>('.x')?.offsetWidth ?? 0;
+      title.style.setProperty('--a', `${a}px`);
+      let line = Number.NaN;
+      let carry = 0;
+      for (const word of title.querySelectorAll<HTMLElement>('.word')) {
+        if (word.offsetTop !== line) {
+          line = word.offsetTop;
+          carry = 0;
+        }
+        word.style.setProperty('--carry', String(carry));
+        carry += word.querySelectorAll('.x').length;
+      }
+    };
+    measure();
+    document.fonts.ready.then(measure);
+    window.addEventListener('resize', measure, { passive: true });
+  }
+</script>
 
 <style>
   .section.stats {
@@ -67,91 +120,87 @@ const stats: [string, [number, string][]][] = [
     font-size: clamp(32px, 4.2vw, 56px);
   }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    margin-top: clamp(28px, 4vw, 44px);
+  .stretch .word,
+  .stretch .x,
+  .stretch .tail {
+    display: inline-block;
   }
 
-  .chart {
-    margin: 0;
-    padding: 18px 18px 20px;
-    border-radius: 14px;
-    border: 1px solid var(--line);
-    background: var(--panel);
+  :global(.js) .stretch .word {
+    transform: translateX(calc(var(--carry, 0) * var(--a, 0.55em) * -1));
   }
 
-  figcaption {
-    margin-bottom: 14px;
-    color: var(--text);
-    font-family: var(--font-display);
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+  :global(.js) .stretch .x {
+    transform: translateX(calc(var(--k) * var(--a, 0.55em) * -1));
+    opacity: 0;
+    filter: blur(6px);
   }
 
-  ul {
-    display: grid;
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  :global(.js) .stretch .tail {
+    transform: translateX(calc(var(--a, 0.55em) * -2));
   }
 
-  li {
-    display: grid;
-    grid-template-columns: 86px minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
+  :global(.js) .head.in .stretch .word,
+  :global(.js) .head.in .stretch .x,
+  :global(.js) .head.in .stretch .tail {
+    transform: none;
+    opacity: 1;
+    filter: none;
+    transition:
+      transform 0.9s cubic-bezier(0.34, 1.4, 0.64, 1) 0.35s,
+      opacity 0.4s ease 0.35s,
+      filter 0.7s ease 0.35s;
+    transition-timing-function:
+      linear(
+        0,
+        0.06,
+        0.202,
+        0.38,
+        0.561,
+        0.723,
+        0.856,
+        0.955,
+        1.023,
+        1.062,
+        1.081,
+        1.083,
+        1.075,
+        1.062,
+        1.047,
+        1.032,
+        1.019,
+        1.009,
+        1.002,
+        0.997,
+        0.994,
+        0.993,
+        0.993,
+        0.994,
+        0.995,
+        0.996,
+        0.998,
+        0.999,
+        0.999,
+        1
+      ),
+      ease,
+      ease;
   }
 
-  li:hover .name,
-  li:hover .value {
-    color: var(--text);
+  :global(.js) .head.in .stretch em .x,
+  :global(.js) .head.in .stretch em .tail {
+    transition-delay: 0.6s;
   }
 
-  .name {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--text-2);
-  }
-
-  .us .name {
-    color: var(--text);
-    font-weight: 700;
-  }
-
-  .track {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .bar {
-    flex: none;
-    width: max(2px, calc(var(--w) * 0.72));
-    height: 12px;
-    border-radius: 0 4px 4px 0;
-    background: #6e6a87;
-  }
-
-  .us .bar {
-    background: var(--purple);
-  }
-
-  .value {
-    flex: none;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--text-2);
-    white-space: nowrap;
-  }
-
-  .us .value {
-    color: var(--text);
-    font-weight: 700;
+  @media (prefers-reduced-motion: reduce) {
+    :global(.js) .stretch .word,
+    :global(.js) .stretch .x,
+    :global(.js) .stretch .tail {
+      transform: none;
+      opacity: 1;
+      filter: none;
+      transition: none;
+    }
   }
 
   .note {
@@ -168,17 +217,5 @@ const stats: [string, [number, string][]][] = [
 
   .note a:hover {
     color: var(--purple-3);
-  }
-
-  @media (max-width: 1000px) {
-    .grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 620px) {
-    .grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 </style>
