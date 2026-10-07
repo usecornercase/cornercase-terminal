@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.7
+
+- Searching file names in the files panel puts the file you name first: `workspace-session` now lists `workspace-session.ts` before `workspace-session-handler.ts`, even when the longer name sits in a shallower folder. Between two equally good matches the shorter file name wins.
+
 ## 0.11.6
 
 - When an agent cornercase starts asks whether you trust the folder, you now answer it yourself, and the issue's prompt waits until you have. Saying yes lets the repository's own agent settings, hooks and MCP servers run, so it is your call. Before, cornercase said yes for you, and if you had turned that off, it typed the prompt into the question. **Settings → Agents → trust prompts** still answers for you; it starts off once after this update, even if you had it on.
