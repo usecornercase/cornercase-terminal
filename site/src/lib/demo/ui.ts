@@ -56,7 +56,7 @@ import {
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
-import { type Divider, dividers, grab, hasRoom, visible } from './split';
+import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
 export type Drag = { kind: 'border'; border: Border } | { kind: 'divider'; tab: Tab; divider: Divider; area: Rect };
@@ -102,6 +102,8 @@ const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
 const NO_TAB = 'no tab open';
+const MOVE_LABEL = 'move here';
+const SWAP_LABEL = 'swap';
 const NO_TAB_HINT = ' opens a shell here';
 const TAGLINE = 'every agent in its own corner';
 const WELCOME_HINT = ' opens a folder';
@@ -320,7 +322,16 @@ export class Painter {
       this.region({ r, pane: { pane, rect: r, tab, alone }, cursor: pane.shell.mouse ? 'default' : 'text' });
       if (link) this.region({ r: rect(link.start, link.y, link.end - link.start, 1), cursor: 'pointer' });
     }
+    const landing = app.paneLanding();
+    if (landing) this.paneLanding(landing.area, landing.place);
     this.dividers(tab, area);
+  }
+
+  private paneLanding(r: Rect, place: PanePlace): void {
+    this.g.fill(r, { bg: this.surface });
+    const label = ` ${place === 'swap' ? SWAP_LABEL : MOVE_LABEL} `;
+    if (label.length > r.w || r.h === 0) return;
+    this.span(r.x + Math.floor((r.w - label.length) / 2), r.y + Math.floor(r.h / 2), label, { fg: 0, bg: 6, add: BOLD });
   }
 
   private dividers(tab: Tab, area: Rect): void {

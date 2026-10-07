@@ -351,6 +351,15 @@ struct RowDrag {
     fold: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PaneDrag {
+    tab: u64,
+    pane: u64,
+    from: Position,
+    rect: Rect,
+    moved: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LinkPress {
     term: u64,
@@ -463,6 +472,7 @@ pub struct App {
     selecting: Option<u64>,
     link_press: Option<LinkPress>,
     row_drag: Option<RowDrag>,
+    pane_drag: Option<PaneDrag>,
     toast: Option<Toast>,
     overlay: Option<Overlay>,
     config: Config,
@@ -560,6 +570,7 @@ impl App {
             selecting: None,
             link_press: None,
             row_drag: None,
+            pane_drag: None,
             toast: None,
             overlay: None,
             config: config::load(&config_path),
@@ -629,6 +640,7 @@ impl App {
         self.nav = None;
         self.hover = None;
         self.row_drag = None;
+        self.pane_drag = None;
         self.resizing = None;
         self.divider_drag = None;
         self.selecting = None;
@@ -1394,7 +1406,7 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        if key.code == KeyCode::Esc && self.row_drag.take().is_some() {
+        if key.code == KeyCode::Esc && (self.row_drag.take().is_some() || self.pane_drag.take().is_some()) {
             return Ok(());
         }
         match &self.overlay {
@@ -1557,6 +1569,8 @@ impl App {
             self.drag_border(border, ev, area);
         } else if self.divider_drag.is_some() {
             self.drag_divider(ev, areas.pane);
+        } else if let Some(drag) = self.pane_drag {
+            self.drag_pane(drag, ev, areas.pane, area);
         } else if self.files.selecting.is_some() {
             self.drag_lines(ev, areas.changes);
         } else if let Some(term) = self.selecting {
@@ -1617,7 +1631,9 @@ impl App {
             let program_takes_right = tab.right_clicks_to_pane(id)
                 && tab.panes.iter().any(|t| t.id == id && t.emulator.mouse_mode() != mouse::MouseMode::None);
             if right && !program_takes_right {
-                self.open_pane_menu(id, pos, area);
+                let rect = tab.rect(area, id);
+                let tab = tab.id;
+                self.pane_drag = rect.map(|rect| PaneDrag { tab, pane: id, from: pos, rect, moved: false });
                 return;
             }
             if id != active {
@@ -1709,6 +1725,37 @@ impl App {
         if let Some(divider) = t.layout.dividers(pane).into_iter().find(|d| d.path == path) {
             t.layout.set_ratio(&path, split::ratio_at(&divider, Position::new(ev.column, ev.row)));
         }
+    }
+
+    fn drag_pane(&mut self, drag: PaneDrag, ev: MouseEvent, pane: Rect, area: Rect) {
+        let pos = Position::new(ev.column, ev.row);
+        let moved = drag.moved || !drag.rect.contains(pos);
+        match ev.kind {
+            MouseEventKind::Drag(MouseButton::Right) => self.pane_drag = Some(PaneDrag { moved, ..drag }),
+            MouseEventKind::Up(_) => {
+                self.pane_drag = None;
+                if moved {
+                    self.drop_pane(drag, pos, pane, area);
+                } else {
+                    self.open_pane_menu(drag.pane, drag.from, pane);
+                }
+            }
+            _ => self.pane_drag = None,
+        }
+    }
+
+    fn drop_pane(&mut self, drag: PaneDrag, pos: Position, pane: Rect, area: Rect) {
+        let Some(tab) = self.tab_mut().filter(|t| t.id == drag.tab) else { return };
+        let Some(landing) = tab.landing(pane, drag.pane, pos) else { return };
+        tab.layout = landing.layout;
+        tab.focus(drag.pane);
+        self.resize(area);
+    }
+
+    fn pane_landing(&self, pane: Rect) -> Option<(Rect, split::Place)> {
+        let drag = self.pane_drag.filter(|d| d.moved)?;
+        let tab = self.tab().filter(|t| t.id == drag.tab)?;
+        tab.landing(pane, drag.pane, self.hover?).map(|l| (l.area, l.place))
     }
 
     fn open_pane_menu(&mut self, pane: u64, at: Position, area: Rect) {
@@ -3760,7 +3807,12 @@ impl App {
         let dim_inactive = self.config.dim_inactive_panes;
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
-        let still = self.overlay.is_none() && self.row_drag.is_none() && self.selecting.is_none() && dragging.is_none();
+        let landing = self.pane_landing(pane_area);
+        let still = self.overlay.is_none()
+            && self.row_drag.is_none()
+            && self.pane_drag.is_none()
+            && self.selecting.is_none()
+            && dragging.is_none();
         let pointer = self.hover.filter(|_| still);
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
         let tab = self.tab_mut().and_then(|tab| {
@@ -3770,7 +3822,7 @@ impl App {
             let link = pointer
                 .zip(root.as_deref())
                 .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root));
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link })
+            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();
@@ -3794,7 +3846,7 @@ impl App {
             active_tab,
             workspaces_scroll: self.workspaces_scroll,
             issues: self.issues_available(),
-            hover: self.hover,
+            hover: self.hover.filter(|_| self.pane_drag.is_none()),
             widths: self.widths,
             sidebar: self.sidebar(),
             resizing: self.resizing,
@@ -4474,6 +4526,7 @@ mod tests {
 
     fn right_click(app: &mut App, pos: Position) {
         mouse_down(app, MouseButton::Right, pos);
+        mouse(app, MouseEventKind::Up(MouseButton::Right), pos);
     }
 
     fn type_line(app: &mut App, line: &str) {
@@ -7114,6 +7167,7 @@ rm -f "$1/sessions/$$.json"
             press(&mut app, small().back.as_position());
             let under_the_title = Position::new(3, small().title.y + 1);
             mouse_in(&mut app, MouseEventKind::Down(MouseButton::Right), under_the_title, SMALL);
+            mouse_in(&mut app, MouseEventKind::Up(MouseButton::Right), under_the_title, SMALL);
             assert!(app.overlay.is_none(), "the pane menu opened under the projects menu");
         }
 
@@ -8076,6 +8130,123 @@ rm -f "$1/sessions/$$.json"
             assert!(menu_labels(&app).iter().any(|l| l == "use this menu on right-click"));
         }
 
+        fn drag_pane(app: &mut App, from: Position, to: Position) {
+            mouse_down(app, MouseButton::Right, from);
+            mouse(app, MouseEventKind::Drag(MouseButton::Right), to);
+            mouse(app, MouseEventKind::Up(MouseButton::Right), to);
+        }
+
+        fn middle(r: Rect) -> Position {
+            Position::new(r.x + r.width / 2, r.y + r.height / 2)
+        }
+
+        fn bottom(r: Rect) -> Position {
+            Position::new(r.x + r.width / 2, r.bottom() - 1)
+        }
+
+        fn ids(app: &App) -> Vec<u64> {
+            tab(app).panes.iter().map(|t| t.id).collect()
+        }
+
+        #[test]
+        fn a_pane_dragged_with_the_right_button_onto_the_bottom_of_another_goes_below_it() {
+            let (mut app, _rx) = split_right();
+            let [left, right] = ids(&app)[..] else { panic!("two panes") };
+            let r = rects(&app);
+
+            drag_pane(&mut app, inside(r[0]), bottom(r[1]));
+
+            let mut expected = split::Node::Leaf(right);
+            expected.split(right, Dir::Down, left);
+            assert_eq!((&tab(&app).layout, tab(&app).active, app.overlay.is_none()), (&expected, 0, true));
+        }
+
+        #[test]
+        fn moved_panes_keep_their_shells_and_get_their_new_size() {
+            let (mut app, _rx) = split_right();
+            let before = ids(&app);
+            let r = rects(&app);
+
+            drag_pane(&mut app, inside(r[0]), bottom(r[1]));
+
+            let sizes: Vec<(u64, (u16, u16))> =
+                tab(&app).panes.iter().map(|t| (t.id, t.emulator.size().expect("size"))).collect();
+            let mut expected: Vec<(u64, (u16, u16))> =
+                tab(&app).layout.panes(pane()).into_iter().map(|(id, r)| (id, (r.height, r.width))).collect();
+            expected.sort_by_key(|(id, _)| before.iter().position(|b| b == id));
+            assert_eq!((ids(&app), sizes), (before, expected));
+        }
+
+        #[test]
+        fn a_pane_dropped_in_the_middle_of_another_swaps_with_it() {
+            let (mut app, _rx) = split_right();
+            let [left, right] = ids(&app)[..] else { panic!("two panes") };
+            let r = rects(&app);
+
+            drag_pane(&mut app, inside(r[0]), middle(r[1]));
+
+            assert_eq!(tab(&app).layout.ids(), [right, left]);
+        }
+
+        #[test]
+        fn the_landing_shows_while_dragging() {
+            let (mut app, _rx) = split_right();
+            let r = rects(&app);
+
+            mouse_down(&mut app, MouseButton::Right, inside(r[0]));
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Right), middle(r[1]));
+
+            assert_eq!(app.pane_landing(pane()), Some((r[1], split::Place::Swap)));
+        }
+
+        #[test]
+        fn esc_cancels_a_pane_drag() {
+            let (mut app, _rx) = split_right();
+            let layout = tab(&app).layout.clone();
+            let r = rects(&app);
+            let to = bottom(r[1]);
+
+            mouse_down(&mut app, MouseButton::Right, inside(r[0]));
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Right), to);
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Right), to);
+
+            assert_eq!((&tab(&app).layout, app.overlay.is_none()), (&layout, true));
+        }
+
+        #[test]
+        fn a_drag_back_onto_the_same_pane_changes_nothing_and_opens_no_menu() {
+            let (mut app, _rx) = split_right();
+            let layout = tab(&app).layout.clone();
+            let r = rects(&app);
+            let from = inside(r[0]);
+
+            mouse_down(&mut app, MouseButton::Right, from);
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Right), middle(r[1]));
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Right), from);
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Right), from);
+
+            assert_eq!((&tab(&app).layout, app.overlay.is_none()), (&layout, true));
+        }
+
+        #[test]
+        fn a_move_that_would_not_fit_lands_nowhere() {
+            let (mut app, _rx) = split_right();
+            let r = rects(&app);
+            split(&mut app, inside(r[1]), "split down");
+            let [_, top, bottom_pane] = ids(&app)[..] else { panic!("three panes") };
+            let narrow = Rect { width: 30, ..pane() };
+            let right_edge = |area: Rect| {
+                let r = tab(&app).rect(area, bottom_pane).expect("the bottom pane");
+                Position::new(r.right() - 1, r.y + r.height / 2)
+            };
+
+            let fits = tab(&app).landing(pane(), top, right_edge(pane())).map(|l| l.place);
+            let squeezed = tab(&app).landing(narrow, top, right_edge(narrow)).map(|l| l.place);
+
+            assert_eq!((fits, squeezed), (Some(split::Place::Right), None));
+        }
+
         #[test]
         fn dragging_the_divider_moves_it() {
             let (mut app, _rx) = split_right();
@@ -8156,6 +8327,7 @@ rm -f "$1/sessions/$$.json"
             let at = inside(app.layout(LOW).pane);
 
             mouse_in(&mut app, MouseEventKind::Down(MouseButton::Right), at, LOW);
+            mouse_in(&mut app, MouseEventKind::Up(MouseButton::Right), at, LOW);
 
             assert_eq!(menu_labels(&app), ["send right-clicks to the pane", "close pane"]);
         }

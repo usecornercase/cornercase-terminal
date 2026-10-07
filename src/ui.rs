@@ -19,7 +19,7 @@ use crate::activity::{self, Status};
 use crate::emulator::Snapshot;
 use crate::host_theme::HostTheme;
 use crate::markdown;
-use crate::split::{Dir, Node};
+use crate::split::{Dir, Node, Place};
 use crate::usage::Severity;
 
 pub const SIDEBAR_WIDTH: u16 = 32;
@@ -57,6 +57,8 @@ const TODO_ICON: &str = "☐";
 const FILES_ICON: &str = "▤";
 pub const TODO_LABEL: &str = "todo";
 const UNDO_LABEL: &str = "undo";
+const MOVE_LABEL: &str = "move here";
+const SWAP_LABEL: &str = "swap";
 const NO_TAB: &str = "no tab open";
 const NO_TAB_HINT: &str = " opens a shell here";
 const TAGLINE: &str = "every agent in its own corner";
@@ -2152,6 +2154,7 @@ pub struct TabView {
     pub dim_inactive: bool,
     pub dragging: Option<Vec<bool>>,
     pub link: Option<(u16, Range<u16>)>,
+    pub landing: Option<(Rect, Place)>,
 }
 
 pub struct View<'a> {
@@ -2443,7 +2446,22 @@ fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
             f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
         }
     }
+    if let Some((r, place)) = tab.landing {
+        draw_pane_landing(f, view, r, place);
+    }
     draw_dividers(f, view, tab, area);
+}
+
+fn draw_pane_landing(f: &mut Frame, view: &View, r: Rect, place: Place) {
+    f.buffer_mut().set_style(r, Style::default().bg(view.surface()));
+    let label = format!(" {} ", if place == Place::Swap { SWAP_LABEL } else { MOVE_LABEL });
+    let width = u16::try_from(label.chars().count()).unwrap_or(u16::MAX);
+    if width > r.width || r.height == 0 {
+        return;
+    }
+    let at = Rect::new(r.x + (r.width - width) / 2, r.y + r.height / 2, width, 1);
+    let style = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
+    f.render_widget(Paragraph::new(Span::styled(label, style)), at);
 }
 
 fn draw_screen(f: &mut Frame, screen: &Snapshot, pane: Rect, show_cursor: bool, dim: bool) {
@@ -4061,6 +4079,7 @@ mod tests {
             dim_inactive: true,
             dragging: None,
             link: None,
+            landing: None,
         }
     }
 
@@ -6400,7 +6419,7 @@ mod tests {
             layout.split(0, Dir::Right, 1);
             layout.split(1, Dir::Down, 2);
             let screens = vec![screen(b"$ left"), screen(b"$ top"), screen(b"$ bottom")];
-            TabView { layout, screens, active: 1, dim_inactive, dragging: None, link: None }
+            TabView { layout, screens, active: 1, dim_inactive, dragging: None, link: None, landing: None }
         }
 
         fn style_at(v: &View, at: Position) -> Style {
@@ -6422,6 +6441,32 @@ mod tests {
         fn without_room_for_every_pane_only_the_active_one_is_drawn() {
             let v = View { tab: Some(three(true)), ..view(&["~"]) };
             insta::assert_snapshot!(render_sized(&v, W, 6).backend());
+        }
+
+        fn landing(place: Place) -> String {
+            let target = three(true).layout.panes(areas().pane)[0].1;
+            let tab = TabView { landing: Some((place.area(target), place)), ..three(true) };
+            let v = View { tab: Some(tab), ..view(&["~"]) };
+            format!("{:?}", render(&v).backend())
+        }
+
+        #[test]
+        fn a_pane_landing_on_an_edge_tints_that_half() {
+            insta::assert_snapshot!(landing(Place::Below));
+        }
+
+        #[test]
+        fn a_pane_landing_in_the_middle_offers_a_swap() {
+            insta::assert_snapshot!(landing(Place::Swap));
+        }
+
+        #[test]
+        fn the_landing_takes_the_surface_background() {
+            let v = View {
+                tab: Some(TabView { landing: Some((areas().pane, Place::Swap)), ..three(true) }),
+                ..view(&["~"])
+            };
+            assert_eq!(style_at(&v, areas().pane.as_position()).bg, Some(v.surface()));
         }
 
         #[test]

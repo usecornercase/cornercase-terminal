@@ -40,14 +40,15 @@ cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own
 | Gesture | Where | Does |
 | --- | --- | --- |
 | Click | An inactive pane | Makes it active. The click isn't passed to the program. |
-| Right-click | Any pane | Opens the pane menu: split right, split down, right-clicks, close. |
+| Right-click | Any pane | Opens the pane menu on release: split right, split down, right-clicks, close. |
+| Right-button drag | From a pane onto another pane | Near an edge, moves the pane to that side of the other one; in the middle, swaps them. See [Move and swap panes](../../guides/panes-and-splits/#move-and-swap-panes). |
 | Drag | A divider between panes | Resizes the panes. |
 | Double-click | A divider | Splits the space in half again. |
 | Press, drag, release | Text, when the program doesn't use the mouse | Selects the text and copies it to your clipboard. |
 | Hover, then click | A path to a file of the workspace, in the active pane | Underlines it, then opens the file in the [files panel](../../guides/files/#paths-in-your-panes-are-links), at its line when the path has one. |
 | Anything | A program that uses the mouse | Passed to the program, relative to its pane. |
 
-Programs that use the mouse get clicks, releases, drags, movement and the wheel, depending on what they asked for, in the encoding they asked for (SGR, UTF-8 or the original X10 one). Right-clicks still open the pane menu unless you chose **send right-clicks to the pane** for that pane. See [Panes and splits](../../guides/panes-and-splits/).
+Programs that use the mouse get clicks, releases, drags, movement and the wheel, depending on what they asked for, in the encoding they asked for (SGR, UTF-8 or the original X10 one). Right-clicks still open the pane menu, and right-button drags still move panes, unless you chose **send right-clicks to the pane** for that pane. See [Panes and splits](../../guides/panes-and-splits/).
 
 ### Changes panel
 
@@ -114,7 +115,7 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Any dialog with a text field | Type, `Backspace`, paste. `Enter` confirms, `Esc` cancels. |
 | New workspace | `Tab` toggles **with its own worktree**. |
 | Right-click menus | `Esc` closes the menu. Other keys still go to the active pane. |
-| While dragging a row | `Esc` cancels the drag. Other keys still go to the active pane. |
+| While dragging a row or a pane | `Esc` cancels the drag. Other keys still go to the active pane. |
 | Folder picker | Type to filter. `↑` `↓` select. `→` or `Tab` go into the selected folder, `←` goes up. `Enter` goes into the selected folder, or opens the folder you are in. `~` goes home and `/` to the root when the filter is empty. `Backspace` on an empty filter goes up. |
 | Search | Type to search. `↑` `↓` select. `Enter` goes to the result. `Esc` closes. |
 | Issue list | Type to filter. `↑` `↓` `PgUp` `PgDn` select. `Enter` reads the issue. `Tab` / `Shift+Tab` switch sources. `Esc` closes. |

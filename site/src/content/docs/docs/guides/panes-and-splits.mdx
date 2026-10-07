@@ -1,6 +1,6 @@
 ---
 title: Panes and splits
-description: Split tabs into panes, resize them, use the mouse inside programs, and copy text from any pane.
+description: Split tabs into panes, resize, move and swap them, use the mouse inside programs, and copy text from any pane.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -36,6 +36,19 @@ The new pane starts in the folder the pane you split is currently in, and become
 
 You can split a pane again and again; the dividers join up like in Ghostty. When the program in a pane exits, the pane closes and its neighbour takes the space. Closing the last pane closes the tab.
 
+## Move and swap panes
+
+**Drag a pane with the right button** to put it somewhere else in the tab. Press the right button in the pane, move onto another pane and release:
+
+- **Near an edge** of the other pane, the pane goes on that side of it: left, right, above or below. The half it would take is tinted and says **move here**.
+- **In the middle** of the other pane, the two swap places and the layout stays as it was. The whole pane is tinted and says **swap**.
+
+The programs keep running; only their place and size change. The moved pane becomes the active one, and the new layout is saved with your session. Releasing on the same pane, outside the panes, or pressing `Esc` cancels. A place where the panes would no longer fit is not offered.
+
+A right-click without moving still opens the pane menu, now when you release the button.
+
+This is also how you turn two panes side by side into one above the other: drag one onto the bottom edge of the other.
+
 ## Focus, resize and dim
 
 - **Click a pane** to make it active. That first click only moves the focus; it is not sent to the program.
@@ -46,7 +59,7 @@ Programs are told about every size change, and Ghostty's emulator reflows their 
 
 ### When the tab gets too small
 
-When the terminal shrinks, for example when you attach from a phone, the panes shrink too, each down to 10 columns and 3 rows. If even that doesn't fit, the tab shows only its active pane, over the whole tab, until there is room again. The other panes keep running at their last size, and the tab goes back to its splits, with the same proportions, as soon as they fit. Meanwhile the pane menu offers no split.
+When the terminal shrinks, for example when you attach from a phone, the panes shrink too, each down to 10 columns and 3 rows. If even that doesn't fit, the tab shows only its active pane, over the whole tab, until there is room again. The other panes keep running at their last size, and the tab goes back to its splits, with the same proportions, as soon as they fit. Meanwhile the pane menu offers no split, and there is no other pane to move a pane to.
 
 ## The keyboard
 
@@ -62,7 +75,7 @@ When the program doesn't ask for the mouse, dragging selects text instead; see b
 
 ### Right-clicks inside programs
 
-Right-clicks normally open cornercase's pane menu, even while a program uses the mouse, because almost no program needs the right button. For the ones that do, choose **send right-clicks to the pane** in the pane menu: from then on, right-clicks go to the program in that pane while it uses the mouse.
+Right-clicks normally open cornercase's pane menu, and right-button drags move the pane, even while a program uses the mouse, because almost no program needs the right button. For the ones that do, choose **send right-clicks to the pane** in the pane menu: from then on, right-clicks and right-button drags go to the program in that pane while it uses the mouse.
 
 When the program stops using the mouse, a right-click opens the menu again, and the same item now reads **use this menu on right-click** to switch back. The choice belongs to that pane and is saved with your session.
 

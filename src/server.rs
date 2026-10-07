@@ -773,8 +773,10 @@ mod tests {
             }
 
             fn right_click_in_the_pane(&self) {
-                let kind = MouseEventKind::Down(MouseButton::Right);
-                self.input(Event::Mouse(MouseEvent { kind, column: COLS - 10, row: 3, modifiers: KeyModifiers::NONE }));
+                for kind in [MouseEventKind::Down(MouseButton::Right), MouseEventKind::Up(MouseButton::Right)] {
+                    let ev = MouseEvent { kind, column: COLS - 10, row: 3, modifiers: KeyModifiers::NONE };
+                    self.input(Event::Mouse(ev));
+                }
             }
 
             fn text(&self) -> String {
