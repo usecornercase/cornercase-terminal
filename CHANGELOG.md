@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.11
+
+- A split tab keeps the name of its first pane, the top-left one, instead of changing every time you click another pane, and its row ends with a grey `+n` saying how many other panes it holds. A long name is cut before the count is.
+
 ## 0.11.10
 
 - An agents section for the sidebar: every Claude Code and Codex running in any project, one row each, with its status (`!` waiting for you, `✓` done, `◐` working, `○` idle), its project and workspace, and its model and how full its context is. Click a row to jump straight to that agent, whatever project you're in. Turn it on in **Settings → TUI → agents section**. It sits at the bottom of the sidebar in every layout, and you can drag the line above it to make it taller or shorter. On a narrow terminal it's a third menu: ` agents › ` in the projects menu.
