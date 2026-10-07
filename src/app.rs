@@ -6178,10 +6178,10 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        #[case::both(true, true, (2, "      Opus 5.5 · 17%"))]
-        #[case::the_model_alone(true, false, (2, "      Opus 5.5"))]
-        #[case::the_context_alone(false, true, (2, "      17%"))]
-        #[case::neither(false, false, (1, "    + tab"))]
+        #[case::both(true, true, (2, "▌ │   Opus 5.5 · 17%"))]
+        #[case::the_model_alone(true, false, (2, "▌ │   Opus 5.5"))]
+        #[case::the_context_alone(false, true, (2, "▌ │   17%"))]
+        #[case::neither(false, false, (1, "  └ + tab"))]
         fn a_tab_running_claude_shows_its_model_and_context_under_its_name(
             #[case] model: bool,
             #[case] context: bool,

@@ -3,12 +3,12 @@ source: src/ui.rs
 expression: render(&with(issues(list(Some(0))))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"  ┌ issues · shop ───────────────────────────────────────────────────────────────────────────────┐  "
+"  ╭─ issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
 " p│  All   GitHub   Shortcut   Linear                                    [ ] closed    [x] mine  │  "
 "  │                                                                                              │  "
 "▌ │ ›                                                                                            │  "
 "  │                                                                                              │  "
-"  │  #482   Returns page crashes on empty address                               bug · ana · 3d   │  "
+"  │ ▌#482   Returns page crashes on empty address                               bug · ana · 3d   │  "
 "  │  sc-48  Dark mode                                                   In Review · luis · 2mo   │  "
 "  │                                                                                              │  "
 "  │                                                                                              │  "
@@ -18,5 +18,5 @@ expression: render(&with(issues(list(Some(0))))).backend()
 "  │                                                                                              │  "
 " ─│ enter reads #482 · start works on it in its own worktree, on issue-482-returns               │  "
 "  │                                                                              start   cancel  │  "
-"  └──────────────────────────────────────────────────────────────────────────────────────────────┘  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
 "  quit                         │                         │                                          "

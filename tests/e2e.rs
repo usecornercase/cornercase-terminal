@@ -502,7 +502,7 @@ fn a_tab_running_claude_shows_what_it_is_doing() {
     let tab_row = |s: &str| s.lines().nth(tab).unwrap_or_default().to_string();
 
     app.send(format!("{} {}\r", claude.display(), sessions.display()).as_bytes());
-    app.wait_for("the tab says claude needs you", |s| tab_row(s).contains("▌ ! "));
+    app.wait_for("the tab says claude needs you", |s| tab_row(s).contains("▌ ├ ! "));
     app.send(b"\r");
 
     app.wait_for("the icon goes once claude exits", |s| !tab_row(s).contains('!'));
@@ -699,7 +699,9 @@ fn exiting_the_last_shell_keeps_the_project() {
     app.wait_for("the workspace has no tab", |s| s.contains("no tab open") && s.contains(&first_entry()));
     app.click(workspace_row(&[0], WorkspaceRow::NewTab(0)));
 
-    app.wait_for("a new tab opens", |s| !s.contains("no tab open") && s.contains("$ "));
+    app.wait_for("a new tab opens", |s| !s.contains("no tab open"));
+    app.send(b"echo in-the-\"\"new-tab\r");
+    app.wait_for("the new tab runs a shell", |s| s.contains("in-the-new-tab"));
     assert!(app.is_running(), "client exited");
 }
 
@@ -790,7 +792,7 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     app.click(button.as_position());
     app.send(b"buy milk\r");
 
-    app.wait_for("the item shows", |s| s.contains("[ ] buy milk"));
+    app.wait_for("the item shows", |s| s.contains("○  buy milk"));
     app.session.wait_for_file("todos.json", "the item is saved", |saved| saved.contains("buy milk"));
 }
 

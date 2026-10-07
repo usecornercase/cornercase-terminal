@@ -3,12 +3,12 @@ source: src/ui.rs
 expression: render(&with(settings(1))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"  ┌ settings ────────────────────────────────────────────────────────────────────────────────────┐  "
+"  ╭─ settings ───────────────────────────────────────────────────────────────────────────────────╮  "
 " p│  Worktrees   Agents   Issues   TUI                                                           │  "
 "  │                                                                                              │  "
 "▌ │ Accounts                                                                                     │  "
 "  │   Shortcut API token        @ana in acme  saved                                              │  "
-"  │ › Linear API key            not connected  enter pastes one                                  │  "
+"  │ ▌ Linear API key            not connected  enter pastes one                                  │  "
 "  │                                                                                              │  "
 "  │ Sources shown                                                                                │  "
 "  │   [x] All                   every source together                                            │  "
@@ -18,5 +18,5 @@ expression: render(&with(settings(1))).backend()
 "  │                                                                                              │  "
 " ─│ enter changes the selected setting                                                           │  "
 "  │                                                                                        done  │  "
-"  └──────────────────────────────────────────────────────────────────────────────────────────────┘  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
 "  quit                         │                         │                                          "

@@ -1,13 +1,14 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
 use serde::{Deserialize, Serialize};
 
 pub mod changes;
@@ -49,12 +50,17 @@ const CRUMB_SEPARATOR: &str = " › ";
 const CANCEL_LABEL: &str = "cancel";
 const ISSUES_LABEL: &str = "issues";
 const USAGE_LABEL: &str = "usage";
-const USAGE_FILLED: &str = "█";
-const USAGE_EMPTY: &str = "░";
+const USAGE_BAR: &str = "━";
 const CHANGES_ICON: &str = "±";
 const TODO_ICON: &str = "☐";
 pub const TODO_LABEL: &str = "todo";
 const UNDO_LABEL: &str = "undo";
+const NO_TAB: &str = "no tab open";
+const NO_TAB_HINT: &str = " opens a shell here";
+const TAGLINE: &str = "every agent in its own corner";
+const WELCOME_HINT: &str = " opens a folder";
+const LOGO: [(&str, &str); 6] =
+    [("   █████████", ""), ("▄▄▄▀▀▀▀▀▀▀▀▀", ""), ("███", ""), ("███   ", "██"), ("███   ", "██"), ("███   ", "▀▀")];
 const BRAND_COLOR: Color = Color::Indexed(99);
 const DARK_SURFACE: Color = Color::Indexed(236);
 const LIGHT_SURFACE: Color = Color::Indexed(254);
@@ -62,6 +68,8 @@ const DARK_HOVER: Color = Color::Indexed(235);
 const LIGHT_HOVER: Color = Color::Indexed(255);
 const DARK_MUTED: Color = Color::Indexed(243);
 const LIGHT_MUTED: Color = Color::Indexed(245);
+const DARK_LINE: Color = Color::Indexed(239);
+const LIGHT_LINE: Color = Color::Indexed(250);
 const CLOSE_BUTTON_WIDTH: u16 = 3;
 const COMPACT_CLOSE_WIDTH: u16 = 5;
 const TOAST_ICON: &str = " ✓ ";
@@ -1479,7 +1487,7 @@ pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
 pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
     let width = area.width.saturating_sub(4).min(FORM_WIDTH);
     let body = form_inner(Rect::new(0, 0, width, 3)).width;
-    let lines = u16::try_from(usage_lines(Color::Reset, usage, body).len()).unwrap_or(u16::MAX);
+    let lines = u16::try_from(usage_lines((Color::Reset, Color::Reset), usage, body).len()).unwrap_or(u16::MAX);
     let height = lines.saturating_add(3).min(area.height);
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
@@ -1997,6 +2005,12 @@ pub enum Overlay {
     Search(Search),
 }
 
+impl Overlay {
+    fn is_modal(&self) -> bool {
+        !matches!(self, Self::Menu { .. } | Self::Search(_))
+    }
+}
+
 pub struct Entry {
     pub name: String,
     pub branch: Option<String>,
@@ -2139,11 +2153,19 @@ impl View<'_> {
         if self.light { LIGHT_SURFACE } else { DARK_SURFACE }
     }
 
+    fn hover_fill(&self) -> Color {
+        if self.light { LIGHT_HOVER } else { DARK_HOVER }
+    }
+
+    fn line(&self) -> Color {
+        line_colour(self.light)
+    }
+
     fn row_background(&self, r: Rect, active: bool) -> Style {
         if active {
             Style::default().bg(self.surface())
         } else if self.row_hovered(r) {
-            Style::default().bg(if self.light { LIGHT_HOVER } else { DARK_HOVER })
+            Style::default().bg(self.hover_fill())
         } else {
             Style::default()
         }
@@ -2192,9 +2214,8 @@ pub fn draw(f: &mut Frame, view: &View) {
     let areas = layout_with(f.area(), view.widths, panel, view.sidebar).shown(view.nav);
     match &view.tab {
         Some(tab) => draw_tab(f, view, tab, areas.pane),
-        None if view.has_project => {
-            f.render_widget(Paragraph::new(Span::styled(" no tab open", Style::default().fg(view.muted))), areas.pane);
-        }
+        None if view.has_project => draw_no_tab(f, view.muted, areas.pane),
+        None if view.projects.is_empty() => draw_welcome(f, view.muted, areas.pane),
         None => {}
     }
     if areas.compact() {
@@ -2203,9 +2224,9 @@ pub fn draw(f: &mut Frame, view: &View) {
             f.render_widget(Clear, areas.pane);
         }
     } else {
-        draw_column_border(f, view.muted, areas.projects_border);
-        draw_column_border(f, view.muted, areas.workspaces_border);
-        draw_separator(f, view.muted, areas.stack_border);
+        draw_column_border(f, view.line(), areas.projects_border);
+        draw_column_border(f, view.line(), areas.workspaces_border);
+        draw_separator(f, view.line(), areas.stack_border);
         draw_borders(f, view, &areas);
         draw_search_bar(f, view, areas.search);
     }
@@ -2226,7 +2247,7 @@ pub fn draw(f: &mut Frame, view: &View) {
     if panel && !areas.changes.is_empty() {
         f.render_widget(Clear, areas.changes);
         let border = areas.changes_border;
-        draw_column_border(f, view.muted, border);
+        draw_column_border(f, view.line(), border);
         draw_border(f, view, border, Border::Changes);
         let hover = view.hover.filter(|_| view.overlay.is_none());
         match (&view.changes, &view.todo) {
@@ -2234,6 +2255,10 @@ pub fn draw(f: &mut Frame, view: &View) {
             (None, Some(todo)) => todo::draw(f, areas.changes, todo, hover),
             (None, None) => {}
         }
+    }
+    if view.overlay.as_ref().is_some_and(Overlay::is_modal) {
+        let area = f.area();
+        f.buffer_mut().set_style(area, Style::default().add_modifier(Modifier::DIM));
     }
     match &view.overlay {
         Some(Overlay::Menu { at, items }) => draw_menu(f, view, *at, items),
@@ -2251,6 +2276,66 @@ pub fn draw(f: &mut Frame, view: &View) {
     if let Some(toast) = view.toast {
         draw_toast(f, view, toast);
     }
+}
+
+fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
+    let height = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+    let width = lines.iter().map(Line::width).max().unwrap_or(0);
+    if height > area.height || width > usize::from(area.width) {
+        return;
+    }
+    let r = Rect { y: area.y + (area.height - height) / 2, height, ..area };
+    f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), r);
+}
+
+fn draw_no_tab(f: &mut Frame, muted: Color, pane: Rect) {
+    let dim = Style::default().fg(muted);
+    draw_centered(
+        f,
+        pane,
+        vec![
+            Line::from(Span::styled(NO_TAB, dim.add_modifier(Modifier::BOLD))),
+            Line::from(vec![Span::styled("+ tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]),
+        ],
+    );
+}
+
+fn welcome_text(muted: Color) -> Vec<Line<'static>> {
+    let dim = Style::default().fg(muted);
+    vec![
+        Line::from(wordmark()),
+        Line::from(Span::styled(TAGLINE, dim)),
+        Line::default(),
+        Line::from(vec![
+            Span::styled("+ new project", Style::default().fg(Color::Cyan)),
+            Span::styled(WELCOME_HINT, dim),
+        ]),
+    ]
+}
+
+fn draw_welcome(f: &mut Frame, muted: Color, pane: Rect) {
+    let corner = Style::default().fg(BRAND_COLOR);
+    let cursor = Style::default().fg(Color::Cyan);
+    let width = LOGO.iter().map(|(c, k)| c.chars().count() + k.chars().count()).max().unwrap_or(0);
+    let mut lines: Vec<Line<'static>> = LOGO
+        .iter()
+        .map(|(c, k)| {
+            let pad = width - c.chars().count() - k.chars().count();
+            Line::from(vec![Span::styled(*c, corner), Span::styled(*k, cursor), Span::raw(" ".repeat(pad))])
+        })
+        .collect();
+    lines.push(Line::default());
+    lines.extend(welcome_text(muted));
+    if usize::from(pane.height) >= lines.len() {
+        draw_centered(f, pane, lines);
+    } else {
+        draw_centered(f, pane, welcome_text(muted));
+    }
+}
+
+fn wordmark() -> Vec<Span<'static>> {
+    let mark = Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD);
+    vec![Span::styled("c", mark), Span::styled("ornercase", Style::default().add_modifier(Modifier::BOLD))]
 }
 
 pub fn toast_area(area: Rect, toast: Toast) -> Rect {
@@ -2284,7 +2369,7 @@ fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
     };
     let border = Style::default().fg(icon.style.fg.unwrap_or(Color::Green));
     f.render_widget(Clear, r);
-    f.render_widget(Block::bordered().border_style(border), r);
+    f.render_widget(Block::bordered().border_type(BorderType::Rounded).border_style(border), r);
     f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(toast.message)])), r.inner(Margin::new(1, 1)));
     let undo = toast_undo(f.area(), toast);
     if !undo.is_empty() {
@@ -2392,7 +2477,7 @@ fn draw_dividers(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
     }
     let buf = f.buffer_mut();
     for ((x, y), (links, lit)) in cells {
-        let color = if lit { Color::Cyan } else { view.muted };
+        let color = if lit { Color::Cyan } else { view.line() };
         buf[(x, y)].set_symbol(divider_symbol(links)).set_style(Style::default().fg(color));
     }
 }
@@ -2430,16 +2515,34 @@ fn action_style(lit: bool) -> Style {
     }
 }
 
+fn pick_background(view: &View, selected: bool, r: Rect) -> Style {
+    if selected {
+        Style::default().bg(view.surface())
+    } else if hovered(view, r) {
+        Style::default().bg(view.hover_fill())
+    } else {
+        Style::default()
+    }
+}
+
+fn rail(selected: bool, bg: Style) -> Span<'static> {
+    if selected { Span::styled("▌", bg.fg(Color::Cyan)) } else { Span::styled(" ", bg) }
+}
+
 fn sidebar_hovered(view: &View, r: Rect) -> bool {
     view.overlay.is_none() && view.drag.is_none() && hovered(view, r)
 }
 
 fn overlay_block(muted: Color, title: &str) -> Block<'_> {
-    let block = Block::bordered().border_style(Style::default().fg(muted));
+    let border = Style::default().fg(muted);
+    let block = Block::bordered().border_type(BorderType::Rounded).border_style(border);
     if title.is_empty() {
         block
     } else {
-        block.title(Span::styled(format!(" {title} "), Style::default().add_modifier(Modifier::BOLD)))
+        block.title(Line::from(vec![
+            Span::styled("─", border),
+            Span::styled(format!(" {title} "), Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD)),
+        ]))
     }
 }
 
@@ -2449,12 +2552,11 @@ fn draw_menu(f: &mut Frame, view: &View, at: Position, items: &[String]) {
     f.render_widget(overlay_block(view.muted, ""), menu);
     for (i, item) in items.iter().enumerate() {
         let r = menu_item(menu, i);
-        let style = if hovered(view, r) {
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-        f.render_widget(Paragraph::new(format!(" {item} ")).style(style), r);
+        let lit = hovered(view, r);
+        let bg = if lit { Style::default().bg(view.surface()) } else { Style::default() };
+        let text = if lit { bg.add_modifier(Modifier::BOLD) } else { bg };
+        let line = Line::from(vec![rail(lit, bg), Span::styled(format!("{item} "), text)]);
+        f.render_widget(Paragraph::new(line).style(bg), r);
     }
 }
 
@@ -2586,7 +2688,12 @@ fn severity_color(severity: Severity) -> Color {
     }
 }
 
-fn usage_section_lines(muted: Color, section: &UsageSection, width: usize, lines: &mut Vec<Line<'static>>) {
+fn usage_section_lines(
+    (muted, track): (Color, Color),
+    section: &UsageSection,
+    width: usize,
+    lines: &mut Vec<Line<'static>>,
+) {
     let dim = Style::default().fg(muted);
     let used = section.title.chars().count() + section.status.chars().count();
     lines.extend([
@@ -2615,8 +2722,8 @@ fn usage_section_lines(muted: Color, section: &UsageSection, width: usize, lines
                 Span::styled(resets, dim),
             ]),
             Line::from(vec![
-                Span::styled(USAGE_FILLED.repeat(filled), colour),
-                Span::styled(USAGE_EMPTY.repeat(width - filled), dim),
+                Span::styled(USAGE_BAR.repeat(filled), colour),
+                Span::styled(USAGE_BAR.repeat(width - filled), Style::default().fg(track)),
             ]),
             Line::default(),
         ]);
@@ -2629,10 +2736,10 @@ fn usage_section_lines(muted: Color, section: &UsageSection, width: usize, lines
     }
 }
 
-fn usage_lines(muted: Color, usage: &Usage, width: u16) -> Vec<Line<'static>> {
+fn usage_lines(colours: (Color, Color), usage: &Usage, width: u16) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for section in &usage.sections {
-        usage_section_lines(muted, section, usize::from(width), &mut lines);
+        usage_section_lines(colours, section, usize::from(width), &mut lines);
     }
     lines
 }
@@ -2642,24 +2749,28 @@ fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, USAGE_LABEL), r);
     let [body, _] = usage_rows(r);
-    f.render_widget(Paragraph::new(usage_lines(view.muted, usage, body.width)), body);
+    f.render_widget(Paragraph::new(usage_lines((view.muted, view.line()), usage, body.width)), body);
     draw_submit(f, view, usage_done(f.area(), usage), crate::settings::DONE);
 }
 
+fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style {
+    match (primary, hovered(view, r)) {
+        (true, true) => Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
+        (true, false) => Style::default().fg(Color::Cyan).bg(view.surface()).add_modifier(Modifier::BOLD),
+        (false, true) => Style::default().fg(Color::Black).bg(Color::Gray),
+        (false, false) => Style::default().fg(Color::Gray).bg(view.surface()),
+    }
+}
+
 fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
-    let style = if hovered(view, r) {
-        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-    };
+    let style = dialog_button_style(view, r, true);
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
 }
 
 fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], label: &str) {
-    let dim = Style::default().fg(view.muted);
-    let cancel_style = if hovered(view, cancel) { Style::default().fg(Color::Black).bg(Color::Gray) } else { dim };
     draw_submit(f, view, submit, label);
-    f.render_widget(Paragraph::new(Span::styled(format!(" {CANCEL_LABEL} "), cancel_style)), cancel);
+    let style = dialog_button_style(view, cancel, false);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {CANCEL_LABEL} "), style)), cancel);
 }
 
 fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
@@ -2692,13 +2803,9 @@ fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
         if row.is_empty() {
             continue;
         }
-        let highlighted = picker.selected == Some(i) || hovered(view, row);
-        let (style, branch_style) = if highlighted {
-            let style = Style::default().fg(Color::Black).bg(Color::Cyan);
-            (style.add_modifier(Modifier::BOLD), style)
-        } else {
-            (Style::default(), Style::default().fg(view.muted))
-        };
+        let selected = picker.selected == Some(i);
+        let bg = pick_background(view, selected, row);
+        let style = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
         let branch = item.branch.as_deref().unwrap_or_default();
         let branch_width = branch.chars().count();
         let max = usize::from(row.width).saturating_sub(branch_width + 3);
@@ -2706,10 +2813,11 @@ fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
         let gap = usize::from(row.width).saturating_sub(name.chars().count() + branch_width + 2);
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(format!(" {name}{}", " ".repeat(gap)), style),
-                Span::styled(format!("{branch} "), branch_style),
+                rail(selected, bg),
+                Span::styled(format!("{name}{}", " ".repeat(gap)), style),
+                Span::styled(format!("{branch} "), bg.fg(view.muted)),
             ]))
-            .style(style),
+            .style(bg),
             row,
         );
     }
@@ -2756,14 +2864,14 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
             if row.is_empty() {
                 continue;
             }
-            let highlighted = pick.selected == Some(i) || hovered(view, row);
-            let base = if highlighted { Style::default().fg(Color::Black).bg(Color::Cyan) } else { Style::default() };
-            let value_style = if *dangerous && !highlighted { base.fg(Color::Red) } else { base };
-            let note_style = if highlighted { base } else { dim };
+            let selected = pick.selected == Some(i);
+            let base = pick_background(view, selected, row);
+            let value_style = if *dangerous { base.fg(Color::Red) } else { base };
             f.render_widget(
                 Paragraph::new(Line::from(vec![
-                    Span::styled(format!(" {value:<32} "), value_style.add_modifier(Modifier::BOLD)),
-                    Span::styled(item_note.clone(), note_style),
+                    rail(selected, base),
+                    Span::styled(format!("{value:<32} "), value_style.add_modifier(Modifier::BOLD)),
+                    Span::styled(item_note.clone(), base.fg(view.muted)),
                 ]))
                 .style(base),
                 row,
@@ -2804,7 +2912,7 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
 
 fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, selected: bool, r: Rect) {
     let dim = Style::default().fg(view.muted);
-    let (marker, bg) = if selected { ("› ", Style::default().bg(view.surface())) } else { ("  ", Style::default()) };
+    let (marker, bg) = if selected { ("▌ ", Style::default().bg(view.surface())) } else { ("  ", Style::default()) };
     let label_style = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
     let value_style = if row.dangerous { bg.fg(Color::Red) } else { bg };
     let width = usize::from(r.width);
@@ -2876,12 +2984,7 @@ fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
 
     let rects = issue_buttons(r, &issues.buttons);
     for (i, (rect, label)) in rects.iter().zip(&issues.buttons).enumerate() {
-        let style = match (i == 0, hovered(view, *rect)) {
-            (true, true) => Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
-            (true, false) => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-            (false, true) => Style::default().fg(Color::Black).bg(Color::Gray),
-            (false, false) => dim,
-        };
+        let style = dialog_button_style(view, *rect, i == 0);
         f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), *rect);
     }
 
@@ -2917,34 +3020,33 @@ fn draw_issue_tabs(f: &mut Frame, view: &View, issues: &Issues, r: Rect) {
     }
 }
 
+fn tab_style(active: bool, lit: bool, surface: Color) -> Style {
+    if active {
+        Style::default().fg(Color::Cyan).bg(surface).add_modifier(Modifier::BOLD)
+    } else if lit {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::Gray)
+    }
+}
+
 fn draw_tabs(f: &mut Frame, view: &View, rects: &[Rect], names: &[&str], active: usize) {
     for (i, (rect, name)) in rects.iter().zip(names).enumerate() {
-        let style = if i == active {
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else if hovered(view, *rect) {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::Gray)
-        };
+        let style = tab_style(i == active, hovered(view, *rect), view.surface());
         f.render_widget(Paragraph::new(Span::styled(format!(" {name} "), style)), *rect);
     }
 }
 
 fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], selected: Option<usize>, scroll: usize) {
     let key_width = items.iter().map(|i| i.key.chars().count()).max().unwrap_or(0);
-    let dim = Style::default().fg(view.muted);
     for (i, item) in items.iter().enumerate() {
         let row = list_item(list, items.len(), scroll, i);
         if row.is_empty() {
             continue;
         }
-        let highlighted = selected == Some(i) || hovered(view, row);
-        let (style, key_style, meta_style) = if highlighted {
-            let style = Style::default().fg(Color::Black).bg(Color::Cyan);
-            (style.add_modifier(Modifier::BOLD), style.add_modifier(Modifier::BOLD), style)
-        } else {
-            (Style::default(), Style::default().fg(Color::Cyan), dim)
-        };
+        let chosen = selected == Some(i);
+        let bg = pick_background(view, chosen, row);
+        let style = if chosen { bg.add_modifier(Modifier::BOLD) } else { bg };
         let width = usize::from(row.width);
         let meta = truncate_right(&item.meta, width / 3);
         let meta_width = meta.chars().count();
@@ -2952,11 +3054,12 @@ fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], s
         let gap = width.saturating_sub(key_width + title.chars().count() + meta_width + 5);
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(format!(" {:<key_width$}  ", item.key), key_style),
+                rail(chosen, bg),
+                Span::styled(format!("{:<key_width$}  ", item.key), style.fg(Color::Cyan)),
                 Span::styled(format!("{title}{}", " ".repeat(gap)), style),
-                Span::styled(format!("{meta} "), meta_style),
+                Span::styled(format!("{meta} "), bg.fg(view.muted)),
             ]))
-            .style(style),
+            .style(bg),
             row,
         );
     }
@@ -2994,7 +3097,7 @@ fn draw_landing(f: &mut Frame, r: Rect, indent: Option<u16>) {
 }
 
 fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_separator(f, view.muted, areas.separator);
+    draw_separator(f, view.line(), areas.separator);
     let mut settings = areas.settings;
     if let Some(label) = &view.update {
         let r = update_button(areas.settings, label);
@@ -3007,8 +3110,8 @@ fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
     draw_quit_button(f, view, areas.quit);
 }
 
-fn draw_column_border(f: &mut Frame, muted: Color, r: Rect) {
-    let line = Paragraph::new(vec![Line::from("│"); usize::from(r.height)]).style(Style::default().fg(muted));
+fn draw_column_border(f: &mut Frame, colour: Color, r: Rect) {
+    let line = Paragraph::new(vec![Line::from("│"); usize::from(r.height)]).style(Style::default().fg(colour));
     f.render_widget(line, r);
 }
 
@@ -3047,7 +3150,8 @@ fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
         ])
     } else {
         let icon = if sidebar_hovered(view, r) { accent } else { dim };
-        Line::from(vec![Span::styled(SEARCH_ICON, icon), Span::styled(SEARCH_PLACEHOLDER, dim)])
+        let room = usize::from(r.width).saturating_sub(SEARCH_ICON.chars().count() + 1);
+        Line::from(vec![Span::styled(SEARCH_ICON, icon), Span::styled(truncate_right(SEARCH_PLACEHOLDER, room), dim)])
     };
     f.render_widget(Paragraph::new(line).style(Style::default().bg(view.surface())), r);
 }
@@ -3064,23 +3168,20 @@ fn draw_results(f: &mut Frame, view: &View, search: &Search, r: Rect) {
         if row.is_empty() {
             continue;
         }
-        let highlighted = search.selected == i || hovered(view, row);
-        let (base, matched, context_style) = if highlighted {
-            let style = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
-            (style, style, style.remove_modifier(Modifier::BOLD))
-        } else {
-            (Style::default(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), dim)
-        };
+        let selected = search.selected == i;
+        let bg = pick_background(view, selected, row);
+        let base = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
+        let matched = base.fg(Color::Cyan).add_modifier(Modifier::BOLD);
         let width = usize::from(row.width);
         let context = truncate_left(&result.context, width / 2);
         let context_width = context.chars().count();
         let name = truncate_right(&result.name, width.saturating_sub(context_width + 5));
         let gap = width.saturating_sub(name.chars().count() + context_width + 3);
-        let mut spans = vec![Span::styled("  ", base)];
+        let mut spans = vec![rail(selected, bg), Span::styled(" ", bg)];
         spans.extend(highlight(&name, &search.query, base, matched));
-        spans.push(Span::styled(" ".repeat(gap), base));
-        spans.push(Span::styled(format!("{context} "), context_style));
-        f.render_widget(Paragraph::new(Line::from(spans)).style(base), row);
+        spans.push(Span::styled(" ".repeat(gap), bg));
+        spans.push(Span::styled(format!("{context} "), bg.fg(view.muted)));
+        f.render_widget(Paragraph::new(Line::from(spans)).style(bg), row);
     }
     f.render_widget(
         Paragraph::new(Span::styled(
@@ -3133,6 +3234,10 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     draw_band(f, r, Span::styled(centered(SEARCH_ICON.trim(), r.width), style), style);
 }
 
+fn line_colour(light: bool) -> Color {
+    if light { LIGHT_LINE } else { DARK_LINE }
+}
+
 pub fn muted(theme: &HostTheme) -> Color {
     if theme.muted_is_readable() {
         Color::DarkGray
@@ -3158,8 +3263,7 @@ fn draw_band<'a>(f: &mut Frame, r: Rect, line: impl Into<Line<'a>>, style: Style
 
 fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
     let Some(project) = view.projects.get(view.active).filter(|_| view.has_project) else {
-        let mark = Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD);
-        return vec![Span::styled("c", mark), Span::styled("ornercase", Style::default().add_modifier(Modifier::BOLD))];
+        return wordmark();
     };
     let workspace = view.workspaces.get(view.active_workspace);
     let tab = workspace.zip(view.active_tab).and_then(|(w, t)| w.tabs.get(t));
@@ -3195,9 +3299,9 @@ fn draw_title(f: &mut Frame, muted: Color, r: Rect, title: &str) {
     f.render_widget(Paragraph::new(Span::styled(format!(" {title}"), style)), middle(r));
 }
 
-fn draw_separator(f: &mut Frame, muted: Color, r: Rect) {
+fn draw_separator(f: &mut Frame, colour: Color, r: Rect) {
     let line = "─".repeat(usize::from(r.width.saturating_sub(2)));
-    f.render_widget(Paragraph::new(Span::styled(format!(" {line}"), Style::default().fg(muted))), r);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {line}"), Style::default().fg(colour))), r);
 }
 
 fn button_style(view: &View, r: Rect, idle: Style, hover_bg: Color) -> Style {
@@ -3241,21 +3345,35 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
         if r.is_empty() {
             continue;
         }
+        let guide = r.x.saturating_add(2);
         match row {
             WorkspaceRow::Gap => {}
-            WorkspaceRow::Landing => draw_landing(f, r, landing.map(|l| l.spot.indent())),
+            WorkspaceRow::Landing => {
+                draw_landing(f, r, landing.map(|l| l.spot.indent()));
+                if among_tabs(&rows, i) {
+                    draw_guide(f, view.line(), guide, r, Guide::Bar);
+                }
+            }
             WorkspaceRow::Workspace(w) => {
                 let bg = view.row_background(r, view.dragging_workspace_row(row));
                 let band = Band { r, pitch: areas.pitch, lead: vec![Span::raw("  ")], bg };
                 draw_workspace_band(f, view, band, &view.workspaces[w], w == view.active_workspace, true);
+                draw_guide(f, view.line(), guide, r, Guide::Top);
             }
             WorkspaceRow::Tab(w, t) => {
                 let active = w == view.active_workspace && view.active_tab == Some(t);
                 let bg = view.row_background(r, active || view.dragging_workspace_row(row));
-                let band = Band { r, pitch: areas.pitch, lead: vec![Span::raw("  ")], bg };
+                let band = Band { r, pitch: areas.pitch, lead: vec![marker(active), Span::raw("  ")], bg };
                 draw_tab_band(f, view, band, &view.workspaces[w].tabs[t], active);
+                draw_guide(f, view.line(), guide, r, Guide::Tee);
+                if active {
+                    draw_rail(f, r);
+                }
             }
-            WorkspaceRow::NewTab(_) => draw_button(f, r, "   ", "+ tab", button_style(view, r, dim, Color::Cyan)),
+            WorkspaceRow::NewTab(_) => {
+                draw_button(f, r, "   ", "+ tab", button_style(view, r, dim, Color::Cyan));
+                draw_guide(f, view.line(), guide, r, Guide::End);
+            }
         }
     }
 
@@ -3264,6 +3382,48 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     let r = layout.button();
     draw_button(f, r, " ", "+ new workspace", button_style(view, r, accent, Color::Cyan));
     draw_landing(f, landing_line, landing.map(|l| l.spot.indent()));
+}
+
+#[derive(Clone, Copy)]
+enum Guide {
+    Top,
+    Tee,
+    End,
+    Bar,
+}
+
+fn draw_guide(f: &mut Frame, colour: Color, x: u16, r: Rect, guide: Guide) {
+    if x >= r.right() {
+        return;
+    }
+    let mid = middle(r).y;
+    let buf = f.buffer_mut();
+    for y in r.top()..r.bottom() {
+        let symbol = match (guide, y.cmp(&mid)) {
+            (Guide::Tee, Ordering::Equal) => "├",
+            (Guide::End, Ordering::Equal) => "└",
+            (Guide::Bar, _)
+            | (Guide::Top | Guide::Tee, Ordering::Greater)
+            | (Guide::Tee | Guide::End, Ordering::Less) => "│",
+            _ => continue,
+        };
+        let cell = &mut buf[(x, y)];
+        if cell.symbol() == " " {
+            cell.set_symbol(symbol).set_fg(colour);
+        }
+    }
+}
+
+fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
+    let above = i.checked_sub(1).and_then(|j| rows.get(j)).and_then(|row| match row {
+        WorkspaceRow::Workspace(w) | WorkspaceRow::Tab(w, _) => Some(*w),
+        _ => None,
+    });
+    let below = rows.get(i + 1).and_then(|row| match row {
+        WorkspaceRow::Tab(w, _) | WorkspaceRow::NewTab(w) => Some(*w),
+        _ => None,
+    });
+    above.is_some() && above == below
 }
 
 struct Band {
@@ -3308,10 +3468,9 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     let style = Style::default().fg(if active { Color::White } else { Color::Gray });
     let icon = tab.status.map(|status| status_icon(view.muted, status));
     let icon_width = if icon.is_some() { 2 } else { 0 };
-    let indent = band.lead_width() + 2 + icon_width;
-    let max = band.room().saturating_sub(2 + icon_width);
+    let indent = band.lead_width() + icon_width;
+    let max = band.room().saturating_sub(icon_width);
     let mut line = band.lead;
-    line.push(marker(active));
     if let Some(icon) = icon {
         line.extend([icon, Span::raw(" ")]);
     }
@@ -3326,7 +3485,7 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
 fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     let changes = view.changes_button.as_ref().filter(|_| !areas.compact());
     if view.issues {
-        draw_separator(f, view.muted, areas.workspaces_separator);
+        draw_separator(f, view.line(), areas.workspaces_separator);
         let issues = match changes {
             Some(button) => {
                 let start = changes_button(areas.issues, &button.label).x;
@@ -3510,12 +3669,18 @@ fn draw_entries(f: &mut Frame, view: &View, rows: &Rows, sidebar: &[SidebarRow],
             SidebarRow::Group(g) => {
                 let bg = view.row_background(r, view.dragging_entry(row));
                 draw_group(f, view, g, Band { r, pitch, lead: vec![marker(active == Some(i))], bg });
+                if active == Some(i) {
+                    draw_rail(f, r);
+                }
             }
             SidebarRow::Project(p) => {
                 let bg = view.row_background(r, p == view.active || view.dragging_entry(row));
                 let indent = if view.projects[p].group.is_some() { GROUP_INDENT } else { "" };
                 let lead = vec![marker(p == view.active), Span::raw(indent)];
                 draw_project_band(f, view, Band { r, pitch, lead, bg }, p, true);
+                if p == view.active {
+                    draw_rail(f, r);
+                }
             }
         }
     }
@@ -3523,6 +3688,16 @@ fn draw_entries(f: &mut Frame, view: &View, rows: &Rows, sidebar: &[SidebarRow],
 
 fn marker(shown: bool) -> Span<'static> {
     Span::styled(if shown { "▌ " } else { "  " }, Style::default().fg(Color::Cyan))
+}
+
+fn draw_rail(f: &mut Frame, r: Rect) {
+    let buf = f.buffer_mut();
+    for y in r.top()..r.bottom() {
+        let cell = &mut buf[(r.x, y)];
+        if cell.symbol() == " " {
+            cell.set_symbol("▌").set_fg(Color::Cyan);
+        }
+    }
 }
 
 fn arrow(muted: Color, folded: bool) -> Span<'static> {
@@ -3591,6 +3766,22 @@ fn folded(shape: &TreeShape, row: TreeRow) -> bool {
     }
 }
 
+fn tree_guide(r: Rect, shape: &TreeShape, row: TreeRow) -> u16 {
+    r.x.saturating_add(tree_indent(shape, row).saturating_sub(2))
+}
+
+fn tree_among_tabs(rows: &[TreeRow], i: usize) -> Option<TreeRow> {
+    let above = i.checked_sub(1).and_then(|j| rows.get(j)).and_then(|row| match row {
+        TreeRow::Workspace(p, w) | TreeRow::Tab(p, w, _) => Some((*p, *w)),
+        _ => None,
+    });
+    let below = rows.get(i + 1).and_then(|row| match row {
+        TreeRow::Tab(p, w, _) | TreeRow::NewTab(p, w) => Some((*p, *w)),
+        _ => None,
+    });
+    above.filter(|_| above == below).map(|(p, w)| TreeRow::Tab(p, w, 0))
+}
+
 fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
     draw_title(f, view.muted, areas.title, "projects");
     let Some(tree) = &view.tree else { return };
@@ -3615,30 +3806,40 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
         let band = |lead: Vec<Span<'static>>| Band { r, pitch: 1, lead, bg };
         match row {
             TreeRow::Gap => {}
-            TreeRow::Landing => draw_landing(f, r, indent),
+            TreeRow::Landing => {
+                draw_landing(f, r, indent);
+                if let Some(tab) = tree_among_tabs(&rows, i) {
+                    draw_guide(f, view.line(), tree_guide(r, shape, tab), r, Guide::Bar);
+                }
+            }
             TreeRow::Group(g) => draw_group(f, view, g, band(vec![marker(mark)])),
             TreeRow::Project(p) => {
-                let band = band(vec![Span::raw(lead), marker(mark), arrow(view.muted, folded(shape, row))]);
+                let band = band(vec![marker(mark), Span::raw(lead), arrow(view.muted, folded(shape, row))]);
                 draw_project_band(f, view, band, p, folded(shape, row));
             }
             TreeRow::Workspace(p, w) => {
                 let Some(entry) = workspace(p, w) else { continue };
-                let band = band(vec![Span::raw(lead), marker(mark), arrow(view.muted, folded(shape, row))]);
+                let band = band(vec![marker(mark), Span::raw(lead), arrow(view.muted, folded(shape, row))]);
                 let active = p == view.active && w == view.active_workspace;
                 draw_workspace_band(f, view, band, entry, active, folded(shape, row));
             }
             TreeRow::Tab(p, w, tab) => {
                 let Some(entry) = workspace(p, w).and_then(|w| w.tabs.get(tab)) else { continue };
-                draw_tab_band(f, view, band(vec![Span::raw(lead)]), entry, mark);
+                draw_tab_band(f, view, band(vec![marker(mark), Span::raw(lead)]), entry, mark);
+                draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::Tee);
             }
             TreeRow::NewTab(..) => {
                 let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
                 draw_button(f, r, &format!("{lead} "), "+ tab", style);
+                draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::End);
             }
             TreeRow::NewWorkspace(_) => {
                 let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
                 draw_button(f, r, &format!("{lead} "), "+ new workspace", style);
             }
+        }
+        if mark {
+            draw_rail(f, r);
         }
     }
     let named = |r| matches!(r, TreeRow::Group(_) | TreeRow::Project(_) | TreeRow::Workspace(..) | TreeRow::Tab(..));
@@ -4176,7 +4377,7 @@ mod tests {
         #[test]
         fn a_border_is_dim_by_default() {
             let pos = middle(Border::Projects);
-            assert_eq!(render(&view(&["~"])).backend().buffer()[pos].fg, Color::DarkGray);
+            assert_eq!(render(&view(&["~"])).backend().buffer()[pos].fg, DARK_LINE);
         }
 
         #[test]
@@ -4198,7 +4399,7 @@ mod tests {
             let pos = middle(Border::Workspaces);
             let menu = Overlay::Menu { at: Position::new(80, 1), items: vec!["rename tab".into()] };
             let v = View { hover: Some(pos), overlay: Some(menu), ..view(&["~"]) };
-            assert_eq!(render(&v).backend().buffer()[pos].fg, Color::DarkGray);
+            assert_eq!(render(&v).backend().buffer()[pos].fg, DARK_LINE);
         }
     }
 
@@ -4625,7 +4826,7 @@ mod tests {
 
         #[test]
         fn the_active_tab_holds_the_mark() {
-            assert_eq!(line(&with_tree(), TreeRow::Tab(1, 0, 0)), "      ▌ ◐ claude");
+            assert_eq!(line(&with_tree(), TreeRow::Tab(1, 0, 0)), "▌     ├ ◐ claude");
         }
 
         #[test]
@@ -4633,7 +4834,7 @@ mod tests {
             let mut v = with_tree();
             v.tree.as_mut().expect("a tree").shape.projects[1].collapsed = true;
             let text = line(&v, TreeRow::Project(1));
-            assert!(text.starts_with("  ▌ ▸ cornercase (2)"), "{text}");
+            assert!(text.starts_with("▌   ▸ cornercase (2)"), "{text}");
         }
 
         #[rstest]
@@ -5419,7 +5620,7 @@ mod tests {
 
         #[test]
         fn marks_the_active_tab() {
-            let pos = Position::new(wlist().x + 2, wlist().y + 1);
+            let pos = Position::new(wlist().x, wlist().y + 1);
             assert_eq!(render(&with_workspaces(Some(0))).backend().buffer()[pos].symbol(), "▌");
         }
 
@@ -5525,13 +5726,13 @@ mod tests {
             let r = tab_row(&v, 0, 1);
             let t = render(&v);
             let cell = &t.backend().buffer()[(r.x + 4, r.y)];
-            assert_eq!((row_text(&t, r).trim_end().to_string(), cell.fg), (format!("    {icon} claude"), colour));
+            assert_eq!((row_text(&t, r).trim_end().to_string(), cell.fg), (format!("  ├ {icon} claude"), colour));
         }
 
         #[test]
         fn a_tab_without_an_agent_has_no_icon() {
             let v = with_agents();
-            assert_eq!(row_text(&render(&v), tab_row(&v, 0, 2)).trim_end(), "    nvim");
+            assert_eq!(row_text(&render(&v), tab_row(&v, 0, 2)).trim_end(), "  ├ nvim");
         }
 
         #[test]
@@ -5681,13 +5882,13 @@ mod tests {
         }
 
         #[rstest]
-        #[case::fits(26, None, "      Opus 5.5 · 17%")]
-        #[case::cuts_the_model(19, None, "      Opus… · 17%")]
-        #[case::keeps_the_percentage(16, None, "      17%")]
-        #[case::fits_with_the_memory(32, Some(GB * 12 / 10), "      Opus 5.5 · 17% · 1.2 GB")]
-        #[case::cuts_the_model_before_the_memory(30, Some(GB * 12 / 10), "      Opus 5… · 17% · 1.2 GB")]
-        #[case::drops_the_model_before_the_memory(26, Some(GB * 12 / 10), "      17% · 1.2 GB")]
-        #[case::moves_left_to_keep_the_memory(16, Some(GB * 12 / 10), "  17% · 1.2 GB")]
+        #[case::fits(26, None, "▌ │   Opus 5.5 · 17%")]
+        #[case::cuts_the_model(19, None, "▌ │   Opus… · 17%")]
+        #[case::keeps_the_percentage(16, None, "▌ │   17%")]
+        #[case::fits_with_the_memory(32, Some(GB * 12 / 10), "▌ │   Opus 5.5 · 17% · 1.2 GB")]
+        #[case::cuts_the_model_before_the_memory(30, Some(GB * 12 / 10), "▌ │   Opus 5… · 17% · 1.2 GB")]
+        #[case::drops_the_model_before_the_memory(26, Some(GB * 12 / 10), "▌ │   17% · 1.2 GB")]
+        #[case::moves_left_to_keep_the_memory(16, Some(GB * 12 / 10), "▌ 17% · 1.2 GB")]
         fn a_narrow_column_cuts_the_model_first(
             #[case] workspaces: u16,
             #[case] memory: Option<u64>,
@@ -5702,11 +5903,11 @@ mod tests {
         }
 
         #[rstest]
-        #[case::the_model(Details { model: Some("Opus 5.5".into()), ..Details::default() }, "      Opus 5.5")]
-        #[case::the_context(Details { percent: Some(17), ..Details::default() }, "      17%")]
-        #[case::the_memory(Details { memory: Some(300 * MB), ..Details::default() }, "      300 MB")]
-        #[case::the_model_and_the_memory(Details { memory: Some(GB * 12 / 10), ..codex_model() }, "      gpt-5.4 · 1.2 GB")]
-        #[case::the_context_and_the_memory(Details { model: None, memory: Some(300 * MB), ..opus(17) }, "      17% · 300 MB")]
+        #[case::the_model(Details { model: Some("Opus 5.5".into()), ..Details::default() }, "▌ │   Opus 5.5")]
+        #[case::the_context(Details { percent: Some(17), ..Details::default() }, "▌ │   17%")]
+        #[case::the_memory(Details { memory: Some(300 * MB), ..Details::default() }, "▌ │   300 MB")]
+        #[case::the_model_and_the_memory(Details { memory: Some(GB * 12 / 10), ..codex_model() }, "▌ │   gpt-5.4 · 1.2 GB")]
+        #[case::the_context_and_the_memory(Details { model: None, memory: Some(300 * MB), ..opus(17) }, "▌ │   17% · 300 MB")]
         fn each_part_shows_without_the_others(#[case] details: Details, #[case] expected: &str) {
             let v = with_details(details);
             let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
@@ -5775,8 +5976,8 @@ mod tests {
                 (r.height, line(&t, r, 1), line(&t, r, 2)),
                 (
                     COMPACT_PITCH,
-                    format!("  ▌ ◐ claude{}×", " ".repeat(usize::from(SMALL.width) - 15)),
-                    "      Opus 5.5 · 17%".into()
+                    format!("▌ ├ ◐ claude{}×", " ".repeat(usize::from(SMALL.width) - 15)),
+                    "▌ │   Opus 5.5 · 17%".into()
                 )
             );
         }
@@ -5892,6 +6093,24 @@ mod tests {
         }
 
         #[test]
+        fn the_rest_of_a_usage_bar_takes_the_line_colour() {
+            let t = render(&with(Overlay::Usage(usage())));
+            let body = usage_rows(usage_area(AREA, &usage()))[0];
+            let bar = Position::new(body.right() - 1, body.y + 3);
+            assert_eq!(t.backend().buffer()[bar].fg, DARK_LINE);
+        }
+
+        #[test]
+        fn a_dialog_dims_what_is_behind_it() {
+            let t = render(&with(Overlay::Form(new_workspace_form(true))));
+            let form = form_area(AREA);
+            let buffer = t.backend().buffer();
+            let behind = buffer[areas().title.as_position()].modifier.contains(Modifier::DIM);
+            let inside = buffer[form_rows(form)[1].as_position()].modifier.contains(Modifier::DIM);
+            assert_eq!((behind, inside), (true, false));
+        }
+
+        #[test]
         fn the_usage_done_button_sits_on_the_last_row() {
             let r = usage_area(AREA, &usage());
             assert_eq!(usage_done(AREA, &usage()).y, r.bottom() - 2);
@@ -6003,6 +6222,18 @@ mod tests {
         fn truncates_long_names() {
             let v = view(&["a-folder-with-a-really-long-name-that-does-not-fit"]);
             insta::assert_snapshot!(render(&v).backend());
+        }
+
+        #[test]
+        fn without_projects_the_pane_shows_the_logo() {
+            insta::assert_snapshot!(render_sized(&view(&[]), W, 24).backend());
+        }
+
+        #[test]
+        fn a_pane_too_short_for_the_logo_keeps_the_words() {
+            let t = render_sized(&view(&[]), W, 8);
+            let text: String = t.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
+            assert_eq!((text.contains(TAGLINE), text.contains('█')), (true, false));
         }
 
         #[test]
@@ -6182,7 +6413,14 @@ mod tests {
             let at = Position::new(4, 4);
             let item = menu_item(menu_area(AREA, at, &["new worktree"]), 0).as_position();
             let v = View { hover: Some(item), ..with(Overlay::Menu { at, items: vec!["new worktree".into()] }) };
-            assert_eq!(render(&v).backend().buffer()[item].bg, Color::Cyan);
+            assert_eq!(render(&v).backend().buffer()[item].bg, DARK_SURFACE);
+        }
+
+        #[test]
+        fn a_menu_leaves_what_is_behind_it_bright() {
+            let at = Position::new(4, 4);
+            let t = render(&with(Overlay::Menu { at, items: vec!["new worktree".into()] }));
+            assert!(!t.backend().buffer()[areas().title.as_position()].modifier.contains(Modifier::DIM));
         }
 
         #[test]
@@ -6284,13 +6522,13 @@ mod tests {
 
         #[test]
         fn highlights_the_selected_folder() {
-            assert_eq!(render(&with(picker(Some(1)))).backend().buffer()[item(1)].bg, Color::Cyan);
+            assert_eq!(render(&with(picker(Some(1)))).backend().buffer()[item(1)].bg, DARK_SURFACE);
         }
 
         #[test]
         fn highlights_the_hovered_folder() {
             let v = View { hover: Some(item(2)), ..with(picker(None)) };
-            assert_eq!(render(&v).backend().buffer()[item(2)].bg, Color::Cyan);
+            assert_eq!(render(&v).backend().buffer()[item(2)].bg, DARK_HOVER);
         }
 
         #[test]
@@ -6439,7 +6677,7 @@ mod tests {
         fn the_active_tab_is_filled() {
             let t = render(&with(settings(0)));
             let issues = settings_tabs(settings_area(AREA), &TABS)[2];
-            assert_eq!(t.backend().buffer()[issues.as_position()].bg, Color::Cyan);
+            assert_eq!(t.backend().buffer()[issues.as_position()].bg, DARK_SURFACE);
         }
 
         #[test]
@@ -6576,7 +6814,7 @@ mod tests {
         fn the_active_tab_is_filled() {
             let i = issues(list(None));
             let tab = issue_tabs(issues_area(AREA), &TABS)[0].as_position();
-            assert_eq!(render(&with(i)).backend().buffer()[tab].bg, Color::Cyan);
+            assert_eq!(render(&with(i)).backend().buffer()[tab].bg, DARK_SURFACE);
         }
 
         #[test]
@@ -6587,13 +6825,13 @@ mod tests {
 
         #[test]
         fn highlights_the_selected_issue() {
-            assert_eq!(render(&with(issues(list(Some(1))))).backend().buffer()[item(1)].bg, Color::Cyan);
+            assert_eq!(render(&with(issues(list(Some(1))))).backend().buffer()[item(1)].bg, DARK_SURFACE);
         }
 
         #[test]
         fn highlights_the_hovered_issue() {
             let v = View { hover: Some(item(1)), ..with(issues(list(None))) };
-            assert_eq!(render(&v).backend().buffer()[item(1)].bg, Color::Cyan);
+            assert_eq!(render(&v).backend().buffer()[item(1)].bg, DARK_HOVER);
         }
 
         #[test]
@@ -6716,13 +6954,13 @@ mod tests {
 
         #[test]
         fn highlights_the_selected_result() {
-            assert_eq!(render(&with(search("feat", found()))).backend().buffer()[item(0)].bg, Color::Cyan);
+            assert_eq!(render(&with(search("feat", found()))).backend().buffer()[item(0)].bg, DARK_SURFACE);
         }
 
         #[test]
         fn highlights_the_hovered_result() {
             let v = View { hover: Some(item(1)), ..with(search("feat", found())) };
-            assert_eq!(render(&v).backend().buffer()[item(1)].bg, Color::Cyan);
+            assert_eq!(render(&v).backend().buffer()[item(1)].bg, DARK_HOVER);
         }
 
         #[test]

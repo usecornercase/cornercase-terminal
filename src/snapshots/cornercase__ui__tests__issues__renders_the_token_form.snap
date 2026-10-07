@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: render(&with(i)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"  ┌ issues · shop ───────────────────────────────────────────────────────────────────────────────┐  "
+"  ╭─ issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
 " p│  All   GitHub   Shortcut   Linear                                    [ ] closed    [x] mine  │  "
 "  │                                                                                              │  "
 "▌ │ › API token •••                                                                              │  "
@@ -18,5 +18,5 @@ expression: render(&with(i)).backend()
 "  │                                                                                              │  "
 " ─│ enter reads #482 · start works on it in its own worktree, on issue-482-returns               │  "
 "  │                                                                            connect   cancel  │  "
-"  └──────────────────────────────────────────────────────────────────────────────────────────────┘  "
+"  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
 "  quit                         │                         │                                          "

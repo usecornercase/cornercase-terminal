@@ -312,6 +312,10 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     }
 }
 
+fn surface(view: &View) -> Color {
+    if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE }
+}
+
 fn fill(buf: &mut Buffer, r: Rect, bg: Color) {
     buf.set_style(r, Style::default().bg(bg));
 }
@@ -347,7 +351,7 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
         }
     }
     let line = "─".repeat(usize::from(p.separator.width));
-    put(buf, p.separator.x, p.separator.y, &line, dim(view.muted), p.separator.right());
+    put(buf, p.separator.x, p.separator.y, &line, dim(super::line_colour(view.light)), p.separator.right());
     let fold = fold_all(area, view);
     if !fold.is_empty() {
         let style =
@@ -367,13 +371,7 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
 
 fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) {
     for (mode, r) in tabs(area) {
-        let style = if mode == view.mode {
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else if hovered(hover, r) {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::Gray)
-        };
+        let style = super::tab_style(mode == view.mode, hovered(hover, r), surface(view));
         put(buf, r.x, r.y, &format!(" {} ", mode.label()), style, r.right());
     }
     let r = filter_button(area);
@@ -394,7 +392,7 @@ fn draw_field(
     if row.is_empty() {
         return None;
     }
-    fill(buf, row, if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE });
+    fill(buf, row, surface(view));
     let clear = clear_filter(area, view);
     let style = if hovered(hover, clear) {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
@@ -512,14 +510,14 @@ fn draw_row(
             };
             let mut x = r.x + 1;
             if !hunk.context.is_empty() {
-                x = put(buf, x, r.y, "┄┄ ", dim(view.muted), end);
+                x = put(buf, x, r.y, "┄┄ ", dim(super::line_colour(view.light)), end);
                 let room = usize::from(end.saturating_sub(x + 2));
                 let context = cut(&hunk.context, room);
                 x = put(buf, x, r.y, &context, Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC), end);
                 x += 1;
             }
             let rest = usize::from(end.saturating_sub(x + 1));
-            put(buf, x, r.y, &"┄".repeat(rest), dim(view.muted), end);
+            put(buf, x, r.y, &"┄".repeat(rest), dim(super::line_colour(view.light)), end);
             if hovered_hunk == Some((i, h)) {
                 for (action, a) in actions(r) {
                     put(buf, a.x, a.y, &format!(" {} ", action.label()), action_style(hovered(hover, a)), a.right());
@@ -540,7 +538,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     let open = !view.folded.get(i).copied().unwrap_or(true);
     let viewed = view.viewed.get(i).copied().unwrap_or(false);
     if open {
-        fill(buf, r, if view.light { super::LIGHT_SURFACE } else { super::DARK_SURFACE });
+        fill(buf, r, surface(view));
         put(buf, r.x + 1, r.y, "▌", Style::default().fg(Color::Cyan), r.right());
     }
     let muted = viewed || !matches!(file.fold, crate::changes::diff::Fold::Open);
