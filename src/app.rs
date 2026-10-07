@@ -1343,9 +1343,11 @@ impl App {
             AppEvent::FilesIndexed { workspace, generation, paths } => self.files.indexed(workspace, generation, paths),
             AppEvent::NamesFound { workspace, generation, search, found } => {
                 self.files.named(workspace, generation, search, found);
+                self.found_answered(workspace);
             }
             AppEvent::TextFound { workspace, generation, search, found } => {
                 self.files.grepped(workspace, generation, search, found);
+                self.found_answered(workspace);
             }
             AppEvent::UpdateChecked(result) => self.update_checked(result),
             AppEvent::Updated(result) => self.updated(result),
@@ -10229,6 +10231,21 @@ rm -f "$1/sessions/$$.json"
             let back = panel::back(panel_area(&app)).as_position();
             click(&mut app, back);
             assert!(!results(&view(&app)).is_empty(), "back returns to the results");
+        }
+
+        #[test]
+        fn enter_before_the_answer_waits_for_it() {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "shop");
+            for _ in "shop".chars() {
+                send_key(&mut app, KeyCode::Backspace, KeyModifiers::NONE);
+            }
+            type_text(&mut app, "run");
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            settle(&mut app, &rx, "a file opens", |v| matches!(v.screen, Screen::File(_)));
+            let opened = file(&app);
+            assert_eq!((opened.path.as_str(), opened.selection), ("src/main.rs", Some((2, 2))));
         }
 
         #[test]

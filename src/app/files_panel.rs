@@ -297,20 +297,15 @@ impl App {
         query.focused = true;
         query.selected = 0;
         query.scroll = 0;
+        query.enter = false;
     }
 
     pub(super) fn files_key(&mut self, key: KeyEvent, area: Rect) {
         let Some((workspace, _)) = self.files_target() else { return };
         match key.code {
             KeyCode::Esc => *self.files.query_mut(workspace) = Query::default(),
-            KeyCode::Enter => {
-                if let Some(view) = self.files_view()
-                    && let Screen::Search(search) = &view.screen
-                    && let Some(i) = search.selected
-                {
-                    self.open_found(workspace, &view, i);
-                }
-            }
+            KeyCode::Enter if !self.answers_query(workspace) => self.files.query_mut(workspace).enter = true,
+            KeyCode::Enter => self.open_selected(workspace),
             KeyCode::Up => self.move_found(workspace, -1, area),
             KeyCode::Down => self.move_found(workspace, 1, area),
             KeyCode::Backspace => self.edit_query(workspace, |q| _ = q.pop()),
@@ -321,12 +316,37 @@ impl App {
         }
     }
 
+    fn answers_query(&self, workspace: u64) -> bool {
+        self.files.query(workspace).and_then(Query::wanted) == self.files.answered(workspace)
+    }
+
+    fn open_selected(&mut self, workspace: u64) {
+        if let Some(view) = self.files_view()
+            && let Screen::Search(search) = &view.screen
+            && let Some(i) = search.selected
+        {
+            self.open_found(workspace, &view, i);
+        }
+    }
+
+    pub(super) fn found_answered(&mut self, workspace: u64) {
+        let waiting = self.files.query(workspace).is_some_and(|q| q.enter) && self.answers_query(workspace);
+        if !waiting {
+            return;
+        }
+        self.files.query_mut(workspace).enter = false;
+        if self.files_shown() && self.files_target().is_some_and(|(ws, _)| ws == workspace) {
+            self.open_selected(workspace);
+        }
+    }
+
     pub(super) fn files_paste(&mut self, text: &str) {
         let Some((workspace, _)) = self.files_target() else { return };
         self.edit_query(workspace, |q| q.extend(text.chars().filter(|c| !c.is_control())));
     }
 
     fn move_found(&mut self, workspace: u64, delta: isize, area: Rect) {
+        self.files.query_mut(workspace).enter = false;
         let Some(view) = self.files_view() else { return };
         let Screen::Search(search) = &view.screen else { return };
         let selectable: Vec<usize> =

@@ -29,6 +29,7 @@ pub struct Query {
     pub focused: bool,
     pub selected: usize,
     pub scroll: usize,
+    pub enter: bool,
 }
 
 impl Query {
@@ -220,6 +221,7 @@ impl Panel {
     pub fn unfocus(&mut self) {
         for place in self.places.values_mut() {
             place.query.focused = false;
+            place.query.enter = false;
         }
     }
 
@@ -233,6 +235,13 @@ impl Panel {
             Mode::Text => self.grepping.is_some(),
         };
         running || !self.index.contains_key(&workspace)
+    }
+
+    pub fn answered(&self, workspace: u64) -> Option<&str> {
+        match self.mode(workspace) {
+            Mode::Name => self.names.get(&workspace).map(|a| a.query.as_str()),
+            Mode::Text => self.texts.get(&workspace).map(|a| a.query.as_str()),
+        }
     }
 
     pub fn found_names(&self, workspace: u64) -> Option<(&str, &[search::Name])> {
