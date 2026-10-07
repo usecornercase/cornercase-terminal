@@ -24,5 +24,5 @@
 - [ ] `cargo-machete` and `npx -y jscpd@4.3.0` pass
 - [ ] Changed snapshots were reviewed, not just accepted
 - [ ] No new keyboard shortcuts, or they were discussed in an issue first
-- [ ] `CLAUDE.md` is updated if this changes a design decision or adds a module
+- [ ] `DESIGN.md` is updated if this changes a design decision, `AGENTS.md` if it adds a module or changes a rule
 - [ ] The website (`site/`) is updated if this adds, changes or removes a feature

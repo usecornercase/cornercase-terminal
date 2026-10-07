@@ -77,6 +77,10 @@ jobs:
       - name: fmt
         run: cargo fmt --check
 
+      - name: AGENTS.md within Codex's 32 KiB
+        if: ${{ !cancelled() }}
+        run: test "$(wc -c < AGENTS.md)" -le 32768
+
       - name: machete
         if: ${{ !cancelled() }}
         run: cargo-machete

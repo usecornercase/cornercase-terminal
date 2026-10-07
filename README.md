@@ -101,7 +101,7 @@ GitHub issues are read with the [`gh`](https://cli.github.com) CLI, using its lo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Design notes and the reasons behind them are in [CLAUDE.md](CLAUDE.md). The website and its documentation live in [`site/`](site).
+See [CONTRIBUTING.md](CONTRIBUTING.md). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and design notes with the reasons behind them in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
 
 ## License
 

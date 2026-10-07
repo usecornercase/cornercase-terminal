@@ -5,7 +5,7 @@ description: Build cornercase from a checkout, run it next to your real session,
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Contributions are welcome: bug reports, ideas and pull requests. For anything bigger than a small fix, [open an issue](https://github.com/usecornercase/cornercase-terminal/issues) first so you can agree on the approach. The full guidelines are in [CONTRIBUTING.md](https://github.com/usecornercase/cornercase-terminal/blob/main/CONTRIBUTING.md), and every design decision is explained in [CLAUDE.md](https://github.com/usecornercase/cornercase-terminal/blob/main/CLAUDE.md).
+Contributions are welcome: bug reports, ideas and pull requests. For anything bigger than a small fix, [open an issue](https://github.com/usecornercase/cornercase-terminal/issues) first so you can agree on the approach. The full guidelines are in [CONTRIBUTING.md](https://github.com/usecornercase/cornercase-terminal/blob/main/CONTRIBUTING.md), and the rules for every change are in [AGENTS.md](https://github.com/usecornercase/cornercase-terminal/blob/main/AGENTS.md) and every design decision is explained in [DESIGN.md](https://github.com/usecornercase/cornercase-terminal/blob/main/DESIGN.md).
 
 ## Set up
 
@@ -81,7 +81,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 ## Code style
 
 - Everything in English: identifiers, test names, messages and interface text.
-- **No comments**, doc comments included. If a decision needs explaining, it goes in `CLAUDE.md`.
+- **No comments**, doc comments included. If a decision needs explaining, it goes in `DESIGN.md`.
 - Errors use `crate::error::Error` (`thiserror`) in the library; `anyhow` only in `src/main.rs`.
 - No `unwrap()` outside tests; in tests prefer `expect("what")`.
 - Mutexes are `parking_lot::Mutex`.
@@ -94,7 +94,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 
 ## Pull requests
 
-Keep each pull request to one change. Describe what changed and why, how you tested it, and add a screenshot or a recording for anything visible. Update `CLAUDE.md` when you change a design decision or add a module. Contributions are dual licensed under MIT and Apache-2.0, like the rest of the project.
+Keep each pull request to one change. Describe what changed and why, how you tested it, and add a screenshot or a recording for anything visible. Update `DESIGN.md` when you change a design decision, and `AGENTS.md` when you add a module or change a rule. Contributions are dual licensed under MIT and Apache-2.0, like the rest of the project.
 
 ### Versions and releases
 

@@ -9,7 +9,7 @@ For anything bigger than a small fix, open an issue first so we can agree on the
 - **Mouse buttons only.** Every key goes to the program in the active pane; the app has no keyboard shortcuts of its own. Please do not add any without discussing it first.
 - **The server owns the shells.** The UI is a thin client that only writes frames, so behaviour belongs in the server (`App`), not in `client.rs`.
 
-The design and the reasons behind it are written down in [CLAUDE.md](CLAUDE.md). Read the section for the area you touch.
+The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the reasons behind it in [DESIGN.md](DESIGN.md). Read the section for the area you touch.
 
 ## Setup
 
@@ -43,7 +43,7 @@ UI changes usually change a snapshot. `cargo test` then writes `src/snapshots/*.
 ## Code style
 
 - Everything in English: identifiers, test names, messages, UI text.
-- No code comments, including doc comments. If a decision needs explaining, add it to `CLAUDE.md`.
+- No code comments, including doc comments. If a decision needs explaining, add it to `DESIGN.md`.
 - No `unwrap()` outside tests. Errors use `crate::error::Error`.
 - Tests are named as sentences (`close_button_closes_its_entry`) and test one behaviour each. A test added as a safety net must fail without the code it protects.
 

@@ -32,7 +32,7 @@ reviews:
   path_instructions:
     - path: "src/**/*.rs"
       instructions: |
-        Follow CLAUDE.md. Never suggest adding comments or doc comments: the project has none on purpose.
+        Follow AGENTS.md and DESIGN.md. Never suggest adding comments or doc comments: the project has none on purpose.
         Flag `unwrap()` outside tests, `std::sync::Mutex` instead of `parking_lot::Mutex`, and new keyboard shortcuts.
         If the PR changes the app (src/, Cargo.toml, Cargo.lock, rust-toolchain.toml, .cargo/), check that it bumps
         `version` in Cargo.toml and adds a matching `## <version>` section to CHANGELOG.md written for users.
@@ -73,3 +73,6 @@ chat:
 knowledge_base:
   code_guidelines:
     enabled: true
+    filePatterns:
+      - AGENTS.md
+      - DESIGN.md
