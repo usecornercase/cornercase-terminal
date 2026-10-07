@@ -861,7 +861,7 @@ fn quitting_one_client_leaves_the_others_attached() {
 #[test]
 fn kill_server_says_what_it_stopped() {
     let mut app = Harness::start();
-    app.send(b"sleep 30\r");
+    app.send(b"sleep 600\r");
     app.session.wait_for_program("sleep");
 
     let out = app.session.run("kill-server");
@@ -961,7 +961,7 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
     app.send(b"echo old-\"\"shell\r");
     app.wait_for("the old shell answers", |s| s.contains("old-shell"));
-    app.send(b"sleep 30\r");
+    app.send(b"sleep 600\r");
     app.session.wait_for_program("sleep");
     let marker = bin.with_file_name("new-client-ran");
     let new = format!(
