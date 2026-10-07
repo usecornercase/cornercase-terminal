@@ -2,6 +2,7 @@ pub mod browser;
 pub mod cache;
 pub mod github;
 pub mod http;
+pub mod jira;
 pub mod linear;
 pub mod shortcut;
 
@@ -22,17 +23,19 @@ pub enum Source {
     Github,
     Shortcut,
     Linear,
+    Jira,
 }
 
 impl Source {
-    pub const ALL: [Self; 3] = [Self::Github, Self::Shortcut, Self::Linear];
-    pub const REMOTE: [Self; 2] = [Self::Shortcut, Self::Linear];
+    pub const ALL: [Self; 4] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira];
+    pub const REMOTE: [Self; 3] = [Self::Shortcut, Self::Linear, Self::Jira];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::Github => "github",
             Self::Shortcut => "shortcut",
             Self::Linear => "linear",
+            Self::Jira => "jira",
         }
     }
 
@@ -41,12 +44,13 @@ impl Source {
             Self::Github => "GitHub",
             Self::Shortcut => "Shortcut",
             Self::Linear => "Linear",
+            Self::Jira => "Jira",
         }
     }
 
     pub fn token_name(self) -> &'static str {
         match self {
-            Self::Github | Self::Shortcut => "API token",
+            Self::Github | Self::Shortcut | Self::Jira => "API token",
             Self::Linear => "API key",
         }
     }
@@ -56,6 +60,7 @@ impl Source {
             Self::Github => None,
             Self::Shortcut => Some(shortcut::TOKEN_ENV),
             Self::Linear => Some(linear::TOKEN_ENV),
+            Self::Jira => Some(jira::TOKEN_ENV),
         }
     }
 
@@ -64,6 +69,7 @@ impl Source {
             Self::Github => None,
             Self::Shortcut => Some("shortcut_token"),
             Self::Linear => Some("linear_api_key"),
+            Self::Jira => Some("jira_api_token"),
         }
     }
 
@@ -72,6 +78,7 @@ impl Source {
             Self::Github => ["assignee", "author"],
             Self::Shortcut => ["owner", "requester"],
             Self::Linear => ["assignee", "creator"],
+            Self::Jira => ["assignee", "reporter"],
         }
     }
 
@@ -83,6 +90,9 @@ impl Source {
             }
             Self::Linear => {
                 "Create a personal API key in Linear under Settings → Security & access → Personal API keys, paste it here and press Enter."
+            }
+            Self::Jira => {
+                "Create an API token at id.atlassian.com under Security → Create and manage API tokens, paste it here and press Enter."
             }
         }
     }
@@ -104,6 +114,10 @@ pub enum Who {
     Anyone,
     Me,
     Person(String),
+    User {
+        id: String,
+        name: String,
+    },
 }
 
 impl Who {
@@ -111,7 +125,7 @@ impl Who {
         match self {
             Self::Anyone => "anyone".into(),
             Self::Me => "me".into(),
-            Self::Person(handle) => format!("@{handle}"),
+            Self::Person(handle) | Self::User { name: handle, .. } => format!("@{handle}"),
         }
     }
 }
@@ -129,6 +143,7 @@ pub struct People {
     pub github: [Who; 2],
     pub shortcut: [Who; 2],
     pub linear: [Who; 2],
+    pub jira: [Who; 2],
 }
 
 impl People {
@@ -137,6 +152,7 @@ impl People {
             Source::Github => &self.github,
             Source::Shortcut => &self.shortcut,
             Source::Linear => &self.linear,
+            Source::Jira => &self.jira,
         }
     }
 
@@ -145,6 +161,7 @@ impl People {
             Source::Github => &mut self.github,
             Source::Shortcut => &mut self.shortcut,
             Source::Linear => &mut self.linear,
+            Source::Jira => &mut self.jira,
         }
     }
 
@@ -164,6 +181,16 @@ impl People {
 pub struct Person {
     pub handle: String,
     pub name: String,
+    pub id: Option<String>,
+}
+
+impl Person {
+    pub fn who(&self) -> Who {
+        match &self.id {
+            Some(id) => Who::User { id: id.clone(), name: self.handle.clone() },
+            None => Who::Person(self.handle.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,6 +248,7 @@ pub enum Client {
     Github { gh: PathBuf, dir: PathBuf },
     Shortcut { base: String, token: String },
     Linear { url: String, token: String },
+    Jira(jira::Api),
 }
 
 impl Client {
@@ -229,6 +257,7 @@ impl Client {
             Self::Github { gh, dir } => github::people(gh, dir),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.people(),
             Self::Linear { url, token } => linear::Api { url, token }.people(),
+            Self::Jira(api) => api.people(),
         }
     }
 
@@ -237,6 +266,7 @@ impl Client {
             Self::Github { gh, dir } => Ok(Listed { account: None, issues: github::list(gh, dir, query)? }),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.list(query),
             Self::Linear { url, token } => linear::Api { url, token }.list(query),
+            Self::Jira(api) => api.list(query),
         }
     }
 
@@ -245,6 +275,7 @@ impl Client {
             Self::Github { gh, dir } => github::view(gh, dir, issue.number),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.view(issue.number),
             Self::Linear { url, token } => linear::Api { url, token }.view(&issue.key),
+            Self::Jira(api) => api.view(&issue.key),
         }
     }
 
@@ -253,6 +284,7 @@ impl Client {
             Self::Github { .. } => Err(Error::Api("GitHub goes through gh and its own login".into())),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.whoami(),
             Self::Linear { url, token } => linear::Api { url, token }.whoami(),
+            Self::Jira(api) => api.whoami(),
         }
     }
 }
@@ -279,7 +311,7 @@ pub fn branch(issue: &Issue) -> String {
     let prefix = match issue.source {
         Source::Github => format!("issue-{}", issue.number),
         Source::Shortcut => format!("sc-{}", issue.number),
-        Source::Linear => issue.key.clone(),
+        Source::Linear | Source::Jira => issue.key.clone(),
     };
     let slug = slug(&issue.title, SLUG_MAX);
     if slug.is_empty() { prefix } else { format!("{prefix}-{slug}") }
@@ -391,7 +423,20 @@ pub fn parse_time(text: &str) -> Option<i64> {
     let field = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
     let (year, month, day) = (field(0, 4)?, field(5, 7)?, field(8, 10)?);
     let (hour, minute, second) = (field(11, 13)?, field(14, 16)?, field(17, 19)?);
-    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second)
+    let local = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
+    Some(local - offset(text.get(19..).unwrap_or_default()))
+}
+
+fn offset(rest: &str) -> i64 {
+    let zone = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
+    let sign = match zone.chars().next() {
+        Some('+') => 1,
+        Some('-') => -1,
+        _ => return 0,
+    };
+    let digits: String = zone.chars().filter(char::is_ascii_digit).collect();
+    let part = |range: std::ops::Range<usize>| digits.get(range).and_then(|d| d.parse::<i64>().ok()).unwrap_or(0);
+    sign * (part(0..2) * 3_600 + part(2..4) * 60)
 }
 
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
@@ -432,6 +477,7 @@ pub fn issue(source: Source, number: u64, title: &str) -> Issue {
         Source::Github => format!("#{number}"),
         Source::Shortcut => format!("sc-{number}"),
         Source::Linear => format!("ENG-{number}"),
+        Source::Jira => format!("PROJ-{number}"),
     };
     Issue {
         source,
@@ -511,6 +557,7 @@ mod tests {
         #[rstest]
         #[case::story(Source::Shortcut, "sc-12-dark-mode")]
         #[case::linear(Source::Linear, "ENG-12-dark-mode")]
+        #[case::jira(Source::Jira, "PROJ-12-dark-mode")]
         fn starts_with_the_key_of_the_tracker(#[case] source: Source, #[case] expected: &str) {
             assert_eq!(branch(&issue(source, 12, "Dark mode")), expected);
         }
@@ -572,6 +619,15 @@ mod tests {
         #[test]
         fn leaves_out_what_is_missing() {
             assert_eq!(meta(&Issue { author: String::new(), ..gh(1, "x") }, 0), "");
+        }
+
+        #[rstest]
+        #[case::utc("1970-01-02T00:00:10Z", 86_410)]
+        #[case::ahead("1970-01-02T02:00:10.000+0200", 86_410)]
+        #[case::behind_with_a_colon("1970-01-01T19:30:10-04:30", 86_410)]
+        #[case::no_zone("1970-01-02T00:00:10", 86_410)]
+        fn parses_the_time_zone_offset(#[case] text: &str, #[case] expected: i64) {
+            assert_eq!(parse_time(text), Some(expected));
         }
 
         #[test]

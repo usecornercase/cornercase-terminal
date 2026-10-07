@@ -11,7 +11,7 @@ A terminal multiplexer for working on several projects at once, each with its ow
 - **Projects, workspaces, tabs.** A sidebar of projects (folders), and for the active project its workspaces (lines of work) and their tabs. Click to switch, `+` to create, `×` to close, right-click to rename, drag to reorder.
 - **Git worktrees.** A new workspace in a git repository can get its own worktree and branch. Worktrees created outside cornercase show up too. Files listed in `.worktreeinclude` (such as `.env`) are copied into new checkouts.
 - **Splits.** Right-click a pane to split it right or down; drag the dividers to resize.
-- **Issues to agents.** Browse GitHub issues, Shortcut stories and Linear issues, read them as Markdown, and start one: cornercase creates a worktree on a matching branch, launches your coding agent (Claude Code, Codex, Gemini, …) in a new tab and hands it the issue.
+- **Issues to agents.** Browse GitHub issues, Shortcut stories, Linear issues and Jira issues, read them as Markdown, and start one: cornercase creates a worktree on a matching branch, launches your coding agent (Claude Code, Codex, Gemini, …) in a new tab and hands it the issue.
 - **Agent status.** A tab running Claude Code shows whether it is working (`◐`), needs you (`!`) or finished while you were elsewhere (`✓`), and under its name the model and how full its context is (`Opus 5.5 · 23%`). `!` and `✓` also mark its workspace and project, so an agent waiting in another project doesn't go unnoticed.
 - **Codex context.** Codex tabs also show their model and context use (`gpt-5.4 · 20%`), using each pane's own session and Codex's reported window size. When usage is unavailable, they show the model alone. Works with native and npm installations and with Codex's background app-server; respects `CODEX_HOME`. Verified against Codex CLI 0.160.0.
 - **Scripts and agents.** The `cornercase` command drives the running server: it lists everything with ids, opens tabs and worktrees, types into panes, starts agents and hands them a prompt, waits until they finish or need you, and reads what they wrote. So an agent in one tab can coordinate others. A [skill](skills/cornercase/SKILL.md) teaches your agents to use it.
@@ -87,13 +87,13 @@ Open ` settings ` in the sidebar. Changes are saved at once to `~/.config/corner
 | Where | What |
 | --- | --- |
 | `~/.config/cornercase/config.json` | settings: worktrees folder, issue sources, agent and its arguments, prompt |
-| `~/.config/cornercase/secrets.json` | Shortcut and Linear tokens typed in the app (mode 0600) |
+| `~/.config/cornercase/secrets.json` | Shortcut, Linear and Jira tokens typed in the app (mode 0600) |
 | `~/.local/state/cornercase/session.json` | the saved session |
 | `$XDG_RUNTIME_DIR/cornercase/`, or `$TMPDIR/cornercase-<uid>/` | the server's socket and `server.log` |
 
 Environment variables:
 
-- `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`: tokens for the issues modal, taking precedence over saved ones.
+- `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`: tokens for the issues modal, taking precedence over saved ones.
 - `CORNERCASE_SOCKET`: run a separate server on another socket (its config and session live next to it).
 - `CORNERCASE_RELEASES_URL`: where the update check looks for the latest release (GitHub's API by default).
 

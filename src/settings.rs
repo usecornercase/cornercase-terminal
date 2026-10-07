@@ -4,13 +4,13 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Account, Secret, Source};
+use crate::issues::{Account, Secret, Source, jira};
 use crate::notify;
 use crate::search::Search;
 use crate::ui;
 
 pub const DONE: &str = "done";
-const TAB_IDS: [&str; 4] = ["all", "github", "shortcut", "linear"];
+const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
 const EXTRA_ARGS: &str = "extra arguments…";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +30,9 @@ pub enum Row {
     Notifications,
     Updates,
     Token(Source),
+    JiraSite,
+    JiraEmail,
+    JiraJql,
     Tab(&'static str),
     DefaultAgent,
     Submit,
@@ -48,6 +51,7 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates => "",
+            Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust => "Agent",
@@ -59,7 +63,7 @@ impl Row {
         match self {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
-            Self::Token(_) | Self::Tab(_) => Page::Issues,
+            Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
             Self::Sidebar | Self::DimPanes | Self::Detail(_) | Self::Notifications | Self::Updates => Page::Tui,
         }
     }
@@ -244,7 +248,13 @@ impl Settings {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch];
-        rows.extend(self.tokens.iter().map(|(source, _)| Row::Token(*source)));
+        for (source, _) in &self.tokens {
+            if *source == Source::Jira {
+                rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]);
+            } else {
+                rows.push(Row::Token(*source));
+            }
+        }
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
@@ -310,6 +320,9 @@ impl Settings {
                 }
                 self.start_edit(row, String::new())
             }
+            Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
+            Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
+            Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),
             Row::Tab(id) => self.toggle_tab(id),
             Row::DefaultAgent => {
                 let auto = PickItem {
@@ -508,6 +521,10 @@ impl Settings {
                     Action::None
                 }
             },
+            Row::Token(Source::Jira) if self.config.jira_site.is_empty() || self.config.jira_email.is_empty() => {
+                edit.error = Some("set the Jira site and email first".into());
+                Action::None
+            }
             Row::Token(source) => {
                 let token = edit.input.trim().to_string();
                 if token.is_empty() {
@@ -517,6 +534,46 @@ impl Settings {
                 edit.error = None;
                 self.checking.push(source);
                 Action::CheckToken(source, Secret(token))
+            }
+            Row::JiraSite | Row::JiraEmail => {
+                let site = edit.row == Row::JiraSite;
+                let input = edit.input.trim();
+                let checked = match (input.is_empty(), site) {
+                    (true, _) => Ok(String::new()),
+                    (false, true) => jira::check_site(input),
+                    (false, false) => jira::check_email(input),
+                };
+                match checked {
+                    Ok(value) => {
+                        self.edit = None;
+                        let name = if site { "site" } else { "email" };
+                        let notice = if value.is_empty() {
+                            format!("the Jira {name} was cleared")
+                        } else {
+                            format!("Jira {name}: {value}")
+                        };
+                        let config = if site {
+                            Config { jira_site: value, ..self.config.clone() }
+                        } else {
+                            Config { jira_email: value, ..self.config.clone() }
+                        };
+                        self.save(config, notice)
+                    }
+                    Err(message) => {
+                        edit.error = Some(message.into());
+                        Action::None
+                    }
+                }
+            }
+            Row::JiraJql => {
+                let jira_jql = edit.input.trim().to_string();
+                self.edit = None;
+                let notice = if jira_jql.is_empty() {
+                    "Jira lists every issue you can see".to_string()
+                } else {
+                    format!("Jira lists only: {jira_jql}")
+                };
+                self.save(Config { jira_jql, ..self.config.clone() }, notice)
             }
             Row::Kind(kind) => {
                 let extra = agents::split_args(&edit.input);
@@ -694,13 +751,15 @@ impl Settings {
                 };
                 (label, value, note, false)
             }
+            Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
             Row::Tab(id) => {
                 let on = self.shown_tabs().contains(id);
                 let name = match *id {
                     "all" => "All",
                     "github" => "GitHub",
                     "shortcut" => "Shortcut",
-                    _ => "Linear",
+                    "linear" => "Linear",
+                    _ => "Jira",
                 };
                 let note = if *id == "all" { "every source together".into() } else { String::new() };
                 (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
@@ -772,6 +831,9 @@ impl Settings {
                 Row::Folder => "worktrees folder".to_string(),
                 Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
                 Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
+                Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
+                Row::JiraEmail => "Jira email".to_string(),
+                Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 _ => String::new(),
             };
@@ -835,6 +897,16 @@ fn with_args(config: &Config, kind: &str, args: Vec<String>) -> Config {
         agent_args.insert(kind.to_string(), args);
     }
     Config { agent_args, ..config.clone() }
+}
+
+fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let (label, value, empty, note) = match row {
+        Row::JiraSite => ("Jira site", &config.jira_site, "not set", "such as acme.atlassian.net"),
+        Row::JiraEmail => ("Jira email", &config.jira_email, "not set", "the one you sign in with"),
+        _ => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
+    };
+    let value = if value.is_empty() { empty.to_string() } else { value.clone() };
+    (label.into(), value, note.into(), false)
 }
 
 fn kind_row(config: &Config, kind: &str) -> (String, String, String, bool) {
@@ -1065,6 +1137,78 @@ mod tests {
             assert_eq!(press(&mut s, KeyCode::Delete), Action::RemoveToken(Source::Shortcut));
         }
 
+        mod jira {
+            use super::*;
+
+            fn with_jira() -> Settings {
+                let mut s = settings();
+                s.tokens.push((Source::Jira, Status::Missing));
+                s
+            }
+
+            fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
+                go_to(s, row);
+                press(s, KeyCode::Enter);
+                s.edit.iter_mut().for_each(|e| e.input.clear());
+                type_text(s, text);
+                press(s, KeyCode::Enter)
+            }
+
+            #[test]
+            fn has_its_own_section_after_the_accounts() {
+                let mut s = with_jira();
+                s.open_page(Page::Issues);
+                let rows: Vec<(&str, Row)> = s.rows().into_iter().map(|r| (r.section(), r)).take(6).collect();
+                assert_eq!(
+                    rows,
+                    [
+                        ("Accounts", Row::Token(Source::Shortcut)),
+                        ("Accounts", Row::Token(Source::Linear)),
+                        ("Jira", Row::JiraSite),
+                        ("Jira", Row::JiraEmail),
+                        ("Jira", Row::Token(Source::Jira)),
+                        ("Jira", Row::JiraJql)
+                    ]
+                );
+            }
+
+            #[test]
+            fn the_site_is_saved_as_a_host_name() {
+                let mut s = with_jira();
+                let config = saved(edit(&mut s, &Row::JiraSite, "https://acme.atlassian.net/jira"));
+                assert_eq!(config.jira_site, "acme.atlassian.net");
+            }
+
+            #[test]
+            fn a_bad_email_stays_in_the_field() {
+                let mut s = with_jira();
+                assert_eq!(edit(&mut s, &Row::JiraEmail, "ana"), Action::None);
+                assert_eq!(s.edit.and_then(|e| e.error).as_deref(), Some("type the email of your Atlassian account"));
+            }
+
+            #[test]
+            fn the_filter_is_saved_as_typed() {
+                let mut s = with_jira();
+                assert_eq!(saved(edit(&mut s, &Row::JiraJql, " project = SHOP ")).jira_jql, "project = SHOP");
+            }
+
+            #[test]
+            fn the_token_needs_the_site_and_the_email_first() {
+                let mut s = with_jira();
+                assert_eq!(edit(&mut s, &Row::Token(Source::Jira), "t0k"), Action::None);
+                assert_eq!(s.edit.and_then(|e| e.error).as_deref(), Some("set the Jira site and email first"));
+            }
+
+            #[test]
+            fn the_token_is_checked_once_both_are_set() {
+                let mut s = with_jira();
+                s.config.jira_site = "acme.atlassian.net".into();
+                s.config.jira_email = "ana@acme.dev".into();
+                let action = edit(&mut s, &Row::Token(Source::Jira), "t0k");
+                assert_eq!(action, Action::CheckToken(Source::Jira, Secret("t0k".into())));
+            }
+        }
+
         #[test]
         fn are_never_shown() {
             let mut s = settings();
@@ -1083,7 +1227,7 @@ mod tests {
         fn enter_hides_a_tab() {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("shortcut"));
-            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear"]);
+            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira"]);
         }
 
         #[test]
@@ -1107,7 +1251,7 @@ mod tests {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("linear"));
             let config = saved(key(&mut s, KeyCode::Up, KeyModifiers::SHIFT));
-            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut"]);
+            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira"]);
             assert_eq!(s.row(), Some(Row::Tab("linear")));
         }
     }

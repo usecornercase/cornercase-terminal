@@ -1,6 +1,6 @@
 ---
 title: Issues and agents
-description: Browse GitHub issues, Shortcut stories and Linear issues, read them as Markdown, and start a coding agent on one in its own worktree.
+description: Browse GitHub issues, Shortcut stories, Linear issues and Jira issues, read them as Markdown, and start a coding agent on one in its own worktree.
 ---
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -24,6 +24,7 @@ Click **`issues`** at the bottom of the sidebar. The browser opens for the activ
 | **GitHub** | Issues of the project's repository, read with the `gh` CLI. |
 | **Shortcut** | Stories from your Shortcut workspace. |
 | **Linear** | Issues from your Linear workspace. |
+| **Jira** | Issues from your Jira Cloud site. |
 
 You can hide tabs and change their order in **settings → Issues → Sources shown**. The browser remembers the last tab you used.
 
@@ -63,6 +64,20 @@ Linear needs a personal API key:
 cornercase checks the key against Linear and, if it works, saves it. You can also set `LINEAR_API_KEY` in your environment instead.
 
 </TabItem>
+<TabItem label="Jira">
+
+Jira Cloud (`https://<site>.atlassian.net`) needs three things: your site, the email of your Atlassian account and an API token.
+
+1. At [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens), open **Security → Create and manage API tokens** and create one (a classic token, without scopes).
+2. In cornercase, open the **Jira** tab of the issue browser. Type your site (`acme.atlassian.net`, or just `acme`) and press `Enter`, then your email and `Enter`, then paste the token and press `Enter`. **back** returns to the previous step.
+
+cornercase checks the token against Jira and, if it works, saves it. The site and the email are saved in your settings (`jira_site` and `jira_email` in [`config.json`](../../reference/configuration/)), and you can change them in **settings → Issues → Jira**, where the token can also be pasted. You can set `JIRA_API_TOKEN` in your environment instead of saving the token; the site and the email are still asked once.
+
+The Jira tab lists the issues of the whole site you can see. To narrow it down, set a **Jira filter** in **settings → Issues → Jira**: a JQL condition such as `project = SHOP`, which is combined with the closed and people filters.
+
+Jira Server and Data Center are not supported.
+
+</TabItem>
 </Tabs>
 
 <Screen
@@ -74,7 +89,7 @@ cornercase checks the key against Linear and, if it works, saves it. You can als
 Saved tokens go to `secrets.json` next to your `config.json`, readable only by you (mode `0600`). They are never written to logs, to the issue cache or to the screen. The **disconnect** button in a tracker's tab removes its saved token.
 
 <Aside type="caution" title="Environment variables win">
-When `SHORTCUT_API_TOKEN` or `LINEAR_API_KEY` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
+When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY` or `JIRA_API_TOKEN` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
 </Aside>
 
 ## Browse and filter
@@ -93,8 +108,8 @@ Each row shows the issue's key, its title and, on the right, its state (for clos
 
 Two toggles at the top right narrow the list down:
 
-- **closed** includes closed (GitHub), done (Shortcut) or completed and canceled (Linear) issues.
-- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear.
+- **closed** includes closed (GitHub), done (Shortcut), completed and canceled (Linear) or done (Jira) issues.
+- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear, *assignee* and *reporter* on Jira.
 
 <Screen
   name="issues-people"
@@ -134,7 +149,7 @@ At the top you see the issue's details and its link, then exactly what **start**
 | **agent** | Which agent will be started, in which mode, and its full command line. |
 | **prompt** | What will be pasted into the agent, and whether it is sent for you or left for you to send. |
 
-Below comes the description, rendered from Markdown: headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
+Below comes the description, rendered from Markdown (Jira descriptions and comments are converted to Markdown first): headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
 
 <Screen
   name="issue-detail-end"
@@ -154,7 +169,7 @@ Press **start** in the issue, or select an issue in the list and press **start**
 ### Where
 
 - **GitHub** issues belong to the project you opened the browser from.
-- **Shortcut** and **Linear** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
+- **Shortcut**, **Linear** and **Jira** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
 
 In a repository, the issue gets its own worktree on a branch named after it:
 
@@ -163,6 +178,7 @@ In a repository, the issue gets its own worktree on a branch named after it:
 | GitHub | #482 Returns page crashes on empty address | `issue-482-returns-page-crashes-on-empty-address` |
 | Shortcut | sc-48 Dark mode | `sc-48-dark-mode` |
 | Linear | ENG-123 Returns page crashes | `ENG-123-returns-page-crashes` |
+| Jira | SHOP-77 Returns page crashes | `SHOP-77-returns-page-crashes` |
 
 The title part is lowercased, accents become plain letters, everything else becomes dashes, and it is cut at a word boundary to at most 40 characters. The workspace is named after the issue's key and title, like `#482 Returns page crashes on empty addr…`.
 

@@ -82,7 +82,7 @@ impl Api<'_> {
             .filter(|m| {
                 !m["disabled"].as_bool().unwrap_or(false) && !m["profile"]["deactivated"].as_bool().unwrap_or(false)
             })
-            .map(|m| Person { handle: text(m, "/profile/mention_name"), name: text(m, "/profile/name") })
+            .map(|m| Person { handle: text(m, "/profile/mention_name"), name: text(m, "/profile/name"), id: None })
             .filter(|p| !p.handle.is_empty())
             .collect();
         people.sort_by_key(|p| p.handle.to_lowercase());
@@ -137,7 +137,7 @@ fn search_query(query: &Query, me: &str) -> String {
         let name = match who {
             Who::Anyone => continue,
             Who::Me => mention(me),
-            Who::Person(handle) => mention(handle),
+            Who::Person(handle) | Who::User { name: handle, .. } => mention(handle),
         };
         if !name.is_empty() {
             search.push(' ');
@@ -343,7 +343,10 @@ mod tests {
 
         assert_eq!(
             people,
-            [Person { handle: "ana".into(), name: "Ana".into() }, Person { handle: "zoe".into(), name: "Zoe".into() }]
+            [
+                Person { handle: "ana".into(), name: "Ana".into(), id: None },
+                Person { handle: "zoe".into(), name: "Zoe".into(), id: None }
+            ]
         );
     }
 

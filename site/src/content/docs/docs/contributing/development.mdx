@@ -66,7 +66,7 @@ npx -y jscpd@4.3.0         # copy-paste detector
 - **UI tests** render a `View` into ratatui's `TestBackend`: `insta` snapshots for layouts, cell styles for things like hover colours.
 - **Terminal and app tests** spawn real `/bin/sh` PTYs, never your own shell, and wait with `test_util::wait_until`, never with sleeps.
 - **End-to-end tests** in `tests/e2e.rs` run the real binary in a PTY, parse its output with `vt100`, and send raw bytes and SGR mouse sequences. Each test gets its own server through a `Session`, which runs `kill-server` when dropped. Wait for output that proves the previous step finished before sending the next one.
-- Nothing calls the real `gh`, Shortcut or Linear: tests use `fake_gh`, `FakeHttp` and a fake agent script. A test added as a safety net must fail without the code it protects.
+- Nothing calls the real `gh`, Shortcut, Linear or Jira: tests use `fake_gh`, `FakeHttp` and a fake agent script. A test added as a safety net must fail without the code it protects.
 
 ### Snapshots
 

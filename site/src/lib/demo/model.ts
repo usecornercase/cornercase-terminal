@@ -116,7 +116,7 @@ export interface IssuesOverlay {
   loading: boolean;
   busy?: string;
   notice?: string;
-  token: { input: string; checking: boolean; error?: string };
+  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
 }
@@ -160,7 +160,10 @@ export interface Config {
   updates: boolean;
   agentArgs: Record<string, string[]>;
   sources: string[];
-  accounts: { shortcut: boolean; linear: boolean };
+  accounts: { shortcut: boolean; linear: boolean; jira: boolean };
+  jiraSite: string;
+  jiraEmail: string;
+  jiraJql: string;
 }
 
 export const defaultConfig = (): Config => ({
@@ -177,8 +180,11 @@ export const defaultConfig = (): Config => ({
   notify: 'auto',
   updates: true,
   agentArgs: { claude: ['--permission-mode', 'plan'] },
-  sources: ['all', 'github', 'shortcut', 'linear'],
-  accounts: { shortcut: false, linear: false },
+  sources: ['all', 'github', 'shortcut', 'linear', 'jira'],
+  accounts: { shortcut: false, linear: false, jira: false },
+  jiraSite: '',
+  jiraEmail: '',
+  jiraJql: '',
 });
 
 export const projectLabel = (p: Project) => p.name || p.folder;

@@ -80,7 +80,7 @@ fn person(who: &Who) -> Option<String> {
     match who {
         Who::Anyone => None,
         Who::Me => Some("@me".into()),
-        Who::Person(login) => Some(login.clone()),
+        Who::Person(login) | Who::User { name: login, .. } => Some(login.clone()),
     }
 }
 
@@ -105,7 +105,7 @@ pub fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
         .lines()
         .map(str::trim)
         .filter(|login| !login.is_empty())
-        .map(|login| Person { handle: login.to_string(), name: String::new() })
+        .map(|login| Person { handle: login.to_string(), name: String::new(), id: None })
         .collect();
     people.sort_by_key(|p| p.handle.to_lowercase());
     Ok(people)

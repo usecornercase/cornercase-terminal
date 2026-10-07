@@ -5,7 +5,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, sort_by_updated};
+use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, sort_by_updated};
 use crate::markdown;
 use crate::search::Search;
 use crate::ui::{self, IssuesHit};
@@ -66,11 +66,20 @@ pub struct Connection {
     pub account: Option<Account>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Step {
+    Site,
+    Email,
+    #[default]
+    Token,
+}
+
 #[derive(Debug, Default)]
 pub struct TokenForm {
     pub input: String,
     pub checking: bool,
     pub error: Option<String>,
+    pub step: Step,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +141,7 @@ struct Choice {
     key: String,
     title: String,
     meta: String,
+    who: Option<Who>,
 }
 
 #[derive(Debug)]
@@ -148,6 +158,7 @@ pub enum Action {
     Read(Issue),
     Start(Issue, String, Option<Place>),
     CheckToken(Source, Secret),
+    SaveJira { site: String, email: String },
     Disconnect(Source),
     Copy(String),
     SetDefaultAgent(String),
@@ -169,6 +180,7 @@ enum Button {
     Copy,
     Disconnect,
     Connect,
+    Next,
     Cancel,
     Back,
 }
@@ -189,6 +201,7 @@ impl Button {
             Self::Copy => "copy url",
             Self::Disconnect => "disconnect",
             Self::Connect => "connect",
+            Self::Next => "next",
             Self::Cancel => "cancel",
             Self::Back => "back",
         }
@@ -213,6 +226,8 @@ pub struct Browser {
     pub lists: HashMap<Source, Listing>,
     pub connections: HashMap<Source, Connection>,
     pub forms: HashMap<Source, TokenForm>,
+    pub jira_site: String,
+    pub jira_email: String,
     pub screen: Screen,
     pub starting: bool,
     pub error: Option<String>,
@@ -286,8 +301,24 @@ impl Browser {
         self.connections.insert(source, connection);
     }
 
+    fn form(&mut self, source: Source) -> &mut TokenForm {
+        let site = self.jira_site.clone();
+        self.forms.entry(source).or_insert_with(|| match source {
+            Source::Jira => TokenForm { input: site, step: Step::Site, ..TokenForm::default() },
+            _ => TokenForm::default(),
+        })
+    }
+
+    fn form_step(&self, source: Source) -> Step {
+        match (self.forms.get(&source), source) {
+            (Some(form), _) => form.step,
+            (None, Source::Jira) => Step::Site,
+            (None, _) => Step::Token,
+        }
+    }
+
     pub fn token_rejected(&mut self, source: Source, error: String) {
-        let form = self.forms.entry(source).or_default();
+        let form = self.form(source);
         form.checking = false;
         form.error = Some(error);
     }
@@ -340,18 +371,27 @@ impl Browser {
                 buttons.extend([if *raw { Button::Rendered } else { Button::Raw }, Button::Copy, Button::Back]);
                 buttons
             }
-            Screen::List if self.token_form().is_some() => vec![Button::Connect, Button::Cancel],
-            Screen::List => {
-                let mut buttons = vec![Button::Start, Button::Refresh];
-                if let Tab::One(source) = self.current()
-                    && self.connections.get(&source).is_some_and(|c| !c.from_env)
-                {
-                    buttons.push(Button::Disconnect);
+            Screen::List => match self.token_form().map(|source| self.form_step(source)) {
+                Some(Step::Site) => vec![Button::Next, Button::Cancel],
+                Some(Step::Email) => vec![Button::Next, Button::Back, Button::Cancel],
+                Some(Step::Token) if self.token_form() == Some(Source::Jira) => {
+                    vec![Button::Connect, Button::Back, Button::Cancel]
                 }
-                buttons.push(Button::Cancel);
-                buttons
-            }
+                Some(Step::Token) => vec![Button::Connect, Button::Cancel],
+                None => self.list_buttons(),
+            },
         }
+    }
+
+    fn list_buttons(&self) -> Vec<Button> {
+        let mut buttons = vec![Button::Start, Button::Refresh];
+        if let Tab::One(source) = self.current()
+            && self.connections.get(&source).is_some_and(|c| !c.from_env)
+        {
+            buttons.push(Button::Disconnect);
+        }
+        buttons.push(Button::Cancel);
+        buttons
     }
 
     fn labels(&self) -> Vec<&'static str> {
@@ -505,10 +545,14 @@ impl Browser {
                 Tab::One(source) => Action::Disconnect(source),
                 Tab::All => Action::None,
             },
-            Button::Connect => self.submit_token(),
+            Button::Connect | Button::Next => self.submit_token(),
             Button::Cancel => Action::Close,
             Button::Back if self.picker.is_some() => {
                 self.picker = None;
+                Action::None
+            }
+            Button::Back if self.token_form().is_some() => {
+                self.step_back();
                 Action::None
             }
             Button::Back => {
@@ -565,7 +609,7 @@ impl Browser {
             (Who::Me, me.map_or_else(|| "you".into(), |h| format!("you (@{h})"))),
         ];
         if let Some(Ok(people)) = self.members.get(&source) {
-            choices.extend(people.iter().map(|p| (Who::Person(p.handle.clone()), p.name.clone())));
+            choices.extend(people.iter().map(|p| (p.who(), p.name.clone())));
         }
         choices
     }
@@ -582,6 +626,7 @@ impl Browser {
                     key: kind.clone(),
                     title: self.agents.starts.get(kind).map(|s| s.command.clone()).unwrap_or_default(),
                     meta: self.agents.notes(kind),
+                    who: None,
                 })
                 .collect(),
             Pick::Place => self
@@ -592,12 +637,13 @@ impl Browser {
                     key: place.label.clone(),
                     title: if place.worktree { "a new worktree".into() } else { "a new tab".into() },
                     meta: if i == self.here { "where you are".into() } else { String::new() },
+                    who: None,
                 })
                 .collect(),
             Pick::Person(source, _) => self
                 .person_choices(source)
                 .into_iter()
-                .map(|(who, name)| Choice { key: who.describe(), title: name, meta: String::new() })
+                .map(|(who, name)| Choice { key: who.describe(), title: name, meta: String::new(), who: Some(who) })
                 .collect(),
         };
         all.into_iter()
@@ -610,13 +656,12 @@ impl Browser {
         let (pick, then_start) = (picker.pick, picker.then_start);
         let choices = self.choices();
         let i = index.unwrap_or_else(|| picker.search.selected()).min(choices.len().saturating_sub(1));
-        let Some(key) = choices.get(i).map(|c| c.key.clone()) else { return Action::None };
+        let Some((key, who)) = choices.get(i).map(|c| (c.key.clone(), c.who.clone())) else { return Action::None };
         self.picker = None;
         match pick {
             Pick::Agent => self.agents.chosen = Some(key),
             Pick::Place => self.place = self.places.iter().position(|p| p.label == key),
             Pick::Person(source, field) => {
-                let who = self.person_choices(source).into_iter().map(|(w, _)| w).find(|w| w.describe() == key);
                 if let Some(who) = who {
                     self.set_person(source, field, who);
                 }
@@ -673,14 +718,49 @@ impl Browser {
 
     fn submit_token(&mut self) -> Action {
         let Some(source) = self.token_form() else { return Action::None };
-        let form = self.forms.entry(source).or_default();
-        let token = form.input.trim().to_string();
-        if token.is_empty() || form.checking {
+        let email = self.jira_email.clone();
+        let form = self.form(source);
+        let input = form.input.trim().to_string();
+        if form.checking {
             return Action::None;
         }
-        form.checking = true;
-        form.error = None;
-        Action::CheckToken(source, Secret(token))
+        match form.step {
+            Step::Site => match jira::check_site(&input) {
+                Ok(site) => {
+                    *form = TokenForm { input: email, step: Step::Email, ..TokenForm::default() };
+                    self.jira_site = site;
+                }
+                Err(e) => form.error = Some(e.into()),
+            },
+            Step::Email => match jira::check_email(&input) {
+                Ok(email) => {
+                    *form = TokenForm::default();
+                    self.jira_email.clone_from(&email);
+                    return Action::SaveJira { site: self.jira_site.clone(), email };
+                }
+                Err(e) => form.error = Some(e.into()),
+            },
+            Step::Token if input.is_empty() => {}
+            Step::Token => {
+                form.checking = true;
+                form.error = None;
+                return Action::CheckToken(source, Secret(input));
+            }
+        }
+        Action::None
+    }
+
+    fn step_back(&mut self) {
+        let Some(source) = self.token_form() else { return };
+        let (site, email) = (self.jira_site.clone(), self.jira_email.clone());
+        let form = self.form(source);
+        if form.checking {
+            return;
+        }
+        *form = match form.step {
+            Step::Token => TokenForm { input: email, step: Step::Email, ..TokenForm::default() },
+            Step::Email | Step::Site => TokenForm { input: site, step: Step::Site, ..TokenForm::default() },
+        };
     }
 
     fn detail_rows(area: Rect) -> usize {
@@ -731,7 +811,7 @@ impl Browser {
             _ => {}
         }
         if let Some(source) = self.token_form() {
-            let form = self.forms.entry(source).or_default();
+            let form = self.form(source);
             match key.code {
                 KeyCode::Enter => return self.submit_token(),
                 KeyCode::Backspace if !form.checking => {
@@ -771,7 +851,7 @@ impl Browser {
         }
         let chars = text.chars().filter(|c| !c.is_control());
         if let Some(source) = self.token_form() {
-            let form = self.forms.entry(source).or_default();
+            let form = self.form(source);
             if !form.checking {
                 form.input.extend(chars.filter(|c| !c.is_whitespace()));
                 form.error = None;
@@ -1020,24 +1100,46 @@ impl Browser {
 
     fn token_view(&self, source: Source) -> (ui::IssuesBody, Option<ui::Note>, String) {
         let form = self.forms.get(&source);
-        let input = form.map_or(0, |f| f.input.chars().count());
-        let mut help = vec![format!("Connect {}.", source.name()), String::new(), source.token_help().into()];
-        if let Some(env) = source.token_env() {
-            help.push(String::new());
-            help.push(format!(
-                "It is saved in {} (only you can read it); you can also paste it in settings. {env}, when set, \
-                 takes precedence.",
-                self.secrets_path
-            ));
+        let step = self.form_step(source);
+        let typed = form.map_or_else(
+            || if step == Step::Site { self.jira_site.clone() } else { String::new() },
+            |f| f.input.clone(),
+        );
+        let mut help = vec![format!("Connect {}.", source.name()), String::new()];
+        let (label, input) = match step {
+            Step::Site => {
+                help.push("Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.".into());
+                ("site", typed)
+            }
+            Step::Email => {
+                help.push("Type the email you sign in to Atlassian with and press Enter.".into());
+                ("email", typed)
+            }
+            Step::Token => {
+                if source == Source::Jira {
+                    help.extend([format!("Signing in to {} as {}.", self.jira_site, self.jira_email), String::new()]);
+                }
+                help.push(source.token_help().into());
+                (source.token_name(), "•".repeat(typed.chars().count().min(TOKEN_DOTS)))
+            }
+        };
+        match (step, source.token_env()) {
+            (Step::Token, Some(env)) => {
+                help.push(String::new());
+                help.push(format!(
+                    "It is saved in {} (only you can read it); you can also paste it in settings. {env}, when set, \
+                     takes precedence.",
+                    self.secrets_path
+                ));
+            }
+            _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
         }
         let note = match form {
             Some(f) if f.checking => Some(ui::Note::Busy("checking…")),
             Some(TokenForm { error: Some(e), .. }) => Some(ui::Note::Error(e.clone())),
             _ => None,
         };
-        let body =
-            ui::IssuesBody::Token { label: source.token_name(), input: "•".repeat(input.min(TOKEN_DOTS)), help };
-        (body, note, String::new())
+        (ui::IssuesBody::Token { label, input, help }, note, String::new())
     }
 
     fn list_view(&self, now: i64) -> (ui::IssuesBody, Option<ui::Note>, String) {
@@ -1056,7 +1158,7 @@ impl Browser {
         } else if self.current() == Tab::One(Source::Github) && !self.github {
             "this project is not in a git repository".into()
         } else if self.sources().is_empty() {
-            "nothing to list here: connect Shortcut or Linear in their tabs".into()
+            "nothing to list here: connect Shortcut, Linear or Jira in their tabs".into()
         } else if self.closed {
             "no issues".into()
         } else {
@@ -1175,6 +1277,8 @@ mod tests {
             lists: HashMap::new(),
             connections: HashMap::new(),
             forms: HashMap::new(),
+            jira_site: String::new(),
+            jira_email: String::new(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -1270,10 +1374,16 @@ mod tests {
         use super::*;
 
         #[test]
-        fn are_all_four_by_default() {
+        fn are_all_five_by_default() {
             assert_eq!(
                 tabs(&[]),
-                [Tab::All, Tab::One(Source::Github), Tab::One(Source::Shortcut), Tab::One(Source::Linear)]
+                [
+                    Tab::All,
+                    Tab::One(Source::Github),
+                    Tab::One(Source::Shortcut),
+                    Tab::One(Source::Linear),
+                    Tab::One(Source::Jira)
+                ]
             );
         }
 
@@ -1494,6 +1604,83 @@ mod tests {
             let mut b = on_shortcut();
             b.connected(Source::Shortcut, Connection { from_env: true, account: None });
             assert_eq!(b.labels(), ["start", "refresh", "cancel"]);
+        }
+
+        mod jira {
+            use super::*;
+
+            fn on_jira() -> Browser {
+                let mut b = browser();
+                b.jira_site = "acme.atlassian.net".into();
+                b.jira_email = "ana@acme.dev".into();
+                b.tab_to(Tab::One(Source::Jira));
+                b
+            }
+
+            fn field(b: &Browser) -> (&'static str, String) {
+                let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues view") };
+                let ui::IssuesBody::Token { label, input, .. } = view.body else { panic!("not the form") };
+                (label, input)
+            }
+
+            fn to_the_token(b: &mut Browser) -> Action {
+                press(b, KeyCode::Enter);
+                press(b, KeyCode::Enter)
+            }
+
+            #[test]
+            fn asks_the_site_first_with_the_saved_one_typed() {
+                let b = on_jira();
+                assert_eq!((field(&b), b.labels()), (("site", "acme.atlassian.net".into()), vec!["next", "cancel"]));
+            }
+
+            #[test]
+            fn then_the_email_and_saves_both() {
+                let mut b = on_jira();
+                press(&mut b, KeyCode::Enter);
+                assert_eq!((field(&b), b.labels()), (("email", "ana@acme.dev".into()), vec!["next", "back", "cancel"]));
+                let saved = press(&mut b, KeyCode::Enter);
+                assert_eq!(saved, Action::SaveJira { site: "acme.atlassian.net".into(), email: "ana@acme.dev".into() });
+            }
+
+            #[test]
+            fn a_site_typed_as_a_name_gets_its_domain() {
+                let mut b = on_jira();
+                b.jira_site.clear();
+                type_text(&mut b, "shop");
+                press(&mut b, KeyCode::Enter);
+                assert_eq!(b.jira_site, "shop.atlassian.net");
+            }
+
+            #[test]
+            fn a_bad_email_stays_with_its_error() {
+                let mut b = on_jira();
+                b.jira_email = "ana".into();
+                let action = to_the_token(&mut b);
+                let error = b.forms.get(&Source::Jira).and_then(|f| f.error.clone());
+                assert_eq!(
+                    (action, field(&b).0, error.as_deref()),
+                    (Action::None, "email", Some("type the email of your Atlassian account"))
+                );
+            }
+
+            #[test]
+            fn the_token_comes_last_and_is_hidden() {
+                let mut b = on_jira();
+                to_the_token(&mut b);
+                type_text(&mut b, "t0k");
+                assert_eq!((field(&b), b.labels()), (("API token", "•••".into()), vec!["connect", "back", "cancel"]));
+                assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Jira, Secret("t0k".into())));
+            }
+
+            #[test]
+            fn back_returns_to_the_email() {
+                let mut b = on_jira();
+                to_the_token(&mut b);
+                let pos = button(&b, "back");
+                click(&mut b, pos);
+                assert_eq!(field(&b), ("email", "ana@acme.dev".into()));
+            }
         }
 
         #[test]
@@ -1780,7 +1967,10 @@ mod tests {
         #[test]
         fn members_can_be_picked_by_name() {
             let mut b = filtering();
-            b.people_loaded(Source::Shortcut, Ok(vec![Person { handle: "bo".into(), name: "Bo Diddley".into() }]));
+            b.people_loaded(
+                Source::Shortcut,
+                Ok(vec![Person { handle: "bo".into(), name: "Bo Diddley".into(), id: None }]),
+            );
             press(&mut b, KeyCode::Down);
             press(&mut b, KeyCode::Down);
             press(&mut b, KeyCode::Down);
@@ -1788,6 +1978,21 @@ mod tests {
             type_text(&mut b, "diddley");
             press(&mut b, KeyCode::Enter);
             assert_eq!(b.people.shortcut[1], Who::Person("bo".into()));
+        }
+
+        #[test]
+        fn jira_people_are_picked_by_account_even_with_the_same_name() {
+            let mut b = browser();
+            b.tab_to(Tab::One(Source::Jira));
+            b.connected(Source::Jira, Connection { from_env: false, account: None });
+            b.open_people();
+            let twin = |id: &str, email: &str| Person { handle: "Ana".into(), name: email.into(), id: Some(id.into()) };
+            b.people_loaded(Source::Jira, Ok(vec![twin("a1", "ana@one.dev"), twin("a2", "ana@two.dev")]));
+            press(&mut b, KeyCode::Enter);
+            type_text(&mut b, "two");
+            press(&mut b, KeyCode::Enter);
+            assert_eq!(b.people.jira[0], Who::User { id: "a2".into(), name: "Ana".into() });
+            assert_eq!(b.people.describe(Source::Jira), "assignee @Ana");
         }
 
         #[test]

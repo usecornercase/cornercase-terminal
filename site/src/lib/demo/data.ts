@@ -162,7 +162,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   infra: [['7a7d2b0', 'Add terraform skeleton', '2 months ago']],
 };
 
-export type SourceId = 'github' | 'shortcut' | 'linear';
+export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira';
 
 export interface Issue {
   source: SourceId;
@@ -272,6 +272,32 @@ export const ISSUES: Issue[] = [
     age: '4d',
     url: 'https://linear.app/acme/issue/ENG-131',
     body: 'Customers want to pay part with a gift card and the rest with a card.',
+    mine: false,
+  },
+  {
+    source: 'jira',
+    number: 77,
+    key: 'SHOP-77',
+    title: 'Show the return label as a QR code',
+    labels: ['returns'],
+    state: 'In Progress',
+    author: 'marta',
+    age: '2d',
+    url: 'https://acme.atlassian.net/browse/SHOP-77',
+    body: 'Customers without a printer should be able to show a QR code at the drop-off point.\n\n- [ ] Generate the code from the label id\n- [ ] Add it to the confirmation email',
+    mine: true,
+  },
+  {
+    source: 'jira',
+    number: 81,
+    key: 'SHOP-81',
+    title: 'Translate the returns page into Spanish',
+    labels: ['i18n'],
+    state: 'To Do',
+    author: 'luis',
+    age: '9d',
+    url: 'https://acme.atlassian.net/browse/SHOP-81',
+    body: 'Every string of the returns flow goes through `t()`; the **es** catalogue is missing.',
     mine: false,
   },
 ];

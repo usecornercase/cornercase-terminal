@@ -91,7 +91,7 @@ export interface IssuesView {
   hint: string;
   buttons: string[];
   detail?: Line[];
-  token?: { label: string; help: string[] };
+  token?: { label: string; input: string; help: string[] };
   picking: boolean;
   error?: boolean;
 }
@@ -106,7 +106,44 @@ export interface SearchResult {
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira' };
+
+type Remote = 'shortcut' | 'linear' | 'jira';
+const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
+  shortcut: {
+    name: 'Shortcut',
+    token: 'API token',
+    env: 'SHORTCUT_API_TOKEN',
+    help: 'Create a token in Shortcut under Settings → Your account → API Tokens, paste it here and press Enter.',
+  },
+  linear: {
+    name: 'Linear',
+    token: 'API key',
+    env: 'LINEAR_API_KEY',
+    help: 'Create a personal API key in Linear under Settings → Security & access → Personal API keys, paste it here and press Enter.',
+  },
+  jira: {
+    name: 'Jira',
+    token: 'API token',
+    env: 'JIRA_API_TOKEN',
+    help: 'Create an API token at id.atlassian.com under Security → Create and manage API tokens, paste it here and press Enter.',
+  },
+};
+const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
+const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
+
+function checkSite(input: string): [string, string?] {
+  const host = (input.trim().split('://').pop() ?? '').split('/')[0].replace(/\.+$/, '').toLowerCase();
+  if (!host) return ['', 'type your site, such as acme.atlassian.net'];
+  if (!/^[a-z0-9.-]+$/.test(host)) return ['', 'a site is a host name, such as acme.atlassian.net'];
+  return [host.includes('.') ? host : `${host}.atlassian.net`];
+}
+
+function checkEmail(input: string): [string, string?] {
+  const email = input.trim();
+  const at = email.indexOf('@');
+  return at > 0 && at < email.length - 1 && !/\s/.test(email) ? [email] : ['', 'type the email of your Atlassian account'];
+}
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
 
@@ -1535,14 +1572,19 @@ export class App {
       return rows;
     }
     if (page === 2) {
-      const account = (on: boolean): [string, string] => (on ? ['@you in acme', 'saved'] : ['not connected', 'enter pastes one']);
-      const [sv, sn] = account(c.accounts.shortcut);
-      const [lv, ln] = account(c.accounts.linear);
+      const token = (s: Remote, section: string): SettingsRow => {
+        const on = c.accounts[s];
+        return { id: `token:${s}`, section, label: tokenName(s), value: on ? this.accountOf(s) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
+      };
       const rows: SettingsRow[] = [
-        { id: 'token:shortcut', section: 'Accounts', label: 'Shortcut API token', value: sv, note: sn },
-        { id: 'token:linear', section: 'Accounts', label: 'Linear API key', value: lv, note: ln },
+        token('shortcut', 'Accounts'),
+        token('linear', 'Accounts'),
+        { id: 'jira-site', section: 'Jira', label: 'Jira site', value: c.jiraSite || 'not set', note: 'such as acme.atlassian.net' },
+        { id: 'jira-email', section: 'Jira', label: 'Jira email', value: c.jiraEmail || 'not set', note: 'the one you sign in with' },
+        token('jira', 'Jira'),
+        { id: 'jira-jql', section: 'Jira', label: 'Jira filter', value: c.jiraJql || 'none', note: 'JQL, such as project = SHOP' },
       ];
-      const hidden = ['all', 'github', 'shortcut', 'linear'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -1619,9 +1661,15 @@ export class App {
       const items = AGENTS.filter(([k]) => !listed.includes(k)).map(([k, bin]) => ({ value: k, note: bin }));
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
     } else if (row.id.startsWith('token:')) {
-      const source = row.id.slice(6) as 'shortcut' | 'linear';
-      if (c.accounts[source]) o.notice = `${source === 'shortcut' ? 'Shortcut' : 'Linear'} is connected; delete removes the token`;
-      else o.edit = { row: row.id, label: source === 'shortcut' ? 'Shortcut API token' : 'Linear API key', input: '', token: true };
+      const source = row.id.slice(6) as Remote;
+      if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;
+      else o.edit = { row: row.id, label: tokenName(source), input: '', token: true };
+    } else if (row.id === 'jira-site') {
+      o.edit = { row: row.id, label: 'Jira site, such as acme.atlassian.net', input: c.jiraSite, token: false };
+    } else if (row.id === 'jira-email') {
+      o.edit = { row: row.id, label: 'Jira email', input: c.jiraEmail, token: false };
+    } else if (row.id === 'jira-jql') {
+      o.edit = { row: row.id, label: 'Jira filter (JQL, such as project = SHOP; empty lists everything)', input: c.jiraJql, token: false };
     } else if (row.id.startsWith('src:')) {
       const id = row.id.slice(4);
       if (c.sources.includes(id)) {
@@ -1695,19 +1743,38 @@ export class App {
         o.notice = this.config.fetchMinutes ? `branches are fetched every ${this.config.fetchMinutes} min` : 'branches are not fetched: commits to pull are not shown';
       }
     } else if (edit.row.startsWith('token:')) {
-      const source = edit.row.slice(6) as 'shortcut' | 'linear';
-      if (!edit.input.trim()) {
-        edit.error = `paste the ${source === 'shortcut' ? 'API token' : 'API key'} first`;
+      const source = edit.row.slice(6) as Remote;
+      if (source === 'jira' && (!this.config.jiraSite || !this.config.jiraEmail)) {
+        edit.error = 'set the Jira site and email first';
+      } else if (!edit.input.trim()) {
+        edit.error = `paste the ${REMOTES[source].token} first`;
       } else {
         o.busy = 'checking…';
         this.after(900, () => {
           o.busy = undefined;
           o.edit = undefined;
           this.config.accounts[source] = true;
-          o.notice = `${source === 'shortcut' ? 'Shortcut' : 'Linear'} connected as @you in acme`;
+          o.notice = `${REMOTES[source].name} connected as ${this.accountOf(source)}`;
           this.dirty();
         });
       }
+    } else if (edit.row === 'jira-site' || edit.row === 'jira-email') {
+      const site = edit.row === 'jira-site';
+      const name = site ? 'site' : 'email';
+      const input = edit.input.trim();
+      const [value, error] = !input ? [''] : site ? checkSite(input) : checkEmail(input);
+      if (error) edit.error = error;
+      else {
+        if (site) this.config.jiraSite = value;
+        else this.config.jiraEmail = value;
+        if (!value) this.config.accounts.jira = false;
+        o.edit = undefined;
+        o.notice = value ? `Jira ${name}: ${value}` : `the Jira ${name} was cleared`;
+      }
+    } else if (edit.row === 'jira-jql') {
+      this.config.jiraJql = edit.input.trim();
+      o.edit = undefined;
+      o.notice = this.config.jiraJql ? `Jira lists only: ${this.config.jiraJql}` : 'Jira lists every issue you can see';
     } else if (edit.row.startsWith('kind:')) {
       const kind = edit.row.slice(5);
       const mode = this.modeOf(kind);
@@ -1741,7 +1808,8 @@ export class App {
       agentPick: null,
       chosen: null,
     };
-    this.emit('narrate', 'Your issues from GitHub, Shortcut and Linear. Click one to read it, then press start.');
+    this.overlay.token = this.freshToken(this.issuesSource(this.overlay));
+    this.emit('narrate', 'Your issues from GitHub, Shortcut, Linear and Jira. Click one to read it, then press start.');
     this.after(450, () => {
       const o = this.overlay;
       if (o?.kind === 'issues') {
@@ -1761,13 +1829,23 @@ export class App {
     return this.config.sources[o.tab] ?? 'all';
   }
 
+  private accountOf(source: Remote): string {
+    return `@you in ${source === 'jira' ? this.config.jiraSite : 'acme'}`;
+  }
+
+  private freshToken(source: string): IssuesOverlay['token'] {
+    return source === 'jira' ? { input: this.config.jiraSite, checking: false, step: 'site' } : { input: '', checking: false };
+  }
+
   private issuesList(o: IssuesOverlay): Issue[] {
     const source = this.issuesSource(o);
     const p = this.projects.find((x) => x.id === o.project);
     const github = !!p?.repo;
-    const allowed = (s: string) => (s === 'github' ? github : this.config.accounts[s as 'shortcut' | 'linear']);
+    const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s]);
     const f = o.filter.trim().toLowerCase();
+    const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
+      .filter((i) => i.source !== 'jira' || !project || i.key.startsWith(`${project}-`))
       .filter((i) => !o.mine || i.mine)
       .filter((i) => !f || [i.key, i.title, i.author, i.state, ...i.labels].some((k) => k.toLowerCase().includes(f)));
   }
@@ -1871,12 +1949,29 @@ export class App {
         picking: true,
       };
     }
-    if ((source === 'shortcut' || source === 'linear') && !this.config.accounts[source]) {
-      const name = source === 'shortcut' ? 'Shortcut' : 'Linear';
-      const help =
-        source === 'shortcut'
-          ? 'Create a token in Shortcut under Settings → Your account → API Tokens, paste it here and press Enter.'
-          : 'Create a personal API key in Linear under Settings → Security & access → Personal API keys, paste it here and press Enter.';
+    if (isRemote(source) && !this.config.accounts[source]) {
+      const remote = REMOTES[source];
+      const step = o.token.step ?? 'token';
+      const help = [`Connect ${remote.name}.`, ''];
+      let label = remote.token;
+      let input = '•'.repeat(Math.min(o.token.input.length, 40));
+      if (step === 'site') {
+        help.push('Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.');
+        [label, input] = ['site', o.token.input];
+      } else if (step === 'email') {
+        help.push('Type the email you sign in to Atlassian with and press Enter.');
+        [label, input] = ['email', o.token.input];
+      } else {
+        if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
+        help.push(remote.help);
+      }
+      help.push(
+        '',
+        step === 'token'
+          ? `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${remote.env}, when set, takes precedence.`
+          : 'The site and the email are saved in your settings.',
+      );
+      const back = step !== 'site' && source === 'jira' ? ['back'] : [];
       return {
         tabs,
         toggles,
@@ -1886,11 +1981,8 @@ export class App {
         empty: '',
         hint: o.token.error ?? '',
         error: !!o.token.error,
-        buttons: ['connect', 'cancel'],
-        token: {
-          label: source === 'shortcut' ? 'API token' : 'API key',
-          help: [`Connect ${name}.`, '', help, '', `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${source === 'shortcut' ? 'SHORTCUT_API_TOKEN' : 'LINEAR_API_KEY'}, when set, takes precedence.`],
-        },
+        buttons: [step === 'token' ? 'connect' : 'next', ...back, 'cancel'],
+        token: { label, input, help },
         picking: false,
       };
     }
@@ -1898,10 +1990,19 @@ export class App {
     const selected = Math.min(o.selected, Math.max(0, list.length - 1));
     const sel = list[selected];
     const p = this.projects.find((x) => x.id === o.project);
-    const empty = o.loading ? '' : o.filter ? 'no matches' : source === 'github' && !p?.repo ? 'this project is not in a git repository' : 'no open issues';
-    const account = source === 'shortcut' || source === 'linear' ? '@you in acme' : '';
+    const nothing = source === 'all' && !p?.repo && !Object.values(this.config.accounts).some(Boolean);
+    const empty = o.loading
+      ? ''
+      : o.filter
+        ? 'no matches'
+        : source === 'github' && !p?.repo
+          ? 'this project is not in a git repository'
+          : nothing
+            ? 'nothing to list here: connect Shortcut, Linear or Jira in their tabs'
+            : 'no open issues';
+    const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
-    const buttons = ['start', 'refresh', ...(source === 'shortcut' || source === 'linear' ? ['disconnect'] : []), 'cancel'];
+    const buttons = ['start', 'refresh', ...(isRemote(source) ? ['disconnect'] : []), 'cancel'];
     return {
       tabs,
       toggles,
@@ -1926,7 +2027,7 @@ export class App {
     o.selected = 0;
     o.scroll = 0;
     o.filter = '';
-    o.token = { input: '', checking: false };
+    o.token = this.freshToken(this.issuesSource(o));
     this.dirty();
   }
 
@@ -1981,6 +2082,11 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site') {
+      const email = o.token.step === 'token';
+      o.token = { input: email ? this.config.jiraEmail : this.config.jiraSite, checking: false, step: email ? 'email' : 'site' };
+      return this.dirty();
+    }
     if (label === 'back') {
       if (o.agentPick) o.agentPick = null;
       else o.detail = null;
@@ -1999,11 +2105,12 @@ export class App {
       return this.dirty();
     }
     if (label === 'disconnect') {
-      const source = this.issuesSource(o) as 'shortcut' | 'linear';
+      const source = this.issuesSource(o) as Remote;
       this.config.accounts[source] = false;
+      o.token = this.freshToken(source);
       return this.dirty();
     }
-    if (label === 'connect') return this.issuesConnect();
+    if (label === 'connect' || label === 'next') return this.issuesConnect();
     if (label === 'copy url') {
       const issue = ISSUES.find((i) => i.key === o.detail);
       if (issue) {
@@ -2038,16 +2145,30 @@ export class App {
   private issuesConnect(): void {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
-    const source = this.issuesSource(o) as 'shortcut' | 'linear';
-    if (!o.token.input.trim()) {
-      o.token.error = `paste the ${source === 'shortcut' ? 'API token' : 'API key'} first`;
+    const source = this.issuesSource(o) as Remote;
+    const input = o.token.input.trim();
+    if (o.token.step === 'site' || o.token.step === 'email') {
+      const site = o.token.step === 'site';
+      const [value, error] = site ? checkSite(input) : checkEmail(input);
+      if (error) o.token.error = error;
+      else if (site) {
+        this.config.jiraSite = value;
+        o.token = { input: this.config.jiraEmail, checking: false, step: 'email' };
+      } else {
+        this.config.jiraEmail = value;
+        o.token = { input: '', checking: false, step: 'token' };
+      }
+      return this.dirty();
+    }
+    if (!input) {
+      o.token.error = `paste the ${REMOTES[source].token} first`;
       return this.dirty();
     }
     o.busy = 'checking…';
     this.after(900, () => {
       o.busy = undefined;
       this.config.accounts[source] = true;
-      o.token = { input: '', checking: false };
+      o.token = this.freshToken(source);
       o.loading = true;
       this.after(400, () => {
         o.loading = false;
@@ -2499,10 +2620,10 @@ export class App {
     else if (k.key === 'ArrowDown') o.cursor = Math.min(o.cursor + 1, rows.length - 1);
     else if (k.key === 'ArrowUp') o.cursor = Math.max(0, o.cursor - 1);
     else if ((k.key === 'Delete' || k.key === 'Backspace') && rows[o.cursor]?.id.startsWith('token:')) {
-      const source = rows[o.cursor].id.slice(6) as 'shortcut' | 'linear';
+      const source = rows[o.cursor].id.slice(6) as Remote;
       if (this.config.accounts[source]) {
         this.config.accounts[source] = false;
-        o.notice = `the ${source === 'shortcut' ? 'Shortcut API token' : 'Linear API key'} was removed`;
+        o.notice = `the ${tokenName(source)} was removed`;
       }
     }
     this.dirty();
@@ -2521,11 +2642,12 @@ export class App {
     }
     if (view.token) {
       if (k.key === 'Enter') this.issuesConnect();
-      else if (k.key === 'Backspace') o.token.input = o.token.input.slice(0, -1);
       else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.config.sources.length);
       else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.config.sources.length - 1) % this.config.sources.length);
-      else if (ch) o.token.input += ch;
-      o.token.error = undefined;
+      else if (k.key === 'Backspace' || ch) {
+        o.token.input = k.key === 'Backspace' ? o.token.input.slice(0, -1) : o.token.input + ch;
+        o.token.error = undefined;
+      }
       this.dirty();
       return true;
     }

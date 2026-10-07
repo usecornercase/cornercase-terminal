@@ -6,6 +6,13 @@ Every pull request that changes the app adds a section here for its new version.
 
 - With **memory** on, an agent tab now shows the memory its agent really uses: on macOS the figure Activity Monitor shows, on Linux each process's private memory, including what was swapped out. Code that several processes share, such as the agent's own program, used to be counted again for every process, so the figure was about twice what the agent costs; a fresh Claude Code tab now shows about 200 MB instead of 440 MB.
 
+## 0.11.0
+
+- Jira: the issue browser has a **Jira** tab for Jira Cloud. Open it, type your site (`acme.atlassian.net`, or just `acme`), your email and an API token from id.atlassian.com, and its issues show up next to GitHub, Shortcut and Linear: read them (descriptions and comments are turned into Markdown), filter them by assignee or reporter, and press **start** to put an agent on one in a worktree on a `SHOP-77-…` branch.
+- **settings → Issues → Jira** holds the site, the email and the token, plus an optional **Jira filter**: a JQL condition such as `project = SHOP` for when your site has more than you want to see. `JIRA_API_TOKEN` in the environment works like the other trackers' variables.
+- If you hid some issue tabs before, the Jira tab is added at the end of your list once; hide it in settings if you don't use Jira.
+- Issues from different trackers are now sorted correctly in the **All** tab when their times come with a time zone.
+
 ## 0.10.0
 
 - cornercase can now be driven from the command line, by your scripts, git hooks and coding agents. `cornercase status` lists your projects, workspaces, tabs and panes with their ids; `open`, `new-workspace` (with `--worktree` for a git worktree), `new-tab` and `split` make them, typing a command if you give one; `start` starts an agent in a new tab or its own worktree and hands it a prompt; `send` and `keys` type into a pane, `read` prints its screen or its last lines, and `wait` waits until an agent stops working or needs you, a program ends, a line shows up or the output stops. `close`, `rename`, `focus`, `notify` and `todo` do what their buttons do. `cornercase --help` explains each one, and `--json` prints the answers as JSON.

@@ -15,7 +15,7 @@ use crate::ui;
 pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub const DEFAULT_PROMPT: &str = "{url}";
 pub const DEFAULT_GH: &str = "gh";
-pub const DEFAULT_ISSUE_TABS: [&str; 4] = ["all", "github", "shortcut", "linear"];
+pub const DEFAULT_ISSUE_TABS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
 pub const DEFAULT_FETCH_MINUTES: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +25,9 @@ pub struct Config {
     pub worktrees_dir: String,
     pub fetch_minutes: u64,
     pub issue_tabs: Vec<String>,
+    pub jira_site: String,
+    pub jira_email: String,
+    pub jira_jql: String,
     pub agent: String,
     pub agent_args: BTreeMap<String, Vec<String>>,
     pub agent_modes: BTreeMap<String, BTreeMap<String, Vec<String>>>,
@@ -49,6 +52,9 @@ impl Default for Config {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
             issue_tabs: DEFAULT_ISSUE_TABS.map(String::from).to_vec(),
+            jira_site: String::new(),
+            jira_email: String::new(),
+            jira_jql: String::new(),
             agent: agents::AUTO.into(),
             agent_args: BTreeMap::new(),
             agent_modes: BTreeMap::new(),
@@ -110,6 +116,12 @@ fn migrate(keys: &mut Map<String, Value>) {
     }
     if let Some(context) = keys.get("context").cloned() {
         keys.entry("model").or_insert(context);
+    }
+    if !keys.contains_key("jira_site")
+        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
+        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("jira")))
+    {
+        tabs.push(Value::String("jira".into()));
     }
 }
 
@@ -211,6 +223,26 @@ mod tests {
             let config = load(&path);
 
             assert_eq!((config.model, config.context), expected);
+        }
+    }
+
+    mod jira_tab {
+        use super::*;
+
+        fn tabs(file: &str) -> Vec<String> {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("config.json");
+            std::fs::write(&path, file).expect("write");
+            load(&path).issue_tabs
+        }
+
+        #[rstest]
+        #[case::a_list_from_before_jira(r#"{"issue_tabs": ["linear", "all"]}"#, &["linear", "all", "jira"])]
+        #[case::already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all"])]
+        #[case::hidden_since(r#"{"issue_tabs": ["all"], "jira_site": ""}"#, &["all"])]
+        #[case::no_list("{}", &DEFAULT_ISSUE_TABS)]
+        fn is_added_to_lists_saved_before_it_existed(#[case] file: &str, #[case] expected: &[&str]) {
+            assert_eq!(tabs(file), expected);
         }
     }
 

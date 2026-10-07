@@ -966,7 +966,7 @@ export class Painter {
         this.region({ r: tr, click: () => app.issuesToggle(i), cursor: 'pointer' });
       });
       if (view.token) {
-        this.input(inputRow, view.token.label, '•'.repeat(Math.min(o.token.input.length, 40)));
+        this.input(inputRow, view.token.label, view.token.input);
         const help = wrapAll(view.token.help.map((h) => [seg(h)]), list.w - 2);
         help.slice(0, list.h).forEach((row, i) => row.forEach((cell, x) => this.g.put(list.x + 1 + x, list.y + i, cell.ch, {})));
       } else {

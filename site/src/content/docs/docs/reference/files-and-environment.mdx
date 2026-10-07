@@ -11,7 +11,7 @@ import { Aside } from '@astrojs/starlight/components';
 | --- | --- | --- |
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place. | `~/.local/bin/` with the install script; Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
-| `secrets.json` | Shortcut and Linear tokens typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
+| `secrets.json` | Shortcut, Linear and Jira tokens typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
@@ -51,6 +51,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `SHELL` | The shell started in every pane. Without it, `/bin/sh`. |
 | `SHORTCUT_API_TOKEN` | Shortcut token. Takes precedence over a saved one. |
 | `LINEAR_API_KEY` | Linear API key. Takes precedence over a saved one. |
+| `JIRA_API_TOKEN` | Jira API token, sent with the email of your Jira settings. Takes precedence over a saved one. |
 | `HOME` | Expands `~` in paths, and is the base of the default folders. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets it too. |
 | `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. The `codex` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets the server's. |
@@ -60,10 +61,10 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `XDG_STATE_HOME` | Folder for `session.json`, `issues.json` and `todos.json`. |
 | `XDG_RUNTIME_DIR`, `TMPDIR` | Folder for the socket, lock and log. |
 | `CORNERCASE_RELEASES_URL` | Where the update check asks for the latest release. Meant for testing; the default is `https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest`. |
-| `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API` | Base URL of the Shortcut REST API and of the Linear GraphQL API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3` and `https://api.linear.app/graphql`. |
+| `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API`, `CORNERCASE_JIRA_API` | Base URL of the Shortcut REST API, of the Linear GraphQL API and of the Jira REST API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3`, `https://api.linear.app/graphql` and `https://<your Jira site>`. |
 
 <Aside type="caution" title="The server keeps the environment it started with">
-The server is started by the first `cornercase` you run, and keeps that command's environment for as long as it runs. Variables such as `SHELL`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY` or `CORNERCASE_RELEASES_URL` are read then. After changing them, run `cornercase kill-server` and start again.
+The server is started by the first `cornercase` you run, and keeps that command's environment for as long as it runs. Variables such as `SHELL`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `CORNERCASE_RELEASES_URL` are read then. After changing them, run `cornercase kill-server` and start again.
 </Aside>
 
 ### Read from Claude Code

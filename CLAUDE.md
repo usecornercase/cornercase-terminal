@@ -1,6 +1,6 @@
 # cornercase
 
-A terminal multiplexer TUI in Rust. A sidebar of **projects** (folders, optionally in **groups** with an icon and a colour), a column with the active project's **workspaces** (lines of work, optionally each in its own git worktree) and their **tabs** (one or more shells, split like Ghostty), the active tab's panes, and an optional **changes** panel on the right with the workspace's git diff. Everything is driven by mouse buttons. An issues modal (GitHub, Shortcut, Linear) reads an issue and starts a coding agent on it in its own worktree. A background server owns the shells, so closing the UI leaves them running and the next `cornercase` reattaches.
+A terminal multiplexer TUI in Rust. A sidebar of **projects** (folders, optionally in **groups** with an icon and a colour), a column with the active project's **workspaces** (lines of work, optionally each in its own git worktree) and their **tabs** (one or more shells, split like Ghostty), the active tab's panes, and an optional **changes** panel on the right with the workspace's git diff. Everything is driven by mouse buttons. An issues modal (GitHub, Shortcut, Linear, Jira) reads an issue and starts a coding agent on it in its own worktree. A background server owns the shells, so closing the UI leaves them running and the next `cornercase` reattaches.
 
 ## Commands
 
@@ -61,10 +61,10 @@ src/usage/        plan usage: claude.rs (the `get_usage` control request), codex
 src/notify.rs     desktop notifications through the outer terminal: which escape sequence a terminal understands, encoding
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/launch.rs     starting an agent in a new tab (pure state machine)
-src/secrets.rs    Shortcut / Linear tokens in secrets.json (0600)
+src/secrets.rs    Shortcut / Linear / Jira tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
-src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), http.rs, browser.rs (modal state), cache.rs (lists on disk)
+src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), http.rs, browser.rs (modal state), cache.rs (lists on disk)
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
@@ -160,10 +160,11 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 - **Undo instead of confirming**: ` × ` and ` clear done ` remove at once and set a toast with an ` undo ` button (`Toast::undo`, `UNDO_FOR` 6 s instead of 2 s). Only the last removal can be undone. The toast's button is checked before overlays, so it works with a menu open.
 
 **Issues (`issues/`)**
-- `Browser` is pure state that returns `Action`s; `App` does the I/O on threads. Answers carry their query and issue key so stale ones are dropped. Lists are cached in memory and in `issues.json` (titles and metadata only, never tokens).
-- GitHub goes through `gh` in the project folder. Shortcut (REST v3) and Linear (GraphQL) go through `ureq`, capped at 100 issues. People filters go into each tracker's query.
-- Tokens come from `SHORTCUT_API_TOKEN` / `LINEAR_API_KEY` or are typed in the app, checked, and saved to `secrets.json` (0600). `issues::Secret` hides them in `Debug`; they are never logged.
-- **Starting an issue**: in a repo root, a worktree on `issue-<n>-<slug>` / `sc-<n>-<slug>` / `ENG-123-<slug>`; elsewhere a new tab. Shortcut and Linear issues ask which open project or workspace to use. Then the agent starts with the prompt.
+- `Browser` is pure state that returns `Action`s; `App` does the I/O on threads. Answers carry their query and issue key so stale ones are dropped, and lists, people, reads and token checks also the source's epoch, bumped by `App::forget_issues` when its connection goes or changes (disconnect, token removed or replaced, Jira settings changed), so an answer still in flight cannot refill the cache with the old connection or save a token checked against it. Lists are cached in memory and in `issues.json` (titles and metadata only, never tokens).
+- GitHub goes through `gh` in the project folder. Shortcut (REST v3), Linear (GraphQL) and Jira Cloud (REST v3) go through `ureq`, capped at 100 issues. People filters go into each tracker's query.
+- Tokens come from `SHORTCUT_API_TOKEN` / `LINEAR_API_KEY` / `JIRA_API_TOKEN` or are typed in the app, checked, and saved to `secrets.json` (0600). `issues::Secret` hides them in `Debug`; they are never logged.
+- **Starting an issue**: in a repo root, a worktree on `issue-<n>-<slug>` / `sc-<n>-<slug>` / `ENG-123-<slug>` / `PROJ-123-<slug>`; elsewhere a new tab. Shortcut, Linear and Jira issues ask which open project or workspace to use. Then the agent starts with the prompt.
+- **Jira** (Cloud only; Server/Data Center use other auth, API v2 and wiki markup): HTTP Basic with `email:token`. The site and email are not secret, so they live in `config.json` (`jira_site`, `jira_email`) and only the token in `secrets.json`; the browser's connect form asks site → email → token (one field, three steps; `SaveJira` saves the first two before the token is checked), settings has a row for each. `jira_jql` is ANDed with the generated JQL (its `ORDER BY` dropped). `/rest/api/3/search/jql` refuses unbounded queries, so a list with no condition at all sends `project IS NOT EMPTY`. Jira Cloud no longer takes names in JQL, so a picked person is `Who::User { id, name }` (the `accountId`); other trackers keep `Who::Person(handle)`. Descriptions and comments are ADF (JSON), turned into Markdown by `jira/adf.rs`; unknown nodes give their text. A `config.json` without `jira_site` was written before Jira, so `config::load` appends `jira` to its `issue_tabs` (once saved, the key exists and hiding the tab sticks). Changing the site, email or filter forgets the cached lists, people and account. Timestamps carry an offset (`+0200`), which `parse_time` applies.
 - **Copy URL** uses OSC 52 through `App::host_writes`, because the server may run on another machine.
 - Markdown renders with `pulldown-cmark`; code blocks are highlighted with syntect (pure Rust `regex-fancy`), mapping scopes to palette colours so the terminal theme applies. Highlighting is cached and warmed on the reading thread; syntect and its regex crates build with `opt-level = 3` in dev.
 
@@ -278,7 +279,7 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 - UI: render a `View` into `TestBackend`; `insta` snapshots for layout, cell styles for hover.
 - App tests `click` with a press and a release (rows act on release); drags start with `press`.
 - `term.rs` / `app.rs` tests spawn real `/bin/sh` PTYs (never the user's shell) and wait with `test_util::wait_until`, never sleeps. `/bin/sh` is `bash` on macOS, so tests check its name with `test_util::is_sh`. `TempDir` paths are canonical, because macOS' temp dir is behind a symlink (`/var` → `/private/var`).
-- Helpers: `test_util::TempDir`, `git_repo`, `fake_gh`, `FakeHttp` (canned HTTP), `write_executable` (through a `/bin/sh` child to avoid `ETXTBSY`), `Family` (`sh` running `sh` running `sleep`, for process trees). Nothing calls real `gh`, Shortcut or Linear. App tests clear `App::env_tokens` and never use the real config.
+- Helpers: `test_util::TempDir`, `git_repo`, `fake_gh`, `FakeHttp` (canned HTTP), `write_executable` (through a `/bin/sh` child to avoid `ETXTBSY`), `Family` (`sh` running `sh` running `sleep`, for process trees). Nothing calls real `gh`, Shortcut, Linear or Jira. App tests clear `App::env_tokens` and never use the real config.
 - Agents are faked with a script (`FAKE_AGENT`) that asks a trust question and echoes what it reads.
 - Agent status is faked with a script named `claude` that writes its own `sessions/$$.json` (and, for the context line, a transcript under `projects/`); app tests point `App::claude_dir` at a temp dir, and e2e sets `CLAUDE_CONFIG_DIR` per `Session`, so nothing reads the real `~/.claude`. Codex's is `FakeCodex`: its rollout gets the turn fixtures appended, and its script sets the title it finds in a `title` signal file (OSC 0). `app::tests::agent_status::Watched` drives either agent with the same steps, so the notification tests run for both. Tests that read a process's environment spawn `/bin/sleep` with a cleared one and wait until its arguments are `sleep`'s (before `exec`, `/proc` shows the parent's).
 - The usage probes are faked with `claude` and `codex` scripts that read the requests and answer, set through `agent_commands`; app tests point the agent they do not fake at `/nonexistent/<kind>`, so no test runs the real `claude` or `codex` (both may be on the `PATH`).

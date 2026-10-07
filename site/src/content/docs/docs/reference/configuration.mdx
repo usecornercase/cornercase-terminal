@@ -55,13 +55,16 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-issues"
-  crop={[2, 1, 106, 13]}
-  alt="The Issues tab: Shortcut API token and Linear API key not connected, and the sources shown: All, GitHub, Shortcut and Linear, with move arrows on the hovered row"
+  crop={[2, 1, 106, 19]}
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; and the sources shown: All, GitHub, Shortcut, Linear and Jira, with move arrows on the hovered row"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **Shortcut API token**, **Linear API key** | Paste a token and press `Enter`; cornercase checks it, then saves it to `secrets.json`. Hover a saved one and click `×`, or press `Delete`, to remove it. When the token comes from an environment variable, the row says so and can't be changed here. |
+| **Jira site**, **Jira email** | Your Jira Cloud site, such as `acme.atlassian.net` (a bare name like `acme` gets `.atlassian.net`), and the email of your Atlassian account. The Jira tab of the issue browser asks for both when they are missing. |
+| **Jira API token** | Like the tokens above; the site and the email must be set first, since the token is checked against that site. |
+| **Jira filter** | A JQL condition the Jira tab always applies, such as `project = SHOP`. Empty lists every issue of the site you can see. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### TUI
@@ -109,7 +112,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
-  "issue_tabs": ["all", "github", "shortcut", "linear"],
+  "issue_tabs": ["all", "github", "shortcut", "linear", "jira"],
+  "jira_site": "",
+  "jira_email": "",
+  "jira_jql": "",
   "agent": "claude",
   "agent_args": {
     "claude": ["--permission-mode", "plan"]
@@ -137,7 +143,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | --- | --- | --- |
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
-| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear"]` |
+| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira"]` |
+| [`jira_site`](#jira_site) | string | `""` |
+| [`jira_email`](#jira_email) | string | `""` |
+| [`jira_jql`](#jira_jql) | string | `""` |
 | [`agent`](#agent) | string | `"auto"` |
 | [`agent_args`](#agent_args) | object | `{}` |
 | [`agent_modes`](#agent_modes) | object | `{}` |
@@ -165,7 +174,19 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `issue_tabs`
 
-The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut` and `linear`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all four.
+The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear` and `jira`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all five. A list saved before Jira existed gets `jira` added at the end once.
+
+#### `jira_site`
+
+Your Jira Cloud site, as a host name such as `acme.atlassian.net`. Set from the issue browser or the settings modal, which also accept a URL or a bare name.
+
+#### `jira_email`
+
+The email of your Atlassian account, sent with the API token to sign in to Jira. The token itself is never stored here: it goes in `secrets.json` or comes from `JIRA_API_TOKEN` (see [Files and environment](../files-and-environment/)).
+
+#### `jira_jql`
+
+A [JQL](https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-search-in-jira-cloud/) condition added to every Jira list, such as `project = SHOP` or `project in (SHOP, API) AND labels = backend`. The list is always sorted by last update, so an `ORDER BY` in it is dropped.
 
 #### `agent`
 

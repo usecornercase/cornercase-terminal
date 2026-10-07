@@ -58,7 +58,7 @@ impl Api<'_> {
             .into_iter()
             .flatten()
             .filter(|u| u["active"].as_bool() != Some(false))
-            .map(|u| Person { handle: text(u, "/displayName"), name: text(u, "/name") })
+            .map(|u| Person { handle: text(u, "/displayName"), name: text(u, "/name"), id: None })
             .filter(|p| !p.handle.is_empty())
             .collect();
         people.sort_by_key(|p| p.handle.to_lowercase());
@@ -125,7 +125,9 @@ fn filter(query: &Query) -> Value {
         let user = match who {
             Who::Anyone => continue,
             Who::Me => json!({ "isMe": { "eq": true } }),
-            Who::Person(name) => json!({ "displayName": { "eq": name.trim_start_matches('@') } }),
+            Who::Person(name) | Who::User { name, .. } => {
+                json!({ "displayName": { "eq": name.trim_start_matches('@') } })
+            }
         };
         parts.push(json!({ (*field): user }));
     }
