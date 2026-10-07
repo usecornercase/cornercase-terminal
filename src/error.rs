@@ -6,12 +6,8 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub enum Error {
     #[error("failed to open a pty")]
     OpenPty(#[source] BoxError),
-    #[error("failed to spawn shell `{shell}`")]
-    SpawnShell {
-        shell: String,
-        #[source]
-        source: BoxError,
-    },
+    #[error("failed to spawn shell `{shell}` in `{}`: {cause}", dir.display())]
+    SpawnShell { shell: String, dir: PathBuf, cause: BoxError },
     #[error("failed to attach to the pty")]
     AttachPty(#[source] BoxError),
     #[error("failed to create the terminal emulator")]

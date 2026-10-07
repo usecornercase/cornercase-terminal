@@ -85,14 +85,16 @@ impl Term {
         for (key, value) in env {
             cmd.env(key, value);
         }
-        if let Some(dir) = cwd.or_else(|| std::env::current_dir().ok()) {
+        let dir = cwd.or_else(|| std::env::current_dir().ok());
+        if let Some(dir) = &dir {
             cmd.cwd(dir);
         }
 
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|e| Error::SpawnShell { shell: shell.to_string(), source: e.into() })?;
+        let child = pair.slave.spawn_command(cmd).map_err(|e| Error::SpawnShell {
+            shell: shell.to_string(),
+            dir: dir.unwrap_or_default(),
+            cause: e.into(),
+        })?;
         drop(pair.slave);
 
         let reader = pair.master.try_clone_reader().map_err(|e| Error::AttachPty(e.into()))?;

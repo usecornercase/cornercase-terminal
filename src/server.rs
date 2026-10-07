@@ -443,13 +443,19 @@ impl Server {
     fn open_first_terminals(&mut self) -> Result<()> {
         let area = self.area.unwrap_or_default();
         let saved = state::load(&self.session);
-        if let Some(saved) = &saved {
-            self.app.restore(saved, area)?;
-        }
-        if self.app.is_empty() {
-            self.app.open_here(area)?;
+        let complete = saved.as_ref().is_none_or(|saved| self.app.restore(saved, area));
+        if !complete {
+            match state::back_up(&self.session) {
+                Ok(backup) => {
+                    eprintln!("cornercase server: the session came back incomplete, a copy is in {}", backup.display());
+                }
+                Err(e) => eprintln!("cornercase server: failed to keep a copy of the session: {e}"),
+            }
         }
         self.saver = Saver::new(self.session.clone(), saved);
+        if self.app.is_empty() || !(complete || self.app.has_terms()) {
+            self.app.open_here(area)?;
+        }
         Ok(())
     }
 
@@ -598,7 +604,7 @@ mod tests {
             server.step(step)
         }
 
-        fn one_shell_in(dir: &Path) -> State {
+        pub(super) fn one_shell_in(dir: &Path) -> State {
             let tabs = vec![TabState {
                 name: None,
                 panes: vec![PaneState { cwd: Some(dir.to_path_buf()), right_clicks: false }],
@@ -626,8 +632,8 @@ mod tests {
             State { version: state::VERSION, projects: vec![project], ..State::default() }
         }
 
-        struct Attached {
-            server: Server,
+        pub(super) struct Attached {
+            pub(super) server: Server,
             rx: Receiver<ServerEvent>,
             client: Client,
             _dir: TempDir,
@@ -641,10 +647,15 @@ mod tests {
         }
 
         impl Attached {
-            fn new() -> Self {
+            pub(super) fn new() -> Self {
                 let dir = TempDir::new();
+                let saved = one_shell_in(dir.path());
+                Self::with(dir, &saved)
+            }
+
+            pub(super) fn with(dir: TempDir, saved: &State) -> Self {
                 let session = dir.path().join("session.json");
-                state::save(&session, &one_shell_in(dir.path())).expect("save a session");
+                state::save(&session, saved).expect("save a session");
                 let (tx, rx) = mpsc::channel();
                 let (app_tx, app_rx) = mpsc::channel();
                 spawn_forwarder(app_rx, tx.clone());
@@ -766,6 +777,54 @@ mod tests {
                 client.key(BUGGY_KEY);
                 client.until("the menu closes", |client| !client.text().contains(PANE_MENU));
             });
+        }
+    }
+
+    mod restore {
+        use super::a_bug::{Attached, one_shell_in};
+        use super::*;
+        use crate::test_util::Locked;
+
+        fn backup(attached: &Attached) -> PathBuf {
+            attached.server.session.with_extension("json.bak")
+        }
+
+        #[test]
+        fn a_complete_restore_leaves_no_backup() {
+            let attached = Attached::new();
+
+            assert!(!backup(&attached).exists());
+        }
+
+        #[test]
+        fn an_incomplete_restore_keeps_the_session_it_read() {
+            let (dir, locked) = (TempDir::new(), Locked::new());
+            let mut saved = one_shell_in(dir.path());
+            saved.projects.extend(one_shell_in(locked.path()).projects);
+
+            let attached = Attached::with(dir, &saved);
+
+            assert_eq!(state::load(&backup(&attached)), Some(saved));
+        }
+
+        #[test]
+        fn a_session_whose_every_tab_fails_still_opens_a_shell() {
+            let locked = Locked::new();
+
+            let attached = Attached::with(TempDir::new(), &one_shell_in(locked.path()));
+
+            assert!(attached.server.app.has_terms(), "a shell opens in the current folder");
+        }
+
+        #[test]
+        fn a_session_saved_without_tabs_comes_back_as_it_was() {
+            let dir = TempDir::new();
+            let mut saved = one_shell_in(dir.path());
+            saved.projects[0].workspaces[0].tabs.clear();
+
+            let attached = Attached::with(dir, &saved);
+
+            assert_eq!(attached.server.app.state().projects.len(), 1);
         }
     }
 }

@@ -228,6 +228,12 @@ pub fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {
     std::fs::rename(tmp, path)
 }
 
+pub fn back_up(path: &Path) -> io::Result<PathBuf> {
+    let backup = path.with_extension("json.bak");
+    std::fs::copy(path, &backup)?;
+    Ok(backup)
+}
+
 #[derive(Debug)]
 pub struct Saver<T = State> {
     path: PathBuf,

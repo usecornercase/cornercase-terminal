@@ -363,6 +363,15 @@ fn stopped_tabs(tabs: usize) -> String {
     }
 }
 
+fn not_restored(missed: &[(String, usize)]) -> String {
+    let tabs = match missed.iter().map(|(_, n)| n).sum::<usize>() {
+        1 => "1 tab".to_string(),
+        n => format!("{n} tabs"),
+    };
+    let projects: Vec<&str> = missed.iter().map(|(name, _)| name.as_str()).collect();
+    format!("could not restore {tabs} ({}), see server.log", projects.join(", "))
+}
+
 fn wheel(kind: MouseEventKind) -> Option<isize> {
     match kind {
         MouseEventKind::ScrollUp => Some(-WHEEL_ROWS),
@@ -593,6 +602,10 @@ impl App {
 
     pub fn is_empty(&self) -> bool {
         self.projects.is_empty()
+    }
+
+    pub fn has_terms(&self) -> bool {
+        self.projects.iter().any(Project::has_terms)
     }
 
     pub fn open_here(&mut self, area: Rect) -> Result<()> {
@@ -1078,7 +1091,7 @@ impl App {
         }
     }
 
-    pub fn restore(&mut self, saved: &State, area: Rect) -> Result<()> {
+    pub fn restore(&mut self, saved: &State, area: Rect) -> bool {
         self.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
             self.changes.open = changes.open && !saved.todo;
@@ -1096,6 +1109,7 @@ impl App {
             let id = self.take_id();
             self.groups.push(Group { id, entry: ui::GroupEntry { icon, ..entry.clone() } });
         }
+        let mut missed: Vec<(String, usize)> = Vec::new();
         for (i, saved_project) in saved.projects.iter().enumerate() {
             let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
             if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
@@ -1104,10 +1118,15 @@ impl App {
             let mut project = Project::new(self.take_id(), path, saved_project.name.clone());
             project.group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
             project.collapsed = saved_project.collapsed;
+            let mut lost = 0;
             for saved_ws in &saved_project.workspaces {
-                if let Some(workspace) = self.restore_workspace(saved_ws, area)? {
+                if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area) {
                     project.workspaces.push(workspace);
+                    lost += missing;
                 }
+            }
+            if lost > 0 {
+                missed.push((self.project_label(&project), lost));
             }
             project.active = saved_project.active.min(project.workspaces.len().saturating_sub(1));
             if i <= saved.active {
@@ -1116,31 +1135,45 @@ impl App {
             self.projects.push(project);
         }
         self.sync_worktrees();
-        Ok(())
+        if !missed.is_empty() {
+            self.toast = Some(Toast::new(not_restored(&missed), ui::ToastIcon::Bug));
+        }
+        missed.is_empty()
     }
 
-    fn restore_workspace(&mut self, saved: &WorkspaceState, area: Rect) -> Result<Option<Workspace>> {
+    fn restore_workspace(&mut self, saved: &WorkspaceState, area: Rect) -> Option<(Workspace, usize)> {
         let path = saved.path.canonicalize().unwrap_or_else(|_| saved.path.clone());
         if !path.is_dir() {
-            return Ok(None);
+            return None;
         }
         let mut workspace = Workspace::new(self.take_id(), path.clone(), saved.name.clone(), saved.worktree);
         workspace.base.clone_from(&saved.base);
         workspace.collapsed = saved.collapsed;
+        let mut lost = 0;
         for saved_tab in saved.tabs.iter().filter(|t| !t.panes.is_empty()) {
-            let mut panes = Vec::new();
-            for pane in &saved_tab.panes {
-                let cwd = pane.cwd.clone().filter(|dir| dir.is_dir()).unwrap_or_else(|| path.clone());
-                panes.push(self.spawn(area, cwd)?);
+            match self.restore_tab(saved_tab, &path, area) {
+                Ok(tab) => workspace.tabs.push(tab),
+                Err(e) => {
+                    eprintln!("cornercase server: could not restore a tab: {e}");
+                    lost += 1;
+                }
             }
-            let mut tab = Tab::restored(self.take_id(), saved_tab.name.clone(), panes, saved_tab.layout.as_ref());
-            tab.active = saved_tab.active.min(tab.panes.len() - 1);
-            tab.right_clicks =
-                saved_tab.panes.iter().zip(&tab.panes).filter(|(s, _)| s.right_clicks).map(|(_, t)| t.id).collect();
-            workspace.tabs.push(tab);
         }
         workspace.active = saved.active.min(workspace.tabs.len().saturating_sub(1));
-        Ok(Some(workspace))
+        Some((workspace, lost))
+    }
+
+    fn restore_tab(&mut self, saved: &TabState, dir: &Path, area: Rect) -> Result<Tab> {
+        let mut panes = Vec::new();
+        for pane in &saved.panes {
+            let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
+            panes.push(self.spawn(area, cwd)?);
+        }
+        let mut tab = Tab::restored(self.take_id(), saved.name.clone(), panes, saved.layout.as_ref());
+        tab.active = saved.active.min(tab.panes.len() - 1);
+        tab.right_clicks =
+            saved.panes.iter().zip(&tab.panes).filter(|(s, _)| s.right_clicks).map(|(_, t)| t.id).collect();
+        Ok(tab)
     }
 
     fn remove(&mut self, id: u64) {
@@ -4090,7 +4123,7 @@ mod tests {
     use std::sync::mpsc::{self, Receiver};
 
     use super::*;
-    use crate::test_util::{TempDir, git_repo, is_sh, wait_until};
+    use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until};
     use crate::ui::WorkspaceRow;
 
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
@@ -4733,7 +4766,7 @@ mod tests {
             let saved = app.state();
 
             let (mut restored, _rx2) = empty_app();
-            restored.restore(&saved, AREA).expect("restore");
+            restored.restore(&saved, AREA);
 
             let groups: Vec<&ui::GroupEntry> = restored.groups.iter().map(|g| &g.entry).collect();
             let expected: Vec<&ui::GroupEntry> = app.groups.iter().map(|g| &g.entry).collect();
@@ -5130,7 +5163,7 @@ mod tests {
             let saved = app.state();
 
             let (mut restored, _rx2) = empty_app();
-            restored.restore(&saved, AREA).expect("restore");
+            restored.restore(&saved, AREA);
 
             let state = restored.state();
             let groups: Vec<&str> = state.groups.iter().map(|g| g.name.as_str()).collect();
@@ -5738,7 +5771,7 @@ mod tests {
             first_project.active = 1;
             let state = saved(vec![first_project, project(&b_path, vec![workspace(&b_path, vec![None])])], 0);
 
-            app.restore(&state, AREA).expect("restore");
+            assert!(app.restore(&state, AREA), "every tab comes back");
 
             assert_eq!((app.projects.len(), app.active, app.projects[0].active), (2, 0, 1));
             assert_eq!(workspace_labels(&app), ["default", "other"]);
@@ -5756,7 +5789,7 @@ mod tests {
             other.collapsed = true;
             let state = saved(vec![project(&a_path, vec![folded, workspace(&a_path, vec![None])]), other], 0);
 
-            app.restore(&state, AREA).expect("restore");
+            app.restore(&state, AREA);
             let again = app.state();
 
             let folds = |s: &State| -> Vec<(bool, Vec<bool>)> {
@@ -5771,11 +5804,63 @@ mod tests {
             let (mut app, _rx) = empty_app();
             let mut folded = project(&canonical(&dir), vec![workspace(&canonical(&dir), vec![None])]);
             folded.collapsed = true;
-            app.restore(&saved(vec![folded], 0), AREA).expect("restore");
+            app.restore(&saved(vec![folded], 0), AREA);
 
             app.follow(AREA);
 
             assert!(app.projects[0].collapsed);
+        }
+
+        fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
+            let mut ws = workspace(dir, vec![None, None]);
+            ws.tabs[0].panes.push(PaneState { cwd: Some(locked.path().to_path_buf()), right_clicks: false });
+            ws
+        }
+
+        #[test]
+        fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
+            let (first, last, locked) = (TempDir::new(), TempDir::new(), Locked::new());
+            let (mut app, _rx) = empty_app();
+            let one_tab = |path: &Path| project(path, vec![workspace(path, vec![None])]);
+            let state = saved(vec![one_tab(first.path()), one_tab(locked.path()), one_tab(last.path())], 0);
+
+            assert!(!app.restore(&state, AREA), "the restore says a tab is missing");
+
+            let tabs: Vec<usize> =
+                app.projects.iter().map(|p| p.workspaces.iter().map(|w| w.tabs.len()).sum()).collect();
+            assert_eq!(tabs, [1, 0, 1]);
+            assert_eq!(toast(&app), Some("could not restore 1 tab (locked), see server.log"));
+        }
+
+        #[test]
+        fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
+            let (dir, locked) = (TempDir::new(), Locked::new());
+            let (mut app, _rx) = empty_app();
+            let ws = with_a_locked_pane(dir.path(), &locked);
+
+            assert!(
+                !app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA),
+                "the restore says a tab is missing"
+            );
+
+            let label = app.project_label(&app.projects[0]);
+            assert_eq!(app.projects[0].workspaces[0].tabs.len(), 1);
+            assert_eq!(toast(&app), Some(format!("could not restore 1 tab ({label}), see server.log").as_str()));
+        }
+
+        #[test]
+        fn a_tab_that_cannot_start_names_the_folder_and_why() {
+            let (dir, locked) = (TempDir::new(), Locked::new());
+            let (mut app, _rx) = empty_app();
+            let ws = with_a_locked_pane(dir.path(), &locked);
+
+            let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA) else {
+                panic!("the second pane cannot start");
+            };
+
+            let message = e.to_string();
+            assert!(message.contains(&locked.path().display().to_string()), "{message}");
+            assert!(message.contains("Permission denied"), "{message}");
         }
 
         #[test]
@@ -5784,7 +5869,7 @@ mod tests {
             let (mut app, _rx) = empty_app();
             let gone = project(Path::new("/nonexistent/folder"), vec![]);
 
-            app.restore(&saved(vec![gone, project(dir.path(), vec![])], 1), AREA).expect("restore");
+            app.restore(&saved(vec![gone, project(dir.path(), vec![])], 1), AREA);
 
             assert_eq!((app.projects.len(), app.active), (1, 0));
         }
@@ -5796,7 +5881,7 @@ mod tests {
             let workspaces =
                 vec![workspace(Path::new("/nonexistent/folder"), vec![None]), workspace(dir.path(), vec![None])];
 
-            app.restore(&saved(vec![project(dir.path(), workspaces)], 0), AREA).expect("restore");
+            app.restore(&saved(vec![project(dir.path(), workspaces)], 0), AREA);
 
             assert_eq!(app.projects[0].workspaces.len(), 1);
         }
@@ -5808,7 +5893,7 @@ mod tests {
             let (mut app, _rx) = empty_app();
             let ws = workspace(&path, vec![Some(PathBuf::from("/nonexistent/folder"))]);
 
-            app.restore(&saved(vec![project(&path, vec![ws])], 0), AREA).expect("restore");
+            app.restore(&saved(vec![project(&path, vec![ws])], 0), AREA);
 
             wait_until("the pane starts in the workspace", || term(&app, 0).cwd() == Some(path.clone()));
         }
@@ -5823,7 +5908,7 @@ mod tests {
             let mut p = project(dir.path(), vec![ws]);
             p.name = Some("api".into());
 
-            app.restore(&saved(vec![p], 0), AREA).expect("restore");
+            app.restore(&saved(vec![p], 0), AREA);
 
             let labels = (
                 app.project_label(&app.projects[0]),
@@ -5838,7 +5923,7 @@ mod tests {
             let dir = TempDir::new();
             let (mut app, _rx) = empty_app();
 
-            app.restore(&saved(vec![project(dir.path(), vec![])], 5), AREA).expect("restore");
+            app.restore(&saved(vec![project(dir.path(), vec![])], 5), AREA);
 
             assert_eq!(app.active, 0);
         }
@@ -7730,7 +7815,7 @@ rm -f "$1/sessions/$$.json"
             let saved = app.state();
             let (mut restored, _rx2) = empty_app();
 
-            restored.restore(&saved, AREA).expect("restore");
+            restored.restore(&saved, AREA);
 
             let tab = tab(&restored);
             let right_clicks: Vec<bool> = tab.panes.iter().map(|t| tab.right_clicks_to_pane(t.id)).collect();
@@ -7778,7 +7863,7 @@ rm -f "$1/sessions/$$.json"
                 todo: false,
             };
 
-            app.restore(&saved, AREA).expect("restore");
+            app.restore(&saved, AREA);
 
             assert_eq!(
                 (rects(&app).len(), tab_term(&app, 0, 0).id, app.tab().map(|t| t.active)),
@@ -7939,7 +8024,7 @@ rm -f "$1/sessions/$$.json"
                 todo: false,
             };
 
-            app.restore(&saved, AREA).expect("restore");
+            app.restore(&saved, AREA);
 
             assert_eq!(app.widths, widths);
         }
@@ -8562,7 +8647,7 @@ rm -f "$1/sessions/$$.json"
                     ..s.app.state()
                 };
                 let (mut app, _rx) = empty_app();
-                app.restore(&saved, AREA).expect("restore");
+                app.restore(&saved, AREA);
                 s.app.issue_tab = app.issue_tab;
                 s.app.issue_closed = app.issue_closed;
                 s.app.issue_people = app.issue_people.clone();
@@ -9490,7 +9575,7 @@ rm -f "$1/sessions/$$.json"
             app.changes.set_mode(changes::Mode::Commits);
             let saved = app.state();
             let (mut restored, _rx) = empty_app();
-            restored.restore(&saved, AREA).expect("restore");
+            restored.restore(&saved, AREA);
             assert_eq!((restored.changes.open, restored.changes.mode), (true, changes::Mode::Commits));
         }
 
@@ -9874,7 +9959,7 @@ rm -f "$1/sessions/$$.json"
             let (state, saved) = (app.state(), app.todos_saved());
             let (mut back, _rx2) = empty_app();
             back.set_todos(Todos::from(saved));
-            back.restore(&state, AREA).expect("restore");
+            back.restore(&state, AREA);
             assert_eq!((state.todo, back.todo.open, texts(&back)), (true, true, vec!["a".into()]));
         }
     }
