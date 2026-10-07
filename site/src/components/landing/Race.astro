@@ -1,0 +1,1161 @@
+---
+import { APPS, type Measure, clock, lead, slowest, ticks, times } from '../../lib/speed';
+
+interface Props {
+  measures: Measure[];
+}
+
+const { measures } = Astro.props;
+---
+
+<div class="race reveal" data-race>
+  <div class="tasks" role="tablist" aria-label="What we timed">
+    {
+      measures.map(({ title, values }, i) => (
+        <button
+          type="button"
+          role="tab"
+          class="task"
+          id={`race-tab-${i}`}
+          aria-controls={`race-${i}`}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          tabindex={i === 0 ? '0' : '-1'}>
+          <span class="title">{title}</span>
+          <span class="us">{values[0][1]}</span>
+          <i class="p" aria-hidden="true" />
+        </button>
+      ))
+    }
+  </div>
+  {
+    measures.map(({ title, what, values }, i) => {
+      const max = slowest(values);
+      const { x, app } = lead(values);
+      return (
+        <div
+          class="panel"
+          role="tabpanel"
+          id={`race-${i}`}
+          aria-labelledby={`race-tab-${i}`}
+          data-on={i === 0 ? '' : undefined}
+          data-max={max}
+          style={`--max: ${max}`}>
+          <div class="top">
+            <div class="say">
+              <h3 class="title">{title}</h3>
+              <p class="what">{what}</p>
+              <div class="slot">
+                <p class="verdict">
+                  <b data-lead={x}>{times(x)}</b>{' '}
+                  <span>
+                    faster than {app}, <br />
+                    the next fastest
+                  </span>
+                </p>
+                <p class="wait" aria-hidden="true">
+                  <i class="spin" />
+                  <span>
+                    Still waiting for <b data-wait /><span class="ellipsis"><i>.</i><i>.</i><i>.</i></span>
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="clock">
+              <div class="row">
+                <span class="live" aria-hidden="true">
+                  <i />
+                  real time
+                </span>
+                <button type="button" class="again" data-again>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v3h3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  race again
+                </button>
+              </div>
+              <span class="digits" aria-hidden="true">
+                <span data-clock>{clock(max)}</span>
+                <small>s</small>
+              </span>
+            </div>
+          </div>
+          <div class="plot">
+            <div class="grid" aria-hidden="true">
+              {ticks(max).map(([at, label]) => (
+                <span class="tick" style={`--at: ${at / max}`}>
+                  <em>{label}</em>
+                </span>
+              ))}
+              <span class="sweep">
+                <span class="head">
+                  <i />
+                </span>
+              </span>
+            </div>
+            <ol class="lanes">
+              {values.map(([t, label], j) => (
+                <li
+                  class:list={['lane', { us: j === 0, none: t === 0 }]}
+                  data-t={t}
+                  data-app={APPS[j]}
+                  style={`--t: ${t}`}>
+                  <span class="name">
+                    <i class="state" aria-hidden="true" />
+                    {APPS[j]}
+                  </span>
+                  <span class="track">
+                    <span class="bar" />
+                    <span class="time">{label}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      );
+    })
+  }
+</div>
+
+<script>
+  import { clock, countUp } from '../../lib/speed';
+
+  const HOLD = 3500;
+
+  function race(root: HTMLElement): void {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    const lanes = panels.map((panel) => [...panel.querySelectorAll<HTMLElement>('.lane')]);
+    const digits = panels.map((panel) => panel.querySelector<HTMLElement>('[data-clock]'));
+    const waits = panels.map((panel) => panel.querySelector<HTMLElement>('[data-wait]'));
+    const list = (names: string[]) =>
+      names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let current = 0;
+    let start = 0;
+    let frame = 0;
+    let wait = 0;
+    let started = false;
+    let touring = !still;
+    let visible = false;
+    let due = false;
+
+    const select = (i: number) => {
+      current = i;
+      tabs.forEach((tab, j) => {
+        tab.setAttribute('aria-selected', String(j === i));
+        tab.tabIndex = j === i ? 0 : -1;
+        tab.style.setProperty('--p', '0');
+      });
+      panels.forEach((panel, j) => {
+        panel.hidden = j !== i;
+        panel.toggleAttribute('data-on', j === i);
+      });
+    };
+
+    const show = (i: number, t: number) => {
+      const max = Number(panels[i].dataset.max);
+      panels[i].style.setProperty('--now', String(t));
+      tabs[i].style.setProperty('--p', String(t / max));
+      const shown = digits[i];
+      if (shown) shown.textContent = clock(t);
+      for (const lane of lanes[i]) lane.classList.toggle('done', t >= Number(lane.dataset.t));
+      const left = lanes[i].filter((lane) => !lane.classList.contains('done')).map((lane) => lane.dataset.app ?? '');
+      panels[i].classList.toggle('waiting', left.length > 0 && lanes[i][0].classList.contains('done'));
+      const names = waits[i];
+      const text = list(left);
+      if (names && left.length && names.textContent !== text) names.textContent = text;
+    };
+
+    const finish = (i: number) => {
+      const panel = panels[i];
+      panel.classList.remove('running', 'waiting');
+      panel.classList.add('over');
+      const x = panel.querySelector<HTMLElement>('[data-lead]');
+      if (x && !still) countUp(x, Number(x.dataset.lead), 1100);
+      if (touring && i < panels.length - 1) wait = window.setTimeout(next, HOLD);
+      else touring = false;
+    };
+
+    const step = (now: number) => {
+      const max = Number(panels[current].dataset.max);
+      const t = Math.min(Math.max(0, (now - start) / 1000), max);
+      show(current, t);
+      if (t < max) frame = requestAnimationFrame(step);
+      else finish(current);
+    };
+
+    const play = (i: number) => {
+      started = true;
+      due = false;
+      cancelAnimationFrame(frame);
+      clearTimeout(wait);
+      select(i);
+      const panel = panels[i];
+      panel.classList.remove('over', 'running', 'waiting');
+      if (still) {
+        show(i, Number(panel.dataset.max));
+        finish(i);
+        return;
+      }
+      show(i, 0);
+      panel.classList.add('running');
+      start = performance.now();
+      frame = requestAnimationFrame(step);
+    };
+
+    const next = () => {
+      if (!touring) return;
+      if (!visible) {
+        due = true;
+        return;
+      }
+      play(current + 1);
+    };
+
+    const take = (i: number) => {
+      touring = false;
+      play(i);
+    };
+
+    tabs.forEach((tab, i) => tab.addEventListener('click', () => take(i)));
+    root.querySelectorAll('[data-again]').forEach((button) => button.addEventListener('click', () => take(current)));
+    root.querySelector('[role="tablist"]')?.addEventListener('keydown', (event) => {
+      const key = (event as KeyboardEvent).key;
+      const i = tabs.indexOf(document.activeElement as HTMLButtonElement);
+      const n = tabs.length;
+      const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 }[key];
+      if (i < 0 || to === undefined) return;
+      event.preventDefault();
+      tabs[to].focus();
+      take(to);
+    });
+
+    select(0);
+    if (still) play(0);
+    else show(0, 0);
+
+    new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+        if (!visible) return;
+        if (!started) {
+          clearTimeout(wait);
+          wait = window.setTimeout(() => play(current), 250);
+        } else if (due) {
+          due = false;
+          wait = window.setTimeout(next, 900);
+        }
+      },
+      { threshold: 0.5 },
+    ).observe(root);
+  }
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-race]')) race(root);
+</script>
+
+<style>
+  .race {
+    --name: 128px;
+    --gap: 18px;
+    --gutter: 84px;
+    position: relative;
+    margin-top: clamp(28px, 4vw, 44px);
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(90% 140% at 0% 0%, rgb(135 95 255 / 0.09), transparent 55%),
+      linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent 30%),
+      var(--panel);
+    overflow: hidden;
+  }
+
+  .tasks {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1px;
+    border-bottom: 1px solid var(--line);
+    background: var(--line);
+  }
+
+  :global(html:not(.js)) .tasks {
+    display: none;
+  }
+
+  .task {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    min-width: 0;
+    padding: 14px 16px 15px;
+    border: 0;
+    background: var(--bg-2);
+    color: var(--text-3);
+    font-family: var(--font-body);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .task:hover {
+    color: var(--text-2);
+    background: #0f0e16;
+  }
+
+  .task[aria-selected='true'] {
+    color: var(--text);
+    background: var(--panel);
+  }
+
+  .task:focus-visible {
+    outline-offset: -3px;
+  }
+
+  .task .title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .task .us {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--purple-2);
+    opacity: 0.75;
+  }
+
+  .task[aria-selected='true'] .us {
+    opacity: 1;
+  }
+
+  .task .p {
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 100%;
+    height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px rgb(69 217 232 / 0.8);
+    transform: scaleX(var(--p, 0));
+    transform-origin: left;
+  }
+
+  .task[aria-selected='false'] .p {
+    display: none;
+  }
+
+  .panel {
+    --now: 1000;
+    padding: 30px 34px 34px;
+  }
+
+  :global(.js) .panel {
+    --now: 0;
+  }
+
+  :global(.js) .panel:not([data-on]) {
+    display: none;
+  }
+
+  :global(.js) .panel[data-on] {
+    animation: enter 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  :global(html:not(.js)) .panel + .panel {
+    border-top: 1px solid var(--line);
+  }
+
+  .top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 28px;
+    margin-bottom: 26px;
+  }
+
+  .say {
+    min-width: 0;
+  }
+
+  .say .title {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+
+  :global(.js) .say .title {
+    display: none;
+  }
+
+  .what {
+    margin: 0;
+    max-width: 520px;
+    color: var(--text-2);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .slot {
+    display: grid;
+    margin-top: 18px;
+  }
+
+  .slot > * {
+    grid-area: 1 / 1;
+  }
+
+  .wait {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: 10px;
+    margin: 0;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 14.5px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease;
+  }
+
+  .wait b {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .ellipsis i {
+    font-style: normal;
+    animation: dot 1.2s ease-in-out infinite;
+  }
+
+  .ellipsis i:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .ellipsis i:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.2;
+    }
+    30% {
+      opacity: 1;
+    }
+  }
+
+  .waiting .wait {
+    opacity: 1;
+    transform: none;
+  }
+
+  .spin {
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1.5px solid var(--yellow);
+    background: conic-gradient(var(--yellow) 0 50%, transparent 0);
+    animation: spin 0.9s linear infinite;
+  }
+
+  .verdict {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0;
+    transition:
+      opacity 0.6s cubic-bezier(0.2, 0.7, 0.2, 1),
+      transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .verdict b {
+    font-family: var(--font-display);
+    font-size: clamp(44px, 4.8vw, 66px);
+    font-weight: 780;
+    line-height: 0.9;
+    letter-spacing: -0.045em;
+    font-variant-numeric: tabular-nums;
+    color: transparent;
+    background: linear-gradient(100deg, var(--purple-2) 10%, #d8cbff 60%, var(--cyan) 115%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .verdict span {
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  :global(.js) .panel:not(.over) .verdict {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  .clock {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+    flex: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    transition: color 0.3s ease;
+  }
+
+  .live i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .running .live {
+    color: var(--green);
+  }
+
+  .running .live i {
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  .again {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .again:hover {
+    color: #07060b;
+    border-color: var(--cyan);
+    background: var(--cyan);
+  }
+
+  .again svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  :global(html:not(.js)) .clock {
+    display: none;
+  }
+
+  .digits {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: baseline;
+    font-family: var(--font-mono);
+    font-size: clamp(46px, 5.6vw, 78px);
+    font-weight: 700;
+    line-height: 0.9;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+    transition: color 0.4s ease;
+  }
+
+  .digits::before {
+    content: '';
+    position: absolute;
+    inset: -30% -12%;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgb(69 217 232 / 0.16), transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+
+  .running .digits {
+    color: #fff;
+  }
+
+  .running .digits::before {
+    opacity: 1;
+  }
+
+  .over .digits {
+    animation: stop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1);
+  }
+
+  @keyframes stop {
+    from {
+      transform: scale(1.06);
+    }
+  }
+
+  .digits small {
+    margin-left: 0.18em;
+    font-size: 0.36em;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--text-3);
+  }
+
+  .plot {
+    position: relative;
+    padding-bottom: 30px;
+  }
+
+  .grid {
+    position: absolute;
+    top: -10px;
+    bottom: 30px;
+    left: calc(var(--name) + var(--gap));
+    right: var(--gutter);
+    pointer-events: none;
+  }
+
+  .tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--at) * 100%);
+    width: 1px;
+    background: rgb(255 255 255 / 0.055);
+  }
+
+  .tick em {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    translate: -50% 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-style: normal;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  .tick:first-child em {
+    translate: 0 0;
+  }
+
+  .sweep {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(-40px -40px -40px -4px);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .running .sweep {
+    opacity: 1;
+  }
+
+  .head {
+    position: absolute;
+    inset: -6px 0;
+    transform: translateX(calc(min(var(--now), var(--max)) / var(--max) * 100%));
+  }
+
+  .head::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    width: min(180px, 22%, min(var(--now), var(--max)) / var(--max) * 100%);
+    background: linear-gradient(90deg, transparent, rgb(69 217 232 / 0.1));
+  }
+
+  .head::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 2px;
+    background: var(--cyan);
+    box-shadow:
+      0 0 10px rgb(69 217 232 / 0.9),
+      0 0 30px rgb(69 217 232 / 0.4);
+  }
+
+  .head i {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan);
+  }
+
+  .lanes {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .lane {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--name) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--gap);
+    height: 44px;
+  }
+
+  .lane.us::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 -14px;
+    border-radius: 10px;
+    background: linear-gradient(90deg, rgb(135 95 255 / 0.16), rgb(135 95 255 / 0.05) 45%, transparent 80%);
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+
+  .lane.us.done::before {
+    opacity: 1;
+  }
+
+  .name {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition: color 0.3s ease;
+  }
+
+  .state {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    font-style: normal;
+  }
+
+  .state::before {
+    content: '✓';
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  :global(.js) .panel:not(.over) .lane:not(.done) .name {
+    color: var(--text-3);
+  }
+
+  :global(.js) .panel:not(.over) .lane:not(.done) .state::before {
+    content: '';
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+  }
+
+  :global(.js) .panel.running .lane:not(.done) .state::before {
+    color: var(--yellow);
+    background: conic-gradient(currentColor 0 50%, transparent 0);
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  :global(.js) .lane.done .state::before {
+    animation: tick 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+
+  @keyframes tick {
+    from {
+      transform: scale(0.2);
+      opacity: 0;
+    }
+  }
+
+  .none .state::before {
+    content: '–';
+    color: var(--text-3);
+  }
+
+  .us .name {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .track {
+    --w: max(4px, (100% - var(--gutter)) * min(var(--now), var(--t)) / var(--max));
+    position: relative;
+    height: 100%;
+  }
+
+  :global(.js) .panel:not(.over) .lane:not(.done) .track {
+    --w: calc((100% - var(--gutter)) * min(var(--now), var(--t)) / var(--max));
+  }
+
+  .bar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--w);
+    height: 22px;
+    margin-top: -11px;
+    border-radius: 0 6px 6px 0;
+    background: #6e6a87;
+  }
+
+  .lane:not(.us) .bar {
+    overflow: hidden;
+  }
+
+  .lane:not(.us) .bar::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 -16px;
+    background: linear-gradient(
+        -45deg,
+        rgb(255 255 255 / 0.13) 25%,
+        transparent 25% 50%,
+        rgb(255 255 255 / 0.13) 50% 75%,
+        transparent 75%
+      )
+      0 0 / 16px 16px;
+    opacity: 0;
+  }
+
+  :global(.js) .panel:not(.over) .lane:not(.done) .bar {
+    background: #57526f;
+  }
+
+  :global(.js) .panel.running .lane:not(.done) .bar::before {
+    opacity: 1;
+    animation: stripes 0.45s linear infinite;
+  }
+
+  @keyframes stripes {
+    to {
+      transform: translateX(16px);
+    }
+  }
+
+  :global(.js) .lane.done:not(.us) .bar {
+    animation: settle 0.6s ease-out;
+  }
+
+  @keyframes settle {
+    from {
+      background-color: #d9d4f2;
+    }
+  }
+
+  .us .bar {
+    background: linear-gradient(90deg, #6d48f5, var(--purple-2));
+    box-shadow:
+      0 0 0 1px rgb(201 184 255 / 0.35),
+      0 0 22px rgb(135 95 255 / 0.8);
+  }
+
+  .us .bar::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    margin: -20px -20px 0 0;
+    border-radius: 50%;
+    border: 2px solid var(--purple-2);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :global(.js) .us.done .bar::after {
+    animation: ring 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  @keyframes ring {
+    0% {
+      opacity: 1;
+      transform: scale(0.2);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
+  .us .track::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: var(--w);
+    width: 220px;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, rgb(201 184 255 / 0.95));
+    box-shadow:
+      30px -7px 0 -0.5px rgb(135 95 255 / 0.55),
+      -10px 7px 0 -0.5px rgb(135 95 255 / 0.4);
+    opacity: 0;
+    transform-origin: left;
+    pointer-events: none;
+  }
+
+  :global(.js) .us.done .track::after {
+    animation: whoosh 0.75s cubic-bezier(0.15, 0.6, 0.3, 1);
+  }
+
+  @keyframes whoosh {
+    0% {
+      opacity: 0;
+      transform: translateX(-60px) scaleX(0.3);
+    }
+    25% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(min(60vw, 640px)) scaleX(1);
+    }
+  }
+
+  .time {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--w) + 12px);
+    translate: 0 -50%;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition:
+      opacity 0.35s ease,
+      translate 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  :global(.js) .panel:not(.over) .lane:not(.done) .time {
+    opacity: 0;
+    translate: -8px -50%;
+  }
+
+  .us .time {
+    color: var(--purple-3);
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  :global(.js) .us.done .time {
+    animation: pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1);
+  }
+
+  @keyframes pop {
+    from {
+      transform: scale(0.5);
+    }
+  }
+
+  .none .bar {
+    display: none;
+  }
+
+  .none .track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: var(--gutter);
+    top: 50%;
+    border-top: 1px dashed var(--line-2);
+  }
+
+  .none .time {
+    left: 0;
+    padding-right: 10px;
+    background: var(--panel);
+    color: var(--text-3);
+    font-weight: 500;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .verdict,
+    .wait,
+    .time,
+    .name,
+    .digits,
+    .sweep,
+    .lane.us::before {
+      transition: none;
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .tasks {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 720px) {
+    .race {
+      --name: 96px;
+      --gap: 10px;
+      --gutter: 62px;
+    }
+
+    .tasks {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .task {
+      padding: 11px 12px 12px;
+    }
+
+    .task .title {
+      font-size: 13px;
+    }
+
+    .task .us {
+      font-size: 12px;
+    }
+
+    .panel {
+      padding: 20px 16px 24px;
+    }
+
+    .top {
+      flex-direction: column-reverse;
+      align-items: stretch;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .clock {
+      grid-template-columns: auto auto;
+      justify-content: space-between;
+      align-items: end;
+    }
+
+    .row {
+      grid-column: 2;
+      grid-row: 1;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .digits {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .what {
+      font-size: 15px;
+    }
+
+    .verdict span {
+      font-size: 15.5px;
+    }
+
+    .name,
+    .time {
+      font-size: 12.5px;
+    }
+
+    .name {
+      gap: 7px;
+    }
+
+    .us .time {
+      font-size: 13px;
+    }
+
+    .lane {
+      height: 38px;
+    }
+
+    .lane.us::before {
+      left: -8px;
+    }
+
+    .wait {
+      font-size: 13px;
+    }
+
+    .bar {
+      height: 18px;
+      margin-top: -9px;
+    }
+
+    .tick em {
+      font-size: 10.5px;
+    }
+  }
+</style>
