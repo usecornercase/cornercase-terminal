@@ -3970,7 +3970,12 @@ impl App {
     }
 
     fn tab_entry(&self, t: &Tab) -> ui::TabEntry {
-        ui::TabEntry { name: t.label(&self.config), status: t.status(), details: self.tab_details(t) }
+        ui::TabEntry {
+            name: t.label(&self.config),
+            status: t.status(),
+            details: self.tab_details(t),
+            others: t.others(),
+        }
     }
 
     fn workspace_entry(&self, w: &Workspace) -> ui::WorkspaceEntry {
@@ -8300,6 +8305,29 @@ rm -f "$1/sessions/$$.json"
             let at = inside(rects(&app)[0]);
             click(&mut app, at);
             assert_eq!((tab(&app).active, app.selecting), (0, None));
+        }
+
+        #[test]
+        fn a_split_tab_keeps_the_name_of_its_first_pane_whatever_has_the_focus() {
+            let (mut app, rx) = split_right();
+            type_line(&mut app, "sleep 30");
+            pump_until(&mut app, &rx, "sleep runs", |a| {
+                a.term().and_then(|t| t.program(&a.config)).as_deref() == Some("sleep")
+            });
+            let first = tab(&app).label(&app.config);
+
+            let left = inside(rects(&app)[0]);
+            click(&mut app, left);
+
+            assert!(is_sh(&first) && tab(&app).label(&app.config) == first, "{first}");
+        }
+
+        #[test]
+        fn a_split_tab_counts_its_other_panes() {
+            let (mut app, _rx) = split_right();
+            let left = inside(rects(&app)[0]);
+            split(&mut app, left, "split down");
+            assert_eq!(app.tab_entry(tab(&app)).others, 2);
         }
 
         fn pane_text(app: &mut App, i: usize) -> String {

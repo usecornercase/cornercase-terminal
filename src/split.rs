@@ -172,6 +172,13 @@ impl<T: Copy + PartialEq> Node<T> {
         ids
     }
 
+    pub fn first(&self) -> T {
+        match self {
+            Self::Leaf(id) => *id,
+            Self::Split { first, .. } => first.first(),
+        }
+    }
+
     fn collect_ids(&self, ids: &mut Vec<T>) {
         match self {
             Self::Leaf(id) => ids.push(*id),

@@ -49,7 +49,16 @@ impl Tab {
     }
 
     pub fn label(&self, config: &Config) -> String {
-        self.name.clone().or_else(|| self.pane().and_then(|t| t.program(config))).unwrap_or_else(|| "?".into())
+        self.name.clone().or_else(|| self.first().and_then(|t| t.program(config))).unwrap_or_else(|| "?".into())
+    }
+
+    fn first(&self) -> Option<&Term> {
+        let first = self.layout.first();
+        self.panes.iter().find(|t| t.id == first).or_else(|| self.panes.first())
+    }
+
+    pub fn others(&self) -> usize {
+        self.panes.len().saturating_sub(1)
     }
 
     pub fn status(&self) -> Option<Status> {
