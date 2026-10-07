@@ -119,11 +119,11 @@ export class Grid {
       this.put(r.x, y, '│', s);
       this.put(right, y, '│', s);
     }
-    this.put(r.x, r.y, '┌', s);
-    this.put(right, r.y, '┐', s);
-    this.put(r.x, bottom, '└', s);
-    this.put(right, bottom, '┘', s);
-    if (title) this.text(r.x + 1, r.y, ` ${title} `, titleStyle, r.w - 2);
+    this.put(r.x, r.y, '╭', s);
+    this.put(right, r.y, '╮', s);
+    this.put(r.x, bottom, '╰', s);
+    this.put(right, bottom, '╯', s);
+    if (title) this.text(r.x + 2, r.y, ` ${title} `, titleStyle, r.w - 3);
   }
 
   copy(from: Grid, at: Rect, dx = 0, dy = 0): void {

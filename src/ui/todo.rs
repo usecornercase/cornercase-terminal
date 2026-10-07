@@ -13,6 +13,8 @@ const TITLE: &str = "todo";
 const NEW_TODO: &str = "+ new todo";
 const CLEAR_DONE: &str = "clear done";
 const PLACEHOLDER: &str = "enter adds, esc closes";
+const OPEN_BOX: &str = "○";
+const DONE_BOX: &str = "✓";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct View {
@@ -265,12 +267,14 @@ fn draw_item(
     }
     let box_style = if hovered(hover, check(row)) {
         bg.fg(Color::Cyan).add_modifier(Modifier::BOLD)
-    } else if item.done || dragged {
+    } else if item.done {
+        bg.fg(Color::Green)
+    } else if dragged {
         bg.fg(view.muted)
     } else {
         bg
     };
-    put(buf, row.x + 1, row.y, if item.done { "[x]" } else { "[ ]" }, box_style, row.right());
+    put(buf, row.x + 2, row.y, if item.done { DONE_BOX } else { OPEN_BOX }, box_style, row.right());
     if let Some(editor) = &item.editing {
         return draw_field(buf, view, editor, row, width, "");
     }

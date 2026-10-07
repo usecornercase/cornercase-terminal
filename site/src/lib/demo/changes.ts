@@ -341,7 +341,7 @@ export function drawPanelBorder(p: Painter, areas: Areas): void {
   const border = areas.changesBorder;
   if (isEmpty(border)) return;
   const lit = (app.dragging?.kind === 'border' && app.dragging.border === 'changes') || p.sidebarHovered(border);
-  for (let y = border.y; y < bottom(border); y++) p.g.put(border.x, y, '│', { fg: lit ? 6 : 8 });
+  for (let y = border.y; y < bottom(border); y++) p.g.put(border.x, y, '│', { fg: lit ? 6 : p.lineColour });
   p.region({ r: border, drag: { kind: 'border', border: 'changes' }, double: () => app.resetBorder('changes'), cursor: 'col-resize' });
 }
 
@@ -362,7 +362,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
   let x = inner.x;
   for (const mode of CHANGES_MODES) {
     const r = rect(x, inner.y, mode.length + 2, 1);
-    const style: Style = mode === app.changesMode ? { fg: 0, bg: 6, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
+    const style: Style = mode === app.changesMode ? { fg: 6, bg: surface, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
     p.span(r.x, r.y, ` ${mode} `, style);
     p.region({ r, click: () => app.setChangesMode(mode), cursor: 'pointer' });
     x = right(r) + 1;
@@ -424,7 +424,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
   }
 
   const sep = rect(inner.x, bottom(area) - 2, inner.w, 1);
-  p.span(sep.x, sep.y, '─'.repeat(sep.w), DARK);
+  p.span(sep.x, sep.y, '─'.repeat(sep.w), { fg: p.lineColour });
   const foot = bottom(area) - 1;
   if (files.length) {
     const label = files.every((f) => app.changesFolded(f)) ? 'unfold all' : 'fold all';
@@ -502,10 +502,10 @@ function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): voi
   }
   let x = r.x + 1;
   if (hunk.context) {
-    x = p.span(x, r.y, '┄┄ ', DARK);
+    x = p.span(x, r.y, '┄┄ ', { fg: p.lineColour });
     x = p.span(x, r.y, truncateRight(hunk.context, Math.max(0, end - x - 2)), { fg: 7, add: ITALIC }) + 1;
   }
-  p.span(x, r.y, '┄'.repeat(Math.max(0, end - x - 1)), DARK);
+  p.span(x, r.y, '┄'.repeat(Math.max(0, end - x - 1)), { fg: p.lineColour });
   buttons.forEach((b, k) => {
     const action = ACTIONS[k];
     p.span(b.x, b.y, ` ${action} `, p.hovered(b) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });

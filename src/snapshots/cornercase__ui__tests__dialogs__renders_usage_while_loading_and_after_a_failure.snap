@@ -1,13 +1,12 @@
 ---
 source: src/ui.rs
-assertion_line: 4814
 expression: "render(&with(Overlay::Usage(usage))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
 " projects                      │ workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)  ┌ usage ───────────────────────────────────────────────────────┐                  "
+"▌ cornercase (1)  ╭─ usage ──────────────────────────────────────────────────────╮                  "
 "                  │ Claude Code · max plan                              loading… │                  "
 "  + new project   │                                                              │                  "
 "                  │ Codex                                                        │                  "
@@ -16,7 +15,7 @@ expression: "render(&with(Overlay::Usage(usage))).backend()"
 "                  │ such file or directory (os error 2)                          │                  "
 "                  │                                                              │                  "
 "                  │                                                        done  │                  "
-"                  └──────────────────────────────────────────────────────────────┘                  "
+"                  ╰──────────────────────────────────────────────────────────────╯                  "
 " ───────────────────────────── │                         │                                          "
 "  settings                     │                         │                                          "
 "  usage                        │                         │                                          "

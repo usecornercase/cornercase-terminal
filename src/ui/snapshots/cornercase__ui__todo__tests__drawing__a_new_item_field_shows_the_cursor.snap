@@ -4,10 +4,10 @@ expression: t.backend()
 ---
 " todo 2                 clear done   ×  "
 "                                        "
-" [ ] fix the login bug in safari        "
+"  ○  fix the login bug in safari        "
 "     when the cookie expires            "
-" [ ] write docs                         "
-" [x] renew the domain                   "
+"  ○  write docs                         "
+"  ✓  renew the domain                   "
 "                                        "
 "  +  call the bank                      "
 "                                        "

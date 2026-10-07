@@ -97,8 +97,20 @@ const BRAND = 99;
 const UNDO = 'undo';
 const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 208, critical: 1 };
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
-const USAGE_FILLED = '█';
-const USAGE_EMPTY = '░';
+const USAGE_BAR = '━';
+const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
+const NO_TAB = 'no tab open';
+const NO_TAB_HINT = ' opens a shell here';
+const TAGLINE = 'every agent in its own corner';
+const WELCOME_HINT = ' opens a folder';
+const LOGO: [string, string][] = [
+  ['   █████████', ''],
+  ['▄▄▄▀▀▀▀▀▀▀▀▀', ''],
+  ['███', ''],
+  ['███   ', '██'],
+  ['███   ', '██'],
+  ['███   ', '▀▀'],
+];
 const CONTEXT_SEPARATOR = ' · ';
 const MIN_MODEL_WIDTH = 4;
 const MB = 1 << 20;
@@ -119,6 +131,9 @@ const INPUT_PROMPT = '› ';
 
 const middle = (r: Rect): Rect => rect(r.x, r.y + Math.floor(Math.max(0, r.h - 1) / 2), r.w, Math.min(r.h, 1));
 const marker = (shown: boolean): Seg => seg(shown ? '▌ ' : '  ', CYAN);
+const rail = (selected: boolean, bg: Style): Seg => (selected ? seg('▌', { ...bg, fg: 6 }) : seg(' ', bg));
+const wordmark = (): Line => [seg('c', { fg: BRAND, add: BOLD }), seg('ornercase', { add: BOLD })];
+type Guide = 'top' | 'tee' | 'end' | 'bar';
 const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 
 export class Painter {
@@ -126,6 +141,7 @@ export class Painter {
   cursor: Cursor | null = null;
   private surface: number;
   private hoverSurface: number;
+  readonly lineColour: number;
 
   constructor(
     readonly app: App,
@@ -133,6 +149,7 @@ export class Painter {
   ) {
     this.surface = app.light ? 254 : 236;
     this.hoverSurface = app.light ? 255 : 235;
+    this.lineColour = app.light ? 250 : 239;
   }
 
   hovered(r: Rect): boolean {
@@ -184,6 +201,52 @@ export class Painter {
     return this.sidebarHovered(r) ? { fg: 0, bg: hoverBg, add: BOLD } : idle;
   }
 
+  private pickBackground(selected: boolean, r: Rect): Style {
+    if (selected) return { bg: this.surface };
+    return this.hovered(r) ? { bg: this.hoverSurface } : {};
+  }
+
+  private guide(x: number, r: Rect, kind: Guide): void {
+    if (x >= right(r)) return;
+    const mid = middle(r).y;
+    for (let y = r.y; y < bottom(r); y++) {
+      let ch = '';
+      if (kind === 'bar' || (y < mid && (kind === 'tee' || kind === 'end')) || (y > mid && (kind === 'top' || kind === 'tee'))) ch = '│';
+      else if (y === mid && kind === 'tee') ch = '├';
+      else if (y === mid && kind === 'end') ch = '└';
+      if (ch && this.g.at(x, y)?.ch === ' ') this.g.put(x, y, ch, { fg: this.lineColour });
+    }
+  }
+
+  private rail(r: Rect): void {
+    for (let y = r.y; y < bottom(r); y++) if (this.g.at(r.x, y)?.ch === ' ') this.g.put(r.x, y, '▌', { fg: 6 });
+  }
+
+  private dim(): void {
+    this.g.fill(rect(0, 0, this.app.cols, this.app.rows), { add: DIM });
+  }
+
+  private centered(area: Rect, lines: Line[]): void {
+    const h = lines.length;
+    const w = Math.max(0, ...lines.map(width));
+    if (h > area.h || w > area.w) return;
+    const y = area.y + Math.floor((area.h - h) / 2);
+    lines.forEach((line, i) => drawLine(this.g, area.x + Math.floor((area.w - width(line)) / 2), y + i, line, area.w));
+  }
+
+  private welcome(area: Rect): void {
+    const words: Line[] = [
+      wordmark(),
+      [seg(TAGLINE, DARK)],
+      [],
+      [seg('+ new project', CYAN), seg(WELCOME_HINT, DARK)],
+    ];
+    const size = Math.max(...LOGO.map(([c, k]) => [...c].length + [...k].length));
+    const logo: Line[] = LOGO.map(([c, k]) => [seg(c, { fg: BRAND }), seg(k, CYAN), seg(' '.repeat(size - [...c].length - [...k].length))]);
+    const all = [...logo, [], ...words];
+    this.centered(area, all.length <= area.h ? all : words);
+  }
+
   draw(): Frame {
     const app = this.app;
     if (app.detached) {
@@ -229,7 +292,8 @@ export class Painter {
     const app = this.app;
     const tab = app.tab();
     if (tab) this.tab(tab, areas.pane);
-    else if (app.project()) this.span(areas.pane.x, areas.pane.y, ' no tab open', DARK, areas.pane.w);
+    else if (app.project()) this.centered(areas.pane, [[seg(NO_TAB, { fg: 8, add: BOLD })], [seg('+ tab', CYAN), seg(NO_TAB_HINT, DARK)]]);
+    else if (!app.projects.length) this.welcome(areas.pane);
   }
 
   private tab(tab: Tab, area: Rect): void {
@@ -309,7 +373,7 @@ export class Painter {
       if (l & (UP | DOWN)) return '│';
       return '─';
     };
-    for (const c of cells.values()) this.g.put(c.x, c.y, symbol(c.links), { fg: c.lit ? 6 : 8, bg: -1, sub: DIM | INVERSE });
+    for (const c of cells.values()) this.g.put(c.x, c.y, symbol(c.links), { fg: c.lit ? 6 : this.lineColour, bg: -1, sub: DIM | INVERSE });
     for (const d of list) {
       this.region({ r: grab(d), drag: { kind: 'divider', tab, divider: d, area: d.area }, cursor: d.dir === 'right' ? 'col-resize' : 'row-resize' });
     }
@@ -322,12 +386,12 @@ export class Painter {
       ['projects', areas.projectsBorder],
       ['workspaces', areas.workspacesBorder],
     ] as const) {
-      for (let y = r.y; y < bottom(r); y++) this.g.put(r.x, y, '│', { fg: lit(border, r) ? 6 : 8 });
+      for (let y = r.y; y < bottom(r); y++) this.g.put(r.x, y, '│', { fg: lit(border, r) ? 6 : this.lineColour });
       this.region({ r, drag: { kind: 'border', border }, double: () => app.resetBorder(border), cursor: 'col-resize' });
     }
     const line = areas.stackBorder;
     if (isEmpty(line)) return;
-    this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit('stack', line) ? 6 : 8 })]);
+    this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit('stack', line) ? 6 : this.lineColour })]);
     this.region({ r: line, drag: { kind: 'border', border: 'stack' }, double: () => app.resetBorder('stack'), cursor: 'row-resize' });
   }
 
@@ -346,7 +410,7 @@ export class Painter {
     }
     const icon = this.sidebarHovered(r) ? CYAN : DARK;
     const x = this.span(r.x, r.y, ' ⌕ ', { ...icon, bg: this.surface });
-    this.span(x, r.y, 'search projects, workspaces, tabs', { fg: 8, bg: this.surface }, right(r) - x);
+    this.span(x, r.y, truncateRight(SEARCH_PLACEHOLDER, Math.max(0, r.w - 4)), { fg: 8, bg: this.surface }, right(r) - x);
     this.region({ r, click: () => app.openSearch(), cursor: 'text' });
   }
 
@@ -384,7 +448,7 @@ export class Painter {
   private breadcrumb(room: number): Line {
     const app = this.app;
     const p = app.project();
-    if (!p) return [seg('c', { fg: BRAND, add: BOLD }), seg('ornercase', { add: BOLD })];
+    if (!p) return wordmark();
     const w = p.workspaces[p.active];
     const t = w?.tabs[w.active];
     const crumbs = [projectLabel(p), w ? workspaceLabel(w) : null, t ? tabLabel(t) : null].filter(Boolean) as string[];
@@ -503,13 +567,13 @@ export class Painter {
     const tab = ws.tabs[t];
     const status = tabStatus(tab);
     const icon = status ? 2 : 0;
-    const name = truncateRight(tabLabel(tab), this.room(b) - 2 - icon);
-    const line = [...b.lead, marker(active)];
+    const name = truncateRight(tabLabel(tab), this.room(b) - icon);
+    const line = [...b.lead];
     if (status) line.push(STATUS_ICONS[status], seg(' '));
     line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
     this.band(b.r, line, b.bg);
     const details = app.tabDetails(tab);
-    if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + 2 + icon);
+    if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + icon);
     const grab: Target = { kind: 'tab', project: project.id, workspace: ws.id, tab: tab.id };
     this.region({ r: b.r, click: () => app.selectTab(p, w, t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
     this.closeX(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseTab(p, w, t) : app.closeTab(p, w, t)));
@@ -548,10 +612,15 @@ export class Painter {
       const r = rows.item(i);
       if (isEmpty(r) || spec.kind === 'gap') return;
       if (spec.kind === 'landing') return this.landing(r, indent);
-      if (spec.kind === 'group') return this.groupRow({ r, pitch, lead: [marker(i === marked)], bg: this.rowBackground(r, dragged(spec)) }, spec.g);
+      if (spec.kind === 'group') {
+        this.groupRow({ r, pitch, lead: [marker(i === marked)], bg: this.rowBackground(r, dragged(spec)) }, spec.g);
+        if (i === marked) this.rail(r);
+        return;
+      }
       const active = spec.p === app.active;
       const lead = [marker(active), seg(app.projects[spec.p].group !== undefined ? '  ' : '')];
       this.projectRow({ r, pitch, lead, bg: this.rowBackground(r, active || dragged(spec)) }, spec.p, true, () => app.selectProject(spec.p));
+      if (active) this.rail(r);
     });
     this.more(areas.list, rows, sidebar, (s) => s.kind === 'group' || s.kind === 'project');
     this.newProject(rows.buttonRect());
@@ -578,20 +647,32 @@ export class Painter {
     all.forEach((row, i) => {
       const r = rows.item(i);
       if (isEmpty(r) || row.kind === 'gap') return;
-      if (row.kind === 'landing') return this.landing(r, indent);
+      if (row.kind === 'landing') {
+        this.landing(r, indent);
+        const tab = treeAmongTabs(all, i);
+        if (tab) this.guide(r.x + treeIndent(shape, tab) - 2, r, 'bar');
+        return;
+      }
       const mark = i === marked;
       const bg = this.rowBackground(r, mark || dragged(row));
-      const lead = [seg(' '.repeat(2 * treeDepth(shape, row))), marker(mark), arrow(folded(row))];
+      const spaces = seg(' '.repeat(2 * treeDepth(shape, row)));
+      const lead = [marker(mark), spaces, arrow(folded(row))];
       const fold = arrowIn(r, shape, row);
       const button = ' '.repeat(treeIndent(shape, row) - 1);
+      const guide = r.x + treeIndent(shape, row) - 2;
       if (row.kind === 'group') this.groupRow({ r, pitch, lead: [marker(mark)], bg }, row.g);
       else if (row.kind === 'project') {
         this.projectRow({ r, pitch, lead, bg }, row.p, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p) : app.selectProject(row.p)));
       } else if (row.kind === 'ws') {
         this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
-      } else if (row.kind === 'tab') this.tabRow({ r, pitch, lead: lead.slice(0, 1), bg }, row.p, row.w, row.t, mark);
-      else if (row.kind === 'newTab') this.newTab(r, button, row.p, row.w);
-      else this.newWorkspace(r, button, row.p);
+      } else if (row.kind === 'tab') {
+        this.tabRow({ r, pitch, lead: [marker(mark), spaces], bg }, row.p, row.w, row.t, mark);
+        this.guide(guide, r, 'tee');
+      } else if (row.kind === 'newTab') {
+        this.newTab(r, button, row.p, row.w);
+        this.guide(guide, r, 'end');
+      } else this.newWorkspace(r, button, row.p);
+      if (mark) this.rail(r);
     });
     this.more(areas.list, rows, all, (r) => r.kind === 'group' || r.kind === 'project' || r.kind === 'ws' || r.kind === 'tab');
     this.newProject(rows.buttonRect());
@@ -600,7 +681,7 @@ export class Painter {
 
   private footer(areas: Areas): void {
     const app = this.app;
-    this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, DARK)]);
+    this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, { fg: this.lineColour })]);
     this.button(areas.settings, ' ', 'settings', this.buttonStyle(areas.settings, DARK, 6));
     this.region({ r: areas.settings, click: () => app.openSettings(), cursor: 'pointer' });
     this.button(areas.usage, ' ', 'usage', this.buttonStyle(areas.usage, DARK, 6));
@@ -638,12 +719,24 @@ export class Painter {
     rowsSpec.forEach((spec, i) => {
       const r = rows.item(i);
       if (isEmpty(r) || spec.kind === 'gap') return;
-      if (spec.kind === 'landing') return this.landing(r, indent);
-      if (spec.kind === 'ws') this.workspaceRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, dragged(spec)) }, app.active, spec.w, true, () => app.selectWorkspace(app.active, spec.w));
-      else if (spec.kind === 'tab') {
+      const guide = r.x + 2;
+      if (spec.kind === 'landing') {
+        this.landing(r, indent);
+        if (amongTabs(rowsSpec, i)) this.guide(guide, r, 'bar');
+        return;
+      }
+      if (spec.kind === 'ws') {
+        this.workspaceRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, dragged(spec)) }, app.active, spec.w, true, () => app.selectWorkspace(app.active, spec.w));
+        this.guide(guide, r, 'top');
+      } else if (spec.kind === 'tab') {
         const active = spec.w === p.active && spec.t === p.workspaces[spec.w].active;
-        this.tabRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, active || dragged(spec)) }, app.active, spec.w, spec.t, active);
-      } else this.newTab(r, '   ', app.active, spec.w);
+        this.tabRow({ r, pitch, lead: [marker(active), seg('  ')], bg: this.rowBackground(r, active || dragged(spec)) }, app.active, spec.w, spec.t, active);
+        this.guide(guide, r, 'tee');
+        if (active) this.rail(r);
+      } else {
+        this.newTab(r, '   ', app.active, spec.w);
+        this.guide(guide, r, 'end');
+      }
     });
     this.more(list, rows, rowsSpec, (r) => r.kind === 'ws' || r.kind === 'tab');
     this.newWorkspace(rows.buttonRect(), ' ', app.active);
@@ -652,7 +745,7 @@ export class Painter {
 
   private issuesRow(areas: Areas): void {
     const app = this.app;
-    this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, DARK)]);
+    this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, { fg: this.lineColour })]);
     this.button(areas.issues, ' ', 'issues', this.buttonStyle(areas.issues, DARK, 6));
     this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
     if (!areas.compact && hasChanges(app.workspace())) {
@@ -683,6 +776,7 @@ export class Painter {
   private overlay(areas: Areas): void {
     const o = this.app.overlay;
     if (!o) return;
+    if (o.kind !== 'menu' && o.kind !== 'search') this.dim();
     if (o.kind === 'menu') return this.menu();
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
@@ -705,7 +799,9 @@ export class Painter {
     this.box(r, '');
     items.forEach((item, i) => {
       const row = intersect(rect(r.x + 1, r.y + 1 + i, r.w - 2, 1), r);
-      this.line(row, [seg(` ${item} `)], this.hovered(row) ? PRESSED : {});
+      const lit = this.hovered(row);
+      const bg: Style = lit ? { bg: this.surface } : {};
+      this.line(row, [rail(lit, bg), seg(`${item} `, lit ? { add: BOLD } : {})], bg);
       this.region({ r: row, click: () => app.chooseMenu(i), cursor: 'pointer' });
     });
   }
@@ -714,12 +810,17 @@ export class Painter {
     const cancel = intersect(rect(right(row) - buttonWidth('cancel'), row.y, buttonWidth('cancel'), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
     this.submitButton(ok, submit, onSubmit);
-    this.span(cancel.x, cancel.y, ' cancel ', this.hovered(cancel) ? { fg: 0, bg: 7 } : DARK);
+    this.span(cancel.x, cancel.y, ' cancel ', this.pill(cancel, false));
     this.region({ r: cancel, click: onCancel, cursor: 'pointer' });
   }
 
+  private pill(r: Rect, primary: boolean): Style {
+    if (primary) return this.hovered(r) ? PRESSED : { fg: 6, bg: this.surface, add: BOLD };
+    return this.hovered(r) ? { fg: 0, bg: 7 } : { fg: 7, bg: this.surface };
+  }
+
   private submitButton(r: Rect, label: string, onClick: () => void): void {
-    this.span(r.x, r.y, ` ${label} `, this.hovered(r) ? PRESSED : { fg: 6, add: BOLD }, r.w);
+    this.span(r.x, r.y, ` ${label} `, this.pill(r, true), r.w);
     this.region({ r, click: onClick, cursor: 'pointer' });
   }
 
@@ -809,7 +910,7 @@ export class Painter {
         const filled = Math.ceil((width * Math.min(w.percent, 100)) / 100);
         const room = width - [...w.label].length - percent.length - [...resets].length;
         lines.push([seg(w.label), seg(' '.repeat(Math.max(0, room))), seg(percent, { ...colour, add: BOLD }), seg(resets, DARK)]);
-        lines.push([seg(USAGE_FILLED.repeat(filled), colour), seg(USAGE_EMPTY.repeat(width - filled), DARK)]);
+        lines.push([seg(USAGE_BAR.repeat(filled), colour), seg(USAGE_BAR.repeat(width - filled), { fg: this.lineColour })]);
         lines.push([]);
       }
     }
@@ -856,13 +957,14 @@ export class Painter {
     items.slice(first, first + list.h).forEach((item, k) => {
       const i = first + k;
       const row = rect(list.x, list.y + k, list.w, 1);
-      const hi = o.selected === i || this.hovered(row);
-      const style: Style = hi ? { fg: 0, bg: 6, add: BOLD } : {};
+      const selected = o.selected === i;
+      const bg = this.pickBackground(selected, row);
       const branch = item.branch ?? '';
       const name = truncateLeft(item.name, row.w - branch.length - 3);
-      this.g.fill(row, hi ? { bg: 6 } : {});
-      this.span(row.x, row.y, ` ${name}`, style);
-      this.span(right(row) - branch.length - 1, row.y, branch, hi ? { fg: 0, bg: 6 } : DARK);
+      this.g.fill(row, bg);
+      this.line(rect(row.x, row.y, 1, 1), [rail(selected, bg)]);
+      this.span(row.x + 1, row.y, name, { ...bg, ...(selected ? { add: BOLD } : {}) });
+      this.span(right(row) - branch.length - 1, row.y, branch, { ...bg, fg: 8 });
       this.region({ r: row, click: () => app.pickerClick(i), cursor: 'pointer' });
     });
     this.region({ r: list, wheel: (dy) => app.pickerScroll(dy) });
@@ -872,7 +974,7 @@ export class Painter {
 
   private tabs(row: Rect, names: string[], active: number, onClick: (i: number) => void): void {
     tabsIn(row, names).forEach((r, i) => {
-      const style: Style = i === active ? PRESSED : this.hovered(r) ? CYAN : { fg: 7 };
+      const style: Style = i === active ? { fg: 6, bg: this.surface, add: BOLD } : this.hovered(r) ? CYAN : { fg: 7 };
       this.span(r.x, r.y, ` ${names[i]} `, style, r.w);
       this.region({ r, click: () => onClick(i), cursor: 'pointer' });
     });
@@ -897,12 +999,13 @@ export class Painter {
       if (!items.length) this.span(list.x, list.y, ' nothing matches', DARK);
       items.slice(0, list.h).forEach((item, i) => {
         const row = rect(list.x, list.y + i, list.w, 1);
-        const hi = Math.min(o.pick!.selected, items.length - 1) === i || this.hovered(row);
-        const base: Style = hi ? { fg: 0, bg: 6 } : {};
+        const selected = Math.min(o.pick!.selected, items.length - 1) === i;
+        const base = this.pickBackground(selected, row);
         this.g.fill(row, base);
-        const value: Style = { ...base, ...(item.dangerous && !hi ? { fg: 1 } : {}), add: BOLD };
-        const x = this.span(row.x, row.y, ` ${item.value.padEnd(32)} `, value);
-        this.span(x, row.y, item.note, hi ? base : DARK, right(row) - x);
+        this.line(rect(row.x, row.y, 1, 1), [rail(selected, base)]);
+        const value: Style = { ...base, ...(item.dangerous ? { fg: 1 } : {}), add: BOLD };
+        const x = this.span(row.x + 1, row.y, `${item.value.padEnd(32)} `, value);
+        this.span(x, row.y, item.note, { ...base, fg: 8 }, right(row) - x);
         this.region({ r: row, click: () => app.choosePick(i), cursor: 'pointer' });
       });
     } else {
@@ -924,7 +1027,7 @@ export class Painter {
         const rr = rect(body.x, y, body.w, 1);
         const bg: Style = selected ? { bg: this.surface } : {};
         this.g.fill(rr, bg);
-        let x = this.span(rr.x, y, selected ? '› ' : '  ', { ...bg, fg: 6 });
+        let x = this.span(rr.x, y, selected ? '▌ ' : '  ', { ...bg, fg: 6 });
         x = this.span(x, y, truncateRight(row.label, 24).padEnd(26), { ...bg, ...(selected ? { add: BOLD } : {}) });
         const value = truncateRight(row.value, Math.floor((rr.w - 30) / 2) + 10);
         x = this.span(x, y, value, { ...bg, ...(row.dangerous ? { fg: 1 } : {}) });
@@ -978,16 +1081,16 @@ export class Painter {
         items.slice(first, first + list.h).forEach((item, k) => {
           const i = first + k;
           const row = rect(list.x, list.y + k, list.w, 1);
-          const hi = view.selected === i || this.hovered(row);
-          const style: Style = hi ? { fg: 0, bg: 6, add: BOLD } : {};
-          const keyStyle: Style = hi ? { fg: 0, bg: 6, add: BOLD } : CYAN;
-          const metaStyle: Style = hi ? { fg: 0, bg: 6 } : DARK;
-          this.g.fill(row, hi ? { bg: 6 } : {});
+          const chosen = view.selected === i;
+          const bg = this.pickBackground(chosen, row);
+          const style: Style = chosen ? { ...bg, add: BOLD } : bg;
+          this.g.fill(row, bg);
           const meta = truncateRight(item.meta, Math.floor(row.w / 3));
           const title = truncateRight(item.title, row.w - keyWidth - meta.length - 6);
-          let x = this.span(row.x, row.y, ` ${item.key.padEnd(keyWidth)}  `, { ...keyStyle, ...(item.danger && !hi ? { fg: 1 } : {}) });
+          this.line(rect(row.x, row.y, 1, 1), [rail(chosen, bg)]);
+          let x = this.span(row.x + 1, row.y, `${item.key.padEnd(keyWidth)}  `, { ...style, fg: item.danger ? 1 : 6 });
           x = this.span(x, row.y, title, style);
-          this.span(right(row) - meta.length - 1, row.y, meta, metaStyle);
+          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: 8 });
           this.region({ r: row, click: () => app.issuesClick(i), cursor: 'pointer' });
         });
         this.region({ r: list, wheel: (dy) => app.issuesScroll(dy) });
@@ -999,9 +1102,7 @@ export class Painter {
     if (busy) this.cursor = null;
     const labels = view.buttons;
     rightAligned(buttonsRow, labels, buttonWidth, 1).forEach((br, i) => {
-      const hov = this.hovered(br);
-      const style: Style = i === 0 ? (hov ? PRESSED : { fg: 6, add: BOLD }) : hov ? { fg: 0, bg: 7 } : DARK;
-      this.span(br.x, br.y, ` ${labels[i]} `, style);
+      this.span(br.x, br.y, ` ${labels[i]} `, this.pill(br, i === 0));
       this.region({ r: br, click: () => app.issuesButton(labels[i]), cursor: 'pointer' });
     });
   }
@@ -1023,14 +1124,16 @@ export class Painter {
     results.slice(first, first + list.h).forEach((res, k) => {
       const i = first + k;
       const row = rect(list.x, list.y + k, list.w, 1);
-      const hi = o.selected === i || this.hovered(row);
-      const base: Style = hi ? { fg: 0, bg: 6, add: BOLD } : {};
-      const matched: Style = hi ? base : { fg: 6, add: BOLD };
-      const ctxStyle: Style = hi ? { fg: 0, bg: 6 } : DARK;
-      this.g.fill(row, hi ? { bg: 6 } : {});
+      const selected = o.selected === i;
+      const bg = this.pickBackground(selected, row);
+      const base: Style = selected ? { ...bg, add: BOLD } : bg;
+      const matched: Style = { ...bg, fg: 6, add: BOLD };
+      const ctxStyle: Style = { ...bg, fg: 8 };
+      this.g.fill(row, bg);
       const context = truncateLeft(res.context, Math.floor(row.w / 2));
       const name = truncateRight(res.name, row.w - context.length - 5);
-      let x = this.span(row.x, row.y, '  ', base);
+      this.line(rect(row.x, row.y, 1, 1), [rail(selected, bg)]);
+      let x = row.x + 2;
       const at = name.toLowerCase().indexOf(o.query.toLowerCase());
       if (at >= 0) {
         x = this.span(x, row.y, name.slice(0, at), base);
@@ -1059,6 +1162,21 @@ export class Painter {
     this.span(b.x, b.y, ` ${UNDO} `, this.hovered(b) ? PRESSED : { fg: 6, add: BOLD });
     this.region({ r: b, click: undo, cursor: 'pointer' });
   }
+}
+
+function amongTabs(rows: WorkspaceRow[], i: number): boolean {
+  const above = rows[i - 1];
+  const below = rows[i + 1];
+  const owner = above && (above.kind === 'ws' || above.kind === 'tab') ? above.w : null;
+  const next = below && (below.kind === 'tab' || below.kind === 'new') ? below.w : null;
+  return owner !== null && owner === next;
+}
+
+function treeAmongTabs(rows: TreeRow[], i: number): TreeRow | null {
+  const above = rows[i - 1];
+  const below = rows[i + 1];
+  if (!above || !below || (above.kind !== 'ws' && above.kind !== 'tab') || (below.kind !== 'tab' && below.kind !== 'newTab')) return null;
+  return above.p === below.p && above.w === below.w ? { kind: 'tab', p: above.p, w: above.w, t: 0 } : null;
 }
 
 function menuLabel(status: Status | null, w: number, lit: boolean): Line {

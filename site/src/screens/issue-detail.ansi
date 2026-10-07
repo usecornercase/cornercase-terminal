@@ -1,30 +1,30 @@
-[0m [0m[38;5;8;48;5;236m ⌕ search projects, workspaces, tabs[0m[48;5;236m         [0m [0m[38;5;8m│[0m test checkout::tests::coupons_[0m[38;5;8m│[0m [0m[1;2;38;5;6mshop[0m[2m [0m[2;38;5;5m❯[0m[2m git log --oneline --gr
-[0m  [0m[38;5;8m┌[0m[1;38;5;8m issues · shop [0m[38;5;8m─────────────────────────────────────────────────────────────────────────────────────────┐
-[0m[0m[1;38;5;8m p[0m[38;5;8m│[0m [0m[1;38;5;6m#482[0m [0m[1mReturns[0m [0m[1mpage[0m [0m[1mcrashes[0m [0m[1mon[0m [0m[1mempty[0m [0m[1maddress[0m                                                             [0m[38;5;8m│[0m[1;2;38;5;2mat
-[0m  [0m[38;5;8m│[0m [0m[38;5;8mopen[0m [0m[38;5;8m·[0m [0m[38;5;8mbug[0m [0m[38;5;8m·[0m [0m[38;5;8massigned[0m [0m[38;5;8mto[0m [0m[38;5;8m@ana[0m [0m[38;5;8m·[0m [0m[38;5;8mopened[0m [0m[38;5;8mby[0m [0m[38;5;8m@ana[0m [0m[38;5;8m·[0m [0m[38;5;8mupdated[0m [0m[38;5;8m3d[0m [0m[38;5;8mago[0m                                        [0m[38;5;8m│[0m[2mea
-[0m[0m[38;5;6;48;5;236m▌ [0m[38;5;8m│[0m [0m[38;5;8mhttps://github.com/acme/shop/issues/482[0m                                                                [0m[38;5;8m│
-[0m[0m[38;5;6m  [0m[38;5;8m│[0m                                                                                                        [0m[38;5;8m│[0m[2mn
-[0m[0m[38;5;6m  [0m[38;5;8m│[0m [0m[38;5;8mstart   [0min its own worktree, on issue-482-returns-page-crashes-on-empty-address                        [0m[38;5;8m│
-[0m[0m[38;5;6m  [0m[38;5;8m│[0m [0m[38;5;8magent   [0m[1mclaude[0m · plan[0m[38;5;8m  claude --permission-mode plan  (default)[0m                                        [0m[38;5;8m│[0m[2m s
-[0m  [0m[38;5;8m│[0m [0m[38;5;8mprompt  [0mhttps://github.com/acme/shop/issues/482[0m[38;5;8m  (typed, you press enter)[0m                              [0m[38;5;8m│
-[0m [0m[38;5;6m [0m[38;5;8m│[0m                                                                                                        [0m[38;5;8m│
-[0m  [0m[38;5;8m│[0m When a customer starts a return without an address line, the returns page crashes with a 500.          [0m[38;5;8m│
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [0m[38;5;8m│[0m [0m[1mSteps[0m [0m[1mto[0m [0m[1mreproduce[0m                                                                                     [0m[38;5;8m│
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m 1. Open a delivered order                                                                              [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m 2. Click [1mStart[0m [1ma[0m [1mreturn[0m                                                                                [38;5;8m│──
-[39m  [38;5;8m│[39m 3. Clear the address and submit                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m [1mExpected[0m                                                                                               [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m A validation error: [3mEnter[0m [3mthe[0m [3mfirst[0m [3mline[0m [3mof[0m [3myour[0m [3maddress[0m.                                              [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m [1mLogs[0m                                                                                                   [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m [38;5;8mrust[39m                                                                                                   [38;5;8m│[2m[39m
-[0m  [38;5;8m│[39m [38;5;8m│ [39mthread [38;5;5m'tokio[39m-runtime-worker' panicked at src/returns/address.rs:[38;5;3m12[39m:[38;5;3m33[39m:                              [38;5;8m│[2m[39m
-[0m[0m[38;5;8m ─│[0m [0m[38;5;8menter starts it · lines 1-24 of 31[0m                                                                     [0m[38;5;8m│
-[0m [0m[38;5;8m │[0m                                                               [0m[1;38;5;0;48;5;6m start [0m [0m[38;5;8m agent… [0m [0m[38;5;8m raw [0m [0m[38;5;8m copy url [0m [0m[38;5;8m back [0m [0m[38;5;8m│
-[0m [38;5;8m └────────────────────────────────────────────────────────────────────────────────────────────────────────┘[2m[39m
-[0m [38;5;8m quit [39m              [38;5;8m│[39m                         [38;5;8m│[39m [1m[38;5;6mshop[0m [38;5;5m❯[39m                        [38;5;8m│[39m [2m
+[0;2m [0;2;38;5;8;48;5;236m ⌕ search projects, workspaces, tabs[0;2;48;5;236m         [0;2m [0;2;38;5;239m│[0;2m test checkout::tests::coupons_[0;2;38;5;239m│[0;2m [0;1;2;38;5;6mshop[0;2m [0;2;38;5;5m❯[0;2m git log --oneline --gr[0m
+[0;2m  [0;38;5;8m╭─[0;1m issues · shop [0;38;5;8m────────────────────────────────────────────────────────────────────────────────────────╮[0;2m  [0m
+[0;1;2;38;5;8m p[0;38;5;8m│[0m [0;1;38;5;6m#482[0m [0;1mReturns[0m [0;1mpage[0m [0;1mcrashes[0m [0;1mon[0m [0;1mempty[0m [0;1maddress[0m                                                             [0;38;5;8m│[0;1;2;38;5;2mat[0m
+[0;2m  [0;38;5;8m│[0m [0;38;5;8mopen[0m [0;38;5;8m·[0m [0;38;5;8mbug[0m [0;38;5;8m·[0m [0;38;5;8massigned[0m [0;38;5;8mto[0m [0;38;5;8m@ana[0m [0;38;5;8m·[0m [0;38;5;8mopened[0m [0;38;5;8mby[0m [0;38;5;8m@ana[0m [0;38;5;8m·[0m [0;38;5;8mupdated[0m [0;38;5;8m3d[0m [0;38;5;8mago[0m                                        [0;38;5;8m│[0;2mea[0m
+[0;2;38;5;6;48;5;236m▌ [0;38;5;8m│[0m [0;38;5;8mhttps://github.com/acme/shop/issues/482[0m                                                                [0;38;5;8m│[0;2m  [0m
+[0;2;38;5;6m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2mn [0m
+[0;2;38;5;6m  [0;38;5;8m│[0m [0;38;5;8mstart   [0min its own worktree, on issue-482-returns-page-crashes-on-empty-address                        [0;38;5;8m│[0;2m  [0m
+[0;2;38;5;6m  [0;38;5;8m│[0m [0;38;5;8magent   [0;1mclaude[0m · plan[0;38;5;8m  claude --permission-mode plan  (default)[0m                                        [0;38;5;8m│[0;2m s[0m
+[0;2m  [0;38;5;8m│[0m [0;38;5;8mprompt  [0mhttps://github.com/acme/shop/issues/482[0;38;5;8m  (typed, you press enter)[0m                              [0;38;5;8m│[0;2m  [0m
+[0;2m [0;2;38;5;6m [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m When a customer starts a return without an address line, the returns page crashes with a 500.          [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m [0;1mSteps[0m [0;1mto[0m [0;1mreproduce[0m                                                                                     [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m 1. Open a delivered order                                                                              [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m 2. Click [0;1mStart[0m [0;1ma[0m [0;1mreturn[0m                                                                                [0;38;5;8m│[0;2;38;5;239m──[0m
+[0;2m  [0;38;5;8m│[0m 3. Clear the address and submit                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m [0;1mExpected[0m                                                                                               [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m A validation error: [0;3mEnter[0m [0;3mthe[0m [0;3mfirst[0m [0;3mline[0m [0;3mof[0m [0;3myour[0m [0;3maddress[0m.                                              [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m [0;1mLogs[0m                                                                                                   [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m [0;38;5;8mrust[0m                                                                                                   [0;38;5;8m│[0;2m  [0m
+[0;2m  [0;38;5;8m│[0m [0;38;5;8m│ [0mthread [0;38;5;5m'tokio[0m-runtime-worker' panicked at src/returns/address.rs:[0;38;5;3m12[0m:[0;38;5;3m33[0m:                              [0;38;5;8m│[0;2m  [0m
+[0;2;38;5;239m ─[0;38;5;8m│[0m [0;38;5;8menter starts it · lines 1-24 of 31[0m                                                                     [0;38;5;8m│[0;2m  [0m
+[0;2m [0;2;38;5;8m [0;38;5;8m│[0m                                                               [0;1;38;5;0;48;5;6m start [0m [0;38;5;7;48;5;236m agent… [0m [0;38;5;7;48;5;236m raw [0m [0;38;5;7;48;5;236m copy url [0m [0;38;5;7;48;5;236m back [0m [0;38;5;8m│[0;2m  [0m
+[0;2m [0;2;38;5;8m [0;38;5;8m╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0;2m  [0m
+[0;2m [0;2;38;5;8m quit [0;2m              [0;2;38;5;239m│[0;2m                         [0;2;38;5;239m│[0;2m [0;1;2;38;5;6mshop[0;2m [0;2;38;5;5m❯[0;2m                        [0;2;38;5;239m│[0;2m                              [0m

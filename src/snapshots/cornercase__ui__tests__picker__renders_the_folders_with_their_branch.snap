@@ -3,7 +3,7 @@ source: src/ui.rs
 expression: render(&with(picker(None))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"              ┌ new workspace ───────────────────────────────────────────────────────┐              "
+"              ╭─ new workspace ──────────────────────────────────────────────────────╮              "
 " projects     │ › ~/projects/                                                        │              "
 "              │                                                                      │              "
 "▌ cornercase (│  ..                                                                  │              "
@@ -18,5 +18,5 @@ expression: render(&with(picker(None))).backend()
 "              │                                                                      │              "
 " ─────────────│ enter opens ~/projects                                               │              "
 "  settings    │                                                       open   cancel  │              "
-"  usage       └──────────────────────────────────────────────────────────────────────┘              "
+"  usage       ╰──────────────────────────────────────────────────────────────────────╯              "
 "  quit                         │                         │                                          "

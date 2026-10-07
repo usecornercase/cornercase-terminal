@@ -52,7 +52,7 @@ Each client has its own writer thread, so a slow client never blocks the loop. A
 
 Geometry functions such as `ui::layout`, `entry_row`, `workspace_row`, `form_buttons` and `picker_item` are shared by drawing and hit testing, so a click lands exactly on what was drawn, and tests take their click positions from the same functions.
 
-Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::compact_layout` reuses the same areas with a top bar and three-row bands.
+Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::compact_layout` reuses the same areas with a top bar and three-row bands.
 
 ## Terminal emulation
 

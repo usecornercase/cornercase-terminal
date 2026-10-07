@@ -4,7 +4,7 @@ expression: "render(&with(search(\"feat\", found()))).backend()"
 ---
 "  ⌕ feat                                                 │                                          "
 "                                                         │                                          "
-"  feat/search                                      notes │                                          "
+"▌ feat/search                                      notes │                                          "
 "  nvim                               notes › feat/search │                                          "
 "                                                         │                                          "
 "                                                         │                                          "

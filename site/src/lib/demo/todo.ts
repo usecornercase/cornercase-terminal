@@ -230,7 +230,7 @@ export function drawTodo(p: Painter, areas: Areas): void {
     const bg: Style = hovered ? { bg: hoverFill } : {};
     if (hovered) p.g.fill(row, bg);
     const box = rect(row.x + 1, row.y, 3, 1);
-    p.span(box.x, box.y, item.done ? '[x]' : '[ ]', p.hovered(box) ? { ...bg, fg: 6, add: BOLD } : item.done ? { ...bg, fg: 8 } : bg);
+    p.span(box.x + 1, box.y, item.done ? '✓' : '○', p.hovered(box) ? { ...bg, fg: 6, add: BOLD } : item.done ? { ...bg, fg: 2 } : bg);
     p.region({ r: box, click: () => app.toggleTodoItem(item.id), cursor: 'pointer' });
     if (editing) {
       drawField(p, editing, row, width, '', surface);
