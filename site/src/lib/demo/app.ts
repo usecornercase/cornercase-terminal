@@ -2541,7 +2541,7 @@ export class App {
       press.held?.();
     }
     if (this.paneDrag) {
-      if (buttons & 2) this.paneDrag.moved ||= !contains(this.paneDrag.rect, x, y);
+      if (buttons === 2) this.paneDrag.moved ||= !contains(this.paneDrag.rect, x, y);
       else this.paneDrag = null;
       this.dirty();
       return;
