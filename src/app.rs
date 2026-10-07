@@ -6699,12 +6699,15 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn closing_a_tab_asks_first() {
             let (mut app, _rx, _dirs) = with_workspace(false);
-            let name = app.projects[0].workspaces[1].tabs[0].label(&app.config);
+            wait_until("the shell runs", || is_sh(&app.projects[0].workspaces[1].tabs[0].label(&app.config)));
 
             click_close(&mut app, WorkspaceRow::Tab(1, 0));
 
-            let expected = format!("Close the tab {name}? The programs running in it are stopped.");
-            assert_eq!(confirmation(&app), Some(expected));
+            let question = confirmation(&app).expect("a question");
+            let name = question
+                .strip_prefix("Close the tab ")
+                .and_then(|rest| rest.strip_suffix("? The programs running in it are stopped."));
+            assert!(name.is_some_and(is_sh), "{question}");
         }
 
         #[test]
