@@ -1,3 +1,4 @@
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -5,8 +6,12 @@ use std::time::{Duration, Instant};
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 
-pub fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
-    let deadline = Instant::now() + TIMEOUT;
+pub fn wait_until(what: &str, cond: impl FnMut() -> bool) {
+    wait_until_within(what, TIMEOUT, cond);
+}
+
+pub fn wait_until_within(what: &str, timeout: Duration, mut cond: impl FnMut() -> bool) {
+    let deadline = Instant::now() + timeout;
     while !cond() {
         assert!(Instant::now() < deadline, "timed out waiting for: {what}");
         std::thread::sleep(POLL);
@@ -42,6 +47,34 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+pub struct Locked {
+    path: PathBuf,
+    _dir: TempDir,
+}
+
+impl Locked {
+    pub fn new() -> Self {
+        let dir = TempDir::new();
+        let path = dir.path().join("locked");
+        std::fs::create_dir(&path).expect("create the locked folder");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).expect("lock the folder");
+        let locked = Self { path, _dir: dir };
+        let entered = std::process::Command::new("/bin/sh").arg("-c").arg("true").current_dir(&locked.path).status();
+        assert!(entered.is_err(), "a locked folder can still be entered, so the test would prove nothing (root?)");
+        locked
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for Locked {
+    fn drop(&mut self) {
+        let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o755));
     }
 }
 

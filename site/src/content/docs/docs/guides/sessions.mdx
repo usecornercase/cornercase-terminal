@@ -49,7 +49,7 @@ It saves once your layout has stayed the same for two seconds, so the burst of s
 
 ## What is restored
 
-Processes can't be saved. When a **new** server starts, after `cornercase kill-server`, a reboot or a restart after an [update](../../installation/#update), its first client restores the saved layout: the same projects, workspaces, tabs and splits, each pane with a **fresh shell in its saved folder**. Folders that no longer exist are skipped; a pane whose folder is gone starts in its workspace's folder.
+Processes can't be saved. When a **new** server starts, after `cornercase kill-server`, a reboot or a restart after an [update](../../installation/#update), its first client restores the saved layout: the same projects, workspaces, tabs and splits, each pane with a **fresh shell in its saved folder**. Folders that no longer exist are skipped; a pane whose folder is gone starts in its workspace's folder. If a shell can't start in some folder (one you can no longer enter, say), that tab is left out, everything else comes back, and a message names the projects it was in. If no shell could start at all, a new one opens in the folder you started cornercase from. The session as it was is kept in `session.json.bak`, next to `session.json`.
 
 A server that is already running never restores: reattaching just shows what is there.
 

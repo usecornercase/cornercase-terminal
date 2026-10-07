@@ -115,6 +115,8 @@ Where you see it tells you which side refused:
 
 Sessions are restored only by a **new** server, and projects or workspaces whose folders no longer exist are skipped. The session is saved two seconds after your layout last changed, so a change made right before a crash or a power cut may be missing.
 
+If some tabs were missing and a message said `could not restore … see server.log`, their shells couldn't start: `server.log` says why, and the session as it was saved is in `session.json.bak` (an older copy, if there was one, in `session.json.bak.1`). To get it back, stop the server (`cornercase kill-server`) and copy `session.json.bak` over `session.json`.
+
 ## Using cornercase
 
 ### "cornercase hit a bug, see server.log"

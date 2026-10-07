@@ -13,6 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `secrets.json` | Shortcut, Linear and Jira tokens typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
+| `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
 | `server.sock` | The Unix socket clients use to reach the server. cornercase creates its folder private to you (mode `0700`), and refuses an existing folder that another user owns or can write to, or that is a symbolic link. | `$XDG_RUNTIME_DIR/cornercase/`, or `$TMPDIR/cornercase-<uid>/` |
