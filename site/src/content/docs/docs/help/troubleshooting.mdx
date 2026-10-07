@@ -31,11 +31,11 @@ You can always update by hand with the install script or `brew upgrade cornercas
 
 ### No update shows up
 
-cornercase checks when the server starts and then every hour, and only if **settings → TUI → check for updates** is on; builds made with `cargo run` never check. A release that came out less than an hour ago may not have been seen yet. Run `cornercase update` to install it right away. When the check itself fails, `server.log` says why, in a line starting with `cornercase server: the update check failed`.
+cornercase checks when the server starts and then every hour, and only if **settings → UI → check for updates** is on; builds made with `cargo run` never check. A release that came out less than an hour ago may not have been seen yet. Run `cornercase update` to install it right away. When the check itself fails, `server.log` says why, in a line starting with `cornercase server: the update check failed`.
 
 ### Turning update checks off
 
-Set **settings → TUI → check for updates** to *never*, or `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates). cornercase then never contacts GitHub, and you update with the install script or Homebrew when you choose.
+Set **settings → UI → check for updates** to *never*, or `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates). cornercase then never contacts GitHub, and you update with the install script or Homebrew when you choose.
 
 ## Building from source
 
@@ -139,7 +139,7 @@ Over SSH, it's your local terminal that needs to allow it.
 ### No desktop notification shows up
 
 - Only a tab you aren't looking at notifies you, and only when Claude Code runs in it; see [Notifications](../../guides/projects-workspaces-tabs/#notifications).
-- Check that **settings → TUI → desktop notifications** isn't *off*. With *auto*, cornercase picks from your terminal's name; if it picks wrong, for example over SSH with a terminal that doesn't say its name, choose the one your terminal understands.
+- Check that **settings → UI → desktop notifications** isn't *off*. With *auto*, cornercase picks from your terminal's name; if it picks wrong, for example over SSH with a terminal that doesn't say its name, choose the one your terminal understands.
 - Your system must let your terminal show notifications: on macOS, in **System Settings → Notifications**.
 - **iTerm2** shows them only with *Notification Center Alerts* on, in **Settings → Profiles → Terminal**.
 - **foot** shows them with `notify-send`, which has to be installed.
@@ -160,7 +160,7 @@ cornercase asks your terminal to report these keys unambiguously, using the kitt
 
 ### Colours look wrong after changing my terminal theme
 
-The server reads your terminal's colours once, from the first client that attaches to it. Restart it with `cornercase kill-server` to pick up a new theme.
+The server reads your terminal's colours once, from the first client that attaches to it. Restart it with `cornercase restart` (or **settings → restart**) to pick up a new theme.
 
 ## Issues and agents
 

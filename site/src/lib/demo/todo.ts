@@ -234,6 +234,7 @@ export function drawTodo(p: Painter, areas: Areas): void {
     p.region({ r: box, click: () => app.toggleTodoItem(item.id), cursor: 'pointer' });
     if (editing) {
       drawField(p, editing, row, width, '', surface);
+      drawDelete(p, row, bg, item.id);
       continue;
     }
     const chars = [...item.text];
@@ -244,10 +245,7 @@ export function drawTodo(p: Painter, areas: Areas): void {
     });
     const text = rect(row.x + TEXT_X, row.y, width, row.h);
     p.region({ r: text, click: (cx, cy) => app.editTodo(item.id, cy - row.y, cx - text.x), cursor: 'text' });
-    if (!hovered) continue;
-    const del = rect(right(row) - BUTTONS, row.y, 3, 1);
-    p.span(del.x + 1, del.y, '×', p.hovered(del) ? { ...bg, fg: 1, add: BOLD } : { ...bg, fg: 8 });
-    p.region({ r: del, click: () => app.deleteTodo(item.id), cursor: 'pointer' });
+    if (hovered) drawDelete(p, row, bg, item.id);
   }
   const [above, below] = layout.hidden();
   for (const [n, arrow, m] of [
@@ -263,6 +261,12 @@ export function drawTodo(p: Painter, areas: Areas): void {
     p.span(button.x + 1, button.y, ` ${NEW_TODO} `, p.hovered(button) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
     p.region({ r: button, click: () => app.addTodo(), cursor: 'pointer' });
   }
+}
+
+function drawDelete(p: Painter, row: Rect, bg: Style, id: number): void {
+  const del = rect(right(row) - BUTTONS, row.y, 3, 1);
+  p.span(del.x + 1, del.y, '×', p.hovered(del) ? { ...bg, fg: 1, add: BOLD } : { ...bg, fg: 8 });
+  p.region({ r: del, click: () => p.app.deleteTodo(id), cursor: 'pointer' });
 }
 
 function drawField(p: Painter, f: Field, r: Rect, width: number, mark: string, surface: number): void {

@@ -10,7 +10,7 @@ expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height
 "▌ website (1)                  │▌ ├ codex                │                                          "
 "  api (1)                      │  └ + tab                │                                          "
 "                               │                         │                                          "
-"  + new project                │  + new workspace        │                                          "
+"  + new                        │  + new workspace        │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "

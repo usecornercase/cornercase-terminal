@@ -10,7 +10,7 @@ expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).back
 "▌ ▸ website (1)                │                                                                    "
 "  ▸ api (1)                    │                                                                    "
 "                               │                                                                    "
-"  + new project                │                                                                    "
+"  + new                        │                                                                    "
 "                               │                                                                    "
 "                               │                                                                    "
 "                               │                                                                    "

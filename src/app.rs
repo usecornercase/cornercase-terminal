@@ -231,7 +231,7 @@ const UNLOCK_SUBMIT: &str = "unlock and remove";
 const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
 const MAX_LOCK_REASON: usize = 100;
 const PICKER_SUBMIT: &str = "open";
-const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
+const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into the group";
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 const WHEEL_ROWS: isize = 3;
 const SYNC_EVERY: Duration = Duration::from_secs(1);
@@ -248,6 +248,9 @@ const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 const UPDATE_SUBMIT: &str = "update";
 const RETRY_UPDATE_SUBMIT: &str = "try again";
 const RESTART_SUBMIT: &str = "restart now";
+const UPDATE_TITLE: &str = "update";
+const RESTART_TITLE: &str = "restart";
+const RESTART_MESSAGE: &str = "Restart cornercase now? Its server starts again and every client comes back.";
 const LATER: &str = "later";
 const COPY_COMMAND_SUBMIT: &str = "copy command";
 const RESTART_LABEL: &str = "↻ restart";
@@ -284,6 +287,7 @@ enum Overlay {
     Issues(Box<Browser>),
     Search(Search),
     Update(UpdateStep),
+    Restart,
     Usage,
     Branches(BranchPicker),
 }
@@ -298,7 +302,7 @@ impl Overlay {
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseProject { .. } | Self::CloseWorkspace { .. } | Self::CloseTab { .. } => CLOSE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
-            Self::Update(UpdateStep::Installed) => RESTART_SUBMIT,
+            Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
             _ => CREATE_SUBMIT,
@@ -321,6 +325,10 @@ impl Overlay {
             Self::Rename { input, .. } | Self::NewGroup { input } => Some(input),
             _ => None,
         }
+    }
+
+    fn lists_running(&self) -> bool {
+        matches!(self, Self::Update(UpdateStep::Installed) | Self::Restart)
     }
 
     fn busy(&self) -> bool {
@@ -643,10 +651,13 @@ impl App {
     }
 
     pub fn take_restart(&mut self) -> Option<PathBuf> {
-        match (std::mem::take(&mut self.restart), &self.updates.install) {
-            (true, Install::Replace(exe)) => Some(exe.clone()),
-            _ => None,
+        if !std::mem::take(&mut self.restart) {
+            return None;
         }
+        Some(match &self.updates.install {
+            Install::Replace(exe) if self.updates.installed => exe.clone(),
+            _ => std::env::current_exe().unwrap_or_default(),
+        })
     }
 
     pub fn set_theme(&mut self, theme: HostTheme) {
@@ -735,7 +746,7 @@ impl App {
 
     pub fn refresh(&mut self, now: Instant) {
         self.reap();
-        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed)))
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running)
             && self.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
         {
             self.list_running(now);
@@ -1883,6 +1894,7 @@ impl App {
             }
             Some(SidebarHit::New) => self.new_project_menu(pos),
             Some(SidebarHit::CloseGroup(g)) => self.close_row(ui::TreeRow::Group(g)),
+            Some(SidebarHit::Menu(_) | SidebarHit::GroupMenu(_)) => self.open_project_menu(list, pitch, pos),
             None => {}
         }
     }
@@ -2058,6 +2070,7 @@ impl App {
                 }
             }
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
+            Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
             Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
             Some(ui::TreeHit::NewWorkspace(p)) => self.ask_new_workspace(p),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
@@ -2314,6 +2327,9 @@ impl App {
             Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
             Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
             Some(WorkspaceHit::NewWorkspace) => self.ask_new_workspace(p),
+            Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
+                self.open_workspace_menu(list, pitch, pos);
+            }
             None => {}
         }
         Ok(())
@@ -3026,8 +3042,8 @@ impl App {
 
     fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.projects_scroll, pos) {
-            Some(SidebarHit::Select(i) | SidebarHit::Close(i)) => self.project_menu(i),
-            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g)) => self.group_menu(g),
+            Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
+            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
         };
         self.overlay = Some(Overlay::Menu { at: pos, actions });
@@ -3048,7 +3064,7 @@ impl App {
     }
 
     fn open_tree_menu(&mut self, list: Rect, pos: Position) {
-        let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row)) =
+        let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row) | ui::TreeHit::Menu(row)) =
             self.tree_hit(list, &self.tree_shape(), pos)
         else {
             return;
@@ -3065,10 +3081,10 @@ impl App {
     fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let Some(project) = self.project() else { return };
         let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
-            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w)) => {
+            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w)) => {
                 Target::Workspace(project.id, project.workspaces[w].id)
             }
-            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t)) => {
+            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
                 let workspace = &project.workspaces[w];
                 Target::Tab(project.id, workspace.id, workspace.tabs[t].id)
             }
@@ -3139,7 +3155,7 @@ impl App {
             self.settings_mouse(ev, pos, area);
             return Ok(());
         }
-        if matches!(self.overlay, Some(Overlay::Update(_))) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
             return self.update_mouse(ev, pos, area);
         }
         if matches!(self.overlay, Some(Overlay::Usage)) {
@@ -3242,9 +3258,13 @@ impl App {
     }
 
     fn add_group(&mut self, name: String) -> u64 {
-        let n = self.groups.len();
-        let icon = ui::GROUP_ICONS[n % ui::GROUP_ICONS.len()];
-        let colour = ui::GROUP_COLOURS[n % ui::GROUP_COLOURS.len()];
+        let taken =
+            |&(icon, colour): &(char, u8)| self.groups.iter().any(|g| (g.entry.icon, g.entry.colour) == (icon, colour));
+        let (icon, colour) = ui::GROUP_STYLES
+            .iter()
+            .copied()
+            .find(|style| !taken(style))
+            .unwrap_or(ui::GROUP_STYLES[self.groups.len() % ui::GROUP_STYLES.len()]);
         let id = self.take_id();
         self.groups.push(Group { id, entry: ui::GroupEntry { name, icon, colour, collapsed: false } });
         id
@@ -3314,7 +3334,8 @@ impl App {
             }
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => {
-                Some(Overlay::GroupStyle { group: self.add_group(input.trim().to_string()) })
+                self.add_group(input.trim().to_string());
+                None
             }
             Overlay::GroupStyle { .. } | Overlay::Usage => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
@@ -3341,6 +3362,10 @@ impl App {
                 None
             }
             Overlay::Update(step) => self.submit_update(step),
+            Overlay::Restart => {
+                self.restart = true;
+                None
+            }
             busy => Some(busy),
         };
         Ok(())
@@ -3440,7 +3465,7 @@ impl App {
     }
 
     fn scroll_update(&mut self, delta: isize, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::Update(_))) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
             let lines = self.update_notes(area).len();
             self.update_scroll = ui::update_scroll(area, lines, self.update_scroll.saturating_add_signed(delta));
         }
@@ -3448,7 +3473,7 @@ impl App {
 
     fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
-        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed))) {
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
             return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
         }
         let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
@@ -3527,7 +3552,33 @@ impl App {
         let overlay = Overlay::Update(step.clone());
         let (submit, cancel) = (overlay.submit_label(), overlay.cancel_label());
         let notes = self.update_notes(area);
-        ui::Overlay::Update(ui::Update { message, notes, scroll: self.update_scroll, note, submit, cancel })
+        ui::Overlay::Update(ui::Update {
+            title: UPDATE_TITLE,
+            message,
+            notes,
+            scroll: self.update_scroll,
+            note,
+            submit,
+            cancel,
+        })
+    }
+
+    fn open_restart(&mut self) {
+        self.update_scroll = 0;
+        self.list_running(Instant::now());
+        self.overlay = Some(Overlay::Restart);
+    }
+
+    fn restart_view(&self, area: Rect) -> ui::Overlay {
+        ui::Overlay::Update(ui::Update {
+            title: RESTART_TITLE,
+            message: RESTART_MESSAGE.into(),
+            notes: self.update_notes(area),
+            scroll: self.update_scroll,
+            note: None,
+            submit: RESTART_SUBMIT,
+            cancel: ui::CANCEL_LABEL,
+        })
     }
 
     fn open_usage(&mut self) {
@@ -3609,6 +3660,7 @@ impl App {
         };
         let action = match ui::settings_hit(area, &layout, pos) {
             Some(ui::SettingsHit::Done) => settings::Action::Close,
+            Some(ui::SettingsHit::Restart) => settings::Action::Restart,
             Some(ui::SettingsHit::Tab(i)) => {
                 s.open_page(Page::ALL[i]);
                 settings::Action::None
@@ -3634,6 +3686,7 @@ impl App {
         match action {
             settings::Action::None => {}
             settings::Action::Close => self.overlay = None,
+            settings::Action::Restart => self.open_restart(),
             settings::Action::Save(config) => {
                 if let Err(e) = config::save(&self.config_path, &config) {
                     if let Some(Overlay::Settings(s)) = &mut self.overlay {
@@ -3958,6 +4011,7 @@ impl App {
         let view = ui::View {
             tree,
             agents,
+            counts: self.config.counts,
             groups,
             projects,
             active: self.active,
@@ -4103,6 +4157,7 @@ impl App {
             Overlay::Issues(b) => b.view(area, issues::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
+            Overlay::Restart => self.restart_view(area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
         })
@@ -4186,7 +4241,7 @@ impl App {
             None => String::new(),
         };
         ui::Overlay::Picker(ui::Picker {
-            title: "new project",
+            title: "open project",
             path: if dir.ends_with('/') { dir } else { format!("{dir}/") },
             filter: picker.filter().to_string(),
             items: items
@@ -4880,9 +4935,6 @@ mod tests {
             click(app, new);
             pick(app, "new group");
             submit_text(app, name);
-            if matches!(app.overlay, Some(Overlay::GroupStyle { .. })) {
-                send_key(app, KeyCode::Enter, KeyModifiers::NONE);
-            }
         }
 
         fn open_style(app: &mut App) {
@@ -4919,15 +4971,11 @@ mod tests {
         }
 
         #[test]
-        fn a_new_group_opens_its_icon_and_colour() {
+        fn a_new_group_takes_the_first_style_without_asking() {
             let (mut app, _rx) = app();
-            let new = new_project_pos(&app);
-            click(&mut app, new);
-            pick(&mut app, "new group");
-
-            submit_text(&mut app, "work");
-
-            assert!(matches!(app.overlay, Some(Overlay::GroupStyle { group }) if group == app.groups[0].id));
+            new_group(&mut app, "work");
+            let entry = &app.groups[0].entry;
+            assert_eq!((app.overlay.is_none(), (entry.icon, entry.colour)), (true, ui::GROUP_STYLES[0]));
         }
 
         #[test]
@@ -4935,6 +4983,15 @@ mod tests {
             let (mut app, _rx) = app();
             new_group(&mut app, "work");
             right_click_sidebar(&mut app, SidebarRow::Group(0));
+            assert_eq!(menu_labels(&app), ["rename group", "icon and colour", "delete group"]);
+        }
+
+        #[test]
+        fn the_menu_button_of_a_group_opens_the_same_menu() {
+            let (mut app, _rx) = app();
+            new_group(&mut app, "work");
+            let row = ui::entry_row(list(), 1, &app.sidebar_rows(), 0, SidebarRow::Group(0));
+            click(&mut app, ui::row_menu_button(row, 1).as_position());
             assert_eq!(menu_labels(&app), ["rename group", "icon and colour", "delete group"]);
         }
 
@@ -4978,16 +5035,37 @@ mod tests {
             assert_eq!((app.groups.len(), matches!(app.overlay, Some(Overlay::NewGroup { .. }))), (0, true));
         }
 
+        fn styles(app: &App) -> Vec<(char, u8)> {
+            app.groups.iter().map(|g| (g.entry.icon, g.entry.colour)).collect()
+        }
+
         #[test]
-        fn each_new_group_gets_the_next_icon_and_colour() {
+        fn each_new_group_gets_the_next_style() {
             let (mut app, _rx) = app();
             new_group(&mut app, "work");
             new_group(&mut app, "oss");
-            let styles: Vec<(char, u8)> = app.groups.iter().map(|g| (g.entry.icon, g.entry.colour)).collect();
-            assert_eq!(
-                styles,
-                [(ui::GROUP_ICONS[0], ui::GROUP_COLOURS[0]), (ui::GROUP_ICONS[1], ui::GROUP_COLOURS[1])]
-            );
+            assert_eq!(styles(&app), ui::GROUP_STYLES[..2]);
+        }
+
+        #[test]
+        fn a_new_group_takes_a_style_no_other_group_has() {
+            let (mut app, _rx) = app();
+            for name in ["work", "oss", "home"] {
+                new_group(&mut app, name);
+            }
+            let oss = app.groups[1].id;
+            app.delete_group(oss);
+            new_group(&mut app, "clients");
+            assert_eq!(styles(&app), [ui::GROUP_STYLES[0], ui::GROUP_STYLES[2], ui::GROUP_STYLES[1]]);
+        }
+
+        #[test]
+        fn past_the_presets_the_styles_start_over() {
+            let (mut app, _rx) = app();
+            for i in 0..=ui::GROUP_STYLES.len() {
+                new_group(&mut app, &format!("group {i}"));
+            }
+            assert_eq!(styles(&app)[ui::GROUP_STYLES.len()], ui::GROUP_STYLES[0]);
         }
 
         #[test]
@@ -6291,6 +6369,24 @@ mod tests {
             let (mut app, _rx, _dirs) = app_with(1);
             right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
             assert_eq!(menu_labels(&app), ["rename tab"]);
+        }
+
+        #[test]
+        fn the_menu_button_of_a_project_opens_its_menu() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            let row = ui::entry_row(list(), 1, &app.sidebar_rows(), 0, SidebarRow::Project(0));
+            click(&mut app, ui::row_menu_button(row, 1).as_position());
+            assert_eq!(menu_labels(&app), ["rename project"]);
+        }
+
+        #[rstest::rstest]
+        #[case::a_workspace(WorkspaceRow::Workspace(0), "rename workspace")]
+        #[case::a_tab(WorkspaceRow::Tab(0, 0), "rename tab")]
+        fn the_menu_button_of_a_row_opens_its_menu(#[case] row: WorkspaceRow, #[case] label: &str) {
+            let (mut app, _rx, _dirs) = app_with(1);
+            let menu = ui::row_menu_button(row_rect(&app, row), areas().pitch);
+            click(&mut app, menu.as_position());
+            assert_eq!(menu_labels(&app), [label]);
         }
 
         #[test]
@@ -7891,7 +7987,7 @@ rm -f "$1/sessions/$$.json"
             app.projects[1].name = Some("clients-api".into());
             let found: Vec<(Kind, String)> =
                 app.search_results("clients").into_iter().map(|c| (c.kind, c.name)).collect();
-            let group = format!("{} clients", ui::GROUP_ICONS[0]);
+            let group = format!("{} clients", ui::GROUP_STYLES[0].0);
             assert_eq!(found, [(Kind::Group, group), (Kind::Project, "clients-api".into())]);
         }
 
@@ -8094,12 +8190,13 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn a_click_on_a_tab_shows_its_rows() {
             let mut s = open();
-            show(&mut s.app, Page::Tui);
+            show(&mut s.app, Page::Ui);
             assert_eq!(
                 form(&s.app).rows(),
                 [
                     Row::Sidebar,
                     Row::AgentsSection,
+                    Row::Counts,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),
@@ -9128,6 +9225,14 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn the_menu_button_of_a_project_opens_its_menu() {
+            let (mut app, _rx, _dirs) = tree(2);
+            let menu = ui::row_menu_button(row(&app, TreeRow::Project(1)), 1);
+            click_at(&mut app, menu.as_position());
+            assert_eq!(menu_labels(&app), ["rename project"]);
+        }
+
+        #[test]
         fn a_tab_of_another_project_can_be_renamed_from_its_menu() {
             let (mut app, _rx, _dirs) = tree(2);
             let r = row(&app, TreeRow::Tab(0, 0, 0));
@@ -10046,6 +10151,51 @@ rm -f "$1/sessions/$$.json"
 
                 assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
             }
+        }
+    }
+
+    mod restarting {
+        use super::*;
+
+        fn open(app: &mut App) {
+            click(app, areas().settings.as_position());
+            click(app, ui::settings_restart(ui::settings_area(AREA)).as_position());
+        }
+
+        fn notes(app: &App) -> String {
+            let Some(ui::Overlay::Update(dialog)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
+                panic!("the restart dialog");
+            };
+            dialog.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")
+        }
+
+        #[test]
+        fn the_settings_button_says_what_stops_before_restarting() {
+            let (mut app, _rx) = empty_app();
+            app.open_here(AREA).expect("open a project");
+            type_line(&mut app, "sleep 30");
+            wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+
+            open(&mut app);
+
+            assert!(matches!(app.overlay, Some(Overlay::Restart)));
+            assert!(notes(&app).contains("sleep in"), "{}", notes(&app));
+        }
+
+        #[test]
+        fn restart_now_restarts() {
+            let (mut app, _rx) = empty_app();
+            open(&mut app);
+            click(&mut app, ui::update_buttons(AREA, RESTART_SUBMIT, ui::CANCEL_LABEL)[0].as_position());
+            assert_eq!((app.overlay.is_none(), app.take_restart().is_some()), (true, true));
+        }
+
+        #[test]
+        fn cancel_closes_without_restarting() {
+            let (mut app, _rx) = empty_app();
+            open(&mut app);
+            click(&mut app, ui::update_buttons(AREA, RESTART_SUBMIT, ui::CANCEL_LABEL)[1].as_position());
+            assert_eq!((app.overlay.is_none(), app.take_restart()), (true, None));
         }
     }
 
@@ -11370,6 +11520,19 @@ rm -f "$1/sessions/$$.json"
             type_text(&mut app, "i");
             tap(&mut app, |a| panel::check(item_row(a, 0)));
             assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
+        }
+
+        #[test]
+        fn deleting_an_item_being_edited_saves_the_text_and_undo_brings_it_back() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["fix logn", "b"]);
+            let row = item_row(&app, 0);
+            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
+            type_text(&mut app, "i");
+            tap(&mut app, |a| panel::delete(item_row(a, 0)));
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into()]));
+            undo(&mut app, "deleted");
+            assert_eq!(texts(&app), ["fix login", "b"]);
         }
 
         #[test]

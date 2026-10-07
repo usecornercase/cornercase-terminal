@@ -10,6 +10,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 ```sh
 cornercase              # open the UI, starting the server if needed
 cornercase update       # install the latest release and restart the server
+cornercase restart      # restart the server; the session comes back with new shells
 cornercase kill-server  # stop the server and every shell in it
 cornercase --version    # print the version
 cornercase --help       # list every command; cornercase COMMAND --help explains one
@@ -70,6 +71,12 @@ A server running 0.4.2 or older doesn't know how to restart itself, so this firs
 When cornercase can't replace its own binary (Homebrew installed it, you can't write to its folder, or your platform isn't one it knows), `update` changes nothing. It prints the command to run instead (`brew upgrade cornercase`, or the install script) and exits with a non-zero status. After that command, the next `cornercase` [offers to restart](#a-server-from-another-build) the old server.
 
 `--check` prints `cornercase 0.5.0 is out (you have 0.4.2). Update it with:` followed by the command, or that you are up to date. It exits with status 0 in both cases. Builds made with `cargo run` refuse to update.
+
+### `cornercase restart`
+
+Restarts the server, like **settings → restart** in the app. It first lists what is running in your terminals and asks `Restart it now? [y/N]`, since restarting stops every program in them, agents included. With `y` or `--yes`, it saves your session and restarts the server: every attached window reopens, and your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. `--yes` prints the list first, since it doesn't ask, and both print what was stopped afterwards, such as `stopped 1 agent and 2 other programs`. If you say no, or when the input isn't a terminal and `--yes` isn't given, the server keeps running. If no server is running, it prints `no cornercase server is running`.
+
+You can run it inside one of cornercase's own panes. That pane closes with the server and reopens with the rest of your session.
 
 ### `cornercase kill-server`
 

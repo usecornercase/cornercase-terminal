@@ -8,7 +8,7 @@ expression: render(&with(picker(None))).backend()
 "              │                                                                      │              "
 "▌ cornercase (│  ..                                                                  │              "
 "              │  cornercase                                                    main  │              "
-"  + new projec│  notes                                                               │              "
+"  + new       │  notes                                                               │              "
 "              │                                                                      │              "
 "              │                                                                      │              "
 "              │                                                                      │              "

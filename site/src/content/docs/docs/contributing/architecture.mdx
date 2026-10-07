@@ -19,7 +19,7 @@ cornercase is a single Rust binary that plays two roles: a **server** that owns 
                                     your shells, editors and agents
 ```
 
-- `src/main.rs` hands the arguments to `cli.rs`, which parses them with `clap`: none for the client, `server`, or `kill-server`; `update` installs the latest release and restarts the server; `--version` only prints the version; the [commands for scripts and agents](../../guides/scripts-and-agents/) send one request to the running server and print its answer.
+- `src/main.rs` hands the arguments to `cli.rs`, which parses them with `clap`: none for the client, `server`, or `kill-server`; `restart` restarts the server; `update` installs the latest release and restarts the server; `--version` only prints the version; the [commands for scripts and agents](../../guides/scripts-and-agents/) send one request to the running server and print its answer.
 - The **client** (`client.rs`) starts the server if needed, queries the outer terminal's colours and name, sets up raw mode, mouse capture, bracketed paste and the kitty keyboard flags, sends a `Hello`, then has two jobs: write every frame it receives to stdout, and send every crossterm event it reads to the server.
 - The **server** (`server.rs`) owns the `App`, every PTY and every emulator. It renders a ratatui frame for each client and sends the bytes.
 
@@ -81,7 +81,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `main.rs` | Hands the arguments to `cli.rs` (the only place using `anyhow`). |
 | `cli.rs` | The `clap` definitions of every command, and the commands for scripts: sending a request, printing its answer. |
 | `control.rs` | The JSON of requests and answers, shared by the commands and the server. |
-| `client.rs` | Terminal setup and teardown, colour query, starting the server, forwarding events, writing frames; `kill-server` and `update`. |
+| `client.rs` | Terminal setup and teardown, colour query, starting the server, forwarding events, writing frames; `kill-server`, `restart` and `update`. |
 | `server.rs` | The daemon: owns `App` and every terminal, accepts clients, draws a frame per client. |
 | `panics.rs` | Containing panics: `catch_unwind` around each step of the server loop and each background job, and the hook that writes them to `server.log`. |
 | `protocol.rs` | Messages, framing, socket and lock paths, build id. |

@@ -8,7 +8,7 @@ expression: render(&with_details(opus(17))).backend()
 "                               │                         │                                          "
 "▌ shop (1)                     │  login                  │                                          "
 "                               │▌ ├ ◐ claude             │                                          "
-"  + new project                │▌ │   Opus 5.5 · 17%     │                                          "
+"  + new                        │▌ │   Opus 5.5 · 17%     │                                          "
 "                               │  ├ nvim                 │                                          "
 "                               │  └ + tab                │                no tab open               "
 "                               │                         │         + tab opens a shell here         "

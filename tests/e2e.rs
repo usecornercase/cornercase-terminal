@@ -305,7 +305,7 @@ impl Harness {
 
     fn open_picker(&mut self, entries: usize) {
         self.open_new_menu(entries, 0);
-        self.wait_for("the folder picker opens", |s| s.contains("new project") && s.contains("cancel"));
+        self.wait_for("the folder picker opens", |s| s.contains("open project") && s.contains("cancel"));
     }
 
     fn open_project(&mut self, entries: usize, dir: &std::path::Path) {
@@ -608,7 +608,7 @@ fn opening_an_open_folder_switches_to_it() {
 
     app.wait_for("project 1 is active again", |s| s.contains(&format!("▌{}", first_entry())) && !s.contains("cancel"));
     let third = app.row(ui::new_project_button(list(), 1, &plain(2)).y);
-    assert!(third.contains("new project"), "a third entry opened: {third:?}");
+    assert!(third.contains(ui::NEW_BUTTON), "a third entry opened: {third:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -660,7 +660,9 @@ fn a_narrow_terminal_gets_a_menu_bar() {
     app.click(areas.bar.as_position());
     app.wait_for("the menu lists the workspaces", |s| s.contains("‹ projects") && s.contains("+ new workspace"));
     app.click(areas.back.as_position());
-    app.wait_for("back lists the projects", |s| s.contains("+ new project") && s.contains("quit"));
+    app.wait_for("back lists the projects", |s| {
+        s.contains(ui::NEW_BUTTON) && !s.contains("+ new workspace") && s.contains("quit")
+    });
 }
 
 #[test]
@@ -951,6 +953,32 @@ fn kill_server_says_when_none_is_running() {
 }
 
 #[test]
+fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
+    let mut app = Harness::start();
+    app.send(b"echo old-\"\"shell\r");
+    app.wait_for("the old shell answers", |s| s.contains("old-shell"));
+    app.send(b"sleep 600\r");
+    app.session.wait_for_program("sleep");
+
+    let out = app.session.cli(&["restart", "--yes"]);
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{out:?}");
+    assert!(stdout.contains("restarted the cornercase server") && stdout.contains("stopped 1 program"), "{stdout}");
+    app.wait_for("the client comes back with a new shell", |s| !s.contains("old-shell") && s.contains(&first_entry()));
+}
+
+#[test]
+fn restart_without_a_server_says_so() {
+    let session = Session::new();
+
+    let out = session.cli(&["restart", "--yes"]);
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && stderr.contains("no cornercase server is running"), "{out:?}");
+}
+
+#[test]
 fn update_installs_the_latest_release_and_restarts_the_server() {
     let bin = installed_copy("update");
     let mut app = Harness::open_from(&bin, Session::new(), ROWS, COLS, &[]);
@@ -1225,13 +1253,11 @@ fn a_project_moves_into_a_new_group() {
     app.open_new_menu(1, 1);
     app.wait_for("the group form opens", |s| s.contains("new group") && s.contains("right-click a project"));
     app.send(b"work\r");
-    app.wait_for("its icon and colour open", |s| s.contains("colour") && s.contains(" done "));
-    app.send(b"\r");
-    app.wait_for("the group shows", |s| s.contains(&format!("  ▾ {} work", ui::GROUP_ICONS[0])));
+    app.wait_for("the group shows", |s| s.contains(&format!("  ▾ {} work", ui::GROUP_STYLES[0].0)));
     app.right_click(at);
     app.wait_for("the menu opens", |s| s.contains("move to group"));
     app.pick(at, &["rename project", "move to group"], 1);
-    let group = format!("{} work", ui::GROUP_ICONS[0]);
+    let group = format!("{} work", ui::GROUP_STYLES[0].0);
     app.wait_for("the groups are listed", |s| s.contains(&format!(" {group} ")) && !s.contains("move to group"));
     app.click(ui::menu_item(ui::menu_area(AREA, at, &[group.as_str()]), 0).as_position());
 

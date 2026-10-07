@@ -125,10 +125,10 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     let (line, col) = spot(row, pos);
     Some(if check(row).contains(pos) {
         Hit::Check(item.id)
-    } else if item.editing.is_some() {
-        Hit::Field { item: Some(item.id), line, col }
     } else if delete(row).contains(pos) {
         Hit::Delete(item.id)
+    } else if item.editing.is_some() {
+        Hit::Field { item: Some(item.id), line, col }
     } else {
         Hit::Item { id: item.id, row, line, col }
     })
@@ -268,7 +268,9 @@ fn draw_item(
     };
     put(buf, row.x + 2, row.y, if item.done { DONE_BOX } else { OPEN_BOX }, box_style, row.right());
     if let Some(editor) = &item.editing {
-        return draw_field(buf, view, editor, row, width, "");
+        let cursor = draw_field(buf, view, editor, row, width, "");
+        draw_delete(buf, view, row, hover, bg);
+        return cursor;
     }
     let style = if item.done {
         bg.fg(view.muted).add_modifier(Modifier::CROSSED_OUT)
@@ -287,11 +289,15 @@ fn draw_item(
         put(buf, row.x + TEXT_X, y, part.trim_end(), style, text_area(row).right());
     }
     if lit {
-        let r = delete(row);
-        let style = if hovered(hover, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
-        put(buf, r.x + 1, r.y, "×", style, r.right());
+        draw_delete(buf, view, row, hover, bg);
     }
     None
+}
+
+fn draw_delete(buf: &mut Buffer, view: &View, row: Rect, hover: Option<Position>, bg: Style) {
+    let r = delete(row);
+    let style = if hovered(hover, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
+    put(buf, r.x + 1, r.y, "×", style, r.right());
 }
 
 #[cfg(test)]
@@ -384,6 +390,13 @@ mod tests {
         }
 
         #[test]
+        fn an_item_being_edited_keeps_its_delete_button() {
+            let mut v = list();
+            v.items[1].editing = Some(Editor::new("write docs"));
+            assert_eq!(hit(AREA, &v, delete(row(&v, 1)).as_position()), Some(Hit::Delete(2)));
+        }
+
+        #[test]
         fn an_item_being_edited_takes_clicks_as_a_field() {
             let mut v = list();
             v.items[1].editing = Some(Editor::new("write docs"));
@@ -434,6 +447,16 @@ mod tests {
             let x = delete(r);
             assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].symbol(), "×");
             assert_eq!(t.backend().buffer()[(r.x, r.y)].bg, crate::ui::DARK_HOVER);
+        }
+
+        #[test]
+        fn an_item_being_edited_shows_its_delete_button_without_hover() {
+            let mut v = list();
+            v.items[1].editing = Some(Editor::new("write docs"));
+            let x = delete(row(&v, 1));
+            let t = render(&v, None);
+            let cell = &t.backend().buffer()[(x.x + 1, x.y)];
+            assert_eq!((cell.symbol(), cell.fg), ("×", Color::DarkGray));
         }
 
         #[test]

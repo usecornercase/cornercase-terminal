@@ -213,35 +213,56 @@ fn announce(version: &str, command: &str) {
 }
 
 fn offer_restart(yes: bool) -> Result<()> {
-    let path = protocol::socket_path();
-    protocol::check_socket_dir(&path)?;
-    if UnixStream::connect(&path).is_err() {
-        return Ok(());
-    }
-    let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
-    let note = if inside { format!(" {INSIDE}") } else { String::new() };
-    let running = if yes || stdin().is_terminal() { running_now() } else { None };
-    let stops = restart::confirmation(running.as_deref());
-    let question = format!("The running cornercase server still runs {CURRENT}.{note}\n{stops}\n{RESTART}");
-    if yes || (stdin().is_terminal() && confirm(&question)) {
-        if yes {
-            println!("{stops}");
-        }
-        if inside {
-            println!("restarting the cornercase server");
-        }
-        if restart_server()? {
-            println!("restarted the cornercase server; your session comes back the next time cornercase starts");
-            if let Some(line) = running.as_deref().and_then(restart::stopped) {
-                println!("{line}");
-            }
-        }
-    } else {
+    if server_running()?
+        && !restart_if_confirmed(Some(&format!("The running cornercase server still runs {CURRENT}.")), yes)?
+    {
         println!(
             "the server keeps running {CURRENT}; run `cornercase kill-server` and start cornercase to use the new one"
         );
     }
     Ok(())
+}
+
+pub fn restart(yes: bool) -> Result<()> {
+    if !server_running()? {
+        eprintln!("no cornercase server is running");
+    } else if !restart_if_confirmed(None, yes)? {
+        let hint = if stdin().is_terminal() { "" } else { "; pass --yes to restart it without asking" };
+        println!("the server keeps running{hint}");
+    }
+    Ok(())
+}
+
+fn server_running() -> Result<bool> {
+    let path = protocol::socket_path();
+    protocol::check_socket_dir(&path)?;
+    Ok(UnixStream::connect(&path).is_ok())
+}
+
+fn restart_if_confirmed(intro: Option<&str>, yes: bool) -> Result<bool> {
+    let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
+    let lead: Vec<&str> = [intro, inside.then_some(INSIDE)].into_iter().flatten().collect();
+    let running = if yes || stdin().is_terminal() { running_now() } else { None };
+    let stops = restart::confirmation(running.as_deref());
+    let question =
+        if lead.is_empty() { format!("{stops}\n{RESTART}") } else { format!("{}\n{stops}\n{RESTART}", lead.join(" ")) };
+    let confirmed = yes || (stdin().is_terminal() && confirm(&question));
+    if !confirmed {
+        return Ok(false);
+    }
+    if yes {
+        println!("{stops}");
+    }
+    if inside {
+        println!("restarting the cornercase server");
+    }
+    if restart_server()? {
+        println!("restarted the cornercase server; your session comes back the next time cornercase starts");
+        if let Some(line) = running.as_deref().and_then(restart::stopped) {
+            println!("{line}");
+        }
+    }
+    Ok(true)
 }
 
 fn wait_for_exit(path: &Path) {
