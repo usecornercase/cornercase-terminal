@@ -424,7 +424,7 @@ impl Server {
 
     fn handle(&mut self, ev: ServerEvent) -> ControlFlow<()> {
         match &ev {
-            ServerEvent::App(AppEvent::Output(id, _)) => self.printed |= self.app.shows(*id),
+            ServerEvent::App(AppEvent::Output(id, _)) => self.printed = self.printed || self.app.shows(*id),
             _ => self.changed = true,
         }
         match ev {
@@ -896,12 +896,8 @@ mod tests {
         use crate::control::{Report, Response};
 
         fn drawn_just_now(attached: &mut Attached) -> Instant {
-            let now = Instant::now();
-            attached.server.drawn = Some(now);
-            attached.server.printed_at = Some(now);
-            attached.server.changed = false;
-            attached.server.printed = false;
-            now
+            attached.server.draw();
+            attached.server.drawn.expect("a frame was drawn")
         }
 
         fn shown_pane(attached: &mut Attached) -> u64 {
@@ -928,6 +924,7 @@ mod tests {
             let mut attached = Attached::new();
             let pane = shown_pane(&mut attached);
             let now = drawn_just_now(&mut attached);
+            attached.server.printed_at = Some(now);
 
             let _ = attached.server.handle(ServerEvent::App(AppEvent::Output(pane, b"shown".to_vec())));
 
@@ -951,7 +948,6 @@ mod tests {
             let mut attached = Attached::new();
             let pane = shown_pane(&mut attached);
             drawn_just_now(&mut attached);
-            attached.server.printed_at = None;
             let key = Event::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
             let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Event(key)));
             attached.server.draw();

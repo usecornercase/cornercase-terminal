@@ -436,6 +436,8 @@ pub struct App {
     counted: Option<Instant>,
     updates: Updates,
     update_scroll: usize,
+    restart_list: Vec<restart::Running>,
+    listed: Option<Instant>,
     restart: bool,
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
@@ -528,6 +530,8 @@ impl App {
             counted: None,
             updates: Updates::from_env(),
             update_scroll: 0,
+            restart_list: Vec::new(),
+            listed: None,
             restart: false,
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
@@ -630,6 +634,11 @@ impl App {
 
     pub fn refresh(&mut self, now: Instant) {
         self.reap();
+        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed)))
+            && self.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
+        {
+            self.list_running(now);
+        }
         self.drive_launches(now);
         self.watch_agents(now);
         self.check_requests(now);
@@ -902,9 +911,7 @@ impl App {
     }
 
     pub fn shows(&self, pane: u64) -> bool {
-        let Some(tab) = self.visible_tab() else { return false };
-        let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
-        tabs.filter(|t| t.id == tab).any(|t| t.panes.iter().any(|p| p.id == pane))
+        self.nav.is_none() && self.tab().is_some_and(|t| t.panes.iter().any(|p| p.id == pane))
     }
 
     fn focus(&self) -> Focus {
@@ -3107,6 +3114,11 @@ impl App {
         restart::from_report(&self.report(None))
     }
 
+    fn list_running(&mut self, now: Instant) {
+        self.restart_list = self.running();
+        self.listed = Some(now);
+    }
+
     fn update_label(&self) -> Option<String> {
         if self.updates.installed {
             return Some(RESTART_LABEL.into());
@@ -3121,6 +3133,9 @@ impl App {
             Install::Command(command) => UpdateStep::Manual(command),
         };
         self.update_scroll = 0;
+        if step == UpdateStep::Installed {
+            self.list_running(Instant::now());
+        }
         self.overlay = Some(Overlay::Update(step));
     }
 
@@ -3152,7 +3167,7 @@ impl App {
     fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
         if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed))) {
-            return markdown::render(&restart::confirmation(&self.running()), width);
+            return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
         }
         let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
             return Vec::new();
@@ -3192,6 +3207,8 @@ impl App {
         let step = match result {
             Ok(()) => {
                 self.updates.installed = true;
+                self.update_scroll = 0;
+                self.list_running(Instant::now());
                 UpdateStep::Installed
             }
             Err(e) => UpdateStep::Failed(e.to_string()),
@@ -6552,7 +6569,7 @@ rm -f "$1/sessions/$$.json"
                 a.term().and_then(|t| t.program(&a.config)).as_deref() == Some("sleep")
             });
 
-            let text = restart::confirmation(&w.app.running());
+            let text = restart::confirmation(Some(&w.app.running()));
 
             assert!(text.contains("1 agent (1 working)") && text.contains("1 other program (`sleep` in "), "{text}");
         }
@@ -9240,6 +9257,17 @@ rm -f "$1/sessions/$$.json"
             mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
 
             assert_eq!(app.update_scroll, 3);
+        }
+
+        #[test]
+        fn the_restart_list_starts_at_its_top() {
+            let notes: Vec<String> = (0..60).map(|i| format!("- change {i}")).collect();
+            let (mut app, _rx) = with_notes(&notes.join("\n"));
+            mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
+
+            app.handle_event(AppEvent::Updated(Ok(())), AREA).expect("handle the update");
+
+            assert_eq!((step(&app), app.update_scroll), (Some(&UpdateStep::Installed), 0));
         }
 
         #[test]

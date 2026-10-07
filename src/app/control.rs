@@ -638,7 +638,7 @@ impl App {
             program: term.program(&self.config),
             agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
-            shell: Some(term.at_prompt()),
+            at_prompt: Some(term.shell_in_foreground()),
             model: context.map(|c| c.model.clone()),
             context: context.and_then(|c| c.percent),
             active,

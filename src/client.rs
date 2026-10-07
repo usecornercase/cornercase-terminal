@@ -46,7 +46,10 @@ pub fn run() -> Result<()> {
     match open() {
         Err(Error::Rejected(_))
             if stdin().is_terminal()
-                && confirm(&format!("{OTHER_BUILD}\n{}\n{RESTART}", stops(running_now().as_deref()))) =>
+                && confirm(&format!(
+                    "{OTHER_BUILD}\n{}\n{RESTART}",
+                    restart::confirmation(running_now().as_deref())
+                )) =>
         {
             kill_server()?;
             open()
@@ -94,12 +97,16 @@ fn open() -> Result<()> {
     }
 }
 
-pub fn ask(name: &'static str, command: control::Command) -> Result<Value> {
+fn connect() -> Result<UnixStream> {
     let path = protocol::socket_path();
     protocol::check_socket_dir(&path)?;
     let stream = UnixStream::connect(&path).map_err(|_| Error::NoServer)?;
     protocol::check_peer(&stream, protocol::own_uid())?;
-    ask_on(stream, name, command)
+    Ok(stream)
+}
+
+pub fn ask(name: &'static str, command: control::Command) -> Result<Value> {
+    ask_on(connect()?, name, command)
 }
 
 fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
@@ -132,18 +139,11 @@ pub fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
 }
 
 pub fn running_now() -> Option<Vec<restart::Running>> {
-    let path = protocol::socket_path();
-    protocol::check_socket_dir(&path).ok()?;
-    let stream = UnixStream::connect(&path).ok()?;
-    protocol::check_peer(&stream, protocol::own_uid()).ok()?;
+    let stream = connect().ok()?;
     stream.set_read_timeout(Some(STATUS_TIMEOUT)).ok()?;
     let value = ask_on(stream, "status", control::Command::Status(control::Status {})).ok()?;
     let report: control::Report = answer(value).ok()?;
     Some(restart::from_report(&report))
-}
-
-fn stops(running: Option<&[restart::Running]>) -> String {
-    running.map_or_else(restart::generic, restart::confirmation)
 }
 
 pub fn kill_server() -> Result<bool> {
@@ -220,12 +220,12 @@ fn offer_restart(yes: bool) -> Result<()> {
     }
     let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
     let note = if inside { format!(" {INSIDE}") } else { String::new() };
-    let running = running_now();
-    let question =
-        format!("The running cornercase server still runs {CURRENT}.{note}\n{}\n{RESTART}", stops(running.as_deref()));
+    let running = if yes || stdin().is_terminal() { running_now() } else { None };
+    let stops = restart::confirmation(running.as_deref());
+    let question = format!("The running cornercase server still runs {CURRENT}.{note}\n{stops}\n{RESTART}");
     if yes || (stdin().is_terminal() && confirm(&question)) {
         if yes {
-            println!("{}", stops(running.as_deref()));
+            println!("{stops}");
         }
         if inside {
             println!("restarting the cornercase server");

@@ -1,14 +1,23 @@
+use crate::activity::Status;
 use crate::agents;
 use crate::control::{PaneInfo, Report};
+use crate::ui::CRUMB_SEPARATOR;
 
 const STOPS: &str = "Restarting stops every program running in cornercase's terminals.";
 const NOTHING: &str = "Nothing is running in your terminals.";
 const COMES_BACK: &str =
     "Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder.";
 const RESUME: &str = "To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab.";
-const SHELLS: [&str; 12] = ["sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "tcsh", "csh", "nu", "elvish", "xonsh"];
-const STATUSES: [(&str, &str); 4] =
-    [("working", "working"), ("waiting", "waiting for you"), ("done", "done"), ("idle", "idle")];
+const SHELLS: [&str; 17] = [
+    "sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "oksh", "loksh", "yash", "tcsh", "csh", "nu", "elvish",
+    "xonsh", "pwsh", "ion",
+];
+const STATUSES: [(Status, &str); 4] = [
+    (Status::Working, "working"),
+    (Status::Waiting, "waiting for you"),
+    (Status::Done, "done"),
+    (Status::Idle, "idle"),
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Running {
@@ -22,10 +31,10 @@ pub fn from_report(report: &Report) -> Vec<Running> {
     let mut running = Vec::new();
     for project in &report.projects {
         for workspace in &project.workspaces {
-            let panes = workspace.tabs.iter().flat_map(|t| &t.panes).filter(|pane| busy(pane));
+            let panes = workspace.tabs.iter().flat_map(|t| &t.panes).filter(|pane| !pane.caller && busy(pane));
             running.extend(panes.map(|pane| Running {
                 program: pane.program.clone().unwrap_or_else(|| "a program".into()),
-                place: format!("{} › {}", project.name, workspace.name),
+                place: format!("{}{CRUMB_SEPARATOR}{}", project.name, workspace.name),
                 agent: pane.agent.clone(),
                 status: pane.status.clone(),
             }));
@@ -35,55 +44,55 @@ pub fn from_report(report: &Report) -> Vec<Running> {
 }
 
 fn busy(pane: &PaneInfo) -> bool {
-    pane.agent.is_some()
-        || pane
-            .shell
-            .map_or_else(|| pane.program.as_deref().is_some_and(|program| !SHELLS.contains(&program)), |shell| !shell)
+    if pane.agent.is_some() {
+        return true;
+    }
+    match pane.at_prompt {
+        Some(at_prompt) => !at_prompt,
+        None => pane.program.as_deref().is_some_and(|program| !SHELLS.contains(&program)),
+    }
 }
 
-pub fn generic() -> String {
-    format!("{STOPS} {COMES_BACK}")
-}
-
-pub fn confirmation(running: &[Running]) -> String {
+pub fn confirmation(running: Option<&[Running]>) -> String {
+    let Some(running) = running else { return format!("{STOPS} {COMES_BACK}") };
     if running.is_empty() {
         return format!("{NOTHING} {COMES_BACK}");
     }
-    let (with_agent, others): (Vec<&Running>, Vec<&Running>) = running.iter().partition(|r| r.agent.is_some());
-    let mut parts = Vec::new();
-    if !with_agent.is_empty() {
-        let by_status = STATUSES.iter().filter_map(|(status, said)| {
-            let n = with_agent.iter().filter(|a| a.status.as_deref().unwrap_or("idle") == *status).count();
-            (n > 0).then(|| format!("{n} {said}"))
-        });
-        parts.push(format!("{} ({})", count(with_agent.len(), "agent"), by_status.collect::<Vec<_>>().join(", ")));
-    }
-    if !others.is_empty() {
-        let named: Vec<String> = others.iter().map(|r| format!("`{}` in {}", r.program, r.place)).collect();
-        parts.push(format!("{} ({})", count(others.len(), program_word(&with_agent)), named.join(", ")));
-    }
-    let text = format!("{STOPS} Running now: {}. {COMES_BACK}", parts.join(" and "));
-    if with_agent.iter().any(|a| a.agent.as_deref() == Some(agents::CLAUDE)) {
+    let now: Vec<String> =
+        parts(running).into_iter().map(|(counted, detail)| format!("{counted} ({detail})")).collect();
+    let text = format!("{STOPS} Running now: {}. {COMES_BACK}", now.join(" and "));
+    if running.iter().any(|r| r.agent.as_deref() == Some(agents::CLAUDE)) {
         return format!("{text} {RESUME}");
     }
     text
 }
 
 pub fn stopped(running: &[Running]) -> Option<String> {
-    if running.is_empty() {
-        return None;
-    }
-    let (with_agent, others): (Vec<&Running>, Vec<&Running>) = running.iter().partition(|r| r.agent.is_some());
-    let parts: Vec<String> = [(with_agent.len(), "agent"), (others.len(), program_word(&with_agent))]
-        .into_iter()
-        .filter(|(n, _)| *n > 0)
-        .map(|(n, word)| count(n, word))
-        .collect();
-    Some(format!("stopped {}", parts.join(" and ")))
+    let counted: Vec<String> = parts(running).into_iter().map(|(counted, _)| counted).collect();
+    (!counted.is_empty()).then(|| format!("stopped {}", counted.join(" and ")))
 }
 
-fn program_word(with_agent: &[&Running]) -> &'static str {
-    if with_agent.is_empty() { "program" } else { "other program" }
+fn parts(running: &[Running]) -> Vec<(String, String)> {
+    let (with_agent, others): (Vec<&Running>, Vec<&Running>) = running.iter().partition(|r| r.agent.is_some());
+    let mut parts = Vec::new();
+    if !with_agent.is_empty() {
+        parts.push((count(with_agent.len(), "agent"), by_status(&with_agent)));
+    }
+    if !others.is_empty() {
+        let word = if with_agent.is_empty() { "program" } else { "other program" };
+        let named: Vec<String> = others.iter().map(|r| format!("`{}` in {}", r.program, r.place)).collect();
+        parts.push((count(others.len(), word), named.join(", ")));
+    }
+    parts
+}
+
+fn by_status(with_agent: &[&Running]) -> String {
+    let counted = STATUSES.iter().filter_map(|(status, said)| {
+        let n =
+            with_agent.iter().filter(|a| a.status.as_deref().unwrap_or(Status::Idle.name()) == status.name()).count();
+        (n > 0).then(|| format!("{n} {said}"))
+    });
+    counted.collect::<Vec<_>>().join(", ")
 }
 
 fn count(n: usize, word: &str) -> String {
@@ -113,14 +122,14 @@ mod tests {
         Report { projects: vec![project], ..Report::default() }
     }
 
-    fn pane(program: &str, shell: Option<bool>) -> PaneInfo {
-        PaneInfo { program: Some(program.into()), shell, ..PaneInfo::default() }
+    fn pane(program: &str, at_prompt: Option<bool>) -> PaneInfo {
+        PaneInfo { program: Some(program.into()), at_prompt, ..PaneInfo::default() }
     }
 
     #[test]
     fn nothing_running_says_so() {
         assert_eq!(
-            confirmation(&[]),
+            confirmation(Some(&[])),
             "Nothing is running in your terminals. Your projects, workspaces, tabs and splits come back, \
              each tab with a new shell in its folder."
         );
@@ -135,7 +144,7 @@ mod tests {
             running("npm", None, None),
         ];
         assert_eq!(
-            confirmation(&all),
+            confirmation(Some(&all)),
             "Restarting stops every program running in cornercase's terminals. Running now: \
              3 agents (2 working, 1 waiting for you) and 1 other program (`npm` in shop › main). \
              Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. \
@@ -156,15 +165,21 @@ mod tests {
     }
 
     #[test]
-    fn a_shell_at_its_prompt_is_not_running() {
+    fn a_pane_at_its_prompt_is_not_running() {
         let found = from_report(&report(vec![pane("zsh", Some(true)), pane("sleep", Some(false))]));
         assert_eq!(found, [running("sleep", None, None)]);
     }
 
     #[test]
-    fn an_agent_runs_even_where_its_pane_says_shell() {
+    fn an_agent_runs_even_where_its_pane_says_at_prompt() {
         let claude = PaneInfo { agent: Some("claude".into()), ..pane("claude", Some(true)) };
         assert_eq!(from_report(&report(vec![claude])), [running("claude", Some("claude"), None)]);
+    }
+
+    #[test]
+    fn the_pane_that_asks_is_not_listed() {
+        let asking = PaneInfo { caller: true, ..pane("cornercase", Some(false)) };
+        assert_eq!(from_report(&report(vec![asking, pane("nvim", Some(false))])), [running("nvim", None, None)]);
     }
 
     #[test]

@@ -168,13 +168,9 @@ impl Term {
         Some(program(config, &name, &process::args(pid)))
     }
 
-    pub fn at_prompt(&self) -> bool {
-        self.interactive && self.shell_in_foreground()
-    }
-
     pub fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
-        shell.is_some() && self.foreground_pid() == shell
+        self.interactive && shell.is_some() && self.foreground_pid() == shell
     }
 
     pub fn foreground_args(&self) -> Vec<String> {
@@ -313,13 +309,13 @@ mod tests {
         term.emulator.snapshot().expect("snapshot").contents()
     }
 
-    mod at_prompt {
+    mod shell_in_foreground {
         use super::*;
 
         #[test]
         fn an_idle_shell_is() {
             let (term, _rx) = spawn_sh();
-            wait_until("the shell is at its prompt", || term.at_prompt());
+            wait_until("the shell is at its prompt", || term.shell_in_foreground());
         }
 
         #[test]
@@ -327,7 +323,7 @@ mod tests {
             let (term, _rx) = spawn_with(&["-c".into(), "exec sleep 30".into()], None);
             wait_until("sleep runs", || term.foreground_pid().and_then(process::name).as_deref() == Some("sleep"));
 
-            assert!(term.shell_in_foreground() && !term.at_prompt());
+            assert!(!term.shell_in_foreground());
         }
     }
 
