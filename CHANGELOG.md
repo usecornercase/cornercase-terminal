@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.12
+
+- Every project, group, workspace and tab row has a `⋯` button next to its `×`, shown while you hover the row (always, in the compact layout). It opens the same menu as a right-click: rename, move to group, icon and colour, delete group.
+- **+ new group** creates the group as soon as you name it, with its own icon and colour: the first eight groups each get a different one, starting with a blue `●`. Change them later from the group's `⋯` or right-click menu, **icon and colour**.
+- The button at the end of the projects list now reads `+ new`, since it opens a project or creates a group.
+- Restart cornercase from **settings → restart**, or with `cornercase restart` in a shell. Like after an update, it first lists what is running in your terminals, then brings your projects, workspaces, tabs and splits back with new shells.
+- **Settings → UI → counts** hides the number of workspaces after each project, and of projects after a folded group. The settings tab called TUI is now UI.
+- The TODO item you are editing keeps its `×`, so you can delete it without leaving the field first. Undo brings it back with what you typed.
+
 ## 0.11.11
 
 - Removing a worktree that is locked no longer stops its programs and then fails with git's "cannot remove a locked working tree". The dialog says it is locked and why, and when the lock names a process, whether it still runs: Claude Code locks the worktrees it creates, and a restart that ends its session leaves the lock behind. **unlock and remove** unlocks and removes it. `cornercase close --remove-worktree` refuses a locked worktree before anything stops and says how to unlock it.
