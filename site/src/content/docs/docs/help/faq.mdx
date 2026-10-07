@@ -41,9 +41,9 @@ Opening and searching files, in a clone of Orca's own repository (32,255 files) 
 | Open a file, until it is coloured | 0.14 s | 0.65 s | 1.33 s | 0.47 s |
 | Open it again | 0.08 s | 0.57 s | 0.39 s | 0.21 s |
 | Find a file by its name | 19 ms | 0.30 s | 0.19 s | none |
-| Search the text of every file (472 matches) | 69 ms | 0.43 s | 0.49 s | 0.10 s |
+| Search the text of every file, until matches show (472 in all) | 69 ms | 0.43 s | 0.49 s | 0.10 s |
 
-These are medians of 5 to 7 runs, from the click, or the query arriving, until the result is on screen. cornercase shows the file's text in 15 ms and colours it after; Warp shows both at once. Warp shows the first matches at 0.43 s and all of them at 1.6 s. The name is found in each app's quick open (Emdash has none); Orca's lists the first 20,001 files, so in this repository it could not find the file we opened, and we searched a name it lists.
+These are medians of 5 to 7 runs, from the click, or the query arriving, until the result is on screen. cornercase shows the file's text in 15 ms and colours it after; Warp shows both at once. cornercase shows all 472 matches at once; Warp shows its first ones at 0.43 s and the rest by 1.6 s. The name is found in each app's quick open (Emdash has none); Orca's lists the first 20,001 files, so in this repository it could not find the file we opened, and we searched a name it lists.
 
 Against the terminal multiplexers, each with its default settings and `/bin/sh` in every pane:
 
