@@ -36,7 +36,7 @@ impl Pane {
 }
 
 fn measure(pid: i32) -> Option<u64> {
-    std::iter::once(pid).chain(process::descendants(pid)).filter_map(process::resident).reduce(u64::saturating_add)
+    std::iter::once(pid).chain(process::descendants(pid)).filter_map(process::footprint).reduce(u64::saturating_add)
 }
 
 #[cfg(test)]
@@ -57,7 +57,7 @@ mod tests {
     fn counts_the_process_and_everything_it_started() {
         let family = Family::new();
         let parent =
-            [family.pid(), family.child().expect("a child")].map(|pid| process::resident(pid).expect("resident"));
+            [family.pid(), family.child().expect("a child")].map(|pid| process::footprint(pid).expect("footprint"));
 
         let pane = measured(family.pid(), Instant::now());
 
