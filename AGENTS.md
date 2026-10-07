@@ -97,7 +97,7 @@ src/error.rs      library error type
 skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 ```
 
-**Server loop:** the accept thread, one reader thread per client, the signal thread and a forwarder for PTY output all send `ServerEvent`s over one `mpsc` channel. The loop waits for an event or a 500 ms tick, drains the queue, then draws once per client. Each client has a writer thread so a slow one never blocks the loop. **Client:** the main thread writes each `Frame` to stdout; an input thread sends every crossterm event.
+**Server loop:** the accept thread, one reader thread per client, the signal thread and a forwarder for PTY output all send `ServerEvent`s over one `mpsc` channel. The loop waits for an event or a 500 ms tick, drains the queue, then draws once per client when something on screen may have changed (`Server::due`). Each client has a writer thread so a slow one never blocks the loop. **Client:** the main thread writes each `Frame` to stdout; an input thread sends every crossterm event.
 
 `ui::draw` takes a `View`, not `App`, so rendering is testable with `TestBackend`. Geometry functions (`ui::layout`, `entry_row`, `workspace_row`, `form_buttons`, `picker_item`, …) serve both drawing and hit testing, so tests take positions from them.
 

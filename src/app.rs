@@ -892,6 +892,12 @@ impl App {
         self.focus().tab.filter(|_| self.nav.is_none())
     }
 
+    pub fn shows(&self, pane: u64) -> bool {
+        let Some(tab) = self.visible_tab() else { return false };
+        let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+        tabs.filter(|t| t.id == tab).any(|t| t.panes.iter().any(|p| p.id == pane))
+    }
+
     fn focus(&self) -> Focus {
         let project = self.project();
         let workspace = project.and_then(Project::workspace);
@@ -5717,6 +5723,20 @@ mod tests {
             send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
 
             wait_until("back to the program name", || is_sh(&app.projects[0].workspaces[0].tabs[0].label(&app.config)));
+        }
+    }
+
+    mod shows {
+        use super::*;
+
+        #[test]
+        fn only_the_panes_of_the_tab_on_screen() {
+            let (mut app, _rx) = app();
+            let first = app.term().expect("a pane").id;
+            app.add_tab(0, 0, AREA).expect("add a tab");
+            let second = app.term().expect("the new pane").id;
+
+            assert_eq!((app.shows(first), app.shows(second), app.shows(u64::MAX)), (false, true, false));
         }
     }
 
