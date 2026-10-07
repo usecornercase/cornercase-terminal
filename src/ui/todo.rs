@@ -123,10 +123,10 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     let i = layout.at(pos)?;
     let (row, item) = (layout.item(i), &view.items[i]);
     let (line, col) = spot(row, pos);
-    Some(if item.editing.is_some() {
-        Hit::Field { item: Some(item.id), line, col }
-    } else if check(row).contains(pos) {
+    Some(if check(row).contains(pos) {
         Hit::Check(item.id)
+    } else if item.editing.is_some() {
+        Hit::Field { item: Some(item.id), line, col }
     } else if delete(row).contains(pos) {
         Hit::Delete(item.id)
     } else {

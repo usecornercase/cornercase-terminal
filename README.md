@@ -1,26 +1,38 @@
 # cornercase
 
+[![CI](https://github.com/usecornercase/cornercase-terminal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/usecornercase/cornercase-terminal/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release](https://img.shields.io/github/v/release/usecornercase/cornercase-terminal)](https://github.com/usecornercase/cornercase-terminal/releases/latest)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+[![Docs](https://img.shields.io/badge/docs-usecornercase.dev-875fff)](https://usecornercase.dev/docs/)
+
 A terminal multiplexer for working on several projects at once, each with its own git worktrees and coding agents. Every action is a mouse button, so you never need to learn a prefix key.
 
-> **Status:** early and moving fast. Runs on Linux and macOS.
+![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away; close the terminal, they keep working.](site/public/og.png)
 
 **Website and documentation:** https://usecornercase.dev
 
 ## What it does
 
-- **Projects, workspaces, tabs.** A sidebar of projects (folders), and for the active project its workspaces (lines of work) and their tabs. Click to switch, `+` to create, `×` to close, right-click to rename, drag to reorder.
-- **Git worktrees.** A new workspace in a git repository can get its own worktree and branch. Worktrees created outside cornercase show up too. Files listed in `.worktreeinclude` (such as `.env`) are copied into new checkouts.
-- **Splits.** Right-click a pane to split it right or down; drag the dividers to resize.
-- **Issues to agents.** Browse GitHub issues, Shortcut stories, Linear issues and Jira issues, read them as Markdown, and start one: cornercase creates a worktree on a matching branch, launches your coding agent (Claude Code, Codex, Gemini, …) in a new tab and hands it the issue.
-- **Agent status.** A tab running Claude Code shows whether it is working (`◐`), needs you (`!`) or finished while you were elsewhere (`✓`), and under its name the model and how full its context is (`Opus 5.5 · 23%`). `!` and `✓` also mark its workspace and project, so an agent waiting in another project doesn't go unnoticed.
-- **Codex context.** Codex tabs also show their model and context use (`gpt-5.4 · 20%`), using each pane's own session and Codex's reported window size. When usage is unavailable, they show the model alone. Works with native and npm installations and with Codex's background app-server; respects `CODEX_HOME`. Verified against Codex CLI 0.160.0.
-- **Files.** ` files ` opens the workspace's files beside the pane, leaving out what git ignores, with changed files marked, and searches them by name or by text. A file shows coloured for about 60 languages, its new, changed and deleted lines marked in the margin, and follows edits as an agent makes them; select lines to hand `path:12-30` to the agent. Click a path an agent or a compiler prints to open it there.
-- **Scripts and agents.** The `cornercase` command drives the running server: it lists everything with ids, opens tabs and worktrees, types into panes, starts agents and hands them a prompt, waits until they finish or need you, and reads what they wrote. So an agent in one tab can coordinate others. A [skill](skills/cornercase/SKILL.md) teaches your agents to use it.
-- **Sessions survive the UI.** A background server owns the shells. Closing the window or clicking ` quit ` detaches; running `cornercase` again reattaches. Several terminals can attach at once and mirror each other.
-- **A real terminal inside.** Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty), Ghostty's terminal core, so nvim, fzf, htop and full-screen agents work as expected.
-- **Responsive.** Below 90 columns the sidebars fold into a menu bar.
+- **[Projects, workspaces, tabs](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/).** Projects (folders), optionally in groups with an icon and a colour; per project its workspaces (lines of work) and their tabs. Click to switch, `+` to create, drag to reorder, right-click to rename.
+- **[Sidebar layouts](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#arrange-the-columns).** Both lists stacked in one column, side by side, or one tree of every project, workspace and tab.
+- **[Git worktrees](https://usecornercase.dev/docs/guides/worktrees/).** A workspace can get its own worktree and branch, with `.worktreeinclude` files (such as `.env`) copied in; worktrees made outside cornercase show up too.
+- **[Splits](https://usecornercase.dev/docs/guides/panes-and-splits/).** Right-click a pane to split it right or down; drag the dividers to resize.
+- **[Issues to agents](https://usecornercase.dev/docs/guides/issues-and-agents/).** Read GitHub, Shortcut, Linear and Jira issues as Markdown and start one: a worktree on a matching branch, your agent (Claude Code, Codex, Gemini, …) in a new tab, the issue as its prompt.
+- **[Agent status](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#what-your-agents-are-doing).** Claude Code and Codex tabs show whether the agent is working (`◐`), needs you (`!`) or finished while you were elsewhere (`✓`), and their model and context use (`Opus 5.5 · 23%`); `!` and `✓` also mark the workspace and project.
+- **[Notifications](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#notifications).** A toast and a desktop notification through your terminal when an agent needs you or finishes, also over SSH.
+- **[Plan usage](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#plan-usage).** ` usage ` shows how much of your Claude Code and Codex session and weekly limits you have used.
+- **[Changes](https://usecornercase.dev/docs/guides/changes/).** The workspace's git diff beside the pane: uncommitted, its commits or both, against a base branch you pick; hand a hunk to the agent.
+- **[Files](https://usecornercase.dev/docs/guides/files/).** Browse, read and search the workspace's files, highlighted and with changes marked; click a path an agent prints to open it, select lines to hand `path:12-30` to the agent.
+- **[TODO list](https://usecornercase.dev/docs/guides/todo/).** One list beside the pane for what comes next.
+- **[Search](https://usecornercase.dev/docs/guides/search/).** Jump to any group, project, workspace or tab by name.
+- **[Scripts and agents](https://usecornercase.dev/docs/guides/scripts-and-agents/).** The `cornercase` command opens tabs and worktrees, starts agents, types into panes, waits for them and reads what they wrote, so one agent can coordinate others.
+- **[Sessions survive the UI](https://usecornercase.dev/docs/guides/sessions/).** A background server owns the shells: closing the window detaches, `cornercase` reattaches, and several terminals can mirror each other.
+- **A real terminal inside.** Panes run on [libghostty-vt](https://github.com/ghostty-org/ghostty), Ghostty's terminal core, so nvim, fzf, htop and full-screen agents work as expected.
+- **[Small terminals](https://usecornercase.dev/docs/guides/small-terminals/).** Below 90 columns the sidebar folds into a menu bar.
 
 ## Install
+
+Linux and macOS, on x86_64 and arm64:
 
 ```sh
 curl -fsSL https://usecornercase.dev/install.sh | sh
@@ -32,11 +44,7 @@ or with Homebrew:
 brew install usecornercase/tap/cornercase
 ```
 
-Prebuilt binaries cover Linux and macOS on x86_64 and arm64.
-
-### Updates
-
-Every hour cornercase asks GitHub for the latest release. When there is a newer one, a ` ↑ 0.2.0 ` button shows up next to ` settings `: it shows what is new since your version, downloads the new binary, checks its checksum and replaces the old one, then offers to restart. Your session comes back after the restart, with new shells in the same folders. Homebrew installs show `brew upgrade cornercase` instead. Turn the check off in ` settings ` → TUI.
+cornercase checks GitHub for a new release every hour. When there is one, a ` ↑ ` button next to ` settings ` shows what is new and installs it; `cornercase update` does the same from a shell. See [Installation](https://usecornercase.dev/docs/installation/).
 
 ### From source
 
@@ -61,11 +69,10 @@ The first build takes a couple of minutes.
 cornercase              # open the UI (starts the server if needed)
 cornercase update       # install the latest release and restart the server
 cornercase kill-server  # stop the server and every shell in it
-cornercase --version    # print the version
 cornercase --help       # every command, including the ones for scripts and agents
 ```
 
-For example, from a script or an agent in one of cornercase's panes:
+From a script or an agent in one of cornercase's panes:
 
 ```sh
 pane=$(cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit')
@@ -73,32 +80,13 @@ cornercase wait --pane "$pane" --timeout 1800   # until the agent stops working:
 cornercase read --pane "$pane" --lines 40
 ```
 
-See [Scripts and agents](https://usecornercase.dev/docs/guides/scripts-and-agents/) for every command. Install the skill for your agents with `npx skills add usecornercase/cornercase-terminal --skill cornercase -g`.
+Install the skill that teaches your agents these commands with `npx skills add usecornercase/cornercase-terminal --skill cornercase -g`.
 
-On a fresh server, cornercase reopens your last session: the same projects, workspaces, tabs and splits, each pane with a new shell in its folder.
-
-Keys always go to the program in the active pane. While a form or modal is open, `Enter` confirms and `Esc` cancels.
-
-To copy text, drag over it in a pane. cornercase sends the selection to your terminal's clipboard with OSC 52, which some terminals need you to allow (iTerm2: *Applications in terminal may access clipboard*; tmux: `set -g set-clipboard on`).
+Keys always go to the program in the active pane. Start with [First steps](https://usecornercase.dev/docs/first-steps/).
 
 ## Configuration
 
-Open ` settings ` in the sidebar. Changes are saved at once to `~/.config/cornercase/config.json` (`$XDG_CONFIG_HOME` is respected).
-
-| Where | What |
-| --- | --- |
-| `~/.config/cornercase/config.json` | settings: worktrees folder, issue sources, agent and its arguments, prompt |
-| `~/.config/cornercase/secrets.json` | Shortcut, Linear and Jira tokens typed in the app (mode 0600) |
-| `~/.local/state/cornercase/session.json` | the saved session |
-| `$XDG_RUNTIME_DIR/cornercase/`, or `$TMPDIR/cornercase-<uid>/` | the server's socket and `server.log` |
-
-Environment variables:
-
-- `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`: tokens for the issues modal, taking precedence over saved ones.
-- `CORNERCASE_SOCKET`: run a separate server on another socket (its config and session live next to it).
-- `CORNERCASE_RELEASES_URL`: where the update check looks for the latest release (GitHub's API by default).
-
-GitHub issues are read with the [`gh`](https://cli.github.com) CLI, using its login.
+Open ` settings ` in the sidebar; changes are saved at once to `~/.config/cornercase/config.json`. Every setting is in [Settings and config.json](https://usecornercase.dev/docs/reference/configuration/), and the files and environment variables cornercase uses in [Files and environment](https://usecornercase.dev/docs/reference/files-and-environment/).
 
 ## Contributing
 

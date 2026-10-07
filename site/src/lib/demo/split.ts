@@ -133,3 +133,52 @@ export function setRatio(node: Node, path: boolean[], value: number): Node {
   const [head, ...rest] = path;
   return head ? { ...node, second: setRatio(node.second, rest, value) } : { ...node, first: setRatio(node.first, rest, value) };
 }
+
+export type PanePlace = 'swap' | 'left' | 'right' | 'above' | 'below';
+
+export function placeAt(r: Rect, x: number, y: number): PanePlace {
+  const [w, h] = [Math.max(1, r.w), Math.max(1, r.h)];
+  const px = (x - r.x) * 2 + 1;
+  const py = (y - r.y) * 2 + 1;
+  if (3 * px >= 2 * w && 3 * px < 4 * w && 3 * py >= 2 * h && 3 * py < 4 * h) return 'swap';
+  const edges: [PanePlace, number][] = [
+    ['left', px * h],
+    ['right', Math.max(0, 2 * w - px) * h],
+    ['above', py * w],
+    ['below', Math.max(0, 2 * h - py) * w],
+  ];
+  return edges.reduce((best, e) => (e[1] < best[1] ? e : best))[0];
+}
+
+export function placeArea(place: PanePlace, r: Rect): Rect {
+  const [w, h] = [Math.floor(r.w / 2), Math.floor(r.h / 2)];
+  if (place === 'left') return rect(r.x, r.y, w, r.h);
+  if (place === 'right') return rect(r.x + r.w - w, r.y, w, r.h);
+  if (place === 'above') return rect(r.x, r.y, r.w, h);
+  if (place === 'below') return rect(r.x, r.y + r.h - h, r.w, h);
+  return r;
+}
+
+function insert(node: Node, target: number, dir: Dir, before: boolean, fresh: number): Node {
+  if ('leaf' in node) {
+    if (node.leaf !== target) return node;
+    const [first, second] = before ? [fresh, target] : [target, fresh];
+    return { dir, ratio: 0.5, first: { leaf: first }, second: { leaf: second } };
+  }
+  return { ...node, first: insert(node.first, target, dir, before, fresh), second: insert(node.second, target, dir, before, fresh) };
+}
+
+function swap(node: Node, a: number, b: number): Node {
+  if ('leaf' in node) return node.leaf === a ? { leaf: b } : node.leaf === b ? { leaf: a } : node;
+  return { ...node, first: swap(node.first, a, b), second: swap(node.second, a, b) };
+}
+
+export function moved(node: Node, pane: number, target: number, place: PanePlace): Node | null {
+  const all = ids(node);
+  if (pane === target || !all.includes(pane) || !all.includes(target)) return null;
+  if (place === 'swap') return swap(node, pane, target);
+  const rest = remove(node, pane);
+  if (!rest) return null;
+  const dir: Dir = place === 'left' || place === 'right' ? 'right' : 'down';
+  return insert(rest, target, dir, place === 'left' || place === 'above', pane);
+}

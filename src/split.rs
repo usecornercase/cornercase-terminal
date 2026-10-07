@@ -13,6 +13,54 @@ pub enum Dir {
     Down,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    Swap,
+    Left,
+    Right,
+    Above,
+    Below,
+}
+
+impl Place {
+    pub fn at(pane: Rect, pos: Position) -> Self {
+        let (w, h) = (u32::from(pane.width.max(1)), u32::from(pane.height.max(1)));
+        let x = u32::from(pos.x.saturating_sub(pane.x)) * 2 + 1;
+        let y = u32::from(pos.y.saturating_sub(pane.y)) * 2 + 1;
+        if (2 * w..4 * w).contains(&(3 * x)) && (2 * h..4 * h).contains(&(3 * y)) {
+            return Self::Swap;
+        }
+        let edges = [
+            (Self::Left, x * h),
+            (Self::Right, (2 * w).saturating_sub(x) * h),
+            (Self::Above, y * w),
+            (Self::Below, (2 * h).saturating_sub(y) * w),
+        ];
+        edges.into_iter().min_by_key(|(_, d)| *d).map_or(Self::Swap, |(place, _)| place)
+    }
+
+    pub fn area(self, pane: Rect) -> Rect {
+        let (w, h) = (pane.width / 2, pane.height / 2);
+        match self {
+            Self::Swap => pane,
+            Self::Left => Rect { width: w, ..pane },
+            Self::Right => Rect { x: pane.right() - w, width: w, ..pane },
+            Self::Above => Rect { height: h, ..pane },
+            Self::Below => Rect { y: pane.bottom() - h, height: h, ..pane },
+        }
+    }
+
+    fn edge(self) -> Option<(Dir, bool)> {
+        match self {
+            Self::Swap => None,
+            Self::Left => Some((Dir::Right, true)),
+            Self::Right => Some((Dir::Right, false)),
+            Self::Above => Some((Dir::Down, true)),
+            Self::Below => Some((Dir::Down, false)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Node<T> {
@@ -208,18 +256,53 @@ impl<T: Copy + PartialEq> Node<T> {
     }
 
     pub fn split(&mut self, target: T, dir: Dir, new: T) -> bool {
+        self.insert(target, dir, false, new)
+    }
+
+    fn insert(&mut self, target: T, dir: Dir, before: bool, new: T) -> bool {
         match self {
             Self::Leaf(id) if *id == target => {
+                let (first, second) = if before { (new, target) } else { (target, new) };
                 *self = Self::Split {
                     dir,
                     ratio: HALF,
-                    first: Box::new(Self::Leaf(target)),
-                    second: Box::new(Self::Leaf(new)),
+                    first: Box::new(Self::Leaf(first)),
+                    second: Box::new(Self::Leaf(second)),
                 };
                 true
             }
             Self::Leaf(_) => false,
-            Self::Split { first, second, .. } => first.split(target, dir, new) || second.split(target, dir, new),
+            Self::Split { first, second, .. } => {
+                first.insert(target, dir, before, new) || second.insert(target, dir, before, new)
+            }
+        }
+    }
+
+    pub fn moved(&self, pane: T, target: T, place: Place) -> Option<Self> {
+        let ids = self.ids();
+        if pane == target || !ids.contains(&pane) || !ids.contains(&target) {
+            return None;
+        }
+        let mut node = self.clone();
+        match place.edge() {
+            None => node.swap(pane, target),
+            Some((dir, before)) => {
+                node.remove(pane)?;
+                node.insert(target, dir, before, pane).then_some(())?;
+            }
+        }
+        Some(node)
+    }
+
+    fn swap(&mut self, a: T, b: T) {
+        match self {
+            Self::Leaf(id) if *id == a => *id = b,
+            Self::Leaf(id) if *id == b => *id = a,
+            Self::Leaf(_) => {}
+            Self::Split { first, second, .. } => {
+                first.swap(a, b);
+                second.swap(a, b);
+            }
         }
     }
 
@@ -477,6 +560,78 @@ mod tests {
         #[test]
         fn map_drops_the_tree_when_an_id_is_unknown() {
             assert_eq!(three().map(&|id| (id != 3).then_some(id)), None);
+        }
+
+        #[test]
+        fn two_panes_side_by_side_can_be_stacked() {
+            assert_eq!(pair(Dir::Right).moved(2, 1, Place::Below), Some(pair(Dir::Down)));
+        }
+
+        #[test]
+        fn a_pane_dropped_above_its_sibling_goes_first() {
+            let expected = Node::Split {
+                dir: Dir::Down,
+                ratio: HALF,
+                first: Box::new(Node::Leaf(2)),
+                second: Box::new(Node::Leaf(1)),
+            };
+            assert_eq!(pair(Dir::Right).moved(2, 1, Place::Above), Some(expected));
+        }
+
+        #[rstest]
+        #[case::to_the_left(Place::Left, Dir::Right, [3, 1])]
+        #[case::to_the_right(Place::Right, Dir::Right, [1, 3])]
+        #[case::above(Place::Above, Dir::Down, [3, 1])]
+        #[case::below(Place::Below, Dir::Down, [1, 3])]
+        fn a_moved_pane_leaves_its_place_and_splits_the_target(
+            #[case] place: Place,
+            #[case] dir: Dir,
+            #[case] order: [u64; 2],
+        ) {
+            let [first, second] = order;
+            let mut target = Node::Leaf(first);
+            target.split(first, dir, second);
+            let expected =
+                Node::Split { dir: Dir::Right, ratio: HALF, first: Box::new(target), second: Box::new(Node::Leaf(2)) };
+            assert_eq!(three().moved(3, 1, place), Some(expected));
+        }
+
+        #[test]
+        fn swapping_keeps_the_layout() {
+            let swapped = three().moved(1, 3, Place::Swap).expect("a new layout");
+            let mut expected = Node::Leaf(3);
+            expected.split(3, Dir::Right, 2);
+            expected.split(2, Dir::Down, 1);
+            assert_eq!(swapped, expected);
+        }
+
+        #[rstest]
+        #[case::onto_itself(1, 1)]
+        #[case::an_unknown_pane(9, 1)]
+        #[case::onto_an_unknown_target(1, 9)]
+        fn a_move_that_cannot_happen_gives_nothing(#[case] pane: u64, #[case] target: u64) {
+            assert_eq!(three().moved(pane, target, Place::Left), None);
+        }
+
+        #[rstest]
+        #[case::the_middle(Position::new(20, 10), Place::Swap)]
+        #[case::near_the_left_edge(Position::new(1, 10), Place::Left)]
+        #[case::near_the_right_edge(Position::new(39, 10), Place::Right)]
+        #[case::near_the_top(Position::new(20, 1), Place::Above)]
+        #[case::near_the_bottom(Position::new(20, 19), Place::Below)]
+        #[case::a_corner_goes_to_the_nearer_edge(Position::new(2, 0), Place::Above)]
+        fn where_a_pane_lands_follows_the_pointer(#[case] pos: Position, #[case] expected: Place) {
+            assert_eq!(Place::at(Rect::new(0, 0, 40, 20), pos), expected);
+        }
+
+        #[rstest]
+        #[case::swap(Place::Swap, Rect::new(10, 2, 41, 21))]
+        #[case::left(Place::Left, Rect::new(10, 2, 20, 21))]
+        #[case::right(Place::Right, Rect::new(31, 2, 20, 21))]
+        #[case::above(Place::Above, Rect::new(10, 2, 41, 10))]
+        #[case::below(Place::Below, Rect::new(10, 13, 41, 10))]
+        fn the_landing_covers_the_half_the_pane_takes(#[case] place: Place, #[case] expected: Rect) {
+            assert_eq!(place.area(Rect::new(10, 2, 41, 21)), expected);
         }
 
         #[rstest]

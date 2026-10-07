@@ -72,7 +72,7 @@ import {
   workspaceLabel,
 } from './model';
 import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
-import { type Node, fits, ratioAt, remove, setRatio, split, visible } from './split';
+import { type Node, type PanePlace, fits, hasRoom, moved, placeArea, placeAt, ratioAt, remove, setRatio, split, visible } from './split';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
@@ -251,6 +251,7 @@ export class App {
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
   rowDrag: { target: Target | null; row: Rect; moved: boolean; click?: () => void; scrolled: number } | null = null;
+  paneDrag: { tab: Tab; pane: Pane; from: Pos; rect: Rect; alone: boolean; moved: boolean } | null = null;
   detached = false;
   scripted = false;
   agentPace = 900;
@@ -1279,9 +1280,22 @@ export class App {
     return link && path ? { start: r.x + link.start, end: r.x + link.end, path, lines: link.lines } : null;
   }
 
+  paneLanding(drag = this.paneDrag): { area: Rect; place: PanePlace; layout: Node } | null {
+    const h = this.hover;
+    if (!drag?.moved || !h || this.tab() !== drag.tab) return null;
+    const area = this.areas().pane;
+    const under = this.panesOf(drag.tab, area).find(([id, r]) => id !== drag.pane.id && contains(r, h.x, h.y));
+    if (!under) return null;
+    const [target, r] = under;
+    const place = placeAt(r, h.x, h.y);
+    const layout = moved(drag.tab.layout, drag.pane.id, target, place);
+    if (!layout || !hasRoom(layout, area)) return null;
+    return { area: placeArea(place, r), place, layout };
+  }
+
   hoveredLink(pane: Pane, r: Rect, grid: Grid): { y: number; start: number; end: number } | null {
     const h = this.hover;
-    if (!h || this.overlay || this.rowDrag || this.selection || this.dragging) return null;
+    if (!h || this.overlay || this.rowDrag || this.paneDrag || this.selection || this.dragging) return null;
     const link = this.linkUnder(pane, r, h.x, h.y, grid);
     return link && { y: h.y, start: link.start, end: link.end };
   }
@@ -2590,7 +2604,7 @@ export class App {
   }
 
   cursorAt(x: number, y: number): string {
-    if (this.rowDrag?.moved && this.rowDrag.target) return 'grabbing';
+    if ((this.rowDrag?.moved && this.rowDrag.target) || this.paneDrag?.moved) return 'grabbing';
     return this.hit(x, y, (r) => !!r.cursor)?.cursor ?? 'default';
   }
 
@@ -2601,6 +2615,12 @@ export class App {
     if (press && (press.at.x !== x || press.at.y !== y)) {
       this.linkPress = null;
       press.held?.();
+    }
+    if (this.paneDrag) {
+      if (buttons === 2) this.paneDrag.moved ||= !contains(this.paneDrag.rect, x, y);
+      else this.paneDrag = null;
+      this.dirty();
+      return;
     }
     if (this.files.selecting !== null && buttons & 1) {
       const line = lineNear(this, y);
@@ -2688,7 +2708,7 @@ export class App {
     if (region.pane) {
       const { pane, rect, tab, alone } = region.pane;
       if (button === 2) {
-        this.openPaneMenu({ x, y }, tab, pane, rect, alone);
+        this.paneDrag = { tab, pane, from: { x, y }, rect, alone, moved: false };
         return;
       }
       if (tab.active !== pane.id) {
@@ -2720,6 +2740,18 @@ export class App {
 
   pointerUp(): void {
     this.files.selecting = null;
+    const paneDrag = this.paneDrag;
+    if (paneDrag) {
+      this.paneDrag = null;
+      if (!paneDrag.moved) return this.openPaneMenu(paneDrag.from, paneDrag.tab, paneDrag.pane, paneDrag.rect, paneDrag.alone);
+      const landing = this.paneLanding(paneDrag);
+      if (landing) {
+        paneDrag.tab.layout = landing.layout;
+        paneDrag.tab.active = paneDrag.pane.id;
+      }
+      this.dirty();
+      return;
+    }
     const press = this.linkPress;
     this.linkPress = null;
     const drag = this.rowDrag;
@@ -2797,8 +2829,9 @@ export class App {
       this.dirty();
       return true;
     }
-    if (this.rowDrag && k.key === 'Escape') {
+    if ((this.rowDrag || this.paneDrag) && k.key === 'Escape') {
       this.rowDrag = null;
+      this.paneDrag = null;
       this.dirty();
       return true;
     }

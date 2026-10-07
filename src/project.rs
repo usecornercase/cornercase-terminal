@@ -5,9 +5,15 @@ use ratatui::layout::{Position, Rect};
 use crate::activity::Status;
 use crate::config::Config;
 use crate::context::Context;
-use crate::split::{self, Dir, Node};
+use crate::split::{self, Dir, Node, Place};
 use crate::term::Term;
 use crate::ui::GroupEntry;
+
+pub struct Landing {
+    pub area: Rect,
+    pub place: Place,
+    pub layout: Node<u64>,
+}
 
 pub struct Tab {
     pub id: u64,
@@ -74,6 +80,14 @@ impl Tab {
 
     pub fn pane_at(&self, area: Rect, pos: Position) -> Option<u64> {
         self.layout.pane_at(area, self.pane()?.id, pos)
+    }
+
+    pub fn landing(&self, area: Rect, pane: u64, pos: Position) -> Option<Landing> {
+        let target = self.pane_at(area, pos).filter(|t| *t != pane)?;
+        let rect = self.rect(area, target)?;
+        let place = Place::at(rect, pos);
+        let layout = self.layout.moved(pane, target, place).filter(|l| l.has_room(area))?;
+        Some(Landing { area: place.area(rect), place, layout })
     }
 
     pub fn can_split(&self, area: Rect, id: u64, dir: Dir) -> bool {
