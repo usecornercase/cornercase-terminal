@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.5
+
+- A files panel: ` files `, under ` issues ` (` ▤ ` in the narrow bar), opens the active workspace's files beside the pane, folders first, leaving out what git ignores. Click a folder to open it and a file to read it, coloured for about 60 languages; the rest borrow the colours of a close relative.
+- What changed shows as in the changes panel, following its tab: changed files get their letter and colour in the tree and folders holding changes a dot. In a file the margin marks new lines in green, changed ones in blue and deleted ones in red; click a mark to see the old lines.
+- A search bar at the top of the panel finds text in every file of the workspace, grouped by file with the match lit; with nothing typed the panel shows all the files. The ` ▤ ` next to it switches to file names, found by a few letters of their path (`ptyhand` finds `src/relay/pty-handler.ts`). Arrow keys pick a result and Enter opens it; a text match opens the file at its line with the text lit.
+- Click a path in a pane, such as one Claude Code or Codex prints, `git status` lists or a compiler error points at, and the file opens in the panel at its lines (`src/app.rs:120-140`), selected. A path under the pointer is underlined when it can be opened. In Claude Code a drag that starts on a path still selects text there.
+- Click a line, or drag over several, then ` ask agent ` hands `path:12-30` to the workspace's agent, ` copy ` copies them and ` open ` opens your editor there. An open file follows its edits, so you can watch an agent write it.
+
 ## 0.11.4
 
 - Before cornercase restarts, after an update or when a new build finds an old server, it now says what will stop: how many agents are working or waiting for you, and which other programs run in which project. Nothing running? It says so. The update dialog has a **later** button, `cornercase update --yes` prints what it stopped, and so does `cornercase kill-server`.
