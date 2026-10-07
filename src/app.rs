@@ -10795,6 +10795,17 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn checking_an_item_being_edited_saves_the_text_and_checks_it() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["fix logn", "b"]);
+            let row = item_row(&app, 0);
+            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
+            type_text(&mut app, "i");
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
+        }
+
+        #[test]
         fn deleting_an_item_shows_a_toast_that_undoes_it() {
             let (mut app, _rx, _dirs) = opened();
             add(&mut app, &["a", "b"]);
