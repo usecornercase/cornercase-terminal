@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.6
+
+- When an agent cornercase starts asks whether you trust the folder, you now answer it yourself, and the issue's prompt waits until you have. Saying yes lets the repository's own agent settings, hooks and MCP servers run, so it is your call. Before, cornercase said yes for you, and if you had turned that off, it typed the prompt into the question. **Settings → Agents → trust prompts** still answers for you; it starts off once after this update, even if you had it on.
+- Removing a worktree no longer holds the dialog open while its folder is deleted. The dialog says right away when the worktree has changes that are not committed, and **remove** closes it at once: the workspace's row shows `removing…` until git is done, then goes with a `removed …` message, or comes back with git's reason. You can remove several at once and keep working meanwhile.
+- Split panes never shrink to nothing. Dragging a divider stops where a pane on either side, panes split inside it included, would get smaller than 10 columns or 3 rows, and a smaller terminal shrinks them down to that. When even that doesn't fit, as when you attach from a phone, the tab shows only its active pane until there is room again.
+
 ## 0.11.5
 
 - A files panel: ` files `, under ` issues ` (` ▤ ` in the narrow bar), opens the active workspace's files beside the pane, folders first, leaving out what git ignores. Click a folder to open it and a file to read it, coloured for about 60 languages; the rest borrow the colours of a close relative.
