@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.4
+
+- Before cornercase restarts, after an update or when a new build finds an old server, it now says what will stop: how many agents are working or waiting for you, and which other programs run in which project. Nothing running? It says so. The update dialog has a **later** button, `cornercase update --yes` prints what it stopped, and so does `cornercase kill-server`.
+- cornercase uses less CPU while agents print in tabs you are not looking at: their output no longer redraws the screen, and a tab printing without pause is drawn at most about 60 times a second.
+
 ## 0.11.3
 
 - A shell that can't start while your session is restored, for example in a folder you can no longer enter, no longer cuts the restore short and loses the rest: every other project, workspace and tab comes back, a message names the projects that lost a tab, and `server.log` says which folder failed and why. If no shell could start at all, one opens in the folder you started cornercase from. The session as it was saved is kept in `session.json.bak`.
