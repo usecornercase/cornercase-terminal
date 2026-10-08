@@ -122,6 +122,37 @@ fn quote(out: &mut String, value: &str) {
 
 pub struct Stamp(pub SystemTime);
 
+impl Stamp {
+    pub fn parse(text: &str) -> Option<SystemTime> {
+        let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
+        let [year, month, day] = numbers(date, '-')?;
+        let (clock, fraction) = time.split_once('.').unwrap_or((time, ""));
+        let [hour, minute, second] = numbers(clock, ':')?;
+        let valid = (1..=12).contains(&month) && (1..=31).contains(&day) && hour < 24 && minute < 60 && second < 60;
+        if !valid || fraction.len() > 9 || !fraction.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let nanos = format!("{fraction:0<9}").parse().ok()?;
+        let secs = days(year, month, day)? * 86_400 + hour * 3600 + minute * 60 + second;
+        UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
+    }
+}
+
+fn numbers(text: &str, separator: char) -> Option<[u64; 3]> {
+    let mut parts = text.split(separator).map(|part| part.bytes().all(|b| b.is_ascii_digit()).then(|| part.parse()));
+    let found = [parts.next()??.ok()?, parts.next()??.ok()?, parts.next()??.ok()?];
+    parts.next().is_none().then_some(found)
+}
+
+fn days(year: u64, month: u64, day: u64) -> Option<u64> {
+    let year = year.checked_sub(u64::from(month <= 2))?;
+    let era = year / 400;
+    let yoe = year % 400;
+    let doy = (153 * if month > 2 { month - 3 } else { month + 9 } + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    (era * 146_097 + doe).checked_sub(719_468)
+}
+
 impl Display for Stamp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let since = self.0.duration_since(UNIX_EPOCH).unwrap_or_default();
@@ -390,6 +421,31 @@ mod tests {
         #[case::far_ahead(4_102_444_800, "2100-01-01T00:00:00.000Z")]
         fn is_utc(#[case] secs: u64, #[case] shown: &str) {
             assert_eq!(Stamp(at(secs, 0)).to_string(), shown);
+        }
+
+        #[rstest]
+        #[case::the_epoch(0, 0)]
+        #[case::a_leap_day(951_782_400, 7)]
+        #[case::new_year(1_798_761_599, 999)]
+        #[case::far_ahead(4_102_444_800, 120)]
+        fn reads_back_what_it_writes(#[case] secs: u64, #[case] millis: u64) {
+            let shown = Stamp(at(secs, millis)).to_string();
+
+            assert_eq!(Stamp::parse(&shown), Some(at(secs, millis)));
+        }
+
+        #[rstest]
+        #[case::seconds_only("2026-10-08T20:23:20Z", Some(at(1_791_491_000, 0)))]
+        #[case::microseconds("2026-10-08T20:23:20.000749Z", Some(at(1_791_491_000, 0) + Duration::from_micros(749)))]
+        #[case::an_offset("2026-10-08T22:23:20.749+02:00", None)]
+        #[case::no_time("2026-10-08", None)]
+        #[case::a_thirteenth_month("2026-13-08T20:23:20.749Z", None)]
+        #[case::a_sign("2026-10-08T20:23:+2.749Z", None)]
+        #[case::too_many_parts("2026-10-08-01T20:23:20Z", None)]
+        #[case::before_the_epoch("0000-01-01T00:00:00Z", None)]
+        #[case::empty("", None)]
+        fn reads_utc_times_of_other_programs(#[case] text: &str, #[case] expected: Option<SystemTime>) {
+            assert_eq!(Stamp::parse(text), expected);
         }
     }
 

@@ -18,6 +18,7 @@ const MESSAGES: i64 = 200;
 pub(super) struct Session {
     pub turn: bool,
     pub context: Option<Context>,
+    pub prompted: Option<SystemTime>,
 }
 
 #[derive(Debug, Default)]
@@ -89,7 +90,7 @@ pub(super) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<S
     connection.busy_timeout(BUSY_FOR).ok()?;
     let since = i64::try_from(since.duration_since(UNIX_EPOCH).ok()?.as_millis()).ok()?;
     let Some(id) = session(&connection, &cwd, since).ok()? else {
-        return Some(Session { turn: false, context: None });
+        return Some(Session { turn: false, context: None, prompted: None });
     };
     let messages = messages(&connection, &id)?;
     Some(read(&messages, models, models_file(holder).as_deref()))
@@ -189,6 +190,7 @@ struct Picked {
 
 #[derive(Debug, Default, Deserialize)]
 struct Times {
+    created: Option<u64>,
     completed: Option<u64>,
 }
 
@@ -247,7 +249,13 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
             percent: used.zip(found.and_then(|found| found.window)).map(|(used, window)| percent(used, window)),
         }
     });
-    Session { turn, context }
+    let prompted = messages
+        .iter()
+        .filter(|m| m.role.as_deref() == Some("user"))
+        .filter_map(|m| m.time.as_ref()?.created)
+        .max()
+        .and_then(|created| UNIX_EPOCH.checked_add(Duration::from_millis(created)));
+    Session { turn, context, prompted }
 }
 
 #[cfg(test)]
@@ -265,6 +273,7 @@ mod tests {
     const MODELS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/models.json");
     const FLASH: &str =
         r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
+    const QUEUED: &str = r#"{"role":"user","time":{"created":1791469765000},"model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"}}"#;
 
     struct Models {
         dir: TempDir,
@@ -302,7 +311,23 @@ mod tests {
         #[case] turn: bool,
         #[case] context: Option<Context>,
     ) {
-        assert_eq!(Models::new().read(messages), Session { turn, context });
+        let session = Models::new().read(messages);
+
+        assert_eq!((session.turn, session.context), (turn, context));
+    }
+
+    #[rstest]
+    #[case::a_reply(&[REPLY], Some(1_791_469_400_000))]
+    #[case::a_message_after_it(&[REPLY, WORKING], Some(1_791_469_762_156))]
+    #[case::a_prompt_queued_while_it_works(&[WORKING, QUEUED], Some(1_791_469_765_000))]
+    #[case::nothing_yet(&[], None)]
+    fn the_newest_message_of_the_user_says_when_a_prompt_was_last_sent(
+        #[case] messages: &[&str],
+        #[case] millis: Option<u64>,
+    ) {
+        let prompted = millis.map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
+
+        assert_eq!(Models::new().read(messages).prompted, prompted);
     }
 
     #[test]
@@ -372,14 +397,14 @@ mod tests {
         running.fake.write("ses_old", running.project.path(), REPLY);
         let since = SystemTime::now() + Duration::from_millis(5);
         std::thread::sleep(Duration::from_millis(10));
-        assert_eq!(running.look(since), Some(Session { turn: false, context: None }));
+        assert_eq!(running.look(since), Some(Session { turn: false, context: None, prompted: None }));
 
         running.fake.write("ses_elsewhere", elsewhere.path(), WORKING);
         running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
 
         assert_eq!(
-            running.look(since),
-            Some(Session { turn: false, context: Some(shown("DeepSeek V4 Pro", Some(12))) })
+            running.look(since).map(|session| (session.turn, session.context)),
+            Some((false, Some(shown("DeepSeek V4 Pro", Some(12)))))
         );
     }
 

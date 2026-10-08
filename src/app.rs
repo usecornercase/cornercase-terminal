@@ -495,6 +495,11 @@ fn agent_in(
             let claude = Claude { pid, args, session: Session::read(dir, pid) };
             term.context.update(dir, Some(&claude));
             remember(config, term, Some((&agent, &claude.args)), now);
+            if term.input_seen != Some(pid)
+                && agents::input_box(&agent, &term.emulator.screen_text().unwrap_or_default()) == Some(true)
+            {
+                term.input_seen = Some(pid);
+            }
             Some((agent, claude.activity(&term.emulator.title())))
         }
         (Some(pid), Some(agent)) if agent == agents::CODEX => {
@@ -647,6 +652,7 @@ pub struct App {
     watched: Option<Instant>,
     usage: usage::State,
     usage_timeout: Duration,
+    confirm_within: Duration,
     todos: Todos,
     todo: todo::Panel,
     files: files::Panel,
@@ -748,6 +754,7 @@ impl App {
             watched: None,
             usage: usage::State::default(),
             usage_timeout: usage::TIMEOUT,
+            confirm_within: control::CONFIRM_WITHIN,
             todos: Todos::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
@@ -12863,19 +12870,23 @@ rm -f "$1/sessions/$$.json"
 
         const CLIENT: u64 = 9;
         const AGENT: &str = r#"#!/bin/sh
-s="$1/sessions/$$.json"
-printf '{"pid":%s,"status":"idle"}' $$ > "$s"
-while printf 'agent> ' && IFS= read -r line; do
-  printf '{"pid":%s,"status":"busy"}' $$ > "$s"
-  while [ ! -e "$1/finish" ]; do sleep 0.02; done
-  rm -f "$1/finish"
+d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
+mkdir -p "$t"
+state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
+state idle
+while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
+  case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
+  printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
+  state busy
+  while [ ! -e "$d/finish" ]; do sleep 0.02; done
+  rm -f "$d/finish"
   case "$line" in
-    *ask*) printf '{"pid":%s,"status":"waiting"}' $$ > "$s"; read answer ;;
-    *background*) printf '{"pid":%s,"status":"shell"}' $$ > "$s"
-      while [ ! -e "$1/finish" ]; do sleep 0.02; done; rm -f "$1/finish" ;;
+    *ask*) state waiting; read answer ;;
+    *background*) state shell
+      while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish" ;;
   esac
-  printf 'done: %s\n' "$line"
-  printf '{"pid":%s,"status":"idle"}' $$ > "$s"
+  said="done: $line"
+  state idle
 done
 rm -f "$s"
 "#;
@@ -13382,7 +13393,7 @@ rm -f "$s"
 
                 let id = agent.start(Some("fix the login"));
 
-                agent.until("the agent reads the prompt", |a| pane_screen(a, id).contains("agent> fix the login"));
+                agent.until("the agent reads the prompt", |a| pane_screen(a, id).contains("❯ fix the login"));
                 let tab = &agent.app.projects[0].workspaces[0].tabs[1];
                 assert_eq!((tab.name.as_deref(), agent.app.focus()), (Some("fixer"), before));
                 agent.finish();
@@ -13467,6 +13478,43 @@ rm -f "$s"
                 );
                 assert!(timed_out.contains("--until turn-over"), "{timed_out}");
                 assert_eq!(ended.ended.as_deref(), Some("done"));
+            }
+
+            fn dialog_in_status(app: &mut App, id: u64) -> bool {
+                let report: Report =
+                    serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
+                let mut tabs = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+                tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").dialog
+            }
+
+            #[test]
+            fn send_refuses_an_agent_showing_a_panel_and_says_when_a_forced_prompt_was_not_taken() {
+                let mut agent = Agent::new();
+                let id = agent.start(None);
+                agent.until("its input box is seen", |a| pane(a, id).input_seen.is_some());
+                done(now(&mut agent.app, None, press_keys(id, &["p", "a", "n", "e", "l", "enter"])));
+                agent.until("the panel shows", |a| pane_screen(a, id).contains("Shell details"));
+
+                let shown = dialog_in_status(&mut agent.app, id);
+                let refused = error(now(&mut agent.app, None, send_text(id, "next step", true, false)));
+                agent.app.confirm_within = Duration::from_millis(300);
+                let forced = wire::SendText {
+                    pane: Some(id),
+                    text: Some("next step".into()),
+                    enter: true,
+                    force: true,
+                    ..wire::SendText::default()
+                };
+                ask(&mut agent.app, None, Command::Send(forced));
+                let unconfirmed = error(agent.answered("the confirmation gives up"));
+                agent.until("the panel closes", |a| pane_screen(a, id).contains('❯'));
+
+                assert_eq!((shown, dialog_in_status(&mut agent.app, id)), (true, false));
+                assert!(refused.contains("shows a dialog, a panel or its shell mode"), "{refused}");
+                assert!(
+                    unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"),
+                    "{unconfirmed}"
+                );
             }
 
             #[test]

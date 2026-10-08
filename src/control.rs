@@ -108,7 +108,7 @@ impl Command {
                 fields.maybe("pane", send.pane).maybe("tab", send.tab);
                 fields.add("bytes", send.text.as_ref().map_or(0, String::len)).add("enter", send.enter);
                 fields.add("wait", send.wait).maybe("until", send.wait.then(|| send.until.name()));
-                fields.maybe("timeout", send.timeout);
+                fields.maybe("timeout", send.timeout).add("force", send.force);
             }
             Self::Keys(keys) => {
                 fields.maybe("pane", keys.pane).maybe("tab", keys.tab).add("keys", keys.keys.len());
@@ -252,6 +252,7 @@ pub struct SendText {
     pub wait: bool,
     pub until: Until,
     pub timeout: Option<f64>,
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -442,6 +443,7 @@ pub struct PaneInfo {
     pub agent: Option<String>,
     pub status: Option<String>,
     pub background_shell: bool,
+    pub dialog: bool,
     pub at_prompt: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,

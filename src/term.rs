@@ -50,6 +50,7 @@ pub struct Term {
     pub output_at: Instant,
     pub input_at: Option<Instant>,
     pub submitted: Option<Instant>,
+    pub input_seen: Option<i32>,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -120,6 +121,7 @@ impl Term {
             output_at: Instant::now(),
             input_at: None,
             submitted: None,
+            input_seen: None,
             master: pair.master,
             writer,
             child,
@@ -176,6 +178,12 @@ impl Term {
     pub fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
         self.interactive && shell.is_some() && self.foreground_pid() == shell
+    }
+
+    pub fn dialog(&self) -> bool {
+        let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return false };
+        self.foreground_pid() == Some(seen)
+            && agents::input_box(agent, &self.emulator.screen_text().unwrap_or_default()) == Some(false)
     }
 
     pub fn foreground_args(&self) -> Vec<String> {

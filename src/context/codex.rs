@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use serde_json::Value;
 
 use super::{Context, TAIL, percent};
+use crate::log::Stamp;
 use crate::process;
 
 pub(super) fn rollout_path(pid: i32, since: SystemTime) -> Option<PathBuf> {
@@ -122,11 +123,22 @@ pub(super) struct Rollout {
     model: Option<String>,
     percent: Option<u16>,
     turn: bool,
+    prompted: Option<SystemTime>,
 }
 
 impl Rollout {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, read: 0, skipping: false, stamp: None, id: None, model: None, percent: None, turn: false }
+        Self {
+            path,
+            read: 0,
+            skipping: false,
+            stamp: None,
+            id: None,
+            model: None,
+            percent: None,
+            turn: false,
+            prompted: None,
+        }
     }
 
     pub fn context(&self) -> Option<Context> {
@@ -135,6 +147,10 @@ impl Rollout {
 
     pub fn turn(&self) -> bool {
         self.turn
+    }
+
+    pub fn prompted(&self) -> Option<SystemTime> {
+        self.prompted
     }
 
     pub fn id(&self) -> Option<&str> {
@@ -224,6 +240,10 @@ impl Rollout {
                 Some("context_compacted") => self.percent = None,
                 Some("task_started") => self.turn = true,
                 Some("task_complete" | "turn_aborted") => self.turn = false,
+                Some("item_completed") if payload["item"]["type"] == "UserMessage" => {
+                    let at = entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now);
+                    self.prompted = self.prompted.max(Some(at));
+                }
                 _ => {}
             },
             _ => {}
@@ -251,6 +271,7 @@ mod tests {
     const STARTED: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-started.jsonl");
     const COMPLETE: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-complete.jsonl");
     const ABORTED: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-aborted.jsonl");
+    const USER_MESSAGE: &str = include_str!("../../tests/fixtures/codex/0.160.0/user-message.jsonl");
 
     struct Written {
         _dir: TempDir,
@@ -417,6 +438,28 @@ mod tests {
         }
 
         assert_eq!(file.rollout.turn(), turn);
+    }
+
+    #[test]
+    fn a_prompt_is_recorded_when_codex_takes_it() {
+        let mut file = Written::new(CONTEXT);
+        let before = file.rollout.prompted();
+
+        file.append(USER_MESSAGE);
+
+        let sent = SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(1_791_201_606_291);
+        assert_eq!((before, file.rollout.prompted()), (None, Some(sent)));
+    }
+
+    #[test]
+    fn a_prompt_without_a_time_counts_from_when_it_was_read() {
+        let mut file = Written::new(CONTEXT);
+        let untimed = USER_MESSAGE.lines().last().expect("the user message").replace("\"timestamp\"", "\"at\"");
+        let read = SystemTime::now();
+
+        file.append(&format!("{untimed}\n"));
+
+        assert!(file.rollout.prompted().is_some_and(|at| at >= read), "{:?}", file.rollout.prompted());
     }
 
     #[test]

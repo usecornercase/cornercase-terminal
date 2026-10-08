@@ -1541,14 +1541,20 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     let agent = session.dir.join("bin").join("claude");
     write_executable(
         &agent,
-        "#!/bin/sh\nd=\"$CLAUDE_CONFIG_DIR/sessions\"; mkdir -p \"$d\"; s=\"$d/$$.json\"\n\
-         printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"\n\
-         while printf 'agent> ' && IFS= read -r line; do\n\
-         printf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$s\"\n\
-         while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\"\n\
-         case \"$line\" in *background*) printf '{\"pid\":%s,\"status\":\"shell\"}' $$ > \"$s\"\n\
-         while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\";; esac\n\
-         printf 'done: %s\\n' \"$line\"; printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"; done\n",
+        r#"#!/bin/sh
+d="$CLAUDE_CONFIG_DIR"; mkdir -p "$d/sessions"; s="$d/sessions/$$.json"
+t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"; mkdir -p "$t"
+state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
+finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
+state idle
+while printf 'agent> ' && IFS= read -r line; do
+  case "$line" in *panel*) printf 'Shell details\n'; read -r line; continue ;; esac
+  printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
+  state busy; finished
+  case "$line" in *background*) state shell; finished ;; esac
+  printf 'done: %s\n' "$line"; state idle
+done
+"#,
     );
     let config = format!("{{\"agent_commands\": {{\"claude\": \"{}\"}}}}", agent.display());
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
@@ -1583,8 +1589,12 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     std::fs::write(session.claude_dir().join("finish"), "").expect("let the background shell end");
     let last = session.says(&["wait", "--pane", pane, "--timeout", "30"]);
 
+    session.says(&["keys", "--pane", pane, "p", "a", "n", "e", "l", "enter"]);
+    let unrecorded = session.cli(&["send", "--pane", pane, "--enter", "--timeout", "1", "never recorded"]);
+
     assert_eq!((ended, next.as_str(), turn.as_str(), last.as_str()), ("done", "done", "shell", "done"));
     assert!(status.contains("working (background shell)"), "{status}");
+    assert!(refused(&unrecorded, 1, "has not recorded the prompt yet"), "{unrecorded:?}");
     let screen = session.says(&["read", "--pane", pane]);
     assert!(screen.contains("done: fix the login") && screen.contains("done: add tests"), "{screen}");
 }
