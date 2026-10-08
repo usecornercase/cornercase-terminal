@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::{App, Target, Toast};
-use crate::activity::Status;
+use crate::activity::{self, Status};
 use crate::agents;
 use crate::control::{
     self, Command, Done, GroupInfo, Ids, Item, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo, TodoItem,
@@ -88,7 +88,7 @@ enum Stage {
 
 struct Then {
     start: Option<(launch::Spec, Option<String>)>,
-    wait: bool,
+    wait: Option<Condition>,
     focus: bool,
 }
 
@@ -118,6 +118,7 @@ enum Condition {
     Working,
     Waiting,
     Shell,
+    TurnOver,
     Text(Regex),
     Quiet(Duration),
 }
@@ -130,6 +131,7 @@ impl Condition {
             Until::Working => Self::Working,
             Until::Waiting => Self::Waiting,
             Until::Shell => Self::Shell,
+            Until::TurnOver => Self::TurnOver,
             Until::Text(pattern) => Self::Text(
                 Regex::new(&pattern).map_err(|e| format!("`{pattern}` is not a valid regular expression: {e}"))?,
             ),
@@ -138,21 +140,24 @@ impl Condition {
     }
 
     fn needs_agent(&self) -> bool {
-        matches!(self, Self::Stops | Self::Idle | Self::Working | Self::Waiting)
+        matches!(self, Self::Stops | Self::Idle | Self::Working | Self::Waiting | Self::TurnOver)
     }
 
     fn ends_on_idle(&self) -> bool {
-        matches!(self, Self::Stops | Self::Idle)
+        matches!(self, Self::Stops | Self::Idle | Self::TurnOver)
     }
 
-    fn holds(&self, status: Status) -> bool {
-        match self {
-            Self::Stops => status != Status::Working,
+    fn ended(&self, agent: &activity::Pane) -> Option<&'static str> {
+        let status = agent.status()?;
+        let holds = match self {
+            Self::TurnOver if agent.background_shell() => return Some(activity::SHELL),
+            Self::Stops | Self::TurnOver => status != Status::Working,
             Self::Idle => matches!(status, Status::Idle | Status::Done),
             Self::Working => status == Status::Working,
             Self::Waiting => status == Status::Waiting,
             Self::Shell | Self::Text(_) | Self::Quiet(_) => false,
-        }
+        };
+        holds.then(|| status.name())
     }
 }
 
@@ -452,6 +457,10 @@ impl App {
             Condition::Shell => {
                 format!("pane {pane} still runs {}", term.program(&self.config).unwrap_or_else(|| "a program".into()))
             }
+            Condition::Stops if term.agent.background_shell() => format!(
+                "the agent in pane {pane} ended its turn, but a background shell it started still runs; \
+                 --until turn-over ends there"
+            ),
             _ => format!("the agent in pane {pane} is {}", term.agent.status().map_or("starting", Status::name)),
         }
     }
@@ -482,14 +491,14 @@ impl App {
                 return Verdict::Pending;
             }
             Condition::Shell | Condition::Quiet(_) | Condition::Text(_) => return Verdict::Pending,
-            Condition::Stops | Condition::Idle | Condition::Working | Condition::Waiting => {}
+            Condition::Stops | Condition::Idle | Condition::Working | Condition::Waiting | Condition::TurnOver => {}
         }
-        let Some(status) = term.agent.status() else {
+        if term.agent.status().is_none() {
             if self.watched_agent(term).is_ok() {
                 return Verdict::Pending;
             }
             return Verdict::Failed(format!("the agent in pane {pane} exited"));
-        };
+        }
         if let Some(since) = watch.since {
             if term.agent.reacted(since) {
                 watch.since = None;
@@ -503,7 +512,7 @@ impl App {
                 return Verdict::Pending;
             }
         }
-        if watch.until.holds(status) { Verdict::Ended(status.name(), None) } else { Verdict::Pending }
+        watch.until.ended(&term.agent).map_or(Verdict::Pending, |ended| Verdict::Ended(ended, None))
     }
 
     pub(super) fn next_request(&self, now: Instant) -> Option<Duration> {
@@ -731,6 +740,7 @@ impl App {
             program: term.program(&self.config),
             agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
+            background_shell: term.agent.background_shell(),
             at_prompt: Some(term.shell_in_foreground()),
             model: context.map(|c| c.model.clone()),
             context: context.and_then(|c| c.percent),
@@ -773,7 +783,7 @@ impl App {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}"));
             }
-            let then = Then { start: None, wait: false, focus: new.focus };
+            let then = Then { start: None, wait: None, focus: new.focus };
             return self.create_worktree(client, p, &name, then, None).map(|()| None);
         }
         let path = self.projects[p].path.clone();
@@ -862,11 +872,10 @@ impl App {
             self.show(Item::Pane(pane))?;
         }
         let Some((spec, _)) = launch else { return Ok(false) };
-        let wait = then.wait.then_some(Condition::Stops);
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
         self.launches.push(launch);
-        pending.stage = Stage::Launch(wait);
+        pending.stage = Stage::Launch(then.wait);
         Ok(true)
     }
 
@@ -928,6 +937,7 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
+        let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
         let kind = self.agent_kind(caller, start.agent)?;
         let prompt = start.prompt.filter(|p| !p.trim().is_empty());
         let spec = launch::Spec { command: agents::command_line(&self.config, &kind), prompt, submit: true };
@@ -938,7 +948,7 @@ impl App {
             let p = self.here(caller).project.ok_or(NO_PROJECT)?;
             let open = self.workspace_on(p, branch).and_then(|id| self.workspace_position(id));
             let Some(found) = open else {
-                let then = Then { start: Some((spec, name)), wait: start.wait, focus: start.focus };
+                let then = Then { start: Some((spec, name)), wait, focus: start.focus };
                 return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
             };
             found
@@ -951,7 +961,6 @@ impl App {
         if start.focus {
             self.show(Item::Pane(pane))?;
         }
-        let wait = start.wait.then_some(Condition::Stops);
         let launch = Some(Launch::new(pane, spec, now));
         Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, wait, timeout))
     }
@@ -984,8 +993,9 @@ impl App {
                  you send would answer it; ask the user, then answer with `cornercase keys`"
             ));
         }
-        if send.wait {
-            self.can_wait(caller, pane, &Condition::Stops)?;
+        let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
+        if let Some(until) = &wait {
+            self.can_wait(caller, pane, until)?;
         }
         let text = send.text.filter(|t| !t.is_empty());
         if text.is_none() && !send.enter {
@@ -1000,7 +1010,6 @@ impl App {
         if !send.enter {
             return Ok(Some(json(&pane_ids(pane))));
         }
-        let wait = send.wait.then_some(Condition::Stops);
         Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), wait, timeout))
     }
 

@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.5
 
-- `cornercase wait` can watch several panes at once: repeat `--pane` or `--tab` and add `--any` to return as soon as one of them meets the condition, or `--all` to return once every one has. It prints one line per pane, its id and how it ended (`15 idle`), and `--json` gives the same as a list. A pane that closes meanwhile ends as `closed` instead of failing the wait. An agent coordinating others no longer needs one background wait per agent.
+- Scripts and orchestrating agents can now tell when a Claude Code agent's turn is over but a command it started in the background (a test watcher, a dev server) still runs. The tab keeps showing it as working, as before, since Claude wakes up when that command ends, but `cornercase status` now says `working (background shell)` (`"background_shell": true` in `--json`), and `cornercase wait --until turn-over` returns as soon as the turn is over, printing `shell` in that case. `start --wait` and `send --wait` take the same `--until`. A plain `wait` that times out on such an agent now says so.
 
 ## 0.12.4
 
