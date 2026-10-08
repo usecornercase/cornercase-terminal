@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - `cornercase read --last-message` prints the last message the coding agent in a pane wrote, as plain text. It comes from the agent's own record (Claude Code's transcript, Codex's rollout, opencode's database) rather than the screen, so it is whole even once it scrolled off, and free of the input box, the status lines and Claude Code's grey suggestions. `--json` adds when it was written and whether the agent's turn is over. An agent that starts others can now read their answers directly, instead of asking each one to write its report to a file.
 
+## 0.12.8
+
+- `cornercase events` follows what happens as it happens, for scripts and agents that coordinate other agents: it prints a line when an agent starts working, waits for an answer, is left with a background shell, finishes or goes idle, when the program in a pane ends, and when a project, workspace, tab or pane opens or closes. `--pane` keeps only some panes and stops once they have all closed, and `--json` prints one JSON object per line, with the ids, the old and new state and the time. Without `--pane` it keeps running until the server stops, so a script can react to each change instead of polling `cornercase status`.
+
 ## 0.12.7
 
 - `cornercase wait` can watch several panes at once: repeat `--pane` or `--tab` and add `--any` to return as soon as one of them meets the condition, or `--all` to return once every one has. It prints one line per pane, its id and how it ended (`15 idle`), and `--json` gives the same as a list. A pane that closes meanwhile ends as `closed` instead of failing the wait. An agent coordinating others no longer needs one background wait per agent.

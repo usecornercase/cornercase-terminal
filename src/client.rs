@@ -43,6 +43,8 @@ const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
+const LOST: &str = "the cornercase server closed the connection without stopping: it crashed, or this command \
+    fell too far behind reading its events";
 const INCOMPATIBLE: &str = "the running cornercase server is incompatible with this build. \
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
@@ -222,26 +224,55 @@ pub fn ask(name: &'static str, command: control::Command) -> Result<Value> {
 }
 
 fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command) -> Result<Value> {
-    let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
-    let server = std::env::var(control::SERVER_ENV).ok();
-    let request =
-        serde_json::to_string(&Request { caller, server, command }).map_err(|e| Error::Control(e.to_string()))?;
-    protocol::send(&mut stream, &ClientMessage::Request(request))?;
+    request(&mut stream, command)?;
     loop {
         match protocol::recv::<ServerMessage>(&mut stream) {
-            Ok(Some(ServerMessage::Response(text))) => {
-                return match serde_json::from_str(&text) {
-                    Ok(Response::Ok(value)) => Ok(value),
-                    Ok(Response::Error(message)) => Err(Error::Control(message)),
-                    Err(e) => Err(Error::Control(format!("cannot read the server's answer: {e}"))),
-                };
-            }
+            Ok(Some(ServerMessage::Response(text))) => return answered(&text),
             Ok(Some(ServerMessage::Rejected(_))) => return Err(Error::OldServer(name)),
             Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::OldServer(name)),
             Ok(Some(ServerMessage::Frame(_) | ServerMessage::Detached)) => {}
             Ok(Some(ServerMessage::Shutdown | ServerMessage::Restart(_)) | None) | Err(_) => {
                 return Err(Error::ServerGone);
             }
+        }
+    }
+}
+
+fn request(stream: &mut UnixStream, command: control::Command) -> Result<()> {
+    let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
+    let server = std::env::var(control::SERVER_ENV).ok();
+    let request =
+        serde_json::to_string(&Request { caller, server, command }).map_err(|e| Error::Control(e.to_string()))?;
+    protocol::send(stream, &ClientMessage::Request(request))?;
+    Ok(())
+}
+
+fn answered(text: &str) -> Result<Value> {
+    match serde_json::from_str(text) {
+        Ok(Response::Ok(value)) => Ok(value),
+        Ok(Response::Error(message)) => Err(Error::Control(message)),
+        Err(e) => Err(Error::Control(format!("cannot read the server's answer: {e}"))),
+    }
+}
+
+pub fn follow(
+    name: &'static str,
+    command: control::Command,
+    mut each: impl FnMut(Value) -> Result<bool>,
+) -> Result<()> {
+    let mut stream = connect()?;
+    let reader = stream.try_clone()?;
+    ask_on(reader, name, command)?;
+    loop {
+        match protocol::recv::<ServerMessage>(&mut stream) {
+            Ok(Some(ServerMessage::Response(text))) => {
+                if each(answered(&text)?)? {
+                    return Ok(());
+                }
+            }
+            Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown | ServerMessage::Restart(_))) => return Ok(()),
+            Ok(Some(ServerMessage::Frame(_) | ServerMessage::Rejected(_))) => {}
+            Ok(None) | Err(_) => return Err(Error::Control(LOST.into())),
         }
     }
 }

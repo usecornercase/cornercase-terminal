@@ -1523,6 +1523,64 @@ fn a_command_typed_in_a_new_tab_is_waited_for_and_read() {
     app.wait_for("the tab shows in the list", |s| s.contains("build"));
 }
 
+struct Followed {
+    lines: std::sync::mpsc::Receiver<String>,
+    seen: Vec<serde_json::Value>,
+}
+
+impl Followed {
+    fn of(child: &mut std::process::Child) -> Self {
+        let out = child.stdout.take().expect("its output");
+        let (tx, lines) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            for line in std::io::BufRead::lines(std::io::BufReader::new(out)).map_while(Result::ok) {
+                if tx.send(line).is_err() {
+                    return;
+                }
+            }
+        });
+        Self { lines, seen: Vec::new() }
+    }
+
+    fn until(&mut self, what: &str, cond: impl Fn(&serde_json::Value) -> bool) {
+        let deadline = Instant::now() + TIMEOUT;
+        while !self.seen.iter().any(&cond) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let line = self.lines.recv_timeout(left).unwrap_or_else(|_| panic!("timed out waiting for: {what}"));
+            self.seen.push(serde_json::from_str(&line).expect("one JSON object per line"));
+        }
+    }
+}
+
+fn told(event: &serde_json::Value, what: &str, key: &str, value: &str, pane: &str) -> bool {
+    event["event"] == what && event[key] == value && event["pane"].as_u64() == pane.parse().ok()
+}
+
+#[test]
+fn events_follow_what_opens_ends_and_closes_until_the_server_stops() {
+    let app = Harness::start();
+    let first = panes(app.session.report()).next().expect("a pane").id.to_string();
+    let mut all = app.session.spawn(&["events", "--json"]);
+    let one = app.session.spawn(&["events", "--pane", &first]);
+    app.session.wait_for_file("server.log", "both follow", |log| log.matches("command=events").count() == 2);
+    let mut followed = Followed::of(&mut all);
+
+    let pane = app.session.says(&["new-tab", "--", "sleep 2"]);
+    followed.until("the tab opens", |event| told(event, "opened", "kind", "pane", &pane));
+    followed.until("sleep ends", |event| told(event, "exited", "program", "sleep", &pane));
+    app.session.says(&["close", "--pane", &first]);
+    let one = finish_within(one, TIMEOUT);
+    followed.until("the first pane closes", |event| told(event, "closed", "kind", "pane", &first));
+    let stopped = app.session.run("kill-server");
+
+    assert!(stopped.status.success(), "{stopped:?}");
+    assert!(finish_within(all, TIMEOUT).status.success(), "events ends with the server");
+    assert_eq!(
+        (one.status.code(), String::from_utf8_lossy(&one.stdout)),
+        (Some(0), format!("pane {first}  closed\n").into())
+    );
+}
+
 #[test]
 fn several_panes_are_waited_for_at_once() {
     let app = Harness::start();

@@ -4,9 +4,11 @@ use std::net::Shutdown;
 use std::ops::ControlFlow;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
@@ -16,8 +18,9 @@ use ratatui::{Terminal, TerminalOptions, Viewport};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
-use crate::app::{App, AppEvent};
+use crate::app::{App, AppEvent, Streamed};
 use crate::config;
+use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
 use crate::host_theme::HostTheme;
 use crate::log::{self, Level};
@@ -33,6 +36,7 @@ const FRAME: Duration = Duration::from_millis(16);
 const SAVE_EVERY: Duration = Duration::from_millis(500);
 const ISSUE_CACHE_FILE: &str = "issues.json";
 const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
+const EVENTS_QUEUED: usize = 1024;
 const CLEAR_SCREEN: &[u8] = b"\x1b[H\x1b[2J";
 const OTHER_BUILD: &str = "the running cornercase server comes from another build. \
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
@@ -82,9 +86,28 @@ impl Step {
     }
 }
 
+#[derive(Clone)]
+struct Outbox {
+    tx: Sender<ServerMessage>,
+    queued: Arc<AtomicUsize>,
+}
+
+impl Outbox {
+    fn send(&self, msg: ServerMessage) {
+        self.queued.fetch_add(1, Ordering::Relaxed);
+        if self.tx.send(msg).is_err() {
+            self.queued.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    fn queued(&self) -> usize {
+        self.queued.load(Ordering::Relaxed)
+    }
+}
+
 struct FrameWriter {
     buf: Vec<u8>,
-    out: Sender<ServerMessage>,
+    out: Outbox,
 }
 
 impl Write for FrameWriter {
@@ -95,7 +118,7 @@ impl Write for FrameWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         if !self.buf.is_empty() {
-            let _ = self.out.send(ServerMessage::Frame(std::mem::take(&mut self.buf)));
+            self.out.send(ServerMessage::Frame(std::mem::take(&mut self.buf)));
         }
         Ok(())
     }
@@ -167,13 +190,36 @@ struct Client {
     used: u64,
     notify: Channel,
     screen: Option<Screen>,
-    out: Sender<ServerMessage>,
+    out: Outbox,
     writer: JoinHandle<()>,
+    dropped: u64,
 }
 
 impl Client {
     fn send(&self, msg: ServerMessage) {
-        let _ = self.out.send(msg);
+        self.out.send(msg);
+    }
+
+    fn stream(&mut self, text: String) {
+        self.catch_up();
+        if self.dropped > 0 || self.out.queued() >= EVENTS_QUEUED {
+            self.dropped += 1;
+        } else {
+            self.send(ServerMessage::Response(text));
+        }
+    }
+
+    fn catch_up(&mut self) {
+        if self.dropped == 0 || self.out.queued() >= EVENTS_QUEUED {
+            return;
+        }
+        log::warning!("server", "events dropped", client = self.id, count = self.dropped);
+        let time = log::Stamp(SystemTime::now()).to_string();
+        let notice = control::Event { time, what: What::Dropped { count: self.dropped }, ids: Ids::default() };
+        if let Some(text) = notice.streamed() {
+            self.send(ServerMessage::Response(text));
+        }
+        self.dropped = 0;
     }
 
     fn reset_screen(&mut self, area: Rect) {
@@ -291,10 +337,16 @@ fn spawn_forwarder(app_rx: Receiver<AppEvent>, tx: Sender<ServerEvent>) {
     });
 }
 
-fn spawn_client_writer(mut stream: UnixStream, rx: Receiver<ServerMessage>) -> JoinHandle<()> {
+fn spawn_client_writer(
+    mut stream: UnixStream,
+    rx: Receiver<ServerMessage>,
+    queued: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
     thread::spawn(move || {
         for msg in rx {
-            if protocol::send(&mut stream, &msg).is_err() {
+            let sent = protocol::send(&mut stream, &msg);
+            queued.fetch_sub(1, Ordering::Relaxed);
+            if sent.is_err() {
                 break;
             }
         }
@@ -429,6 +481,21 @@ impl Server {
                 client.send(ServerMessage::Response(text));
             }
         }
+        let mut ended = Vec::new();
+        for (id, streamed) in self.app.take_events() {
+            match (self.client_mut(id), streamed) {
+                (Some(client), Streamed::Event(text)) => client.stream(text),
+                (Some(_), Streamed::End) => ended.push(id),
+                (None, _) => {}
+            }
+        }
+        self.clients.iter_mut().for_each(Client::catch_up);
+        for id in ended {
+            if let Some(client) = self.client_mut(id) {
+                client.send(ServerMessage::Detached);
+            }
+            self.remove(id);
+        }
     }
 
     fn save(&mut self, now: Instant) {
@@ -543,10 +610,12 @@ impl Server {
         let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
         let id = self.next_client;
         self.next_client += 1;
-        let (out, out_rx) = mpsc::channel();
-        let writer = spawn_client_writer(stream, out_rx);
+        let (tx, out_rx) = mpsc::channel();
+        let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
+        let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
         spawn_client_reader(id, reader, self.tx.clone());
-        self.clients.push(Client { id, size: None, used: 0, notify: Channel::Bell, screen: None, out, writer });
+        let notify = Channel::Bell;
+        self.clients.push(Client { id, size: None, used: 0, notify, screen: None, out, writer, dropped: 0 });
     }
 
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
@@ -991,6 +1060,59 @@ mod tests {
                 client.key(BUGGY_KEY);
                 client.until("the menu closes", |client| !client.text().contains(PANE_MENU));
             });
+        }
+    }
+
+    mod streaming {
+        use super::*;
+        use crate::control::{Event, Response};
+
+        fn client() -> (Client, Receiver<ServerMessage>) {
+            let (tx, rx) = mpsc::channel();
+            let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
+            let writer = thread::spawn(|| {});
+            (Client { id: 1, size: None, used: 0, notify: Channel::Bell, screen: None, out, writer, dropped: 0 }, rx)
+        }
+
+        fn texts(rx: &Receiver<ServerMessage>) -> Vec<String> {
+            rx.try_iter()
+                .map(|msg| match msg {
+                    ServerMessage::Response(text) => text,
+                    _ => panic!("not an answer"),
+                })
+                .collect()
+        }
+
+        #[test]
+        fn a_reader_that_falls_behind_loses_events_then_is_told_how_many() {
+            let (mut client, rx) = client();
+            for n in 0..EVENTS_QUEUED + 3 {
+                client.stream(n.to_string());
+            }
+            let queued = texts(&rx);
+
+            client.out.queued.store(0, Ordering::Relaxed);
+            client.stream("next".into());
+
+            let after = texts(&rx);
+            let Ok(Response::Ok(notice)) = serde_json::from_str(&after[0]) else { panic!("not a notice: {after:?}") };
+            let notice: Event = serde_json::from_value(notice).expect("an event");
+            assert_eq!(queued.len(), EVENTS_QUEUED);
+            assert_eq!((notice.what, &after[1..]), (What::Dropped { count: 3 }, &["next".to_string()][..]));
+        }
+
+        #[test]
+        fn the_notice_goes_out_once_there_is_room_even_without_a_new_event() {
+            let (mut client, rx) = client();
+            client.out.queued.store(EVENTS_QUEUED, Ordering::Relaxed);
+            client.stream("lost".into());
+
+            client.catch_up();
+            let full = texts(&rx);
+            client.out.queued.store(0, Ordering::Relaxed);
+            client.catch_up();
+
+            assert_eq!((full.len(), texts(&rx).len(), client.dropped), (0, 1, 0));
         }
     }
 
