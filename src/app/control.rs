@@ -316,9 +316,9 @@ impl App {
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
-        self.requests
-            .pending
-            .retain(|p| p.client.is_some() || !matches!(p.stage, Stage::Watch(_) | Stage::Several { .. }));
+        self.requests.pending.retain(|p| {
+            p.client.is_some() || !matches!(p.stage, Stage::Watch(_) | Stage::Several { .. } | Stage::Reading)
+        });
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
@@ -1380,6 +1380,26 @@ mod tests {
 
             let bug = serde_json::to_string(&Response::Error(error::Error::Bug.to_string())).expect("json");
             assert_eq!(app.take_answers(), [(2, bug)]);
+        }
+    }
+
+    mod forget {
+        use super::*;
+
+        #[test]
+        fn a_last_message_read_goes_with_its_client() {
+            let dir = TempDir::new();
+            let (tx, _rx) = mpsc::channel();
+            let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), tx);
+            let reading = Pending { client: Some(1), key: 1, timeout: None, done: pane_ids(4), stage: Stage::Reading };
+            app.requests.pending.push(reading);
+            app.requests.open.push(1);
+
+            app.forget(1);
+            let left = app.requests.pending.len();
+            app.message_read(1, Ok(Some(context::Said { text: "Done.".into(), written: None })));
+
+            assert_eq!((left, app.take_answers()), (0, Vec::new()));
         }
     }
 }
