@@ -19,6 +19,8 @@ const BANNER_BYTES: u64 = 4096;
 const KEPT_LINES: usize = 20;
 const KEPT_CHARS: usize = 300;
 const NOT_FOUND: i32 = 127;
+const CANNOT_EXECUTE: i32 = 126;
+const NO_SUCH_FILE: &str = "No such file or directory";
 const OLD_CLI: &str = "unrecognized subcommand";
 const GARBAGE: &str = "the remote shell printed too much before cornercase started";
 const SEARCHED: &str = "$PATH:$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin";
@@ -162,7 +164,8 @@ impl Remote {
 
     fn failure(&self, status: Option<ExitStatus>, stderr: &Stderr) -> Error {
         let host = self.destination.clone();
-        if status.and_then(|s| s.code()) == Some(NOT_FOUND) {
+        let code = status.and_then(|s| s.code());
+        if code == Some(NOT_FOUND) || (code == Some(CANNOT_EXECUTE) && stderr.any(NO_SUCH_FILE)) {
             return Error::RemoteMissing(host);
         }
         if stderr.any(OLD_CLI) {
@@ -416,6 +419,20 @@ mod tests {
             let error = devbox().failure(Some(exited(127)), &with(&["sh: 1: exec: cornercase: not found"]));
 
             assert!(matches!(error, Error::RemoteMissing(_)));
+        }
+
+        #[test]
+        fn a_missing_path_in_bash_says_so_too() {
+            let stderr = with(&["sh: line 0: exec: /opt/cornercase: cannot execute: No such file or directory"]);
+
+            assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::RemoteMissing(_)));
+        }
+
+        #[test]
+        fn a_command_that_cannot_run_shows_why() {
+            let stderr = with(&["sh: line 0: exec: /opt/cornercase: cannot execute: Permission denied"]);
+
+            assert!(matches!(devbox().failure(Some(exited(126)), &stderr), Error::Ssh { .. }));
         }
 
         #[test]
