@@ -10,6 +10,7 @@ use crate::search::Search;
 use crate::ui;
 
 pub const DONE: &str = "done";
+pub const RESTART: &str = "restart";
 const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
 const EXTRA_ARGS: &str = "extra arguments…";
 
@@ -26,6 +27,7 @@ pub enum Row {
     Fetch,
     Sidebar,
     AgentsSection,
+    Counts,
     DimPanes,
     Detail(Detail),
     Notifications,
@@ -49,6 +51,7 @@ impl Row {
             | Self::Fetch
             | Self::Sidebar
             | Self::AgentsSection
+            | Self::Counts
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
@@ -68,10 +71,11 @@ impl Row {
             Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::AgentsSection
+            | Self::Counts
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
-            | Self::Updates => Page::Tui,
+            | Self::Updates => Page::Ui,
         }
     }
 }
@@ -134,18 +138,18 @@ pub enum Page {
     Worktrees,
     Agents,
     Issues,
-    Tui,
+    Ui,
 }
 
 impl Page {
-    pub const ALL: [Self; 4] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Tui];
+    pub const ALL: [Self; 4] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Worktrees => "Worktrees",
             Self::Agents => "Agents",
             Self::Issues => "Issues",
-            Self::Tui => "TUI",
+            Self::Ui => "UI",
         }
     }
 
@@ -164,6 +168,7 @@ pub enum Move {
 pub enum Action {
     None,
     Close,
+    Restart,
     Save(Box<Config>),
     CheckToken(Source, Secret),
     RemoveToken(Source),
@@ -269,6 +274,7 @@ impl Settings {
             Row::AddAgent,
             Row::Sidebar,
             Row::AgentsSection,
+            Row::Counts,
             Row::DimPanes,
             Row::Detail(Detail::Model),
             Row::Detail(Detail::Context),
@@ -362,6 +368,9 @@ impl Settings {
                 |c| &mut c.agents_section,
                 ["the sidebar lists every agent", "the sidebar no longer lists agents"],
             ),
+            Row::Counts => {
+                self.flip(|c| &mut c.counts, ["rows show how many they hold", "rows no longer show how many they hold"])
+            }
             Row::DimPanes => {
                 self.flip(|c| &mut c.dim_inactive_panes, ["inactive panes are dimmed", "every pane looks the same"])
             }
@@ -790,6 +799,10 @@ impl Settings {
                 let value = if config.agents_section { "[x] shown" } else { "[ ] hidden" };
                 ("agents section".into(), value.into(), "every running agent in the sidebar".into(), false)
             }
+            Row::Counts => {
+                let value = if config.counts { "[x] shown" } else { "[ ] hidden" };
+                ("counts".into(), value.into(), "what a project or folded group holds, such as (3)".into(), false)
+            }
             Row::DimPanes => {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
                 ("inactive panes".into(), value.into(), "in a split tab".into(), false)
@@ -995,7 +1008,7 @@ mod tests {
         #[case::worktrees(Page::Worktrees, &[""])]
         #[case::agents(Page::Agents, &["Agent", "How each agent starts"])]
         #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
-        #[case::tui(Page::Tui, &[""])]
+        #[case::ui(Page::Ui, &[""])]
         fn hold_their_sections(#[case] page: Page, #[case] expected: &[&str]) {
             assert_eq!(sections(page), expected);
         }
@@ -1008,8 +1021,8 @@ mod tests {
         #[rstest]
         #[case::tab(KeyCode::Tab, KeyModifiers::NONE, Page::Agents)]
         #[case::right(KeyCode::Right, KeyModifiers::NONE, Page::Agents)]
-        #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Tui)]
-        #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Tui)]
+        #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Ui)]
+        #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Ui)]
         fn are_switched_with_keys(#[case] code: KeyCode, #[case] modifiers: KeyModifiers, #[case] expected: Page) {
             let mut s = settings();
             key(&mut s, code, modifiers);
@@ -1028,7 +1041,7 @@ mod tests {
         fn switching_closes_an_open_edit() {
             let mut s = settings();
             press(&mut s, KeyCode::Enter);
-            s.open_page(Page::Tui);
+            s.open_page(Page::Ui);
             assert!(s.edit.is_none());
         }
 
@@ -1293,6 +1306,18 @@ mod tests {
         }
     }
 
+    mod counts {
+        use super::*;
+
+        #[test]
+        fn is_a_switch_that_starts_on() {
+            let mut s = settings();
+            let before = s.config.counts;
+            go_to(&mut s, &Row::Counts);
+            assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).counts), (true, false));
+        }
+    }
+
     mod agent_tabs {
         use rstest::rstest;
 
@@ -1313,10 +1338,10 @@ mod tests {
         fn show_whether_each_part_is_on() {
             let mut s = settings();
             s.config.context = false;
-            s.open_page(Page::Tui);
+            s.open_page(Page::Ui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
             let rows: Vec<(&str, &str)> =
-                view.rows[3..6].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+                view.rows[4..7].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
             assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
         }
     }
@@ -1325,14 +1350,15 @@ mod tests {
         use super::*;
 
         #[test]
-        fn comes_first_on_the_tui_page() {
+        fn comes_first_on_the_ui_page() {
             let mut s = settings();
-            s.open_page(Page::Tui);
+            s.open_page(Page::Ui);
             assert_eq!(
                 s.rows(),
                 [
                     Row::Sidebar,
                     Row::AgentsSection,
+                    Row::Counts,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),
@@ -1367,7 +1393,7 @@ mod tests {
         fn an_unknown_value_shows_as_the_default() {
             let mut s = settings();
             s.config.sidebar = "sideways".into();
-            s.open_page(Page::Tui);
+            s.open_page(Page::Ui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
             assert_eq!(view.rows[0].value, "projects_on_top");
         }

@@ -2,6 +2,27 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.14
+
+- A split tab keeps the name of its first pane, the top-left one, instead of changing every time you click another pane, and its row ends with a grey `+n` saying how many other panes it holds. A long name is cut before the count is.
+## 0.11.13
+
+- The server now keeps a log of what it does, so when something goes wrong there is a trail to follow: windows attaching, commands from scripts and their answers, tabs and panes opening and closing, each step of starting an agent, every change of an agent's status, dialogs opening, git runs and issue lists that failed or took long, and every error. It never holds what you type, paste or see in a pane, nor tokens. `cornercase logs` prints the end of it (`--follow` keeps printing, `--path` says where it is).
+- The log moved to `~/.local/state/cornercase/server.log`, next to your session, so it survives a logout or reboot. Past 8 MiB it moves to `server.log.1` and starts over. Restart the server with `CORNERCASE_LOG=debug` to log every click and key name it handled too.
+
+## 0.11.12
+
+- Every project, group, workspace and tab row has a `⋯` button next to its `×`, shown while you hover the row (always, in the compact layout). It opens the same menu as a right-click: rename, move to group, icon and colour, delete group.
+- **+ new group** creates the group as soon as you name it, with its own icon and colour: the first eight groups each get a different one, starting with a blue `●`. Change them later from the group's `⋯` or right-click menu, **icon and colour**.
+- The button at the end of the projects list now reads `+ new`, since it opens a project or creates a group.
+- Restart cornercase from **settings → restart**, or with `cornercase restart` in a shell. Like after an update, it first lists what is running in your terminals, then brings your projects, workspaces, tabs and splits back with new shells.
+- **Settings → UI → counts** hides the number of workspaces after each project, and of projects after a folded group. The settings tab called TUI is now UI.
+- The TODO item you are editing keeps its `×`, so you can delete it without leaving the field first. Undo brings it back with what you typed.
+
+## 0.11.11
+
+- Removing a worktree that is locked no longer stops its programs and then fails with git's "cannot remove a locked working tree". The dialog says it is locked and why, and when the lock names a process, whether it still runs: Claude Code locks the worktrees it creates, and a restart that ends its session leaves the lock behind. **unlock and remove** unlocks and removes it. `cornercase close --remove-worktree` refuses a locked worktree before anything stops and says how to unlock it.
+
 ## 0.11.10
 
 - An agents section for the sidebar: every Claude Code and Codex running in any project, one row each, with its status (`!` waiting for you, `✓` done, `◐` working, `○` idle), its project and workspace, and its model and how full its context is. Click a row to jump straight to that agent, whatever project you're in. Turn it on in **Settings → TUI → agents section**. It sits at the bottom of the sidebar in every layout, and you can drag the line above it to make it taller or shorter. On a narrow terminal it's a third menu: ` agents › ` in the projects menu.

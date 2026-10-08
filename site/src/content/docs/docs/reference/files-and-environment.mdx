@@ -16,11 +16,12 @@ import { Aside } from '@astrojs/starlight/components';
 | `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
+| `server.log` | What the server did, one line per event: windows attaching, commands run and their answers, tabs opened and closed, agents starting and changing status, background jobs and how long they took, errors and the bugs it hit. Never what you type, paste or see in a pane, nor tokens. Readable only by you (mode `0600`). `cornercase logs` prints it; see [Troubleshooting](../../help/troubleshooting/#the-server-log). | Next to `session.json` |
+| `server.log.1` | The previous log: past 8 MiB, `server.log` is moved here and starts over, so the two never take more than 16 MiB. | Next to `session.json` |
 | `server.sock` | The Unix socket clients use to reach the server. cornercase creates its folder private to you (mode `0700`), and refuses an existing folder that another user owns or can write to, or that is a symbolic link. | `$XDG_RUNTIME_DIR/cornercase/`, or `$TMPDIR/cornercase-<uid>/` |
 | `server.lock` | Makes sure only one server runs per socket. | Next to the socket |
-| `server.log` | What the server prints: errors, failed agent launches, files a worktree couldn't copy, and the bugs it hit, with where they happened. | Next to the socket |
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json` and `todos.json` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json`, `todos.json` and `server.log` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
 
 ### With `CORNERCASE_SOCKET`
 
@@ -50,6 +51,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | --- | --- |
 | `CORNERCASE_SOCKET` | Use another socket, which means another, independent server; its files live next to it. Keep the path short: Unix sockets allow about 100 bytes. cornercase doesn't add it to panes: a pane has it only when the server was started with it. |
 | `SHELL` | The shell started in every pane. Without it, `/bin/sh`. |
+| `CORNERCASE_LOG` | How much the server writes to `server.log`: `info` (the default), `debug` for every event it handles, every git run and slow frames, or `warn` / `error` for less. Read when the server starts. |
 | `SHORTCUT_API_TOKEN` | Shortcut token. Takes precedence over a saved one. |
 | `LINEAR_API_KEY` | Linear API key. Takes precedence over a saved one. |
 | `JIRA_API_TOKEN` | Jira API token, sent with the email of your Jira settings. Takes precedence over a saved one. |

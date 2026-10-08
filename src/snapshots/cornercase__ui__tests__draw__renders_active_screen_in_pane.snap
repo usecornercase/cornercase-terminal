@@ -8,7 +8,7 @@ expression: render(&v).backend()
 "                               │                         │                                          "
 "▌ ~ (1)                        │                         │                                          "
 "                               │                         │                                          "
-"  + new project                │                         │                                          "
+"  + new                        │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "

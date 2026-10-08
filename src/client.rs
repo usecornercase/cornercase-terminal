@@ -1,5 +1,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, IsTerminal, Read, Write, stdin, stdout};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -29,6 +30,7 @@ use signal_hook::iterator::{Handle, Signals};
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::host_theme::{HostTheme, ThemeProbe};
+use crate::log;
 use crate::notify::{self, Channel};
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::remote::{self, Remote, Stderr};
@@ -323,35 +325,56 @@ fn announce(version: &str, command: &str) {
 }
 
 fn offer_restart(yes: bool) -> Result<()> {
-    let path = protocol::socket_path();
-    protocol::check_socket_dir(&path)?;
-    if UnixStream::connect(&path).is_err() {
-        return Ok(());
-    }
-    let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
-    let note = if inside { format!(" {INSIDE}") } else { String::new() };
-    let running = if yes || stdin().is_terminal() { running_now() } else { None };
-    let stops = restart::confirmation(running.as_deref());
-    let question = format!("The running cornercase server still runs {CURRENT}.{note}\n{stops}\n{RESTART}");
-    if yes || (stdin().is_terminal() && confirm(&question)) {
-        if yes {
-            println!("{stops}");
-        }
-        if inside {
-            println!("restarting the cornercase server");
-        }
-        if restart_server()? {
-            println!("restarted the cornercase server; your session comes back the next time cornercase starts");
-            if let Some(line) = running.as_deref().and_then(restart::stopped) {
-                println!("{line}");
-            }
-        }
-    } else {
+    if server_running()?
+        && !restart_if_confirmed(Some(&format!("The running cornercase server still runs {CURRENT}.")), yes)?
+    {
         println!(
             "the server keeps running {CURRENT}; run `cornercase kill-server` and start cornercase to use the new one"
         );
     }
     Ok(())
+}
+
+pub fn restart(yes: bool) -> Result<()> {
+    if !server_running()? {
+        eprintln!("no cornercase server is running");
+    } else if !restart_if_confirmed(None, yes)? {
+        let hint = if stdin().is_terminal() { "" } else { "; pass --yes to restart it without asking" };
+        println!("the server keeps running{hint}");
+    }
+    Ok(())
+}
+
+fn server_running() -> Result<bool> {
+    let path = protocol::socket_path();
+    protocol::check_socket_dir(&path)?;
+    Ok(UnixStream::connect(&path).is_ok())
+}
+
+fn restart_if_confirmed(intro: Option<&str>, yes: bool) -> Result<bool> {
+    let inside = std::env::var_os(protocol::NESTED_ENV).is_some();
+    let lead: Vec<&str> = [intro, inside.then_some(INSIDE)].into_iter().flatten().collect();
+    let running = if yes || stdin().is_terminal() { running_now() } else { None };
+    let stops = restart::confirmation(running.as_deref());
+    let question =
+        if lead.is_empty() { format!("{stops}\n{RESTART}") } else { format!("{}\n{stops}\n{RESTART}", lead.join(" ")) };
+    let confirmed = yes || (stdin().is_terminal() && confirm(&question));
+    if !confirmed {
+        return Ok(false);
+    }
+    if yes {
+        println!("{stops}");
+    }
+    if inside {
+        println!("restarting the cornercase server");
+    }
+    if restart_server()? {
+        println!("restarted the cornercase server; your session comes back the next time cornercase starts");
+        if let Some(line) = running.as_deref().and_then(restart::stopped) {
+            println!("{line}");
+        }
+    }
+    Ok(true)
 }
 
 fn wait_for_exit(path: &Path) {
@@ -365,7 +388,7 @@ pub(crate) fn connect_or_start(path: &Path) -> Result<UnixStream> {
     if let Ok(stream) = UnixStream::connect(path) {
         return Ok(stream);
     }
-    let log = protocol::log_path(path);
+    let log = log::path();
     let start_error = |e| Error::ServerStart { log: log.clone(), source: Some(e) };
     let deadline = Instant::now() + SERVER_START_TIMEOUT;
     let mut server = start_server(&log).map_err(start_error)?;
@@ -386,7 +409,11 @@ pub(crate) fn connect_or_start(path: &Path) -> Result<UnixStream> {
 }
 
 fn start_server(log: &Path) -> io::Result<Child> {
-    let log = OpenOptions::new().create(true).append(true).open(log)?;
+    if let Some(dir) = log.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    let log = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log)?;
+    log.set_permissions(fs::Permissions::from_mode(log::PRIVATE))?;
     Command::new(std::env::current_exe()?)
         .arg("server")
         .stdin(Stdio::null())
@@ -479,6 +506,7 @@ struct Window<'a> {
     tx: Sender<Incoming>,
     theme: HostTheme,
     notify: Channel,
+    name: Option<String>,
     generation: u64,
     out: Option<Sender<ClientMessage>>,
     guard: Option<Guard>,
@@ -492,8 +520,8 @@ impl Window<'_> {
         let size = self.terminal.size()?;
         let out = spawn_writer(writer);
         let (version, build) = (protocol::VERSION, protocol::build_id());
-        let (theme, notify) = (self.theme.clone(), self.notify);
-        let hello = Hello { version, build, cols: size.width, rows: size.height, theme, notify };
+        let (theme, notify, terminal) = (self.theme.clone(), self.notify, self.name.clone());
+        let hello = Hello { version, build, cols: size.width, rows: size.height, theme, notify, terminal };
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));
         spawn_reader(self.generation, reader, self.tx.clone());
         self.out = Some(out);
@@ -627,8 +655,18 @@ fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal) -> Result
     let theme = HostTheme { truecolor: truecolor(), ..theme };
     let notify = notify::detect(name.as_deref(), |var| std::env::var(var).ok());
     let (tx, rx) = mpsc::channel();
-    let mut window =
-        Window { terminal, target, tx: tx.clone(), theme, notify, generation: 0, out: None, guard: None, lost: None };
+    let mut window = Window {
+        terminal,
+        target,
+        tx: tx.clone(),
+        theme,
+        notify,
+        name,
+        generation: 0,
+        out: None,
+        guard: None,
+        lost: None,
+    };
     window.link(link)?;
     let _threads = Threads::spawn(tx)?;
     loop {

@@ -143,6 +143,7 @@ export type Overlay =
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number }
   | { kind: 'search'; query: string; selected: number; scroll: number }
   | { kind: 'usage' }
+  | { kind: 'restart'; scroll: number }
   | SettingsOverlay
   | IssuesOverlay;
 
@@ -154,6 +155,7 @@ export interface Config {
   trust: boolean;
   sidebar: string;
   agentsSection: boolean;
+  counts: boolean;
   dim: boolean;
   model: boolean;
   context: boolean;
@@ -176,6 +178,7 @@ export const defaultConfig = (): Config => ({
   trust: false,
   sidebar: 'projects_on_top',
   agentsSection: false,
+  counts: true,
   dim: true,
   model: true,
   context: true,
@@ -197,7 +200,16 @@ export function activePane(t: Tab): Pane | undefined {
   return t.panes.find((p) => p.id === t.active) ?? t.panes[0];
 }
 
-export const tabLabel = (t: Tab) => t.name || activePane(t)?.shell.name || 'bash';
+function firstLeaf(node: Node): number {
+  return 'leaf' in node ? node.leaf : firstLeaf(node.first);
+}
+
+export function firstPane(t: Tab): Pane | undefined {
+  const first = firstLeaf(t.layout);
+  return t.panes.find((p) => p.id === first) ?? t.panes[0];
+}
+
+export const tabLabel = (t: Tab) => t.name || firstPane(t)?.shell.name || 'bash';
 
 export const NOTIFY_AFTER = 1000;
 

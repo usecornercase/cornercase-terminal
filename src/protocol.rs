@@ -38,6 +38,7 @@ pub struct Hello {
     pub rows: u16,
     pub theme: HostTheme,
     pub notify: Channel,
+    pub terminal: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,10 +85,6 @@ pub fn socket_path() -> PathBuf {
         |dir| PathBuf::from(dir).join("cornercase"),
     );
     dir.join("server.sock")
-}
-
-pub fn log_path(socket: &Path) -> PathBuf {
-    socket.with_extension("log")
 }
 
 pub fn lock_path(socket: &Path) -> PathBuf {

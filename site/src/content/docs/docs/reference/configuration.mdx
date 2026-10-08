@@ -12,6 +12,8 @@ cornercase is configured from the **settings** modal, opened with the `settings`
 
 The modal has four tabs. Click a row, or select it and press `Enter`, to change it; the line at the bottom explains what the selected row does and confirms every change.
 
+The ` restart ` button next to ` done ` restarts cornercase. It first lists what is running in your terminals, since restarting stops every program in them; your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. See [Restart the server](../../guides/sessions/#restart-the-server).
+
 ### Worktrees
 
 <Screen
@@ -67,18 +69,19 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Jira filter** | A JQL condition the Jira tab always applies, such as `project = SHOP`. Empty lists every issue of the site you can see. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
-### TUI
+### UI
 
 <Screen
-  name="settings-tui"
+  name="settings-ui"
   crop={[2, 1, 106, 12]}
-  alt="The TUI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; agents section hidden, every running agent in the sidebar; inactive panes dimmed, in a split tab; model shown, under a Claude Code or Codex tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under a Claude Code or Codex tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **agents section** | List every Claude Code and Codex, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a folded group holds. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
 | **model** | Show the model of a Claude Code or Codex tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
@@ -130,6 +133,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "gh": "gh",
   "sidebar": "projects_on_top",
   "agents_section": false,
+  "counts": true,
   "dim_inactive_panes": true,
   "model": true,
   "context": true,
@@ -160,6 +164,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`agents_section`](#agents_section) | boolean | `false` |
+| [`counts`](#counts) | boolean | `true` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
 | [`model`](#model) | boolean | `true` |
 | [`context`](#context) | boolean | `true` |
@@ -238,6 +243,10 @@ How projects, workspaces and tabs are laid out: `"projects_on_top"` and `"worksp
 #### `agents_section`
 
 Whether the sidebar ends with a list of every Claude Code and Codex running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+
+#### `counts`
+
+Whether a project shows how many workspaces it has after its name, such as `(3)`, and a folded group how many projects it holds.
 
 #### `dim_inactive_panes`
 

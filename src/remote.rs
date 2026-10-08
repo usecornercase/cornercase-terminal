@@ -466,6 +466,7 @@ mod tests {
                 rows: 24,
                 theme: HostTheme::default(),
                 notify: Channel::Bell,
+                terminal: None,
             };
 
             let message = rebuilt(ClientMessage::Hello(Box::new(hello)), "the server's".into());

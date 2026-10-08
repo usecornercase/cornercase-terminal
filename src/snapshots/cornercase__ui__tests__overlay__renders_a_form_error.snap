@@ -8,7 +8,7 @@ expression: render(&v).backend()
 "                               │                         │                                          "
 "▌ cornercase (1)  ╭─ new worktree ───────────────────────────────────────────────╮                  "
 "                  │ branch                                                       │                  "
-"  + new project   │ › feat/login                                                 │                  "
+"  + new           │ › feat/login                                                 │                  "
 "                  │ in ~/.cornercase/worktrees/cornercase/feat-login             │                  "
 "                  │                                                              │                  "
 "                  │ a branch named 'feat/login' already exists                   │                  "

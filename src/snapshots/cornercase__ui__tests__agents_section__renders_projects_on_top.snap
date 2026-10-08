@@ -9,7 +9,7 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W,\nTALL.he
 "  cornercase (1)               │                                                                    "
 "▌ website (1)                  │                                                                    "
 "  ↓ 1 more                     │                                                                    "
-"  + new project                │                                                                    "
+"  + new                        │                                                                    "
 " ───────────────────────────── │                                                                    "
 " workspaces                    │                                                                    "
 "                               │                                                                    "

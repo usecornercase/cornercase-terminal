@@ -34,7 +34,7 @@ Every tab holds one or more **panes**. Each pane is a real terminal running its 
 
 The new pane starts in the folder the pane you split is currently in, and becomes the active one. A split is only offered when both halves would still be usable: at least 10 columns wide or 3 rows tall each.
 
-You can split a pane again and again; the dividers join up like in Ghostty. When the program in a pane exits, the pane closes and its neighbour takes the space. Closing the last pane closes the tab.
+You can split a pane again and again; the dividers join up like in Ghostty. The tab keeps the name of its first pane, the top-left one, and its row ends with a grey `+n`, the number of other panes in it. When the program in a pane exits, the pane closes and its neighbour takes the space. Closing the last pane closes the tab.
 
 ## Move and swap panes
 
@@ -53,7 +53,7 @@ This is also how you turn two panes side by side into one above the other: drag 
 
 - **Click a pane** to make it active. That first click only moves the focus; it is not sent to the program.
 - **Drag a divider** to resize the panes on both sides. It lights up cyan while you hover or drag it, and stops where a pane on either side, including panes split inside it, would get smaller than 10 columns or 3 rows. **Double-click** a divider to split the space in half again.
-- **Inactive panes are dimmed** so you always know where your keys go. You can turn this off in **settings → TUI → inactive panes**.
+- **Inactive panes are dimmed** so you always know where your keys go. You can turn this off in **settings → UI → inactive panes**.
 
 Programs are told about every size change, and Ghostty's emulator reflows their output, so long lines rewrap instead of being cut.
 

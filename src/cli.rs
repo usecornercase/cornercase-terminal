@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
-use std::io::{self, Read as _};
+use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
@@ -9,9 +10,11 @@ use crate::client::{answer, ask};
 use crate::control::{self, Done, Item, ProjectInfo, Report, TodoList, Until};
 use crate::error::{Error, Result};
 use crate::keys;
+use crate::log;
 use crate::remote::{self, Remote};
 use crate::{client, restart, server, ui};
 
+const FOLLOW_EVERY: Duration = Duration::from_millis(200);
 pub const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
 
 const ABOUT: &str = "A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse";
@@ -131,6 +134,20 @@ key or an agent.
 Examples:
   cornercase remote devbox
   cornercase remote me@10.0.0.5 --command '~/bin/cornercase'";
+const LOGS_HELP: &str = "The server writes one line per event: the time in UTC, the level, where it happened and what,
+then key=value details. It says which windows attached, which commands ran and how they were
+answered, what started and stopped, how long background jobs took, what each agent was doing and
+each step of starting one. It never holds what is typed, pasted or shown in a pane, nor tokens.
+
+The log is server.log in the state folder ($XDG_STATE_HOME/cornercase, else ~/.local/state/cornercase),
+or next to the socket when CORNERCASE_SOCKET is set. Past 8 MiB it moves to server.log.1 and starts
+over. Start the server with CORNERCASE_LOG=debug for more: every event it handled, every git run,
+slow frames.
+
+Examples:
+  cornercase logs -n 50
+  cornercase logs --follow
+  cornercase kill-server && CORNERCASE_LOG=debug cornercase";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
 
@@ -154,8 +171,14 @@ pub enum Command {
     Skill,
     #[command(about = "Install the latest release, then offer to restart the server")]
     Update(UpdateArgs),
+    #[command(
+        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells"
+    )]
+    Restart(RestartArgs),
     #[command(about = "Stop the server and every shell in it")]
     KillServer,
+    #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
+    Logs(LogsArgs),
     #[command(hide = true)]
     Server,
     #[command(hide = true)]
@@ -504,6 +527,22 @@ pub struct RemoteArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct LogsArgs {
+    #[arg(short = 'n', long, value_name = "N", default_value_t = 200, help = "How many of the last lines to print")]
+    pub lines: usize,
+    #[arg(short, long, help = "Keep printing what the server writes, until interrupted")]
+    pub follow: bool,
+    #[arg(long, conflicts_with_all = ["lines", "follow"], help = "Print only where the log is")]
+    pub path: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct RestartArgs {
+    #[arg(short, long, help = "Restart the server without asking")]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct UpdateArgs {
     #[arg(long, help = "Only say whether a newer version is out")]
     pub check: bool,
@@ -536,6 +575,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return client::update(update.check, update.yes),
+        Command::Restart(restart) => client::restart(restart.yes)?,
         Command::KillServer => {
             let running = client::running_now();
             if !client::kill_server()? {
@@ -544,10 +584,47 @@ pub fn run(cli: Cli) -> Result<bool> {
                 println!("{line}");
             }
         }
+        Command::Logs(args) => return print_logs(&args),
         Command::Server => server::run()?,
         Command::Proxy => remote::proxy()?,
     }
     Ok(true)
+}
+
+fn print_logs(args: &LogsArgs) -> Result<bool> {
+    let path = log::path();
+    let mut out = io::stdout().lock();
+    if args.path {
+        writeln!(out, "{}", path.display())?;
+        return Ok(true);
+    }
+    let follower = if args.follow { Some(log::Follower::at_end(&path)) } else { None };
+    let tail = match log::tail(&path, args.lines) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            eprintln!("no log yet: {} does not exist", path.display());
+            return Ok(false);
+        }
+        tail => tail?,
+    };
+    if quietly(out.write_all(tail.as_bytes()).and_then(|()| out.flush()))? {
+        return Ok(true);
+    }
+    let Some(follower) = follower else { return Ok(true) };
+    let mut follower = follower?;
+    loop {
+        let new = follower.read()?;
+        if !new.is_empty() && quietly(out.write_all(&new).and_then(|()| out.flush()))? {
+            return Ok(true);
+        }
+        std::thread::sleep(FOLLOW_EVERY);
+    }
+}
+
+fn quietly(written: io::Result<()>) -> Result<bool> {
+    match written {
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(true),
+        written => written.map(|()| false).map_err(Into::into),
+    }
 }
 
 fn run_control(command: Control) -> Result<()> {
@@ -850,9 +927,11 @@ mod tests {
         fn the_old_commands_stay() {
             let update = parse(&["update", "--check", "-y"]).expect("parse");
             let kill = parse(&["kill-server"]).expect("parse");
+            let restart = parse(&["restart", "--yes"]).expect("parse");
 
             assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true }))));
             assert!(matches!(kill.command, Some(Command::KillServer)));
+            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true }))));
         }
 
         #[rstest]
