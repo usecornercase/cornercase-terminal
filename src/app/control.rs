@@ -318,6 +318,7 @@ impl App {
                 ms = at.elapsed().as_millis()
             );
         }
+        self.events.forget(client);
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
@@ -369,6 +370,7 @@ impl App {
             Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
+            Command::Events(events) => self.events_request(client, events),
         }
     }
 
@@ -1305,6 +1307,15 @@ impl App {
         }
         self.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
+        Ok(Some(json(&Done::default())))
+    }
+
+    fn events_request(&mut self, client: u64, events: control::Events) -> Handled {
+        if let Some(pane) = events.panes.iter().find(|pane| self.locate(**pane).is_none()) {
+            return Err(none("pane", *pane));
+        }
+        self.publish(log::enabled(Level::Info));
+        self.events.subscribe(client, events.panes);
         Ok(Some(json(&Done::default())))
     }
 

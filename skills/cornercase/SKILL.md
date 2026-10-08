@@ -17,5 +17,6 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 - `send` refuses a Claude Code agent showing a dialog, a panel or its shell mode instead of its input box (`dialog open` in `status`). Read the pane; use `--force` only once you know where the text will go.
 - Keep `--timeout` under the timeout of your own command and wait again, or run the wait in the background.
 - To follow several agents, run one `cornercase wait --any` (or `--all`) with a `--pane` for each, not one wait per pane; `--any` prints the id of the one that ended.
+- To react to each change as it happens, run `cornercase events --pane ID…` in the background, or with a tool that streams a command's output: it prints a line each time one of those agents changes state, a program in its pane ends or the pane closes.
 - For long results, ask the other agent to write them to a file, then read the file.
 - When cornercase itself misbehaves (a command fails oddly, a tab or agent does something unexpected, "cornercase hit a bug"), `cornercase logs` prints what the server did, step by step, with its errors; quote the relevant lines to the user.
