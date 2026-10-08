@@ -25,8 +25,10 @@ commands drive the running server from scripts, git hooks and the agents in its 
 start a server.";
 const AFTER_HELP: &str = "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
-shows. Only `focus` and `--focus` change what the window shows. The commands exit with 1 on errors
-and timeouts, and 2 on wrong usage.
+shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
+instead, in that same project. Only `focus` and `--focus` change what the window shows. The
+commands exit with 1 on errors and timeouts, and 2 on wrong usage, a branch no workspace is on
+included, or one several are on (both list the workspaces to pick from).
 
 Examples:
   cornercase status
@@ -106,7 +108,8 @@ workspace stays listed while its worktree exists, and its branch is never delete
 
 Examples:
   cornercase close --tab 9
-  cornercase close --workspace 5 --remove-worktree";
+  cornercase close --workspace 5 --remove-worktree
+  cornercase close --worktree fix/login --remove-worktree";
 const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";
@@ -150,6 +153,7 @@ Examples:
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
+const BY_BRANCH: &str = "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
 #[derive(Debug, Parser)]
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]
@@ -282,6 +286,8 @@ pub struct NewWorkspaceArgs {
 pub struct NewTabArgs {
     #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
     pub workspace: Option<u64>,
+    #[arg(long, value_name = "BRANCH", value_parser = branch, conflicts_with = "workspace", help = BY_BRANCH)]
+    pub worktree: Option<String>,
     #[arg(long, help = "The tab's name [default: the name of the program it runs]")]
     pub name: Option<String>,
     #[command(flatten)]
@@ -425,17 +431,21 @@ pub struct Which {
     pub tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "A workspace and its tabs")]
     pub workspace: Option<u64>,
+    #[arg(long, value_name = "BRANCH", value_parser = branch, help = BY_BRANCH)]
+    pub worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "A project and its workspaces")]
     pub project: Option<u64>,
 }
 
 impl Which {
-    fn item(&self) -> Option<Item> {
-        self.pane
+    fn item(&self, command: &'static str) -> Result<Option<Item>> {
+        let workspace = workspace(command, self.workspace, self.worktree.as_deref())?;
+        Ok(self
+            .pane
             .map(Item::Pane)
             .or_else(|| self.tab.map(Item::Tab))
-            .or_else(|| self.workspace.map(Item::Workspace))
-            .or_else(|| self.project.map(Item::Project))
+            .or_else(|| workspace.map(Item::Workspace))
+            .or_else(|| self.project.map(Item::Project)))
     }
 }
 
@@ -466,6 +476,13 @@ pub struct Renamed {
     pub tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this workspace instead")]
     pub workspace: Option<u64>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        value_parser = branch,
+        help = "Rename the workspace on this branch instead, looked up in the project this runs in, else the shown one"
+    )]
+    pub worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "Rename this project instead")]
     pub project: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this group instead")]
@@ -561,6 +578,11 @@ fn pattern(text: &str) -> std::result::Result<String, String> {
     regex::Regex::new(text).map(|_| text.to_string()).map_err(|e| e.to_string())
 }
 
+fn branch(text: &str) -> std::result::Result<String, String> {
+    let branch = text.trim();
+    if branch.is_empty() { Err("the branch needs a name".into()) } else { Ok(branch.to_string()) }
+}
+
 fn key(text: &str) -> std::result::Result<String, String> {
     keys::named(text).map(|_| text.to_string()).ok_or_else(|| format!("unknown key; use {KEY_NAMES}"))
 }
@@ -651,7 +673,7 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::NewTab(new) => {
             let request = control::NewTab {
-                workspace: new.workspace,
+                workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
                 name: new.name,
                 command: typed(&new.command),
                 focus: new.create.focus,
@@ -700,12 +722,13 @@ fn run_control(command: Control) -> Result<()> {
             say(ask("wait", control::Command::Wait(request))?, wait.print.json, ending)
         }
         Control::Close(close) => {
-            let item = close.which.item().ok_or_else(|| Error::Control("say what to close".into()))?;
+            let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
             let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
             ask("close", control::Command::Close(request)).map(drop)
         }
         Control::Rename(rename) => {
-            let Renamed { tab, workspace, project, group } = rename.renamed;
+            let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;
+            let workspace = workspace("rename", id, worktree.as_deref())?;
             let item = tab
                 .map(Item::Tab)
                 .or_else(|| workspace.map(Item::Workspace))
@@ -714,7 +737,7 @@ fn run_control(command: Control) -> Result<()> {
             ask("rename", control::Command::Rename(control::Rename { item, name: rename.name })).map(drop)
         }
         Control::Focus(focus) => {
-            let item = focus.which.item().ok_or_else(|| Error::Control("say what to show".into()))?;
+            let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
             ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
         }
         Control::Notify(notify) => {
@@ -723,6 +746,12 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::Todo(todo) => run_todo(todo.action),
     }
+}
+
+fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
+    let Some(branch) = branch else { return Ok(id) };
+    let report: Report = answer(ask(command, control::Command::Status(control::Status {}))?)?;
+    report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
 fn run_start(start: StartArgs) -> Result<()> {
@@ -951,9 +980,23 @@ mod tests {
         #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
         #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
         #[case::two_things_to_rename(&["rename", "--tab", "1", "--group", "2", "x"])]
+        #[case::a_branch_and_a_workspace_to_close(&["close", "--worktree", "x", "--workspace", "1"])]
+        #[case::a_branch_and_a_tab_to_show(&["focus", "--worktree", "x", "--tab", "1"])]
+        #[case::a_branch_and_a_workspace_for_a_tab(&["new-tab", "--worktree", "x", "--workspace", "1"])]
+        #[case::a_branch_and_a_project_to_rename(&["rename", "--worktree", "x", "--project", "1", "y"])]
+        #[case::a_blank_branch(&["close", "--worktree", " "])]
         #[case::an_unknown_command(&["frobnicate"])]
         fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
             assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
+        }
+
+        #[test]
+        fn a_worktree_is_closed_by_its_branch() {
+            let cli = parse(&["close", "--worktree", " fix/login ", "--remove-worktree", "--force"]).expect("parse");
+
+            let Some(Command::Control(Control::Close(close))) = cli.command else { panic!("not close") };
+            assert_eq!(close.which.worktree.as_deref(), Some("fix/login"));
+            assert!(close.remove_worktree && close.force);
         }
 
         #[test]
