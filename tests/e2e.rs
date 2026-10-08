@@ -1609,20 +1609,27 @@ fn split_opens_a_pane_beside_the_shown_one() {
 }
 
 #[test]
-fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() {
+fn an_agent_started_from_the_command_line_takes_its_prompts_is_waited_for_and_read() {
     let session = Session::new();
     std::fs::create_dir(session.dir.join("bin")).expect("create bin");
     let agent = session.dir.join("bin").join("claude");
     write_executable(
         &agent,
-        "#!/bin/sh\nd=\"$CLAUDE_CONFIG_DIR/sessions\"; mkdir -p \"$d\"; s=\"$d/$$.json\"\n\
-         printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"\n\
-         while printf 'agent> ' && IFS= read -r line; do\n\
-         printf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$s\"\n\
-         while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\"\n\
-         case \"$line\" in *background*) printf '{\"pid\":%s,\"status\":\"shell\"}' $$ > \"$s\"\n\
-         while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\";; esac\n\
-         printf 'done: %s\\n' \"$line\"; printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"; done\n",
+        r#"#!/bin/sh
+d="$CLAUDE_CONFIG_DIR"; mkdir -p "$d/sessions"; s="$d/sessions/$$.json"
+t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"; mkdir -p "$t"; n=0
+state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
+finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
+said() { n=$((n+1)); printf '{"type":"assistant","timestamp":"2026-10-08T12:00:0%s.000Z","message":{"id":"m%s","model":"claude-opus-5-5","content":[{"type":"text","text":"said: %s"}]}}\n' "$n" "$n" "$1" >> "$t/s$$.jsonl"; }
+state idle
+while printf 'agent> ' && IFS= read -r line; do
+  case "$line" in *panel*) printf 'Shell details\n'; read -r line; continue ;; esac
+  printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
+  state busy; finished; said "$line"
+  case "$line" in *background*) state shell; finished ;; esac
+  printf 'done: %s\n' "$line"; state idle
+done
+"#,
     );
     let config = format!("{{\"agent_commands\": {{\"claude\": \"{}\"}}}}", agent.display());
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
@@ -1638,6 +1645,7 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     let started = Session::output(start);
     let lines: Vec<&str> = started.lines().collect();
     let [pane, ended] = lines[..] else { panic!("not a pane and an ending: {started}") };
+    let first = session.says(&["read", "--pane", pane, "--last-message"]);
     let send = session.spawn(&["send", "--pane", pane, "--enter", "--wait", "--timeout", "30", "add tests"]);
     finish();
     let next = Session::output(send);
@@ -1657,10 +1665,25 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     std::fs::write(session.claude_dir().join("finish"), "").expect("let the background shell end");
     let last = session.says(&["wait", "--pane", pane, "--timeout", "30"]);
 
+    session.says(&["keys", "--pane", pane, "p", "a", "n", "e", "l", "enter"]);
+    let unrecorded = session.cli(&["send", "--pane", pane, "--enter", "--timeout", "1", "never recorded"]);
+
     assert_eq!((ended, next.as_str(), turn.as_str(), last.as_str()), ("done", "done", "shell", "done"));
     assert!(status.contains("working (background shell)"), "{status}");
+    assert!(refused(&unrecorded, 1, "has not recorded the prompt yet"), "{unrecorded:?}");
     let screen = session.says(&["read", "--pane", pane]);
     assert!(screen.contains("done: fix the login") && screen.contains("done: add tests"), "{screen}");
+    let said: serde_json::Value =
+        serde_json::from_str(&session.says(&["read", "--pane", pane, "--last-message", "--json"])).expect("json");
+    let shell = session.report().projects[0].workspaces[0].tabs[0].panes[0].id.to_string();
+    let no_agent = session.cli(&["read", "--pane", &shell, "--last-message"]);
+
+    assert_eq!(first, "said: fix the login");
+    assert_eq!(
+        (&said["text"], &said["agent"], &said["turn_over"], &said["written"]),
+        (&"said: watch in the background".into(), &"claude".into(), &true.into(), &"2026-10-08T12:00:03.000Z".into())
+    );
+    assert!(refused(&no_agent, 1, &format!("pane {shell} runs no agent")), "{no_agent:?}");
 }
 
 #[test]

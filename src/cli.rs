@@ -41,6 +41,8 @@ waiting for an answer, done out of sight, idle), its model and how full its cont
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
+`(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
+input box, which `cornercase send` refuses (`dialog` in the JSON).
 
 Examples:
   cornercase status
@@ -77,9 +79,18 @@ Examples:
   cornercase start codex --prompt-file task.md --wait --timeout 1800";
 const SEND_HELP: &str = "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer
-it; use `cornercase keys` for that. With --wait, the command fails if the agent does not start
-working within 10 seconds of the Enter, and otherwise prints how the wait ended; with --until it waits
-for that state instead, as `cornercase wait --until` does.
+it; use `cornercase keys` for that. So is a Claude Code agent that shows a dialog, a panel or
+its shell mode instead of its input box (`dialog` in `cornercase status --json`), unless you pass
+--force.
+
+With --enter, the command returns once Claude Code, Codex or opencode has recorded the prompt in
+its own history, and fails with `not confirmed: the prompt may not have been submitted` when it
+records none: read the pane before sending it again. A working Codex holds a prompt until its next
+step, so the command returns then. In other programs it returns once Enter is pressed.
+
+With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
+and otherwise prints how the wait ended; with --until it waits for that state instead, as
+`cornercase wait --until` does.
 
 Examples:
   cornercase send --pane 12 --enter 'Now add tests for it'
@@ -95,9 +106,17 @@ const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, righ
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
 const READ_HELP: &str = "Lines the terminal wrapped come back joined, and empty lines at the end are left out.
 
+With --last-message it prints the last message the agent in the pane wrote, as plain text, from its
+own record (Claude Code's transcript, Codex's rollout, opencode's database) instead of the screen, so
+it comes whole even once it scrolled off, without the input box or status lines. While the agent
+works it is the newest one so far. --json adds when it was written and whether the agent's turn is
+over. It fails on a pane without Claude Code, Codex or opencode, and before the agent wrote anything.
+
 Examples:
   cornercase read --pane 12
-  cornercase read --pane 7 --lines 200 > build.log";
+  cornercase read --pane 7 --lines 200 > build.log
+  cornercase read --pane 12 --last-message
+  cornercase read --tab 4 --last-message --json";
 const WAIT_HELP: &str = "By default it waits until the agent stops working: idle, done or waiting. A Claude Code agent
 whose turn is over while a background shell it started still runs counts as working, since it
 wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then prints
@@ -388,11 +407,13 @@ pub struct SendArgs {
     #[arg(
         long,
         value_name = "SECONDS",
-        requires = "wait",
+        requires = "enter",
         value_parser = seconds,
         help = "Give up waiting after this long, with status 1"
     )]
     pub timeout: Option<f64>,
+    #[arg(long, help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box")]
+    pub force: bool,
     #[command(flatten)]
     pub print: Print,
     #[arg(
@@ -422,6 +443,8 @@ pub struct ReadArgs {
         help = "The last N lines, scrollback included (a pane keeps 5,000)"
     )]
     pub lines: Option<u64>,
+    #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
+    pub last_message: bool,
     #[command(flatten)]
     pub print: Print,
 }
@@ -764,6 +787,7 @@ fn run_control(command: Control) -> Result<()> {
                 wait: send.wait,
                 until: send.until.map_or(Until::Stops, Until::from),
                 timeout: send.timeout,
+                force: send.force,
             };
             say(ask("send", control::Command::Send(request))?, send.print.json, ending)
         }
@@ -771,12 +795,7 @@ fn run_control(command: Control) -> Result<()> {
             let Target { pane, tab } = keys.target;
             ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
         }
-        Control::Read(read) => {
-            let Target { pane, tab } = read.target;
-            let lines = read.lines.and_then(|n| usize::try_from(n).ok());
-            let value = ask("read", control::Command::Read(control::Read { pane, tab, lines }))?;
-            say(value, read.print.json, |done| done.text.clone().into_iter().collect())
-        }
+        Control::Read(read) => run_read(&read),
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
@@ -878,6 +897,17 @@ fn run_start(start: StartArgs) -> Result<()> {
     say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
+}
+
+fn run_read(read: &ReadArgs) -> Result<()> {
+    let Target { pane, tab } = read.target;
+    let value = if read.last_message {
+        ask("read --last-message", control::Command::LastMessage(control::LastMessage { pane, tab }))?
+    } else {
+        let lines = read.lines.and_then(|n| usize::try_from(n).ok());
+        ask("read", control::Command::Read(control::Read { pane, tab, lines }))?
+    };
+    say(value, read.print.json, |done| done.text.clone().into_iter().collect())
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {
@@ -1024,10 +1054,14 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
+                let notes: Vec<&str> = [(pane.background_shell, "background shell"), (pane.dialog, "dialog open")]
+                    .into_iter()
+                    .filter_map(|(on, note)| on.then_some(note))
+                    .collect();
                 let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),
-                    if pane.background_shell { format!("{status} (background shell)") } else { status },
+                    if notes.is_empty() { status } else { format!("{status} ({})", notes.join(", ")) },
                     details,
                     pane.path.as_deref().map(place).unwrap_or_default(),
                 ];
@@ -1104,6 +1138,7 @@ mod tests {
 
         #[rstest]
         #[case::wait_without_enter(&["send", "--wait", "hi"])]
+        #[case::a_timeout_without_enter(&["send", "--timeout", "5", "hi"])]
         #[case::sending_until_without_waiting(&["send", "--enter", "--until", "turn-over", "hi"])]
         #[case::starting_until_without_waiting(&["start", "--until", "turn-over"])]
         #[case::nothing_to_send(&["send", "--pane", "1"])]
@@ -1118,6 +1153,7 @@ mod tests {
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
         #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
+        #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]
         #[case::an_unknown_key(&["keys", "hello"])]
         #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
         #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
@@ -1176,12 +1212,28 @@ mod tests {
         }
 
         #[test]
+        fn send_gives_up_on_the_confirmation_after_a_timeout_and_can_force_its_way() {
+            let cli = parse(&["send", "--enter", "--timeout", "5", "--force", "hi"]).expect("parse");
+
+            let Some(Command::Control(Control::Send(send))) = cli.command else { panic!("not send") };
+            assert_eq!((send.timeout, send.force, send.wait), (Some(5.0), true, false));
+        }
+
+        #[test]
         fn a_worktree_is_closed_by_its_branch() {
             let cli = parse(&["close", "--worktree", " fix/login ", "--remove-worktree", "--force"]).expect("parse");
 
             let Some(Command::Control(Control::Close(close))) = cli.command else { panic!("not close") };
             assert_eq!(close.which.worktree.as_deref(), Some("fix/login"));
             assert!(close.remove_worktree && close.force);
+        }
+
+        #[test]
+        fn the_last_message_is_read_from_a_pane_or_a_tab() {
+            let cli = parse(&["read", "--tab", "4", "--last-message", "--json"]).expect("parse");
+
+            let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
+            assert_eq!((read.target.tab, read.last_message, read.print.json), (Some(4), true, true));
         }
 
         #[test]
@@ -1317,6 +1369,24 @@ mod tests {
             let value = serde_json::json!({"time": "2026-10-08T12:00:00.000Z", "event": "renamed", "tab": 3});
 
             assert_eq!(event_line(&value), value.to_string());
+        }
+
+        #[rstest]
+        #[case::a_dialog(false, true, "idle (dialog open)")]
+        #[case::both(true, true, "working (background shell, dialog open)")]
+        fn what_covers_an_agent_is_said_after_its_status(
+            #[case] background_shell: bool,
+            #[case] dialog: bool,
+            #[case] shown: &str,
+        ) {
+            let mut report = report();
+            let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
+            pane.status = Some(if background_shell { "working" } else { "idle" }.into());
+            (pane.background_shell, pane.dialog) = (background_shell, dialog);
+
+            let text = render(&report, Some(Path::new("/home/ana")));
+
+            assert!(text.contains(&format!("pane 5  claude  {shown}  Opus 5.5 · 23%")), "{text}");
         }
 
         #[rstest]

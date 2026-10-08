@@ -2,9 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.12
+## 0.12.13
 
 - Nothing changes in the app. A test that checks how cornercase tells two opencode in one folder apart failed now and then on macOS; it now runs a fake opencode that cannot be mistaken for a second one.
+
+## 0.12.12
+
+- `cornercase read --last-message` prints the last message the coding agent in a pane wrote, as plain text. It comes from the agent's own record (Claude Code's transcript, Codex's rollout, opencode's database) rather than the screen, so it is whole even once it scrolled off, and free of the input box, the status lines and Claude Code's grey suggestions. `--json` adds when it was written and whether the agent's turn is over. An agent that starts others can now read their answers directly, instead of asking each one to write its report to a file.
+
+## 0.12.11
+
+- `cornercase send --enter` now makes sure the prompt was submitted: for Claude Code, Codex and opencode it returns once the agent has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have been submitted` when it records nothing, instead of reporting success for a prompt that went nowhere. A Codex that is working keeps a prompt until its next step, so `send` returns then; `--timeout` now works without `--wait` to give up sooner.
+- `cornercase send` refuses a Claude Code agent that shows a dialog, a panel or its `!` shell mode instead of its input box, such as the details of a background shell, where the text could stop the shell and the Enter would just close the panel. `--force` sends anyway. `cornercase status` shows such an agent as `(dialog open)`, and `"dialog": true` in `--json`.
 
 ## 0.12.9
 

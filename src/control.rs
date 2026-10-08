@@ -59,6 +59,7 @@ pub enum Command {
     Notify(Notify),
     Todo(Todo),
     Events(Events),
+    LastMessage(LastMessage),
 }
 
 impl Command {
@@ -81,6 +82,7 @@ impl Command {
             Self::Todo(_) => 14,
             Self::WaitSeveral(_) => 15,
             Self::Events(_) => 16,
+            Self::LastMessage(_) => 17,
         }]
     }
 
@@ -113,13 +115,16 @@ impl Command {
                 fields.maybe("pane", send.pane).maybe("tab", send.tab);
                 fields.add("bytes", send.text.as_ref().map_or(0, String::len)).add("enter", send.enter);
                 fields.add("wait", send.wait).maybe("until", send.wait.then(|| send.until.name()));
-                fields.maybe("timeout", send.timeout);
+                fields.maybe("timeout", send.timeout).add("force", send.force);
             }
             Self::Keys(keys) => {
                 fields.maybe("pane", keys.pane).maybe("tab", keys.tab).add("keys", keys.keys.len());
             }
             Self::Read(read) => {
                 fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
+            }
+            Self::LastMessage(last) => {
+                fields.maybe("pane", last.pane).maybe("tab", last.tab);
             }
             Self::Wait(wait) | Self::WaitSeveral(wait) => {
                 fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", wait.until.name());
@@ -157,7 +162,7 @@ impl Command {
         fields.0
     }
 
-    pub const NAMES: [&str; 17] = [
+    pub const NAMES: [&str; 18] = [
         "status",
         "open",
         "new-workspace",
@@ -175,6 +180,7 @@ impl Command {
         "todo",
         "wait-several",
         "events",
+        "last-message",
     ];
 }
 
@@ -271,6 +277,7 @@ pub struct SendText {
     pub wait: bool,
     pub until: Until,
     pub timeout: Option<f64>,
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -287,6 +294,13 @@ pub struct Read {
     pub pane: Option<u64>,
     pub tab: Option<u64>,
     pub lines: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LastMessage {
+    pub pane: Option<u64>,
+    pub tab: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -479,6 +493,12 @@ pub struct Done {
     pub todo: Option<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub panes: Vec<Done>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub written: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_over: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -588,6 +608,7 @@ pub struct PaneInfo {
     pub agent: Option<String>,
     pub status: Option<String>,
     pub background_shell: bool,
+    pub dialog: bool,
     pub at_prompt: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,
@@ -672,6 +693,7 @@ mod tests {
             Command::Todo(Todo::List),
             Command::WaitSeveral(Wait::default()),
             Command::Events(Events::default()),
+            Command::LastMessage(LastMessage::default()),
         ];
 
         let names: Vec<String> = commands

@@ -9,10 +9,15 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::activity::Claude;
+use crate::agents;
+use crate::log::Stamp;
 use crate::process;
 
 mod codex;
+mod message;
 mod opencode;
+
+pub use message::{Record, Said};
 
 const TAIL: u64 = 1024 * 1024;
 const DIR_NAME_MAX: usize = 200;
@@ -22,6 +27,11 @@ const LONG_SUFFIX: &str = "[1m]";
 const SYNTHETIC: &str = "<synthetic>";
 const ASSISTANT: &str = r#""type":"assistant""#;
 const COMPACT_BOUNDARY: &str = r#""compact_boundary""#;
+const TYPED: &str = r#""origin":{"kind":"human""#;
+const QUEUED: &str = r#""operation":"enqueue""#;
+const COMMAND: &str = "<command-name>";
+const SHELL_INPUT: &str = "<bash-input>";
+const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
 const MODEL_FLAG: &str = "--model";
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
 pub const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
@@ -44,6 +54,7 @@ pub struct Pane {
     opencode: Option<opencode::Session>,
     looking: Option<Receiver<(Option<opencode::Session>, opencode::Models)>>,
     models: opencode::Models,
+    prompted: Option<SystemTime>,
 }
 
 impl Pane {
@@ -72,6 +83,7 @@ impl Pane {
         if let Some(rollout) = &mut self.codex {
             rollout.update();
             self.shown = rollout.context();
+            self.prompted = self.prompted.max(rollout.prompted());
         }
     }
 
@@ -84,6 +96,7 @@ impl Pane {
                 self.looking = None;
                 self.models = models;
                 self.shown = found.as_ref().and_then(|session| session.context.clone());
+                self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
                 self.opencode = found;
             }
             Some(Err(TryRecvError::Disconnected)) => self.looking = None,
@@ -113,11 +126,12 @@ impl Pane {
             return;
         };
         if self.transcript.as_ref().is_none_or(|t| t.path != path) {
-            *self = Self::default();
+            *self = Self { prompted: self.prompted, ..Self::default() };
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
         let before = transcript.reply.clone();
         transcript.update();
+        self.prompted = self.prompted.max(transcript.prompted);
         if transcript.reply != before {
             self.shown = transcript.reply.as_ref().map(|reply| reply.context(&Limits::read(dir, cwd, claude)));
         }
@@ -127,12 +141,28 @@ impl Pane {
         self.shown.as_ref()
     }
 
+    pub fn prompted(&self) -> Option<SystemTime> {
+        self.prompted
+    }
+
     pub fn codex_turn(&self) -> bool {
         self.codex.as_ref().is_some_and(codex::Rollout::turn)
     }
 
     pub fn opencode_turn(&self) -> Option<bool> {
         self.opencode.as_ref().map(|session| session.turn)
+    }
+
+    pub fn record_for(&self, agent: &str) -> Option<Record> {
+        Some(match agent {
+            agents::CLAUDE => Record::Claude(self.transcript.as_ref()?.path.clone()),
+            agents::CODEX => Record::Codex(self.codex.as_ref()?.path.clone()),
+            agents::OPENCODE => {
+                let place = self.opencode.as_ref()?.place.clone()?;
+                Record::Opencode { database: place.database, session: place.id }
+            }
+            _ => return None,
+        })
     }
 
     pub fn conversation(&self) -> Option<&str> {
@@ -181,6 +211,7 @@ struct Transcript {
     len: u64,
     read: u64,
     reply: Option<Reply>,
+    prompted: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,7 +264,7 @@ impl Message {
 
 impl Transcript {
     fn new(path: PathBuf) -> Self {
-        Self { path, len: 0, read: 0, reply: None }
+        Self { path, len: 0, read: 0, reply: None, prompted: None }
     }
 
     fn update(&mut self) {
@@ -263,8 +294,58 @@ impl Transcript {
                 Mark::Compacted => None,
             };
         }
+        let read_at = SystemTime::now();
+        let prompts = bytes[from..end].split(|b| *b == b'\n').filter_map(|line| prompt(line, read_at));
+        self.prompted = self.prompted.max(prompts.max());
         self.read = start + end as u64;
     }
+}
+
+#[derive(Deserialize)]
+struct Line {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    #[serde(rename = "isSidechain")]
+    sidechain: Option<bool>,
+    #[serde(rename = "isMeta")]
+    meta: Option<bool>,
+    origin: Option<Origin>,
+    operation: Option<String>,
+    content: Option<Value>,
+    message: Option<Sent>,
+    timestamp: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Origin {
+    kind: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Sent {
+    content: Option<Value>,
+}
+
+fn prompt(line: &[u8], read_at: SystemTime) -> Option<SystemTime> {
+    let line = std::str::from_utf8(line).ok()?;
+    if ![TYPED, QUEUED, COMMAND, SHELL_INPUT].iter().any(|marker| line.contains(marker)) {
+        return None;
+    }
+    let record: Line = serde_json::from_str(line).ok()?;
+    if record.sidechain == Some(true) || record.meta == Some(true) {
+        return None;
+    }
+    let content = record.message.and_then(|said| said.content).or(record.content);
+    let text = content.as_ref().and_then(Value::as_str).unwrap_or_default();
+    let typed = match record.kind.as_deref()? {
+        "user" if record.origin.and_then(|origin| origin.kind).as_deref() == Some("human") => true,
+        "user" | "system" => text.starts_with(COMMAND) || text.starts_with(SHELL_INPUT),
+        "queue-operation" => {
+            record.operation.as_deref() == Some("enqueue") && !NOT_TYPED.iter().any(|tag| text.starts_with(tag))
+        }
+        _ => false,
+    };
+    typed.then(|| record.timestamp.as_deref().and_then(Stamp::parse).unwrap_or(read_at))
 }
 
 enum Mark {
@@ -615,6 +696,122 @@ mod tests {
         }
     }
 
+    mod prompts {
+        use super::*;
+
+        const AT: &str = "2026-10-08T20:23:15.694Z";
+
+        fn at() -> Option<SystemTime> {
+            Stamp::parse(AT)
+        }
+
+        fn prompted(lines: &[&str]) -> Option<SystemTime> {
+            let mut file = Written::new();
+            file.lines(&lines.iter().map(|line| line.replace("$AT", AT)).collect::<Vec<_>>());
+            file.transcript.prompted
+        }
+
+        #[rstest]
+        #[case::typed(
+            r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":"fix the login"},"timestamp":"$AT","origin":{"kind":"human"},"promptSource":"typed"}"#
+        )]
+        #[case::queued_while_it_works(
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"$AT","sessionId":"s","content":"and add tests"}"#
+        )]
+        #[case::a_paste_queued(
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"$AT","content":"<pasted_content id=\"ab12\">\nlong\n</pasted_content>"}"#
+        )]
+        #[case::a_slash_command(
+            r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-args></command-args>"},"timestamp":"$AT"}"#
+        )]
+        #[case::a_slash_command_that_opened_a_dialog(
+            r#"{"type":"system","content":"<command-name>/model</command-name>","timestamp":"$AT"}"#
+        )]
+        #[case::a_shell_command(
+            r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":"<bash-input>ls</bash-input>"},"timestamp":"$AT"}"#
+        )]
+        fn a_prompt_typed_or_pasted_is_recorded_with_its_time(#[case] line: &str) {
+            assert_eq!(prompted(&[line]), at());
+        }
+
+        #[rstest]
+        #[case::a_reply(&assistant("claude-opus-5-5", 1, 0, 9))]
+        #[case::a_tool_result(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"<command-name>/x"}]},"toolUseResult":{},"timestamp":"$AT"}"#
+        )]
+        #[case::a_task_notification(
+            r#"{"type":"user","message":{"role":"user","content":"<task-notification>done</task-notification>"},"timestamp":"$AT","origin":{"kind":"task-notification"}}"#
+        )]
+        #[case::a_task_notification_queued(
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"$AT","content":"<task-notification>\n<task-id>b1</task-id>"}"#
+        )]
+        #[case::another_agent_queued(
+            r#"{"type":"queue-operation","operation":"enqueue","timestamp":"$AT","content":"<agent-message from=\"x\">hi</agent-message>"}"#
+        )]
+        #[case::taken_from_the_queue(r#"{"type":"queue-operation","operation":"dequeue","timestamp":"$AT"}"#)]
+        #[case::taken_between_two_tools(
+            r#"{"type":"queue-operation","operation":"remove","timestamp":"$AT","content":"and add tests","reason":"absorbed_mid_turn"}"#
+        )]
+        #[case::handed_to_the_model_between_two_tools(
+            r#"{"isSidechain":false,"type":"attachment","timestamp":"$AT","attachment":{"type":"queued_command","prompt":"and add tests","commandMode":"prompt","origin":{"kind":"human"},"humanTurn":true}}"#
+        )]
+        #[case::an_interruption(
+            r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"timestamp":"$AT"}"#
+        )]
+        #[case::a_commands_output(
+            r#"{"type":"system","subtype":"local_command","content":"<local-command-stdout>ok</local-command-stdout>","timestamp":"$AT"}"#
+        )]
+        #[case::a_note_for_the_model(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<command-name>/x"},"timestamp":"$AT","origin":{"kind":"human"}}"#
+        )]
+        #[case::a_subagents_prompt(
+            r#"{"isSidechain":true,"type":"user","message":{"role":"user","content":"look"},"timestamp":"$AT","origin":{"kind":"human"}}"#
+        )]
+        fn other_lines_are_not_a_prompt(#[case] line: &str) {
+            assert_eq!(prompted(&[line]), None);
+        }
+
+        #[test]
+        fn the_newest_prompt_counts() {
+            let line = |at: &str| {
+                format!(
+                    r#"{{"type":"user","message":{{"role":"user","content":"hi"}},"timestamp":"{at}","origin":{{"kind":"human"}}}}"#
+                )
+            };
+
+            let found = prompted(&[&line("2026-10-08T20:23:15.694Z"), &line("2026-10-08T20:24:00.000Z")]);
+
+            assert_eq!(found, Stamp::parse("2026-10-08T20:24:00.000Z"));
+        }
+
+        #[test]
+        fn a_prompt_sent_while_a_tool_runs_counts_from_when_it_was_queued() {
+            let queued = r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-08T20:57:35.079Z","content":"and add tests"}"#;
+            let taken = [
+                r#"{"type":"queue-operation","operation":"remove","timestamp":"2026-10-08T20:57:51.454Z","content":"and add tests","reason":"absorbed_mid_turn"}"#,
+                r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":""}]},"toolUseResult":{},"timestamp":"2026-10-08T20:57:51.415Z"}"#,
+                r#"{"isSidechain":false,"type":"attachment","timestamp":"2026-10-08T20:57:51.500Z","attachment":{"type":"queued_command","prompt":"and add tests","origin":{"kind":"human"}}}"#,
+            ];
+            let mut file = Written::new();
+
+            file.lines(&[queued.to_string()]);
+            let sent = file.transcript.prompted;
+            file.lines(&taken.map(str::to_string));
+
+            assert_eq!((sent, file.transcript.prompted), (Stamp::parse("2026-10-08T20:57:35.079Z"), sent));
+        }
+
+        #[test]
+        fn a_prompt_without_a_time_counts_from_when_it_was_read() {
+            let read = SystemTime::now();
+
+            let found =
+                prompted(&[r#"{"type":"user","message":{"role":"user","content":"hi"},"origin":{"kind":"human"}}"#]);
+
+            assert!(found.is_some_and(|at| at >= read), "{found:?}");
+        }
+    }
+
     mod folder {
         use super::*;
 
@@ -849,6 +1046,23 @@ mod tests {
     mod pane {
         use super::*;
 
+        #[test]
+        fn the_record_is_the_one_of_the_agent_asked_for() {
+            let place = opencode::Place { database: "/d/opencode.db".into(), id: "ses".into() };
+            let replaced = Pane {
+                codex: Some(codex::Rollout::new("/c/rollout.jsonl".into())),
+                opencode: Some(opencode::Session { place: Some(place), ..opencode::Session::default() }),
+                ..Pane::default()
+            };
+
+            let found = [agents::OPENCODE, agents::CLAUDE].map(|agent| replaced.record_for(agent));
+
+            assert_eq!(
+                found,
+                [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]
+            );
+        }
+
         fn answered() -> (Setup, Pane) {
             let s = Setup::new(&[]);
             s.transcript(&[assistant("claude-opus-5-5", 2, 15_655, 149_954)]);
@@ -892,7 +1106,22 @@ mod tests {
 
             pane.update(Some(s.claude_dir.path()), None);
 
-            assert_eq!(pane.context(), None);
+            assert_eq!((pane.context(), pane.prompted()), (None, None));
+        }
+
+        #[test]
+        fn a_new_conversation_keeps_when_the_last_prompt_was_sent() {
+            let s = Setup::new(&[]);
+            let typed = r#"{"type":"user","message":{"role":"user","content":"/clear"},"timestamp":"2026-10-08T20:23:15.694Z","origin":{"kind":"human"}}"#;
+            s.transcript(&[typed.to_string()]);
+            let mut pane = Pane::default();
+            pane.update(Some(s.claude_dir.path()), Some(&s.claude(&["claude"])));
+            let mut cleared = s.claude(&["claude"]);
+            cleared.session.as_mut().expect("a session").id = Some("s2".into());
+
+            pane.update(Some(s.claude_dir.path()), Some(&cleared));
+
+            assert_eq!(pane.prompted(), Stamp::parse("2026-10-08T20:23:15.694Z"));
         }
     }
 }

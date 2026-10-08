@@ -308,7 +308,7 @@ mod tests {
     mod footprint {
         use std::ptr::null_mut;
 
-        use rustix::mm::{MapFlags, ProtFlags, mmap, munmap};
+        use rustix::mm::{MapFlags, ProtFlags, mmap, mmap_anonymous, munmap};
 
         use super::*;
         use crate::test_util::TempDir;
@@ -323,11 +323,16 @@ mod tests {
 
         #[test]
         fn counts_memory_the_process_writes() {
+            let map =
+                unsafe { mmap_anonymous(null_mut(), SIZE, ProtFlags::READ | ProtFlags::WRITE, MapFlags::PRIVATE) }
+                    .expect("map");
             let before = footprint(this_pid()).expect("before");
 
-            let written = std::hint::black_box(vec![1_u8; SIZE]);
+            for at in (0..SIZE).step_by(4096) {
+                unsafe { map.cast::<u8>().add(at).write_volatile(1) };
+            }
             let after = footprint(this_pid()).expect("after");
-            drop(written);
+            unsafe { munmap(map, SIZE) }.expect("unmap");
 
             assert!(after.saturating_sub(before) > HALF, "{before} -> {after}");
         }

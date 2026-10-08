@@ -1,0 +1,3 @@
+{"type":"step-start","snapshot":"0000000000000000000000000000000000000000"}
+{"type":"tool","tool":"bash","callID":"call_00_fixture","state":{"status":"completed","input":{"command":"cargo test"},"output":"test result: ok","metadata":{"output":"test result: ok","exit":0,"truncated":false},"title":"cargo test","time":{"start":1791469480731,"end":1791469483192}}}
+{"reason":"tool-calls","snapshot":"0000000000000000000000000000000000000000","type":"step-finish","tokens":{"total":124700,"input":60,"output":20,"reasoning":0,"cache":{"write":0,"read":124620}},"cost":0.002613952}

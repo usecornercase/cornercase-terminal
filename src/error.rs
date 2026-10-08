@@ -54,6 +54,8 @@ pub enum Error {
     Usage(String),
     #[error("cannot read `{}`: {reason}", path.display())]
     CodeWorkspace { path: PathBuf, reason: String },
+    #[error("cannot read `{}`: {cause}", path.display())]
+    Record { path: PathBuf, cause: String },
     #[error("`{0}` already exists")]
     PathExists(PathBuf),
     #[error("no cornercase server is running")]
