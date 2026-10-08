@@ -43,7 +43,7 @@ function tests(root: string): Line[] {
 }
 
 function inGroup(app: App, name: string, projects: Project[]): void {
-  const group = app.addGroup(name, 12);
+  const group = app.addGroup(name);
   for (const p of projects) p.group = group.id;
 }
 

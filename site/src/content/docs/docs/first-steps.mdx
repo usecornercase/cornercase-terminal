@@ -30,7 +30,7 @@ On the left are your projects and the workspaces of the active one, in one colum
 | Area | What it holds |
 | --- | --- |
 | Top left | The **search bar**: click it to jump to any project, workspace or tab. |
-| **projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ new project` at the end of the list; `settings`, [`usage`](../guides/projects-workspaces-tabs/#plan-usage) and `quit` at the bottom, with an [update](../installation/#update) button next to `settings` when a new version is out. |
+| **projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ new` at the end of the list; `settings`, [`usage`](../guides/projects-workspaces-tabs/#plan-usage) and `quit` at the bottom, with an [update](../installation/#update) button next to `settings` when a new version is out. |
 | **workspaces** | The workspaces of the active project, each with its tabs. `+ tab` adds a tab to a workspace, `+ new workspace` starts a new one, `issues` opens the issue browser, `files` the [files panel](../guides/files/), `todo` your [TODO list](../guides/todo/). |
 | The pane | The active tab: one shell, or several in splits. |
 
@@ -40,14 +40,14 @@ The active project and tab are marked with a cyan bar `▌` on the left edge and
 
 <Steps>
 
-1. Click **`+ new project`**, then **open project**. A folder picker opens in the folder above your current project.
+1. Click **`+ new`**, then **open project**. A folder picker opens in the folder above your current project.
 
 2. Type to filter the folders. Folders that are git repositories show their branch on the right.
 
    <Screen
      name="picker-filter"
      crop={[19, 3, 72, 24]}
-     alt="The new project folder picker in ~/code with the filter a: api, infra and playground match, api is selected"
+     alt="The open project folder picker in ~/code with the filter a: api, infra and playground match, api is selected"
      caption="Typing filters the folders; the best match is selected."
    />
 
@@ -109,9 +109,9 @@ cornercase copies through your terminal with the OSC 52 escape sequence, so it a
 
 ## Close things
 
-Hover a project, workspace or tab: its row gets a lighter background and a `×` appears at its end. Clicking it closes it and ends the programs inside. Closing a project asks first, because it stops every program in it; so does closing a workspace that has its own worktree, because it also deletes the worktree's folder (never the branch). In the [compact layout](../guides/small-terminals/) the `×` is always there, and closing a tab or a workspace asks first too.
+Hover a project, workspace or tab: its row gets a lighter background and a `⋯` and a `×` appear at its end. Clicking `×` closes it and ends the programs inside; `⋯` opens its menu. Closing a project asks first, because it stops every program in it; so does closing a workspace that has its own worktree, because it also deletes the worktree's folder (never the branch). In the [compact layout](../guides/small-terminals/) both are always there, and closing a tab or a workspace asks first too.
 
-To rename something, right-click its row. Right-clicking a project also moves it into a [group](../guides/projects-workspaces-tabs/#groups).
+To rename something, click the `⋯` at the end of its row, or right-click the row. A project's menu also moves it into a [group](../guides/projects-workspaces-tabs/#groups).
 
 ## Leave and come back
 

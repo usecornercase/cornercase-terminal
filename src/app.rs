@@ -24,6 +24,7 @@ use crate::issues::{
     self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
 };
 use crate::launch::{self, Launch, Step, Trust};
+use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::memory;
 use crate::mouse;
@@ -50,6 +51,7 @@ use crate::worktree;
 mod control;
 mod files_panel;
 mod todo_panel;
+mod trace;
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -65,7 +67,7 @@ pub enum AppEvent {
     WorktreeChecked {
         project: u64,
         workspace: u64,
-        changed: bool,
+        status: worktree::Status,
         request: Option<u64>,
     },
     WorktreeRemoved {
@@ -154,6 +156,35 @@ pub enum AppEvent {
     Usage(usage::Agent, Result<usage::Report>),
 }
 
+impl AppEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Input(_) => "input",
+            Self::Output(..) => "output",
+            Self::Exited(_) => "exited",
+            Self::WorktreeCreated { .. } => "worktree created",
+            Self::WorktreeChecked { .. } => "worktree checked",
+            Self::WorktreeRemoved { .. } => "worktree removed",
+            Self::IssuesLoaded { .. } => "issues loaded",
+            Self::IssueRead { .. } => "issue read",
+            Self::TokenChecked { .. } => "token checked",
+            Self::PeopleLoaded { .. } => "people loaded",
+            Self::Behind { .. } => "behind",
+            Self::Changes { .. } => "changes",
+            Self::Branches { .. } => "branches",
+            Self::Gap { .. } => "gap",
+            Self::FilesListed { .. } => "files listed",
+            Self::FileRead { .. } => "file read",
+            Self::FilesIndexed { .. } => "files indexed",
+            Self::NamesFound { .. } => "names found",
+            Self::TextFound { .. } => "text found",
+            Self::UpdateChecked(_) => "update checked",
+            Self::Updated(_) => "updated",
+            Self::Usage(..) => "usage",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Start {
     name: String,
@@ -227,8 +258,11 @@ const DELETE_SUBMIT: &str = "delete";
 const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
+const UNLOCK_SUBMIT: &str = "unlock and remove";
+const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
+const MAX_LOCK_REASON: usize = 100;
 const PICKER_SUBMIT: &str = "open";
-const NEW_GROUP_HINT: &str = "right-click a project to move it into the group";
+const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into the group";
 const WORKTREE_TOGGLE: &str = "with its own worktree";
 const WHEEL_ROWS: isize = 3;
 const SYNC_EVERY: Duration = Duration::from_secs(1);
@@ -245,6 +279,9 @@ const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 const UPDATE_SUBMIT: &str = "update";
 const RETRY_UPDATE_SUBMIT: &str = "try again";
 const RESTART_SUBMIT: &str = "restart now";
+const UPDATE_TITLE: &str = "update";
+const RESTART_TITLE: &str = "restart";
+const RESTART_MESSAGE: &str = "Restart cornercase now? Its server starts again and every client comes back.";
 const LATER: &str = "later";
 const COPY_COMMAND_SUBMIT: &str = "copy command";
 const RESTART_LABEL: &str = "↻ restart";
@@ -276,25 +313,50 @@ enum Overlay {
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
-    RemoveWorkspace { project: u64, workspace: u64, check: Check },
+    RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
     Picker(Picker),
     Issues(Box<Browser>),
     Search(Search),
     Update(UpdateStep),
+    Restart,
     Usage,
     Branches(BranchPicker),
 }
 
 impl Overlay {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Menu { .. } => "menu",
+            Self::NewGroup { .. } => "new group",
+            Self::GroupStyle { .. } => "group style",
+            Self::DeleteGroup { .. } => "delete group",
+            Self::CloseProject { .. } => "close project",
+            Self::CloseWorkspace { .. } => "close workspace",
+            Self::CloseTab { .. } => "close tab",
+            Self::NewWorkspace { .. } => "new workspace",
+            Self::Settings(_) => "settings",
+            Self::Rename { .. } => "rename",
+            Self::RemoveWorkspace { .. } => "remove workspace",
+            Self::Picker(_) => "folder picker",
+            Self::Issues(_) => "issues",
+            Self::Search(_) => "search",
+            Self::Update(_) => "update",
+            Self::Usage => "usage",
+            Self::Branches(_) => "branches",
+            Self::Restart => "restart",
+        }
+    }
+
     fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
+            Self::RemoveWorkspace { lock: Some(_), .. } => UNLOCK_SUBMIT,
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
             Self::CloseProject { .. } | Self::CloseWorkspace { .. } | Self::CloseTab { .. } => CLOSE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
-            Self::Update(UpdateStep::Installed) => RESTART_SUBMIT,
+            Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
             _ => CREATE_SUBMIT,
@@ -317,6 +379,10 @@ impl Overlay {
             Self::Rename { input, .. } | Self::NewGroup { input } => Some(input),
             _ => None,
         }
+    }
+
+    fn lists_running(&self) -> bool {
+        matches!(self, Self::Update(UpdateStep::Installed) | Self::Restart)
     }
 
     fn busy(&self) -> bool {
@@ -428,12 +494,36 @@ fn measure_memory(term: &mut Term, measure: bool, now: Instant) {
     }
 }
 
+fn lock_message(label: &str, lock: &worktree::Lock) -> String {
+    let reason = ui::truncate_right(&lock.reason, MAX_LOCK_REASON);
+    let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
+    format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept.")
+}
+
+fn lock_note(lock: &worktree::Lock, changed: bool) -> Option<String> {
+    let holder = lock.holder.map(|holder| match holder {
+        worktree::Holder::Gone(pid) => format!("Process {pid} is gone; the lock was left behind."),
+        worktree::Holder::Running(pid) => format!("Process {pid} still runs and may be using it."),
+    });
+    let parts: Vec<String> = holder.into_iter().chain(changed.then(|| UNCOMMITTED_TOO.to_string())).collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
 fn stopped_tabs(tabs: usize) -> String {
     match tabs {
         0 => String::new(),
         1 => " Its tab and the programs running in it are stopped.".into(),
         n => format!(" Its {n} tabs and the programs running in them are stopped."),
     }
+}
+
+fn changed_keys(old: &Config, new: &Config) -> Vec<String> {
+    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
+        (serde_json::to_value(old), serde_json::to_value(new))
+    else {
+        return Vec::new();
+    };
+    new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).map(|(key, _)| key).collect()
 }
 
 fn not_restored(missed: &[(String, usize)]) -> String {
@@ -517,6 +607,7 @@ pub struct App {
     todo: todo::Panel,
     files: files::Panel,
     requests: control::Requests,
+    seen: trace::Seen,
 }
 
 struct Apis {
@@ -616,6 +707,7 @@ impl App {
             todo: todo::Panel::default(),
             files: files::Panel::default(),
             requests: control::Requests::default(),
+            seen: trace::Seen::default(),
         }
     }
 
@@ -624,10 +716,13 @@ impl App {
     }
 
     pub fn take_restart(&mut self) -> Option<PathBuf> {
-        match (std::mem::take(&mut self.restart), &self.updates.install) {
-            (true, Install::Replace(exe)) => Some(exe.clone()),
-            _ => None,
+        if !std::mem::take(&mut self.restart) {
+            return None;
         }
+        Some(match &self.updates.install {
+            Install::Replace(exe) if self.updates.installed => exe.clone(),
+            _ => std::env::current_exe().unwrap_or_default(),
+        })
     }
 
     pub fn set_theme(&mut self, theme: HostTheme) {
@@ -716,7 +811,7 @@ impl App {
 
     pub fn refresh(&mut self, now: Instant) {
         self.reap();
-        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed)))
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running)
             && self.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
         {
             self.list_running(now);
@@ -757,8 +852,21 @@ impl App {
                         if read {
                             let found = agent_in(config, dir, term);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
+                            let before = term.agent.status();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
-                            if let Some(status) = term.agent.update(activity, seen, now)
+                            let notice = term.agent.update(activity, seen, now);
+                            let status = term.agent.status();
+                            if status != before {
+                                log::info!(
+                                    "activity",
+                                    "status",
+                                    pane = term.id,
+                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
+                                    from = before.map_or("none", activity::Status::name),
+                                    to = status.map_or("none", activity::Status::name),
+                                );
+                            }
+                            if let Some(status) = notice
                                 && let Some((agent, _)) = found
                             {
                                 let notice = (agent, status, project.id, workspace.id);
@@ -785,6 +893,14 @@ impl App {
         let project = &self.projects[p];
         let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
         let message = notify::clean(&format!("{agent} {what} in {place}"));
+        log::info!(
+            "activity",
+            "notify",
+            agent = agent,
+            status = status.name(),
+            project = project.id,
+            workspace = project.workspaces[w].id
+        );
         self.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
     }
@@ -814,9 +930,11 @@ impl App {
                 self.fetched.insert(project.id, now);
             }
             let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
+            let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch).begin();
             std::thread::spawn(move || {
-                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch))
-                    .unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
+                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch));
+                job.done();
+                let behind = behind.unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
                 let _ = tx.send(AppEvent::Behind { project: id, behind });
             });
         }
@@ -830,8 +948,10 @@ impl App {
         }
         let Some((generation, request)) = self.changes.request(&target, now) else { return };
         let (tx, workspace) = (self.tx.clone(), target.workspace);
+        let job = Job::new(Level::Debug, "changes", "diff").with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| changes::git::load(&request));
+            job.finish(&result);
             let _ = tx.send(AppEvent::Changes { workspace, generation, request: Box::new(request), result });
         });
     }
@@ -875,24 +995,39 @@ impl App {
                 trust_prompt: &asks,
                 trust,
             };
-            match launch.step(now, &mut seen) {
+            let before = launch.stage();
+            let step = launch.step(now, &mut seen);
+            let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
+            match &step {
+                Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
+                Step::Wait => {}
+                Step::Write(bytes) | Step::Done(bytes) => {
+                    let done = matches!(step, Step::Done(_));
+                    let message = if done { "done" } else { "wrote" };
+                    let bytes = bytes.len();
+                    log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
+                }
+                Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
+            }
+            match step {
                 Step::Wait => {}
                 Step::Write(bytes) => {
                     if !(bytes.is_empty() || term.write(&bytes)) {
+                        log::warning!("launch", "the pane is not reading", pane = pane);
                         finished.push((i, false));
                     }
                 }
-                Step::Done(bytes) if !(bytes.is_empty() || term.write(&bytes)) => finished.push((i, false)),
+                Step::Done(bytes) if !(bytes.is_empty() || term.write(&bytes)) => {
+                    log::warning!("launch", "the pane is not reading", pane = pane);
+                    finished.push((i, false));
+                }
                 Step::Done(_) => {
                     if launch.submits() {
                         term.submitted = Some(now);
                     }
                     finished.push((i, true));
                 }
-                Step::Abandon => {
-                    eprintln!("cornercase server: the agent did not start in terminal {}", launch.term);
-                    finished.push((i, false));
-                }
+                Step::Abandon => finished.push((i, false)),
             }
         }
         for (i, started) in finished.into_iter().rev() {
@@ -1264,7 +1399,7 @@ impl App {
             match self.restore_tab(saved_tab, &path, area) {
                 Ok(tab) => workspace.tabs.push(tab),
                 Err(e) => {
-                    eprintln!("cornercase server: could not restore a tab: {e}");
+                    log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
                     lost += 1;
                 }
             }
@@ -1287,6 +1422,10 @@ impl App {
     }
 
     fn remove(&mut self, id: u64) {
+        if let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
+            let status = term.exit_status().unwrap_or_else(|| "unknown".into());
+            log::info!("app", "shell exited", pane = id, status = status);
+        }
         let Some(p) = self.projects.iter_mut().position(|p| p.remove_term(id)) else { return };
         if self.projects[p].closing && !self.projects[p].has_terms() {
             self.remove_project(p);
@@ -1330,11 +1469,11 @@ impl App {
             AppEvent::WorktreeCreated { project, result, start, request: None } => {
                 self.worktree_created(project, result, start, area)?;
             }
-            AppEvent::WorktreeChecked { project, workspace, changed, request: Some(key) } => {
-                self.removal_checked(key, project, workspace, changed);
+            AppEvent::WorktreeChecked { project, workspace, status, request: Some(key) } => {
+                self.removal_checked(key, project, workspace, &status);
             }
-            AppEvent::WorktreeChecked { project, workspace, changed, request: None } => {
-                self.worktree_checked(project, workspace, changed);
+            AppEvent::WorktreeChecked { project, workspace, status, request: None } => {
+                self.worktree_checked(project, workspace, status);
             }
             AppEvent::WorktreeRemoved { project, workspace, result, request: Some(key) } => {
                 self.worktree_gone(key, project, workspace, result);
@@ -1762,6 +1901,7 @@ impl App {
     fn drop_pane(&mut self, drag: PaneDrag, pos: Position, pane: Rect, area: Rect) {
         let Some(tab) = self.tab_mut().filter(|t| t.id == drag.tab) else { return };
         let Some(landing) = tab.landing(pane, drag.pane, pos) else { return };
+        log::info!("app", "pane moved", pane = drag.pane, tab = drag.tab, place = format!("{:?}", landing.place));
         tab.layout = landing.layout;
         tab.focus(drag.pane);
         self.resize(area);
@@ -1864,6 +2004,7 @@ impl App {
             }
             Some(SidebarHit::New) => self.new_project_menu(pos),
             Some(SidebarHit::CloseGroup(g)) => self.close_row(ui::TreeRow::Group(g)),
+            Some(SidebarHit::Menu(_) | SidebarHit::GroupMenu(_)) => self.open_project_menu(list, pitch, pos),
             None => {}
         }
     }
@@ -2039,6 +2180,7 @@ impl App {
                 }
             }
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
+            Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
             Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
             Some(ui::TreeHit::NewWorkspace(p)) => self.ask_new_workspace(p),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
@@ -2109,6 +2251,7 @@ impl App {
             return;
         };
         let Some(row) = self.tree_row_of(target) else { return };
+        log::info!("app", "row moved", row = format!("{target:?}"), to = format!("{:?}", landing.spot));
         match (row, landing.spot) {
             (ui::TreeRow::Group(g), ui::Spot::Group(before)) => move_before(&mut self.groups, g, before, None),
             (ui::TreeRow::Project(p), ui::Spot::Project { group, before }) => {
@@ -2295,6 +2438,9 @@ impl App {
             Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
             Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
             Some(WorkspaceHit::NewWorkspace) => self.ask_new_workspace(p),
+            Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
+                self.open_workspace_menu(list, pitch, pos);
+            }
             None => {}
         }
         Ok(())
@@ -2614,8 +2760,10 @@ impl App {
         let Some(project) = self.browser_project() else { return };
         let Some(client) = self.client(source, project) else { return };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job = Job::new(Level::Info, "issues", "people").with("source", source.name()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.people());
+            job.finish(&result);
             let _ = tx.send(AppEvent::PeopleLoaded { project, source, epoch, result });
         });
     }
@@ -2649,8 +2797,11 @@ impl App {
             return;
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job =
+            Job::new(Level::Info, "issues", "list").with("source", source.name()).with("project", project).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.list(&query));
+            job.finish(&result);
             let _ = tx.send(AppEvent::IssuesLoaded { project, source, epoch, query, result });
         });
     }
@@ -2683,6 +2834,8 @@ impl App {
             return;
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(issue.source));
+        let job = Job::new(Level::Info, "issues", "read").with("source", issue.source.name()).with("key", &issue.key);
+        let job = job.begin();
         std::thread::spawn(move || {
             let result = panics::job(|| {
                 let detail = client.read(&issue)?;
@@ -2691,6 +2844,7 @@ impl App {
                 });
                 Ok(detail)
             });
+            job.finish(&result);
             let _ = tx.send(AppEvent::IssueRead { source: issue.source, epoch, key: issue.key, result });
         });
     }
@@ -2712,6 +2866,12 @@ impl App {
     }
 
     fn set_config(&mut self, config: Config) {
+        if log::enabled(Level::Info) {
+            let keys = changed_keys(&self.config, &config);
+            if !keys.is_empty() {
+                log::info!("app", "settings changed", keys = keys.join(","));
+            }
+        }
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
         if jira(&config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
@@ -2746,8 +2906,10 @@ impl App {
             }
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job = Job::new(Level::Info, "issues", "token check").with("source", source.name()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.whoami());
+            job.finish(&result);
             let _ = tx.send(AppEvent::TokenChecked { source, epoch, token, result });
         });
     }
@@ -2827,6 +2989,16 @@ impl App {
             Some(place) => !place.worktree,
             None => !git::is_repo_root(&self.projects[p].path),
         };
+        log::info!(
+            "issues",
+            "start",
+            source = issue.source.name(),
+            key = issue.key,
+            agent = agent,
+            project = project,
+            branch = branch,
+            in_a_tab = in_a_tab,
+        );
         if in_a_tab {
             self.overlay = None;
             let workspace = place.and_then(|place| place.workspace);
@@ -2850,8 +3022,11 @@ impl App {
         let project = &self.projects[p];
         let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
+        let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
+        let job = job.with("path", path.display()).with("issue", start.is_some()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| worktree::create(&repo, &branch, &path).map(|()| path));
+            job.finish(&result);
             let _ = tx.send(AppEvent::WorktreeCreated { project: id, result, start, request });
         });
     }
@@ -3007,8 +3182,8 @@ impl App {
 
     fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.projects_scroll, pos) {
-            Some(SidebarHit::Select(i) | SidebarHit::Close(i)) => self.project_menu(i),
-            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g)) => self.group_menu(g),
+            Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
+            Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
         };
         self.overlay = Some(Overlay::Menu { at: pos, actions });
@@ -3029,7 +3204,7 @@ impl App {
     }
 
     fn open_tree_menu(&mut self, list: Rect, pos: Position) {
-        let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row)) =
+        let Some(ui::TreeHit::Fold(row) | ui::TreeHit::Select(row) | ui::TreeHit::Close(row) | ui::TreeHit::Menu(row)) =
             self.tree_hit(list, &self.tree_shape(), pos)
         else {
             return;
@@ -3046,10 +3221,10 @@ impl App {
     fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let Some(project) = self.project() else { return };
         let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
-            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w)) => {
+            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w)) => {
                 Target::Workspace(project.id, project.workspaces[w].id)
             }
-            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t)) => {
+            Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
                 let workspace = &project.workspaces[w];
                 Target::Tab(project.id, workspace.id, workspace.tabs[t].id)
             }
@@ -3073,6 +3248,7 @@ impl App {
     }
 
     fn rename(&mut self, target: Target, name: Option<String>) {
+        log::info!("app", "rename", target = format!("{target:?}"), name = name.as_deref().unwrap_or("-"));
         match target {
             Target::Group(id) => {
                 if let Some(entry) = self.group_mut(id)
@@ -3120,7 +3296,7 @@ impl App {
             self.settings_mouse(ev, pos, area);
             return Ok(());
         }
-        if matches!(self.overlay, Some(Overlay::Update(_))) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
             return self.update_mouse(ev, pos, area);
         }
         if matches!(self.overlay, Some(Overlay::Usage)) {
@@ -3177,6 +3353,7 @@ impl App {
     }
 
     fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
+        log::info!("ui", "menu", action = format!("{action:?}"));
         match action {
             MenuAction::Rename(target) => {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
@@ -3223,9 +3400,13 @@ impl App {
     }
 
     fn add_group(&mut self, name: String) -> u64 {
-        let n = self.groups.len();
-        let icon = ui::GROUP_ICONS[n % ui::GROUP_ICONS.len()];
-        let colour = ui::GROUP_COLOURS[n % ui::GROUP_COLOURS.len()];
+        let taken =
+            |&(icon, colour): &(char, u8)| self.groups.iter().any(|g| (g.entry.icon, g.entry.colour) == (icon, colour));
+        let (icon, colour) = ui::GROUP_STYLES
+            .iter()
+            .copied()
+            .find(|style| !taken(style))
+            .unwrap_or(ui::GROUP_STYLES[self.groups.len() % ui::GROUP_STYLES.len()]);
         let id = self.take_id();
         self.groups.push(Group { id, entry: ui::GroupEntry { name, icon, colour, collapsed: false } });
         id
@@ -3295,10 +3476,13 @@ impl App {
             }
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => {
-                Some(Overlay::GroupStyle { group: self.add_group(input.trim().to_string()) })
+                self.add_group(input.trim().to_string());
+                None
             }
             Overlay::GroupStyle { .. } | Overlay::Usage => None,
-            Overlay::RemoveWorkspace { project, workspace, check } => self.confirm_removal(project, workspace, check),
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.confirm_removal(project, workspace, check, lock.is_some())
+            }
             Overlay::DeleteGroup { group } => {
                 self.delete_group(group);
                 None
@@ -3320,6 +3504,10 @@ impl App {
                 None
             }
             Overlay::Update(step) => self.submit_update(step),
+            Overlay::Restart => {
+                self.restart = true;
+                None
+            }
             busy => Some(busy),
         };
         Ok(())
@@ -3349,11 +3537,13 @@ impl App {
         }
         self.updates.checked = Some(now);
         let (url, tx) = (self.updates.url.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "update", "check").begin();
         std::thread::spawn(move || {
             let found = panics::job(|| {
                 let found = update::check(&url, update::CURRENT)?;
                 Ok(found.map(|release| update::with_changelog(release, update::CURRENT)))
             });
+            job.finish(&found);
             let _ = tx.send(AppEvent::UpdateChecked(found));
         });
     }
@@ -3361,13 +3551,13 @@ impl App {
     fn update_checked(&mut self, result: Result<Option<Release>>) {
         match result {
             Ok(Some(release)) if !self.updates.installed => {
+                log::info!("update", "release found", version = release.version);
                 if self.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
                     self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
                 }
                 self.updates.available = Some(release);
             }
-            Ok(_) => {}
-            Err(e) => eprintln!("cornercase server: the update check failed: {e}"),
+            _ => {}
         }
     }
 
@@ -3419,7 +3609,7 @@ impl App {
     }
 
     fn scroll_update(&mut self, delta: isize, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::Update(_))) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
             let lines = self.update_notes(area).len();
             self.update_scroll = ui::update_scroll(area, lines, self.update_scroll.saturating_add_signed(delta));
         }
@@ -3427,7 +3617,7 @@ impl App {
 
     fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
-        if matches!(self.overlay, Some(Overlay::Update(UpdateStep::Installed))) {
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
             return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
         }
         let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
@@ -3447,8 +3637,11 @@ impl App {
                     return None;
                 };
                 let tx = self.tx.clone();
+                let job = Job::new(Level::Info, "update", "install").with("version", &release.version).begin();
                 std::thread::spawn(move || {
-                    let _ = tx.send(AppEvent::Updated(panics::job(|| update::update(&release, target, &exe))));
+                    let result = panics::job(|| update::update(&release, target, &exe));
+                    job.finish(&result);
+                    let _ = tx.send(AppEvent::Updated(result));
                 });
                 Some(Overlay::Update(UpdateStep::Updating))
             }
@@ -3506,7 +3699,33 @@ impl App {
         let overlay = Overlay::Update(step.clone());
         let (submit, cancel) = (overlay.submit_label(), overlay.cancel_label());
         let notes = self.update_notes(area);
-        ui::Overlay::Update(ui::Update { message, notes, scroll: self.update_scroll, note, submit, cancel })
+        ui::Overlay::Update(ui::Update {
+            title: UPDATE_TITLE,
+            message,
+            notes,
+            scroll: self.update_scroll,
+            note,
+            submit,
+            cancel,
+        })
+    }
+
+    fn open_restart(&mut self) {
+        self.update_scroll = 0;
+        self.list_running(Instant::now());
+        self.overlay = Some(Overlay::Restart);
+    }
+
+    fn restart_view(&self, area: Rect) -> ui::Overlay {
+        ui::Overlay::Update(ui::Update {
+            title: RESTART_TITLE,
+            message: RESTART_MESSAGE.into(),
+            notes: self.update_notes(area),
+            scroll: self.update_scroll,
+            note: None,
+            submit: RESTART_SUBMIT,
+            cancel: ui::CANCEL_LABEL,
+        })
     }
 
     fn open_usage(&mut self) {
@@ -3519,8 +3738,11 @@ impl App {
         for agent in self.usage.start(shown) {
             let command = agents::command(&self.config, agent.kind());
             let (timeout, tx) = (self.usage_timeout, self.tx.clone());
+            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.kind()).begin();
             std::thread::spawn(move || {
-                let _ = tx.send(AppEvent::Usage(agent, panics::job(|| usage::probe(agent, &command, timeout))));
+                let result = panics::job(|| usage::probe(agent, &command, timeout));
+                job.finish(&result);
+                let _ = tx.send(AppEvent::Usage(agent, result));
             });
         }
     }
@@ -3588,6 +3810,7 @@ impl App {
         };
         let action = match ui::settings_hit(area, &layout, pos) {
             Some(ui::SettingsHit::Done) => settings::Action::Close,
+            Some(ui::SettingsHit::Restart) => settings::Action::Restart,
             Some(ui::SettingsHit::Tab(i)) => {
                 s.open_page(Page::ALL[i]);
                 settings::Action::None
@@ -3613,6 +3836,7 @@ impl App {
         match action {
             settings::Action::None => {}
             settings::Action::Close => self.overlay = None,
+            settings::Action::Restart => self.open_restart(),
             settings::Action::Save(config) => {
                 if let Err(e) = config::save(&self.config_path, &config) {
                     if let Some(Overlay::Settings(s)) = &mut self.overlay {
@@ -3735,46 +3959,48 @@ impl App {
     fn ask_removal(&mut self, p: usize, w: usize) {
         let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
         self.spawn_check(p, w, None);
-        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running });
+        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running, lock: None });
     }
 
     fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace).begin();
         std::thread::spawn(move || {
-            let changed = !matches!(panics::job(|| worktree::changed(&path)), Ok(false));
-            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, changed, request });
+            let status = panics::job(|| Ok(worktree::status(&path)));
+            let job = job.with("changed", status.as_ref().map_or(true, |s| s.changed));
+            job.with("locked", status.as_ref().is_ok_and(|s| s.lock.is_some())).finish(&status);
+            let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
+            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, status, request });
         });
     }
 
-    fn confirm_removal(&mut self, project: u64, workspace: u64, check: Check) -> Option<Overlay> {
+    fn confirm_removal(&mut self, project: u64, workspace: u64, check: Check, unlock: bool) -> Option<Overlay> {
         if matches!(check, Check::Running | Check::Confirmed) {
-            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed });
+            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed, lock: None });
         }
-        self.start_removal(project, workspace, check == Check::Changed, None);
+        self.start_removal(project, workspace, check == Check::Changed, unlock, None);
         None
     }
 
-    fn worktree_checked(&mut self, project: u64, workspace: u64, changed: bool) {
-        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check }) = &mut self.overlay else {
+    fn worktree_checked(&mut self, project: u64, workspace: u64, status: worktree::Status) {
+        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check, lock }) = &mut self.overlay else {
             return;
         };
-        if (*asked, *shown) != (project, workspace) {
+        if (*asked, *shown) != (project, workspace) || !matches!(check, Check::Running | Check::Confirmed) {
             return;
         }
-        match (*check, changed) {
-            (Check::Running | Check::Confirmed, true) => *check = Check::Changed,
-            (Check::Running, false) => *check = Check::Clean,
-            (Check::Confirmed, false) => {
-                self.overlay = None;
-                self.start_removal(project, workspace, false, None);
-            }
-            (Check::Clean | Check::Changed, _) => {}
+        let go_on = *check == Check::Confirmed && !status.changed && status.lock.is_none();
+        *check = if status.changed { Check::Changed } else { Check::Clean };
+        *lock = status.lock;
+        if go_on {
+            self.overlay = None;
+            self.start_removal(project, workspace, false, false, None);
         }
     }
 
-    fn start_removal(&mut self, project: u64, workspace: u64, force: bool, request: Option<u64>) -> bool {
+    fn start_removal(&mut self, project: u64, workspace: u64, force: bool, unlock: bool, request: Option<u64>) -> bool {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return false };
         let target = &mut self.projects[p].workspaces[w];
         if !target.open() {
@@ -3785,8 +4011,11 @@ impl App {
         self.projects[p].step_off(w);
         let (repo, path, tx) =
             (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
+        let job = job.with("force", force).with("unlock", unlock).begin();
         std::thread::spawn(move || {
-            let result = panics::job(|| worktree::remove(&repo, &path, force));
+            let result = panics::job(|| worktree::remove(&repo, &path, force, unlock));
+            job.finish(&result);
             let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
         });
         true
@@ -3938,6 +4167,7 @@ impl App {
         let view = ui::View {
             tree,
             agents,
+            counts: self.config.counts,
             groups,
             projects,
             active: self.active,
@@ -4057,26 +4287,8 @@ impl App {
                 note: None,
                 submit: RENAME_SUBMIT,
             }),
-            Overlay::RemoveWorkspace { project, workspace, check } => {
-                let (label, path) = self
-                    .workspace_index(*project, *workspace)
-                    .map(|(p, w)| {
-                        let ws = &self.projects[p].workspaces[w];
-                        (ws.label(), ui::display_path(&ws.path, home))
-                    })
-                    .unwrap_or_default();
-                ui::Overlay::Confirm(ui::Confirm {
-                    title: "remove workspace",
-                    message: format!(
-                        "Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."
-                    ),
-                    note: match check {
-                        Check::Confirmed => Some(ui::Note::Busy("checking…")),
-                        Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
-                        Check::Running | Check::Clean => None,
-                    },
-                    submit: overlay.submit_label(),
-                })
+            Overlay::RemoveWorkspace { project, workspace, check, lock } => {
+                self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())
             }
             Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
                 title: "delete group",
@@ -4106,9 +4318,39 @@ impl App {
             Overlay::Issues(b) => b.view(area, issues::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
+            Overlay::Restart => self.restart_view(area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
         })
+    }
+
+    fn remove_view(
+        &self,
+        project: u64,
+        workspace: u64,
+        check: Check,
+        lock: Option<&worktree::Lock>,
+        submit: &'static str,
+    ) -> ui::Overlay {
+        let (label, path) = self
+            .workspace_index(project, workspace)
+            .map(|(p, w)| {
+                let ws = &self.projects[p].workspaces[w];
+                (ws.label(), ui::display_path(&ws.path, self.home.as_deref()))
+            })
+            .unwrap_or_default();
+        let (message, note) = match lock {
+            Some(lock) => (lock_message(&label, lock), lock_note(lock, check == Check::Changed).map(ui::Note::Error)),
+            None => (
+                format!("Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."),
+                match check {
+                    Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                    Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                    Check::Running | Check::Clean => None,
+                },
+            ),
+        };
+        ui::Overlay::Confirm(ui::Confirm { title: "remove workspace", message, note, submit })
     }
 
     fn delete_group_message(&self, id: u64) -> Option<String> {
@@ -4160,7 +4402,7 @@ impl App {
             None => String::new(),
         };
         ui::Overlay::Picker(ui::Picker {
-            title: "new project",
+            title: "open project",
             path: if dir.ends_with('/') { dir } else { format!("{dir}/") },
             filter: picker.filter().to_string(),
             items: items
@@ -4298,8 +4540,11 @@ impl App {
             Some(PanelHit::Gap(i, h)) => {
                 if let Some(f) = file(i) {
                     let (tx, mode, workspace, dir) = (self.tx.clone(), self.changes.mode, target.workspace, target.dir);
+                    let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace).begin();
                     std::thread::spawn(move || {
-                        let Some(new_side) = changes::git::new_side(&dir, mode, &f.path) else { return };
+                        let new_side = changes::git::new_side(&dir, mode, &f.path);
+                        job.done();
+                        let Some(new_side) = new_side else { return };
                         let lines = changes::gap_lines(&f, h, &new_side);
                         let _ = tx.send(AppEvent::Gap { workspace, file: f, hunk: h, lines });
                     });
@@ -4399,9 +4644,11 @@ impl App {
 
     fn open_branches(&mut self, target: &Checkout) {
         let (tx, workspace, dir) = (self.tx.clone(), target.workspace, target.dir.clone());
+        let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let branches = changes::git::branches(&dir);
             let default = changes::git::default_base(&dir);
+            job.done();
             let _ = tx.send(AppEvent::Branches { workspace, branches, default });
         });
     }
@@ -4854,9 +5101,6 @@ mod tests {
             click(app, new);
             pick(app, "new group");
             submit_text(app, name);
-            if matches!(app.overlay, Some(Overlay::GroupStyle { .. })) {
-                send_key(app, KeyCode::Enter, KeyModifiers::NONE);
-            }
         }
 
         fn open_style(app: &mut App) {
@@ -4893,15 +5137,11 @@ mod tests {
         }
 
         #[test]
-        fn a_new_group_opens_its_icon_and_colour() {
+        fn a_new_group_takes_the_first_style_without_asking() {
             let (mut app, _rx) = app();
-            let new = new_project_pos(&app);
-            click(&mut app, new);
-            pick(&mut app, "new group");
-
-            submit_text(&mut app, "work");
-
-            assert!(matches!(app.overlay, Some(Overlay::GroupStyle { group }) if group == app.groups[0].id));
+            new_group(&mut app, "work");
+            let entry = &app.groups[0].entry;
+            assert_eq!((app.overlay.is_none(), (entry.icon, entry.colour)), (true, ui::GROUP_STYLES[0]));
         }
 
         #[test]
@@ -4909,6 +5149,15 @@ mod tests {
             let (mut app, _rx) = app();
             new_group(&mut app, "work");
             right_click_sidebar(&mut app, SidebarRow::Group(0));
+            assert_eq!(menu_labels(&app), ["rename group", "icon and colour", "delete group"]);
+        }
+
+        #[test]
+        fn the_menu_button_of_a_group_opens_the_same_menu() {
+            let (mut app, _rx) = app();
+            new_group(&mut app, "work");
+            let row = ui::entry_row(list(), 1, &app.sidebar_rows(), 0, SidebarRow::Group(0));
+            click(&mut app, ui::row_menu_button(row, 1).as_position());
             assert_eq!(menu_labels(&app), ["rename group", "icon and colour", "delete group"]);
         }
 
@@ -4952,16 +5201,37 @@ mod tests {
             assert_eq!((app.groups.len(), matches!(app.overlay, Some(Overlay::NewGroup { .. }))), (0, true));
         }
 
+        fn styles(app: &App) -> Vec<(char, u8)> {
+            app.groups.iter().map(|g| (g.entry.icon, g.entry.colour)).collect()
+        }
+
         #[test]
-        fn each_new_group_gets_the_next_icon_and_colour() {
+        fn each_new_group_gets_the_next_style() {
             let (mut app, _rx) = app();
             new_group(&mut app, "work");
             new_group(&mut app, "oss");
-            let styles: Vec<(char, u8)> = app.groups.iter().map(|g| (g.entry.icon, g.entry.colour)).collect();
-            assert_eq!(
-                styles,
-                [(ui::GROUP_ICONS[0], ui::GROUP_COLOURS[0]), (ui::GROUP_ICONS[1], ui::GROUP_COLOURS[1])]
-            );
+            assert_eq!(styles(&app), ui::GROUP_STYLES[..2]);
+        }
+
+        #[test]
+        fn a_new_group_takes_a_style_no_other_group_has() {
+            let (mut app, _rx) = app();
+            for name in ["work", "oss", "home"] {
+                new_group(&mut app, name);
+            }
+            let oss = app.groups[1].id;
+            app.delete_group(oss);
+            new_group(&mut app, "clients");
+            assert_eq!(styles(&app), [ui::GROUP_STYLES[0], ui::GROUP_STYLES[2], ui::GROUP_STYLES[1]]);
+        }
+
+        #[test]
+        fn past_the_presets_the_styles_start_over() {
+            let (mut app, _rx) = app();
+            for i in 0..=ui::GROUP_STYLES.len() {
+                new_group(&mut app, &format!("group {i}"));
+            }
+            assert_eq!(styles(&app)[ui::GROUP_STYLES.len()], ui::GROUP_STYLES[0]);
         }
 
         #[test]
@@ -5906,7 +6176,7 @@ mod tests {
 
     mod remove_worktree {
         use super::*;
-        use crate::test_util::git;
+        use crate::test_util::{exited_pid, git};
 
         struct Setup {
             app: App,
@@ -6100,21 +6370,146 @@ mod tests {
             assert_eq!(s.app.overlay.as_ref().map(Overlay::submit_label), Some(FORCE_REMOVE_SUBMIT));
         }
 
+        fn lock(s: &Setup, reason: &str) {
+            git(s.repo.path(), &["worktree", "lock", "--reason", reason, &s.path.display().to_string()]);
+        }
+
+        fn note(app: &App) -> Option<String> {
+            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+                ui::Overlay::Confirm(ui::Confirm { note: Some(ui::Note::Error(text)), .. }) => Some(text),
+                _ => None,
+            }
+        }
+
+        fn submit(app: &App) -> Option<&'static str> {
+            app.overlay.as_ref().map(Overlay::submit_label)
+        }
+
+        #[test]
+        fn a_lock_makes_the_dialog_say_so_before_anything_stops() {
+            let mut s = opened();
+            lock(&s, "on a usb disk");
+            ask(&mut s);
+
+            checked(&mut s);
+
+            let message = confirmation(&s.app).expect("a confirmation");
+            assert!(message.contains("is locked: on a usb disk"), "{message}");
+            assert_eq!((submit(&s.app), s.app.projects[0].workspaces[1].tabs.is_empty()), (Some(UNLOCK_SUBMIT), false));
+        }
+
+        #[test]
+        fn a_lock_left_by_a_process_that_is_gone_says_so() {
+            let mut s = opened();
+            lock(&s, &format!("claude session wt (pid {} start Wed Oct  7 09:10:42 2026)", exited_pid()));
+            ask(&mut s);
+
+            checked(&mut s);
+
+            assert!(
+                note(&s.app).is_some_and(|n| n.contains("is gone; the lock was left behind")),
+                "{:?}",
+                note(&s.app)
+            );
+        }
+
+        #[test]
+        fn unlock_and_remove_deletes_a_locked_worktree_and_keeps_the_branch() {
+            let mut s = opened();
+            lock(&s, "busy");
+            ask(&mut s);
+            checked(&mut s);
+
+            click(&mut s.app, form_button(UNLOCK_SUBMIT, 0));
+
+            gone(&mut s);
+            assert_eq!((s.path.exists(), branch_exists(s.repo.path(), "wt")), (false, true));
+        }
+
+        #[test]
+        fn unlock_and_remove_deletes_a_locked_worktree_with_changes() {
+            let mut s = opened();
+            std::fs::write(s.path.join("notes.txt"), "draft").expect("write file");
+            lock(&s, "busy");
+            ask(&mut s);
+            checked(&mut s);
+            assert!(note(&s.app).is_some_and(|n| n.contains("uncommitted")), "{:?}", note(&s.app));
+
+            click(&mut s.app, form_button(UNLOCK_SUBMIT, 0));
+
+            gone(&mut s);
+            assert!(!s.path.exists());
+        }
+
+        #[test]
+        fn confirming_before_git_status_answers_stops_at_a_lock() {
+            let mut s = opened();
+            lock(&s, "busy");
+            ask(&mut s);
+
+            click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
+            checked(&mut s);
+
+            assert_eq!(
+                (submit(&s.app), s.app.removing(0, 1), s.app.projects[0].workspaces[1].tabs.is_empty()),
+                (Some(UNLOCK_SUBMIT), false, false)
+            );
+        }
+
         #[test]
         fn a_refused_removal_brings_the_row_back_and_says_why() {
             let mut s = opened();
-            git(s.repo.path(), &["worktree", "lock", &s.path.display().to_string()]);
             ask(&mut s);
             checked(&mut s);
+            std::fs::write(s.path.join("notes.txt"), "draft").expect("write file");
 
             click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
 
             pump_until(&mut s.app, &s.rx, "git refuses", |a| !a.projects[0].workspaces[1].removing());
-            assert!(toast(&s.app).is_some_and(|t| t.contains("locked")), "{:?}", toast(&s.app));
+            assert!(toast(&s.app).is_some_and(|t| t.contains("modified or untracked")), "{:?}", toast(&s.app));
             pump_until(&mut s.app, &s.rx, "its shells stopped", |a| a.projects[0].workspaces[1].tabs.is_empty());
             ask(&mut s);
             checked(&mut s);
             assert!(s.path.exists() && matches!(s.app.overlay, Some(Overlay::RemoveWorkspace { .. })));
+        }
+    }
+
+    mod lock_text {
+        use super::*;
+        use rstest::rstest;
+
+        use crate::worktree::{Holder, Lock};
+
+        fn lock(reason: &str, holder: Option<Holder>) -> Lock {
+            Lock { reason: reason.into(), holder }
+        }
+
+        #[rstest]
+        #[case::with_a_reason(
+            "busy",
+            "The worktree of wt is locked: busy. Unlock it and delete its folder? The branch is kept."
+        )]
+        #[case::without_one("", "The worktree of wt is locked. Unlock it and delete its folder? The branch is kept.")]
+        fn the_message_names_the_reason(#[case] reason: &str, #[case] expected: &str) {
+            assert_eq!(lock_message("wt", &lock(reason, None)), expected);
+        }
+
+        #[rstest]
+        #[case::gone(Some(Holder::Gone(7)), false, Some("Process 7 is gone; the lock was left behind."))]
+        #[case::running(Some(Holder::Running(7)), false, Some("Process 7 still runs and may be using it."))]
+        #[case::nobody(None, false, None)]
+        #[case::nobody_with_changes(None, true, Some("It has uncommitted changes, which are deleted."))]
+        #[case::gone_with_changes(
+            Some(Holder::Gone(7)),
+            true,
+            Some("Process 7 is gone; the lock was left behind. It has uncommitted changes, which are deleted.")
+        )]
+        fn the_note_says_who_holds_it(
+            #[case] holder: Option<Holder>,
+            #[case] changed: bool,
+            #[case] expected: Option<&str>,
+        ) {
+            assert_eq!(lock_note(&lock("busy", holder), changed).as_deref(), expected);
         }
     }
 
@@ -6140,6 +6535,24 @@ mod tests {
             let (mut app, _rx, _dirs) = app_with(1);
             right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
             assert_eq!(menu_labels(&app), ["rename tab"]);
+        }
+
+        #[test]
+        fn the_menu_button_of_a_project_opens_its_menu() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            let row = ui::entry_row(list(), 1, &app.sidebar_rows(), 0, SidebarRow::Project(0));
+            click(&mut app, ui::row_menu_button(row, 1).as_position());
+            assert_eq!(menu_labels(&app), ["rename project"]);
+        }
+
+        #[rstest::rstest]
+        #[case::a_workspace(WorkspaceRow::Workspace(0), "rename workspace")]
+        #[case::a_tab(WorkspaceRow::Tab(0, 0), "rename tab")]
+        fn the_menu_button_of_a_row_opens_its_menu(#[case] row: WorkspaceRow, #[case] label: &str) {
+            let (mut app, _rx, _dirs) = app_with(1);
+            let menu = ui::row_menu_button(row_rect(&app, row), areas().pitch);
+            click(&mut app, menu.as_position());
+            assert_eq!(menu_labels(&app), [label]);
         }
 
         #[test]
@@ -7740,7 +8153,7 @@ rm -f "$1/sessions/$$.json"
             app.projects[1].name = Some("clients-api".into());
             let found: Vec<(Kind, String)> =
                 app.search_results("clients").into_iter().map(|c| (c.kind, c.name)).collect();
-            let group = format!("{} clients", ui::GROUP_ICONS[0]);
+            let group = format!("{} clients", ui::GROUP_STYLES[0].0);
             assert_eq!(found, [(Kind::Group, group), (Kind::Project, "clients-api".into())]);
         }
 
@@ -7943,12 +8356,13 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn a_click_on_a_tab_shows_its_rows() {
             let mut s = open();
-            show(&mut s.app, Page::Tui);
+            show(&mut s.app, Page::Ui);
             assert_eq!(
                 form(&s.app).rows(),
                 [
                     Row::Sidebar,
                     Row::AgentsSection,
+                    Row::Counts,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),
@@ -9000,6 +9414,14 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn the_menu_button_of_a_project_opens_its_menu() {
+            let (mut app, _rx, _dirs) = tree(2);
+            let menu = ui::row_menu_button(row(&app, TreeRow::Project(1)), 1);
+            click_at(&mut app, menu.as_position());
+            assert_eq!(menu_labels(&app), ["rename project"]);
+        }
+
+        #[test]
         fn a_tab_of_another_project_can_be_renamed_from_its_menu() {
             let (mut app, _rx, _dirs) = tree(2);
             let r = row(&app, TreeRow::Tab(0, 0, 0));
@@ -9918,6 +10340,51 @@ rm -f "$1/sessions/$$.json"
 
                 assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
             }
+        }
+    }
+
+    mod restarting {
+        use super::*;
+
+        fn open(app: &mut App) {
+            click(app, areas().settings.as_position());
+            click(app, ui::settings_restart(ui::settings_area(AREA)).as_position());
+        }
+
+        fn notes(app: &App) -> String {
+            let Some(ui::Overlay::Update(dialog)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
+                panic!("the restart dialog");
+            };
+            dialog.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ")
+        }
+
+        #[test]
+        fn the_settings_button_says_what_stops_before_restarting() {
+            let (mut app, _rx) = empty_app();
+            app.open_here(AREA).expect("open a project");
+            type_line(&mut app, "sleep 30");
+            wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+
+            open(&mut app);
+
+            assert!(matches!(app.overlay, Some(Overlay::Restart)));
+            assert!(notes(&app).contains("sleep in"), "{}", notes(&app));
+        }
+
+        #[test]
+        fn restart_now_restarts() {
+            let (mut app, _rx) = empty_app();
+            open(&mut app);
+            click(&mut app, ui::update_buttons(AREA, RESTART_SUBMIT, ui::CANCEL_LABEL)[0].as_position());
+            assert_eq!((app.overlay.is_none(), app.take_restart().is_some()), (true, true));
+        }
+
+        #[test]
+        fn cancel_closes_without_restarting() {
+            let (mut app, _rx) = empty_app();
+            open(&mut app);
+            click(&mut app, ui::update_buttons(AREA, RESTART_SUBMIT, ui::CANCEL_LABEL)[1].as_position());
+            assert_eq!((app.overlay.is_none(), app.take_restart()), (true, None));
         }
     }
 
@@ -11245,6 +11712,19 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn deleting_an_item_being_edited_saves_the_text_and_undo_brings_it_back() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["fix logn", "b"]);
+            let row = item_row(&app, 0);
+            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
+            type_text(&mut app, "i");
+            tap(&mut app, |a| panel::delete(item_row(a, 0)));
+            assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into()]));
+            undo(&mut app, "deleted");
+            assert_eq!(texts(&app), ["fix login", "b"]);
+        }
+
+        #[test]
         fn deleting_an_item_shows_a_toast_that_undoes_it() {
             let (mut app, _rx, _dirs) = opened();
             add(&mut app, &["a", "b"]);
@@ -11981,6 +12461,7 @@ rm -f "$s"
 
         mod worktrees {
             use super::*;
+            use crate::test_util::git;
 
             fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
                 let repo = git_repo(&[("README", "hi")]);
@@ -12038,7 +12519,7 @@ rm -f "$s"
             fn a_worktree_already_being_removed_is_refused() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
                 let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let message = error(now(&mut app, None, remove(id)));
 
@@ -12049,7 +12530,7 @@ rm -f "$s"
             fn no_tab_opens_in_a_worktree_being_removed() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
                 let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let new = wire::NewTab { workspace: Some(id), ..wire::NewTab::default() };
                 let message = error(now(&mut app, None, Command::NewTab(new)));
@@ -12063,7 +12544,7 @@ rm -f "$s"
                 let (id, _) = made(&mut app, &rx);
                 ask(&mut app, None, remove(id));
 
-                app.start_removal(app.projects[0].id, id, false, None);
+                app.start_removal(app.projects[0].id, id, false, false, None);
 
                 let message = error(answered(&mut app, &rx, "git status answers"));
                 assert!(message.contains("is being removed"), "{message}");
@@ -12082,6 +12563,61 @@ rm -f "$s"
                 let workspace = &app.projects[p].workspaces[w];
                 assert!(message.contains("--force"), "{message}");
                 assert_eq!((workspace.removing(), workspace.tabs.len(), path.exists()), (false, 1, true));
+            }
+
+            fn force_remove(id: u64) -> Command {
+                Command::Close(wire::Close { item: Item::Workspace(id), remove_worktree: true, force: true })
+            }
+
+            fn lock(repo: &Path, path: &Path) {
+                git(repo, &["worktree", "lock", "--reason", "on a usb disk", &path.display().to_string()]);
+            }
+
+            fn untouched(app: &App, id: u64, path: &Path) -> bool {
+                let (p, w) = app.workspace_position(id).expect("it stays");
+                let workspace = &app.projects[p].workspaces[w];
+                workspace.open() && !workspace.tabs.is_empty() && path.exists()
+            }
+
+            #[test]
+            fn a_locked_worktree_is_refused_before_anything_stops() {
+                let (mut app, rx, repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                lock(repo.path(), &path);
+
+                ask(&mut app, None, remove(id));
+                let message = error(answered(&mut app, &rx, "git status answers"));
+
+                assert!(
+                    message.contains("is locked (on a usb disk)") && message.contains("git worktree unlock"),
+                    "{message}"
+                );
+                assert!(untouched(&app, id, &path));
+            }
+
+            #[test]
+            fn force_does_not_unlock_a_locked_worktree() {
+                let (mut app, rx, repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                lock(repo.path(), &path);
+
+                ask(&mut app, None, force_remove(id));
+                let message = error(answered(&mut app, &rx, "git status answers"));
+
+                assert!(message.contains("is locked"), "{message}");
+                assert!(untouched(&app, id, &path));
+            }
+
+            #[test]
+            fn force_removes_a_worktree_with_changes() {
+                let (mut app, rx, _repo, _worktrees, _config) = repo();
+                let (id, path) = made(&mut app, &rx);
+                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+
+                ask(&mut app, None, force_remove(id));
+                done(answered(&mut app, &rx, "git removes the worktree"));
+
+                assert!(!path.exists());
             }
 
             #[test]
@@ -12139,6 +12675,95 @@ rm -f "$s"
 
             let filter = app.changes.filter.as_ref().map(|f| (f.query(), f.focused));
             assert_eq!((app.todo.field.is_none(), filter), (true, Some(("a", false))));
+        }
+    }
+
+    mod trace {
+        use super::*;
+
+        fn told(app: &mut App) -> Vec<String> {
+            app.observe()
+                .into_iter()
+                .map(|note| {
+                    let fields: Vec<String> = note.fields.iter().map(|(k, v)| format!(" {k}={v}")).collect();
+                    format!("{}: {}{}", note.target, note.message, fields.concat())
+                })
+                .collect()
+        }
+
+        fn ids(app: &App) -> (u64, u64, u64, u64) {
+            let project = &app.projects[0];
+            let workspace = project.workspace().expect("a workspace");
+            let tab = workspace.tab().expect("a tab");
+            (project.id, workspace.id, tab.id, tab.pane().expect("a pane").id)
+        }
+
+        #[test]
+        fn tells_each_new_item_once_with_where_it_sits() {
+            let (mut app, _rx, dirs) = app_with(1);
+            let (project, workspace, tab, pane) = ids(&app);
+            let path = canonical(&dirs[0]);
+
+            assert_eq!(
+                told(&mut app),
+                [
+                    format!("app: project opened id={project} path={}", path.display()),
+                    format!(
+                        "app: workspace opened id={workspace} project={project} path={} label=default worktree=false",
+                        path.display()
+                    ),
+                    format!("app: tab opened id={tab} workspace={workspace}"),
+                    format!("app: pane opened id={pane} tab={tab}"),
+                    format!("ui: focus project={project} workspace={workspace} tab={tab} pane={pane}"),
+                ]
+            );
+            assert_eq!(told(&mut app), Vec::<String>::new());
+        }
+
+        #[test]
+        fn tells_what_closed_from_the_inside_out() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            app.add_tab(0, 0, AREA).expect("a second tab");
+            told(&mut app);
+            let (_, _, tab, pane) = ids(&app);
+
+            app.remove(pane);
+
+            let told = told(&mut app);
+            assert_eq!(told[..2], [format!("app: pane closed id={pane}"), format!("app: tab closed id={tab}")]);
+            assert!(told[2].starts_with("ui: focus "), "{told:?}");
+        }
+
+        #[test]
+        fn tells_when_a_dialog_opens_and_closes() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            told(&mut app);
+
+            app.open_settings();
+            let opened = told(&mut app);
+            app.overlay = None;
+
+            assert_eq!(opened, ["ui: overlay opened kind=settings"]);
+            assert_eq!(told(&mut app), ["ui: overlay closed kind=settings"]);
+        }
+
+        #[test]
+        fn tells_the_errors_it_shows() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            told(&mut app);
+
+            app.report_bug();
+
+            assert_eq!(told(&mut app), ["ui: error shown text=cornercase hit a bug, see server.log"]);
+        }
+
+        #[test]
+        fn tells_which_settings_changed_but_not_to_what() {
+            let (app, _rx, _dirs) = app_with(1);
+            let mut config = app.config.clone();
+            config.memory = !config.memory;
+
+            assert_eq!(changed_keys(&app.config, &config), ["memory"]);
         }
     }
 }

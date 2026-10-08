@@ -53,6 +53,16 @@ Processes can't be saved. When a **new** server starts, after `cornercase kill-s
 
 A server that is already running never restores: reattaching just shows what is there.
 
+## Restart the server
+
+Click **settings**, then **restart** next to **done**, or run:
+
+```sh
+cornercase restart
+```
+
+Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab.
+
 ## Stop the server
 
 ```sh

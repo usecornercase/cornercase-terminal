@@ -46,7 +46,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 - **Mouse buttons only, no app shortcuts.** Every key goes to the program in the active pane, except while a modal, the search, the changes panel's filter field, the files panel's search field or a TODO field has them (then `Enter` submits, `Esc` cancels; the files panel's search field also takes `↑` `↓` to pick a result; a TODO field also takes `←` `→` `↑` `↓` `Home` `End` `Delete` to move and edit, since editing an item means fixing a word in the middle) and `Esc` while a row is dragged. Do not add keyboard shortcuts without asking. No `Alt` shortcuts (Option is a compose key on macOS), no `Ctrl+letter` (steals shell bindings). `e2e::ctrl_b_reaches_the_shell` guards this.
 - Closing the last project leaves the app open and empty. ` quit ` only detaches.
-- `×` buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`ui::truncate_right`), paths at the start (`truncate_left`).
+- `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`ui::truncate_right`), paths at the start (`truncate_left`).
 - At most one overlay is open (menu, form, confirmation, settings, usage, picker, issues, search). While it is open, no mouse event reaches the columns or the pane.
 - Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s.
 
@@ -56,7 +56,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 src/main.rs       hands argv to cli.rs (uses anyhow)
 src/cli.rs        clap definitions of every command; the commands for scripts and agents send a request and print the answer
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
-src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames; `kill-server` and `update`
+src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames; `kill-server`, `restart` and `update`
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client
 src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
 src/state.rs      the saved session as JSON, migrations, and the Saver that writes it (or todos.json) once it settles
@@ -72,6 +72,7 @@ src/usage/        plan usage: claude.rs (the `get_usage` control request), codex
 src/notify.rs     desktop notifications through the outer terminal: which escape sequence a terminal understands, encoding
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/launch.rs     starting an agent in a new tab (pure state machine)
+src/log.rs        server.log: levels, the line format, the writer thread and its rotation, `Job` timings, `cornercase logs`
 src/secrets.rs    Shortcut / Linear / Jira tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
@@ -87,7 +88,7 @@ src/picker.rs     folder picker state
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
-src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits
+src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/trace.rs logs what changed after each step
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
 src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel

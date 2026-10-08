@@ -16,11 +16,14 @@ const FORM_WIDTH = 64;
 const FORM_HEIGHT = 10;
 const PICKER_WIDTH = 72;
 const PICKER_HEIGHT = 24;
+const UPDATE_MESSAGE_HEIGHT = 3;
+const MIN_MENU_ROW_WIDTH = 20;
 const ISSUES_WIDTH = 110;
 const ISSUES_HEIGHT = 30;
 
 export const GROUP_ICONS = ['●', '◉', '◐', '◆', '■', '▲', '▼', '★', '✦', '♥', '♣', '♠'];
 export const GROUP_COLOURS = [1, 9, 208, 214, 3, 11, 2, 10, 6, 14, 4, 12, 99, 5, 13, 205];
+export const GROUP_STYLES: [string, number][] = [['●', 12], ['◆', 2], ['★', 99], ['♥', 9], ['▲', 208], ['■', 214], ['✦', 205], ['◉', 6]];
 export const DONE = 'done';
 const ICONS_PER_ROW = 6;
 const COLOURS_PER_ROW = 8;
@@ -792,6 +795,13 @@ export const closeButton = (row: Rect, pitch: number): Rect => {
   return rect(right(row) - w, row.y, Math.min(w, row.w), Math.min(pitch, row.h));
 };
 
+export const menuButton = (row: Rect, pitch: number): Rect => {
+  const close = closeButton(row, pitch);
+  const w = row.w < MIN_MENU_ROW_WIDTH ? 0 : pitch > 1 ? 4 : 2;
+  const x = Math.max(row.x, close.x - w);
+  return rect(x, row.y, Math.max(0, close.x - x), close.h);
+};
+
 export interface Details {
   model: string | null;
   percent: number | null;
@@ -807,6 +817,10 @@ export function centered(cols: number, rows: number, w: number, h: number): Rect
 export const formArea = (cols: number, rows: number) => centered(cols, rows, Math.min(Math.max(0, cols - 4), FORM_WIDTH), Math.min(FORM_HEIGHT, rows));
 export const pickerArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), PICKER_WIDTH), Math.min(Math.max(0, rows - 2), PICKER_HEIGHT));
+export const updateNotes = (cols: number, rows: number): Rect => {
+  const r = pickerArea(cols, rows);
+  return rect(r.x + 2, r.y + 2 + UPDATE_MESSAGE_HEIGHT, Math.max(0, r.w - 4), Math.max(0, r.h - 5 - UPDATE_MESSAGE_HEIGHT));
+};
 export const issuesArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), ISSUES_WIDTH), Math.min(Math.max(0, rows - 2), ISSUES_HEIGHT));
 

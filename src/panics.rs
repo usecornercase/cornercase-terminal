@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::thread;
+use std::time::SystemTime;
 
 use parking_lot::Mutex;
 
 use crate::error::{Error, Result};
+use crate::log::Stamp;
 
 #[cfg(not(panic = "unwind"))]
 compile_error!("the server contains panics with catch_unwind, so cornercase must be built with panic = \"unwind\"");
@@ -27,7 +29,7 @@ pub fn log_to_stderr() {
         let message = info.payload_as_str().unwrap_or("no message");
         let backtrace = || Backtrace::force_capture().to_string();
         if let Some(report) = reports.lock().report(thread.name().unwrap_or("unnamed"), &location, message, backtrace) {
-            let _ = writeln!(io::stderr().lock(), "{report}");
+            let _ = writeln!(io::stderr().lock(), "{} ERROR panic: {report}", Stamp(SystemTime::now()));
         }
     }));
 }
@@ -45,7 +47,7 @@ impl Reports {
     ) -> Option<String> {
         let seen = self.0.entry(location.to_string()).or_default();
         *seen += 1;
-        let head = format!("cornercase server: thread '{thread}' panicked at {location}");
+        let head = format!("thread '{thread}' panicked at {location}");
         match *seen {
             1 => Some(format!("{head}:\n{message}\n{}", backtrace().trim_end())),
             n if n.is_power_of_two() => Some(format!("{head} again, {n} times so far:\n{message}")),
@@ -106,9 +108,7 @@ mod tests {
         fn the_first_panic_at_a_place_comes_with_its_backtrace() {
             assert_eq!(
                 report(&mut Reports::default(), "src/ui.rs:12:5").as_deref(),
-                Some(
-                    "cornercase server: thread 'main' panicked at src/ui.rs:12:5:\nmin > max\n   0: cornercase::ui::draw"
-                )
+                Some("thread 'main' panicked at src/ui.rs:12:5:\nmin > max\n   0: cornercase::ui::draw")
             );
         }
 
@@ -125,7 +125,7 @@ mod tests {
             report(&mut reports, "src/ui.rs:12:5");
             assert_eq!(
                 report(&mut reports, "src/ui.rs:12:5").as_deref(),
-                Some("cornercase server: thread 'main' panicked at src/ui.rs:12:5 again, 2 times so far:\nmin > max")
+                Some("thread 'main' panicked at src/ui.rs:12:5 again, 2 times so far:\nmin > max")
             );
         }
 

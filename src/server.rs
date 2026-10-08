@@ -8,7 +8,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{Event, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Rect, Size};
@@ -20,6 +20,7 @@ use crate::app::{App, AppEvent};
 use crate::config;
 use crate::error::{Error, Result};
 use crate::host_theme::HostTheme;
+use crate::log::{self, Level};
 use crate::notify::Channel;
 use crate::panics;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
@@ -27,6 +28,7 @@ use crate::state::{self, Saver};
 use crate::todo;
 
 const TICK: Duration = Duration::from_millis(500);
+const SLOW_STEP: Duration = Duration::from_millis(100);
 const FRAME: Duration = Duration::from_millis(16);
 const SAVE_EVERY: Duration = Duration::from_millis(500);
 const ISSUE_CACHE_FILE: &str = "issues.json";
@@ -51,6 +53,33 @@ enum Step {
     Draw,
     Save,
     Event(ServerEvent),
+}
+
+impl Step {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Refresh => "refresh",
+            Self::Answer => "answer",
+            Self::Flush => "flush",
+            Self::Draw => "draw",
+            Self::Save => "save",
+            Self::Event(ServerEvent::App(AppEvent::Output(..))) => "output",
+            Self::Event(ServerEvent::App(_)) => "job answer",
+            Self::Event(ServerEvent::Accepted(_)) => "connection",
+            Self::Event(ServerEvent::Message(_, ClientMessage::Event(_))) => "input",
+            Self::Event(ServerEvent::Message(_, ClientMessage::Request(_))) => "request",
+            Self::Event(ServerEvent::Message(..)) => "message",
+            Self::Event(ServerEvent::Incompatible(_) | ServerEvent::Gone(_)) => "client gone",
+            Self::Event(ServerEvent::Shutdown) => "signal",
+        }
+    }
+
+    fn traced(&self) -> bool {
+        !matches!(
+            self,
+            Self::Answer | Self::Flush | Self::Draw | Self::Save | Self::Event(ServerEvent::App(AppEvent::Output(..)))
+        )
+    }
 }
 
 struct FrameWriter {
@@ -181,6 +210,10 @@ pub fn run() -> Result<()> {
     let _ = rustix::process::setsid();
     let path = protocol::socket_path();
     let (listener, _lock) = bind(&path)?;
+    let level = log::level_from_env();
+    if let Err(e) = log::start(&log::path(), level) {
+        eprintln!("cornercase server: cannot write its log to {}: {e}", log::path().display());
+    }
     let (tx, rx) = mpsc::channel();
     spawn_acceptor(listener, tx.clone());
     spawn_signal_thread(tx.clone())?;
@@ -190,6 +223,18 @@ pub fn run() -> Result<()> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
     let mut app = App::new(shell, HostTheme::default(), config::path(), app_tx);
     let session = state::path();
+    log::info!(
+        "server",
+        "started",
+        version = crate::update::CURRENT,
+        build = protocol::build_id(),
+        pid = std::process::id(),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        socket = path.display(),
+        session = session.display(),
+        level = format!("{level:?}").to_lowercase(),
+    );
     app.set_issue_cache(session.with_file_name(ISSUE_CACHE_FILE));
     let todos = todo::load(&todo::path(&session));
     let todo_saver = Saver::new(todo::path(&session), Some(todos.saved()));
@@ -198,6 +243,7 @@ pub fn run() -> Result<()> {
     server.serve(&rx);
     let _ = std::fs::remove_file(&path);
     server.shutdown();
+    log::info!("server", "stopped", restart = server.restart.is_some());
     Ok(())
 }
 
@@ -328,6 +374,15 @@ impl Server {
     }
 
     fn step(&mut self, step: Step) -> ControlFlow<()> {
+        let traced = step.traced();
+        let flow = self.run_step(step);
+        if traced {
+            self.app.trace();
+        }
+        flow
+    }
+
+    fn run_step(&mut self, step: Step) -> ControlFlow<()> {
         match step {
             Step::Refresh => self.app.refresh(Instant::now()),
             Step::Answer => self.answer(),
@@ -342,8 +397,17 @@ impl Server {
     fn contain(&mut self, step: Step, run: impl Fn(&mut Self, Step) -> ControlFlow<()>) -> Option<ControlFlow<()>> {
         let drawing = matches!(step, Step::Draw);
         let interacting = drawing || matches!(step, Step::Event(ServerEvent::Message(_, ClientMessage::Event(_))));
+        let name = step.name();
+        let started = Instant::now();
         let done = panics::contain(|| run(self, step));
+        let took = started.elapsed();
+        if took >= SLOW_STEP {
+            log::warning!("server", "slow step", step = name, ms = took.as_millis());
+        } else if drawing && took >= FRAME {
+            log::debug!("server", "slow frame", ms = took.as_millis());
+        }
         if done.is_none() {
+            log::error!("server", "step panicked", step = name, interacting = interacting);
             if interacting {
                 self.app.reset_interaction();
             }
@@ -372,13 +436,17 @@ impl Server {
             return;
         }
         self.observed = Some(now);
-        if self.started
-            && let Err(e) = self.saver.observe(self.app.state(), now)
-        {
-            eprintln!("cornercase server: failed to save the session: {e}");
+        if self.started {
+            match self.saver.observe(self.app.state(), now) {
+                Ok(true) => log::debug!("server", "session saved", path = self.session.display()),
+                Ok(false) => {}
+                Err(e) => log::error!("server", "failed to save the session", error = e),
+            }
         }
-        if let Err(e) = self.todo_saver.observe(self.app.todos_saved(), now) {
-            eprintln!("cornercase server: failed to save the todo lists: {e}");
+        match self.todo_saver.observe(self.app.todos_saved(), now) {
+            Ok(true) => log::debug!("server", "todo list saved"),
+            Ok(false) => {}
+            Err(e) => log::error!("server", "failed to save the todo list", error = e),
         }
     }
 
@@ -391,6 +459,7 @@ impl Server {
         }
         for notification in app.take_notifications() {
             for client in clients.iter().filter(|c| c.screen.is_some()) {
+                log::info!("server", "notification sent", client = client.id, channel = client.notify.id());
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
@@ -423,17 +492,28 @@ impl Server {
     }
 
     fn handle(&mut self, ev: ServerEvent) -> ControlFlow<()> {
+        if log::enabled(Level::Debug) {
+            describe(&ev);
+        }
         match &ev {
             ServerEvent::App(AppEvent::Output(id, _)) => self.printed = self.printed || self.app.shows(*id),
             _ => self.changed = true,
         }
         match ev {
-            ServerEvent::Message(_, ClientMessage::KillServer) | ServerEvent::Shutdown => return ControlFlow::Break(()),
+            ServerEvent::Message(id, ClientMessage::KillServer) => {
+                log::info!("server", "kill-server received", client = id);
+                return ControlFlow::Break(());
+            }
+            ServerEvent::Shutdown => {
+                log::info!("server", "stopping on a signal");
+                return ControlFlow::Break(());
+            }
             ServerEvent::App(ev) => self.handle_app(ev),
             ServerEvent::Accepted(stream) => self.accept(stream),
             ServerEvent::Message(id, ClientMessage::Hello(hello)) => self.hello(id, *hello),
             ServerEvent::Message(id, ClientMessage::Event(ev)) => self.input(id, ev),
-            ServerEvent::Message(_, ClientMessage::Restart) => {
+            ServerEvent::Message(id, ClientMessage::Restart) => {
+                log::info!("server", "restart requested", client = id);
                 self.restart = Some(std::env::current_exe().unwrap_or_default());
             }
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
@@ -450,13 +530,13 @@ impl Server {
 
     fn handle_app(&mut self, ev: AppEvent) {
         if let Err(e) = self.app.handle_event(ev, self.area.unwrap_or_default()) {
-            eprintln!("cornercase server: {e}");
+            log::error!("app", "an event failed", error = e);
         }
     }
 
     fn accept(&mut self, stream: UnixStream) {
         if let Err(e) = protocol::check_peer(&stream, protocol::own_uid()) {
-            eprintln!("cornercase server: {e}");
+            log::warning!("server", "connection refused", error = e);
             return;
         }
         let Ok(reader) = stream.try_clone() else { return };
@@ -475,9 +555,21 @@ impl Server {
 
     fn hello(&mut self, id: u64, hello: Hello) {
         if hello.version != protocol::VERSION || hello.build != self.build {
+            log::warning!("server", "client from another build", client = id, build = hello.build);
             self.reject(id, OTHER_BUILD);
             return;
         }
+        log::info!(
+            "server",
+            "client attached",
+            client = id,
+            cols = hello.cols,
+            rows = hello.rows,
+            terminal = hello.terminal.as_deref().unwrap_or("unknown"),
+            notify = hello.notify.id(),
+            background = if hello.theme.background.is_some() { "known" } else { "unknown" },
+            truecolor = hello.theme.truecolor,
+        );
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
@@ -487,7 +579,7 @@ impl Server {
             self.started = true;
             self.app.set_theme(hello.theme);
             if let Err(e) = self.open_first_terminals() {
-                eprintln!("cornercase server: {e}");
+                log::error!("server", "could not open a first terminal", error = e);
             }
         }
     }
@@ -496,12 +588,20 @@ impl Server {
         let area = self.area.unwrap_or_default();
         let saved = state::load(&self.session);
         let complete = saved.as_ref().is_none_or(|saved| self.app.restore(saved, area));
+        match &saved {
+            Some(saved) => log::info!(
+                "server",
+                "session restored",
+                projects = saved.projects.len(),
+                complete = complete,
+                path = self.session.display()
+            ),
+            None => log::info!("server", "no session to restore", path = self.session.display()),
+        }
         if !complete {
             match state::back_up(&self.session) {
-                Ok(backup) => {
-                    eprintln!("cornercase server: the session came back incomplete, a copy is in {}", backup.display());
-                }
-                Err(e) => eprintln!("cornercase server: failed to keep a copy of the session: {e}"),
+                Ok(backup) => log::warning!("server", "the session came back incomplete", copy = backup.display()),
+                Err(e) => log::error!("server", "failed to keep a copy of the session", error = e),
             }
         }
         self.saver = Saver::new(self.session.clone(), saved);
@@ -524,10 +624,14 @@ impl Server {
         }
         let Some(area) = self.area else { return };
         if let Err(e) = self.app.handle_event(AppEvent::Input(ev), area) {
-            eprintln!("cornercase server: {e}");
+            log::warning!("app", "input failed", error = e);
         }
         self.restart = self.app.take_restart();
+        if self.restart.is_some() {
+            log::info!("server", "restart chosen in the window", client = id);
+        }
         if self.app.take_detach() {
+            log::info!("server", "client detached", client = id);
             if let Some(client) = self.client_mut(id) {
                 client.send(ServerMessage::Detached);
             }
@@ -548,6 +652,9 @@ impl Server {
         let Some((cols, rows)) = latest else { return };
         let area = Rect::new(0, 0, cols, rows);
         let area_changed = self.area != Some(area);
+        if area_changed {
+            log::info!("server", "size", cols = cols, rows = rows);
+        }
         self.area = Some(area);
         for client in self.clients.iter_mut().filter(|c| area_changed || Some(c.id) == resized) {
             client.reset_screen(area);
@@ -555,6 +662,7 @@ impl Server {
     }
 
     fn reject(&mut self, id: u64, reason: &str) {
+        log::warning!("server", "client rejected", client = id);
         if let Some(client) = self.client_mut(id) {
             client.send(ServerMessage::Rejected(reason.into()));
         }
@@ -562,6 +670,10 @@ impl Server {
     }
 
     fn remove(&mut self, id: u64) {
+        if let Some(client) = self.clients.iter().find(|c| c.id == id) {
+            let level = if client.size.is_some() { Level::Info } else { Level::Debug };
+            log::event!(level, "server", "client gone", client = id);
+        }
         self.app.forget(id);
         let before = self.clients.len();
         self.clients.retain(|c| c.id != id);
@@ -572,15 +684,15 @@ impl Server {
 
     fn shutdown(&mut self) {
         if let Err(e) =
-            self.todo_saver.observe(self.app.todos_saved(), Instant::now()).and_then(|()| self.todo_saver.flush())
+            self.todo_saver.observe(self.app.todos_saved(), Instant::now()).and_then(|_| self.todo_saver.flush())
         {
-            eprintln!("cornercase server: failed to save the todo lists: {e}");
+            log::error!("server", "failed to save the todo list", error = e);
         }
         if self.restart.is_some()
             && self.started
             && let Err(e) = state::save(&self.session, &self.app.state())
         {
-            eprintln!("cornercase server: failed to save the session: {e}");
+            log::error!("server", "failed to save the session", error = e);
         }
         for client in self.clients.drain(..) {
             client.send(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));
@@ -589,6 +701,46 @@ impl Server {
             let _ = writer.join();
         }
     }
+}
+
+fn describe(ev: &ServerEvent) {
+    match ev {
+        ServerEvent::App(AppEvent::Output(..)) => {}
+        ServerEvent::App(ev) => log::debug!("server", "job answered", job = ev.name()),
+        ServerEvent::Accepted(_) => log::debug!("server", "connection"),
+        ServerEvent::Message(id, ClientMessage::Event(ev)) => {
+            if let Some(input) = input(ev) {
+                log::debug!("server", "input", client = id, event = input);
+            }
+        }
+        ServerEvent::Message(id, ClientMessage::Request(_)) => log::debug!("server", "request", client = id),
+        ServerEvent::Message(id, ClientMessage::Hello(_)) => log::debug!("server", "hello", client = id),
+        ServerEvent::Message(..) | ServerEvent::Incompatible(_) | ServerEvent::Gone(_) | ServerEvent::Shutdown => {}
+    }
+}
+
+fn input(ev: &Event) -> Option<String> {
+    let with = |modifiers: KeyModifiers| {
+        if modifiers.is_empty() { String::new() } else { format!(" with {modifiers}") }
+    };
+    Some(match ev {
+        Event::Key(key) => {
+            let code = match key.code {
+                KeyCode::Char(_) => "a character".to_string(),
+                code => code.to_string(),
+            };
+            let kind = if key.kind == KeyEventKind::Press { String::new() } else { format!(" {:?}", key.kind) };
+            format!("key {code}{}{kind}", with(key.modifiers))
+        }
+        Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => return None,
+        Event::Mouse(mouse) => {
+            format!("mouse {:?} at {},{}{}", mouse.kind, mouse.column, mouse.row, with(mouse.modifiers))
+        }
+        Event::Paste(text) => format!("paste of {} bytes", text.len()),
+        Event::Resize(cols, rows) => format!("resize {cols}x{rows}"),
+        Event::FocusGained => "focus gained".into(),
+        Event::FocusLost => "focus lost".into(),
+    })
 }
 
 fn is_use(ev: &Event) -> bool {
@@ -717,7 +869,8 @@ mod tests {
                 let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
                 let _ = server.handle(ServerEvent::Accepted(ours));
                 let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
-                let hello = Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell };
+                let hello =
+                    Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
                 let _ = server.handle(ServerEvent::Message(1, ClientMessage::Hello(Box::new(hello))));
                 let (frames_tx, frames) = mpsc::channel();
                 thread::spawn(move || {

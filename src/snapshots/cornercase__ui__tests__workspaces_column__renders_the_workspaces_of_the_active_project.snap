@@ -8,7 +8,7 @@ expression: render(&with_workspaces(Some(0))).backend()
 "                               │                         │                                          "
 "▌ cornercase (1)               │  login                  │                                          "
 "                               │▌ ├ claude               │                                          "
-"  + new project                │  ├ nvim                 │                                          "
+"  + new                        │  ├ nvim                 │                                          "
 "                               │  └ + tab                │                                          "
 "                               │                         │                no tab open               "
 "                               │  main                   │         + tab opens a shell here         "

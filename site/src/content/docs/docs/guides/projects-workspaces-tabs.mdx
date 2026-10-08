@@ -11,24 +11,24 @@ cornercase organises your shells in three levels, each in its own column: **proj
 <Screen
   name="hover-close"
   crop={[0, 2, 48, 21]}
-  alt="The projects column with shop, api, infra and notes, and the workspaces column of shop: main with nvim and bash, feat/dark-mode, feat/login hovered, with a lighter background and a close button, and an issue workspace whose claude tab shows ◐ while the agent works, with Opus 5.5 · 7% under it"
+  alt="The projects column with shop, api, infra and notes, and the workspaces column of shop: main with nvim and bash, feat/dark-mode, feat/login hovered, with a lighter background, a menu button and a close button, and an issue workspace whose claude tab shows ◐ while the agent works, with Opus 5.5 · 7% under it"
   caption="The two columns, with feat/login hovered: a lighter background and its × button."
 />
 
 ## Projects
 
-A project is a folder. The projects column lists them, each with its number of workspaces in parentheses; a new one goes at the end, and you can [drag them](#reorder) into any order. Click one to make it active; the second column then shows its workspaces.
+A project is a folder. The projects column lists them, each with its number of workspaces in parentheses (turn them off in **settings → UI → counts**); a new one goes at the end, and you can [drag them](#reorder) into any order. Click one to make it active; the second column then shows its workspaces.
 
 A project is called after its folder (`~` for your home folder) unless you rename it.
 
 ### Open a project
 
-Click **`+ new project`** at the end of the list, then **open project**. A folder picker opens in the folder that contains the active project, or in your home folder.
+Click **`+ new`** at the end of the list, then **open project**. A folder picker opens in the folder that contains the active project, or in your home folder.
 
 <Screen
   name="picker"
   crop={[19, 3, 72, 24]}
-  alt="The new project folder picker showing the folders in ~/code, with the branch of each git repository on the right"
+  alt="The open project folder picker showing the folders in ~/code, with the branch of each git repository on the right"
 />
 
 | To | Do |
@@ -56,18 +56,18 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 
 | To | Do |
 | --- | --- |
-| Create a group | Click **`+ new project`**, then **new group**, and type its name. Its icon and colour open next. |
-| Put a project in a group | Right-click the project, choose **move to group**, then the group. **no group** takes it out again. You can also [drag it](#reorder) onto the group's header or between its projects. |
+| Create a group | Click **`+ new`**, then **new group**, and type its name. It gets its own icon and colour: the first eight groups each get a different one, starting with a blue `●`. |
+| Put a project in a group | Click the project's `⋯` or right-click it, choose **move to group**, then the group. **no group** takes it out again. You can also [drag it](#reorder) onto the group's header or between its projects. |
 | Collapse or expand a group | Click its header. A collapsed group shows how many projects it holds, and gets the cyan `▌` when the active project is inside. |
-| Rename a group | Right-click its header, then **rename group**. |
-| Change its icon or colour | Right-click its header, then **icon and colour**. |
-| Delete a group | Hover its header and click the `×` at its right end, or right-click it and choose **delete group**. cornercase asks first; its projects stay open and lose their group. |
+| Rename a group | Click its `⋯` or right-click its header, then **rename group**. |
+| Change its icon or colour | Click its `⋯` or right-click its header, then **icon and colour**. |
+| Delete a group | Hover its header and click the `×` at its right end, or open its menu and choose **delete group**. cornercase asks first; its projects stay open and lose their group. |
 
 A new group goes at the end of the list; drag its header to move it. There is a single level: a group can't hold another group.
 
 ### Icon and colour
 
-The dialog has twelve icons and sixteen colours. Every click applies at once, and the header at the bottom of the dialog shows the result; close it with **done**, `Enter` or `Esc`.
+Open it from the group's menu (its `⋯`, or a right-click on its header), **icon and colour**. The dialog has twelve icons and sixteen colours. Every click applies at once, and the header at the bottom of the dialog shows the result; close it with **done**, `Enter` or `Esc`.
 
 <Screen
   name="group-style"
@@ -128,7 +128,7 @@ Other agents don't get an icon yet.
 
 ### How full the context is
 
-Claude Code and Codex tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → TUI → model** and **settings → TUI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
+Claude Code and Codex tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -156,7 +156,7 @@ The variables are read from the running `claude` and from the `env` of its setti
 
 ### How much memory an agent uses
 
-Turn on **settings → TUI → memory** and Claude Code and Codex tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
+Turn on **settings → UI → memory** and Claude Code and Codex tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
 
 It is the memory held by everything running in the tab's agent panes: the shell, the agent and whatever the agent started, such as MCP servers, language servers and background commands. Each process counts only what it keeps on its own (on macOS, the figure Activity Monitor shows in its Memory column; on Linux, its private memory, including what was swapped out), so code that several processes share, such as the agent's own program, is not counted again for each of them, and the total is close to what the agent costs you. It is measured every 2 seconds, only for the project on screen (in the [tree](#the-tree), for every workspace you have open) and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
 
@@ -178,7 +178,7 @@ The desktop notification is an escape sequence that cornercase writes to your te
 | kitty, Contour, VS Code | OSC 99, shown only while the terminal isn't focused |
 | Any other, or cornercase inside tmux, screen or Zellij | A bell, which most terminals turn into a sound or a mark on the window |
 
-Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a notification while their window is in front; the toast tells you then. Each attached cornercase gets what its own terminal understands. To choose one yourself, or to turn them off, use **settings → TUI → desktop notifications**; the toast and the marks stay either way. If none shows up, see [No desktop notification shows up](../../help/troubleshooting/#no-desktop-notification-shows-up).
+Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a notification while their window is in front; the toast tells you then. Each attached cornercase gets what its own terminal understands. To choose one yourself, or to turn them off, use **settings → UI → desktop notifications**; the toast and the marks stay either way. If none shows up, see [No desktop notification shows up](../../help/troubleshooting/#no-desktop-notification-shows-up).
 
 ### Plan usage
 
@@ -215,7 +215,7 @@ The order is kept in your [saved session](../sessions/#what-is-saved), so it sur
 
 ## Rename
 
-Right-click a project, group, workspace or tab to open its menu, then choose **rename**:
+Click the `⋯` at the end of a project, group, workspace or tab row (it shows while you hover the row), or right-click the row, to open its menu, then choose **rename**:
 
 <Screen
   name="rename-menu"
@@ -250,7 +250,7 @@ When a program ends by itself, for example when you type `exit`, its pane closes
 
 - **Scroll** a column with the mouse wheel when it has more rows than fit. `↑ n more` and `↓ n more` tell you what is hidden, and the `+` buttons stay at the bottom.
 - **Resize** a column by dragging the border on its right. The panes follow live. Double-click a border to reset that column to its default width.
-- **Pick a layout** in **settings → TUI → sidebar**:
+- **Pick a layout** in **settings → UI → sidebar**:
   - *projects_on_top* (the default) puts both lists in one column, the projects above the active project's workspaces, so the panes get the most room;
   - *workspaces_on_top* swaps the two;
   - *side_by_side* gives each list its own column;
@@ -270,7 +270,7 @@ Column widths, the line between stacked lists, the height of the [agents section
 
 ### The tree
 
-With **settings → TUI → sidebar** set to *tree*, one list holds your groups, every project, their workspaces and their tabs, indented one step per level. A tab in another project is one click away, and the agents of every open project show what they are doing at once.
+With **settings → UI → sidebar** set to *tree*, one list holds your groups, every project, their workspaces and their tabs, indented one step per level. A tab in another project is one click away, and the agents of every open project show what they are doing at once.
 
 <Screen
   name="sidebar-tree"
@@ -290,7 +290,7 @@ Below 90 columns the [compact layout](../small-terminals/) shows its usual menu,
 
 ### The agents section
 
-Turn on **settings → TUI → agents section** to list every Claude Code and Codex running in any project at the bottom of the sidebar, one row per agent:
+Turn on **settings → UI → agents section** to list every Claude Code and Codex running in any project at the bottom of the sidebar, one row per agent:
 
 <Screen
   name="sidebar-agents"

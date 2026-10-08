@@ -13,6 +13,7 @@ use crate::error::Result;
 use crate::files::link::{self, Target};
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
 use crate::files::{self, Mode, Query, disk};
+use crate::log::{Job, Level};
 use crate::mouse::MouseMode;
 use crate::panics;
 use crate::project::Tab;
@@ -47,22 +48,29 @@ impl App {
         let Some((workspace, root)) = self.files_target().filter(|_| shown) else { return };
         if let Some((generation, list)) = self.files.list(workspace, &root, now) {
             let tx = self.tx.clone();
+            let job = Job::new(Level::Debug, "files", "list").with("workspace", workspace);
+            let job = job.with("folders", list.folders.len()).begin();
             std::thread::spawn(move || {
                 let folders = panics::contain(|| {
                     list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect()
                 });
+                job.done();
                 let folders = folders.unwrap_or_default();
                 let _ = tx.send(AppEvent::FilesListed { workspace, generation, folders });
             });
         }
         if let Some((generation, load)) = self.files.load(workspace, &root, now) {
             let tx = self.tx.clone();
+            let job = Job::new(Level::Debug, "files", "read").with("workspace", workspace).with("path", &load.path);
+            let job = job.begin();
             std::thread::spawn(move || {
                 let send = |content, done| {
                     let path = load.path.clone();
                     let _ = tx.send(AppEvent::FileRead { workspace, generation, path, content, done });
                 };
-                let Some(Some(read)) = panics::contain(|| disk::read(&load.file, load.previous)) else {
+                let read = panics::contain(|| disk::read(&load.file, load.previous));
+                job.done();
+                let Some(Some(read)) = read else {
                     send(None, true);
                     return;
                 };
@@ -84,23 +92,29 @@ impl App {
     fn refresh_search(&mut self, workspace: u64, root: &Path, now: Instant) {
         if let Some((generation, root)) = self.files.index_request(workspace, root, now) {
             let tx = self.tx.clone();
+            let job = Job::new(Level::Debug, "files", "index").with("workspace", workspace).begin();
             std::thread::spawn(move || {
                 let paths = panics::contain(|| search::index(&root)).unwrap_or_default();
+                job.with("files", paths.len()).done();
                 let _ = tx.send(AppEvent::FilesIndexed { workspace, generation, paths });
             });
         }
         if let Some((generation, search)) = self.files.names_request(workspace, now) {
             let tx = self.tx.clone();
+            let job = Job::new(Level::Debug, "files", "name search").with("workspace", workspace).begin();
             std::thread::spawn(move || {
                 let found = panics::contain(|| search::names(&search.index, &search.query)).unwrap_or_default();
+                job.with("found", found.len()).done();
                 let _ = tx.send(AppEvent::NamesFound { workspace, generation, search, found });
             });
         }
         if let Some((generation, search, cancel)) = self.files.grep_request(workspace, now) {
             let (tx, root) = (self.tx.clone(), root.to_path_buf());
+            let job = Job::new(Level::Debug, "files", "text search").with("workspace", workspace).begin();
             std::thread::spawn(move || {
                 let found =
                     panics::contain(|| search::text(&root, &search.index, &search.query, &cancel)).unwrap_or_default();
+                job.with("capped", found.capped).done();
                 let _ = tx.send(AppEvent::TextFound { workspace, generation, search, found });
             });
         }

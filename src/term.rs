@@ -178,7 +178,12 @@ impl Term {
     }
 
     pub fn exited(&mut self) -> bool {
-        matches!(self.child.try_wait(), Ok(Some(_)))
+        self.exit_status().is_some()
+    }
+
+    pub fn exit_status(&mut self) -> Option<String> {
+        let status = self.child.try_wait().ok()??;
+        Some(status.signal().map_or_else(|| status.exit_code().to_string(), str::to_owned))
     }
 
     pub fn kill(&mut self) {

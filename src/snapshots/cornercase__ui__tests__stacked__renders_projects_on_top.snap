@@ -12,7 +12,7 @@ expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).b
 "  ▾ ● work                     │                                                                    "
 "    api (1)                    │                                                                    "
 "                               │                                                                    "
-"  + new project                │                                                                    "
+"  + new                        │                                                                    "
 "                               │                                                                    "
 " ───────────────────────────── │                                                                    "
 " workspaces                    │                                                                    "

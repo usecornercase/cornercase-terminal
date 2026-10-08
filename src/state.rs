@@ -252,10 +252,10 @@ impl<T: PartialEq + Serialize> Saver<T> {
         Self { path, saved, pending: None }
     }
 
-    pub fn observe(&mut self, state: T, now: Instant) -> io::Result<()> {
+    pub fn observe(&mut self, state: T, now: Instant) -> io::Result<bool> {
         if self.saved.as_ref() == Some(&state) {
             self.pending = None;
-            return Ok(());
+            return Ok(false);
         }
         match &self.pending {
             Some((pending, since)) if *pending == state => {
@@ -263,11 +263,12 @@ impl<T: PartialEq + Serialize> Saver<T> {
                     save(&self.path, &state)?;
                     self.saved = Some(state);
                     self.pending = None;
+                    return Ok(true);
                 }
             }
             _ => self.pending = Some((state, now)),
         }
-        Ok(())
+        Ok(false)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -513,9 +514,10 @@ mod tests {
             let (mut saver, path) = saver(&tmp);
             let t0 = Instant::now();
 
-            saver.observe(state(&["/a"]), t0).expect("observe");
-            saver.observe(state(&["/a"]), t0 + SETTLE).expect("observe");
+            let first = saver.observe(state(&["/a"]), t0).expect("observe");
+            let settled = saver.observe(state(&["/a"]), t0 + SETTLE).expect("observe");
 
+            assert_eq!((first, settled), (false, true));
             assert_eq!(load(&path), Some(state(&["/a"])));
         }
 

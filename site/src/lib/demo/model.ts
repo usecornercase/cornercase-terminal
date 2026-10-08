@@ -143,6 +143,7 @@ export type Overlay =
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number }
   | { kind: 'search'; query: string; selected: number; scroll: number }
   | { kind: 'usage' }
+  | { kind: 'restart'; scroll: number }
   | SettingsOverlay
   | IssuesOverlay;
 
@@ -154,6 +155,7 @@ export interface Config {
   trust: boolean;
   sidebar: string;
   agentsSection: boolean;
+  counts: boolean;
   dim: boolean;
   model: boolean;
   context: boolean;
@@ -176,6 +178,7 @@ export const defaultConfig = (): Config => ({
   trust: false,
   sidebar: 'projects_on_top',
   agentsSection: false,
+  counts: true,
   dim: true,
   model: true,
   context: true,
