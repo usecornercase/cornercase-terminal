@@ -3,7 +3,7 @@ use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 
 use crate::client::{answer, ask};
@@ -97,10 +97,16 @@ ended (idle, done, waiting, working, shell or quiet), or the line that matched. 
 agent fails on a pane without one. A timeout exits with 1 and does not prove that the agent missed
 what you sent: read the pane before sending it again.
 
+Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
+one of them meets it and prints one line, its id and how it ended; --all returns once every one has
+met it, and prints one such line each, in the order given. The id is the one given, so a tab's line
+starts with the tab's id. A pane that closes meanwhile ends as `closed` instead of failing the wait.
+
 Examples:
   cornercase wait --pane 12 --timeout 600
   cornercase wait --pane 7 --until shell
-  cornercase wait --pane 7 --text 'test result: (ok|FAILED)'";
+  cornercase wait --pane 7 --text 'test result: (ok|FAILED)'
+  cornercase wait --any --pane 12 --pane 15 --tab 9 --timeout 1800";
 const CLOSE_HELP: &str = "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
 
@@ -149,6 +155,9 @@ Examples:
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
+const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
+    the shown one]";
+const WAIT_TAB: &str = "A tab: its agent's pane, else its active one; repeat it to wait on several";
 const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
 
 #[derive(Debug, Parser)]
@@ -396,8 +405,14 @@ pub enum UntilArg {
 
 #[derive(Debug, Args)]
 pub struct WaitArgs {
-    #[command(flatten)]
-    pub target: Target,
+    #[arg(long = "pane", value_name = "ID", help = WAIT_PANE)]
+    pub panes: Vec<u64>,
+    #[arg(long = "tab", value_name = "ID", help = WAIT_TAB)]
+    pub tabs: Vec<u64>,
+    #[arg(long, conflicts_with = "all", help = "Return once any of the panes meets the condition")]
+    pub any: bool,
+    #[arg(long, help = "Return once every one of the panes has met the condition")]
+    pub all: bool,
     #[arg(long, value_enum, conflicts_with_all = ["text", "quiet"], help = "Until the pane is in this state")]
     pub until: Option<UntilArg>,
     #[arg(
@@ -685,20 +700,7 @@ fn run_control(command: Control) -> Result<()> {
             let value = ask("read", control::Command::Read(control::Read { pane, tab, lines }))?;
             say(value, read.print.json, |done| done.text.clone().into_iter().collect())
         }
-        Control::Wait(wait) => {
-            let until = match (wait.until, wait.text, wait.quiet) {
-                (Some(UntilArg::Idle), ..) => Until::Idle,
-                (Some(UntilArg::Working), ..) => Until::Working,
-                (Some(UntilArg::Waiting), ..) => Until::Waiting,
-                (Some(UntilArg::Shell), ..) => Until::Shell,
-                (None, Some(text), _) => Until::Text(text),
-                (None, None, Some(quiet)) => Until::Quiet(quiet),
-                (None, None, None) => Until::Stops,
-            };
-            let Target { pane, tab } = wait.target;
-            let request = control::Wait { pane, tab, until, timeout: wait.timeout };
-            say(ask("wait", control::Command::Wait(request))?, wait.print.json, ending)
-        }
+        Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item().ok_or_else(|| Error::Control("say what to close".into()))?;
             let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
@@ -750,6 +752,42 @@ fn run_start(start: StartArgs) -> Result<()> {
     })
 }
 
+fn run_wait(wait: WaitArgs) -> Result<()> {
+    let several = several(&wait).unwrap_or_else(|e| e.exit());
+    let until = match (wait.until, wait.text, wait.quiet) {
+        (Some(UntilArg::Idle), ..) => Until::Idle,
+        (Some(UntilArg::Working), ..) => Until::Working,
+        (Some(UntilArg::Waiting), ..) => Until::Waiting,
+        (Some(UntilArg::Shell), ..) => Until::Shell,
+        (None, Some(text), _) => Until::Text(text),
+        (None, None, Some(quiet)) => Until::Quiet(quiet),
+        (None, None, None) => Until::Stops,
+    };
+    let request = control::Wait { until, timeout: wait.timeout, ..control::Wait::default() };
+    if !several {
+        let (pane, tab) = (wait.panes.first().copied(), wait.tabs.first().copied());
+        return say(
+            ask("wait", control::Command::Wait(control::Wait { pane, tab, ..request }))?,
+            wait.print.json,
+            ending,
+        );
+    }
+    let request = control::Wait { panes: wait.panes, tabs: wait.tabs, all: wait.all, ..request };
+    say(ask("wait", control::Command::WaitSeveral(request))?, wait.print.json, endings)
+}
+
+fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
+    if wait.any || wait.all {
+        return Ok(true);
+    }
+    if wait.panes.len() + wait.tabs.len() > 1 {
+        let command = Cli::command().find_subcommand("wait").cloned().unwrap_or_else(Cli::command);
+        let mut command = command.bin_name("cornercase wait");
+        return Err(command.error(clap::error::ErrorKind::MissingRequiredArgument, "several panes need --any or --all"));
+    }
+    Ok(false)
+}
+
 fn run_todo(action: TodoAction) -> Result<()> {
     match action {
         TodoAction::Add { text } => {
@@ -798,6 +836,11 @@ fn ending(done: &Done) -> Vec<String> {
         ended => ended.map(str::to_string),
     };
     line.into_iter().collect()
+}
+
+fn endings(done: &Done) -> Vec<String> {
+    let line = |pane: &Done| Some(format!("{} {}", pane.ids.tab.or(pane.ids.pane)?, ending(pane).first()?));
+    done.panes.iter().filter_map(line).collect()
 }
 
 fn typed(words: &[String]) -> Option<String> {
@@ -884,7 +927,6 @@ fn line(depth: usize, kind: &str, id: u64, parts: &[String], marks: &[&str]) -> 
 
 #[cfg(test)]
 mod tests {
-    use clap::CommandFactory;
     use rstest::rstest;
 
     use super::*;
@@ -946,6 +988,7 @@ mod tests {
         #[case::an_unknown_state(&["wait", "--until", "sleeping"])]
         #[case::a_broken_pattern(&["wait", "--text", "("])]
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
+        #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
         #[case::an_unknown_key(&["keys", "hello"])]
         #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
@@ -954,6 +997,23 @@ mod tests {
         #[case::an_unknown_command(&["frobnicate"])]
         fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
             assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
+        }
+
+        #[rstest]
+        #[case::two_panes(&["wait", "--pane", "1", "--pane", "2"], None)]
+        #[case::a_pane_and_a_tab(&["wait", "--pane", "1", "--tab", "2"], None)]
+        #[case::one_pane(&["wait", "--pane", "1"], Some(false))]
+        #[case::any(&["wait", "--any", "--pane", "1", "--tab", "2"], Some(true))]
+        #[case::all_of_one(&["wait", "--all", "--pane", "1"], Some(true))]
+        fn several_panes_need_any_or_all(#[case] args: &[&str], #[case] expected: Option<bool>) {
+            let Some(Command::Control(Control::Wait(wait))) = parse(args).expect("parse").command else {
+                panic!("not wait")
+            };
+
+            match several(&wait) {
+                Ok(several) => assert_eq!(Some(several), expected),
+                Err(e) => assert_eq!((expected, e.exit_code()), (None, 2)),
+            }
         }
 
         #[test]
@@ -1047,6 +1107,26 @@ mod tests {
             let done = Done { ended: ended.map(str::to_string), line: line.map(str::to_string), ..Done::default() };
 
             assert_eq!(ending(&done), expected);
+        }
+
+        #[test]
+        fn several_panes_end_one_line_each_with_the_id_they_were_given() {
+            let pane = |tab, pane, ended: &str, line: Option<&str>| Done {
+                ids: Ids { tab, pane: Some(pane), ..Ids::default() },
+                ended: Some(ended.into()),
+                line: line.map(str::to_string),
+                ..Done::default()
+            };
+            let done = Done {
+                panes: vec![
+                    pane(None, 4, "idle", None),
+                    pane(Some(9), 12, "text", Some("ok")),
+                    pane(None, 7, "closed", None),
+                ],
+                ..Done::default()
+            };
+
+            assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
         }
     }
 }

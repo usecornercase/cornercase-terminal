@@ -1524,6 +1524,22 @@ fn a_command_typed_in_a_new_tab_is_waited_for_and_read() {
 }
 
 #[test]
+fn several_panes_are_waited_for_at_once() {
+    let app = Harness::start();
+    let quick = app.session.says(&["new-tab", "--", "sleep 0.2"]);
+    let slow = app.session.says(&["new-tab", "--", "sleep 4"]);
+    let both = ["--pane", slow.as_str(), "--pane", quick.as_str(), "--until", "shell", "--timeout", "20"];
+
+    let any = app.session.says(&[&["wait", "--any"][..], &both].concat());
+    let all = app.session.says(&[&["wait", "--all"][..], &both].concat());
+    let neither = app.session.cli(&[&["wait"][..], &both].concat());
+
+    assert_eq!(any, format!("{quick} shell"));
+    assert_eq!(all, format!("{slow} shell\n{quick} shell"));
+    assert_eq!(neither.status.code(), Some(2), "{neither:?}");
+}
+
+#[test]
 fn split_opens_a_pane_beside_the_shown_one() {
     let mut app = Harness::start();
 

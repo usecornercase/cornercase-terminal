@@ -51,6 +51,7 @@ pub enum Command {
     Keys(Keys),
     Read(Read),
     Wait(Wait),
+    WaitSeveral(Wait),
     Close(Close),
     Rename(Rename),
     Focus(Focus),
@@ -76,6 +77,7 @@ impl Command {
             Self::Focus(_) => 12,
             Self::Notify(_) => 13,
             Self::Todo(_) => 14,
+            Self::WaitSeveral(_) => 15,
         }]
     }
 
@@ -114,7 +116,7 @@ impl Command {
             Self::Read(read) => {
                 fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
             }
-            Self::Wait(wait) => {
+            Self::Wait(wait) | Self::WaitSeveral(wait) => {
                 let until = match &wait.until {
                     Until::Stops => "stops".to_string(),
                     Until::Idle => "idle".to_string(),
@@ -126,6 +128,10 @@ impl Command {
                 };
                 fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", until);
                 fields.maybe("timeout", wait.timeout);
+                if let Self::WaitSeveral(_) = self {
+                    fields.add("panes", listed(&wait.panes)).add("tabs", listed(&wait.tabs));
+                    fields.add("mode", if wait.all { "all" } else { "any" });
+                }
             }
             Self::Close(close) => {
                 fields.add("item", close.item).add("remove_worktree", close.remove_worktree).add("force", close.force);
@@ -151,7 +157,7 @@ impl Command {
         fields.0
     }
 
-    pub const NAMES: [&str; 15] = [
+    pub const NAMES: [&str; 16] = [
         "status",
         "open",
         "new-workspace",
@@ -167,7 +173,12 @@ impl Command {
         "focus",
         "notify",
         "todo",
+        "wait-several",
     ];
+}
+
+fn listed(ids: &[u64]) -> String {
+    ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")
 }
 
 #[derive(Default)]
@@ -280,6 +291,9 @@ pub struct Read {
 pub struct Wait {
     pub pane: Option<u64>,
     pub tab: Option<u64>,
+    pub panes: Vec<u64>,
+    pub tabs: Vec<u64>,
+    pub all: bool,
     pub until: Until,
     pub timeout: Option<f64>,
 }
@@ -366,6 +380,8 @@ pub struct Done {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todo: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub panes: Vec<Done>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -510,6 +526,7 @@ mod tests {
             Command::Focus(Focus { item: Item::Pane(1) }),
             Command::Notify(Notify::default()),
             Command::Todo(Todo::List),
+            Command::WaitSeveral(Wait::default()),
         ];
 
         let names: Vec<String> = commands
@@ -535,6 +552,7 @@ mod tests {
             Command::NewTab(NewTab { command: Some(secret.into()), ..NewTab::default() }),
             Command::Split(Split { command: Some(secret.into()), ..Split::default() }),
             Command::Wait(Wait { until: Until::Text(secret.into()), ..Wait::default() }),
+            Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
             Command::Notify(Notify { text: secret.into() }),
             Command::Todo(Todo::Add(secret.into())),
         ];
