@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.3
+
+- opencode tabs now show what opencode is doing, like Claude Code and Codex: `◐` while it works, `✓` when it finished in a tab you weren't looking at, with a toast and a desktop notification, and `○` while it waits for your next message. They also show the model and how full the context is, such as `DeepSeek V4 Pro · 12%`, the memory they use when that setting is on, and they appear in the agents section. opencode doesn't save its permission prompts and questions anywhere, so while it waits for you the tab keeps showing `◐` instead of `!`. With two opencode in the same folder, neither shows its model and context.
+
 ## 0.12.2
 
 - Claude Code and Codex now come back in their conversations after `cornercase kill-server`, a reboot or the restart after an update: each pane that ran one types `claude --resume <id>` or `codex resume <id>` into its new shell, in the mode the agent was running in. The agent opens idle with the conversation on screen, waiting for you. Turn it off in **Settings → Agents → resume conversations**. Before restarting, cornercase now says how many conversations will resume.
