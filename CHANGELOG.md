@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.2
+
+- Claude Code and Codex now come back in their conversations after `cornercase kill-server`, a reboot or the restart after an update: each pane that ran one types `claude --resume <id>` or `codex resume <id>` into its new shell, in the mode the agent was running in. The agent opens idle with the conversation on screen, waiting for you. Turn it off in **Settings → Agents → resume conversations**. Before restarting, cornercase now says how many conversations will resume.
+
 ## 0.12.1
 
 - Homebrew installs now update with `brew update && brew upgrade cornercase`, the command the update dialog copies and `cornercase update` prints. `brew upgrade` alone often missed a new release, since Homebrew refreshes its taps only once a day.
