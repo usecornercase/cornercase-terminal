@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.3
 
-- opencode tabs now show what opencode is doing, like Claude Code and Codex: `◐` while it works, `✓` when it finished in a tab you weren't looking at, with a toast and a desktop notification, and `○` while it waits for your next message. They also show the model and how full the context is, such as `DeepSeek V4 Pro · 12%`, the memory they use when that setting is on, and they appear in the agents section. opencode doesn't save its permission prompts and questions anywhere, so while it waits for you the tab keeps showing `◐` instead of `!`. With two opencode in the same folder, neither shows its model and context.
+- opencode tabs now show what opencode is doing, like Claude Code and Codex: `◐` while it works, `✓` when it finished in a tab you weren't looking at, with a toast and a desktop notification, and `○` while it waits for your next message. They also show the model and how full the context is, such as `DeepSeek V4 Pro · 12%`, the memory they use when that setting is on, and they appear in the agents section. opencode doesn't save its permission prompts and questions anywhere, so while it waits for you the tab keeps showing `◐` instead of `!`. With two opencode in the same folder, neither shows its status, model or context until one of them exits.
 
 ## 0.12.2
 

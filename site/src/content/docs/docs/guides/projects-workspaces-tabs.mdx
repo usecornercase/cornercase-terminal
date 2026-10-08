@@ -157,7 +157,7 @@ After a model change or compaction, Codex's old percentage disappears until fres
 
 **opencode** shows the same numbers as the bottom of its own screen: the model's name, such as `DeepSeek V4 Pro · 12%`, and the tokens of its last answer (input, output, reasoning and cache) divided by the model's context window. The names and windows come from the list of models opencode keeps in `~/.cache/opencode/models.json`; a model it doesn't list, such as one from a provider you added yourself, shows its id without a percentage. After switching models, the new one shows without a percentage until it answers; after `/compact`, the percentage is the summary's, as in opencode.
 
-opencode saves every session of every opencode you run in one database, without saying which process each belongs to, so cornercase picks the session by folder: the one in the folder where that opencode runs, used since it started. The line appears after your first message, and follows `/new` once you send something there. With two opencode in the same folder, neither shows a line until one exits. The database is the one the running opencode has open (also with `OPENCODE_DB` or `XDG_DATA_HOME` set), read without changing it.
+opencode saves every session of every opencode you run in one database, without saying which process each belongs to, so cornercase picks the session by folder: the one in the folder where that opencode runs, used since it started. The line appears after your first message, and follows `/new` once you send something there. With two opencode in the same folder, neither shows an icon or a line until one exits. The database is the one the running opencode has open (also with `OPENCODE_DB` or `XDG_DATA_HOME` set), read without changing it.
 
 Once Claude has answered, a second line under the tab's name shows its model and how much of its context window the conversation takes up, such as `Opus 5.5 · 23%`: the percentage Claude Code gives its own status line. It turns orange from 75% and red from 90%. After `/compact` or `/clear` the line goes away until Claude's next answer. In the [compact layout](../small-terminals/) it sits at the bottom of the tab's row.
 
@@ -198,7 +198,7 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 
 ### Plan usage
 
-Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, each billed on its own, and has no plan to ask about.
+Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
 
 <Screen
   name="usage"

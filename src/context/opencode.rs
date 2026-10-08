@@ -87,7 +87,9 @@ pub(super) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<S
         Connection::open_with_flags(&database, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
             .ok()?;
     connection.busy_timeout(BUSY_FOR).ok()?;
-    let id = session(&connection, &cwd, since)?;
+    let Some(id) = session(&connection, &cwd, since) else {
+        return Some(Session { turn: false, context: None });
+    };
     let messages = messages(&connection, &id)?;
     Some(read(&messages, models, models_file(holder).as_deref()))
 }
@@ -371,7 +373,7 @@ mod tests {
         running.fake.write("ses_old", running.project.path(), REPLY);
         let since = SystemTime::now() + Duration::from_millis(5);
         std::thread::sleep(Duration::from_millis(10));
-        assert_eq!(running.look(since), None);
+        assert_eq!(running.look(since), Some(Session { turn: false, context: None }));
 
         running.fake.write("ses_elsewhere", elsewhere.path(), WORKING);
         running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
@@ -428,20 +430,20 @@ mod tests {
         running.fake.write(FakeOpencode::SESSION, running.project.path(), WORKING);
         wait_until("the turn shows", || {
             pane.update_opencode(running.pid());
-            pane.opencode_turn()
+            pane.opencode_turn() == Some(true)
         });
         assert_eq!(pane.context().cloned(), Some(shown("DeepSeek V4 Pro", None)));
 
         running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
         wait_until("the reply shows", || {
             pane.update_opencode(running.pid());
-            !pane.opencode_turn() && pane.context().is_some_and(|c| c.percent == Some(12))
+            pane.opencode_turn() == Some(false) && pane.context().is_some_and(|c| c.percent == Some(12))
         });
         running.fake.quit();
         running.child.wait().expect("fake opencode exits");
         wait_until("the line clears", || {
             pane.update_opencode(running.pid());
-            pane.context().is_none() && !pane.opencode_turn()
+            pane.context().is_none() && pane.opencode_turn().is_none()
         });
     }
 }

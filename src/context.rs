@@ -131,8 +131,8 @@ impl Pane {
         self.codex.as_ref().is_some_and(codex::Rollout::turn)
     }
 
-    pub fn opencode_turn(&self) -> bool {
-        self.opencode.as_ref().is_some_and(|session| session.turn)
+    pub fn opencode_turn(&self) -> Option<bool> {
+        self.opencode.as_ref().map(|session| session.turn)
     }
 
     pub fn conversation(&self) -> Option<&str> {

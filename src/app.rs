@@ -496,7 +496,7 @@ fn agent_in(
         (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
             term.context.update_opencode(pid);
             remember(config, term, Some((&agent, &args)), now);
-            Some((agent, activity::opencode(term.context.opencode_turn())))
+            term.context.opencode_turn().map(|turn| (agent, activity::opencode(turn)))
         }
         _ => {
             term.context.update(dir, None);
@@ -7799,7 +7799,9 @@ rm -f "$1/sessions/$$.json"
             let folder = app.projects[0].path.clone();
             opencode.write(FakeOpencode::SESSION, &folder, messages);
             let turn = messages == OPENCODE_WORKING;
-            watch_until(app, rx, "opencode's turn shows", |a| tab_term(a, 0, tab).context.opencode_turn() == turn);
+            watch_until(app, rx, "opencode's turn shows", |a| {
+                tab_term(a, 0, tab).context.opencode_turn() == Some(turn)
+            });
         }
 
         struct Watched {
@@ -7942,6 +7944,19 @@ rm -f "$1/sessions/$$.json"
             w.app.config.memory = true;
 
             watch_until(&mut w.app, &w.rx, "the memory is measured", |a| memory(a).is_some());
+        }
+
+        #[test]
+        fn a_second_opencode_in_its_folder_hides_the_status_instead_of_finishing_it() {
+            let mut w = Watched::start(agents::OPENCODE, true);
+            let Fake::Opencode(opencode, _) = &w.agents[0] else { unreachable!("an opencode was started") };
+            let mut other = opencode.spawn(&w.app.projects[0].path.clone());
+
+            watch_until(&mut w.app, &w.rx, "the status goes", |a| status(a, 0, 0).is_none());
+            other.kill().expect("stop the second opencode");
+            other.wait().expect("the second opencode exits");
+
+            assert_eq!(w.told().1, []);
         }
 
         #[test]
