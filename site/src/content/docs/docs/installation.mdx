@@ -134,7 +134,7 @@ It installs the latest release the same way, then asks whether to restart the se
 When cornercase can't replace its own binary, because Homebrew installed it, because you can't write to its folder, or because it doesn't know your platform, the dialog shows the command to run instead, with a **copy command** button, and `cornercase update` prints it:
 
 ```sh
-brew upgrade cornercase                              # Homebrew
+brew update && brew upgrade cornercase                # Homebrew
 curl -fsSL https://usecornercase.dev/install.sh | sh  # everything else
 ```
 

@@ -81,7 +81,7 @@ You can run it inside one of cornercase's own panes. That pane closes with the s
 
 A server running 0.4.2 or older doesn't know how to restart itself, so this first time `update` stops it instead, like `kill-server`, and the attached windows close. Run `cornercase` again to get your session back on the new version. From the next update on, the windows reopen by themselves.
 
-When cornercase can't replace its own binary (Homebrew installed it, you can't write to its folder, or your platform isn't one it knows), `update` changes nothing. It prints the command to run instead (`brew upgrade cornercase`, or the install script) and exits with a non-zero status. After that command, the next `cornercase` [offers to restart](#a-server-from-another-build) the old server.
+When cornercase can't replace its own binary (Homebrew installed it, you can't write to its folder, or your platform isn't one it knows), `update` changes nothing. It prints the command to run instead (`brew update && brew upgrade cornercase`, or the install script) and exits with a non-zero status. After that command, the next `cornercase` [offers to restart](#a-server-from-another-build) the old server.
 
 `--check` prints `cornercase 0.5.0 is out (you have 0.4.2). Update it with:` followed by the command, or that you are up to date. It exits with status 0 in both cases. Builds made with `cargo run` refuse to update.
 
