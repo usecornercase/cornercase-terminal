@@ -87,7 +87,8 @@ pub(super) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<S
         Connection::open_with_flags(&database, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
             .ok()?;
     connection.busy_timeout(BUSY_FOR).ok()?;
-    let Some(id) = session(&connection, &cwd, since) else {
+    let since = i64::try_from(since.duration_since(UNIX_EPOCH).ok()?.as_millis()).ok()?;
+    let Some(id) = session(&connection, &cwd, since).ok()? else {
         return Some(Session { turn: false, context: None });
     };
     let messages = messages(&connection, &id)?;
@@ -145,18 +146,16 @@ fn models_file(pid: i32) -> Option<PathBuf> {
     if path.is_absolute() { Some(path) } else { Some(process::cwd(pid)?.join(path)) }
 }
 
-fn session(connection: &Connection, cwd: &Path, since: SystemTime) -> Option<String> {
-    let since = i64::try_from(since.duration_since(UNIX_EPOCH).ok()?.as_millis()).ok()?;
-    let mut statement = connection
-        .prepare(
-            "SELECT id, directory FROM session WHERE parent_id IS NULL AND time_archived IS NULL \
-             AND time_updated >= ?1 ORDER BY time_updated DESC",
-        )
-        .ok()?;
-    let rows = statement.query_map(params![since], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)));
-    rows.ok()?
-        .flatten()
-        .find_map(|(id, directory)| (Path::new(&directory).canonicalize().ok().as_deref() == Some(cwd)).then_some(id))
+fn session(connection: &Connection, cwd: &Path, since: i64) -> rusqlite::Result<Option<String>> {
+    let mut statement = connection.prepare(
+        "SELECT id, directory FROM session WHERE parent_id IS NULL AND time_archived IS NULL \
+         AND time_updated >= ?1 ORDER BY time_updated DESC",
+    )?;
+    let rows: Vec<(String, String)> =
+        statement.query_map(params![since], |row| Ok((row.get(0)?, row.get(1)?)))?.collect::<Result<_, _>>()?;
+    Ok(rows
+        .into_iter()
+        .find_map(|(id, directory)| (Path::new(&directory).canonicalize().ok().as_deref() == Some(cwd)).then_some(id)))
 }
 
 fn messages(connection: &Connection, id: &str) -> Option<Vec<String>> {
@@ -412,6 +411,16 @@ mod tests {
         other.kill().expect("stop the second one");
         other.wait().expect("the second one exits");
         assert!(running.look(SystemTime::UNIX_EPOCH).is_some());
+    }
+
+    #[test]
+    fn a_database_that_cannot_be_queried_gives_no_status() {
+        let running = Running::start();
+        Connection::open(&running.fake.database)
+            .and_then(|db| db.execute_batch("DROP TABLE message; DROP TABLE session;"))
+            .expect("break the schema");
+
+        assert_eq!(running.look(SystemTime::UNIX_EPOCH), None);
     }
 
     #[test]
