@@ -1,7 +1,7 @@
 use std::fmt::{self, Display, Write as _};
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, Permissions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,6 +17,7 @@ pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub const SLOW: Duration = Duration::from_secs(1);
 const QUEUE: usize = 4096;
 const FILE: &str = "server.log";
+pub const PRIVATE: u32 = 0o600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
@@ -219,7 +220,8 @@ impl Sink {
         if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
-        let file = OpenOptions::new().create(true).append(true).open(&path)?;
+        let file = OpenOptions::new().create(true).append(true).mode(PRIVATE).open(&path)?;
+        file.set_permissions(Permissions::from_mode(PRIVATE))?;
         if stderr {
             rustix::stdio::dup2_stderr(&file)?;
         }
@@ -246,7 +248,13 @@ impl Sink {
     }
 
     fn rotate(&mut self) {
-        let _ = std::fs::rename(&self.path, rotated(&self.path));
+        if let Err(e) = std::fs::rename(&self.path, rotated(&self.path)) {
+            let note =
+                format!("could not keep the old log in {}, so it starts over: {e}", rotated(&self.path).display());
+            let _ = self.file.set_len(0);
+            let _ = self.file.write_all(note_line(Level::Error, &note).as_bytes());
+            return;
+        }
         match Self::open(self.path.clone(), self.max, self.stderr) {
             Ok(sink) => *self = sink,
             Err(e) => {
@@ -422,6 +430,34 @@ mod tests {
             assert_eq!(std::fs::read_to_string(rotated(&path)).expect("read"), "two 12345\n");
             assert_eq!(std::fs::read_to_string(&path).expect("read"), "three 123\n");
         }
+    }
+
+    #[test]
+    fn only_its_owner_can_read_the_log() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("server.log");
+        std::fs::write(&path, "old\n").expect("write");
+        std::fs::set_permissions(&path, Permissions::from_mode(0o644)).expect("chmod");
+        let mut sink = Sink::open(path.clone(), 10, false).expect("open");
+        sink.write("a new line\n");
+
+        let mode = |path: &Path| std::fs::metadata(path).expect("stat").mode() & 0o777;
+        assert_eq!((mode(&rotated(&path)), mode(&path)), (PRIVATE, PRIVATE));
+    }
+
+    #[test]
+    fn starts_over_when_the_old_log_cannot_be_kept() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("server.log");
+        std::fs::create_dir(rotated(&path)).expect("a folder in the way");
+        std::fs::write(rotated(&path).join("inside"), "").expect("fill it");
+        let mut sink = Sink::open(path.clone(), 20, false).expect("open");
+        sink.write("first line\n");
+        sink.write("second line\n");
+
+        let text = std::fs::read_to_string(&path).expect("read");
+        assert!(text.contains("could not keep the old log") && text.ends_with("second line\n"), "{text}");
+        assert!(!text.contains("first line"), "{text}");
     }
 
     mod tail {
