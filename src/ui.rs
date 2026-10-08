@@ -3741,7 +3741,12 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     let max = band.room().saturating_sub(icon_width);
     let others = (tab.others > 0).then(|| Span::styled(format!("+{}", tab.others), Style::default().fg(view.muted)));
     let marks = Tags::fit(others.into_iter().collect(), max);
-    let name = truncate_right(&tab.name, max.saturating_sub(marks.reserved()));
+    let name = if marks.is_empty() {
+        truncate_right(&tab.name, max)
+    } else {
+        let room = max.saturating_sub(marks.reserved());
+        truncate_right(&tab.name, room).chars().take(room).collect()
+    };
     let used = name.chars().count();
     let mut line = band.lead;
     if let Some(icon) = icon {
@@ -6221,6 +6226,17 @@ mod tests {
             v.workspaces[0].tabs[1] = TabEntry { others: 1, ..tab("a-very-long-program-name", Some(Status::Working)) };
             let text = row_text(&render(&v), tab_row(&v, 0, 1)).trim_end().to_string();
             assert!(text.contains('…') && text.ends_with(" +1"), "{text}");
+        }
+
+        #[test]
+        fn a_row_too_narrow_for_the_name_still_shows_the_count() {
+            let v = with_agents();
+            let r = Rect::new(0, 0, 12, 1);
+            let band = Band { r, pitch: 1, lead: vec![Span::raw("  ├ ")], bg: Style::default() };
+            let tab = TabEntry { others: 1, .."claude".into() };
+            let mut t = Terminal::new(TestBackend::new(r.width, 1)).expect("test backend");
+            t.draw(|f| draw_tab_band(f, &v, band, &tab, false)).expect("draw");
+            assert_eq!(row_text(&t, r).trim_end(), "  ├ c +1");
         }
 
         #[test]

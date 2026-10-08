@@ -619,7 +619,8 @@ export class Painter {
     const room = this.room(b) - icon;
     const others = tab.panes.length - 1;
     const marks = fitTags(others > 0 ? [seg(`+${others}`, DARK)] : [], room);
-    const name = truncateRight(tabLabel(tab), room - marks.reserved);
+    const fit = room - marks.reserved;
+    const name = marks.segs.length ? [...truncateRight(tabLabel(tab), fit)].slice(0, Math.max(0, fit)).join('') : truncateRight(tabLabel(tab), room);
     const line = [...b.lead];
     if (status) line.push(STATUS_ICONS[status], seg(' '));
     line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
