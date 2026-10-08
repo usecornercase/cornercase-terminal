@@ -101,12 +101,14 @@ impl Command {
             Self::Start(start) => {
                 fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
-                fields.add("wait", start.wait).maybe("timeout", start.timeout).add("focus", start.focus);
+                fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
+                fields.maybe("timeout", start.timeout).add("focus", start.focus);
             }
             Self::Send(send) => {
                 fields.maybe("pane", send.pane).maybe("tab", send.tab);
                 fields.add("bytes", send.text.as_ref().map_or(0, String::len)).add("enter", send.enter);
-                fields.add("wait", send.wait).maybe("timeout", send.timeout);
+                fields.add("wait", send.wait).maybe("until", send.wait.then(|| send.until.name()));
+                fields.maybe("timeout", send.timeout);
             }
             Self::Keys(keys) => {
                 fields.maybe("pane", keys.pane).maybe("tab", keys.tab).add("keys", keys.keys.len());
@@ -115,16 +117,7 @@ impl Command {
                 fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
             }
             Self::Wait(wait) => {
-                let until = match &wait.until {
-                    Until::Stops => "stops".to_string(),
-                    Until::Idle => "idle".to_string(),
-                    Until::Working => "working".to_string(),
-                    Until::Waiting => "waiting".to_string(),
-                    Until::Shell => "shell".to_string(),
-                    Until::Text(_) => "text".to_string(),
-                    Until::Quiet(seconds) => format!("quiet {seconds}s"),
-                };
-                fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", until);
+                fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", wait.until.name());
                 fields.maybe("timeout", wait.timeout);
             }
             Self::Close(close) => {
@@ -244,6 +237,7 @@ pub struct Start {
     pub name: Option<String>,
     pub prompt: Option<String>,
     pub wait: bool,
+    pub until: Until,
     pub timeout: Option<f64>,
     pub focus: bool,
 }
@@ -256,6 +250,7 @@ pub struct SendText {
     pub text: Option<String>,
     pub enter: bool,
     pub wait: bool,
+    pub until: Until,
     pub timeout: Option<f64>,
 }
 
@@ -293,8 +288,25 @@ pub enum Until {
     Working,
     Waiting,
     Shell,
+    #[serde(rename = "turn-over")]
+    TurnOver,
     Text(String),
     Quiet(f64),
+}
+
+impl Until {
+    pub fn name(&self) -> String {
+        match self {
+            Self::Stops => "stops".into(),
+            Self::Idle => "idle".into(),
+            Self::Working => "working".into(),
+            Self::Waiting => "waiting".into(),
+            Self::Shell => "shell".into(),
+            Self::TurnOver => "turn-over".into(),
+            Self::Text(_) => "text".into(),
+            Self::Quiet(seconds) => format!("quiet {seconds}s"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -422,12 +434,14 @@ pub struct TabInfo {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own key in the JSON of `status`")]
 pub struct PaneInfo {
     pub id: u64,
     pub path: Option<PathBuf>,
     pub program: Option<String>,
     pub agent: Option<String>,
     pub status: Option<String>,
+    pub background_shell: bool,
     pub at_prompt: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,
@@ -543,6 +557,15 @@ mod tests {
             let fields = command.fields();
             assert!(fields.iter().all(|(_, value)| !value.contains(secret)), "{fields:?}");
         }
+    }
+
+    #[test]
+    fn turn_over_is_spelt_as_on_the_command_line() {
+        let wait = Command::Wait(Wait { until: Until::TurnOver, ..Wait::default() });
+
+        let sent = serde_json::to_value(Request { caller: None, server: None, command: wait }).expect("json");
+
+        assert_eq!(sent["args"]["until"], json!("turn-over"));
     }
 
     #[test]

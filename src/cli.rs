@@ -36,7 +36,9 @@ Examples:
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
 const STATUS_HELP: &str = "Each pane shows its program and folder, and for a coding agent what it is doing (working,
 waiting for an answer, done out of sight, idle), its model and how full its context is. `(you)`
-marks the pane running the command, `(shown)` what the window shows.
+marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
+is a Claude Code agent whose turn is over while a shell it started in the background still runs:
+it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
 
 Examples:
   cornercase status
@@ -66,7 +68,7 @@ you trust the folder, the question waits for your answer unless settings → age
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
 --wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting
-(it needs an answer).
+(it needs an answer); with --until it waits for that state instead, as `cornercase wait --until` does.
 
 Examples:
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
@@ -74,16 +76,19 @@ Examples:
 const SEND_HELP: &str = "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer
 it; use `cornercase keys` for that. With --wait, the command fails if the agent does not start
-working within 10 seconds of the Enter, and otherwise prints how the wait ended.
+working within 10 seconds of the Enter, and otherwise prints how the wait ended; with --until it waits
+for that state instead, as `cornercase wait --until` does.
 
 Examples:
   cornercase send --pane 12 --enter 'Now add tests for it'
-  cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md";
+  cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md
+  cornercase send --pane 12 --enter --wait --until turn-over 'Run the tests'";
 const KEYS_HELP: &str = "Keys are encoded the way the program in the pane asked for.
 
 Examples:
   cornercase keys --pane 12 ctrl+c
   cornercase keys --pane 12 down enter";
+const UNTIL_AFTER: &str = "Wait until the pane is in this state instead";
 const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, right, home, end, pageup,
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
 const READ_HELP: &str = "Lines the terminal wrapped come back joined, and empty lines at the end are left out.
@@ -91,15 +96,17 @@ const READ_HELP: &str = "Lines the terminal wrapped come back joined, and empty 
 Examples:
   cornercase read --pane 12
   cornercase read --pane 7 --lines 200 > build.log";
-const WAIT_HELP: &str =
-    "By default it waits until the agent stops working: idle, done or waiting. It then prints how it
-ended (idle, done, waiting, working, shell or quiet), or the line that matched. Waiting for an
-agent fails on a pane without one. A timeout exits with 1 and does not prove that the agent missed
+const WAIT_HELP: &str = "By default it waits until the agent stops working: idle, done or waiting. A Claude Code agent
+whose turn is over while a background shell it started still runs counts as working, since it
+wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then prints
+how it ended (idle, done, waiting, working, shell or quiet), or the line that matched. Waiting for
+an agent fails on a pane without one. A timeout exits with 1 and does not prove that the agent missed
 what you sent: read the pane before sending it again.
 
 Examples:
   cornercase wait --pane 12 --timeout 600
   cornercase wait --pane 7 --until shell
+  cornercase wait --pane 12 --until turn-over --timeout 600
   cornercase wait --pane 7 --text 'test result: (ok|FAILED)'";
 const CLOSE_HELP: &str = "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
@@ -327,6 +334,8 @@ pub struct StartArgs {
     pub prompt_file: Option<PathBuf>,
     #[arg(long, help = "Then wait until the agent stops working, and print how it ended")]
     pub wait: bool,
+    #[arg(long, value_enum, requires = "wait", help = UNTIL_AFTER)]
+    pub until: Option<UntilArg>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
     pub timeout: Option<f64>,
     #[command(flatten)]
@@ -341,6 +350,8 @@ pub struct SendArgs {
     pub enter: bool,
     #[arg(long, requires = "enter", help = "Then wait until the agent stops working, and print how it ended")]
     pub wait: bool,
+    #[arg(long, value_enum, requires = "wait", help = UNTIL_AFTER)]
+    pub until: Option<UntilArg>,
     #[arg(
         long,
         value_name = "SECONDS",
@@ -392,6 +403,20 @@ pub enum UntilArg {
     Waiting,
     #[value(help = "The program in the foreground ended and the shell is back")]
     Shell,
+    #[value(help = "The agent's turn is over: it stopped working, or only a background shell it started still runs")]
+    TurnOver,
+}
+
+impl From<UntilArg> for Until {
+    fn from(until: UntilArg) -> Self {
+        match until {
+            UntilArg::Idle => Self::Idle,
+            UntilArg::Working => Self::Working,
+            UntilArg::Waiting => Self::Waiting,
+            UntilArg::Shell => Self::Shell,
+            UntilArg::TurnOver => Self::TurnOver,
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -671,8 +696,15 @@ fn run_control(command: Control) -> Result<()> {
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
             let Target { pane, tab } = send.target;
-            let request =
-                control::SendText { pane, tab, text, enter: send.enter, wait: send.wait, timeout: send.timeout };
+            let request = control::SendText {
+                pane,
+                tab,
+                text,
+                enter: send.enter,
+                wait: send.wait,
+                until: send.until.map_or(Until::Stops, Until::from),
+                timeout: send.timeout,
+            };
             say(ask("send", control::Command::Send(request))?, send.print.json, ending)
         }
         Control::Keys(keys) => {
@@ -687,10 +719,7 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::Wait(wait) => {
             let until = match (wait.until, wait.text, wait.quiet) {
-                (Some(UntilArg::Idle), ..) => Until::Idle,
-                (Some(UntilArg::Working), ..) => Until::Working,
-                (Some(UntilArg::Waiting), ..) => Until::Waiting,
-                (Some(UntilArg::Shell), ..) => Until::Shell,
+                (Some(until), ..) => until.into(),
                 (None, Some(text), _) => Until::Text(text),
                 (None, None, Some(quiet)) => Until::Quiet(quiet),
                 (None, None, None) => Until::Stops,
@@ -742,6 +771,7 @@ fn run_start(start: StartArgs) -> Result<()> {
         name: start.name,
         prompt,
         wait: start.wait,
+        until: start.until.map_or(Until::Stops, Until::from),
         timeout: start.timeout,
         focus: start.create.focus,
     };
@@ -856,9 +886,10 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
+                let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),
-                    pane.status.clone().unwrap_or_default(),
+                    if pane.background_shell { format!("{status} (background shell)") } else { status },
                     details,
                     pane.path.as_deref().map(place).unwrap_or_default(),
                 ];
@@ -936,6 +967,8 @@ mod tests {
 
         #[rstest]
         #[case::wait_without_enter(&["send", "--wait", "hi"])]
+        #[case::sending_until_without_waiting(&["send", "--enter", "--until", "turn-over", "hi"])]
+        #[case::starting_until_without_waiting(&["start", "--until", "turn-over"])]
         #[case::nothing_to_send(&["send", "--pane", "1"])]
         #[case::a_pane_and_a_tab(&["read", "--pane", "1", "--tab", "2"])]
         #[case::nothing_to_close(&["close"])]
@@ -954,6 +987,21 @@ mod tests {
         #[case::an_unknown_command(&["frobnicate"])]
         fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
             assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
+        }
+
+        #[rstest]
+        #[case::wait(&["wait", "--until", "turn-over"])]
+        #[case::send(&["send", "--enter", "--wait", "--until", "turn-over", "hi"])]
+        #[case::start(&["start", "claude", "--wait", "--until", "turn-over"])]
+        fn turn_over_is_a_state_to_wait_for(#[case] args: &[&str]) {
+            let until = match parse(args).expect("parse").command {
+                Some(Command::Control(Control::Wait(wait))) => wait.until,
+                Some(Command::Control(Control::Send(send))) => send.until,
+                Some(Command::Control(Control::Start(start))) => start.until,
+                _ => None,
+            };
+
+            assert_eq!(until.map(Until::from), Some(Until::TurnOver));
         }
 
         #[test]
@@ -1032,6 +1080,19 @@ mod tests {
                  \x20     pane 5  claude  working  Opus 5.5 · 23%  ~/shop  (you)\n\
                  group 8  work  collapsed\n\
                  \x20 project 9  api  ~/api\n"
+            );
+        }
+
+        #[test]
+        fn an_agent_left_with_a_background_shell_still_reads_working() {
+            let mut report = report();
+            report.projects[0].workspaces[0].tabs[0].panes[1].background_shell = true;
+
+            let text = render(&report, Some(Path::new("/home/ana")));
+
+            assert!(
+                text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"),
+                "{text}"
             );
         }
 

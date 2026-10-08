@@ -64,7 +64,7 @@ cornercase status          # the tree above
 cornercase status --json   # the same, as JSON
 ```
 
-Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
 
 ### Create
 
@@ -96,20 +96,21 @@ git diff | cornercase start claude --prompt-file -
 - **Which agent**: the one you name (`claude`, `codex`, `gemini` or any [other kind](../../reference/agents/)); without one, the default from **settings → Agents**, or, when that is *auto*, the agent running in the pane the command runs in.
 - **Where**: a new tab in the workspace the command runs in; in another workspace with `--workspace ID`; or with `--worktree BRANCH`, in the workspace on that branch, made as a new worktree when there is none.
 - `--name` names the tab, `--prompt` gives the prompt and `--prompt-file` reads it from a file, or from standard input with `-`. Without a prompt, the agent just starts.
-- `--wait` then waits like [`wait`](#wait) does, and prints how it ended on a second line.
+- `--wait` then waits like [`wait`](#wait) does, and prints how it ended on a second line. `--until` with one of `wait`'s states (`idle`, `working`, `waiting`, `shell`, `turn-over`) waits for that one instead.
 
 ### Talk to a pane
 
 ```sh
 cornercase send --pane 12 --enter 'Now add tests for it'
 cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md
+cornercase send --pane 12 --enter --wait --until turn-over 'Run the tests'
 cornercase keys --pane 12 ctrl+c
 cornercase keys --pane 12 down enter
 cornercase read --pane 12
 cornercase read --pane 7 --lines 200
 ```
 
-- `send` pastes the text in one go, bracketed when the program asked for it, as a paste from your terminal would be. `-` reads it from standard input. `--enter` then presses Enter once the screen settles. `--wait` then waits until the agent stops working; it fails if the agent does not start working within 10 seconds of the Enter, rather than waiting forever for an agent that never got the text.
+- `send` pastes the text in one go, bracketed when the program asked for it, as a paste from your terminal would be. `-` reads it from standard input. `--enter` then presses Enter once the screen settles. `--wait` then waits until the agent stops working; it fails if the agent does not start working within 10 seconds of the Enter, rather than waiting forever for an agent that never got the text. `--until` waits for another of `wait`'s states, as `start` does.
 - `send` refuses a pane whose agent is `waiting` for an answer to a question or a permission prompt: whatever it typed would answer it. Answer such a prompt with `keys`, after deciding what the answer should be.
 - `keys` presses keys, encoded the way the program in the pane asked for: `enter`, `esc`, `tab`, `backspace`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `delete`, `insert`, `f1` to `f12`, or one character, each after any of `ctrl+`, `alt+` and `shift+` (`shift+tab`, `ctrl+c`, `alt+x`).
 - `read` prints the screen as text. `--lines N` prints the last `N` lines instead, scrollback included (a pane keeps 5,000). Lines the terminal wrapped come back as one, and empty lines at the end are left out.
@@ -119,6 +120,7 @@ cornercase read --pane 7 --lines 200
 ```sh
 cornercase wait --pane 12 --timeout 600                        # until the agent stops working
 cornercase wait --pane 12 --until waiting                      # until it needs an answer
+cornercase wait --pane 12 --until turn-over                    # until its turn is over, background shells or not
 cornercase wait --pane 7 --until shell                         # until the program ends
 cornercase wait --pane 7 --text 'test result: (ok|FAILED)'     # until a line matches
 cornercase wait --pane 7 --quiet 5                             # until it writes nothing for 5 s
@@ -132,12 +134,14 @@ cornercase wait --pane 7 --quiet 5                             # until it writes
 | `--until idle` | the agent is idle or done | `idle` or `done` |
 | `--until working` | the agent is working | `working` |
 | `--until waiting` | the agent waits for an answer to a question or a permission prompt | `waiting` |
+| `--until turn-over` | the agent's turn is over: it stops working, as with no condition, or only a background shell it started still runs | `idle`, `done`, `waiting` or `shell` |
 | `--until shell` | the program in the foreground ended and the shell is back, quiet (a second when cornercase never saw the program run) | `shell` |
 | `--text REGEX` | a line on the screen matches, one already there included | the line |
 | `--quiet SECONDS` | the pane wrote nothing for that long | `quiet` |
 
 - The agent conditions need Claude Code, Codex or opencode in the pane, the agents whose state cornercase [knows](../projects-workspaces-tabs/#what-your-agents-are-doing). On any other pane, or with another agent, wait for `shell`, a line or quiet instead.
-- After a prompt reached the agent (through `start`, `send --enter` or `keys … enter`), a wait for it to stop first gives the agent up to 10 seconds to take the prompt, so it doesn't end at once on an agent that hasn't started yet. If the agent shows no change in that time, the wait fails: it may have finished at once, or never got the text, and `read` tells which. If the agent was already working when the text arrived, the wait ends when it next stops.
+- A Claude Code agent that ends its turn while a shell it started in the background still runs counts as working: it wakes up when that shell ends, and may then carry on. So the plain `wait` keeps waiting, and its timeout says that only a background shell is left. `--until turn-over` ends there and prints `shell`; read the pane to see what the agent said, and stop the shell yourself if nothing should wake the agent. Codex and opencode report no such state: their turn ends when they say so, whatever they left running, so for them `turn-over` ends as the plain `wait` does.
+- After a prompt reached the agent (through `start`, `send --enter` or `keys … enter`), a wait for it to stop first gives the agent up to 10 seconds to take the prompt, so it doesn't end at once on an agent that hasn't started yet. If the agent shows no change in that time, the wait fails: it may have finished at once, or never got the text, and `read` tells which. If the agent was already working when the text arrived, the wait ends when it next stops. An agent that only had a background shell left counts as taking the prompt once it works again.
 - Waits run in the server and don't slow it down. They end with their condition, their `--timeout` (none by default) or when you interrupt the command. A timeout exits with status 1 and says what the pane was doing. It doesn't prove that the agent missed what you sent: read the pane before sending it again.
 
 ### Arrange
@@ -172,7 +176,7 @@ cornercase todo rm 3
 
 | Command | Fields |
 | --- | --- |
-| `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it. |
+| `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `read` | `pane` and `text`. |

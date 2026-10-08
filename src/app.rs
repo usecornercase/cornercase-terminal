@@ -898,18 +898,18 @@ impl App {
                         if read {
                             let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
-                            let before = term.agent.status();
+                            let before = term.agent.state();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
                             let notice = term.agent.update(activity, seen, now);
-                            let status = term.agent.status();
-                            if status != before {
+                            let state = term.agent.state();
+                            if state != before {
                                 log::info!(
                                     "activity",
                                     "status",
                                     pane = term.id,
                                     agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
-                                    from = before.map_or("none", activity::Status::name),
-                                    to = status.map_or("none", activity::Status::name),
+                                    from = before.unwrap_or("none"),
+                                    to = state.unwrap_or("none"),
                                 );
                             }
                             if let Some(status) = notice
@@ -12869,7 +12869,11 @@ while printf 'agent> ' && IFS= read -r line; do
   printf '{"pid":%s,"status":"busy"}' $$ > "$s"
   while [ ! -e "$1/finish" ]; do sleep 0.02; done
   rm -f "$1/finish"
-  case "$line" in *ask*) printf '{"pid":%s,"status":"waiting"}' $$ > "$s"; read answer ;; esac
+  case "$line" in
+    *ask*) printf '{"pid":%s,"status":"waiting"}' $$ > "$s"; read answer ;;
+    *background*) printf '{"pid":%s,"status":"shell"}' $$ > "$s"
+      while [ ! -e "$1/finish" ]; do sleep 0.02; done; rm -f "$1/finish" ;;
+  esac
   printf 'done: %s\n' "$line"
   printf '{"pid":%s,"status":"idle"}' $$ > "$s"
 done
@@ -13418,6 +13422,51 @@ rm -f "$s"
 
                 let ended = done(agent.answered("the agent stops"));
                 assert_eq!((early, ended.ended.is_some()), (Vec::new(), true));
+            }
+
+            #[test]
+            fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn() {
+                let mut agent = Agent::new();
+                let id = agent.start(None);
+                let send = wire::SendText {
+                    pane: Some(id),
+                    text: Some("watch the tests in the background".into()),
+                    enter: true,
+                    wait: true,
+                    until: Until::TurnOver,
+                    ..wire::SendText::default()
+                };
+                ask(&mut agent.app, None, Command::Send(send));
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                refreshing(app, rx, "the agent works", |a| {
+                    pane(a, id).agent.status() == Some(activity::Status::Working)
+                });
+                agent.finish();
+                let turn = done(agent.answered("the turn is over"));
+
+                let report: Report =
+                    serde_json::from_value(value(&mut agent.app, None, Command::Status(wire::Status {})))
+                        .expect("a report");
+                let info = report
+                    .projects
+                    .iter()
+                    .flat_map(|p| &p.workspaces)
+                    .flat_map(|w| &w.tabs)
+                    .flat_map(|t| &t.panes)
+                    .find(|p| p.id == id)
+                    .expect("the agent's pane");
+                ask(&mut agent.app, None, wait_for(id, Until::Stops, Some(0.3)));
+                let timed_out = error(agent.answered("the default wait times out"));
+                agent.finish();
+                ask(&mut agent.app, None, wait_for(id, Until::Stops, None));
+                let ended = done(agent.answered("the background shell ends"));
+
+                assert_eq!(
+                    (turn.ended.as_deref(), info.status.as_deref(), info.background_shell),
+                    (Some("shell"), Some("working"), true)
+                );
+                assert!(timed_out.contains("--until turn-over"), "{timed_out}");
+                assert_eq!(ended.ended.as_deref(), Some("done"));
             }
 
             #[test]
