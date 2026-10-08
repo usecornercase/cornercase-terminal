@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.8
+
+- `cornercase send --enter` now makes sure the prompt was submitted: for Claude Code, Codex and opencode it returns once the agent has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have been submitted` when it records nothing, instead of reporting success for a prompt that went nowhere. A Codex that is working keeps a prompt until its next step, so `send` returns then; `--timeout` now works without `--wait` to give up sooner.
+- `cornercase send` refuses a Claude Code agent that shows a dialog, a panel or its `!` shell mode instead of its input box, such as the details of a background shell, where the text could stop the shell and the Enter would just close the panel. `--force` sends anyway. `cornercase status` shows such an agent as `(dialog open)`, and `"dialog": true` in `--json`.
+
 ## 0.12.5
 
 - Scripts and orchestrating agents can now tell when a Claude Code agent's turn is over but a command it started in the background (a test watcher, a dev server) still runs. The tab keeps showing it as working, as before, since Claude wakes up when that command ends, but `cornercase status` now says `working (background shell)` (`"background_shell": true` in `--json`), and `cornercase wait --until turn-over` returns as soon as the turn is over, printing `shell` in that case. `start --wait` and `send --wait` take the same `--until`. A plain `wait` that times out on such an agent now says so.
