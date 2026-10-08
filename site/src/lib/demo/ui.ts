@@ -1117,7 +1117,7 @@ export class Painter {
     this.submitButton(usageDone(r), DONE, () => app.closeOverlay());
   }
 
-  private confirm({ title, message, submit, note }: ConfirmView): void {
+  private confirm({ title, message, submit, extra, note }: ConfirmView): void {
     const app = this.app;
     const r = formArea(app.cols, app.rows);
     this.dialogBackdrop(r);
@@ -1126,7 +1126,15 @@ export class Painter {
     const rows = wrapAll([[seg(message)]], c.w);
     rows.slice(0, 4).forEach((row, i) => row.forEach((cell, x) => this.g.put(c.x + x, c.y + i, cell.ch, {})));
     if (note) this.span(c.x, c.y + 4, note, DARK);
-    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), submit, () => app.submitConfirm(), () => app.closeOverlay());
+    const row = rect(c.x, bottom(c) - 1, c.w, 1);
+    this.dialogButtons(row, submit, () => app.submitConfirm(), () => app.closeOverlay());
+    if (extra) {
+      const end = Math.max(row.x, right(row) - buttonWidth('cancel') - 1 - buttonWidth(submit) - 1);
+      const x = Math.max(row.x, end - buttonWidth(extra));
+      const r = rect(x, row.y, end - x, 1);
+      this.span(r.x, r.y, ` ${extra} `, this.pill(r, false), r.w);
+      this.region({ r, click: () => app.submitExtra(), cursor: 'pointer' });
+    }
   }
 
   private restart(scroll: number): void {

@@ -1,0 +1,22 @@
+---
+source: src/ui.rs
+expression: "render(&with(Overlay::Confirm(confirm))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)  ╭─ Delete group ───────────────────────────────────────────────╮                  "
+"                  │ Delete the group work? Keep its 2 projects open, ungrouped,  │                  "
+"  + New           │ or close them too, which stops 3 tabs and the programs       │                  "
+"                  │ running in them. Folders and worktrees stay on disk.         │                  "
+"                  │                                                              │                  "
+"                  │                                                              │                  "
+"                  │                                                              │                  "
+"                  │                                                              │                  "
+"                  │                     close projects   keep projects   cancel  │                  "
+"                  ╰──────────────────────────────────────────────────────────────╯                  "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

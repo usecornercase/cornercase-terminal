@@ -62,7 +62,7 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 | Collapse or expand a group | Click its header. A collapsed group shows how many projects it holds, and gets the cyan `▌` when the active project is inside. |
 | Rename a group | Click its `⋯` or right-click its header, then **rename group**. |
 | Change its icon or colour | Click its `⋯` or right-click its header, then **icon and colour**. |
-| Delete a group | Hover its header and click the `×` at its right end, or open its menu and choose **delete group**. cornercase asks first; its projects stay open and lose their group. |
+| Delete a group | Hover its header and click the `×` at its right end, or open its menu and choose **delete group**. cornercase asks first: **keep projects** leaves them open and ungrouped, **close projects** closes them too and stops their shells. An empty group only asks to confirm. |
 
 A new group goes at the end of the list; drag its header to move it. There is a single level: a group can't hold another group.
 
@@ -263,7 +263,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A tab | Its panes' programs are ended, then the tab goes away. In the compact layout it asks first. |
 | A workspace | All its tabs are closed, then the workspace goes away. In the compact layout it asks first. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
-| A group | It asks first, then the group goes away. Its projects stay open, ungrouped, and nothing in them is ended. |
+| A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 
 Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ New` opens a folder. Closing every project of a group keeps the group.
 

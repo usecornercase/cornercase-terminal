@@ -129,6 +129,7 @@ export interface ConfirmView {
   title: string;
   message: string;
   submit: string;
+  extra?: string;
   note?: string;
 }
 
