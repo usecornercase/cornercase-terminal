@@ -733,6 +733,12 @@ mod tests {
             r#"{"type":"queue-operation","operation":"enqueue","timestamp":"$AT","content":"<agent-message from=\"x\">hi</agent-message>"}"#
         )]
         #[case::taken_from_the_queue(r#"{"type":"queue-operation","operation":"dequeue","timestamp":"$AT"}"#)]
+        #[case::taken_between_two_tools(
+            r#"{"type":"queue-operation","operation":"remove","timestamp":"$AT","content":"and add tests","reason":"absorbed_mid_turn"}"#
+        )]
+        #[case::handed_to_the_model_between_two_tools(
+            r#"{"isSidechain":false,"type":"attachment","timestamp":"$AT","attachment":{"type":"queued_command","prompt":"and add tests","commandMode":"prompt","origin":{"kind":"human"},"humanTurn":true}}"#
+        )]
         #[case::an_interruption(
             r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"timestamp":"$AT"}"#
         )]
@@ -760,6 +766,23 @@ mod tests {
             let found = prompted(&[&line("2026-10-08T20:23:15.694Z"), &line("2026-10-08T20:24:00.000Z")]);
 
             assert_eq!(found, Stamp::parse("2026-10-08T20:24:00.000Z"));
+        }
+
+        #[test]
+        fn a_prompt_sent_while_a_tool_runs_counts_from_when_it_was_queued() {
+            let queued = r#"{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-08T20:57:35.079Z","content":"and add tests"}"#;
+            let taken = [
+                r#"{"type":"queue-operation","operation":"remove","timestamp":"2026-10-08T20:57:51.454Z","content":"and add tests","reason":"absorbed_mid_turn"}"#,
+                r#"{"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":""}]},"toolUseResult":{},"timestamp":"2026-10-08T20:57:51.415Z"}"#,
+                r#"{"isSidechain":false,"type":"attachment","timestamp":"2026-10-08T20:57:51.500Z","attachment":{"type":"queued_command","prompt":"and add tests","origin":{"kind":"human"}}}"#,
+            ];
+            let mut file = Written::new();
+
+            file.lines(&[queued.to_string()]);
+            let sent = file.transcript.prompted;
+            file.lines(&taken.map(str::to_string));
+
+            assert_eq!((sent, file.transcript.prompted), (Stamp::parse("2026-10-08T20:57:35.079Z"), sent));
         }
 
         #[test]
