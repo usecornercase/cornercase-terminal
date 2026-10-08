@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.1
+
+- Homebrew installs now update with `brew update && brew upgrade cornercase`, the command the update dialog copies and `cornercase update` prints. `brew upgrade` alone often missed a new release, since Homebrew refreshes its taps only once a day.
+
 ## 0.12.0
 
 - Bring your VS Code workspaces along: `.code-workspace` files now show up in the folder picker (**`+ new`** → **open project**), and opening one turns it into a group named after the file, with each of its folders as a project. Folders you already had open move into the group, and folders that no longer exist are skipped. Importing the same file again adds the folders that are new.
