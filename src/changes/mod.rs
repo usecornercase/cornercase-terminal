@@ -35,9 +35,9 @@ impl Mode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Uncommitted => "uncommitted",
-            Self::Commits => "commits",
-            Self::All => "all",
+            Self::Uncommitted => "Uncommitted",
+            Self::Commits => "Commits",
+            Self::All => "All",
         }
     }
 }

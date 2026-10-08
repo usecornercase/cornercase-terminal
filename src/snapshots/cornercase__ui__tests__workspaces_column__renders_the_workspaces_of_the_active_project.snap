@@ -1,22 +1,23 @@
 ---
 source: src/ui.rs
+assertion_line: 6143
 expression: render(&with_workspaces(Some(0))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │  login                  │                                          "
 "                               │▌ ├ claude               │                                          "
-"  + new                        │  ├ nvim                 │                                          "
-"                               │  └ + tab                │                                          "
+"  + New                        │  ├ nvim                 │                                          "
+"                               │  └ + Tab                │                                          "
 "                               │                         │                no tab open               "
-"                               │  main                   │         + tab opens a shell here         "
+"                               │  main                   │         + Tab opens a shell here         "
 "                               │  ├ zsh                  │                                          "
-"                               │  └ + tab                │                                          "
+"                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
-"                               │  + new workspace        │                                          "
+"                               │  + New workspace        │                                          "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │  files            todo  │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

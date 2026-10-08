@@ -10,6 +10,7 @@ import type { Painter } from './ui';
 
 export type ChangesMode = 'uncommitted' | 'commits' | 'all';
 export const CHANGES_MODES: ChangesMode[] = ['uncommitted', 'commits', 'all'];
+const MODE_LABELS: Record<ChangesMode, string> = { uncommitted: 'Uncommitted', commits: 'Commits', all: 'All' };
 export const BASES = ['origin/main', 'main'];
 
 type Status = 'M' | 'A' | 'D';
@@ -361,9 +362,9 @@ export function drawChanges(p: Painter, areas: Areas): void {
 
   let x = inner.x;
   for (const mode of CHANGES_MODES) {
-    const r = rect(x, inner.y, mode.length + 2, 1);
+    const r = rect(x, inner.y, MODE_LABELS[mode].length + 2, 1);
     const style: Style = mode === app.changesMode ? { fg: 6, bg: surface, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
-    p.span(r.x, r.y, ` ${mode} `, style);
+    p.span(r.x, r.y, ` ${MODE_LABELS[mode]} `, style);
     p.region({ r, click: () => app.setChangesMode(mode), cursor: 'pointer' });
     x = right(r) + 1;
   }
@@ -543,7 +544,7 @@ function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: (typeo
 }
 
 export function changesLabel(files: FileDiff[]): string {
-  return files.length ? `changes ${files.length}` : 'changes';
+  return files.length ? `Changes ${files.length}` : 'Changes';
 }
 
 export const hasChanges = (w: Workspace | undefined): boolean => !!w?.branch;

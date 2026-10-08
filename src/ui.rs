@@ -49,21 +49,21 @@ const INPUT_PROMPT: &str = "› ";
 const SEARCH_ICON: &str = " ⌕ ";
 const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
 const MENU_ICON: &str = "≡";
-const BACK_LABEL: &str = "‹ projects";
-pub const AGENTS_LABEL: &str = "agents ›";
-const AGENTS_TITLE: &str = "agents";
+const BACK_LABEL: &str = "‹ Projects";
+pub const AGENTS_LABEL: &str = "Agents ›";
+const AGENTS_TITLE: &str = "Agents";
 const NO_AGENTS: &str = "no agents running";
 const AGENT_LINES: u16 = 2;
 const MIN_WORKSPACE_WIDTH: usize = 4;
 pub const CRUMB_SEPARATOR: &str = " › ";
 pub const CANCEL_LABEL: &str = "cancel";
-const ISSUES_LABEL: &str = "issues";
-const USAGE_LABEL: &str = "usage";
+const ISSUES_LABEL: &str = "Issues";
+const USAGE_LABEL: &str = "Usage";
 const USAGE_BAR: &str = "━";
 const CHANGES_ICON: &str = "±";
 const TODO_ICON: &str = "☐";
 const FILES_ICON: &str = "▤";
-pub const TODO_LABEL: &str = "todo";
+pub const TODO_LABEL: &str = "TODO";
 const UNDO_LABEL: &str = "undo";
 const MOVE_LABEL: &str = "move here";
 const SWAP_LABEL: &str = "swap";
@@ -71,7 +71,7 @@ const NO_TAB: &str = "no tab open";
 const NO_TAB_HINT: &str = " opens a shell here";
 const TAGLINE: &str = "every agent in its own corner";
 const WELCOME_HINT: &str = " opens a folder";
-pub const NEW_BUTTON: &str = "+ new";
+pub const NEW_BUTTON: &str = "+ New";
 const LOGO: [(&str, &str); 6] =
     [("   █████████", ""), ("▄▄▄▀▀▀▀▀▀▀▀▀", ""), ("███", ""), ("███   ", "██"), ("███   ", "██"), ("███   ", "▀▀")];
 const BRAND_COLOR: Color = Color::Indexed(99);
@@ -2603,7 +2603,7 @@ fn draw_no_tab(f: &mut Frame, muted: Color, pane: Rect) {
         pane,
         vec![
             Line::from(Span::styled(NO_TAB, dim.add_modifier(Modifier::BOLD))),
-            Line::from(vec![Span::styled("+ tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]),
+            Line::from(vec![Span::styled("+ Tab", Style::default().fg(Color::Cyan)), Span::styled(NO_TAB_HINT, dim)]),
         ],
     );
 }
@@ -3171,7 +3171,7 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
     let area = f.area();
     let r = settings_area(area);
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, "settings"), r);
+    f.render_widget(overlay_block(view.muted, "Settings"), r);
     let [_, body, edit_row, note, _] = settings_rows(r);
     let dim = Style::default().fg(view.muted);
     let mut cursor = None;
@@ -3391,7 +3391,7 @@ fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], s
 }
 
 fn draw_sidebar(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "projects");
+    draw_title(f, view.muted, areas.title, "Projects");
     let sidebar = view.sidebar_rows();
     let base = project_rows(areas.list, areas.pitch, &sidebar, view.projects_scroll);
     let landing = view.sidebar_landing();
@@ -3660,7 +3660,7 @@ fn draw_button(f: &mut Frame, r: Rect, indent: &str, label: &str, style: Style) 
 
 fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if areas.back.is_empty() {
-        draw_title(f, view.muted, areas.workspaces_title, "workspaces");
+        draw_title(f, view.muted, areas.workspaces_title, "Workspaces");
     } else {
         let name = view.projects.get(view.active).filter(|_| view.has_project).map(|p| p.name.as_str());
         draw_back(f, view, areas, name.unwrap_or_default());
@@ -3709,7 +3709,7 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
             }
             WorkspaceRow::NewTab(w) => {
                 if !view.workspaces[w].removing {
-                    draw_button(f, r, "   ", "+ tab", button_style(view, r, dim, Color::Cyan));
+                    draw_button(f, r, "   ", "+ Tab", button_style(view, r, dim, Color::Cyan));
                 }
                 draw_guide(f, view.line(), guide, r, Guide::End);
             }
@@ -3719,7 +3719,7 @@ fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     draw_hidden(f, view.muted, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
 
     let r = layout.button();
-    draw_button(f, r, " ", "+ new workspace", button_style(view, r, accent, Color::Cyan));
+    draw_button(f, r, " ", "+ New workspace", button_style(view, r, accent, Color::Cyan));
     draw_landing(f, landing_line, landing.map(|l| l.spot.indent()));
 }
 
@@ -4022,7 +4022,7 @@ fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style
 
 fn draw_settings_button(f: &mut Frame, view: &View, r: Rect) {
     let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-    draw_button(f, r, " ", "settings", style);
+    draw_button(f, r, " ", "Settings", style);
 }
 
 fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
@@ -4032,7 +4032,7 @@ fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
 
 fn draw_quit_button(f: &mut Frame, view: &View, r: Rect) {
     let style = button_style(view, r, Style::default().fg(view.muted), Color::Red);
-    draw_button(f, r, " ", "quit", style);
+    draw_button(f, r, " ", "Quit", style);
 }
 
 fn draw_entries(f: &mut Frame, view: &View, rows: &Rows, sidebar: &[SidebarRow], pitch: u16) {
@@ -4221,7 +4221,7 @@ fn tree_among_tabs(rows: &[TreeRow], i: usize) -> Option<TreeRow> {
 }
 
 fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "projects");
+    draw_title(f, view.muted, areas.title, "Projects");
     let Some(tree) = &view.tree else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);
@@ -4270,13 +4270,13 @@ fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
             TreeRow::NewTab(p, w) => {
                 if !workspace(p, w).is_some_and(|entry| entry.removing) {
                     let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-                    draw_button(f, r, &format!("{lead} "), "+ tab", style);
+                    draw_button(f, r, &format!("{lead} "), "+ Tab", style);
                 }
                 draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::End);
             }
             TreeRow::NewWorkspace(_) => {
                 let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
-                draw_button(f, r, &format!("{lead} "), "+ new workspace", style);
+                draw_button(f, r, &format!("{lead} "), "+ New workspace", style);
             }
         }
         if mark {
@@ -4519,7 +4519,7 @@ mod tests {
                 }],
                 active_tab: Some(0),
                 changes: Some(panel),
-                changes_button: Some(ChangesButton { label: "changes 3".into(), open: true }),
+                changes_button: Some(ChangesButton { label: "Changes 3".into(), open: true }),
                 ..view(&["shop"])
             }
         }
@@ -4531,7 +4531,7 @@ mod tests {
 
         #[test]
         fn hovering_the_changes_button_leaves_issues_unlit() {
-            let r = changes_button(layout(Rect::new(0, 0, 140, 16), Widths::default()).issues, "changes 3");
+            let r = changes_button(layout(Rect::new(0, 0, 140, 16), Widths::default()).issues, "Changes 3");
             let t = render_sized(&View { hover: Some(r.as_position()), ..with_panel() }, 140, 16);
             let issues_x = layout(Rect::new(0, 0, 140, 16), Widths::default()).issues.x + 2;
             let buffer = t.backend().buffer();
@@ -4569,7 +4569,7 @@ mod tests {
         fn the_bar_has_a_changes_button_in_compact_mode() {
             let v = View {
                 changes: None,
-                changes_button: Some(ChangesButton { label: "changes".into(), open: false }),
+                changes_button: Some(ChangesButton { label: "Changes".into(), open: false }),
                 ..with_panel()
             };
             let t = render_sized(&v, 80, 16);
@@ -4998,7 +4998,7 @@ mod tests {
             let text = |r: Rect| row_text(&t, r).trim().to_string();
             assert_eq!(
                 [text(a.issues), text(a.settings), text(a.usage), text(a.quit)],
-                ["issues", "settings", "usage", "quit"]
+                ["Issues", "Settings", "Usage", "Quit"]
             );
         }
 
@@ -6041,7 +6041,7 @@ mod tests {
         #[test]
         fn an_update_sits_at_the_end_of_the_settings_row() {
             let row = settings_row(&with_update(None));
-            assert!(row.starts_with("  settings ") && row.ends_with(" ↑ 9.0.0 "), "{row:?}");
+            assert!(row.starts_with("  Settings ") && row.ends_with(" ↑ 9.0.0 "), "{row:?}");
         }
 
         #[test]
@@ -6198,7 +6198,7 @@ mod tests {
         fn nothing_shows_without_a_project() {
             let text: String =
                 render(&view(&[])).backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
-            assert!(!text.contains("new workspace"), "{text}");
+            assert!(!text.contains("New workspace"), "{text}");
         }
     }
 
@@ -6618,7 +6618,7 @@ mod tests {
 
         fn new_workspace_form(on: bool) -> Form {
             Form {
-                title: "new workspace",
+                title: "New workspace",
                 label: "name",
                 value: "feat/login".into(),
                 hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
@@ -6756,7 +6756,7 @@ mod tests {
         #[test]
         fn renders_a_confirmation() {
             let confirm = Confirm {
-                title: "remove workspace",
+                title: "Remove workspace",
                 message: "Remove the workspace login and delete its worktree folder ~/wt/login? The branch is kept."
                     .into(),
                 note: Some(Note::Error("contains modified or untracked files, use --force to delete it".into())),
@@ -6769,7 +6769,7 @@ mod tests {
         fn renders_an_update_with_its_notes() {
             let notes = (1..=40).map(|i| Line::from(format!("• change {i}"))).collect();
             let update = Update {
-                title: "update",
+                title: "Update",
                 message: "cornercase 9.0.0 is out (you have 0.1.0). Updating replaces ~/.local/bin/cornercase; \
                     your terminals keep running until you restart."
                     .into(),
@@ -7046,7 +7046,7 @@ mod tests {
 
         fn form(note: Option<Note>) -> Form {
             Form {
-                title: "new worktree",
+                title: "New worktree",
                 label: "branch",
                 value: "feat/login".into(),
                 hint: "in ~/.cornercase/worktrees/cornercase/feat-login".into(),
@@ -7089,7 +7089,7 @@ mod tests {
 
         fn keys_menu() -> keys::Keys {
             keys::Keys {
-                title: "keys".into(),
+                title: "Keys".into(),
                 items: crate::shortcuts::items(None).iter().map(keys::Item::from).collect(),
                 hint: "esc closes · ctrl+] twice types it in the pane".into(),
             }
@@ -7191,7 +7191,7 @@ mod tests {
 
         fn picker(selected: Option<usize>) -> Picker {
             Picker {
-                title: "new workspace",
+                title: "New workspace",
                 path: "~/projects/".into(),
                 filter: String::new(),
                 items: vec![entry("..", None), entry("cornercase", Some("main")), entry("notes", None)],
@@ -7449,7 +7449,7 @@ mod tests {
 
         fn issues(body: IssuesBody) -> Issues {
             Issues {
-                title: "issues · shop".into(),
+                title: "Issues · shop".into(),
                 tabs: TABS.to_vec(),
                 tab: 0,
                 toggles: TOGGLES.map(String::from).to_vec(),

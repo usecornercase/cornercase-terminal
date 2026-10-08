@@ -18,7 +18,7 @@ cornercase is two programs in one binary. A **server** runs in the background an
 ## Start, detach, reattach
 
 - **The first `cornercase`** starts the server for you and attaches to it. The server opens the folder you started from as your first project, unless it restores a saved session (see below).
-- **Detach** by clicking `quit` at the bottom of the projects column, or by closing the terminal window. Only the client goes away; everything in your panes keeps running.
+- **Detach** by clicking `Quit` at the bottom of the projects column, or by closing the terminal window. Only the client goes away; everything in your panes keeps running.
 - **Reattach** by running `cornercase` again, from any terminal and any folder. You find everything as you left it, including programs that kept printing while you were away.
 
 This also works over SSH: run `cornercase` on the remote machine, close the connection when you leave, and reattach when you log in again. Or keep the window on your laptop with `cornercase remote <host>`, which reconnects by itself when the connection drops: see [Remote machines](../remote/).
@@ -62,7 +62,7 @@ Only a conversation with something in it comes back: an agent you opened and nev
 
 ## Restart the server
 
-Click **settings**, then **restart** next to **done**, or run:
+Click **Settings**, then **restart** next to **done**, or run:
 
 ```sh
 cornercase restart

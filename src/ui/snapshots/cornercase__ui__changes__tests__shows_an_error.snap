@@ -1,8 +1,9 @@
 ---
 source: src/ui/changes.rs
+assertion_line: 917
 expression: "render(&view, None).backend()"
 ---
-"  uncommitted   commits   all                         ⌕  ×  "
+"  Uncommitted   Commits   All                         ⌕  ×  "
 " cannot compare with nope                                   "
 "                                                            "
 "                                                            "

@@ -1,10 +1,11 @@
 ---
 source: src/ui.rs
+assertion_line: 7051
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │                         │                                          "
 "    ╭──────────────╮           │                         │                                          "
@@ -17,6 +18,6 @@ expression: render(&v).backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

@@ -876,12 +876,12 @@ export class App {
 
   confirmView(): ConfirmView | null {
     const o = this.overlay;
-    if (o?.kind === 'remove') return { title: 'remove workspace', message: this.removeMessage(o), submit: 'remove' };
-    if (o?.kind === 'deleteGroup') return { title: 'delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
-    if (o?.kind === 'closeProject') return { title: 'close project', message: this.closeProjectMessage(o.project), submit: 'close' };
-    if (o?.kind === 'closeWorkspace') return { title: 'close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
-    if (o?.kind === 'closeTab') return { title: 'close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
-    if (o?.kind === 'closePane') return { title: 'close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
+    if (o?.kind === 'remove') return { title: 'Remove workspace', message: this.removeMessage(o), submit: 'remove' };
+    if (o?.kind === 'deleteGroup') return { title: 'Delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
+    if (o?.kind === 'closeProject') return { title: 'Close project', message: this.closeProjectMessage(o.project), submit: 'close' };
+    if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
+    if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
+    if (o?.kind === 'closePane') return { title: 'Close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
     return null;
   }
 
@@ -1566,6 +1566,11 @@ export class App {
 
   renameLabel(t: Target): string {
     return RENAME[t.kind].label;
+  }
+
+  renameTitle(t: Target): string {
+    const label = this.renameLabel(t);
+    return label.charAt(0).toUpperCase() + label.slice(1);
   }
 
   renameHint(t: Target): string {

@@ -1,17 +1,18 @@
 ---
 source: src/ui.rs
+assertion_line: 4562
 expression: "render_sized(&with_todo(), 80, 18).backend()"
 ---
 "                                                                                "
 "   ≡     shop › main › zsh                             ±      ▤      ☐      ⌕   "
 "                                                                                "
-" todo 2                                                         clear done   ×  "
+" TODO 2                                                         clear done   ×  "
 "                                                                                "
 "  ○  fix the login bug in safari                                                "
 "  ○  renew the domain                                                           "
 "  ✓  write docs                                                                 "
 "                                                                                "
-"  + new todo                                                                    "
+"  + New TODO                                                                    "
 "                                                                                "
 "                                                                                "
 "                                                                                "

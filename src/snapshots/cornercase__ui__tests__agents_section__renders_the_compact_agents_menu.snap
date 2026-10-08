@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 8379
 expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
@@ -7,7 +8,7 @@ expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 "                                                                                "
 "                                                                                "
 "                                                                                "
-" ‹ projects    agents                                                           "
+" ‹ Projects    Agents                                                           "
 "                                                                                "
 "                                                                                "
 "                                                                                "

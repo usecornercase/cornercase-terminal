@@ -1,14 +1,15 @@
 ---
 source: src/ui.rs
+assertion_line: 6637
 expression: "render(&with(Overlay::Form(new_workspace_form(true)))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)  ╭─ new workspace ──────────────────────────────────────────────╮                  "
+"▌ cornercase (1)  ╭─ New workspace ──────────────────────────────────────────────╮                  "
 "                  │ name                                                         │                  "
-"  + new           │ › feat/login                                                 │                  "
+"  + New           │ › feat/login                                                 │                  "
 "                  │ in ~/.cornercase/worktrees/cornercase/feat-login             │                  "
 "                  │ [x] with its own worktree                                    │                  "
 "                  │                                                              │                  "
@@ -17,6 +18,6 @@ expression: "render(&with(Overlay::Form(new_workspace_form(true)))).backend()"
 "                  │                                             create   cancel  │                  "
 "                  ╰──────────────────────────────────────────────────────────────╯                  "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

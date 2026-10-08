@@ -218,6 +218,15 @@ impl Target {
         }
     }
 
+    fn rename_title(self) -> &'static str {
+        match self {
+            Self::Group(_) => "Rename group",
+            Self::Project(_) => "Rename project",
+            Self::Workspace(..) => "Rename workspace",
+            Self::Tab(..) => "Rename tab",
+        }
+    }
+
     fn rename_hint(self) -> &'static str {
         match self {
             Self::Group(_) => "leave it empty to keep the current name",
@@ -291,14 +300,14 @@ const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 const UPDATE_SUBMIT: &str = "update";
 const RETRY_UPDATE_SUBMIT: &str = "try again";
 const RESTART_SUBMIT: &str = "restart now";
-const UPDATE_TITLE: &str = "update";
-const RESTART_TITLE: &str = "restart";
+const UPDATE_TITLE: &str = "Update";
+const RESTART_TITLE: &str = "Restart";
 const RESTART_MESSAGE: &str = "Restart cornercase now? Its server starts again and every client comes back.";
 const LATER: &str = "later";
 const COPY_COMMAND_SUBMIT: &str = "copy command";
 const RESTART_LABEL: &str = "↻ restart";
 const COMPARE_SUBMIT: &str = "compare";
-const CHANGES_LABEL: &str = "changes";
+const CHANGES_LABEL: &str = "Changes";
 const SENT_TO_AGENT: &str = "sent to the agent";
 const NO_AGENT: &str = "no agent here, so the reference is copied";
 const NOT_READING: &str = "the program in this pane is not reading what it gets";
@@ -4494,7 +4503,7 @@ impl App {
             Overlay::Menu { at, actions } => ui::Overlay::Menu { at: *at, items: self.menu_labels(actions) },
             Overlay::GroupStyle { group } => ui::Overlay::GroupStyle(self.group(*group)?.clone()),
             Overlay::NewGroup { input } => ui::Overlay::Form(ui::Form {
-                title: "new group",
+                title: "New group",
                 label: "name",
                 value: input.clone(),
                 hint: NEW_GROUP_HINT.into(),
@@ -4510,7 +4519,7 @@ impl App {
                     repo
                 };
                 ui::Overlay::Form(ui::Form {
-                    title: "new workspace",
+                    title: "New workspace",
                     label: "name",
                     value: input.clone(),
                     hint: format!("in {}", ui::display_path(&path, home)),
@@ -4521,7 +4530,7 @@ impl App {
             }
             Overlay::Settings(s) => s.view(),
             Overlay::Rename { target, input } => ui::Overlay::Form(ui::Form {
-                title: target.rename_label(),
+                title: target.rename_title(),
                 label: "name",
                 value: input.clone(),
                 hint: target.rename_hint().into(),
@@ -4533,31 +4542,31 @@ impl App {
                 self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())
             }
             Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
-                title: "delete group",
+                title: "Delete group",
                 message: self.delete_group_message(*group)?,
                 note: None,
                 submit: overlay.submit_label(),
             }),
             Overlay::CloseProject { project } => ui::Overlay::Confirm(ui::Confirm {
-                title: "close project",
+                title: "Close project",
                 message: self.close_project_message(*project)?,
                 note: None,
                 submit: overlay.submit_label(),
             }),
             Overlay::CloseWorkspace { project, workspace } => ui::Overlay::Confirm(ui::Confirm {
-                title: "close workspace",
+                title: "Close workspace",
                 message: self.close_workspace_message(*project, *workspace)?,
                 note: None,
                 submit: overlay.submit_label(),
             }),
             Overlay::CloseTab { project, workspace, tab } => ui::Overlay::Confirm(ui::Confirm {
-                title: "close tab",
+                title: "Close tab",
                 message: self.close_tab_message(*project, *workspace, *tab)?,
                 note: None,
                 submit: overlay.submit_label(),
             }),
             Overlay::ClosePane { pane } => ui::Overlay::Confirm(ui::Confirm {
-                title: "close pane",
+                title: "Close pane",
                 message: self.close_pane_message(*pane)?,
                 note: None,
                 submit: overlay.submit_label(),
@@ -4599,7 +4608,7 @@ impl App {
                 },
             ),
         };
-        ui::Overlay::Confirm(ui::Confirm { title: "remove workspace", message, note, submit })
+        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit })
     }
 
     fn delete_group_message(&self, id: u64) -> Option<String> {
@@ -4663,7 +4672,7 @@ impl App {
             None => String::new(),
         };
         ui::Overlay::Picker(ui::Picker {
-            title: if into_group { "add project" } else { "open project" },
+            title: if into_group { "Add project" } else { "Open project" },
             path: if dir.ends_with('/') { dir } else { format!("{dir}/") },
             filter: picker.filter().to_string(),
             items: items
@@ -4990,7 +4999,7 @@ impl App {
             .and_then(|i| items.get(i))
             .map_or_else(|| "type to filter the branches".into(), |b| format!("enter compares with {b}"));
         ui::Overlay::Picker(ui::Picker {
-            title: "compare with",
+            title: "Compare with",
             path: String::new(),
             filter: picker.filter().to_string(),
             items: items
@@ -7975,7 +7984,7 @@ rm -f "$1/sessions/$$.json"
         #[case::both(true, true, (2, "▌ │   Opus 5.5 · 17%"))]
         #[case::the_model_alone(true, false, (2, "▌ │   Opus 5.5"))]
         #[case::the_context_alone(false, true, (2, "▌ │   17%"))]
-        #[case::neither(false, false, (1, "  └ + tab"))]
+        #[case::neither(false, false, (1, "  └ + Tab"))]
         fn a_tab_running_claude_shows_its_model_and_context_under_its_name(
             #[case] model: bool,
             #[case] context: bool,
@@ -11919,7 +11928,7 @@ rm -f "$1/sessions/$$.json"
             let repo = repo_with_edit();
             let (mut app, rx) = app_in(repo.path(), no_config());
             refresh_until_loaded(&mut app, &rx);
-            assert_eq!(app.changes_label().as_deref(), Some("changes 1"));
+            assert_eq!(app.changes_label().as_deref(), Some("Changes 1"));
         }
 
         #[test]

@@ -1,14 +1,15 @@
 ---
 source: src/ui.rs
+assertion_line: 6782
 expression: "render(&with(Overlay::Update(update))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"              ╭─ update ─────────────────────────────────────────────────────────────╮              "
-" projects     │ cornercase 9.0.0 is out (you have 0.1.0). Updating replaces          │              "
+"              ╭─ Update ─────────────────────────────────────────────────────────────╮              "
+" Projects     │ cornercase 9.0.0 is out (you have 0.1.0). Updating replaces          │              "
 "              │ ~/.local/bin/cornercase; your terminals keep running until you       │              "
 "▌ cornercase (│ restart.                                                             │              "
 "              │                                                                      │              "
-"  + new       │ • change 31                                                          │              "
+"  + New       │ • change 31                                                          │              "
 "              │ • change 32                                                          │              "
 "              │ • change 33                                                          │              "
 "              │ • change 34                                                          │              "
@@ -17,6 +18,6 @@ expression: "render(&with(Overlay::Update(update))).backend()"
 "              │ • change 37                                                          │              "
 "              │ • change 38                                                          │              "
 " ─────────────│ downloading…                                                         │              "
-"  settings    │                                                     update   cancel  │              "
-"  usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  quit                         │                         │                                          "
+"  Settings    │                                                     update   cancel  │              "
+"  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
+"  Quit                         │                         │                                          "
