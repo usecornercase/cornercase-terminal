@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.5
+
+- Scripts and orchestrating agents can now tell when a Claude Code agent's turn is over but a command it started in the background (a test watcher, a dev server) still runs. The tab keeps showing it as working, as before, since Claude wakes up when that command ends, but `cornercase status` now says `working (background shell)` (`"background_shell": true` in `--json`), and `cornercase wait --until turn-over` returns as soon as the turn is over, printing `shell` in that case. `start --wait` and `send --wait` take the same `--until`. A plain `wait` that times out on such an agent now says so.
+
 ## 0.12.4
 
 - Keyboard shortcuts, if you want them: pick a prefix key in **Settings → UI → prefix key** (press the combination you want, such as `Ctrl+]`). Pressing it opens a small menu at the bottom of the screen listing what each next key does: `n` and `p` switch tabs, `]` and `[` workspaces, `}` and `{` projects, the arrows move between panes, `a` jumps to the next agent that needs you, `c` opens a tab, `|` and `-` split, `f f` finds a file by name and `f w` searches the text in your files, `g d` opens the changes, and more. Nothing to memorise: the menu is on screen, and a click on an entry works too. Press the prefix twice to send it to the program in the pane. It is off by default, so every key still goes to your programs until you turn it on.
