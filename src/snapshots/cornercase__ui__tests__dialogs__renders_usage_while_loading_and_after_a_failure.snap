@@ -1,14 +1,15 @@
 ---
 source: src/ui.rs
+assertion_line: 6696
 expression: "render(&with(Overlay::Usage(usage))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)  ╭─ usage ──────────────────────────────────────────────────────╮                  "
+"▌ cornercase (1)  ╭─ Usage ──────────────────────────────────────────────────────╮                  "
 "                  │ Claude Code · max plan                              loading… │                  "
-"  + new           │                                                              │                  "
+"  + New           │                                                              │                  "
 "                  │ Codex                                                        │                  "
 "                  │                                                              │                  "
 "                  │ usage unavailable: could not run /opt/codex/bin/codex: No    │                  "
@@ -17,6 +18,6 @@ expression: "render(&with(Overlay::Usage(usage))).backend()"
 "                  │                                                        done  │                  "
 "                  ╰──────────────────────────────────────────────────────────────╯                  "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

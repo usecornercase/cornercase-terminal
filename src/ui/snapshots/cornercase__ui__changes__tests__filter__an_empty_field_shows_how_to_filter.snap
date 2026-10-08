@@ -1,8 +1,9 @@
 ---
 source: src/ui/changes.rs
+assertion_line: 845
 expression: "render(&filtered(&sample(), \"\"), None).backend()"
 ---
-"  uncommitted   commits   all                         ⌕  ×  "
+"  Uncommitted   Commits   All                         ⌕  ×  "
 "  ⌕ path, *.test.js, !*.snap                             ×  "
 " 3 files  +7 −3  ▃▃▃▃▃▃▃▃                            ● live "
 "                                                            "

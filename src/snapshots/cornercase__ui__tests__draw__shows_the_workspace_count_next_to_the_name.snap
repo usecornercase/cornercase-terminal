@@ -1,22 +1,23 @@
 ---
 source: src/ui.rs
+assertion_line: 6824
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "  cornercase (3)               │                         │                                          "
 "▌ api (1)                      │                         │                                          "
 "  tmp (0)                      │                         │                                          "
 "                               │                         │                                          "
-"  + new                        │                         │                                          "
+"  + New                        │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │                         │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

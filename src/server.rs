@@ -1041,7 +1041,7 @@ mod tests {
                 server.step(step)
             };
             Attached::new().serve(run, |client| {
-                client.shows("quit");
+                client.shows("Quit");
                 let before = client.clears;
                 client.send(BUGGY);
                 client.until("the screen is cleared", |client| client.clears > before);

@@ -176,7 +176,7 @@ export const TABS: [Tabs, string][] = [
 export const MIN_STACK_SECTION = 5;
 const STACK_FOOTER = 6;
 const STACKED_KEEP = 2 * MIN_STACK_SECTION + 1;
-export const AGENTS_LABEL = 'agents ›';
+export const AGENTS_LABEL = 'Agents ›';
 
 export function agentsRows(w: Widths, room: number, keep: number): number {
   if (room < keep + MIN_STACK_SECTION) return Math.floor(room / 3);
@@ -373,9 +373,9 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
   };
 }
 
-export const TODO_LABEL = 'todo';
+export const TODO_LABEL = 'TODO';
 const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
-export const FILES_LABEL = 'files';
+export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
 
 export const stackedWidth = (w: Widths, total: number): number =>
@@ -494,7 +494,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean):
     bar,
     search: bar,
     searchButton: rect(cols - searchWidth, 0, searchWidth, pitch),
-    back: intersect(rect(0, title.y, '‹ projects'.length + 2 + 2, pitch), title),
+    back: intersect(rect(0, title.y, '‹ Projects'.length + 2 + 2, pitch), title),
     sidebar: below,
     title,
     list,

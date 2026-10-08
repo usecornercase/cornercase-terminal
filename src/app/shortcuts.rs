@@ -58,7 +58,7 @@ impl App {
     pub(super) fn keys_view(&self, group: Option<Group>) -> keys::Keys {
         let items = shortcuts::items(group).iter().map(keys::Item::from).collect();
         let prefix = self.config.prefix().map(|p| p.to_string()).unwrap_or_default();
-        let title = group.map_or_else(|| "keys".to_string(), |g| format!("keys › {}", g.name()));
+        let title = group.map_or_else(|| "Keys".to_string(), |g| format!("Keys › {}", g.name()));
         keys::Keys { title, items, hint: format!("esc closes · {prefix} twice types it in the pane") }
     }
 

@@ -1,10 +1,11 @@
 ---
 source: src/ui.rs
+assertion_line: 7283
 expression: render(&with(settings(1))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
-"  ╭─ settings ───────────────────────────────────────────────────────────────────────────────────╮  "
-" p│  Worktrees   Agents   Issues   TUI                                                           │  "
+"  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
+" P│  Worktrees   Agents   Issues   TUI                                                           │  "
 "  │                                                                                              │  "
 "▌ │ Accounts                                                                                     │  "
 "  │   Shortcut API token        @ana in acme  saved                                              │  "
@@ -19,4 +20,4 @@ expression: render(&with(settings(1))).backend()
 " ─│ enter changes the selected setting                                                           │  "
 "  │                                                                              restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  quit                         │                         │                                          "
+"  Quit                         │                         │                                          "

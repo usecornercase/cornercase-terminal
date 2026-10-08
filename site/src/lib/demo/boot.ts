@@ -54,7 +54,7 @@ export const CHAPTERS: Step[][] = [
     { spot: null },
     { say: 'Need one more? Pick an issue and press start. It gets its own branch and gets to work.' },
     open('workspaces'),
-    { click: 'issues', nth: -1 },
+    { click: 'Issues', nth: -1 },
     { wait: 1200 },
     { click: '#482' },
     { wait: 1600 },
@@ -92,7 +92,7 @@ export const CHAPTERS: Step[][] = [
   [
     open('projects'),
     { say: 'Now quit. Seriously. Everything keeps running without you.' },
-    { click: 'quit', nth: -1 },
+    { click: 'Quit', nth: -1 },
     { run: (app) => void (app.hover = null) },
     { wait: 1500 },
     { say: 'Go grab a coffee. Your agents don’t need you watching.' },
@@ -121,7 +121,7 @@ export const CHAPTERS: Step[][] = [
         if (!compact(app)) app.widths = { ...app.widths, changes: Math.max(40, Math.min(64, app.cols - 83)) };
       },
     },
-    { click: 'changes', nth: -1, alt: '±' },
+    { click: 'Changes', nth: -1, alt: '±' },
     { wait: 500 },
     { spot: 'changes' },
     { wait: 2800 },

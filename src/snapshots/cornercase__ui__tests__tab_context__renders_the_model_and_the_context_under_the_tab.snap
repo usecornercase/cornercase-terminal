@@ -1,22 +1,23 @@
 ---
 source: src/ui.rs
+assertion_line: 6421
 expression: render(&with_details(opus(17))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" projects                      │ workspaces              │                                          "
+" Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ shop (1)                     │  login                  │                                          "
 "                               │▌ ├ ◐ claude             │                                          "
-"  + new                        │▌ │   Opus 5.5 · 17%     │                                          "
+"  + New                        │▌ │   Opus 5.5 · 17%     │                                          "
 "                               │  ├ nvim                 │                                          "
-"                               │  └ + tab                │                no tab open               "
-"                               │                         │         + tab opens a shell here         "
-"                               │  + new workspace        │                                          "
+"                               │  └ + Tab                │                no tab open               "
+"                               │                         │         + Tab opens a shell here         "
+"                               │  + New workspace        │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-"  settings                     │                         │                                          "
-"  usage                        │  files            todo  │                                          "
-"  quit                         │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

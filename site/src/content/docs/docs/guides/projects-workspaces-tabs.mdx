@@ -23,7 +23,7 @@ A project is called after its folder (`~` for your home folder) unless you renam
 
 ### Open a project
 
-Click **`+ new`** at the end of the list, then **open project**. A folder picker opens in the folder that contains the active project, or in your home folder.
+Click **`+ New`** at the end of the list, then **open project**. A folder picker opens in the folder that contains the active project, or in your home folder.
 
 <Screen
   name="picker"
@@ -56,7 +56,7 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 
 | To | Do |
 | --- | --- |
-| Create a group | Click **`+ new`**, then **new group**, and type its name. It gets its own icon and colour: the first eight groups each get a different one, starting with a blue `●`. |
+| Create a group | Click **`+ New`**, then **new group**, and type its name. It gets its own icon and colour: the first eight groups each get a different one, starting with a blue `●`. |
 | Add a project to a group | Click its header's `⋯` or right-click it, then **add project**. The folder picker opens next to the group's projects, and the folder you open goes straight into the group. |
 | Put a project in a group | Click the project's `⋯` or right-click it, choose **move to group**, then the group. **no group** takes it out again. You can also [drag it](#reorder) onto the group's header or between its projects. |
 | Collapse or expand a group | Click its header. A collapsed group shows how many projects it holds, and gets the cyan `▌` when the active project is inside. |
@@ -68,7 +68,7 @@ A new group goes at the end of the list; drag its header to move it. There is a 
 
 ### Import a VS Code workspace
 
-Coming from VS Code with one workspace per area of work? Open its `.code-workspace` file from the folder picker (**`+ new`**, then **open project**) and cornercase turns it into a group:
+Coming from VS Code with one workspace per area of work? Open its `.code-workspace` file from the folder picker (**`+ New`**, then **open project**) and cornercase turns it into a group:
 
 - The group is named after the file: `work.code-workspace` becomes `work`. If a group with that name already exists, the folders go into it, so importing the file again brings in folders added since.
 - Each folder of the workspace opens as a project in the group. A folder with a `name` in the file gets that name, unless you already renamed that project in cornercase. Relative paths are read from where the file is, as VS Code does.
@@ -92,7 +92,7 @@ The icons are plain symbols that every font has at one cell wide, so they line u
 
 A workspace is one line of work inside a project. Every project starts with one: the project folder itself, called after its git branch (`main`), or `default` when the folder isn't a git repository.
 
-Click **`+ new workspace`** to start another one. You give it a name and, when the project folder is the root of a git repository, choose whether it gets **its own worktree**:
+Click **`+ New workspace`** to start another one. You give it a name and, when the project folder is the root of a git repository, choose whether it gets **its own worktree**:
 
 - **With its own worktree** (the default in a repository): the name is a branch, and the workspace is a separate checkout of the repository in `~/.cornercase/worktrees/<repo>/<branch>`. Its files, builds and agents don't touch your other work. See [Git worktrees](../worktrees/).
 - **Without**: the workspace uses the project folder itself, under the name you chose. This is handy to keep a group of tabs together, for example a `servers` workspace next to `main`.
@@ -111,7 +111,7 @@ When a workspace's branch is behind its upstream, its row ends with the number o
 
 ## Tabs
 
-Each workspace lists its tabs under its name. Click **`+ tab`** under a workspace to open a new shell in the workspace's folder; the new tab goes at the end.
+Each workspace lists its tabs under its name. Click **`+ Tab`** under a workspace to open a new shell in the workspace's folder; the new tab goes at the end.
 
 A tab is named after the program in the foreground of its pane, so the name follows what you do: `bash` while you are at the prompt, `nvim` while you edit, `claude` while an agent works. A [split](../panes-and-splits/) tab is named after its first pane, the top-left one, so the name stays put while you click between panes, and a grey `+n` at the end of its row says how many other panes it holds. A program run by an interpreter (Node, Bun, Deno, Python, Ruby) is named after its script file, so Codex or Gemini CLI installed with npm show as `codex` and `gemini`, not `node`. Without a script file, such as a bare Node prompt, `python3 -m http.server` or `node -e '…'`, the tab keeps the interpreter's name. A known [agent](../../reference/agents/) is named after its kind, such as `cursor` for `cursor-agent`. Tabs started from an issue in a folder that isn't a repository are named after the issue instead.
 
@@ -198,7 +198,7 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 
 ### Plan usage
 
-Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
+Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`Usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
 
 <Screen
   name="usage"
@@ -258,7 +258,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. Its projects stay open, ungrouped, and nothing in them is ended. |
 
-Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ new project` opens a folder. Closing every project of a group keeps the group.
+Rows disappear once their programs have exited, not before. Closing the last tab keeps its workspace (the pane says *no tab open*), closing the last workspace keeps its project, and closing the last project leaves cornercase open and empty: the pane shows the cornercase logo and that `+ New` opens a folder. Closing every project of a group keeps the group.
 
 When a program ends by itself, for example when you type `exit`, its pane closes; when the last pane of a tab closes, so does the tab.
 
@@ -299,7 +299,7 @@ With **settings → UI → sidebar** set to *tree*, one list holds your groups, 
 - Click **`▾`** to fold a project or a workspace and **`▸`** to open it again. A click on the rest of its row opens it and unfolds it. Group headers fold as everywhere else.
 - A folded project shows how many workspaces it has, and a folded project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
 - The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while folded. Tabs hang from their workspace's arrow on thin tree lines.
-- Each project ends with **`+ new workspace`** and each workspace with **`+ tab`**: adding a tab under another project switches to it.
+- Each project ends with **`+ New workspace`** and each workspace with **`+ Tab`**: adding a tab under another project switches to it.
 - Drag rows to reorder them: projects among projects and groups, workspaces within their project, tabs within their workspace, as in the other layouts.
 - What you fold is saved with your session. Opening a project or a tab from search, or switching to it, unfolds the way to it.
 

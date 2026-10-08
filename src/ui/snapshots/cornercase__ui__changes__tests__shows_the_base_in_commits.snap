@@ -1,8 +1,9 @@
 ---
 source: src/ui/changes.rs
+assertion_line: 747
 expression: "render(&view, None).backend()"
 ---
-"  uncommitted   commits   all                         ⌕  ×  "
+"  Uncommitted   Commits   All                         ⌕  ×  "
 " 3 files  +7 −3  ▃▃▃▃▃▃▃▃                 vs origin/main ▾  "
 "                                                            "
 " ▌▾ M src/returns.rs                               +5 −2    "
