@@ -12,7 +12,10 @@ use crate::activity::Claude;
 use crate::process;
 
 mod codex;
+mod message;
 mod opencode;
+
+pub use message::{Record, Said};
 
 const TAIL: u64 = 1024 * 1024;
 const DIR_NAME_MAX: usize = 200;
@@ -133,6 +136,17 @@ impl Pane {
 
     pub fn opencode_turn(&self) -> Option<bool> {
         self.opencode.as_ref().map(|session| session.turn)
+    }
+
+    pub fn record(&self) -> Option<Record> {
+        if let Some(transcript) = &self.transcript {
+            return Some(Record::Claude(transcript.path.clone()));
+        }
+        if let Some(rollout) = &self.codex {
+            return Some(Record::Codex(rollout.path.clone()));
+        }
+        let place = self.opencode.as_ref()?.place.clone()?;
+        Some(Record::Opencode { database: place.database, session: place.id })
     }
 
     pub fn conversation(&self) -> Option<&str> {

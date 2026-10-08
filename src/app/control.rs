@@ -8,9 +8,10 @@ use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{App, Target, Toast};
+use super::{App, AppEvent, Target, Toast};
 use crate::activity::{self, Status};
 use crate::agents;
+use crate::context;
 use crate::control::{
     self, Command, Done, GroupInfo, Ids, Item, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo, TodoItem,
     TodoList, Until, WorkspaceInfo,
@@ -19,8 +20,9 @@ use crate::error;
 use crate::git;
 use crate::keys;
 use crate::launch::{self, Launch};
-use crate::log::{self, Level};
+use crate::log::{self, Job, Level};
 use crate::notify::{self, Notification};
+use crate::panics;
 use crate::project::{Phase, Project, Tab, Workspace};
 use crate::search::Goto;
 use crate::split::Dir;
@@ -34,6 +36,7 @@ const SHELL_SETTLES: Duration = Duration::from_millis(300);
 const SHELL_UNSEEN: Duration = Duration::from_secs(1);
 const TEXT_EVERY: Duration = Duration::from_millis(100);
 const SOONEST: Duration = Duration::from_millis(10);
+const WATCHED: [&str; 3] = [agents::CLAUDE, agents::CODEX, agents::OPENCODE];
 const NO_SIZE: &str = "this cornercase server has not opened a window yet, so a new terminal would have no size; \
     run `cornercase` once first";
 const NO_PROJECT: &str = "no project is open; open one with `cornercase open PATH`";
@@ -84,6 +87,7 @@ enum Stage {
     Launch(Option<Condition>),
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
+    Reading,
 }
 
 struct Then {
@@ -229,6 +233,22 @@ fn endings(value: &Value) -> String {
     panes.iter().map(|pane| format!("{}:{}", id(pane), ended(pane))).collect::<Vec<_>>().join(",")
 }
 
+fn unfound(pane: u64, agent: &str) -> String {
+    let why = match agent {
+        agents::CLAUDE => "Claude Code has not said yet which conversation it is in",
+        agents::CODEX => "Codex writes its rollout from its first turn on, and two Codex in one folder hide each other",
+        _ => "opencode has no conversation in its folder yet, or two opencode share that folder",
+    };
+    format!(
+        "cornercase has not found where the {agent} agent in pane {pane} keeps its conversation: {why}; \
+         `cornercase read --pane {pane}` prints its screen"
+    )
+}
+
+fn turn_over(agent: &activity::Pane) -> Option<bool> {
+    agent.status().map(|_| Condition::TurnOver.ended(agent).is_some())
+}
+
 fn pane_ids(pane: u64) -> Done {
     Done { ids: Ids { pane: Some(pane), ..Ids::default() }, ..Done::default() }
 }
@@ -343,6 +363,7 @@ impl App {
             Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
+            Command::LastMessage(last) => self.last_message_request(client, caller, &last),
         }
     }
 
@@ -442,6 +463,7 @@ impl App {
             Stage::Worktree(_) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Launch(_) => return format!("pane {pane} is still starting"),
+            Stage::Reading => return format!("the record of pane {pane} is still being read"),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
                 let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));
@@ -568,7 +590,7 @@ impl App {
             return Ok(());
         }
         match agents::detect(&self.config, &term.foreground_args()) {
-            Some(agent) if [agents::CLAUDE, agents::CODEX, agents::OPENCODE].contains(&agent.as_str()) => Ok(()),
+            Some(agent) if WATCHED.contains(&agent.as_str()) => Ok(()),
             other => Err(other),
         }
     }
@@ -1067,6 +1089,51 @@ impl App {
         };
         let text = text.map_err(|e| format!("cannot read pane {pane}: {e}"))?;
         Ok(Some(json(&Done { text: Some(text), ..pane_ids(pane) })))
+    }
+
+    fn last_message_request(&mut self, client: u64, caller: Option<u64>, last: &control::LastMessage) -> Handled {
+        let pane = self.target(caller, last.pane, last.tab)?;
+        let term = self.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let running = term.agent.agent().map(str::to_string);
+        let agent = match running.or_else(|| agents::detect(&self.config, &term.foreground_args())) {
+            Some(agent) if WATCHED.contains(&agent.as_str()) => agent,
+            other => {
+                let runs = other.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
+                return Err(format!(
+                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex and opencode; \
+                     `cornercase read --pane {pane}` prints its screen"
+                ));
+            }
+        };
+        let record = term.context.record().ok_or_else(|| unfound(pane, &agent))?;
+        let key = self.requests.key();
+        let tx = self.tx.clone();
+        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", &agent).begin();
+        std::thread::spawn(move || {
+            let result = panics::job(|| record.last_message());
+            job.with("found", result.as_ref().is_ok_and(Option::is_some)).finish(&result);
+            let _ = tx.send(AppEvent::LastMessage { request: key, result });
+        });
+        let done = Done { agent: Some(agent), ..pane_ids(pane) };
+        self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
+        Ok(None)
+    }
+
+    pub(super) fn message_read(&mut self, key: u64, result: error::Result<Option<context::Said>>) {
+        let Some(mut pending) = self.requests.take(key) else { return };
+        let pane = pending.done.ids.pane.unwrap_or_default();
+        let agent = pending.done.agent.clone().unwrap_or_default();
+        let reply = match result {
+            Ok(Some(message)) => {
+                pending.done.text = Some(message.text);
+                pending.done.written = message.written;
+                pending.done.turn_over = self.pane_by(pane).and_then(|term| turn_over(&term.agent));
+                Ok(json(&pending.done))
+            }
+            Ok(None) => Err(format!("the {agent} agent in pane {pane} has not written a message yet")),
+            Err(e) => Err(format!("cannot read what the {agent} agent in pane {pane} wrote: {e}")),
+        };
+        self.answer(pending.client, reply);
     }
 
     fn wait_request(&mut self, client: u64, caller: Option<u64>, wait: control::Wait, now: Instant) -> Handled {

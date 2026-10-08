@@ -372,6 +372,19 @@ impl FakeOpencode {
         }
     }
 
+    pub fn parts(&self, session: &str, message: &str, parts: &str) {
+        let db = rusqlite::Connection::open(&self.database).expect("open the database");
+        for data in parts.lines().filter(|line| !line.trim().is_empty()) {
+            let count: i64 = db.query_row("SELECT COUNT(*) FROM part", [], |r| r.get(0)).expect("count parts");
+            db.execute(
+                "INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) \
+                 VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
+                rusqlite::params![format!("prt_{count:06}"), message, session, count, data],
+            )
+            .expect("write a part");
+        }
+    }
+
     pub fn quit(&self) {
         std::fs::write(self.dir.path().join("quit"), "").expect("signal fake opencode");
     }

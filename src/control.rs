@@ -58,6 +58,7 @@ pub enum Command {
     Focus(Focus),
     Notify(Notify),
     Todo(Todo),
+    LastMessage(LastMessage),
 }
 
 impl Command {
@@ -79,6 +80,7 @@ impl Command {
             Self::Notify(_) => 13,
             Self::Todo(_) => 14,
             Self::WaitSeveral(_) => 15,
+            Self::LastMessage(_) => 16,
         }]
     }
 
@@ -119,6 +121,9 @@ impl Command {
             Self::Read(read) => {
                 fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
             }
+            Self::LastMessage(last) => {
+                fields.maybe("pane", last.pane).maybe("tab", last.tab);
+            }
             Self::Wait(wait) | Self::WaitSeveral(wait) => {
                 fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", wait.until.name());
                 fields.maybe("timeout", wait.timeout);
@@ -151,7 +156,7 @@ impl Command {
         fields.0
     }
 
-    pub const NAMES: [&str; 16] = [
+    pub const NAMES: [&str; 17] = [
         "status",
         "open",
         "new-workspace",
@@ -168,6 +173,7 @@ impl Command {
         "notify",
         "todo",
         "wait-several",
+        "last-message",
     ];
 }
 
@@ -284,6 +290,13 @@ pub struct Read {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct LastMessage {
+    pub pane: Option<u64>,
+    pub tab: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Wait {
     pub pane: Option<u64>,
     pub tab: Option<u64>,
@@ -395,6 +408,12 @@ pub struct Done {
     pub todo: Option<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub panes: Vec<Done>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub written: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_over: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -587,6 +606,7 @@ mod tests {
             Command::Notify(Notify::default()),
             Command::Todo(Todo::List),
             Command::WaitSeveral(Wait::default()),
+            Command::LastMessage(LastMessage::default()),
         ];
 
         let names: Vec<String> = commands

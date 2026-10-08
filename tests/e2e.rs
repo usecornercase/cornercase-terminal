@@ -1551,20 +1551,24 @@ fn split_opens_a_pane_beside_the_shown_one() {
 }
 
 #[test]
-fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() {
+fn an_agent_started_from_the_command_line_takes_its_prompts_is_waited_for_and_read() {
     let session = Session::new();
     std::fs::create_dir(session.dir.join("bin")).expect("create bin");
     let agent = session.dir.join("bin").join("claude");
     write_executable(
         &agent,
         "#!/bin/sh\nd=\"$CLAUDE_CONFIG_DIR/sessions\"; mkdir -p \"$d\"; s=\"$d/$$.json\"\n\
-         printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"\n\
+         t=\"$CLAUDE_CONFIG_DIR/projects/$(printf %s \"$PWD\" | tr -c 'A-Za-z0-9' '-')\"; mkdir -p \"$t\"; n=0\n\
+         state() { printf '{\"pid\":%s,\"status\":\"%s\",\"sessionId\":\"s1\",\"cwd\":\"%s\"}' $$ \"$1\" \"$PWD\" > \"$s\"; }\n\
+         state idle\n\
          while printf 'agent> ' && IFS= read -r line; do\n\
-         printf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$s\"\n\
+         state busy\n\
          while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\"\n\
-         case \"$line\" in *background*) printf '{\"pid\":%s,\"status\":\"shell\"}' $$ > \"$s\"\n\
+         n=$((n+1)); printf '{\"type\":\"assistant\",\"timestamp\":\"2026-10-08T12:00:0%s.000Z\",\"message\":{\"id\":\"m%s\",\
+         \"model\":\"claude-opus-5-5\",\"content\":[{\"type\":\"text\",\"text\":\"said: %s\"}]}}\\n' \"$n\" \"$n\" \"$line\" >> \"$t/s1.jsonl\"\n\
+         case \"$line\" in *background*) state shell\n\
          while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\";; esac\n\
-         printf 'done: %s\\n' \"$line\"; printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"; done\n",
+         printf 'done: %s\\n' \"$line\"; state idle; done\n",
     );
     let config = format!("{{\"agent_commands\": {{\"claude\": \"{}\"}}}}", agent.display());
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
@@ -1580,6 +1584,7 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     let started = Session::output(start);
     let lines: Vec<&str> = started.lines().collect();
     let [pane, ended] = lines[..] else { panic!("not a pane and an ending: {started}") };
+    let first = session.says(&["read", "--pane", pane, "--last-message"]);
     let send = session.spawn(&["send", "--pane", pane, "--enter", "--wait", "--timeout", "30", "add tests"]);
     finish();
     let next = Session::output(send);
@@ -1603,6 +1608,19 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     assert!(status.contains("working (background shell)"), "{status}");
     let screen = session.says(&["read", "--pane", pane]);
     assert!(screen.contains("done: fix the login") && screen.contains("done: add tests"), "{screen}");
+    let said: serde_json::Value =
+        serde_json::from_str(&session.says(&["read", "--pane", pane, "--last-message", "--json"])).expect("json");
+    let shell = session.report().projects[0].workspaces[0].tabs[0].panes[0].id.to_string();
+    let refused = session.cli(&["read", "--pane", &shell, "--last-message"]);
+
+    assert_eq!(first, "said: fix the login");
+    assert_eq!(
+        (&said["text"], &said["agent"], &said["turn_over"], &said["written"]),
+        (&"said: watch in the background".into(), &"claude".into(), &true.into(), &"2026-10-08T12:00:03.000Z".into())
+    );
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(refused.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains(&format!("pane {shell} runs no agent")), "{stderr}");
 }
 
 #[test]

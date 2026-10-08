@@ -6,18 +6,29 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
+use serde_json::Value;
 
+use super::message::{self, Said};
 use super::{Context, percent};
+use crate::error::{self, Error};
+use crate::log::Stamp;
 use crate::process;
 
 const NAME: &str = "opencode";
 const BUSY_FOR: Duration = Duration::from_millis(100);
 const MESSAGES: i64 = 200;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Session {
     pub turn: bool,
     pub context: Option<Context>,
+    pub place: Option<Place>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Place {
+    pub database: PathBuf,
+    pub id: String,
 }
 
 #[derive(Debug, Default)]
@@ -83,16 +94,19 @@ pub(super) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<S
     if shared(holder, &database, &cwd) {
         return None;
     }
-    let connection =
-        Connection::open_with_flags(&database, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
-            .ok()?;
-    connection.busy_timeout(BUSY_FOR).ok()?;
+    let connection = open(&database).ok()?;
     let since = i64::try_from(since.duration_since(UNIX_EPOCH).ok()?.as_millis()).ok()?;
-    let Some(id) = session(&connection, &cwd, since).ok()? else {
-        return Some(Session { turn: false, context: None });
-    };
+    let Some(id) = session(&connection, &cwd, since).ok()? else { return Some(Session::default()) };
     let messages = messages(&connection, &id)?;
-    Some(read(&messages, models, models_file(holder).as_deref()))
+    let session = read(&messages, models, models_file(holder).as_deref());
+    Some(Session { place: Some(Place { database, id }), ..session })
+}
+
+fn open(database: &Path) -> rusqlite::Result<Connection> {
+    let connection =
+        Connection::open_with_flags(database, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+    connection.busy_timeout(BUSY_FOR)?;
+    Ok(connection)
 }
 
 fn database(pid: i32) -> Option<(i32, PathBuf)> {
@@ -232,6 +246,44 @@ impl Message {
     }
 }
 
+#[derive(Deserialize)]
+struct Part {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    text: Option<String>,
+    synthetic: Option<bool>,
+}
+
+pub(super) fn last_message(database: &Path, session: &str) -> error::Result<Option<Said>> {
+    let failed = |e: rusqlite::Error| Error::Record { path: database.to_path_buf(), cause: e.to_string() };
+    let connection = open(database).map_err(failed)?;
+    let mut messages = connection
+        .prepare("SELECT id, data FROM message WHERE session_id = ?1 ORDER BY time_created DESC, id DESC")
+        .map_err(failed)?;
+    let mut parts = connection.prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY id").map_err(failed)?;
+    let mut rows = messages.query(params![session]).map_err(failed)?;
+    while let Some(row) = rows.next().map_err(failed)? {
+        let (id, data): (String, String) = (row.get(0).map_err(failed)?, row.get(1).map_err(failed)?);
+        let said: Value = serde_json::from_str(&data).unwrap_or_default();
+        if said["role"] != "assistant" || said["summary"] == true {
+            continue;
+        }
+        let texts: Vec<String> = parts
+            .query_map(params![id], |row| row.get::<_, String>(0))
+            .map_err(failed)?
+            .flatten()
+            .filter_map(|data| serde_json::from_str::<Part>(&data).ok())
+            .filter(|part| part.kind.as_deref() == Some("text") && part.synthetic != Some(true))
+            .filter_map(|part| part.text)
+            .collect();
+        let Some(text) = message::joined(texts) else { continue };
+        let time = said["time"]["completed"].as_u64().or_else(|| said["time"]["created"].as_u64());
+        let written = time.map(|ms| Stamp(UNIX_EPOCH + Duration::from_millis(ms)).to_string());
+        return Ok(Some(Said { text, written }));
+    }
+    Ok(None)
+}
+
 fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Session {
     let messages: Vec<Message> = newest_first.iter().filter_map(|data| serde_json::from_str(data).ok()).collect();
     let turn = messages
@@ -247,7 +299,7 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
             percent: used.zip(found.and_then(|found| found.window)).map(|(used, window)| percent(used, window)),
         }
     });
-    Session { turn, context }
+    Session { turn, context, place: None }
 }
 
 #[cfg(test)]
@@ -263,6 +315,8 @@ mod tests {
     const ABORTED: &str = include_str!("../../tests/fixtures/opencode/1.18.35/aborted.jsonl");
     const COMPACTION: &str = include_str!("../../tests/fixtures/opencode/1.18.35/compaction.jsonl");
     const MODELS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/models.json");
+    const REPLY_PARTS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/reply-parts.jsonl");
+    const TOOL_PARTS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/tool-parts.jsonl");
     const FLASH: &str =
         r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
 
@@ -302,7 +356,7 @@ mod tests {
         #[case] turn: bool,
         #[case] context: Option<Context>,
     ) {
-        assert_eq!(Models::new().read(messages), Session { turn, context });
+        assert_eq!(Models::new().read(messages), Session { turn, context, place: None });
     }
 
     #[test]
@@ -372,14 +426,15 @@ mod tests {
         running.fake.write("ses_old", running.project.path(), REPLY);
         let since = SystemTime::now() + Duration::from_millis(5);
         std::thread::sleep(Duration::from_millis(10));
-        assert_eq!(running.look(since), Some(Session { turn: false, context: None }));
+        assert_eq!(running.look(since), Some(Session::default()));
 
         running.fake.write("ses_elsewhere", elsewhere.path(), WORKING);
         running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
 
+        let place = Place { database: running.fake.database.clone(), id: FakeOpencode::SESSION.into() };
         assert_eq!(
             running.look(since),
-            Some(Session { turn: false, context: Some(shown("DeepSeek V4 Pro", Some(12))) })
+            Some(Session { turn: false, context: Some(shown("DeepSeek V4 Pro", Some(12))), place: Some(place) })
         );
     }
 
@@ -454,5 +509,96 @@ mod tests {
             pane.update_opencode(running.pid());
             pane.context().is_none() && pane.opencode_turn().is_none()
         });
+    }
+
+    mod last_message {
+        use super::*;
+
+        struct Chat {
+            fake: FakeOpencode,
+            project: TempDir,
+        }
+
+        impl Chat {
+            fn new() -> Self {
+                Self { fake: FakeOpencode::new(), project: TempDir::new() }
+            }
+
+            fn messages(&self, messages: &str) {
+                self.fake.write(FakeOpencode::SESSION, self.project.path(), messages);
+            }
+
+            fn parts(&self, message: &str, parts: &str) {
+                self.fake.parts(FakeOpencode::SESSION, message, parts);
+            }
+
+            fn last(&self) -> error::Result<Option<Said>> {
+                last_message(&self.fake.database, FakeOpencode::SESSION)
+            }
+        }
+
+        #[test]
+        fn is_the_text_of_the_newest_reply_with_any() {
+            let said = Chat::new();
+            said.messages(REPLY);
+            said.parts("msg_000000", r#"{"type":"text","text":"Fix the login form"}"#);
+            said.parts("msg_000001", REPLY_PARTS);
+            said.messages(WORKING);
+            said.parts("msg_000003", TOOL_PARTS);
+
+            let found = said.last().expect("read the database");
+
+            assert_eq!(
+                found,
+                Some(Said {
+                    text: "The login form now checks the password.\n\nTests pass.".into(),
+                    written: Some("2026-10-08T14:24:47.195Z".into())
+                })
+            );
+        }
+
+        #[test]
+        fn leaves_out_text_written_for_the_model_alone() {
+            let said = Chat::new();
+            said.messages(REPLY);
+            said.parts("msg_000001", r#"{"type":"text","text":"Continue if you have next steps.","synthetic":true}"#);
+
+            assert_eq!(said.last().expect("read the database"), None);
+        }
+
+        #[test]
+        fn a_compaction_summary_is_for_the_model_not_a_message() {
+            let said = Chat::new();
+            said.messages(REPLY);
+            said.parts("msg_000001", REPLY_PARTS);
+            said.messages(COMPACTION);
+            said.parts("msg_000003", r#"{"type":"text","text":"Goal: fix the login form."}"#);
+
+            let found = said.last().expect("read the database").map(|said| said.text);
+
+            assert_eq!(found.as_deref(), Some("The login form now checks the password.\n\nTests pass."));
+        }
+
+        #[test]
+        fn a_session_without_a_reply_has_none() {
+            let said = Chat::new();
+            said.messages(WORKING);
+            said.parts("msg_000000", r#"{"type":"text","text":"Fix the login form"}"#);
+
+            assert_eq!(said.last().expect("read the database"), None);
+        }
+
+        #[test]
+        fn a_database_that_cannot_be_queried_says_which() {
+            let said = Chat::new();
+            Connection::open(&said.fake.database)
+                .and_then(|db| db.execute_batch("DROP TABLE part;"))
+                .expect("drop parts");
+            said.messages(REPLY);
+
+            let error = said.last().expect_err("no parts to read");
+
+            assert!(error.to_string().contains(&said.fake.database.display().to_string()), "{error}");
+        }
     }
 }

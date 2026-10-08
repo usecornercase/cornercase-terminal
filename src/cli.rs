@@ -95,9 +95,17 @@ const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, righ
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
 const READ_HELP: &str = "Lines the terminal wrapped come back joined, and empty lines at the end are left out.
 
+With --last-message it prints the last message the agent in the pane wrote, as plain text, from its
+own record (Claude Code's transcript, Codex's rollout, opencode's database) instead of the screen, so
+it comes whole even once it scrolled off, without the input box or status lines. While the agent
+works it is the newest one so far. --json adds when it was written and whether the agent's turn is
+over. It fails on a pane without Claude Code, Codex or opencode, and before the agent wrote anything.
+
 Examples:
   cornercase read --pane 12
-  cornercase read --pane 7 --lines 200 > build.log";
+  cornercase read --pane 7 --lines 200 > build.log
+  cornercase read --pane 12 --last-message
+  cornercase read --tab 4 --last-message --json";
 const WAIT_HELP: &str = "By default it waits until the agent stops working: idle, done or waiting. A Claude Code agent
 whose turn is over while a background shell it started still runs counts as working, since it
 wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then prints
@@ -404,6 +412,8 @@ pub struct ReadArgs {
         help = "The last N lines, scrollback included (a pane keeps 5,000)"
     )]
     pub lines: Option<u64>,
+    #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
+    pub last_message: bool,
     #[command(flatten)]
     pub print: Print,
 }
@@ -748,12 +758,7 @@ fn run_control(command: Control) -> Result<()> {
             let Target { pane, tab } = keys.target;
             ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
         }
-        Control::Read(read) => {
-            let Target { pane, tab } = read.target;
-            let lines = read.lines.and_then(|n| usize::try_from(n).ok());
-            let value = ask("read", control::Command::Read(control::Read { pane, tab, lines }))?;
-            say(value, read.print.json, |done| done.text.clone().into_iter().collect())
-        }
+        Control::Read(read) => run_read(&read),
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
@@ -812,6 +817,17 @@ fn run_start(start: StartArgs) -> Result<()> {
     say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
+}
+
+fn run_read(read: &ReadArgs) -> Result<()> {
+    let Target { pane, tab } = read.target;
+    let value = if read.last_message {
+        ask("read --last-message", control::Command::LastMessage(control::LastMessage { pane, tab }))?
+    } else {
+        let lines = read.lines.and_then(|n| usize::try_from(n).ok());
+        ask("read", control::Command::Read(control::Read { pane, tab, lines }))?
+    };
+    say(value, read.print.json, |done| done.text.clone().into_iter().collect())
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {
@@ -1052,6 +1068,7 @@ mod tests {
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
         #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
+        #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]
         #[case::an_unknown_key(&["keys", "hello"])]
         #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
         #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
@@ -1105,6 +1122,14 @@ mod tests {
             let Some(Command::Control(Control::Close(close))) = cli.command else { panic!("not close") };
             assert_eq!(close.which.worktree.as_deref(), Some("fix/login"));
             assert!(close.remove_worktree && close.force);
+        }
+
+        #[test]
+        fn the_last_message_is_read_from_a_pane_or_a_tab() {
+            let cli = parse(&["read", "--tab", "4", "--last-message", "--json"]).expect("parse");
+
+            let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
+            assert_eq!((read.target.tab, read.last_message, read.print.json), (Some(4), true, true));
         }
 
         #[test]
