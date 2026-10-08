@@ -220,6 +220,10 @@ impl Sink {
         if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
+        match std::fs::set_permissions(rotated(&path), Permissions::from_mode(PRIVATE)) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
         let file = OpenOptions::new().create(true).append(true).mode(PRIVATE).open(&path)?;
         file.set_permissions(Permissions::from_mode(PRIVATE))?;
         if stderr {
@@ -443,6 +447,18 @@ mod tests {
 
         let mode = |path: &Path| std::fs::metadata(path).expect("stat").mode() & 0o777;
         assert_eq!((mode(&rotated(&path)), mode(&path)), (PRIVATE, PRIVATE));
+    }
+
+    #[test]
+    fn an_older_log_left_readable_is_made_private_too() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("server.log");
+        std::fs::write(rotated(&path), "older\n").expect("write");
+        std::fs::set_permissions(rotated(&path), Permissions::from_mode(0o644)).expect("chmod");
+
+        Sink::open(path.clone(), 10, false).expect("open");
+
+        assert_eq!(std::fs::metadata(rotated(&path)).expect("stat").mode() & 0o777, PRIVATE);
     }
 
     #[test]
