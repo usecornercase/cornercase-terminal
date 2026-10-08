@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::activity::Claude;
+use crate::agents;
 use crate::log::Stamp;
 use crate::process;
 
@@ -152,15 +153,16 @@ impl Pane {
         self.opencode.as_ref().map(|session| session.turn)
     }
 
-    pub fn record(&self) -> Option<Record> {
-        if let Some(transcript) = &self.transcript {
-            return Some(Record::Claude(transcript.path.clone()));
-        }
-        if let Some(rollout) = &self.codex {
-            return Some(Record::Codex(rollout.path.clone()));
-        }
-        let place = self.opencode.as_ref()?.place.clone()?;
-        Some(Record::Opencode { database: place.database, session: place.id })
+    pub fn record_for(&self, agent: &str) -> Option<Record> {
+        Some(match agent {
+            agents::CLAUDE => Record::Claude(self.transcript.as_ref()?.path.clone()),
+            agents::CODEX => Record::Codex(self.codex.as_ref()?.path.clone()),
+            agents::OPENCODE => {
+                let place = self.opencode.as_ref()?.place.clone()?;
+                Record::Opencode { database: place.database, session: place.id }
+            }
+            _ => return None,
+        })
     }
 
     pub fn conversation(&self) -> Option<&str> {
@@ -1043,6 +1045,23 @@ mod tests {
 
     mod pane {
         use super::*;
+
+        #[test]
+        fn the_record_is_the_one_of_the_agent_asked_for() {
+            let place = opencode::Place { database: "/d/opencode.db".into(), id: "ses".into() };
+            let replaced = Pane {
+                codex: Some(codex::Rollout::new("/c/rollout.jsonl".into())),
+                opencode: Some(opencode::Session { place: Some(place), ..opencode::Session::default() }),
+                ..Pane::default()
+            };
+
+            let found = [agents::OPENCODE, agents::CLAUDE].map(|agent| replaced.record_for(agent));
+
+            assert_eq!(
+                found,
+                [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]
+            );
+        }
 
         fn answered() -> (Setup, Pane) {
             let s = Setup::new(&[]);

@@ -13811,8 +13811,12 @@ rm -f "$s"
             impl Agent {
                 fn transcript(&mut self, id: u64, lines: &[&str]) {
                     let (app, rx) = (&mut self.app, &self.rx);
-                    refreshing(app, rx, "the pane knows its conversation", |a| pane(a, id).context.record().is_some());
-                    let Some(context::Record::Claude(path)) = pane(&self.app, id).context.record() else {
+                    refreshing(app, rx, "the pane knows its conversation", |a| {
+                        pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
+                    });
+                    let Some(context::Record::Claude(path)) =
+                        pane(&self.app, id).context.record_for(crate::agents::CLAUDE)
+                    else {
                         panic!("not a transcript")
                     };
                     let mut file =
@@ -13861,7 +13865,9 @@ rm -f "$s"
                 let mut agent = Agent::new();
                 let id = agent.start(None);
                 let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the pane knows its conversation", |a| pane(a, id).context.record().is_some());
+                refreshing(app, rx, "the pane knows its conversation", |a| {
+                    pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
+                });
                 let term = agent.app.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id);
                 term.expect("the agent's pane").agent.follow(Some(crate::agents::CODEX));
 
@@ -13878,7 +13884,9 @@ rm -f "$s"
                 let mut agent = Agent::new();
                 let id = agent.start(None);
                 let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the pane knows its conversation", |a| pane(a, id).context.record().is_some());
+                refreshing(app, rx, "the pane knows its conversation", |a| {
+                    pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
+                });
 
                 ask(&mut agent.app, None, last_message(id));
 

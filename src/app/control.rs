@@ -1182,8 +1182,7 @@ impl App {
                 ));
             }
         };
-        let record =
-            term.context.record().filter(|record| record.agent() == agent).ok_or_else(|| unfound(pane, &agent))?;
+        let record = term.context.record_for(&agent).ok_or_else(|| unfound(pane, &agent))?;
         let key = self.requests.key();
         let tx = self.tx.clone();
         let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", &agent).begin();

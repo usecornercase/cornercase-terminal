@@ -6,7 +6,6 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{ASSISTANT, SYNTHETIC, opencode};
-use crate::agents;
 use crate::error::{Error, Result};
 
 const CHUNK: u64 = 256 * 1024;
@@ -27,14 +26,6 @@ pub enum Record {
 }
 
 impl Record {
-    pub fn agent(&self) -> &'static str {
-        match self {
-            Self::Claude(_) => agents::CLAUDE,
-            Self::Codex(_) => agents::CODEX,
-            Self::Opencode { .. } => agents::OPENCODE,
-        }
-    }
-
     pub fn last_message(&self) -> Result<Option<Said>> {
         match self {
             Self::Claude(path) => claude(path),
@@ -267,14 +258,6 @@ mod tests {
     fn last_claude(lines: &[String]) -> Option<String> {
         let file = Written::new(&joined_lines(lines));
         claude(&file.path).expect("read the transcript").map(|m| m.text)
-    }
-
-    #[rstest]
-    #[case::a_transcript(Record::Claude("s.jsonl".into()), agents::CLAUDE)]
-    #[case::a_rollout(Record::Codex("rollout.jsonl".into()), agents::CODEX)]
-    #[case::a_database(Record::Opencode { database: "opencode.db".into(), session: "ses".into() }, agents::OPENCODE)]
-    fn a_record_belongs_to_the_agent_that_keeps_it(#[case] record: Record, #[case] agent: &str) {
-        assert_eq!(record.agent(), agent);
     }
 
     mod backwards {
