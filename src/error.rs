@@ -67,6 +67,24 @@ pub enum Error {
     ServerGone,
     #[error("cornercase hit a bug, see server.log")]
     Bug,
+    #[error("failed to run ssh: {0}")]
+    RunSsh(std::io::Error),
+    #[error("could not reach cornercase on `{host}`: {reason}")]
+    Ssh { host: String, reason: String },
+    #[error("cornercase was not found on `{0}`. Install it there, or give its path with --command")]
+    RemoteMissing(String),
+    #[error("the cornercase on `{0}` is too old to attach to from another machine. Run `cornercase update` there")]
+    RemoteTooOld(String),
+    #[error(
+        "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` there",
+        crate::update::CURRENT
+    )]
+    RemoteOlder { host: String, there: String },
+    #[error(
+        "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` here",
+        crate::update::CURRENT
+    )]
+    RemoteNewer { host: String, there: String },
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }

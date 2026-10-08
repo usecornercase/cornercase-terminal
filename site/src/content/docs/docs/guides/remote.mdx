@@ -1,0 +1,79 @@
+---
+title: Remote machines
+description: Keep the shells and agents on another machine, a dev server, a cloud VM or a desktop at home, and open the window on your laptop over SSH. It reconnects by itself when the connection drops.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Your agents can run on a bigger machine than the one you carry: a dev server, a cloud VM, the desktop at home. `cornercase remote` opens the window on your laptop and attaches it to the cornercase server on that machine:
+
+```sh
+cornercase remote devbox
+```
+
+`devbox` is anything `ssh` takes: a host from `~/.ssh/config`, or `user@host`. cornercase runs your own `ssh`, so your config, keys, agent, `ProxyJump` and `ControlMaster` all apply, and cornercase never sees a password or a key.
+
+```text
+ your laptop                                        devbox
+ cornercase remote ── ssh ───────────▶ cornercase proxy ──▶ cornercase server ── shells, agents
+```
+
+On the other machine, `ssh` runs `cornercase proxy`, which starts the server if none is running and passes the window's keys and the server's screens back and forth. It is the same server that `cornercase` on that machine attaches to, so you can also open it from a terminal there: the windows mirror each other, as described in [Sessions and the server](../sessions/#several-terminals-at-once).
+
+## What you need
+
+cornercase on both machines, in the same version (see [Versions](#versions)). On the other machine, it is looked for on the `PATH`, then in `~/.local/bin` (where the [install script](../../installation/) puts it), `~/.cargo/bin` and Homebrew's folders, since the `PATH` of a command run through `ssh` is often shorter than your login shell's. If it lives somewhere else, say how to run it with `--command`:
+
+```sh
+cornercase remote devbox --command '~/tools/cornercase'
+```
+
+The other machine's `sh` reads it, so `~` and `$HOME` work.
+
+## What runs where
+
+Everything that touches files or programs stays on the other machine: the shells, the agents, worktrees and git, the [changes](../changes/) and [files](../files/) panels, ` open ` (your editor opens in a new tab there), plan usage, the issue trackers (`gh` and your tokens live there), and its `config.json` and `session.json`.
+
+Your laptop only shows the window. Keys, the mouse, pastes and your terminal's colours come from it, and copying and [desktop notifications](../projects-workspaces-tabs/#notifications) go through it, so the text lands in your local clipboard and the notification on your local screen.
+
+## When the connection drops
+
+The window stays open and says so:
+
+```text
+╭─ connection lost ────────────────────────────────────────╮
+│                                                          │
+│ reconnecting to devbox…                                  │
+│ trying again in 4 s                                      │
+│ ssh: connect to host devbox port 22: Connection refused  │
+│                                                          │
+│ its shells keep running on devbox                  quit  │
+╰──────────────────────────────────────────────────────────╯
+```
+
+It tries again at once, then after 1, 2, 4 and 8 seconds, then every 15 seconds, and shows the last thing `ssh` said. Your shells and agents keep running on the other machine meanwhile, and once it is back the window shows them as they are now. A laptop that slept or changed Wi-Fi comes back on its own.
+
+`Esc` or ` quit ` gives up: the window closes and everything keeps running there, so `cornercase remote devbox` attaches again later. The ` quit ` in the sidebar works as always: it detaches, and nothing reconnects.
+
+<Aside>
+Reconnecting never asks for a password or a passphrase, since the window has your keys: use a key that is in your SSH agent, or one without a passphrase. The first connection, before the window opens, can still ask for them. To notice a connection that died without a word, cornercase asks `ssh` to check every 5 seconds (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), so it reacts within about 15 seconds.
+</Aside>
+
+## Versions
+
+Both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:
+
+```text
+`devbox` runs cornercase 0.11.9 and this machine 0.11.12. Run `cornercase update` there
+```
+
+When the other machine is the older one, it offers to run `cornercase update` there for you, through `ssh`, and attaches once that is done. When yours is older, run `cornercase update` on it.
+
+When the binary on the other machine was updated but its old server still runs, cornercase asks before restarting it, as it does [on your own machine](../../reference/command-line/#a-server-from-another-build), and then runs `cornercase kill-server` there. After an update from the window's own [update dialog](../../installation/#update), which updates the other machine, the window reconnects to the new server by itself, and tells you if your laptop now needs the same update.
+
+## Good to know
+
+- **Latency**: every key goes to the other machine and comes back as a screen update, the same as typing in plain `ssh`.
+- **One window, one server**: the sidebar shows the projects of one machine. Open another window for another machine.
+- **Commands for scripts and agents** act on the server of the machine they run on, so run them there: in one of its panes, or with `ssh devbox cornercase status`.
+- **Inside a pane**: `cornercase remote` works inside one of cornercase's own panes, unlike `cornercase`, since the other server is a different one.

@@ -1,31 +1,39 @@
 use std::fs::{self, OpenOptions};
-use std::io::{self, BufRead, IsTerminal, Write, stdin, stdout};
-use std::net::Shutdown;
+use std::io::{self, BufRead, IsTerminal, Read, Write, stdin, stdout};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyCode,
+    KeyEventKind, KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use ratatui::DefaultTerminal;
+use ratatui::backend::Backend;
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Position, Rect};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
-use signal_hook::iterator::Signals;
+use signal_hook::iterator::{Handle, Signals};
 
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::host_theme::{HostTheme, ThemeProbe};
-use crate::notify;
+use crate::notify::{self, Channel};
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::remote::{self, Remote, Stderr};
 use crate::restart;
+use crate::ui::remote::{self as notice, Notice};
 use crate::update::{self, CURRENT, Install, Outcome};
 
 const THEME_QUERY_TIMEOUT: Duration = Duration::from_secs(1);
@@ -38,12 +46,16 @@ const INCOMPATIBLE: &str = "the running cornercase server is incompatible with t
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
 const RESTART: &str = "Restart it now? [y/N] ";
 const INSIDE: &str = "This terminal is one of them, so it closes too.";
+const UPDATE_THERE: &str = "Run it there now? [y/N] ";
+const MAX_BACKOFF: Duration = Duration::from_secs(15);
+const SECOND: Duration = Duration::from_secs(1);
+const INPUT_POLL: Duration = Duration::from_millis(100);
 
 pub fn run() -> Result<()> {
     if std::env::var_os(protocol::NESTED_ENV).is_some() {
         return Err(Error::Nested);
     }
-    match open() {
+    match open(&Target::Local) {
         Err(Error::Rejected(_))
             if stdin().is_terminal()
                 && confirm(&format!(
@@ -52,7 +64,36 @@ pub fn run() -> Result<()> {
                 )) =>
         {
             kill_server()?;
-            open()
+            open(&Target::Local)
+        }
+        result => result,
+    }
+}
+
+pub fn remote(remote: &Remote) -> Result<()> {
+    let target = Target::Remote(remote.clone());
+    let host = remote.host();
+    let asks = stdin().is_terminal();
+    match open(&target) {
+        Err(Error::Rejected(_))
+            if asks
+                && confirm(&format!(
+                    "The cornercase server on {host} comes from another build; cornercase was probably updated there.\n{}\n{RESTART}",
+                    restart::confirmation(None)
+                )) =>
+        {
+            remote.kill_server()?;
+            open(&target)
+        }
+        Err(Error::Rejected(_)) => Err(Error::Rejected(format!(
+            "the cornercase server on `{host}` comes from another build. \
+             Run `cornercase kill-server` there (it closes all its terminals) and attach again"
+        ))),
+        Err(e @ (Error::RemoteOlder { .. } | Error::RemoteTooOld(_)))
+            if asks && confirm(&format!("{e}.\n{UPDATE_THERE}")) =>
+        {
+            remote.update()?;
+            open(&target)
         }
         result => result,
     }
@@ -65,19 +106,84 @@ fn confirm(question: &str) -> bool {
     stdin().lock().read_line(&mut answer).is_ok() && matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
+#[derive(Debug)]
 enum Ending {
     Detached,
     Restart,
+    GaveUp,
 }
 
-fn open() -> Result<()> {
-    let path = protocol::socket_path();
-    protocol::check_socket_dir(&path)?;
-    let exe = std::env::current_exe();
-    let stream = connect_or_start(&path)?;
-    protocol::check_peer(&stream, protocol::own_uid())?;
+#[derive(Debug, Clone)]
+enum Target {
+    Local,
+    Remote(Remote),
+}
 
-    let terminal = ratatui::init();
+impl Target {
+    fn connect(&self, again: bool) -> Result<Link> {
+        match self {
+            Self::Local => {
+                let path = protocol::socket_path();
+                protocol::check_socket_dir(&path)?;
+                let stream = connect_or_start(&path)?;
+                protocol::check_peer(&stream, protocol::own_uid())?;
+                Link::socket(stream)
+            }
+            Self::Remote(remote) => remote.connect(again),
+        }
+    }
+
+    fn reconnects(&self) -> bool {
+        matches!(self, Self::Remote(_))
+    }
+
+    fn host(&self) -> &str {
+        match self {
+            Self::Local => "",
+            Self::Remote(remote) => remote.host(),
+        }
+    }
+}
+
+pub struct Link {
+    reader: Box<dyn Read + Send>,
+    writer: Box<dyn Write + Send>,
+    guard: Guard,
+}
+
+#[derive(Default)]
+struct Guard {
+    child: Option<Child>,
+    stderr: Option<Stderr>,
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        if let Some(child) = self.child.take() {
+            stop(child);
+        }
+    }
+}
+
+impl Link {
+    fn socket(stream: UnixStream) -> Result<Self> {
+        Ok(Self { reader: Box::new(stream.try_clone()?), writer: Box::new(stream), guard: Guard::default() })
+    }
+
+    pub fn piped(reader: impl Read + Send + 'static, writer: ChildStdin, child: Child, stderr: Stderr) -> Self {
+        Self {
+            reader: Box::new(reader),
+            writer: Box::new(writer),
+            guard: Guard { child: Some(child), stderr: Some(stderr) },
+        }
+    }
+}
+
+fn open(target: &Target) -> Result<()> {
+    let link = target.connect(false)?;
+    let exe = std::env::current_exe();
+
+    let mut terminal = ratatui::init();
     let _ = execute!(
         stdout(),
         EnableBracketedPaste,
@@ -85,15 +191,19 @@ fn open() -> Result<()> {
         PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
     );
     install_panic_hook();
-    let result = attach(stream, &terminal);
+    let result = attach(link, target, &mut terminal);
     restore_input_modes();
     ratatui::restore();
     match result? {
         Ending::Restart => {
-            wait_for_exit(&path);
+            wait_for_exit(&protocol::socket_path());
             Err(Command::new(exe?).exec().into())
         }
         Ending::Detached => Ok(()),
+        Ending::GaveUp => {
+            println!("stopped reconnecting to {}; its shells keep running there", target.host());
+            Ok(())
+        }
     }
 }
 
@@ -251,7 +361,7 @@ fn wait_for_exit(path: &Path) {
     }
 }
 
-fn connect_or_start(path: &Path) -> Result<UnixStream> {
+pub(crate) fn connect_or_start(path: &Path) -> Result<UnixStream> {
     if let Ok(stream) = UnixStream::connect(path) {
         return Ok(stream);
     }
@@ -285,8 +395,13 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .spawn()
 }
 
-fn reap(mut child: Child) {
+pub(crate) fn reap(mut child: Child) {
     thread::spawn(move || child.wait());
+}
+
+pub(crate) fn stop(mut child: Child) {
+    let _ = child.kill();
+    reap(child);
 }
 
 fn install_panic_hook() {
@@ -301,35 +416,262 @@ fn restore_input_modes() {
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags, DisableBracketedPaste, DisableMouseCapture);
 }
 
-fn attach(stream: UnixStream, terminal: &DefaultTerminal) -> Result<Ending> {
+enum Incoming {
+    Input(Event),
+    Server(u64, Received),
+    Linked(u64, Result<Link>),
+    Signal,
+}
+
+enum Received {
+    Message(ServerMessage),
+    Invalid,
+    Ended,
+}
+
+enum Next {
+    Show(Vec<u8>),
+    End(Ending),
+    Reconnect,
+    Nothing,
+}
+
+fn next(received: Received, reconnects: bool) -> Result<Next> {
+    Ok(match received {
+        Received::Message(ServerMessage::Frame(bytes)) => Next::Show(bytes),
+        Received::Message(ServerMessage::Rejected(reason)) => return Err(Error::Rejected(reason)),
+        Received::Invalid => return Err(Error::Rejected(INCOMPATIBLE.into())),
+        Received::Message(ServerMessage::Restart(_)) | Received::Ended if reconnects => Next::Reconnect,
+        Received::Message(ServerMessage::Restart(_)) => Next::End(Ending::Restart),
+        Received::Message(ServerMessage::Response(_)) => Next::Nothing,
+        Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
+            Next::End(Ending::Detached)
+        }
+    })
+}
+
+fn backoff(failures: u32) -> Duration {
+    SECOND.saturating_mul(1 << failures.saturating_sub(1).min(4)).min(MAX_BACKOFF)
+}
+
+fn until_next_second(left: Duration) -> Duration {
+    match left.subsec_nanos() {
+        0 => left.min(SECOND),
+        nanos => Duration::from_nanos(nanos.into()),
+    }
+}
+
+fn seconds(left: Duration) -> u64 {
+    u64::try_from(left.as_millis().div_ceil(1000)).unwrap_or(u64::MAX)
+}
+
+struct Lost {
+    failures: u32,
+    retry_at: Option<Instant>,
+    error: Option<String>,
+    stderr: Option<Stderr>,
+    hovered: bool,
+}
+
+struct Window<'a> {
+    terminal: &'a mut DefaultTerminal,
+    target: &'a Target,
+    tx: Sender<Incoming>,
+    theme: HostTheme,
+    notify: Channel,
+    generation: u64,
+    out: Option<Sender<ClientMessage>>,
+    guard: Option<Guard>,
+    lost: Option<Lost>,
+}
+
+impl Window<'_> {
+    fn link(&mut self, link: Link) -> Result<()> {
+        self.generation += 1;
+        let Link { reader, writer, guard } = link;
+        let size = self.terminal.size()?;
+        let out = spawn_writer(writer);
+        let (version, build) = (protocol::VERSION, protocol::build_id());
+        let (theme, notify) = (self.theme.clone(), self.notify);
+        let hello = Hello { version, build, cols: size.width, rows: size.height, theme, notify };
+        let _ = out.send(ClientMessage::Hello(Box::new(hello)));
+        spawn_reader(self.generation, reader, self.tx.clone());
+        self.out = Some(out);
+        self.guard = Some(guard);
+        self.lost = None;
+        Ok(())
+    }
+
+    fn wait(&self, now: Instant) -> Duration {
+        match self.lost.as_ref().and_then(|lost| lost.retry_at) {
+            Some(at) => until_next_second(at.saturating_duration_since(now)),
+            None => Duration::MAX,
+        }
+    }
+
+    fn handle(&mut self, incoming: Incoming) -> Result<Option<Ending>> {
+        match incoming {
+            Incoming::Signal => Ok(Some(Ending::Detached)),
+            Incoming::Input(ev) => self.input(ev),
+            Incoming::Server(generation, received) if generation == self.generation => {
+                match next(received, self.target.reconnects())? {
+                    Next::Show(bytes) => {
+                        let mut out = stdout();
+                        out.write_all(&bytes)?;
+                        out.flush()?;
+                    }
+                    Next::End(ending) => return Ok(Some(ending)),
+                    Next::Reconnect => self.lose()?,
+                    Next::Nothing => {}
+                }
+                Ok(None)
+            }
+            Incoming::Linked(generation, linked) if generation == self.generation => {
+                match linked {
+                    Ok(link) => self.link(link)?,
+                    Err(e) if remote::fatal(&e) => return Err(e),
+                    Err(e) => self.failed(&e)?,
+                }
+                Ok(None)
+            }
+            Incoming::Server(..) | Incoming::Linked(..) => Ok(None),
+        }
+    }
+
+    fn input(&mut self, ev: Event) -> Result<Option<Ending>> {
+        if let Some(out) = &self.out {
+            let _ = out.send(ClientMessage::Event(ev));
+            return Ok(None);
+        }
+        let screen = self.screen()?;
+        let Some(lost) = &mut self.lost else { return Ok(None) };
+        match ev {
+            Event::Key(key) if key.code == KeyCode::Esc && key.kind != KeyEventKind::Release => {
+                return Ok(Some(Ending::GaveUp));
+            }
+            Event::Mouse(mouse) => {
+                let on = notice::hits_quit(screen, Position::new(mouse.column, mouse.row));
+                if on && mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+                    return Ok(Some(Ending::GaveUp));
+                }
+                if on != lost.hovered {
+                    lost.hovered = on;
+                    self.show_notice()?;
+                }
+            }
+            Event::Resize(..) => {
+                self.terminal.clear()?;
+                self.show_notice()?;
+            }
+            _ => {}
+        }
+        Ok(None)
+    }
+
+    fn tick(&mut self, now: Instant) -> Result<()> {
+        let Some(lost) = &mut self.lost else { return Ok(()) };
+        if lost.retry_at.is_some_and(|at| at <= now) {
+            lost.retry_at = None;
+            let (target, tx, generation) = (self.target.clone(), self.tx.clone(), self.generation);
+            thread::spawn(move || {
+                let _ = tx.send(Incoming::Linked(generation, target.connect(true)));
+            });
+        }
+        self.show_notice()
+    }
+
+    fn lose(&mut self) -> Result<()> {
+        self.generation += 1;
+        self.out = None;
+        let stderr = self.guard.take().and_then(|mut guard| guard.stderr.take());
+        self.lost = Some(Lost { failures: 0, retry_at: Some(Instant::now()), error: None, stderr, hovered: false });
+        self.tick(Instant::now())
+    }
+
+    fn failed(&mut self, error: &Error) -> Result<()> {
+        let Some(lost) = &mut self.lost else { return Ok(()) };
+        lost.failures += 1;
+        lost.retry_at = Some(Instant::now() + backoff(lost.failures));
+        lost.error = Some(remote::reason(error));
+        self.show_notice()
+    }
+
+    fn screen(&self) -> Result<Rect> {
+        let size = self.terminal.size()?;
+        Ok(Rect::new(0, 0, size.width, size.height))
+    }
+
+    fn show_notice(&mut self) -> Result<()> {
+        let screen = self.screen()?;
+        let Some(lost) = &self.lost else { return Ok(()) };
+        let error = lost.error.clone().or_else(|| lost.stderr.as_ref().and_then(Stderr::last));
+        let retry_in = lost.retry_at.map(|at| seconds(at.saturating_duration_since(Instant::now())));
+        let shown = Notice { host: self.target.host(), retry_in, error: error.as_deref(), hovered: lost.hovered };
+        let mut buf = Buffer::empty(screen);
+        notice::draw(&mut buf, &self.theme, &shown);
+        let r = notice::area(screen);
+        let cells = buf.content.iter().enumerate().filter_map(|(i, cell)| {
+            let (x, y) = buf.pos_of(i);
+            r.contains(Position::new(x, y)).then_some((x, y, cell))
+        });
+        let backend = self.terminal.backend_mut();
+        backend.draw(cells)?;
+        backend.hide_cursor()?;
+        Backend::flush(backend)?;
+        Ok(())
+    }
+}
+
+fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal) -> Result<Ending> {
     let (theme, name) = query_host();
     let theme = HostTheme { truecolor: truecolor(), ..theme };
     let notify = notify::detect(name.as_deref(), |var| std::env::var(var).ok());
-    let size = terminal.size()?;
-    let mut writer = stream.try_clone()?;
-    let (version, build) = (protocol::VERSION, protocol::build_id());
-    let hello = Hello { version, build, cols: size.width, rows: size.height, theme, notify };
-    protocol::send(&mut writer, &ClientMessage::Hello(Box::new(hello)))?;
-    spawn_input_thread(writer);
-    spawn_signal_thread(stream.try_clone()?)?;
-    receive(stream)
-}
-
-fn receive(mut stream: UnixStream) -> Result<Ending> {
-    let mut out = stdout();
+    let (tx, rx) = mpsc::channel();
+    let mut window =
+        Window { terminal, target, tx: tx.clone(), theme, notify, generation: 0, out: None, guard: None, lost: None };
+    window.link(link)?;
+    let _threads = Threads::spawn(tx)?;
     loop {
-        match protocol::recv::<ServerMessage>(&mut stream) {
-            Ok(Some(ServerMessage::Frame(bytes))) => {
-                out.write_all(&bytes)?;
-                out.flush()?;
+        let ending = match rx.recv_timeout(window.wait(Instant::now())) {
+            Ok(incoming) => window.handle(incoming)?,
+            Err(RecvTimeoutError::Timeout) => {
+                window.tick(Instant::now())?;
+                None
             }
-            Ok(Some(ServerMessage::Rejected(reason))) => return Err(Error::Rejected(reason)),
-            Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(Error::Rejected(INCOMPATIBLE.into())),
-            Ok(Some(ServerMessage::Restart(_))) => return Ok(Ending::Restart),
-            Ok(Some(ServerMessage::Response(_))) => {}
-            Ok(Some(ServerMessage::Detached | ServerMessage::Shutdown) | None) | Err(_) => return Ok(Ending::Detached),
+            Err(RecvTimeoutError::Disconnected) => Some(Ending::Detached),
+        };
+        if let Some(ending) = ending {
+            return Ok(ending);
         }
     }
+}
+
+fn spawn_writer(mut writer: Box<dyn Write + Send>) -> Sender<ClientMessage> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for msg in rx {
+            if protocol::send(&mut writer, &msg).is_err() {
+                return;
+            }
+        }
+    });
+    tx
+}
+
+fn spawn_reader(generation: u64, mut reader: Box<dyn Read + Send>, tx: Sender<Incoming>) {
+    thread::spawn(move || {
+        loop {
+            let received = match protocol::recv::<ServerMessage>(&mut reader) {
+                Ok(Some(msg)) => Received::Message(msg),
+                Err(e) if e.kind() == io::ErrorKind::InvalidData => Received::Invalid,
+                Ok(None) | Err(_) => Received::Ended,
+            };
+            let last = !matches!(received, Received::Message(_));
+            if tx.send(Incoming::Server(generation, received)).is_err() || last {
+                return;
+            }
+        }
+    });
 }
 
 fn truecolor() -> bool {
@@ -360,24 +702,50 @@ fn query_host() -> (HostTheme, Option<String>) {
     (probe.finish(), name)
 }
 
-fn spawn_input_thread(mut writer: UnixStream) {
-    thread::spawn(move || {
-        while let Ok(ev) = event::read() {
-            if protocol::send(&mut writer, &ClientMessage::Event(ev)).is_err() {
-                return;
-            }
-        }
-    });
+struct Threads {
+    stop: Arc<AtomicBool>,
+    stopped: Receiver<()>,
+    signals: Handle,
 }
 
-fn spawn_signal_thread(stream: UnixStream) -> Result<()> {
-    let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT]).map_err(Error::Signals)?;
-    thread::spawn(move || {
-        if signals.forever().next().is_some() {
-            let _ = stream.shutdown(Shutdown::Both);
-        }
-    });
-    Ok(())
+impl Threads {
+    fn spawn(tx: Sender<Incoming>) -> Result<Self> {
+        let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT]).map_err(Error::Signals)?;
+        let handle = signals.handle();
+        let signalled = tx.clone();
+        thread::spawn(move || {
+            if signals.forever().next().is_some() {
+                let _ = signalled.send(Incoming::Signal);
+            }
+        });
+        let stop = Arc::new(AtomicBool::new(false));
+        let (done, stopped) = mpsc::channel();
+        let asked = Arc::clone(&stop);
+        thread::spawn(move || {
+            let _done = done;
+            while !asked.load(Ordering::Relaxed) {
+                match event::poll(INPUT_POLL) {
+                    Ok(false) => {}
+                    Ok(true) => {
+                        let Ok(ev) = event::read() else { return };
+                        if tx.send(Incoming::Input(ev)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(_) => return,
+                }
+            }
+        });
+        Ok(Self { stop, stopped, signals: handle })
+    }
+}
+
+impl Drop for Threads {
+    fn drop(&mut self) {
+        self.signals.close();
+        self.stop.store(true, Ordering::Relaxed);
+        let _ = self.stopped.recv_timeout(INPUT_POLL * 3);
+    }
 }
 
 #[cfg(test)]
@@ -389,12 +757,61 @@ mod tests {
     mod restart {
         use super::*;
 
-        #[test]
-        fn never_takes_the_path_the_server_sends() {
-            let (client, mut server) = UnixStream::pair().expect("a socket pair");
-            protocol::send(&mut server, &ServerMessage::Restart(PathBuf::from("/tmp/not-cornercase"))).expect("send");
+        fn restart() -> Received {
+            Received::Message(ServerMessage::Restart(PathBuf::from("/tmp/not-cornercase")))
+        }
 
-            assert!(matches!(receive(client), Ok(Ending::Restart)));
+        #[test]
+        fn starts_this_binary_again_and_never_the_path_the_server_sends() {
+            assert!(matches!(next(restart(), false), Ok(Next::End(Ending::Restart))));
+        }
+
+        #[test]
+        fn reconnects_to_a_remote_server() {
+            assert!(matches!(next(restart(), true), Ok(Next::Reconnect)));
+        }
+    }
+
+    mod connection {
+        use super::*;
+
+        #[test]
+        fn a_local_server_that_goes_away_ends_the_window() {
+            assert!(matches!(next(Received::Ended, false), Ok(Next::End(Ending::Detached))));
+        }
+
+        #[test]
+        fn a_remote_one_is_reconnected() {
+            assert!(matches!(next(Received::Ended, true), Ok(Next::Reconnect)));
+        }
+
+        #[test]
+        fn quit_ends_a_remote_window_too() {
+            assert!(matches!(next(Received::Message(ServerMessage::Detached), true), Ok(Next::End(Ending::Detached))));
+        }
+
+        #[test]
+        fn a_rejection_is_never_retried() {
+            assert!(next(Received::Message(ServerMessage::Rejected("no".into())), true).is_err());
+        }
+    }
+
+    mod reconnecting {
+        use super::*;
+
+        #[test]
+        fn waits_longer_after_each_failure_up_to_a_limit() {
+            let waits: Vec<u64> = (1..=7).map(|n| backoff(n).as_secs()).collect();
+
+            assert_eq!(waits, [1, 2, 4, 8, 15, 15, 15]);
+        }
+
+        #[test]
+        fn counts_down_in_whole_seconds() {
+            assert_eq!(seconds(Duration::from_millis(3400)), 4);
+            assert_eq!(seconds(Duration::ZERO), 0);
+            assert_eq!(until_next_second(Duration::from_millis(3400)), Duration::from_millis(400));
+            assert_eq!(until_next_second(Duration::from_secs(3)), SECOND);
         }
     }
 }

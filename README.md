@@ -27,6 +27,7 @@ A terminal multiplexer for working on several projects at once, each with its ow
 - **[Search](https://usecornercase.dev/docs/guides/search/).** Jump to any group, project, workspace or tab by name.
 - **[Scripts and agents](https://usecornercase.dev/docs/guides/scripts-and-agents/).** The `cornercase` command opens tabs and worktrees, starts agents, types into panes, waits for them and reads what they wrote, so one agent can coordinate others.
 - **[Sessions survive the UI](https://usecornercase.dev/docs/guides/sessions/).** A background server owns the shells: closing the window detaches, `cornercase` reattaches, and several terminals can mirror each other.
+- **[Remote machines](https://usecornercase.dev/docs/guides/remote/).** `cornercase remote <host>` keeps the window on your laptop and the shells and agents on another machine, over your own `ssh`, and reconnects by itself when the connection drops.
 - **A real terminal inside.** Panes run on [libghostty-vt](https://github.com/ghostty-org/ghostty), Ghostty's terminal core, so nvim, fzf, htop and full-screen agents work as expected.
 - **[Small terminals](https://usecornercase.dev/docs/guides/small-terminals/).** Below 90 columns the sidebar folds into a menu bar.
 

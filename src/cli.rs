@@ -9,6 +9,7 @@ use crate::client::{answer, ask};
 use crate::control::{self, Done, Item, ProjectInfo, Report, TodoList, Until};
 use crate::error::{Error, Result};
 use crate::keys;
+use crate::remote::{self, Remote};
 use crate::{client, restart, server, ui};
 
 pub const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
@@ -120,6 +121,16 @@ const TODO_HELP: &str = "Examples:
 const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
+const REMOTE_HELP: &str = "cornercase runs `ssh DESTINATION cornercase proxy`, so your ssh config, keys, agent and
+ProxyJump apply, and starts the server there if none is running. The shells, agents and files stay
+on that machine; this one only shows them, and copies and notifications go through this terminal.
+If the connection drops, the window stays and reconnects by itself; Esc or quit gives up. Both
+machines need the same version of cornercase. Reconnecting never asks for a password, so use a
+key or an agent.
+
+Examples:
+  cornercase remote devbox
+  cornercase remote me@10.0.0.5 --command '~/bin/cornercase'";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
 
@@ -134,6 +145,11 @@ pub struct Cli {
 pub enum Command {
     #[command(flatten)]
     Control(Control),
+    #[command(
+        about = "Open the window on the cornercase server of another machine, over ssh",
+        after_help = REMOTE_HELP
+    )]
+    Remote(RemoteArgs),
     #[command(about = "Print the instructions that teach coding agents these commands", after_help = SKILL_HELP)]
     Skill,
     #[command(about = "Install the latest release, then offer to restart the server")]
@@ -142,6 +158,8 @@ pub enum Command {
     KillServer,
     #[command(hide = true)]
     Server,
+    #[command(hide = true)]
+    Proxy,
 }
 
 #[derive(Debug, Subcommand)]
@@ -473,6 +491,19 @@ pub enum TodoAction {
 }
 
 #[derive(Debug, Args)]
+pub struct RemoteArgs {
+    #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
+    pub destination: String,
+    #[arg(
+        long,
+        value_name = "COMMAND",
+        help = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
+                ~/.local/bin, ~/.cargo/bin and Homebrew's folders]"
+    )]
+    pub command: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct UpdateArgs {
     #[arg(long, help = "Only say whether a newer version is out")]
     pub check: bool,
@@ -502,6 +533,7 @@ pub fn run(cli: Cli) -> Result<bool> {
     };
     match command {
         Command::Control(control) => run_control(control)?,
+        Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return client::update(update.check, update.yes),
         Command::KillServer => {
@@ -513,6 +545,7 @@ pub fn run(cli: Cli) -> Result<bool> {
             }
         }
         Command::Server => server::run()?,
+        Command::Proxy => remote::proxy()?,
     }
     Ok(true)
 }

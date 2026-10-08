@@ -56,7 +56,8 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 src/main.rs       hands argv to cli.rs (uses anyhow)
 src/cli.rs        clap definitions of every command; the commands for scripts and agents send a request and print the answer
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
-src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames; `kill-server` and `update`
+src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; `kill-server` and `update`
+src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client
 src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
 src/state.rs      the saved session as JSON, migrations, and the Saver that writes it (or todos.json) once it settles
@@ -90,7 +91,7 @@ src/split.rs      a tab's split tree: rects, dividers, splitting, removing, rati
 src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
-src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel
+src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice
 src/keys.rs       KeyEvent -> bytes (Ghostty's encoder for special keys, legacy encoder for the rest)
 src/mouse.rs      MouseEvent -> bytes in the protocol the program asked for
 src/host_theme.rs asks the outer terminal for its colours and its name (XTVERSION)
@@ -111,6 +112,7 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 - App tests `click` with a press and a release (rows act on release); drags start with `press`.
 - `term.rs` / `app.rs` tests spawn real `/bin/sh` PTYs (never the user's shell) and wait with `test_util::wait_until`, never sleeps. `/bin/sh` is `bash` on macOS, so tests check its name with `test_util::is_sh`. `TempDir` paths are canonical, because macOS' temp dir is behind a symlink (`/var` → `/private/var`).
 - Helpers: `test_util::TempDir`, `git_repo`, `fake_gh`, `FakeHttp` (canned HTTP), `write_executable` (through a `/bin/sh` child to avoid `ETXTBSY`), `Family` (`sh` running `sh` running `sleep`, for process trees). Nothing calls real `gh`, Shortcut, Linear or Jira. App tests clear `App::env_tokens` and never use the real config.
+- `cornercase remote` is tested with a fake `ssh` first on the `PATH` (`fake_ssh` in `tests/e2e.rs`): it skips the options and the destination and `exec`s the command locally, so the proxy reaches the test's own socket and keeps the fake's pid (killing it drops the connection; without `exec`, a `sh -c` left between them would keep the pipe open).
 - Agents are faked with a script (`FAKE_AGENT`) that asks a trust question and echoes what it reads.
 - Agent status is faked with a script named `claude` that writes its own `sessions/$$.json` (and, for the context line, a transcript under `projects/`); app tests point `App::claude_dir` at a temp dir, and e2e sets `CLAUDE_CONFIG_DIR` per `Session`, so nothing reads the real `~/.claude`. Codex's is `FakeCodex`: its rollout gets the turn fixtures appended, and its script sets the title it finds in a `title` signal file (OSC 0). `app::tests::agent_status::Watched` drives either agent with the same steps, so the notification tests run for both. Tests that read a process's environment spawn `/bin/sleep` with a cleared one and wait until its arguments are `sleep`'s (before `exec`, `/proc` shows the parent's).
 - The usage probes are faked with `claude` and `codex` scripts that read the requests and answer, set through `agent_commands`; app tests point the agent they do not fake at `/nonexistent/<kind>`, so no test runs the real `claude` or `codex` (both may be on the `PATH`).

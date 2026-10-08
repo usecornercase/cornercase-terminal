@@ -65,7 +65,7 @@ It is also much lighter: it opens in 34 ms and uses about 50 MB, where the deskt
 
 ### Does it work over SSH?
 
-Yes. Run `cornercase` on the remote machine: the server lives there, your shells keep running when the connection drops, and you reattach when you log in again. Copying uses OSC 52, so the text lands in your local clipboard.
+Yes, two ways. Run `cornercase` on the remote machine: the server lives there, your shells keep running when the connection drops, and you reattach when you log in again. Or run `cornercase remote <host>` on your laptop: the window stays on your laptop, the shells and agents on the other machine, and when the connection drops the window waits and reconnects by itself (see [Remote machines](../../guides/remote/)). Either way, copying uses OSC 52, so the text lands in your local clipboard.
 
 ### Do my shells survive a reboot?
 

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod changes;
 pub mod files;
+pub mod remote;
 pub mod todo;
 
 use crate::activity::{self, Status};

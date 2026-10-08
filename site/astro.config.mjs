@@ -65,6 +65,7 @@ export default defineConfig({
             { label: 'Scripts and agents', slug: 'docs/guides/scripts-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },
+            { label: 'Remote machines', slug: 'docs/guides/remote' },
             { label: 'Small terminals', slug: 'docs/guides/small-terminals' },
           ],
         },

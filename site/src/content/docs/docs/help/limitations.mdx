@@ -13,6 +13,7 @@ cornercase is young. These are the gaps you may run into today.
 | **Shells don't survive the server** | After `cornercase kill-server`, a reboot or a restart after an update, the layout comes back but every pane starts a new shell: running programs and their output are gone. |
 | **Terminal colours are read once** | The server asks your terminal for its colours when it starts. If you switch theme, restart it with `cornercase kill-server` to see the new colours. |
 | **No key releases** | Programs inside cornercase only see key presses, never releases, even with the kitty keyboard protocol. |
+| **One machine per window** | [`cornercase remote`](../../guides/remote/) shows the server of one machine; projects of several machines don't share a sidebar. Open a window for each. |
 | **One size for all clients** | When several terminals are attached, all of them use the size of the one you used last. The others show the session cut off or with empty space around it. |
 | **100 issues per source** | The issue browser lists up to 100 issues from each tracker. Use the filters to narrow the list down. |
 | **Agent status for Claude Code and Codex only** | Tabs show what Claude Code and Codex are doing and notify you when they need you or finish; other agents don't get an icon or a notification yet. Codex's `!` comes from its terminal title, so it is lost if you take the activity out of that title. Claude Code and Codex both show model/context lines. Agents have to run locally in the pane: through `ssh` or inside a container, cornercase can't see them. |
@@ -27,4 +28,4 @@ cornercase is young. These are the gaps you may run into today.
 | --- | --- |
 | **Linux and macOS only** | cornercase relies on Unix pseudo-terminals, Unix sockets and each system's process information. |
 | **No keyboard shortcuts** | Every key belongs to the program in the active pane. See the [FAQ](../faq/#why-is-everything-a-mouse-click). |
-| **No nesting** | Running `cornercase` inside one of its own panes is refused, because the inner one would fight the outer one for the mouse and the screen. The [commands for scripts and agents](../../guides/scripts-and-agents/) work there. |
+| **No nesting** | Running `cornercase` inside one of its own panes is refused, because the inner one would fight the outer one for the mouse and the screen. The [commands for scripts and agents](../../guides/scripts-and-agents/) work there, and so does [`cornercase remote`](../../guides/remote/), which shows another machine's server. |

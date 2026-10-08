@@ -9,6 +9,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 
 ```sh
 cornercase              # open the UI, starting the server if needed
+cornercase remote HOST  # open the UI on the server of another machine, over ssh
 cornercase update       # install the latest release and restart the server
 cornercase kill-server  # stop the server and every shell in it
 cornercase --version    # print the version
@@ -37,6 +38,17 @@ Restart it now? [y/N]
 ```
 
 The list comes from the old server itself, so you see what it is running before you answer. A server too old to say, or one that doesn't answer within a second, gets a general warning instead. Answer `y` to stop the old server and start one on the new binary: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. Any other answer leaves the old server running and exits with the [message](#messages) below. When the input isn't a terminal, as in a script, it doesn't ask.
+
+### `cornercase remote`
+
+Opens the window on the server of another machine, through your own `ssh`:
+
+```sh
+cornercase remote devbox                                  # a host from ~/.ssh/config, or user@host
+cornercase remote devbox --command '~/tools/cornercase'   # where cornercase is on that machine
+```
+
+It runs `ssh devbox cornercase proxy`, which starts the server there if none is running. If the connection drops, the window stays, says `reconnecting to devbox…` and tries again by itself; `Esc` or its ` quit ` gives up. Both machines need the same version: when they differ it says which one to update, and offers to update the other machine through `ssh` when that one is older. [Remote machines](../../guides/remote/) explains it all.
 
 ### `cornercase update`
 
@@ -79,9 +91,9 @@ Stops the server: every shell and program in every pane ends, and every attached
 
 Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the server.
 
-### `cornercase server`
+### `cornercase server` and `cornercase proxy`
 
-Runs the server itself. You don't need it: `cornercase` starts it in the background for you, with its output going to `server.log` next to the socket. It is listed here so you recognise it in your process list.
+`cornercase proxy` is what [`cornercase remote`](#cornercase-remote) runs on the other machine; it passes the window's messages to the server there. `cornercase server` runs the server itself. You don't need either: `cornercase remote` runs the proxy, and `cornercase` starts it in the background for you, with its output going to `server.log` next to the socket. It is listed here so you recognise it in your process list.
 
 ## The socket
 
@@ -102,6 +114,10 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | `failed to start the cornercase server; see <log>` | The server didn't come up within a few seconds. The log next to the socket says why. |
 | `a cornercase server is already running on <socket>` | Printed by `cornercase server` when another server holds the socket's lock. |
 | ``this is a development build; `cornercase update` only updates released builds`` | You ran `update` from a build made with `cargo run`. Pull and build again instead. |
+| ``could not reach cornercase on `<host>`: …`` | `cornercase remote` couldn't connect; the end of the line is what `ssh` said. |
+| ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command`. |
+| ``the cornercase on `<host>` is too old to attach to from another machine …`` | The other machine's cornercase predates `cornercase remote`. Update it there. |
+| ``` `<host>` runs cornercase <version> and this machine <version> … ``` | The two machines run different versions; the message says which one to update. |
 | `error: unrecognized subcommand '…'` | There is no such command; `cornercase --help` lists them. |
 | `error: unexpected argument '…' found` | The command has no such option; `cornercase COMMAND --help` lists its options. |
 
