@@ -1,7 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, IsTerminal, Write, stdin, stdout};
 use std::net::Shutdown;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -303,6 +303,7 @@ fn start_server(log: &Path) -> io::Result<Child> {
         fs::create_dir_all(dir)?;
     }
     let log = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log)?;
+    log.set_permissions(fs::Permissions::from_mode(log::PRIVATE))?;
     Command::new(std::env::current_exe()?)
         .arg("server")
         .stdin(Stdio::null())
