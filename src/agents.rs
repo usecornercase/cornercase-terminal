@@ -8,6 +8,7 @@ use crate::state::AgentState;
 pub const AUTO: &str = "auto";
 pub const CLAUDE: &str = "claude";
 pub const CODEX: &str = "codex";
+pub const OPENCODE: &str = "opencode";
 pub const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
@@ -15,7 +16,7 @@ const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
     ("gemini", "gemini"),
-    ("opencode", "opencode"),
+    (OPENCODE, "opencode"),
     ("cursor", "cursor-agent"),
     ("copilot", "copilot"),
     ("amp", "amp"),

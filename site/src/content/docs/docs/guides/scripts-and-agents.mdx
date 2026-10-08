@@ -64,7 +64,7 @@ cornercase status          # the tree above
 cornercase status --json   # the same, as JSON
 ```
 
-Each pane shows its program and folder. A pane running Claude Code or Codex also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
 
 ### Create
 
@@ -136,7 +136,7 @@ cornercase wait --pane 7 --quiet 5                             # until it writes
 | `--text REGEX` | a line on the screen matches, one already there included | the line |
 | `--quiet SECONDS` | the pane wrote nothing for that long | `quiet` |
 
-- The agent conditions need Claude Code or Codex in the pane, the agents whose state cornercase [knows](../projects-workspaces-tabs/#what-your-agents-are-doing). On any other pane, or with another agent, wait for `shell`, a line or quiet instead.
+- The agent conditions need Claude Code, Codex or opencode in the pane, the agents whose state cornercase [knows](../projects-workspaces-tabs/#what-your-agents-are-doing). On any other pane, or with another agent, wait for `shell`, a line or quiet instead.
 - After a prompt reached the agent (through `start`, `send --enter` or `keys … enter`), a wait for it to stop first gives the agent up to 10 seconds to take the prompt, so it doesn't end at once on an agent that hasn't started yet. If the agent shows no change in that time, the wait fails: it may have finished at once, or never got the text, and `read` tells which. If the agent was already working when the text arrived, the wait ends when it next stops.
 - Waits run in the server and don't slow it down. They end with their condition, their `--timeout` (none by default) or when you interrupt the command. A timeout exits with status 1 and says what the pane was doing. It doesn't prove that the agent missed what you sent: read the pane before sending it again.
 

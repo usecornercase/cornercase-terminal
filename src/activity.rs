@@ -188,6 +188,10 @@ pub fn codex(title: &str, turn: bool) -> Activity {
     }
 }
 
+pub fn opencode(turn: bool) -> Activity {
+    if turn { Activity::Working } else { Activity::Idle }
+}
+
 fn glyph(title: &str) -> Option<char> {
     let mut chars = title.chars();
     let glyph = chars.next()?;

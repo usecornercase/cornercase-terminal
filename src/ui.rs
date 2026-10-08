@@ -6421,17 +6421,29 @@ mod tests {
             insta::assert_snapshot!(render(&with_details(opus(17))).backend());
         }
 
-        fn codex(model: &str, percent: Option<u16>) -> View<'static> {
+        fn agent(name: &str, model: &str, percent: Option<u16>) -> View<'static> {
             let mut view = with_details(Details { model: Some(model.into()), percent, memory: None });
             let tab = &mut view.workspaces[0].tabs[0];
-            tab.name = "codex".into();
+            tab.name = name.into();
             tab.status = None;
             view
+        }
+
+        fn codex(model: &str, percent: Option<u16>) -> View<'static> {
+            agent("codex", model, percent)
         }
 
         #[test]
         fn renders_codex_context_in_the_wide_layout() {
             insta::assert_snapshot!(render(&codex("gpt-5.4", Some(20))).backend());
+        }
+
+        #[test]
+        fn renders_opencode_working_with_its_model_and_context() {
+            let mut view = agent("opencode", "DeepSeek V4 Pro", Some(12));
+            view.workspaces[0].tabs[0].status = Some(Status::Working);
+
+            insta::assert_snapshot!(render(&view).backend());
         }
 
         #[test]

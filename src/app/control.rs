@@ -515,7 +515,7 @@ impl App {
             return Ok(());
         }
         match agents::detect(&self.config, &term.foreground_args()) {
-            Some(agent) if agent == agents::CLAUDE || agent == agents::CODEX => Ok(()),
+            Some(agent) if [agents::CLAUDE, agents::CODEX, agents::OPENCODE].contains(&agent.as_str()) => Ok(()),
             other => Err(other),
         }
     }
@@ -967,7 +967,9 @@ impl App {
         {
             let runs = agent.map_or_else(
                 || "runs no agent".to_string(),
-                |agent| format!("runs {agent}, and cornercase only knows what Claude Code and Codex are doing"),
+                |agent| {
+                    format!("runs {agent}, and cornercase only knows what Claude Code, Codex and opencode are doing")
+                },
             );
             return Err(format!(
                 "pane {pane} {runs}, so there is nothing to wait for; wait with --until shell, --text or --quiet instead"

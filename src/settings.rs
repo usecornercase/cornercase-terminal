@@ -120,7 +120,7 @@ impl Detail {
 
     fn note(self) -> &'static str {
         match self {
-            Self::Model => "under a Claude Code or Codex tab, such as Opus 5.5",
+            Self::Model => "under an agent's tab, such as Opus 5.5",
             Self::Context => "how full its context is, such as 23%",
             Self::Memory => "the RAM its processes use, such as 1.2 GB",
         }

@@ -1,0 +1,2 @@
+{"role":"user","model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"},"agent":"build","time":{"created":1791471862914}}
+{"role":"assistant","parentID":"msg_user","mode":"compaction","agent":"compaction","summary":true,"path":{"cwd":"/tmp/project","root":"/tmp/project"},"cost":0.00165462,"tokens":{"total":1723,"input":1331,"output":140,"reasoning":252,"cache":{"write":0,"read":0}},"modelID":"deepseek-v4-pro","providerID":"deepseek","time":{"created":1791471868975,"completed":1791471875307},"finish":"stop"}

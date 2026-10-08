@@ -12,6 +12,7 @@ use crate::activity::Claude;
 use crate::process;
 
 mod codex;
+mod opencode;
 
 const TAIL: u64 = 1024 * 1024;
 const DIR_NAME_MAX: usize = 200;
@@ -40,6 +41,9 @@ pub struct Pane {
     codex: Option<codex::Rollout>,
     agent: Option<(i32, SystemTime)>,
     finding: Option<Receiver<Option<PathBuf>>>,
+    opencode: Option<opencode::Session>,
+    looking: Option<Receiver<(Option<opencode::Session>, opencode::Models)>>,
+    models: opencode::Models,
 }
 
 impl Pane {
@@ -71,6 +75,33 @@ impl Pane {
         }
     }
 
+    pub fn update_opencode(&mut self, pid: i32) {
+        if self.agent.is_none_or(|(seen, _)| seen != pid) {
+            *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
+        }
+        match self.looking.as_ref().map(Receiver::try_recv) {
+            Some(Ok((found, models))) => {
+                self.looking = None;
+                self.models = models;
+                self.shown = found.as_ref().and_then(|session| session.context.clone());
+                self.opencode = found;
+            }
+            Some(Err(TryRecvError::Disconnected)) => self.looking = None,
+            Some(Err(TryRecvError::Empty)) | None => {}
+        }
+        if self.looking.is_none()
+            && let Some((pid, since)) = self.agent
+        {
+            let mut models = std::mem::take(&mut self.models);
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let found = opencode::look(pid, since, &mut models);
+                tx.send((found, models)).ok();
+            });
+            self.looking = Some(rx);
+        }
+    }
+
     pub fn update(&mut self, dir: Option<&Path>, claude: Option<&Claude>) {
         let found = dir.zip(claude).and_then(|(dir, claude)| {
             let session = claude.session.as_ref()?;
@@ -98,6 +129,10 @@ impl Pane {
 
     pub fn codex_turn(&self) -> bool {
         self.codex.as_ref().is_some_and(codex::Rollout::turn)
+    }
+
+    pub fn opencode_turn(&self) -> bool {
+        self.opencode.as_ref().is_some_and(|session| session.turn)
     }
 
     pub fn conversation(&self) -> Option<&str> {

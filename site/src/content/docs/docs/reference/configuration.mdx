@@ -75,19 +75,19 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 <Screen
   name="settings-ui"
   crop={[2, 1, 106, 13]}
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under a Claude Code or Codex tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under an agent's tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
 />
 
 | Row | What it sets |
 | --- | --- |
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
-| **agents section** | List every Claude Code and Codex, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **agents section** | List every Claude Code, Codex and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a folded group holds. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **model** | Show the model of a Claude Code or Codex tab on a second line under its name, such as `Opus 5.5`. |
+| **model** | Show the model of a Claude Code, Codex or opencode tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
-| **memory** | Show how much memory a Claude Code or Codex tab uses at the end of that line, such as `1.2 GB`. Off by default. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses). |
+| **memory** | Show how much memory a Claude Code, Codex or opencode tab uses at the end of that line, such as `1.2 GB`. Off by default. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 
@@ -256,7 +256,7 @@ Where a workspace's tabs are listed: `"sidebar"` under their workspace, in the w
 
 #### `agents_section`
 
-Whether the sidebar ends with a list of every Claude Code and Codex running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+Whether the sidebar ends with a list of every Claude Code, Codex and opencode running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
 
 #### `counts`
 
@@ -268,7 +268,7 @@ Whether panes you aren't typing in are dimmed, in tabs split into several panes.
 
 #### `model`
 
-Whether a Claude Code or Codex tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
+Whether a Claude Code, Codex or opencode tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
 
 #### `context`
 
@@ -276,7 +276,7 @@ Whether that line shows how full the agent's context is, such as `23%`, after th
 
 #### `memory`
 
-Whether a Claude Code or Codex tab shows how much memory its processes use at the end of its second line, such as `Opus 5.5 · 23% · 1.2 GB`, or `1.2 GB` alone with `model` and `context` off. While it is `true`, the agents of the project on screen are measured every 2 seconds; in the [tree](../../guides/projects-workspaces-tabs/#the-tree), those of every open workspace. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses).
+Whether a Claude Code, Codex or opencode tab shows how much memory its processes use at the end of its second line, such as `Opus 5.5 · 23% · 1.2 GB`, or `1.2 GB` alone with `model` and `context` off. While it is `true`, the agents of the project on screen are measured every 2 seconds; in the [tree](../../guides/projects-workspaces-tabs/#the-tree), those of every open workspace. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses).
 
 #### `desktop_notifications`
 

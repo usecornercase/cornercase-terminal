@@ -119,12 +119,12 @@ The shell is the one in your `SHELL` environment variable when the server starte
 
 ### What your agents are doing
 
-When Claude Code or Codex runs in a tab, an icon before the tab's name tells you what it is doing:
+When Claude Code, Codex or opencode runs in a tab, an icon before the tab's name tells you what it is doing:
 
 | Icon | Means |
 | --- | --- |
 | `◐` yellow | The agent is working. For Claude, also while it waits for a command it started in the background (a build, a test run). |
-| `!` orange | The agent needs you: it asks for permission or asks you a question. |
+| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code and Codex only. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
@@ -134,12 +134,13 @@ cornercase reads what each agent reports about itself. Nothing is installed and 
 
 - **Claude Code**: the small file it keeps for each running session in `~/.claude/sessions` (or in `$CLAUDE_CONFIG_DIR/sessions`), the same one `claude agents --json` reads. Without that file, for example with an older Claude Code, cornercase falls back to the title Claude gives the terminal, which only tells working from idle.
 - **Codex**: the title Codex gives the terminal, which starts with a spinner while it works and with `[ ! ] Action Required` while it waits for an approval, and the session's rollout file (the one behind the [context line](#how-full-the-context-is)), which records when each turn starts and ends. If you take the activity out of Codex's terminal title (its `/title` setting), the tab still shows working and finished, but not `!`. Verified against Codex CLI 0.160.0.
+- **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows `◐` and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
 
 Other agents don't get an icon yet.
 
 ### How full the context is
 
-Claude Code and Codex tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
+Claude Code, Codex and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -154,6 +155,10 @@ cornercase follows the rollout file held open by the Codex process in each pane,
 
 After a model change or compaction, Codex's old percentage disappears until fresh usage is recorded. If the window size or current usage is unavailable, only the model appears. A new session, process exit, missing rollout, or an ambiguous association clears the line. On Linux cornercase reads `/proc`; on macOS it uses the system `/usr/sbin/lsof` and process metadata. If access to these is unavailable, or Codex runs remotely or in a container, the line is omitted.
 
+**opencode** shows the same numbers as the bottom of its own screen: the model's name, such as `DeepSeek V4 Pro · 12%`, and the tokens of its last answer (input, output, reasoning and cache) divided by the model's context window. The names and windows come from the list of models opencode keeps in `~/.cache/opencode/models.json`; a model it doesn't list, such as one from a provider you added yourself, shows its id without a percentage. After switching models, the new one shows without a percentage until it answers; after `/compact`, the percentage is the summary's, as in opencode.
+
+opencode saves every session of every opencode you run in one database, without saying which process each belongs to, so cornercase picks the session by folder: the one in the folder where that opencode runs, used since it started. The line appears after your first message, and follows `/new` once you send something there. With two opencode in the same folder, neither shows a line until one exits. The database is the one the running opencode has open (also with `OPENCODE_DB` or `XDG_DATA_HOME` set), read without changing it.
+
 Once Claude has answered, a second line under the tab's name shows its model and how much of its context window the conversation takes up, such as `Opus 5.5 · 23%`: the percentage Claude Code gives its own status line. It turns orange from 75% and red from 90%. After `/compact` or `/clear` the line goes away until Claude's next answer. In the [compact layout](../small-terminals/) it sits at the bottom of the tab's row.
 
 The numbers come from the end of the conversation's transcript, which Claude Code keeps in `~/.claude/projects` (or in `$CLAUDE_CONFIG_DIR/projects`): the model of the last answer and how many tokens it was sent. The size of the window isn't written anywhere, so cornercase works it out the way Claude Code does:
@@ -167,13 +172,13 @@ The variables are read from the running `claude` and from the `env` of its setti
 
 ### How much memory an agent uses
 
-Turn on **settings → UI → memory** and Claude Code and Codex tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
+Turn on **settings → UI → memory** and Claude Code, Codex and opencode tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
 
 It is the memory held by everything running in the tab's agent panes: the shell, the agent and whatever the agent started, such as MCP servers, language servers and background commands. Each process counts only what it keeps on its own (on macOS, the figure Activity Monitor shows in its Memory column; on Linux, its private memory, including what was swapped out), so code that several processes share, such as the agent's own program, is not counted again for each of them, and the total is close to what the agent costs you. It is measured every 2 seconds, only for the project on screen (in the [tree](#the-tree), for every workspace you have open) and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
 
 ### Notifications
 
-When Claude Code or Codex asks you something or finishes in a tab you aren't looking at, cornercase also tells you:
+When an agent asks you something or finishes in a tab you aren't looking at, cornercase also tells you (opencode only when it finishes):
 
 - a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in shop › main` or `✓ codex finished in shop › main`;
 - your terminal shows a **desktop notification**, so you find out while you are in another window.
@@ -193,7 +198,7 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 
 ### Plan usage
 
-Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column:
+Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, each billed on its own, and has no plan to ask about.
 
 <Screen
   name="usage"
@@ -322,7 +327,7 @@ Below 90 columns the [compact layout](../small-terminals/) lists the tabs in its
 
 ### The agents section
 
-Turn on **settings → UI → agents section** to list every Claude Code and Codex running in any project at the bottom of the sidebar, one row per agent:
+Turn on **settings → UI → agents section** to list every Claude Code, Codex and opencode running in any project at the bottom of the sidebar, one row per agent:
 
 <Screen
   name="sidebar-agents"
@@ -331,14 +336,14 @@ Turn on **settings → UI → agents section** to list every Claude Code and Cod
   caption="Every agent in one list: click one to jump to it."
 />
 
-- Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude` or `codex`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
+- Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude`, `codex` or `opencode`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
 - **Click a row** to jump to that agent: its project, workspace and tab open and its pane gets the focus, even in a split tab, whatever project you were in. In the [tree](#the-tree) the way to it unfolds.
 - The agent on screen is marked with the cyan bar `▌`.
 - Rows keep the order of the sidebar, so they don't move under your pointer; the icon tells you which one waits. When no agent runs, the section says *no agents running* instead of disappearing.
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.
 - In a narrow sidebar the model goes first, then the workspace; the icon and the project stay.
 
-It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code and Codex are listed, since other agents don't report what they are doing.
+It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex and opencode are listed, since other agents don't report what they are doing.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

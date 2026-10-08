@@ -1,0 +1,2 @@
+{"role":"user","time":{"created":1791471838344},"agent":"build","model":{"providerID":"deepseek","modelID":"deepseek-v4-pro","variant":"high"}}
+{"parentID":"msg_user","role":"assistant","mode":"build","agent":"build","variant":"high","path":{"cwd":"/tmp/project","root":"/tmp/project"},"cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"modelID":"deepseek-v4-pro","providerID":"deepseek","time":{"created":1791471838390,"completed":1791471841755},"error":{"name":"MessageAbortedError","data":{"message":"Aborted"}}}

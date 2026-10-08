@@ -197,7 +197,7 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
 
 const WATCHED = ['claude', 'codex'];
 const DETAILS = [
-  ['model', 'under a Claude Code or Codex tab, such as Opus 5.5'],
+  ['model', "under an agent's tab, such as Opus 5.5"],
   ['context', 'how full its context is, such as 23%'],
   ['memory', 'the RAM its processes use, such as 1.2 GB'],
 ] as const;

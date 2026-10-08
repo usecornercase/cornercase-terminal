@@ -493,6 +493,11 @@ fn agent_in(
             remember(config, term, Some((&agent, &args)), now);
             Some((agent, activity::codex(&term.emulator.title(), term.context.codex_turn())))
         }
+        (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
+            term.context.update_opencode(pid);
+            remember(config, term, Some((&agent, &args)), now);
+            Some((agent, activity::opencode(term.context.opencode_turn())))
+        }
         _ => {
             term.context.update(dir, None);
             remember(config, term, None, now);
@@ -7448,7 +7453,7 @@ mod tests {
 
         use super::*;
         use crate::activity::Status;
-        use crate::test_util::{FakeCodex, write_executable};
+        use crate::test_util::{FakeCodex, FakeOpencode, write_executable};
 
         const FAKE_CLAUDE: &str = r#"#!/bin/sh
 s="$1/sessions/$$.json"
@@ -7461,6 +7466,8 @@ rm -f "$s"
 
         const TURN_STARTED: &str = include_str!("../tests/fixtures/codex/0.160.0/turn-started.jsonl");
         const TURN_COMPLETE: &str = include_str!("../tests/fixtures/codex/0.160.0/turn-complete.jsonl");
+        const OPENCODE_WORKING: &str = include_str!("../tests/fixtures/opencode/1.18.35/working.jsonl");
+        const OPENCODE_REPLY: &str = include_str!("../tests/fixtures/opencode/1.18.35/reply.jsonl");
 
         const SILENT_CLAUDE: &str = "#!/bin/sh\nwhile [ -d \"$1\" ] && [ ! -e \"$1/quit\" ]; do sleep 0.02; done\n";
 
@@ -7777,6 +7784,22 @@ rm -f "$1/sessions/$$.json"
         enum Fake {
             Claude(Claude, i32),
             Codex(FakeCodex, usize),
+            Opencode(FakeOpencode, usize),
+        }
+
+        fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
+            let opencode = FakeOpencode::new();
+            type_line(app, &opencode.command_line());
+            pump_until(app, rx, "opencode runs", |a| runs(a, agents::OPENCODE));
+            tick(app);
+            opencode
+        }
+
+        fn opencode_says(app: &mut App, rx: &Receiver<AppEvent>, opencode: &FakeOpencode, tab: usize, messages: &str) {
+            let folder = app.projects[0].path.clone();
+            opencode.write(FakeOpencode::SESSION, &folder, messages);
+            let turn = messages == OPENCODE_WORKING;
+            watch_until(app, rx, "opencode's turn shows", |a| tab_term(a, 0, tab).context.opencode_turn() == turn);
         }
 
         struct Watched {
@@ -7805,6 +7828,8 @@ rm -f "$1/sessions/$$.json"
                     type_line(app, &codex.command_line());
                     watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
                     Fake::Codex(codex, app.projects[0].workspaces[0].active)
+                } else if agent == agents::OPENCODE {
+                    Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active)
                 } else {
                     let claude = Claude::running(SILENT_CLAUDE);
                     claude.start(app);
@@ -7830,6 +7855,10 @@ rm -f "$1/sessions/$$.json"
                             pump_until(&mut self.app, &self.rx, "codex sets its title", |a| {
                                 tab_term(a, 0, *tab).emulator.title() == title
                             });
+                        }
+                        Fake::Opencode(opencode, tab) => {
+                            let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
+                            opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
                         }
                     }
                 }
@@ -7893,8 +7922,42 @@ rm -f "$1/sessions/$$.json"
             assert_eq!(w.told(), (Some(text), vec![notification]));
         }
 
+        #[test]
+        fn an_opencode_tab_works_until_its_reply_and_shows_its_model_and_context() {
+            let mut w = Watched::start(agents::OPENCODE, false);
+            let mut seen = vec![status(&w.app, 0, 0)];
+
+            w.report("idle", 1);
+            seen.push(status(&w.app, 0, 0));
+            w.report("busy", 1);
+            seen.push(status(&w.app, 0, 0));
+
+            assert_eq!(seen, [Status::Working, Status::Idle, Status::Working].map(Some));
+            assert_eq!(second_row(&mut w.app), (2, "▌ │   DeepSeek V4… · 12%".to_string()));
+        }
+
+        #[test]
+        fn an_opencode_tab_is_measured_like_any_agent() {
+            let mut w = Watched::start(agents::OPENCODE, false);
+            w.app.config.memory = true;
+
+            watch_until(&mut w.app, &w.rx, "the memory is measured", |a| memory(a).is_some());
+        }
+
+        #[test]
+        fn opencode_finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
+            let mut w = Watched::start(agents::OPENCODE, true);
+
+            w.report("idle", 1);
+            assert_eq!(status(&w.app, 0, 0), Some(Status::Done));
+            click_row(&mut w.app, WorkspaceRow::Tab(0, 0));
+            tick(&mut w.app);
+
+            assert_eq!(status(&w.app, 0, 0), Some(Status::Idle));
+        }
+
         #[rstest]
-        fn a_hidden_tab_that_finishes_says_so(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn a_hidden_tab_that_finishes_says_so(#[values(agents::CLAUDE, agents::CODEX, agents::OPENCODE)] agent: &str) {
             let mut w = Watched::start(agent, true);
 
             w.report("idle", 6);
