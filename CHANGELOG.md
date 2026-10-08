@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.10
+
+- `cornercase events` follows what happens as it happens, for scripts and agents that coordinate other agents: it prints a line when an agent starts working, waits for an answer, is left with a background shell, finishes or goes idle, when the program in a pane ends, and when a project, workspace, tab or pane opens or closes. `--pane` keeps only some panes and stops once they have all closed, and `--json` prints one JSON object per line, with the ids, the old and new state and the time. It keeps running until the server stops, so a script can react to each change instead of polling `cornercase status`.
+
 ## 0.12.7
 
 - `cornercase wait` can watch several panes at once: repeat `--pane` or `--tab` and add `--any` to return as soon as one of them meets the condition, or `--all` to return once every one has. It prints one line per pane, its id and how it ended (`15 idle`), and `--json` gives the same as a list. A pane that closes meanwhile ends as `closed` instead of failing the wait. An agent coordinating others no longer needs one background wait per agent.
