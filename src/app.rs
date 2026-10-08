@@ -277,6 +277,7 @@ const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const AUTO_SCROLL_EVERY: Duration = Duration::from_millis(150);
 const LAUNCH_EVERY: Duration = Duration::from_millis(100);
+const RESUME_GRACE: Duration = Duration::from_secs(30);
 const TOAST_FOR: Duration = Duration::from_secs(2);
 const UNDO_FOR: Duration = Duration::from_secs(6);
 const BUG_FOR: Duration = Duration::from_secs(6);
@@ -476,7 +477,7 @@ fn agent_in(
     config: &Config,
     dir: Option<&Path>,
     term: &mut Term,
-    launching: bool,
+    now: Instant,
 ) -> Option<(String, activity::Activity)> {
     let pid = term.foreground_pid();
     let args = pid.map(process::args).unwrap_or_default();
@@ -484,30 +485,34 @@ fn agent_in(
         (Some(pid), Some(agent)) if agent == agents::CLAUDE => {
             let claude = Claude { pid, args, session: Session::read(dir, pid) };
             term.context.update(dir, Some(&claude));
-            remember(config, term, &agent, &claude.args);
+            remember(config, term, Some((&agent, &claude.args)), now);
             Some((agent, claude.activity(&term.emulator.title())))
         }
         (Some(pid), Some(agent)) if agent == agents::CODEX => {
             term.context.update_codex(pid);
-            remember(config, term, &agent, &args);
+            remember(config, term, Some((&agent, &args)), now);
             Some((agent, activity::codex(&term.emulator.title(), term.context.codex_turn())))
         }
         _ => {
             term.context.update(dir, None);
-            if !launching {
-                term.resume = None;
-            }
+            remember(config, term, None, now);
             None
         }
     }
 }
 
-fn remember(config: &Config, term: &mut Term, agent: &str, args: &[String]) {
-    term.resume = term.context.conversation().map(|conversation| AgentState {
+fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {
+    let found = agent.zip(term.context.conversation()).map(|((agent, args), conversation)| AgentState {
         kind: agent.to_string(),
         conversation: conversation.to_string(),
         mode: agents::mode_of(args, &agents::modes(config, agent)),
     });
+    if found.is_some() {
+        term.resuming = None;
+    }
+    if found.is_some() || term.resuming.is_none_or(|until| now >= until) {
+        term.resume = found;
+    }
 }
 
 fn measure_memory(term: &mut Term, measure: bool, now: Instant) {
@@ -868,7 +873,6 @@ impl App {
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
         let (config, dir, tree) = (&self.config, self.claude_dir.as_deref(), self.drawn.tree);
-        let launching: Vec<u64> = self.launches.iter().map(|launch| launch.term).collect();
         let mut notices = Vec::new();
         for (project, open) in self.projects.iter_mut().zip(open) {
             let shown = if tree { open } else { active == Some(project.id) };
@@ -878,7 +882,7 @@ impl App {
                     let seen = visible == Some(tab.id);
                     for term in &mut tab.panes {
                         if read {
-                            let found = agent_in(config, dir, term, launching.contains(&term.id));
+                            let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.status();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
@@ -1516,8 +1520,10 @@ impl App {
         let Some(agent) = agent.filter(|_| self.config.resume_agents) else { return };
         let Some(line) = agents::resume_line(&self.config, agent) else { return };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
-        self.launches.push(Launch::command(term.id, line, Instant::now()));
+        let now = Instant::now();
+        self.launches.push(Launch::command(term.id, line, now));
         term.resume = Some(agent.clone());
+        term.resuming = Some(now + RESUME_GRACE);
     }
 
     fn remove(&mut self, id: u64) {
@@ -8030,17 +8036,21 @@ rm -f "$1/sessions/$$.json"
             }
 
             #[test]
-            fn the_conversation_is_kept_while_its_command_waits_to_be_typed() {
+            fn the_conversation_is_kept_until_its_agent_is_back_or_the_grace_runs_out() {
                 let (mut app, rx, _dirs) = app_with(1);
                 let claude = Claude::running(ANSWERING_CLAUDE);
                 claude.start(&mut app);
                 let saved = remembered(&mut app, &rx);
                 claude.signal("quit");
                 let (mut back, _rx, _bin) = restored(&saved, agents::CLAUDE, true);
+                back.launches.clear();
+                let now = Instant::now();
 
-                back.watch_agents(Instant::now());
+                back.watch_agents(now + RESUME_GRACE / 2);
+                let kept = saved_agent(&back.state()).cloned();
+                back.watch_agents(now + RESUME_GRACE + WATCH_AGENTS_EVERY);
 
-                assert_eq!(saved_agent(&back.state()), saved_agent(&saved));
+                assert_eq!((kept.as_ref(), saved_agent(&back.state())), (saved_agent(&saved), None));
             }
 
             #[test]
