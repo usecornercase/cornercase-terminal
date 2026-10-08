@@ -6,7 +6,7 @@ description: Fixes for the problems you are most likely to meet when installing,
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="tip" title="Start with the log">
-Most things cornercase can't do are written to `server.log`, next to the socket: usually `$XDG_RUNTIME_DIR/cornercase/server.log`. See [Files and environment](../../reference/files-and-environment/).
+The server writes what it does to `server.log`, usually `~/.local/state/cornercase/server.log`, including everything it couldn't do and why. `cornercase logs` prints the end of it. See [The server log](#the-server-log).
 </Aside>
 
 ## Installing and updating
@@ -31,7 +31,7 @@ You can always update by hand with the install script or `brew upgrade cornercas
 
 ### No update shows up
 
-cornercase checks when the server starts and then every hour, and only if **settings → TUI → check for updates** is on; builds made with `cargo run` never check. A release that came out less than an hour ago may not have been seen yet. Run `cornercase update` to install it right away. When the check itself fails, `server.log` says why, in a line starting with `cornercase server: the update check failed`.
+cornercase checks when the server starts and then every hour, and only if **settings → TUI → check for updates** is on; builds made with `cargo run` never check. A release that came out less than an hour ago may not have been seen yet. Run `cornercase update` to install it right away. When the check itself fails, [`server.log`](#the-server-log) says why, in a line with `update: check failed`.
 
 ### Turning update checks off
 
@@ -109,7 +109,7 @@ What to do depends on where the folder comes from.
 Where you see it tells you which side refused:
 
 - **In your terminal**, when you start cornercase or run `cornercase kill-server`: the socket is served by a process of another user, so cornercase refuses to talk to it. Check who owns the socket with `ls -l` on it, and handle it like a socket folder that belongs to another user (above).
-- **In `server.log`**, next to the socket: a process of another user tried to connect to your cornercase server and was turned away, so nothing reached your shells. The line gives that user's uid. Another user can only reach your socket when its folder lets others in (the folder cornercase creates doesn't) and the socket is writable by them, as a loose umask leaves it. Make the folder private with `chmod 700` on it, and tell whoever runs the machine.
+- **In `server.log`**, in a line with `server: connection refused`: a process of another user tried to connect to your cornercase server and was turned away, so nothing reached your shells. The line gives that user's uid. Another user can only reach your socket when its folder lets others in (the folder cornercase creates doesn't) and the socket is writable by them, as a loose umask leaves it. Make the folder private with `chmod 700` on it, and tell whoever runs the machine.
 
 ### My session didn't come back
 
@@ -123,7 +123,7 @@ If some tabs were missing and a message said `could not restore … see server.l
 
 Something went wrong inside cornercase itself. It dropped only what it was doing at that moment and carried on: your shells and agents keep running. A dialog or menu you had open may have closed. A dialog that was waiting for something in the background, such as creating a worktree, shows the message in red instead; close it or try again. A [command for scripts and agents](../../guides/scripts-and-agents/) that was running, such as `cornercase wait`, fails with the same message.
 
-`server.log` says where it happened, in a line starting with `cornercase server: thread 'main' panicked at` (or another thread's name), followed by a backtrace. Please [open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with those lines and what you were doing. A bug that keeps happening is written in full only the first time, then without the backtrace and ever more rarely.
+[`server.log`](#the-server-log) says where it happened, in a line with `ERROR panic: thread 'main' panicked at` (or another thread's name), followed by a backtrace. The lines before it show what led there. Please [open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with those lines and what you were doing. A bug that keeps happening is written in full only the first time, then without the backtrace and ever more rarely.
 
 If the message keeps coming back, or the screen stays blank, the bug happens every time cornercase checks or draws something. Your shells still run, so finish what you're doing, then restart the server with `cornercase kill-server` (it closes them) and start cornercase again, or update once a fix is out.
 
@@ -204,6 +204,32 @@ cornercase waits while the question is on screen. If your agent's normal screen 
 
 By default the prompt is typed and left for you to press `Enter`. Turn on **settings → Agents → send the prompt** to have it sent for you.
 
+## The server log
+
+The server writes one line for each thing it does: a window attaching and at what size, a command from a script and its answer, a tab or pane opening and closing (and how its shell exited), an agent starting step by step and every change of its status, a dialog opening, a git run or issue list that failed or took long, and every error and bug. Each line starts with the time (in UTC), the level and where it happened:
+
+```
+2026-10-07T21:09:50.112Z INFO  control: start client=12 agent=claude worktree=fix-login prompt=true wait=false focus=false
+2026-10-07T21:09:51.482Z INFO  worktree: add done ms=812 project=4 branch=fix-login path=/home/me/.cornercase/worktrees/app/fix-login issue=false
+2026-10-07T21:09:51.490Z INFO  app: tab opened id=31 workspace=30
+```
+
+It never holds what you type or paste, what programs print, the prompts and issues sent to agents, or tokens: commands that carry text log only its size. Paths and the names of projects, workspaces and tabs are in it.
+
+```sh
+cornercase logs              # the last 200 lines
+cornercase logs -n 1000      # more
+cornercase logs --follow     # keep printing as it writes, until Ctrl+C
+cornercase logs --path       # where it is
+```
+
+It lives in `~/.local/state/cornercase/server.log` (`$XDG_STATE_HOME/cornercase/` when that is set), or next to the socket when `CORNERCASE_SOCKET` is set, so it survives a logout or a reboot. Past 8 MiB it moves to `server.log.1` and a new one starts. To see more, such as every key name and click the server handled and every git run, restart the server with `CORNERCASE_LOG=debug`:
+
+```sh
+cornercase kill-server       # closes every shell
+CORNERCASE_LOG=debug cornercase
+```
+
 ## Still stuck?
 
-[Open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with what you did, what you expected and what happened, plus the relevant lines from `server.log`. Security problems go through [private vulnerability reporting](https://github.com/usecornercase/cornercase-terminal/security/advisories/new) instead.
+[Open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with what you did, what you expected and what happened, plus the relevant lines from `cornercase logs`. Security problems go through [private vulnerability reporting](https://github.com/usecornercase/cornercase-terminal/security/advisories/new) instead.

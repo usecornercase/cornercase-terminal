@@ -14,3 +14,4 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 - After a timeout, `cornercase read` the pane before sending anything again: the agent may have received it.
 - Keep `--timeout` under the timeout of your own command and wait again, or run the wait in the background.
 - For long results, ask the other agent to write them to a file, then read the file.
+- When cornercase itself misbehaves (a command fails oddly, a tab or agent does something unexpected, "cornercase hit a bug"), `cornercase logs` prints what the server did, step by step, with its errors; quote the relevant lines to the user.

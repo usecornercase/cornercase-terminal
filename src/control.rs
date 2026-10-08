@@ -18,6 +18,18 @@ pub struct Request {
     pub command: Command,
 }
 
+impl std::fmt::Display for Item {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Group(id) => write!(f, "group-{id}"),
+            Self::Project(id) => write!(f, "project-{id}"),
+            Self::Workspace(id) => write!(f, "workspace-{id}"),
+            Self::Tab(id) => write!(f, "tab-{id}"),
+            Self::Pane(id) => write!(f, "pane-{id}"),
+        }
+    }
+}
+
 pub fn server_token() -> &'static str {
     static TOKEN: OnceLock<String> = OnceLock::new();
     TOKEN.get_or_init(|| {
@@ -47,6 +59,98 @@ pub enum Command {
 }
 
 impl Command {
+    pub fn name(&self) -> &'static str {
+        Self::NAMES[match self {
+            Self::Status(_) => 0,
+            Self::Open(_) => 1,
+            Self::NewWorkspace(_) => 2,
+            Self::NewTab(_) => 3,
+            Self::Split(_) => 4,
+            Self::Start(_) => 5,
+            Self::Send(_) => 6,
+            Self::Keys(_) => 7,
+            Self::Read(_) => 8,
+            Self::Wait(_) => 9,
+            Self::Close(_) => 10,
+            Self::Rename(_) => 11,
+            Self::Focus(_) => 12,
+            Self::Notify(_) => 13,
+            Self::Todo(_) => 14,
+        }]
+    }
+
+    pub fn fields(&self) -> Vec<(&'static str, String)> {
+        let mut fields = Fields::default();
+        match self {
+            Self::Status(_) => {}
+            Self::Open(open) => {
+                fields.add("path", open.path.display()).add("focus", open.focus);
+            }
+            Self::NewWorkspace(new) => {
+                fields.add("name", &new.name).maybe("project", new.project).add("worktree", new.worktree);
+                fields.add("focus", new.focus);
+            }
+            Self::NewTab(new) => {
+                fields.maybe("workspace", new.workspace).maybe("name", new.name.as_ref());
+                fields.add("command", new.command.is_some()).add("focus", new.focus);
+            }
+            Self::Split(split) => {
+                fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
+                fields.add("focus", split.focus);
+            }
+            Self::Start(start) => {
+                fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
+                fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
+                fields.add("wait", start.wait).maybe("timeout", start.timeout).add("focus", start.focus);
+            }
+            Self::Send(send) => {
+                fields.maybe("pane", send.pane).maybe("tab", send.tab);
+                fields.add("bytes", send.text.as_ref().map_or(0, String::len)).add("enter", send.enter);
+                fields.add("wait", send.wait).maybe("timeout", send.timeout);
+            }
+            Self::Keys(keys) => {
+                fields.maybe("pane", keys.pane).maybe("tab", keys.tab).add("keys", keys.keys.len());
+            }
+            Self::Read(read) => {
+                fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
+            }
+            Self::Wait(wait) => {
+                let until = match &wait.until {
+                    Until::Stops => "stops".to_string(),
+                    Until::Idle => "idle".to_string(),
+                    Until::Working => "working".to_string(),
+                    Until::Waiting => "waiting".to_string(),
+                    Until::Shell => "shell".to_string(),
+                    Until::Text(_) => "text".to_string(),
+                    Until::Quiet(seconds) => format!("quiet {seconds}s"),
+                };
+                fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", until);
+                fields.maybe("timeout", wait.timeout);
+            }
+            Self::Close(close) => {
+                fields.add("item", close.item).add("remove_worktree", close.remove_worktree).add("force", close.force);
+            }
+            Self::Rename(rename) => {
+                fields.maybe("item", rename.item).add("name", &rename.name);
+            }
+            Self::Focus(focus) => {
+                fields.add("item", focus.item);
+            }
+            Self::Notify(notify) => {
+                fields.add("bytes", notify.text.len());
+            }
+            Self::Todo(todo) => {
+                match todo {
+                    Todo::Add(_) => fields.add("todo", "add"),
+                    Todo::List => fields.add("todo", "list"),
+                    Todo::Done(id) => fields.add("todo", "done").add("id", id),
+                    Todo::Rm(id) => fields.add("todo", "rm").add("id", id),
+                };
+            }
+        }
+        fields.0
+    }
+
     pub const NAMES: [&str; 15] = [
         "status",
         "open",
@@ -64,6 +168,23 @@ impl Command {
         "notify",
         "todo",
     ];
+}
+
+#[derive(Default)]
+struct Fields(Vec<(&'static str, String)>);
+
+impl Fields {
+    fn add(&mut self, key: &'static str, value: impl std::fmt::Display) -> &mut Self {
+        self.0.push((key, value.to_string()));
+        self
+    }
+
+    fn maybe(&mut self, key: &'static str, value: Option<impl std::fmt::Display>) -> &mut Self {
+        if let Some(value) = value {
+            self.add(key, value);
+        }
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -400,6 +521,27 @@ mod tests {
             .collect();
 
         assert_eq!(names, Command::NAMES);
+        assert_eq!(commands.iter().map(Command::name).collect::<Vec<_>>(), Command::NAMES);
+    }
+
+    #[test]
+    fn the_fields_to_log_leave_out_what_is_typed() {
+        let secret = "hunter2-marker";
+        let commands = [
+            Command::Send(SendText { text: Some(secret.into()), enter: true, ..SendText::default() }),
+            Command::Keys(Keys { keys: vec![secret.into()], ..Keys::default() }),
+            Command::Start(Start { prompt: Some(secret.into()), ..Start::default() }),
+            Command::NewTab(NewTab { command: Some(secret.into()), ..NewTab::default() }),
+            Command::Split(Split { command: Some(secret.into()), ..Split::default() }),
+            Command::Wait(Wait { until: Until::Text(secret.into()), ..Wait::default() }),
+            Command::Notify(Notify { text: secret.into() }),
+            Command::Todo(Todo::Add(secret.into())),
+        ];
+
+        for command in commands {
+            let fields = command.fields();
+            assert!(fields.iter().all(|(_, value)| !value.contains(secret)), "{fields:?}");
+        }
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -18,6 +19,7 @@ use crate::error;
 use crate::git;
 use crate::keys;
 use crate::launch::{self, Launch};
+use crate::log::{self, Level};
 use crate::notify::{self, Notification};
 use crate::project::{Phase, Project, Tab, Workspace};
 use crate::search::Goto;
@@ -46,6 +48,7 @@ type Handled = Result<Option<Value>, String>;
 pub(super) struct Requests {
     pending: Vec<Pending>,
     open: Vec<u64>,
+    asked: HashMap<u64, (Instant, &'static str)>,
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
     next: u64,
@@ -233,7 +236,19 @@ fn parse(text: &str) -> Result<Request, String> {
 impl App {
     pub fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
         self.requests.open.push(client);
-        match parse(text).and_then(|request| self.handle_request(client, request, area, now)) {
+        let request = parse(text);
+        match &request {
+            Ok(request) => {
+                let command = request.command.name();
+                self.requests.asked.insert(client, (now, command));
+                let mut fields = vec![("client", client.to_string())];
+                fields.extend(request.caller.map(|caller| ("caller", caller.to_string())));
+                fields.extend(request.command.fields());
+                log::write_fields(Level::Info, "control", command, &fields);
+            }
+            Err(_) => log::warning!("control", "unreadable request", client = client, bytes = text.len()),
+        }
+        match request.and_then(|request| self.handle_request(client, request, area, now)) {
             Ok(Some(value)) => self.answer(Some(client), Ok(value)),
             Ok(None) => {}
             Err(message) => self.answer(Some(client), Err(message)),
@@ -255,6 +270,15 @@ impl App {
 
     pub fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
+        if let Some((at, command)) = self.requests.asked.remove(&client) {
+            log::info!(
+                "control",
+                "client left before the answer",
+                client = client,
+                command = command,
+                ms = at.elapsed().as_millis()
+            );
+        }
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
@@ -264,6 +288,18 @@ impl App {
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
         let Some(client) = client else { return };
         self.requests.open.retain(|open| *open != client);
+        if let Some((at, command)) = self.requests.asked.remove(&client) {
+            let ms = at.elapsed().as_millis();
+            match &reply {
+                Ok(value) => {
+                    let ended = value.get("ended").and_then(Value::as_str).unwrap_or("-");
+                    log::info!("control", "answered", client = client, command = command, ms = ms, ended = ended);
+                }
+                Err(message) => {
+                    log::info!("control", "refused", client = client, command = command, ms = ms, error = message);
+                }
+            }
+        }
         let response = match reply {
             Ok(value) => Response::Ok(value),
             Err(message) => Response::Error(message),

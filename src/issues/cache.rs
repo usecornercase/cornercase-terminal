@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::{Issue, Query, Source};
+use crate::log;
 
 const VERSION: u32 = 1;
 const MAX_LISTS: usize = 50;
@@ -58,7 +59,7 @@ impl Cache {
             lists: self.lists.iter().map(|e| Entry { key: e.key.clone(), issues: e.issues.clone() }).collect(),
         };
         if let Err(e) = crate::state::save(path, &file) {
-            eprintln!("cornercase server: failed to save the issue cache: {e}");
+            log::warning!("issues", "failed to save the issue cache", error = e);
         }
     }
 

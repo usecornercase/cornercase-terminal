@@ -24,6 +24,7 @@ use crate::issues::{
     self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
 };
 use crate::launch::{self, Launch, Step, Trust};
+use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::memory;
 use crate::mouse;
@@ -50,6 +51,7 @@ use crate::worktree;
 mod control;
 mod files_panel;
 mod todo_panel;
+mod trace;
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -152,6 +154,35 @@ pub enum AppEvent {
     UpdateChecked(Result<Option<Release>>),
     Updated(Result<()>),
     Usage(usage::Agent, Result<usage::Report>),
+}
+
+impl AppEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Input(_) => "input",
+            Self::Output(..) => "output",
+            Self::Exited(_) => "exited",
+            Self::WorktreeCreated { .. } => "worktree created",
+            Self::WorktreeChecked { .. } => "worktree checked",
+            Self::WorktreeRemoved { .. } => "worktree removed",
+            Self::IssuesLoaded { .. } => "issues loaded",
+            Self::IssueRead { .. } => "issue read",
+            Self::TokenChecked { .. } => "token checked",
+            Self::PeopleLoaded { .. } => "people loaded",
+            Self::Behind { .. } => "behind",
+            Self::Changes { .. } => "changes",
+            Self::Branches { .. } => "branches",
+            Self::Gap { .. } => "gap",
+            Self::FilesListed { .. } => "files listed",
+            Self::FileRead { .. } => "file read",
+            Self::FilesIndexed { .. } => "files indexed",
+            Self::NamesFound { .. } => "names found",
+            Self::TextFound { .. } => "text found",
+            Self::UpdateChecked(_) => "update checked",
+            Self::Updated(_) => "updated",
+            Self::Usage(..) => "usage",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +320,28 @@ enum Overlay {
 }
 
 impl Overlay {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Menu { .. } => "menu",
+            Self::NewGroup { .. } => "new group",
+            Self::GroupStyle { .. } => "group style",
+            Self::DeleteGroup { .. } => "delete group",
+            Self::CloseProject { .. } => "close project",
+            Self::CloseWorkspace { .. } => "close workspace",
+            Self::CloseTab { .. } => "close tab",
+            Self::NewWorkspace { .. } => "new workspace",
+            Self::Settings(_) => "settings",
+            Self::Rename { .. } => "rename",
+            Self::RemoveWorkspace { .. } => "remove workspace",
+            Self::Picker(_) => "folder picker",
+            Self::Issues(_) => "issues",
+            Self::Search(_) => "search",
+            Self::Update(_) => "update",
+            Self::Usage => "usage",
+            Self::Branches(_) => "branches",
+        }
+    }
+
     fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
@@ -455,6 +508,15 @@ fn stopped_tabs(tabs: usize) -> String {
     }
 }
 
+fn changed_keys(old: &Config, new: &Config) -> Vec<String> {
+    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
+        (serde_json::to_value(old), serde_json::to_value(new))
+    else {
+        return Vec::new();
+    };
+    new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).map(|(key, _)| key).collect()
+}
+
 fn not_restored(missed: &[(String, usize)]) -> String {
     let tabs = match missed.iter().map(|(_, n)| n).sum::<usize>() {
         1 => "1 tab".to_string(),
@@ -536,6 +598,7 @@ pub struct App {
     todo: todo::Panel,
     files: files::Panel,
     requests: control::Requests,
+    seen: trace::Seen,
 }
 
 struct Apis {
@@ -635,6 +698,7 @@ impl App {
             todo: todo::Panel::default(),
             files: files::Panel::default(),
             requests: control::Requests::default(),
+            seen: trace::Seen::default(),
         }
     }
 
@@ -776,8 +840,21 @@ impl App {
                         if read {
                             let found = agent_in(config, dir, term);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
+                            let before = term.agent.status();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
-                            if let Some(status) = term.agent.update(activity, seen, now)
+                            let notice = term.agent.update(activity, seen, now);
+                            let status = term.agent.status();
+                            if status != before {
+                                log::info!(
+                                    "activity",
+                                    "status",
+                                    pane = term.id,
+                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
+                                    from = before.map_or("none", activity::Status::name),
+                                    to = status.map_or("none", activity::Status::name),
+                                );
+                            }
+                            if let Some(status) = notice
                                 && let Some((agent, _)) = found
                             {
                                 let notice = (agent, status, project.id, workspace.id);
@@ -804,6 +881,14 @@ impl App {
         let project = &self.projects[p];
         let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
         let message = notify::clean(&format!("{agent} {what} in {place}"));
+        log::info!(
+            "activity",
+            "notify",
+            agent = agent,
+            status = status.name(),
+            project = project.id,
+            workspace = project.workspaces[w].id
+        );
         self.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
     }
@@ -833,9 +918,11 @@ impl App {
                 self.fetched.insert(project.id, now);
             }
             let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
+            let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch).begin();
             std::thread::spawn(move || {
-                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch))
-                    .unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
+                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch));
+                job.done();
+                let behind = behind.unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
                 let _ = tx.send(AppEvent::Behind { project: id, behind });
             });
         }
@@ -849,8 +936,10 @@ impl App {
         }
         let Some((generation, request)) = self.changes.request(&target, now) else { return };
         let (tx, workspace) = (self.tx.clone(), target.workspace);
+        let job = Job::new(Level::Debug, "changes", "diff").with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| changes::git::load(&request));
+            job.finish(&result);
             let _ = tx.send(AppEvent::Changes { workspace, generation, request: Box::new(request), result });
         });
     }
@@ -894,24 +983,39 @@ impl App {
                 trust_prompt: &asks,
                 trust,
             };
-            match launch.step(now, &mut seen) {
+            let before = launch.stage();
+            let step = launch.step(now, &mut seen);
+            let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
+            match &step {
+                Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
+                Step::Wait => {}
+                Step::Write(bytes) | Step::Done(bytes) => {
+                    let done = matches!(step, Step::Done(_));
+                    let message = if done { "done" } else { "wrote" };
+                    let bytes = bytes.len();
+                    log::info!("launch", message, pane = pane, kind = kind, from = before, to = stage, bytes = bytes);
+                }
+                Step::Abandon => log::warning!("launch", "the agent did not start", pane = pane, kind = kind),
+            }
+            match step {
                 Step::Wait => {}
                 Step::Write(bytes) => {
                     if !(bytes.is_empty() || term.write(&bytes)) {
+                        log::warning!("launch", "the pane is not reading", pane = pane);
                         finished.push((i, false));
                     }
                 }
-                Step::Done(bytes) if !(bytes.is_empty() || term.write(&bytes)) => finished.push((i, false)),
+                Step::Done(bytes) if !(bytes.is_empty() || term.write(&bytes)) => {
+                    log::warning!("launch", "the pane is not reading", pane = pane);
+                    finished.push((i, false));
+                }
                 Step::Done(_) => {
                     if launch.submits() {
                         term.submitted = Some(now);
                     }
                     finished.push((i, true));
                 }
-                Step::Abandon => {
-                    eprintln!("cornercase server: the agent did not start in terminal {}", launch.term);
-                    finished.push((i, false));
-                }
+                Step::Abandon => finished.push((i, false)),
             }
         }
         for (i, started) in finished.into_iter().rev() {
@@ -1283,7 +1387,7 @@ impl App {
             match self.restore_tab(saved_tab, &path, area) {
                 Ok(tab) => workspace.tabs.push(tab),
                 Err(e) => {
-                    eprintln!("cornercase server: could not restore a tab: {e}");
+                    log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
                     lost += 1;
                 }
             }
@@ -1306,6 +1410,10 @@ impl App {
     }
 
     fn remove(&mut self, id: u64) {
+        if let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
+            let status = term.exit_status().unwrap_or_else(|| "unknown".into());
+            log::info!("app", "shell exited", pane = id, status = status);
+        }
         let Some(p) = self.projects.iter_mut().position(|p| p.remove_term(id)) else { return };
         if self.projects[p].closing && !self.projects[p].has_terms() {
             self.remove_project(p);
@@ -1781,6 +1889,7 @@ impl App {
     fn drop_pane(&mut self, drag: PaneDrag, pos: Position, pane: Rect, area: Rect) {
         let Some(tab) = self.tab_mut().filter(|t| t.id == drag.tab) else { return };
         let Some(landing) = tab.landing(pane, drag.pane, pos) else { return };
+        log::info!("app", "pane moved", pane = drag.pane, tab = drag.tab, place = format!("{:?}", landing.place));
         tab.layout = landing.layout;
         tab.focus(drag.pane);
         self.resize(area);
@@ -2128,6 +2237,7 @@ impl App {
             return;
         };
         let Some(row) = self.tree_row_of(target) else { return };
+        log::info!("app", "row moved", row = format!("{target:?}"), to = format!("{:?}", landing.spot));
         match (row, landing.spot) {
             (ui::TreeRow::Group(g), ui::Spot::Group(before)) => move_before(&mut self.groups, g, before, None),
             (ui::TreeRow::Project(p), ui::Spot::Project { group, before }) => {
@@ -2633,8 +2743,10 @@ impl App {
         let Some(project) = self.browser_project() else { return };
         let Some(client) = self.client(source, project) else { return };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job = Job::new(Level::Info, "issues", "people").with("source", source.name()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.people());
+            job.finish(&result);
             let _ = tx.send(AppEvent::PeopleLoaded { project, source, epoch, result });
         });
     }
@@ -2668,8 +2780,11 @@ impl App {
             return;
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job =
+            Job::new(Level::Info, "issues", "list").with("source", source.name()).with("project", project).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.list(&query));
+            job.finish(&result);
             let _ = tx.send(AppEvent::IssuesLoaded { project, source, epoch, query, result });
         });
     }
@@ -2702,6 +2817,8 @@ impl App {
             return;
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(issue.source));
+        let job = Job::new(Level::Info, "issues", "read").with("source", issue.source.name()).with("key", &issue.key);
+        let job = job.begin();
         std::thread::spawn(move || {
             let result = panics::job(|| {
                 let detail = client.read(&issue)?;
@@ -2710,6 +2827,7 @@ impl App {
                 });
                 Ok(detail)
             });
+            job.finish(&result);
             let _ = tx.send(AppEvent::IssueRead { source: issue.source, epoch, key: issue.key, result });
         });
     }
@@ -2731,6 +2849,12 @@ impl App {
     }
 
     fn set_config(&mut self, config: Config) {
+        if log::enabled(Level::Info) {
+            let keys = changed_keys(&self.config, &config);
+            if !keys.is_empty() {
+                log::info!("app", "settings changed", keys = keys.join(","));
+            }
+        }
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
         if jira(&config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
@@ -2765,8 +2889,10 @@ impl App {
             }
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
+        let job = Job::new(Level::Info, "issues", "token check").with("source", source.name()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| client.whoami());
+            job.finish(&result);
             let _ = tx.send(AppEvent::TokenChecked { source, epoch, token, result });
         });
     }
@@ -2846,6 +2972,16 @@ impl App {
             Some(place) => !place.worktree,
             None => !git::is_repo_root(&self.projects[p].path),
         };
+        log::info!(
+            "issues",
+            "start",
+            source = issue.source.name(),
+            key = issue.key,
+            agent = agent,
+            project = project,
+            branch = branch,
+            in_a_tab = in_a_tab,
+        );
         if in_a_tab {
             self.overlay = None;
             let workspace = place.and_then(|place| place.workspace);
@@ -2869,8 +3005,11 @@ impl App {
         let project = &self.projects[p];
         let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
+        let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
+        let job = job.with("path", path.display()).with("issue", start.is_some()).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| worktree::create(&repo, &branch, &path).map(|()| path));
+            job.finish(&result);
             let _ = tx.send(AppEvent::WorktreeCreated { project: id, result, start, request });
         });
     }
@@ -3092,6 +3231,7 @@ impl App {
     }
 
     fn rename(&mut self, target: Target, name: Option<String>) {
+        log::info!("app", "rename", target = format!("{target:?}"), name = name.as_deref().unwrap_or("-"));
         match target {
             Target::Group(id) => {
                 if let Some(entry) = self.group_mut(id)
@@ -3196,6 +3336,7 @@ impl App {
     }
 
     fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
+        log::info!("ui", "menu", action = format!("{action:?}"));
         match action {
             MenuAction::Rename(target) => {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
@@ -3370,11 +3511,13 @@ impl App {
         }
         self.updates.checked = Some(now);
         let (url, tx) = (self.updates.url.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "update", "check").begin();
         std::thread::spawn(move || {
             let found = panics::job(|| {
                 let found = update::check(&url, update::CURRENT)?;
                 Ok(found.map(|release| update::with_changelog(release, update::CURRENT)))
             });
+            job.finish(&found);
             let _ = tx.send(AppEvent::UpdateChecked(found));
         });
     }
@@ -3382,13 +3525,13 @@ impl App {
     fn update_checked(&mut self, result: Result<Option<Release>>) {
         match result {
             Ok(Some(release)) if !self.updates.installed => {
+                log::info!("update", "release found", version = release.version);
                 if self.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
                     self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
                 }
                 self.updates.available = Some(release);
             }
-            Ok(_) => {}
-            Err(e) => eprintln!("cornercase server: the update check failed: {e}"),
+            _ => {}
         }
     }
 
@@ -3468,8 +3611,11 @@ impl App {
                     return None;
                 };
                 let tx = self.tx.clone();
+                let job = Job::new(Level::Info, "update", "install").with("version", &release.version).begin();
                 std::thread::spawn(move || {
-                    let _ = tx.send(AppEvent::Updated(panics::job(|| update::update(&release, target, &exe))));
+                    let result = panics::job(|| update::update(&release, target, &exe));
+                    job.finish(&result);
+                    let _ = tx.send(AppEvent::Updated(result));
                 });
                 Some(Overlay::Update(UpdateStep::Updating))
             }
@@ -3540,8 +3686,11 @@ impl App {
         for agent in self.usage.start(shown) {
             let command = agents::command(&self.config, agent.kind());
             let (timeout, tx) = (self.usage_timeout, self.tx.clone());
+            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.kind()).begin();
             std::thread::spawn(move || {
-                let _ = tx.send(AppEvent::Usage(agent, panics::job(|| usage::probe(agent, &command, timeout))));
+                let result = panics::job(|| usage::probe(agent, &command, timeout));
+                job.finish(&result);
+                let _ = tx.send(AppEvent::Usage(agent, result));
             });
         }
     }
@@ -3763,9 +3912,12 @@ impl App {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
         let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace).begin();
         std::thread::spawn(move || {
-            let status =
-                panics::job(|| Ok(worktree::status(&path))).unwrap_or(worktree::Status { changed: true, lock: None });
+            let status = panics::job(|| Ok(worktree::status(&path)));
+            let job = job.with("changed", status.as_ref().map_or(true, |s| s.changed));
+            job.with("locked", status.as_ref().is_ok_and(|s| s.lock.is_some())).finish(&status);
+            let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
             let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, status, request });
         });
     }
@@ -3805,8 +3957,11 @@ impl App {
         self.projects[p].step_off(w);
         let (repo, path, tx) =
             (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
+        let job = job.with("force", force).with("unlock", unlock).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| worktree::remove(&repo, &path, force, unlock));
+            job.finish(&result);
             let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
         });
         true
@@ -4324,8 +4479,11 @@ impl App {
             Some(PanelHit::Gap(i, h)) => {
                 if let Some(f) = file(i) {
                     let (tx, mode, workspace, dir) = (self.tx.clone(), self.changes.mode, target.workspace, target.dir);
+                    let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace).begin();
                     std::thread::spawn(move || {
-                        let Some(new_side) = changes::git::new_side(&dir, mode, &f.path) else { return };
+                        let new_side = changes::git::new_side(&dir, mode, &f.path);
+                        job.done();
+                        let Some(new_side) = new_side else { return };
                         let lines = changes::gap_lines(&f, h, &new_side);
                         let _ = tx.send(AppEvent::Gap { workspace, file: f, hunk: h, lines });
                     });
@@ -4425,9 +4583,11 @@ impl App {
 
     fn open_branches(&mut self, target: &Checkout) {
         let (tx, workspace, dir) = (self.tx.clone(), target.workspace, target.dir.clone());
+        let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let branches = changes::git::branches(&dir);
             let default = changes::git::default_base(&dir);
+            job.done();
             let _ = tx.send(AppEvent::Branches { workspace, branches, default });
         });
     }
@@ -12323,6 +12483,95 @@ rm -f "$s"
 
             let filter = app.changes.filter.as_ref().map(|f| (f.query(), f.focused));
             assert_eq!((app.todo.field.is_none(), filter), (true, Some(("a", false))));
+        }
+    }
+
+    mod trace {
+        use super::*;
+
+        fn told(app: &mut App) -> Vec<String> {
+            app.observe()
+                .into_iter()
+                .map(|note| {
+                    let fields: Vec<String> = note.fields.iter().map(|(k, v)| format!(" {k}={v}")).collect();
+                    format!("{}: {}{}", note.target, note.message, fields.concat())
+                })
+                .collect()
+        }
+
+        fn ids(app: &App) -> (u64, u64, u64, u64) {
+            let project = &app.projects[0];
+            let workspace = project.workspace().expect("a workspace");
+            let tab = workspace.tab().expect("a tab");
+            (project.id, workspace.id, tab.id, tab.pane().expect("a pane").id)
+        }
+
+        #[test]
+        fn tells_each_new_item_once_with_where_it_sits() {
+            let (mut app, _rx, dirs) = app_with(1);
+            let (project, workspace, tab, pane) = ids(&app);
+            let path = canonical(&dirs[0]);
+
+            assert_eq!(
+                told(&mut app),
+                [
+                    format!("app: project opened id={project} path={}", path.display()),
+                    format!(
+                        "app: workspace opened id={workspace} project={project} path={} label=default worktree=false",
+                        path.display()
+                    ),
+                    format!("app: tab opened id={tab} workspace={workspace}"),
+                    format!("app: pane opened id={pane} tab={tab}"),
+                    format!("ui: focus project={project} workspace={workspace} tab={tab} pane={pane}"),
+                ]
+            );
+            assert_eq!(told(&mut app), Vec::<String>::new());
+        }
+
+        #[test]
+        fn tells_what_closed_from_the_inside_out() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            app.add_tab(0, 0, AREA).expect("a second tab");
+            told(&mut app);
+            let (_, _, tab, pane) = ids(&app);
+
+            app.remove(pane);
+
+            let told = told(&mut app);
+            assert_eq!(told[..2], [format!("app: pane closed id={pane}"), format!("app: tab closed id={tab}")]);
+            assert!(told[2].starts_with("ui: focus "), "{told:?}");
+        }
+
+        #[test]
+        fn tells_when_a_dialog_opens_and_closes() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            told(&mut app);
+
+            app.open_settings();
+            let opened = told(&mut app);
+            app.overlay = None;
+
+            assert_eq!(opened, ["ui: overlay opened kind=settings"]);
+            assert_eq!(told(&mut app), ["ui: overlay closed kind=settings"]);
+        }
+
+        #[test]
+        fn tells_the_errors_it_shows() {
+            let (mut app, _rx, _dirs) = app_with(1);
+            told(&mut app);
+
+            app.report_bug();
+
+            assert_eq!(told(&mut app), ["ui: error shown text=cornercase hit a bug, see server.log"]);
+        }
+
+        #[test]
+        fn tells_which_settings_changed_but_not_to_what() {
+            let (app, _rx, _dirs) = app_with(1);
+            let mut config = app.config.clone();
+            config.memory = !config.memory;
+
+            assert_eq!(changed_keys(&app.config, &config), ["memory"]);
         }
     }
 }

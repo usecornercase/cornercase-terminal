@@ -34,6 +34,8 @@ The accept thread, one reader thread per client, the signal thread and a forward
 
 Each step (the refresh, sending the answers to commands, the draw, the save and every event) runs under `catch_unwind`. A step that panics is dropped, the loop goes on, and the user sees `cornercase hit a bug, see server.log`; a command for scripts that the panic left without an answer fails with the same message instead of waiting forever; a panic in input or drawing also closes the open dialog or menu and ends any drag, and one while drawing starts every client's screen over. Otherwise a single bug would end the process and every shell in it. Background jobs that the UI waits for turn a panic into an error answer (`panics::job`), so no dialog stays busy forever. That is why every profile must keep `panic = "unwind"`.
 
+After every step that can change the app (a refresh, input, a command, a background job's answer), `App::trace` compares the projects, workspaces, tabs and panes, the focus and the open dialog with what it saw before and writes what changed to `server.log`, so each code path doesn't have to log on its own. Lines are formatted on the thread that logs them and written by a thread of their own, so a slow disk never holds up the loop. When you debug cornercase, start with `cornercase logs`, and restart the server with `CORNERCASE_LOG=debug` to see every event it handled. What the log may and may not contain is in `DESIGN.md`, under Log.
+
 Each client has its own writer thread, so a slow client never blocks the loop. All clients share one size, that of the client that attached, typed or clicked last (a smaller client gets the frame cropped), and see the same `App`, which is why hover, menus and scroll positions are mirrored.
 
 ## Protocol
@@ -84,6 +86,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `client.rs` | Terminal setup and teardown, colour query, starting the server, forwarding events, writing frames; `kill-server` and `update`. |
 | `server.rs` | The daemon: owns `App` and every terminal, accepts clients, draws a frame per client. |
 | `panics.rs` | Containing panics: `catch_unwind` around each step of the server loop and each background job, and the hook that writes them to `server.log`. |
+| `log.rs` | `server.log`: levels, the `key=value` line format, the writer thread and its rotation, background job timings, and `cornercase logs`. `app/trace.rs` logs what changed in the app after each step of the server loop. |
 | `protocol.rs` | Messages, framing, socket and lock paths, build id. |
 | `app.rs` | Application state; turns events into actions; builds the `View`. `app/control.rs` answers the commands for scripts and keeps their waits. |
 | `ui.rs` | Layout, hit testing and drawing from a plain `View`. |

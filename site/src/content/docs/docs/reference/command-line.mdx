@@ -11,6 +11,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 cornercase              # open the UI, starting the server if needed
 cornercase update       # install the latest release and restart the server
 cornercase kill-server  # stop the server and every shell in it
+cornercase logs         # print the end of the server's log
 cornercase --version    # print the version
 cornercase --help       # list every command; cornercase COMMAND --help explains one
 ```
@@ -75,13 +76,26 @@ When cornercase can't replace its own binary (Homebrew installed it, you can't w
 
 Stops the server: every shell and program in every pane ends, and every attached client exits. It waits for the server to be gone before returning, then prints what it stopped when something was running, such as `stopped 1 agent and 2 other programs`. If no server is running on the socket, it prints `no cornercase server is running`.
 
+### `cornercase logs`
+
+Prints the end of the server's log, `server.log`: what the server did, one line per event, as described in [Troubleshooting](../../help/troubleshooting/#the-server-log). It reads the file directly, so it works with no server running.
+
+```sh
+cornercase logs              # the last 200 lines
+cornercase logs -n 50        # the last 50 (--lines works too)
+cornercase logs --follow     # then keep printing what the server writes, until Ctrl+C (-f works too)
+cornercase logs --path       # print only where the log is
+```
+
+When the log is short since it last [moved to `server.log.1`](../files-and-environment/#files), the lines before come from there. Without a log yet, it says so and exits with status 1.
+
 ### `cornercase --version`
 
 Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the server.
 
 ### `cornercase server`
 
-Runs the server itself. You don't need it: `cornercase` starts it in the background for you, with its output going to `server.log` next to the socket. It is listed here so you recognise it in your process list.
+Runs the server itself. You don't need it: `cornercase` starts it in the background for you, with its output going to [`server.log`](../files-and-environment/#files). It is listed here so you recognise it in your process list.
 
 ## The socket
 

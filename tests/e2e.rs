@@ -475,6 +475,29 @@ fn shell_output_shows_in_the_pane() {
 }
 
 #[test]
+fn the_server_log_tells_what_happened_but_never_what_was_typed() {
+    let session = Session::new();
+    let mut app = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("CORNERCASE_LOG", "debug")]);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+
+    app.send(b"echo typed-\"\"marker-$((40+1))\r");
+    app.wait_for("the typed line ran", |s| s.contains("typed-marker-41"));
+    app.send(b"\x1b[200~echo pasted-\"\"marker-$((40+2))\x1b[201~\r");
+    app.wait_for("the pasted line ran", |s| s.contains("pasted-marker-42"));
+    session.says(&["send", "--enter", "echo sent-\"\"marker-$((40+3))"]);
+    app.wait_for("the sent line ran", |s| s.contains("sent-marker-43"));
+    session.wait_for_file("server.log", "the log has the answer to send", |log| log.contains("command=send"));
+
+    let log = session.says(&["logs", "-n", "1000"]);
+    for told in ["server: started", "server: client attached", "app: pane opened", "control: send", "server: input"] {
+        assert!(log.contains(told), "the log lacks {told:?}:\n{log}");
+    }
+    for secret in ["typed-", "pasted-", "sent-", "marker"] {
+        assert!(!log.contains(secret), "the log holds {secret:?}:\n{log}");
+    }
+}
+
+#[test]
 fn sidebar_shows_the_search_and_the_title() {
     let app = Harness::start();
     let areas = areas();

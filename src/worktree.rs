@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 use crate::error::{Error, Result};
+use crate::log;
 use crate::process;
 
 pub const INCLUDE_FILE: &str = ".worktreeinclude";
@@ -46,7 +47,7 @@ pub fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     }
     for file in included_files(repo)? {
         if let Err(e) = copy(&repo.join(&file), &Path::new(path).join(&file)) {
-            eprintln!("cornercase server: failed to copy `{}` into the worktree: {e}", file.display());
+            log::warning!("worktree", "failed to copy a file into the worktree", file = file.display(), error = e);
         }
     }
     Ok(())

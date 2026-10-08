@@ -72,6 +72,7 @@ src/usage/        plan usage: claude.rs (the `get_usage` control request), codex
 src/notify.rs     desktop notifications through the outer terminal: which escape sequence a terminal understands, encoding
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/launch.rs     starting an agent in a new tab (pure state machine)
+src/log.rs        server.log: levels, the line format, the writer thread and its rotation, `Job` timings, `cornercase logs`
 src/secrets.rs    Shortcut / Linear / Jira tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
@@ -87,7 +88,7 @@ src/picker.rs     folder picker state
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
-src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits
+src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/trace.rs logs what changed after each step
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
 src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel

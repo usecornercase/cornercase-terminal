@@ -102,6 +102,23 @@ impl Launch {
         self.asked = false;
     }
 
+    pub fn stage(&self) -> &'static str {
+        match self.stage {
+            Stage::Shell => "shell",
+            Stage::Agent if self.asked => "trust prompt",
+            Stage::Agent => "agent",
+            Stage::Submit => "submit",
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match (self.agent, self.spec.command.is_empty()) {
+            (true, _) => "agent",
+            (false, false) => "command",
+            (false, true) => "enter",
+        }
+    }
+
     pub fn waits_for_you(&self) -> bool {
         self.asked
     }

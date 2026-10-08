@@ -17,6 +17,7 @@ pub mod host_theme;
 pub mod issues;
 pub mod keys;
 pub mod launch;
+pub mod log;
 pub mod markdown;
 pub mod memory;
 pub mod mouse;
