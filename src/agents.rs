@@ -12,6 +12,9 @@ pub const OPENCODE: &str = "opencode";
 pub const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
+const INPUT_MARK: char = '❯';
+const RULE: char = '─';
+const RULE_MIN: usize = 8;
 const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
@@ -238,6 +241,15 @@ impl TrustPrompt {
 pub fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().filter(|line| !line.trim().is_empty()).collect();
     regex.is_match(&lines[lines.len().saturating_sub(TRUST_LINES)..].join("\n"))
+}
+
+pub fn input_box(agent: &str, screen: &str) -> Option<bool> {
+    let rule = |line: &str| {
+        let line = line.trim();
+        line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
+    };
+    let lines: Vec<&str> = screen.lines().collect();
+    (agent == CLAUDE).then(|| lines.windows(2).any(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK)))
 }
 
 #[cfg(test)]
@@ -503,6 +515,43 @@ mod tests {
             let mut trust = TrustPrompt::default();
             trust.regex(DEFAULT_TRUST_PROMPT);
             assert!(trust.regex("how can i help").is_some_and(|re| asks_trust(re, "> How can I help?")));
+        }
+    }
+
+    mod input_box {
+        use rstest::rstest;
+
+        use super::super::input_box;
+        use super::super::{CLAUDE, CODEX};
+
+        const RULE: &str = "────────────────────────────────────────";
+        const FOOTER: &str = "  ⏵⏵ auto mode on · 1 shell · ← for agents";
+
+        fn screen(lines: &[&str]) -> String {
+            lines.join("\n")
+        }
+
+        #[rstest]
+        #[case::empty(&["● Done.", "", RULE, "❯\u{a0}", RULE, FOOTER], Some(true))]
+        #[case::with_text(&[RULE, "❯\u{a0}add tests", "  and run them", RULE, FOOTER], Some(true))]
+        #[case::a_suggestion_list_above_it(&["  ❯ /model   Set the AI model", RULE, "❯\u{a0}/model", RULE], Some(true))]
+        #[case::the_shell_details_panel(
+            &["⎿  Command was manually backgrounded", RULE, "  Shell details", "  Status:   running",
+              "  ← to go back · Esc/Enter/Space to close · x to stop"],
+            Some(false)
+        )]
+        #[case::the_model_picker(&[RULE, "   Select model", "   ❯ 2.  Opus 5.5 ✔", "     3.  Fable 5.1"], Some(false))]
+        #[case::the_transcript_view(&[RULE, "  Showing detailed transcript · ctrl+o to toggle"], Some(false))]
+        #[case::the_prompt_history(&["  ❯ 49s ago  !sleep 300", "  ╭──────╮", "  │ ⌕ Filter history… │"], Some(false))]
+        #[case::a_past_prompt_in_the_transcript(&["", "❯ fix the login", "", "● Fixed."], Some(false))]
+        #[case::its_shell_mode(&[RULE, "! sleep 300", RULE, "  ! for shell mode"], Some(false))]
+        fn claudes_box_is_its_marker_right_under_a_rule(#[case] lines: &[&str], #[case] expected: Option<bool>) {
+            assert_eq!(input_box(CLAUDE, &screen(lines)), expected);
+        }
+
+        #[test]
+        fn other_agents_are_not_known() {
+            assert_eq!(input_box(CODEX, &screen(&["› Ask Codex to do anything"])), None);
         }
     }
 }

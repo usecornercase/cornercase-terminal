@@ -13,7 +13,8 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 - Never steal focus: no `cornercase focus` or `--focus` unless the user asks. Never run `cornercase kill-server`. Close only what you created.
 - Do not answer another agent's permission prompt or question (status `waiting`) without asking the user.
 - An agent shown as `working (background shell)` has ended its turn but left a background command running, and may wake up when it ends; `--until turn-over` stops waiting there. Read its pane, and stop that command if nothing should wake it.
-- After a timeout, `cornercase read` the pane before sending anything again: the agent may have received it.
+- After a timeout, or `send --enter` failing with `not confirmed`, `cornercase read` the pane before sending anything again: the agent may have received it.
+- `send` refuses a Claude Code agent showing a dialog, a panel or its shell mode instead of its input box (`dialog open` in `status`). Read the pane; use `--force` only once you know where the text will go.
 - Keep `--timeout` under the timeout of your own command and wait again, or run the wait in the background.
 - To follow several agents, run one `cornercase wait --any` (or `--all`) with a `--pane` for each, not one wait per pane; `--any` prints the id of the one that ended.
 - To react to each change as it happens, run `cornercase events --pane ID…` in the background, or with a tool that streams a command's output: it prints a line each time one of those agents changes state, a program in its pane ends or the pane closes.

@@ -41,6 +41,8 @@ waiting for an answer, done out of sight, idle), its model and how full its cont
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
+`(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
+input box, which `cornercase send` refuses (`dialog` in the JSON).
 
 Examples:
   cornercase status
@@ -77,9 +79,18 @@ Examples:
   cornercase start codex --prompt-file task.md --wait --timeout 1800";
 const SEND_HELP: &str = "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer
-it; use `cornercase keys` for that. With --wait, the command fails if the agent does not start
-working within 10 seconds of the Enter, and otherwise prints how the wait ended; with --until it waits
-for that state instead, as `cornercase wait --until` does.
+it; use `cornercase keys` for that. So is a Claude Code agent that shows a dialog, a panel or
+its shell mode instead of its input box (`dialog` in `cornercase status --json`), unless you pass
+--force.
+
+With --enter, the command returns once Claude Code, Codex or opencode has recorded the prompt in
+its own history, and fails with `not confirmed: the prompt may not have been submitted` when it
+records none: read the pane before sending it again. A working Codex holds a prompt until its next
+step, so the command returns then. In other programs it returns once Enter is pressed.
+
+With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
+and otherwise prints how the wait ended; with --until it waits for that state instead, as
+`cornercase wait --until` does.
 
 Examples:
   cornercase send --pane 12 --enter 'Now add tests for it'
@@ -396,11 +407,13 @@ pub struct SendArgs {
     #[arg(
         long,
         value_name = "SECONDS",
-        requires = "wait",
+        requires = "enter",
         value_parser = seconds,
         help = "Give up waiting after this long, with status 1"
     )]
     pub timeout: Option<f64>,
+    #[arg(long, help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box")]
+    pub force: bool,
     #[command(flatten)]
     pub print: Print,
     #[arg(
@@ -774,6 +787,7 @@ fn run_control(command: Control) -> Result<()> {
                 wait: send.wait,
                 until: send.until.map_or(Until::Stops, Until::from),
                 timeout: send.timeout,
+                force: send.force,
             };
             say(ask("send", control::Command::Send(request))?, send.print.json, ending)
         }
@@ -1040,10 +1054,14 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
+                let notes: Vec<&str> = [(pane.background_shell, "background shell"), (pane.dialog, "dialog open")]
+                    .into_iter()
+                    .filter_map(|(on, note)| on.then_some(note))
+                    .collect();
                 let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),
-                    if pane.background_shell { format!("{status} (background shell)") } else { status },
+                    if notes.is_empty() { status } else { format!("{status} ({})", notes.join(", ")) },
                     details,
                     pane.path.as_deref().map(place).unwrap_or_default(),
                 ];
@@ -1120,6 +1138,7 @@ mod tests {
 
         #[rstest]
         #[case::wait_without_enter(&["send", "--wait", "hi"])]
+        #[case::a_timeout_without_enter(&["send", "--timeout", "5", "hi"])]
         #[case::sending_until_without_waiting(&["send", "--enter", "--until", "turn-over", "hi"])]
         #[case::starting_until_without_waiting(&["start", "--until", "turn-over"])]
         #[case::nothing_to_send(&["send", "--pane", "1"])]
@@ -1190,6 +1209,14 @@ mod tests {
             };
 
             assert_eq!(events.panes, [4, 7]);
+        }
+
+        #[test]
+        fn send_gives_up_on_the_confirmation_after_a_timeout_and_can_force_its_way() {
+            let cli = parse(&["send", "--enter", "--timeout", "5", "--force", "hi"]).expect("parse");
+
+            let Some(Command::Control(Control::Send(send))) = cli.command else { panic!("not send") };
+            assert_eq!((send.timeout, send.force, send.wait), (Some(5.0), true, false));
         }
 
         #[test]
@@ -1342,6 +1369,24 @@ mod tests {
             let value = serde_json::json!({"time": "2026-10-08T12:00:00.000Z", "event": "renamed", "tab": 3});
 
             assert_eq!(event_line(&value), value.to_string());
+        }
+
+        #[rstest]
+        #[case::a_dialog(false, true, "idle (dialog open)")]
+        #[case::both(true, true, "working (background shell, dialog open)")]
+        fn what_covers_an_agent_is_said_after_its_status(
+            #[case] background_shell: bool,
+            #[case] dialog: bool,
+            #[case] shown: &str,
+        ) {
+            let mut report = report();
+            let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
+            pane.status = Some(if background_shell { "working" } else { "idle" }.into());
+            (pane.background_shell, pane.dialog) = (background_shell, dialog);
+
+            let text = render(&report, Some(Path::new("/home/ana")));
+
+            assert!(text.contains(&format!("pane 5  claude  {shown}  Opus 5.5 · 23%")), "{text}");
         }
 
         #[rstest]

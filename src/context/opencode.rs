@@ -22,6 +22,7 @@ const MESSAGES: i64 = 200;
 pub(super) struct Session {
     pub turn: bool,
     pub context: Option<Context>,
+    pub prompted: Option<SystemTime>,
     pub place: Option<Place>,
 }
 
@@ -203,6 +204,7 @@ struct Picked {
 
 #[derive(Debug, Default, Deserialize)]
 struct Times {
+    created: Option<u64>,
     completed: Option<u64>,
 }
 
@@ -299,7 +301,13 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
             percent: used.zip(found.and_then(|found| found.window)).map(|(used, window)| percent(used, window)),
         }
     });
-    Session { turn, context, place: None }
+    let prompted = messages
+        .iter()
+        .filter(|m| m.role.as_deref() == Some("user"))
+        .filter_map(|m| m.time.as_ref()?.created)
+        .max()
+        .and_then(|created| UNIX_EPOCH.checked_add(Duration::from_millis(created)));
+    Session { turn, context, prompted, place: None }
 }
 
 #[cfg(test)]
@@ -319,6 +327,7 @@ mod tests {
     const TOOL_PARTS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/tool-parts.jsonl");
     const FLASH: &str =
         r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
+    const QUEUED: &str = r#"{"role":"user","time":{"created":1791469765000},"model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"}}"#;
 
     struct Models {
         dir: TempDir,
@@ -356,7 +365,23 @@ mod tests {
         #[case] turn: bool,
         #[case] context: Option<Context>,
     ) {
-        assert_eq!(Models::new().read(messages), Session { turn, context, place: None });
+        let session = Models::new().read(messages);
+
+        assert_eq!((session.turn, session.context), (turn, context));
+    }
+
+    #[rstest]
+    #[case::a_reply(&[REPLY], Some(1_791_469_400_000))]
+    #[case::a_message_after_it(&[REPLY, WORKING], Some(1_791_469_762_156))]
+    #[case::a_prompt_queued_while_it_works(&[WORKING, QUEUED], Some(1_791_469_765_000))]
+    #[case::nothing_yet(&[], None)]
+    fn the_newest_message_of_the_user_says_when_a_prompt_was_last_sent(
+        #[case] messages: &[&str],
+        #[case] millis: Option<u64>,
+    ) {
+        let prompted = millis.map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
+
+        assert_eq!(Models::new().read(messages).prompted, prompted);
     }
 
     #[test]
@@ -433,8 +458,8 @@ mod tests {
 
         let place = Place { database: running.fake.database.clone(), id: FakeOpencode::SESSION.into() };
         assert_eq!(
-            running.look(since),
-            Some(Session { turn: false, context: Some(shown("DeepSeek V4 Pro", Some(12))), place: Some(place) })
+            running.look(since).map(|session| (session.turn, session.context, session.place)),
+            Some((false, Some(shown("DeepSeek V4 Pro", Some(12))), Some(place)))
         );
     }
 

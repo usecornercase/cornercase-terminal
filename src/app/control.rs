@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::KeyCode;
 use ratatui::layout::Rect;
@@ -32,6 +32,7 @@ use crate::update;
 use crate::worktree;
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
+pub(super) const CONFIRM_WITHIN: Duration = Duration::from_secs(10);
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 const SHELL_UNSEEN: Duration = Duration::from_secs(1);
 const TEXT_EVERY: Duration = Duration::from_millis(100);
@@ -84,10 +85,24 @@ struct Pending {
 enum Stage {
     Worktree(Then),
     Removing { force: bool },
-    Launch(Option<Condition>),
+    Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
+    Confirm(Confirm),
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
     Reading,
+}
+
+impl Stage {
+    fn launch(wait: Option<Condition>) -> Self {
+        Self::Launch { confirm: None, wait }
+    }
+}
+
+struct Confirm {
+    pane: u64,
+    since: SystemTime,
+    by: Instant,
+    wait: Option<Condition>,
 }
 
 struct Then {
@@ -219,6 +234,17 @@ fn name_of(name: Option<String>) -> Option<String> {
     (!name.is_empty()).then(|| name.to_string())
 }
 
+fn not_confirmed(pane: u64) -> String {
+    format!(
+        "not confirmed: the prompt may not have been submitted: the agent in pane {pane} recorded no new prompt \
+         after the Enter; `cornercase read --pane {pane}` shows where it is, read it before sending again"
+    )
+}
+
+fn holds_prompts(agent: Option<&str>, status: Option<Status>) -> bool {
+    agent == Some(agents::CODEX) && matches!(status, Some(Status::Working | Status::Waiting))
+}
+
 fn not_reading(pane: u64) -> String {
     format!(
         "the program in pane {pane} is not reading its input: {} MiB are waiting for it, so nothing more was sent",
@@ -317,7 +343,8 @@ impl App {
             pending.client = None;
         }
         self.requests.pending.retain(|p| {
-            p.client.is_some() || !matches!(p.stage, Stage::Watch(_) | Stage::Several { .. } | Stage::Reading)
+            p.client.is_some()
+                || !matches!(p.stage, Stage::Confirm(_) | Stage::Watch(_) | Stage::Several { .. } | Stage::Reading)
         });
     }
 
@@ -374,14 +401,14 @@ impl App {
         client: u64,
         done: Done,
         launch: Option<Launch>,
-        then: Option<Condition>,
+        stage: Stage,
         timeout: Option<(Instant, f64)>,
     ) -> Option<Value> {
         let Some(mut launch) = launch else { return Some(json(&done)) };
         let key = self.requests.key();
         launch.key = Some(key);
         self.launches.push(launch);
-        self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage: Stage::Launch(then) });
+        self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage });
         None
     }
 
@@ -405,15 +432,30 @@ impl App {
 
     fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
         let pane = pending.done.ids.pane.unwrap_or_default();
-        if let Stage::Launch(wait) = &mut pending.stage
+        if let Stage::Launch { confirm, wait } = &mut pending.stage
             && let Some(&(_, started)) = launched.iter().find(|(key, _)| *key == pending.key)
         {
             if !started {
                 return Some(Err(self.not_started(pane)));
             }
-            match wait.take() {
-                Some(until) if pending.client.is_some() => pending.stage = Stage::Watch(self.watch(pane, until, now)),
+            let (confirm, wait) = (confirm.take(), wait.take());
+            let next = match confirm {
+                Some(since) => Some(Stage::Confirm(Confirm { pane, since, by: now + self.confirm_within, wait })),
+                None => wait.map(|until| Stage::Watch(self.watch(pane, until, now))),
+            };
+            match next {
+                Some(next) if pending.client.is_some() => pending.stage = next,
                 _ => return Some(Ok(json(&pending.done))),
+            }
+        }
+        if let Stage::Confirm(confirm) = &mut pending.stage {
+            match self.confirmation(confirm, now) {
+                None => {}
+                Some(Err(message)) => return Some(Err(message)),
+                Some(Ok(())) => {
+                    let Some(until) = confirm.wait.take() else { return Some(Ok(json(&pending.done))) };
+                    pending.stage = Stage::Watch(self.watch(pane, until, now));
+                }
             }
         }
         if let Stage::Watch(watch) = &mut pending.stage {
@@ -464,7 +506,8 @@ impl App {
         let watch = match stage {
             Stage::Worktree(_) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
-            Stage::Launch(_) => return format!("pane {pane} is still starting"),
+            Stage::Launch { .. } => return format!("pane {pane} is still starting"),
+            Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
             Stage::Reading => return format!("the record of pane {pane} is still being read"),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
@@ -487,6 +530,24 @@ impl App {
             ),
             _ => format!("the agent in pane {pane} is {}", term.agent.status().map_or("starting", Status::name)),
         }
+    }
+
+    fn unrecorded(&self, pane: u64) -> String {
+        let holding = self.pane_by(pane).is_some_and(|term| holds_prompts(term.agent.agent(), term.agent.status()));
+        let why = if holding { ": Codex takes a prompt sent while it works after its next step" } else { "" };
+        format!("the agent in pane {pane} has not recorded the prompt yet{why}")
+    }
+
+    fn confirmation(&self, confirm: &mut Confirm, now: Instant) -> Option<Result<(), String>> {
+        let pane = confirm.pane;
+        let Some(term) = self.pane_by(pane) else { return Some(Err(format!("pane {pane} closed"))) };
+        if term.context.prompted().is_some_and(|at| at >= confirm.since) {
+            return Some(Ok(()));
+        }
+        if holds_prompts(term.agent.agent(), term.agent.status()) {
+            confirm.by = confirm.by.max(now + self.confirm_within);
+        }
+        (now >= confirm.by).then(|| Err(not_confirmed(pane)))
     }
 
     fn verdict(&self, watch: &mut Watch, now: Instant) -> Verdict {
@@ -554,7 +615,11 @@ impl App {
                     .collect(),
                 _ => Vec::new(),
             };
-            deadline.into_iter().chain(watches.into_iter().flat_map(|watch| self.due(watch)))
+            let confirm = match &pending.stage {
+                Stage::Confirm(confirm) => Some(confirm.by),
+                _ => None,
+            };
+            deadline.into_iter().chain(confirm).chain(watches.into_iter().flat_map(|watch| self.due(watch)))
         });
         due.filter(|at| *at > now).min().map(|at| at.saturating_duration_since(now).max(SOONEST))
     }
@@ -765,6 +830,7 @@ impl App {
             agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
+            dialog: term.dialog(),
             at_prompt: Some(term.shell_in_foreground()),
             model: context.map(|c| c.model.clone()),
             context: context.and_then(|c| c.percent),
@@ -858,7 +924,7 @@ impl App {
         let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
         let Some(i) = found else { return };
         let mut pending = self.requests.pending.remove(i);
-        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::Launch(None)) else { return };
+        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
         match self.open_worktree(project, result, then, area, &mut pending) {
             Ok(true) => self.requests.pending.push(pending),
             Ok(false) => self.answer(pending.client, Ok(json(&pending.done))),
@@ -899,7 +965,7 @@ impl App {
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
         self.launches.push(launch);
-        pending.stage = Stage::Launch(then.wait);
+        pending.stage = Stage::launch(then.wait);
         Ok(true)
     }
 
@@ -923,7 +989,7 @@ impl App {
             self.show(Item::Pane(pane))?;
         }
         let launch = new.command.map(|command| Launch::command(pane, command, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, None, None))
+        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(None), None))
     }
 
     fn split_request(
@@ -948,7 +1014,7 @@ impl App {
             self.show(Item::Pane(new))?;
         }
         let launch = split.command.map(|command| Launch::command(new, command, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, None, None))
+        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(None), None))
     }
 
     fn start_request(
@@ -986,7 +1052,7 @@ impl App {
             self.show(Item::Pane(pane))?;
         }
         let launch = Some(Launch::new(pane, spec, now));
-        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, wait, timeout))
+        Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(wait), timeout))
     }
 
     fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
@@ -1017,6 +1083,14 @@ impl App {
                  you send would answer it; ask the user, then answer with `cornercase keys`"
             ));
         }
+        if !send.force && term.dialog() {
+            return Err(format!(
+                "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
+                 what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
+                 closed, or with --force"
+            ));
+        }
+        let confirm = (send.enter && self.watched_agent(term).is_ok()).then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(caller, pane, until)?;
@@ -1034,7 +1108,8 @@ impl App {
         if !send.enter {
             return Ok(Some(json(&pane_ids(pane))));
         }
-        Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), wait, timeout))
+        let stage = Stage::Launch { confirm, wait };
+        Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), stage, timeout))
     }
 
     fn can_wait(&self, caller: Option<u64>, pane: u64, until: &Condition) -> Result<(), String> {
@@ -1355,6 +1430,28 @@ mod tests {
         #[case::a_single_quote("/home/it's", "'/home/it'\\''s'")]
         fn paths_are_quoted_for_a_shell(#[case] path: &str, #[case] expected: &str) {
             assert_eq!(shell_quote(path), expected);
+        }
+    }
+
+    mod holds_prompts {
+        use rstest::rstest;
+
+        use super::super::holds_prompts;
+        use crate::activity::Status;
+        use crate::agents::{CLAUDE, CODEX, OPENCODE};
+
+        #[rstest]
+        #[case::codex_at_work(Some(CODEX), Some(Status::Working), true)]
+        #[case::codex_asking(Some(CODEX), Some(Status::Waiting), true)]
+        #[case::codex_idle(Some(CODEX), Some(Status::Idle), false)]
+        #[case::claude_at_work(Some(CLAUDE), Some(Status::Working), false)]
+        #[case::opencode_at_work(Some(OPENCODE), Some(Status::Working), false)]
+        fn only_a_working_codex_records_a_prompt_late(
+            #[case] agent: Option<&str>,
+            #[case] status: Option<Status>,
+            #[case] holds: bool,
+        ) {
+            assert_eq!(holds_prompts(agent, status), holds);
         }
     }
 
