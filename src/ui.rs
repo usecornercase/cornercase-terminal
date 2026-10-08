@@ -3745,7 +3745,8 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     line.push(Span::styled(truncate_right(&tab.name, max), style));
     draw_band(f, band.r, Line::from(line), band.bg);
     if tab.details.lines() > 1 {
-        draw_details(f, view.muted, (band.r, band.pitch), &tab.details, None, indent);
+        let buttons = row_menu_button(band.r, band.pitch).union(row_close_button(band.r, band.pitch));
+        draw_details(f, view.muted, (band.r, buttons), &tab.details, None, indent);
     }
     draw_row_buttons(f, view, band.r, band.pitch, band.bg);
 }
@@ -3785,14 +3786,13 @@ fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: boo
 fn draw_details(
     f: &mut Frame,
     muted: Color,
-    (row, pitch): (Rect, u16),
+    (row, buttons): (Rect, Rect),
     details: &Details,
     agent: Option<&str>,
     indent: usize,
 ) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
-    let close = row_close_button(row, pitch);
-    let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
+    let reserved = if buttons.bottom() > r.y { usize::from(buttons.width) } else { 0 };
     let dim = Style::default().fg(muted);
     let percent = details.percent.map(|used| {
         let level = match Severity::of(used) {
@@ -4080,7 +4080,7 @@ fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &AgentEntr
     let colour = if entry.active { Color::White } else { Color::Gray };
     line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
     draw_band(f, r, Line::from(line), bg);
-    draw_details(f, view.muted, (r, pitch), &entry.details, Some(&entry.agent), indent);
+    draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);
     if entry.active {
         draw_rail(f, r);
     }
@@ -6434,6 +6434,17 @@ mod tests {
         #[test]
         fn the_close_button_covers_only_the_first_band_of_a_taller_row() {
             assert_eq!(row_close_button(Rect::new(0, 4, 25, 2), 1), Rect::new(22, 4, CLOSE_BUTTON_WIDTH, 1));
+        }
+
+        #[test]
+        fn a_narrow_compact_band_keeps_the_percentage_clear_of_the_buttons() {
+            let narrow = Rect { width: 34, ..SMALL };
+            let details = Details { model: Some("Opus 5.5 with a long name".into()), ..opus(95) };
+            let v = View { nav: Some(Nav::Workspaces), ..with_details(details) };
+            let r = row(&v, narrow, WorkspaceRow::Tab(0, 0));
+            let t = render_sized(&v, narrow.width, narrow.height);
+            let end = u16::try_from(line(&t, r, 2).chars().count()).expect("fits");
+            assert!(r.x + end <= row_menu_button(r, COMPACT_PITCH).x, "{}", line(&t, r, 2));
         }
 
         #[test]
