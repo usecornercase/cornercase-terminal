@@ -109,7 +109,7 @@ const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
 const NO_TAB = 'no tab open';
-const AGENTS_TITLE = 'agents';
+const AGENTS_TITLE = 'Agents';
 const NO_AGENTS = 'no agents running';
 const MIN_WORKSPACE_WIDTH = 4;
 const MOVE_LABEL = 'move here';
@@ -117,9 +117,10 @@ const SWAP_LABEL = 'swap';
 const NO_TAB_HINT = ' opens a shell here';
 const TAGLINE = 'every agent in its own corner';
 const WELCOME_HINT = ' opens a folder';
-const NEW_BUTTON = '+ new';
+const NEW_BUTTON = '+ New';
 const ROW_MENU_ICON = '⋯';
 const RESTART = 'restart';
+const RESTART_TITLE = 'Restart';
 const RESTART_MESSAGE = 'Restart cornercase now? Its server starts again and every client comes back.';
 const RESTART_SUBMIT = 'restart now';
 const LOGO: [string, string][] = [
@@ -314,7 +315,7 @@ export class Painter {
     const app = this.app;
     const tab = app.tab();
     if (tab) this.tab(tab, areas.pane);
-    else if (app.project()) this.centered(areas.pane, [[seg(NO_TAB, { fg: 8, add: BOLD })], [seg('+ tab', CYAN), seg(NO_TAB_HINT, DARK)]]);
+    else if (app.project()) this.centered(areas.pane, [[seg(NO_TAB, { fg: 8, add: BOLD })], [seg('+ Tab', CYAN), seg(NO_TAB_HINT, DARK)]]);
     else if (!app.projects.length) this.welcome(areas.pane);
   }
 
@@ -691,12 +692,12 @@ export class Painter {
 
   private newTab(r: Rect, indent: string, p: number, w: number): void {
     if (this.app.projects[p]?.workspaces[w]?.removing) return;
-    this.button(r, indent, '+ tab', this.buttonStyle(r, DARK, 6));
+    this.button(r, indent, '+ Tab', this.buttonStyle(r, DARK, 6));
     this.region({ r, click: () => this.app.addTab(p, w), cursor: 'pointer' });
   }
 
   private newWorkspace(r: Rect, indent: string, p: number): void {
-    this.button(r, indent, '+ new workspace', this.buttonStyle(r, CYAN, 6));
+    this.button(r, indent, '+ New workspace', this.buttonStyle(r, CYAN, 6));
     this.region({ r, click: () => this.app.openNewWorkspace(p), cursor: 'pointer' });
   }
 
@@ -708,7 +709,7 @@ export class Painter {
 
   private sidebar(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'projects');
+    this.title(areas.title, 'Projects');
     const all = app.sidebarRows();
     const base = sidebarLayout(areas.list, areas.pitch, all, app.projectsScroll);
     const drag = app.rowDragView();
@@ -741,7 +742,7 @@ export class Painter {
 
   private tree(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'projects');
+    this.title(areas.title, 'Projects');
     const shape = app.treeShape();
     const base = treeLayout(areas.list, shape, treeRows(shape), app.projectsScroll);
     const drag = app.rowDragView();
@@ -838,7 +839,7 @@ export class Painter {
 
   private back(areas: Areas, name: string): void {
     const style = this.buttonStyle(areas.back, CYAN, 6);
-    this.button(areas.back, '', '‹ projects', style);
+    this.button(areas.back, '', '‹ Projects', style);
     this.region({ r: areas.back, click: () => this.app.navTo('projects'), cursor: 'pointer' });
     const restX = right(areas.back);
     const m = middle(areas.back);
@@ -848,17 +849,17 @@ export class Painter {
   private footer(areas: Areas): void {
     const app = this.app;
     this.line(areas.separator, [seg(` ${'─'.repeat(Math.max(0, areas.separator.w - 2))}${areas.compact ? ' ' : ''}`, { fg: this.lineColour })]);
-    this.button(areas.settings, ' ', 'settings', this.buttonStyle(areas.settings, DARK, 6));
+    this.button(areas.settings, ' ', 'Settings', this.buttonStyle(areas.settings, DARK, 6));
     this.region({ r: areas.settings, click: () => app.openSettings(), cursor: 'pointer' });
-    this.button(areas.usage, ' ', 'usage', this.buttonStyle(areas.usage, DARK, 6));
+    this.button(areas.usage, ' ', 'Usage', this.buttonStyle(areas.usage, DARK, 6));
     this.region({ r: areas.usage, click: () => app.openUsage(), cursor: 'pointer' });
-    this.button(areas.quit, ' ', 'quit', this.buttonStyle(areas.quit, DARK, 1));
+    this.button(areas.quit, ' ', 'Quit', this.buttonStyle(areas.quit, DARK, 1));
     this.region({ r: areas.quit, click: () => app.quit(), cursor: 'pointer' });
   }
 
   private workspaces(areas: Areas): void {
     const app = this.app;
-    if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'workspaces');
+    if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'Workspaces');
     else this.back(areas, app.project() ? projectLabel(app.project()!) : '');
     const p = app.project();
     if (!p) return;
@@ -904,7 +905,7 @@ export class Painter {
   private issuesRow(areas: Areas): void {
     const app = this.app;
     this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, { fg: this.lineColour })]);
-    this.button(areas.issues, ' ', 'issues', this.buttonStyle(areas.issues, DARK, 6));
+    this.button(areas.issues, ' ', 'Issues', this.buttonStyle(areas.issues, DARK, 6));
     this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
     if (!areas.compact && hasChanges(app.workspace())) {
       const label = changesLabel(app.changesDiff());
@@ -975,7 +976,7 @@ export class Painter {
     const hint = app.keysHint();
     const menu = keysArea(keysFrame(areas.pane, rect(0, 0, app.cols, app.rows), items), items, hint);
     this.backdrop(true);
-    this.box(menu, group ? `keys › ${group}` : 'keys');
+    this.box(menu, group ? `Keys › ${group[0].toUpperCase()}${group.slice(1)}` : 'Keys');
     const kw = keyWidth(items);
     items.forEach((item, i) => {
       const r = keysItem(menu, items, i);
@@ -1024,7 +1025,7 @@ export class Painter {
     if (!o || (o.kind !== 'newWorkspace' && o.kind !== 'rename' && o.kind !== 'newGroup')) return;
     const r = formArea(app.cols, app.rows);
     this.backdrop(false);
-    const title = o.kind === 'rename' ? app.renameLabel(o.target) : o.kind === 'newGroup' ? 'new group' : 'new workspace';
+    const title = o.kind === 'rename' ? app.renameTitle(o.target) : o.kind === 'newGroup' ? 'New group' : 'New workspace';
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     this.span(c.x, c.y, 'name', DARK);
@@ -1100,7 +1101,7 @@ export class Painter {
     }
     const r = usageArea(app.cols, app.rows, lines.length);
     this.backdrop(false);
-    this.box(r, 'usage');
+    this.box(r, 'Usage');
     const c = inner(r);
     lines.slice(0, Math.max(0, c.h - 1)).forEach((line, i) => this.line(rect(c.x, c.y + i, c.w, 1), line));
     this.submitButton(usageDone(r), DONE, () => app.closeOverlay());
@@ -1122,7 +1123,7 @@ export class Painter {
     const app = this.app;
     const r = pickerArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, RESTART);
+    this.box(r, RESTART_TITLE);
     const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
     markdown(RESTART_MESSAGE, c.w)
       .slice(0, 3)
@@ -1141,7 +1142,7 @@ export class Painter {
     if (!o || o.kind !== 'picker') return;
     const r = pickerArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, o.group === undefined ? 'open project' : 'add project');
+    this.box(r, o.group === undefined ? 'Open project' : 'Add project');
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     const path = app.pickerPath(o);
     const max = Math.max(0, c.w - INPUT_PROMPT.length - 1);
@@ -1185,7 +1186,7 @@ export class Painter {
     const app = this.app;
     const r = issuesArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, 'settings');
+    this.box(r, 'Settings');
     const c = inner(r);
     const tabsRow = rect(c.x, c.y, c.w, 1);
     const body = rect(c.x, c.y + 2, c.w, Math.max(0, c.h - 5));
@@ -1251,7 +1252,7 @@ export class Painter {
     const app = this.app;
     const r = issuesArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, `issues · ${app.issuesProjectName(o)}`);
+    this.box(r, `Issues · ${app.issuesProjectName(o)}`);
     const c = inner(r);
     const tabsRow = rect(c.x, c.y, c.w, 1);
     const inputRow = rect(c.x, c.y + 2, c.w, 1);

@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 5815
 expression: "render_small(&View\n{ drag: Some(Drag::Workspaces(dragged, landing)), ..v }).backend()"
 ---
 "                                                                                "
@@ -7,7 +8,7 @@ expression: "render_small(&View\n{ drag: Some(Drag::Workspaces(dragged, landing)
 "                                                                                "
 "                                                                                "
 "                                                                                "
-" ‹ projects    cornercase                                                       "
+" ‹ Projects    cornercase                                                       "
 "                                                                                "
 "                                                                                "
 "                                                                                "
@@ -21,12 +22,12 @@ expression: "render_small(&View\n{ drag: Some(Drag::Workspaces(dragged, landing)
 "  │                                                                             "
 "  │ ─────────────────────────────────────────────────────────────────────────── "
 "  │                                                                             "
-"  └ + tab                                                                       "
+"  └ + Tab                                                                       "
 "                                                                                "
 "                                                                                "
 "  ↓ 2 more                                                                      "
 "                                                                                "
-"  + new workspace                                                               "
+"  + New workspace                                                               "
 "                                                                                "
 "                                                                                "
 "                                                                                "

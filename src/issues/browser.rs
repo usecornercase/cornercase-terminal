@@ -1086,7 +1086,7 @@ impl Browser {
             note
         };
         ui::Overlay::Issues(ui::Issues {
-            title: format!("issues · {}", self.project_name),
+            title: format!("Issues · {}", self.project_name),
             tabs: self.tab_names(),
             tab: self.tab,
             toggles,

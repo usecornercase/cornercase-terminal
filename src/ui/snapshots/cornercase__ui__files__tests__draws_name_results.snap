@@ -1,9 +1,9 @@
 ---
 source: src/ui/files.rs
-assertion_line: 733
+assertion_line: 750
 expression: render(&names())
 ---
-  files  ~/projects/shop                     ×
+  Files  ~/projects/shop                     ×
   ⌕ main                                  ×  ▤
   2 files
 ▌ src/main.rs

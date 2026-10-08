@@ -15,7 +15,7 @@ use crate::files::search::occurrences;
 use crate::files::{Gutter, Line, Lines, Mark, Mode};
 use crate::syntax::Segments;
 
-pub const LABEL: &str = "files";
+pub const LABEL: &str = "Files";
 const HEADER_ROWS: u16 = 3;
 const BACK_WIDTH: u16 = 3;
 const LOADING: &str = "reading files…";

@@ -16,7 +16,7 @@ The changes panel shows the diff of the active workspace in a column on the righ
 
 ## Open and close it
 
-The panel is there for workspaces inside a git repository. Click **`changes`** at the bottom of the sidebar, next to `issues`, to open it, and again (or **`×`** in the panel) to close it. It shares its column with the [files panel](../files/) and the [TODO panel](../todo/): opening one closes the others. The button shows how many files changed, such as `changes 3`, even while the panel is closed.
+The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel) to close it. It shares its column with the [files panel](../files/) and the [TODO panel](../todo/): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
 
 The panel follows the active workspace: switch workspaces and it shows the other one's changes. Drag its left border to make it wider or narrower; a double click on the border gives it back its automatic width, half of the room right of the columns. Whether it is open, which tab it shows and its width are kept in the [saved session](../sessions/#what-is-saved).
 
@@ -28,11 +28,11 @@ Three tabs at the top choose what you see:
 
 | Tab | Shows |
 | --- | --- |
-| **uncommitted** | What isn't in a commit yet: staged and unstaged edits, and new files git doesn't track yet. |
-| **commits** | What the branch committed since it left the base branch. |
-| **all** | Both: everything the branch changed, committed or not, which is what its pull request will show. |
+| **Uncommitted** | What isn't in a commit yet: staged and unstaged edits, and new files git doesn't track yet. |
+| **Commits** | What the branch committed since it left the base branch. |
+| **All** | Both: everything the branch changed, committed or not, which is what its pull request will show. |
 
-**commits** and **all** compare with a base branch, shown at the right of the summary as `vs main ▾`. It is the repository's default branch: the one `origin/HEAD` points to, or else a local `main` or `master`. The comparison starts where your branch left the base, like a pull request on GitHub, so commits that land on the base later don't show up as changes of yours.
+**Commits** and **All** compare with a base branch, shown at the right of the summary as `vs main ▾`. It is the repository's default branch: the one `origin/HEAD` points to, or else a local `main` or `master`. The comparison starts where your branch left the base, like a pull request on GitHub, so commits that land on the base later don't show up as changes of yours.
 
 <Screen
   name="changes-commits"

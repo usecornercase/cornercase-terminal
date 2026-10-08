@@ -1,8 +1,9 @@
 ---
 source: src/ui/todo.rs
+assertion_line: 468
 expression: t.backend()
 ---
-" todo 2                 clear done   ×  "
+" TODO 2                 clear done   ×  "
 "                                        "
 "  ○  fix the login bug in safari        "
 "     when the cookie expires            "

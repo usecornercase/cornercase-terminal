@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.9
+## 0.12.10
 
 - `cornercase read --last-message` prints the last message the coding agent in a pane wrote, as plain text. It comes from the agent's own record (Claude Code's transcript, Codex's rollout, opencode's database) rather than the screen, so it is whole even once it scrolled off, and free of the input box, the status lines and Claude Code's grey suggestions. `--json` adds when it was written and whether the agent's turn is over. An agent that starts others can now read their answers directly, instead of asking each one to write its report to a file.
+
+## 0.12.9
+
+- The sidebar, the panels and the dialogs start their labels and titles with a capital letter, so they read as names: **Projects**, **Workspaces**, **+ New workspace**, **+ Tab**, **Issues**, **Changes**, **Files**, **TODO**, **Settings**, **Usage**, **Quit**, the changes panel's **Uncommitted**, **Commits** and **All**, and dialog titles such as **New workspace** or **Remove workspace**. Menu entries and the buttons inside dialogs stay as they were.
 
 ## 0.12.8
 
