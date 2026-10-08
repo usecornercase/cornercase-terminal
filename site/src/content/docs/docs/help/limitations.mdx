@@ -27,5 +27,5 @@ cornercase is young. These are the gaps you may run into today.
 | Choice | Why |
 | --- | --- |
 | **Linux and macOS only** | cornercase relies on Unix pseudo-terminals, Unix sockets and each system's process information. |
-| **No keyboard shortcuts** | Every key belongs to the program in the active pane. See the [FAQ](../faq/#why-is-everything-a-mouse-click). |
+| **No keyboard shortcuts unless you ask** | Every key belongs to the program in the active pane until you choose a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), and then only that key is taken. See the [FAQ](../faq/#why-is-everything-a-mouse-click). |
 | **No nesting** | Running `cornercase` inside one of its own panes is refused, because the inner one would fight the outer one for the mouse and the screen. The [commands for scripts and agents](../../guides/scripts-and-agents/) work there, and so does [`cornercase remote`](../../guides/remote/), which shows another machine's server. |

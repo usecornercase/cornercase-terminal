@@ -61,6 +61,31 @@ impl Place {
     }
 }
 
+pub fn beside<T: Copy + PartialEq>(panes: &[(T, Rect)], from: T, side: Place) -> Option<T> {
+    let (_, at) = *panes.iter().find(|(id, _)| *id == from)?;
+    let across = |r: Rect| match side {
+        Place::Left | Place::Right => (r.y, r.bottom()),
+        Place::Above | Place::Below | Place::Swap => (r.x, r.right()),
+    };
+    let overlap = |r: Rect| {
+        let ((a, b), (c, d)) = (across(at), across(r));
+        b.min(d).saturating_sub(a.max(c))
+    };
+    let distance = |r: Rect| match side {
+        Place::Left => at.x.checked_sub(r.right()),
+        Place::Right => r.x.checked_sub(at.right()),
+        Place::Above => at.y.checked_sub(r.bottom()),
+        Place::Below => r.y.checked_sub(at.bottom()),
+        Place::Swap => None,
+    };
+    panes
+        .iter()
+        .filter(|(id, r)| *id != from && overlap(*r) > 0)
+        .filter_map(|(id, r)| Some((*id, distance(*r)?, overlap(*r))))
+        .min_by_key(|&(_, distance, overlap)| (distance, std::cmp::Reverse(overlap)))
+        .map(|(id, ..)| id)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Node<T> {
@@ -387,6 +412,28 @@ mod tests {
         let mut node = pair(Dir::Right);
         node.split(2, Dir::Down, 3);
         node
+    }
+
+    mod neighbours {
+        use super::*;
+
+        #[rstest]
+        #[case::left_of_the_top_right(2, Place::Left, Some(1))]
+        #[case::below_the_top_right(2, Place::Below, Some(3))]
+        #[case::above_the_bottom_right(3, Place::Above, Some(2))]
+        #[case::nothing_at_the_edge(1, Place::Left, None)]
+        #[case::nothing_above_the_top(2, Place::Above, None)]
+        fn finds_the_pane_on_that_side(#[case] from: u64, #[case] side: Place, #[case] expected: Option<u64>) {
+            assert_eq!(beside(&three().panes(AREA), from, side), expected);
+        }
+
+        #[test]
+        fn takes_the_pane_sharing_the_most_of_its_side() {
+            let mut node = pair(Dir::Down);
+            node.split(1, Dir::Right, 3);
+            node.set_ratio(&[true], 0.8);
+            assert_eq!(beside(&node.panes(AREA), 2, Place::Above), Some(1));
+        }
     }
 
     mod geometry {

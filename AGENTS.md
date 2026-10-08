@@ -44,10 +44,10 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 ## Interaction
 
-- **Mouse buttons only, no app shortcuts.** Every key goes to the program in the active pane, except while a modal, the search, the changes panel's filter field, the files panel's search field or a TODO field has them (then `Enter` submits, `Esc` cancels; the files panel's search field also takes `↑` `↓` to pick a result; a TODO field also takes `←` `→` `↑` `↓` `Home` `End` `Delete` to move and edit, since editing an item means fixing a word in the middle) and `Esc` while a row is dragged. Do not add keyboard shortcuts without asking. No `Alt` shortcuts (Option is a compose key on macOS), no `Ctrl+letter` (steals shell bindings). `e2e::ctrl_b_reaches_the_shell` guards this.
+- **Mouse first; the only app keys sit behind an opt-in prefix key.** Every key goes to the program in the active pane, except while a modal, the search, the changes panel's filter field, the files panel's search field or a TODO field has them (then `Enter` submits, `Esc` cancels; the files panel's search field also takes `↑` `↓` to pick a result; a TODO field also takes `←` `→` `↑` `↓` `Home` `End` `Delete` to move and edit, since editing an item means fixing a word in the middle), `Esc` while a row is dragged, and the prefix key (`prefix_key`, off by default, chosen by the user), which opens the keys menu (`shortcuts.rs`, see DESIGN.md). Do not add keyboard shortcuts outside that menu, nor a default prefix, without asking. No `Alt` shortcuts (Option is a compose key on macOS), no `Ctrl+letter` (steals shell bindings). `e2e::ctrl_b_reaches_the_shell` guards this.
 - Closing the last project leaves the app open and empty. ` quit ` only detaches.
 - `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`ui::truncate_right`), paths at the start (`truncate_left`).
-- At most one overlay is open (menu, form, confirmation, settings, usage, picker, issues, search). While it is open, no mouse event reaches the columns or the pane.
+- At most one overlay is open (menu, form, confirmation, settings, usage, picker, issues, search, keys menu). While it is open, no mouse event reaches the columns or the pane.
 - Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s.
 
 ## Architecture
@@ -65,6 +65,7 @@ src/restart.rs    what a server restart stops: running programs from a status Re
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), `~` expansion, validation
 src/settings.rs   the settings modal's state; returns Actions for App
+src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
 src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt
 src/activity.rs   what the agent in a pane is doing: Claude Code's session file, its title glyph, Codex's title and turns, opencode's turns, done-but-unseen, rollups
 src/context.rs    model/context lines for Claude Code, Codex and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line)
@@ -90,10 +91,10 @@ src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailin
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
-src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/trace.rs logs what changed after each step
+src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/shortcuts.rs runs the keys menu's actions; app/trace.rs logs what changed after each step
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
-src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing)
+src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/keys.rs the keys menu
 src/keys.rs       KeyEvent -> bytes (Ghostty's encoder for special keys, legacy encoder for the rest)
 src/mouse.rs      MouseEvent -> bytes in the protocol the program asked for
 src/host_theme.rs asks the outer terminal for its colours and its name (XTVERSION)

@@ -196,6 +196,16 @@ impl Panel {
         place.query = Query { text: std::mem::take(&mut place.query.text), focused: true, ..Query::default() };
     }
 
+    pub fn search(&mut self, workspace: u64, mode: Mode) {
+        self.close_file(workspace);
+        let place = self.places.entry(workspace).or_default();
+        if place.mode != mode {
+            place.mode = mode;
+            place.query = Query::default();
+        }
+        place.query.focused = true;
+    }
+
     pub fn query(&self, workspace: u64) -> Option<&Query> {
         self.places.get(&workspace).map(|p| &p.query)
     }

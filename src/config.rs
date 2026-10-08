@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 use crate::agents;
 use crate::notify;
 use crate::protocol;
+use crate::shortcuts::Prefix;
 use crate::state;
 use crate::ui;
 
@@ -43,6 +44,7 @@ pub struct Config {
     pub agents_section: bool,
     pub counts: bool,
     pub dim_inactive_panes: bool,
+    pub prefix_key: String,
     pub model: bool,
     pub context: bool,
     pub memory: bool,
@@ -74,6 +76,7 @@ impl Default for Config {
             agents_section: false,
             counts: true,
             dim_inactive_panes: true,
+            prefix_key: String::new(),
             model: true,
             context: true,
             memory: false,
@@ -90,6 +93,10 @@ impl Config {
 
     pub fn gh(&self, home: Option<&Path>) -> PathBuf {
         expand_home(&self.gh, home)
+    }
+
+    pub fn prefix(&self) -> Option<Prefix> {
+        Prefix::parse(&self.prefix_key)
     }
 
     pub fn fetch_every(&self) -> Option<Duration> {

@@ -182,3 +182,25 @@ export function moved(node: Node, pane: number, target: number, place: PanePlace
   const dir: Dir = place === 'left' || place === 'right' ? 'right' : 'down';
   return insert(rest, target, dir, place === 'left' || place === 'above', pane);
 }
+
+export function beside(panes: [number, Rect][], from: number, side: PanePlace): number | null {
+  const at = panes.find(([id]) => id === from)?.[1];
+  if (!at) return null;
+  const across = (r: Rect): [number, number] => (side === 'left' || side === 'right' ? [r.y, r.y + r.h] : [r.x, r.x + r.w]);
+  const overlap = (r: Rect): number => {
+    const [[a, b], [c, d]] = [across(at), across(r)];
+    return Math.max(0, Math.min(b, d) - Math.max(a, c));
+  };
+  const distance = (r: Rect): number | null => {
+    const d =
+      side === 'left' ? at.x - (r.x + r.w) : side === 'right' ? r.x - (at.x + at.w) : side === 'above' ? at.y - (r.y + r.h) : side === 'below' ? r.y - (at.y + at.h) : -1;
+    return d < 0 ? null : d;
+  };
+  let best: [number, number, number] | null = null;
+  for (const [id, r] of panes) {
+    const d = distance(r);
+    if (id === from || overlap(r) === 0 || d === null) continue;
+    if (!best || d < best[1] || (d === best[1] && overlap(r) > best[2])) best = [id, d, overlap(r)];
+  }
+  return best ? best[0] : null;
+}

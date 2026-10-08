@@ -8,7 +8,7 @@ import Screen from '../../../components/Screen.astro';
 
 cornercase is a terminal multiplexer for working on several things at once. It keeps your **projects** in a sidebar, gives each line of work its own **workspace** (optionally its own git worktree and branch), and runs as many **tabs** and **split panes** of real shells as you need. It can also read an issue from GitHub, Shortcut or Linear and start a coding agent on it, in a fresh worktree, in a few clicks.
 
-Everything is a button. There is no prefix key to learn and no shortcut that steals keys from your shell, your editor or your agent: every key you type goes to the program in front of you.
+Everything is a button. There is no prefix key to learn and no shortcut that steals keys from your shell, your editor or your agent: every key you type goes to the program in front of you. If you'd rather use the keyboard, an [optional prefix key](reference/keyboard-and-mouse/#keyboard-shortcuts) opens a menu of shortcuts.
 
 <Screen
   name="overview"
@@ -89,7 +89,7 @@ Claude Code, Codex and opencode tabs show their model and [context use](guides/p
 
 ## A few deliberate choices
 
-**Mouse buttons only.** cornercase has no keyboard shortcuts of its own. Keys always reach the program in the active pane, so `Ctrl+B`, `Alt` combinations and everything your editor or agent uses keep working. Inside a dialog, `Enter` confirms and `Esc` cancels.
+**Mouse first.** Out of the box cornercase has no keyboard shortcuts of its own. Keys always reach the program in the active pane, so `Ctrl+B`, `Alt` combinations and everything your editor or agent uses keep working. Inside a dialog, `Enter` confirms and `Esc` cancels. Shortcuts are there if you want them, behind a [prefix key](reference/keyboard-and-mouse/#keyboard-shortcuts) you choose.
 
 **A real terminal inside.** Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty), the core of the Ghostty terminal. It answers the queries that programs like nvim, fzf, htop and full-screen agents wait for, supports the kitty keyboard protocol, and reflows text when a pane is resized.
 

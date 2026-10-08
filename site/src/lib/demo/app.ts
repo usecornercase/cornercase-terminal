@@ -76,7 +76,8 @@ import {
   workspaceLabel,
 } from './model';
 import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } from './programs';
-import { type Node, type PanePlace, fits, hasRoom, moved, placeArea, placeAt, ratioAt, remove, setRatio, split, visible } from './split';
+import { type KeysAction, type KeysGroup, type KeysStep, isPrefix, keysItems, keysLookup, prefixClash, prefixOf } from './keys';
+import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, placeAt, ratioAt, remove, setRatio, split, visible } from './split';
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
@@ -296,7 +297,7 @@ export class App {
   agentsScroll = 0;
   overlay: Overlay | null = null;
   hover: Pos | null = null;
-  toast: { text: string; until: number; status?: Status; undo?: () => void } | null = null;
+  toast: { text: string; until: number; status?: Status; undo?: () => void; bug?: boolean } | null = null;
   focused = false;
   selection: { pane: number; from: Pos; to: Pos; rect: Rect } | null = null;
   dragging: Drag | null = null;
@@ -880,6 +881,7 @@ export class App {
     if (o?.kind === 'closeProject') return { title: 'close project', message: this.closeProjectMessage(o.project), submit: 'close' };
     if (o?.kind === 'closeWorkspace') return { title: 'close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
+    if (o?.kind === 'closePane') return { title: 'close pane', message: this.closePaneMessage(o.pane), submit: 'close' };
     return null;
   }
 
@@ -895,6 +897,12 @@ export class App {
       const at = this.closeTarget(o.project, o.workspace, o.tab);
       if (at) this.closeTab(at.p, at.w, at.t);
     } else if (o?.kind === 'deleteGroup') this.deleteGroup(o.group);
+    else if (o?.kind === 'closePane') this.paneAction(o.pane, 'close pane');
+  }
+
+  closePaneMessage(id: number): string {
+    const pane = this.findPane(id)?.pane;
+    return pane ? `Close the pane running ${pane.shell.name || 'bash'}? What runs in it is stopped.` : '';
   }
 
   deleteGroup(id: number): void {
@@ -1922,6 +1930,137 @@ export class App {
     this.dirty();
   }
 
+  private capturePrefix(o: SettingsOverlay, k: Key): void {
+    const plain = !k.ctrl && !k.alt && !k.shift;
+    if (plain && k.key === 'Escape') {
+      o.capturing = false;
+      o.notice = undefined;
+      return;
+    }
+    if (plain && (k.key === 'Backspace' || k.key === 'Delete')) {
+      o.capturing = false;
+      this.config.prefix = '';
+      o.notice = 'keyboard shortcuts are off';
+      return;
+    }
+    const prefix = prefixOf(k);
+    if (typeof prefix !== 'string') {
+      o.notice = prefix.error;
+      return;
+    }
+    o.capturing = false;
+    this.config.prefix = prefix;
+    const clash = prefixClash(prefix);
+    o.notice = clash ? `${prefix} opens the keys menu; it is also ${clash}` : `${prefix} opens the keys menu`;
+  }
+
+  keysHint(): string {
+    return `esc closes · ${this.config.prefix} twice types it in the pane`;
+  }
+
+  private keysKey(group: KeysGroup | null, k: Key): boolean {
+    this.overlay = null;
+    if (isPrefix(this.config.prefix, k)) {
+      const t = this.tab();
+      const pane = t ? activePane(t) : undefined;
+      pane?.shell.key(k);
+    } else if (k.key !== 'Escape') this.keysStep(keysLookup(group, k));
+    this.dirty();
+    return true;
+  }
+
+  keysClick(group: KeysGroup | null, i: number): void {
+    this.overlay = null;
+    this.keysStep(keysItems(group)[i]?.step ?? null);
+    this.dirty();
+  }
+
+  private keysStep(step: KeysStep | null): void {
+    if (!step) return;
+    if ('open' in step) this.overlay = { kind: 'keys', group: step.open };
+    else this.shortcut(step.run);
+  }
+
+  private bug(text: string): void {
+    this.toast = { text, until: this.now() + 6000, bug: true };
+    this.after(6050, () => this.dirty());
+  }
+
+  private cycle(at: number, len: number, delta: number): number | null {
+    return len > 0 ? (((at + delta) % len) + len) % len : null;
+  }
+
+  private shortcut(a: KeysAction): void {
+    const p = this.active;
+    const project = this.project();
+    const ws = this.workspace();
+    const w = project?.active ?? 0;
+    const t = this.tab();
+    if (a.kind === 'nextTab' || a.kind === 'previousTab' || a.kind === 'tab') {
+      if (!ws) return;
+      const next = a.kind === 'tab' ? (a.t < ws.tabs.length ? a.t : null) : this.cycle(ws.active, ws.tabs.length, a.kind === 'nextTab' ? 1 : -1);
+      if (next !== null) this.selectTab(p, w, next);
+    } else if (a.kind === 'nextWorkspace' || a.kind === 'previousWorkspace') {
+      const next = project && this.cycle(w, project.workspaces.length, a.kind === 'nextWorkspace' ? 1 : -1);
+      if (next !== null && next !== undefined) this.selectWorkspace(p, next);
+    } else if (a.kind === 'nextProject' || a.kind === 'previousProject') {
+      const order = this.sidebarRows().flatMap((row) => (row.kind === 'project' ? [row.p] : []));
+      const next = this.cycle(Math.max(0, order.indexOf(p)), order.length, a.kind === 'nextProject' ? 1 : -1);
+      if (next !== null) this.goto(order[next], this.projects[order[next]].active);
+    } else if (a.kind === 'pane') {
+      const id = t && beside(this.panesOf(t, this.areas().pane), t.active, a.side);
+      if (t && id) t.active = id;
+    } else if (a.kind === 'agent') {
+      const rows = this.agentRows();
+      const at = rows.findIndex((r) => r.active);
+      const next = rows.map((_, k) => rows[(at + 1 + k) % rows.length]).find((r) => r.status === 'waiting' || r.status === 'done');
+      if (next) this.jumpToPane(next.pane);
+      else this.notify('no agent needs you');
+    } else if (a.kind === 'search') this.openSearch();
+    else if (a.kind === 'newTab') this.addTab(p, w);
+    else if (a.kind === 'split') {
+      const area = t && this.panesOf(t, this.areas().pane).find(([id]) => id === t.active)?.[1];
+      if (t && area && fits(area, a.dir)) this.paneAction(t.active, a.dir === 'right' ? 'split right' : 'split down');
+      else if (t) this.bug('no room to split this pane');
+    } else if (a.kind === 'closePane') {
+      if (t && t.panes.length > 1) this.overlay = { kind: 'closePane', pane: t.active };
+      else if (t && ws) this.askCloseTab(p, w, ws.active);
+    } else if (a.kind === 'renameTab' || a.kind === 'renameWorkspace') {
+      if (!project || !ws) return;
+      const target: Target =
+        a.kind === 'renameWorkspace' ? { kind: 'workspace', project: project.id, workspace: ws.id } : { kind: 'tab', project: project.id, workspace: ws.id, tab: t?.id ?? -1 };
+      if (a.kind === 'renameTab' && !t) return;
+      this.overlay = { kind: 'rename', target, input: this.currentName(target) ?? '' };
+    } else if (a.kind === 'findNames' || a.kind === 'findText') {
+      this.openFiles();
+      const place = this.filesPlace();
+      if (!place) return;
+      place.viewer = null;
+      const mode = a.kind === 'findNames' ? 'name' : 'text';
+      if (place.mode !== mode) Object.assign(place, { mode, query: '', selected: 0, scroll: 0 });
+      place.focused = true;
+    } else if (a.kind === 'files') this.toggleFiles();
+    else if (a.kind === 'changes' || a.kind === 'base') {
+      if (!hasChanges(ws)) return this.bug('this workspace is not in a git repository');
+      const opening = !this.changesOpen;
+      if (a.kind === 'changes' || opening) this.toggleChanges();
+      if (a.kind === 'changes' && opening) this.openChangesFilter();
+      const panel = this.areas().changes;
+      if (a.kind === 'base') this.openChangesBase({ x: panel.x + 2, y: panel.y + 2 });
+    } else if (a.kind === 'newWorkspace') {
+      if (project) this.openNewWorkspace(p);
+    } else if (a.kind === 'closeWorkspace') {
+      if (ws) this.askCloseWorkspace(p, w);
+    } else if (a.kind === 'issues') this.openIssues();
+    else if (a.kind === 'todo') {
+      const opening = !this.todo.open;
+      this.toggleTodo();
+      if (opening) this.addTodo();
+    } else if (a.kind === 'settings') this.openSettings();
+    else if (a.kind === 'usage') this.openUsage();
+    else if (a.kind === 'quit') this.quit();
+  }
+
   settingsPage(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'settings') return;
@@ -2007,10 +2146,19 @@ export class App {
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
+      this.prefixRow(),
     ];
   }
 
+  private prefixRow(): SettingsRow {
+    const o = this.overlay;
+    const clash = prefixClash(this.config.prefix);
+    const value = o?.kind === 'settings' && o.capturing ? 'press a key…' : this.config.prefix || 'off';
+    return { id: 'prefix', section: '', label: 'prefix key', value, note: clash ? `also ${clash}` : 'opens a menu of keyboard shortcuts', dangerous: !!clash };
+  }
+
   settingsHint(o: SettingsOverlay): string {
+    if (o.capturing) return 'press the keys you want · backspace turns them off · esc cancels';
     if (o.edit) return 'enter saves · esc cancels';
     if (o.pick) return 'enter picks · type to filter · esc goes back';
     return 'enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once';
@@ -2053,6 +2201,8 @@ export class App {
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
+    } else if (row.id === 'prefix') {
+      o.capturing = true;
     } else if (row.id === 'updates') {
       c.updates = !c.updates;
       o.notice = c.updates ? 'cornercase looks for new versions' : 'cornercase no longer looks for new versions';
@@ -2962,6 +3112,7 @@ export class App {
   }
 
   paste(text: string): void {
+    if (this.overlay?.kind === 'keys') this.overlay = null;
     const o = this.overlay;
     if (o) {
       if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
@@ -3006,6 +3157,12 @@ export class App {
       return true;
     }
     const o = this.overlay;
+    if (o?.kind === 'keys') return this.keysKey(o.group, k);
+    if ((!o || o.kind === 'menu') && isPrefix(this.config.prefix, k)) {
+      this.overlay = { kind: 'keys', group: null };
+      this.dirty();
+      return true;
+    }
     if (o) return this.overlayKey(o, k);
     if (this.todoTyping()) {
       this.todo.key(k, todoWidth(this));
@@ -3111,6 +3268,11 @@ export class App {
 
   private settingsKey(o: SettingsOverlay, k: Key, ch: string | null): boolean {
     if (o.busy) return true;
+    if (o.capturing) {
+      this.capturePrefix(o, k);
+      this.dirty();
+      return true;
+    }
     if (o.edit) {
       if (k.key === 'Escape') o.edit = undefined;
       else if (k.key === 'Enter') this.submitEdit();

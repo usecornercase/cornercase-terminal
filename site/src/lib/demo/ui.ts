@@ -4,6 +4,7 @@ import type { AgentRow, App } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawTodo } from './todo';
+import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
   type Areas,
   type Border,
@@ -62,7 +63,7 @@ import { USAGE, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
-import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
+import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
 export type Drag = { kind: 'border'; border: Border } | { kind: 'divider'; tab: Tab; divider: Divider; area: Rect };
 
@@ -291,7 +292,7 @@ export class Painter {
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
     this.overlay(areas);
-    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo);
+    if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
   }
 
@@ -936,8 +937,9 @@ export class Painter {
   private overlay(areas: Areas): void {
     const o = this.app.overlay;
     if (!o) return;
-    if (o.kind !== 'menu' && o.kind !== 'search') this.dim();
+    if (o.kind !== 'menu' && o.kind !== 'search' && o.kind !== 'keys') this.dim();
     if (o.kind === 'menu') return this.menu();
+    if (o.kind === 'keys') return this.keys(areas, o.group);
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
     if (o.kind === 'restart') return this.restart(o.scroll);
@@ -965,6 +967,27 @@ export class Painter {
       this.line(row, [rail(lit, bg), seg(`${item} `, lit ? { add: BOLD } : {})], bg);
       this.region({ r: row, click: () => app.chooseMenu(i), cursor: 'pointer' });
     });
+  }
+
+  private keys(areas: Areas, group: KeysGroup | null): void {
+    const app = this.app;
+    const items = keysItems(group);
+    const hint = app.keysHint();
+    const menu = keysArea(keysFrame(areas.pane, rect(0, 0, app.cols, app.rows), items), items, hint);
+    this.backdrop(true);
+    this.box(menu, group ? `keys › ${group}` : 'keys');
+    const kw = keyWidth(items);
+    items.forEach((item, i) => {
+      const r = keysItem(menu, items, i);
+      if (isEmpty(r)) return;
+      const lit = !!item.step && this.hovered(r);
+      const bg: Style = lit ? { bg: this.surface } : {};
+      const bold: Style = lit ? { ...bg, add: BOLD } : bg;
+      const label: Style = item.step && 'open' in item.step ? { ...bold, fg: BRAND } : bold;
+      this.line(r, [rail(lit, bg), seg(`${padTo(item.key, kw)}  `, { ...bg, fg: 6, add: BOLD }), seg(item.label, label)], bg);
+      if (item.step) this.region({ r, click: () => app.keysClick(group, i), cursor: 'pointer' });
+    });
+    if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
   private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void): void {
@@ -1328,12 +1351,12 @@ export class Painter {
     if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
-  private toast(message: string, status?: Status, undo?: () => void): void {
+  private toast(message: string, status?: Status, undo?: () => void, bug?: boolean): void {
     const app = this.app;
     const w = Math.min(3 + [...message].length + 1 + (undo ? UNDO.length + 3 : 0) + 2, app.cols);
     const h = Math.min(3, app.rows);
     const r = rect(Math.max(0, app.cols - w - 1), Math.max(0, app.rows - h - 1), w, h);
-    const icon = status ? STATUS_ICONS[status] : seg('✓', { fg: 2 });
+    const icon = bug ? seg('✗', { fg: 1, add: BOLD }) : status ? STATUS_ICONS[status] : seg('✓', { fg: 2 });
     this.g.clear(r);
     this.g.box(r, { fg: icon.s?.fg ?? 2 });
     const x = this.span(r.x + 1, r.y + 1, ` ${icon.t} `, icon.s ?? {});

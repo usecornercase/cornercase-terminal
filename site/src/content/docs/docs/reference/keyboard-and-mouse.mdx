@@ -1,11 +1,14 @@
 ---
 title: Keyboard and mouse
-description: Every mouse gesture cornercase understands, and the few keys it uses inside its own dialogs.
+description: Every mouse gesture cornercase understands, the optional prefix key and its menu of shortcuts, and the keys it uses inside its own dialogs.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
 
-cornercase is driven with the mouse. It has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+
+If your hands would rather stay on the keyboard, or your terminal can't send clicks, you can turn on a **prefix key** that opens a menu of [keyboard shortcuts](#keyboard-shortcuts). It takes that one key, and only once you choose it.
 
 ## The mouse
 
@@ -115,6 +118,42 @@ See [TODO list](../../guides/todo/).
 
 Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so does the search; other dialogs only close with their buttons or `Esc`.
 
+## Keyboard shortcuts
+
+Off by default. To turn them on, open **Settings → UI**, select **prefix key** and press the combination you want, such as `Ctrl+]`, `Alt+K` or `F12`. It must use `Ctrl` or `Alt` with a key, or be a function key; `Ctrl+C`, `Ctrl+D` and `Ctrl+Z` are refused, and the row warns you when the key you picked already means something, like `Ctrl+B` for tmux or `Ctrl+A` for the start of the line. `Backspace` there turns the shortcuts off again. The key is saved as [`prefix_key`](../configuration/#prefix_key).
+
+Press the prefix and a menu opens at the bottom of the screen with what each next key does. Press one: it runs, and the menu closes. Keys followed by `…` open a group, such as `f` for find, whose menu takes its place, so `f` then `f` finds a file by name. There is nothing to memorise, the menu is always on screen; you can click an entry too.
+
+<Screen
+  name="keys-menu"
+  alt="The shop project with git log in the pane, and the keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, t todo, comma settings, u usage, q quit; esc closes, ctrl+] twice types it in the pane"
+  caption="The menu the prefix key opens, here Ctrl+]."
+/>
+
+| Keys after the prefix | Does |
+| --- | --- |
+| `n` / `p` | Shows the next / previous tab of the workspace, going round. |
+| `1` … `9` | Shows that tab. |
+| `]` / `[` | Shows the next / previous workspace of the project. |
+| `}` / `{` | Shows the next / previous project, in the sidebar's order. |
+| `←` `↑` `↓` `→` | Moves to the pane on that side, in a split tab. |
+| `a` | Jumps to the next agent that needs you (`!` or `✓`), in any project. |
+| `/` | Opens the [search](../../guides/search/). |
+| `c` | Opens a new tab. |
+| `\|` / `-` | Splits the pane right / down. |
+| `x` | Closes the pane, after asking. On a tab's last pane it asks to close the tab. |
+| `r` | Renames the tab. |
+| `f` `f` / `f` `w` | Opens the [files panel](../../guides/files/) searching file names / the text in the files, ready to type. |
+| `f` `e` | Opens or closes the files panel. |
+| `f` `p` | Opens the search, like `/`. |
+| `g` `d` | Opens or closes the [changes panel](../../guides/changes/), with its filter ready to type. |
+| `g` `b` | Opens the changes panel and the list of branches to compare with. |
+| `w` `n` / `w` `r` / `w` `x` | New workspace / renames the workspace / closes it, after asking (a worktree asks to remove it). |
+| `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, the plan usage. |
+| `q` | Quits the window. Everything keeps running, as with **quit**. |
+
+`Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
+
 ## Keys inside cornercase's dialogs
 
 While a dialog, the search, the settings, the issue browser, the changes panel's filter field, the files panel's search bar or a TODO field is open, the keys below drive it instead of your program.
@@ -137,6 +176,7 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Settings | `Enter` or `Space` change the selected row. `↑` `↓` select. `Tab` `→` / `Shift+Tab` `←` switch tabs. `Shift+↑` `Shift+↓` reorder sources. `Delete` removes a saved token. `Esc` closes. |
 | Update | `↑` `↓` scroll the release notes. `Enter` presses the dialog's first button: **update**, **try again**, **restart now** or **copy command**. `Esc` closes it, except while downloading, like **cancel** or, once the update is installed, **later**. |
 | Compact menu | `Esc` closes it. |
+| Keys menu | The key next to an entry runs it, or opens its group. `Esc` closes it. The prefix again types it in the pane. |
 
 ## Keys in your panes
 

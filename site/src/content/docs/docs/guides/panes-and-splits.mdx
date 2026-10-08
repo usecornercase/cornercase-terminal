@@ -63,7 +63,7 @@ When the terminal shrinks, for example when you attach from a phone, the panes s
 
 ## The keyboard
 
-Every key goes to the active pane. cornercase has no shortcuts of its own, so `Ctrl+B`, `Ctrl+A`, `Alt` combinations and function keys all reach your program.
+Every key goes to the active pane. Out of the box cornercase has no shortcuts of its own, so `Ctrl+B`, `Ctrl+A`, `Alt` combinations and function keys all reach your program. If you turn on a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), only that key is taken: after it, `|` and `-` split, the arrows move between panes and `x` closes one.
 
 Keys are encoded the way a modern terminal does it: when a program turns on the kitty keyboard protocol, cornercase speaks it, and it asks your own terminal for the same so that combinations like `Shift+Enter` and `Ctrl+Enter` keep their modifiers. See [Keyboard and mouse](../../reference/keyboard-and-mouse/) for the details.
 

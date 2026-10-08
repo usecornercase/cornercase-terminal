@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod changes;
 pub mod files;
+pub mod keys;
 pub mod remote;
 pub mod tab_bar;
 pub mod todo;
@@ -2274,11 +2275,12 @@ pub enum Overlay {
     Issues(Issues),
     Settings(Settings),
     Search(Search),
+    Keys(keys::Keys),
 }
 
 impl Overlay {
     fn is_modal(&self) -> bool {
-        !matches!(self, Self::Menu { .. } | Self::Search(_))
+        !matches!(self, Self::Menu { .. } | Self::Search(_) | Self::Keys(_))
     }
 }
 
@@ -2576,6 +2578,7 @@ pub fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
+        Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}
     }
     if let Some(toast) = view.toast {
@@ -7081,6 +7084,45 @@ mod tests {
         fn a_menu_leaves_what_is_behind_it_bright() {
             let at = Position::new(4, 4);
             let t = render(&with(Overlay::Menu { at, items: vec!["new worktree".into()] }));
+            assert!(!t.backend().buffer()[areas().title.as_position()].modifier.contains(Modifier::DIM));
+        }
+
+        fn keys_menu() -> keys::Keys {
+            keys::Keys {
+                title: "keys".into(),
+                items: crate::shortcuts::items(None).iter().map(keys::Item::from).collect(),
+                hint: "esc closes · ctrl+] twice types it in the pane".into(),
+            }
+        }
+
+        fn keys_entry(label: &str) -> Position {
+            let menu = keys_menu();
+            let i = menu.items.iter().position(|item| item.label == label).expect("the entry");
+            keys::item(keys::area(keys::frame(areas().pane, AREA, &menu), &menu), &menu, i).as_position()
+        }
+
+        #[test]
+        fn renders_the_keys_menu_at_the_bottom_of_the_pane() {
+            insta::assert_snapshot!(render(&with(Overlay::Keys(keys_menu()))).backend());
+        }
+
+        #[test]
+        fn a_keys_entry_is_highlighted_on_hover() {
+            let entry = keys_entry("new tab");
+            let v = View { hover: Some(entry), ..with(Overlay::Keys(keys_menu())) };
+            assert_eq!(render(&v).backend().buffer()[entry].bg, DARK_SURFACE);
+        }
+
+        #[test]
+        fn a_keys_entry_that_names_several_keys_is_not_highlighted() {
+            let entry = keys_entry("go to tab");
+            let v = View { hover: Some(entry), ..with(Overlay::Keys(keys_menu())) };
+            assert_eq!(render(&v).backend().buffer()[entry].bg, Color::Reset);
+        }
+
+        #[test]
+        fn the_keys_menu_leaves_what_is_behind_it_bright() {
+            let t = render(&with(Overlay::Keys(keys_menu())));
             assert!(!t.backend().buffer()[areas().title.as_position()].modifier.contains(Modifier::DIM));
         }
 

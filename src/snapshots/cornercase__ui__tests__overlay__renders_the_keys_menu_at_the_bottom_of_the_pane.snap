@@ -1,0 +1,22 @@
+---
+source: src/ui.rs
+expression: "render(&with(Overlay::Keys(keys_menu()))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" projects                      │ workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │                         │                                          "
+"                               │                         │                                          "
+"  + n╭─ keys ─────────────────────────────────────────────────────────────────────────────────╮     "
+"     │ n     next tab                a     agent that needs you    g     git…                 │     "
+"     │ p     previous tab            /     search                  w     workspace…           │     "
+"     │ 1-9   go to tab               c     new tab                 i     issues               │     "
+"     │ ]     next workspace          |     split right             t     todo                 │     "
+"     │ [     previous workspace      -     split down              ,     settings             │     "
+"     │ }     next project            x     close pane              u     usage                │     "
+"     │ {     previous project        r     rename tab              q     quit                 │     "
+" ────│ ←↑↓→  pane on that side       f     find…                                              │     "
+"  set│                                                                                        │     "
+"  usa│ esc closes · ctrl+] twice types it in the pane                                         │     "
+"  qui╰────────────────────────────────────────────────────────────────────────────────────────╯     "

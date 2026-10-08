@@ -1,4 +1,5 @@
 import type { Tree } from './data';
+import type { KeysGroup } from './keys';
 import type { Context, Place, Shell } from './programs';
 import type { Node } from './split';
 
@@ -101,6 +102,7 @@ export interface SettingsOverlay {
   edit?: { row: string; label: string; input: string; token: boolean; error?: string };
   notice?: string;
   busy?: string;
+  capturing?: boolean;
 }
 
 export interface IssuesOverlay {
@@ -145,6 +147,8 @@ export type Overlay =
   | { kind: 'search'; query: string; selected: number; scroll: number }
   | { kind: 'usage' }
   | { kind: 'restart'; scroll: number }
+  | { kind: 'keys'; group: KeysGroup | null }
+  | { kind: 'closePane'; pane: number }
   | SettingsOverlay
   | IssuesOverlay;
 
@@ -165,6 +169,7 @@ export interface Config {
   memory: boolean;
   notify: string;
   updates: boolean;
+  prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
   accounts: { shortcut: boolean; linear: boolean; jira: boolean };
@@ -190,6 +195,7 @@ export const defaultConfig = (): Config => ({
   memory: false,
   notify: 'auto',
   updates: true,
+  prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
   sources: ['all', 'github', 'shortcut', 'linear', 'jira'],
   accounts: { shortcut: false, linear: false, jira: false },

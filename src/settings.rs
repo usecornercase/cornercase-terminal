@@ -7,12 +7,14 @@ use crate::config::{self, Config};
 use crate::issues::{Account, Secret, Source, jira};
 use crate::notify;
 use crate::search::Search;
+use crate::shortcuts::Prefix;
 use crate::ui;
 
 pub const DONE: &str = "done";
 pub const RESTART: &str = "restart";
 const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
 const EXTRA_ARGS: &str = "extra arguments…";
+const PREFIX_OFF: &str = "keyboard shortcuts are off";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
@@ -33,6 +35,7 @@ pub enum Row {
     Detail(Detail),
     Notifications,
     Updates,
+    Prefix,
     Token(Source),
     JiraSite,
     JiraEmail,
@@ -58,7 +61,8 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
-            | Self::Updates => "",
+            | Self::Updates
+            | Self::Prefix => "",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
@@ -81,7 +85,8 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
-            | Self::Updates => Page::Ui,
+            | Self::Updates
+            | Self::Prefix => Page::Ui,
         }
     }
 }
@@ -213,6 +218,7 @@ pub struct Settings {
     added: Vec<String>,
     pub checking: Vec<Source>,
     pub notice: Option<String>,
+    pub capturing: bool,
 }
 
 impl Settings {
@@ -228,6 +234,7 @@ impl Settings {
             added: Vec::new(),
             checking: Vec::new(),
             notice: None,
+            capturing: false,
         }
     }
 
@@ -288,6 +295,7 @@ impl Settings {
             Row::Detail(Detail::Memory),
             Row::Notifications,
             Row::Updates,
+            Row::Prefix,
         ]);
         rows.retain(|row| row.page() == self.page);
         rows
@@ -299,6 +307,7 @@ impl Settings {
         self.edit = None;
         self.pick = None;
         self.notice = None;
+        self.capturing = false;
     }
 
     fn switch_page(&mut self, delta: isize) {
@@ -398,6 +407,7 @@ impl Settings {
                 |c| &mut c.accept_trust_prompts,
                 ["trust prompts are accepted for you", "trust prompts are left to you"],
             ),
+            Row::Prefix => self.start_capture(),
             Row::Resume => self.flip(
                 |c| &mut c.resume_agents,
                 ["conversations resume after a restart", "agents no longer resume after a restart"],
@@ -698,6 +708,9 @@ impl Settings {
         if self.busy() {
             return Action::None;
         }
+        if self.capturing {
+            return self.capture(key);
+        }
         let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         if let Some(edit) = &mut self.edit {
             match key.code {
@@ -749,6 +762,40 @@ impl Settings {
             _ => {}
         }
         Action::None
+    }
+
+    fn start_capture(&mut self) -> Action {
+        self.capturing = true;
+        Action::None
+    }
+
+    fn capture(&mut self, key: KeyEvent) -> Action {
+        let plain = key.modifiers.is_empty();
+        match key.code {
+            KeyCode::Esc if plain => {
+                self.capturing = false;
+                self.notice = None;
+                Action::None
+            }
+            KeyCode::Backspace | KeyCode::Delete if plain => {
+                self.capturing = false;
+                self.save(Config { prefix_key: String::new(), ..self.config.clone() }, PREFIX_OFF.into())
+            }
+            _ => match Prefix::from_key(key) {
+                Ok(prefix) => {
+                    self.capturing = false;
+                    let notice = match prefix.clash() {
+                        Some(clash) => format!("{prefix} opens the keys menu; it is also {clash}"),
+                        None => format!("{prefix} opens the keys menu"),
+                    };
+                    self.save(Config { prefix_key: prefix.to_string(), ..self.config.clone() }, notice)
+                }
+                Err(why) => {
+                    self.notice = Some(why);
+                    Action::None
+                }
+            },
+        }
     }
 
     pub fn paste(&mut self, text: &str) {
@@ -847,6 +894,7 @@ impl Settings {
                 let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
                 ("resume conversations".into(), value.into(), "Claude Code and Codex, in their tabs".into(), false)
             }
+            Row::Prefix => self.prefix_row(),
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
         };
@@ -859,6 +907,18 @@ impl Settings {
             removable: false,
             movable: matches!(row, Row::Tab(_)),
         }
+    }
+
+    fn prefix_row(&self) -> (String, String, String, bool) {
+        let prefix = self.config.prefix();
+        let clash = prefix.and_then(Prefix::clash);
+        let value = match prefix {
+            _ if self.capturing => "press a key…".to_string(),
+            Some(prefix) => prefix.to_string(),
+            None => "off".to_string(),
+        };
+        let note = clash.map_or_else(|| "opens a menu of keyboard shortcuts".to_string(), |c| format!("also {c}"));
+        ("prefix key".into(), value, note, clash.is_some())
     }
 
     pub fn view(&self) -> ui::Overlay {
@@ -904,7 +964,9 @@ impl Settings {
         let error = self.edit.as_ref().and_then(|e| e.error.clone());
         let note = if self.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
         let hint = self.notice.clone().unwrap_or_else(|| {
-            if self.edit.is_some() {
+            if self.capturing {
+                "press the keys you want · backspace turns them off · esc cancels".into()
+            } else if self.edit.is_some() {
                 "enter saves · esc cancels".into()
             } else if self.pick.is_some() {
                 "enter picks · type to filter · esc goes back".into()
@@ -1391,7 +1453,8 @@ mod tests {
                     Row::Detail(Detail::Context),
                     Row::Detail(Detail::Memory),
                     Row::Notifications,
-                    Row::Updates
+                    Row::Updates,
+                    Row::Prefix
                 ]
             );
         }
@@ -1464,6 +1527,68 @@ mod tests {
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
             let pick = view.pick.expect("a pick list");
             assert_eq!(pick.selected.map(|i| pick.items[i].0.as_str()), Some("osc9"));
+        }
+    }
+
+    mod prefix {
+        use super::*;
+
+        fn capturing() -> Settings {
+            let mut s = settings();
+            go_to(&mut s, &Row::Prefix);
+            press(&mut s, KeyCode::Enter);
+            s
+        }
+
+        fn value(s: &Settings) -> String {
+            let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
+            view.rows.iter().find(|r| r.label == "prefix key").map(|r| r.value.clone()).expect("the prefix row")
+        }
+
+        #[test]
+        fn is_off_until_one_is_pressed() {
+            let mut s = settings();
+            s.open_page(Page::Ui);
+            assert_eq!(value(&s), "off");
+        }
+
+        #[test]
+        fn takes_the_next_key_pressed() {
+            let mut s = capturing();
+            assert_eq!(value(&s), "press a key…");
+            assert_eq!(saved(key(&mut s, KeyCode::Char(']'), KeyModifiers::CONTROL)).prefix_key, "ctrl+]");
+        }
+
+        #[test]
+        fn a_key_that_cannot_be_one_keeps_waiting() {
+            let mut s = capturing();
+            assert_eq!(press(&mut s, KeyCode::Char('k')), Action::None);
+            assert_eq!(
+                (s.capturing, s.notice.as_deref()),
+                (true, Some("use ctrl or alt with a key, or a function key"))
+            );
+        }
+
+        #[test]
+        fn a_known_clash_is_named() {
+            let mut s = capturing();
+            key(&mut s, KeyCode::Char('b'), KeyModifiers::CONTROL);
+            let notice =
+                "ctrl+b opens the keys menu; it is also tmux's prefix, so it never reaches a tmux inside a pane";
+            assert_eq!(s.notice.as_deref(), Some(notice));
+        }
+
+        #[test]
+        fn backspace_turns_it_off() {
+            let mut s = capturing();
+            s.config.prefix_key = "ctrl+]".into();
+            assert_eq!(saved(press(&mut s, KeyCode::Backspace)).prefix_key, "");
+        }
+
+        #[test]
+        fn esc_keeps_the_one_there_was() {
+            let mut s = capturing();
+            assert_eq!((press(&mut s, KeyCode::Esc), s.capturing), (Action::None, false));
         }
     }
 

@@ -38,6 +38,7 @@ use crate::restart;
 use crate::search::{self, Candidate, Goto, Kind, Search};
 use crate::secrets;
 use crate::settings::{self, Page, Settings, Status};
+use crate::shortcuts::Group as KeysGroup;
 use crate::split::{self, Dir};
 use crate::state::{
     self, AgentState, ChangesState, IssuesState, PaneState, ProjectState, State, TabState, WorkspaceState,
@@ -54,6 +55,7 @@ use crate::worktree;
 
 mod control;
 mod files_panel;
+mod shortcuts;
 mod todo_panel;
 mod trace;
 
@@ -317,6 +319,7 @@ enum Overlay {
     CloseProject { project: u64 },
     CloseWorkspace { project: u64, workspace: u64 },
     CloseTab { project: u64, workspace: u64, tab: u64 },
+    ClosePane { pane: u64 },
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Rename { target: Target, input: String },
@@ -328,6 +331,7 @@ enum Overlay {
     Restart,
     Usage,
     Branches(BranchPicker),
+    Keys(Option<KeysGroup>),
 }
 
 impl Overlay {
@@ -340,6 +344,7 @@ impl Overlay {
             Self::CloseProject { .. } => "close project",
             Self::CloseWorkspace { .. } => "close workspace",
             Self::CloseTab { .. } => "close tab",
+            Self::ClosePane { .. } => "close pane",
             Self::NewWorkspace { .. } => "new workspace",
             Self::Settings(_) => "settings",
             Self::Rename { .. } => "rename",
@@ -351,6 +356,7 @@ impl Overlay {
             Self::Usage => "usage",
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
+            Self::Keys(_) => "keys",
         }
     }
 
@@ -361,7 +367,10 @@ impl Overlay {
             Self::RemoveWorkspace { check: Check::Changed, .. } => FORCE_REMOVE_SUBMIT,
             Self::RemoveWorkspace { .. } => REMOVE_SUBMIT,
             Self::DeleteGroup { .. } => DELETE_SUBMIT,
-            Self::CloseProject { .. } | Self::CloseWorkspace { .. } | Self::CloseTab { .. } => CLOSE_SUBMIT,
+            Self::CloseProject { .. }
+            | Self::CloseWorkspace { .. }
+            | Self::CloseTab { .. }
+            | Self::ClosePane { .. } => CLOSE_SUBMIT,
             Self::Update(UpdateStep::Failed(_)) => RETRY_UPDATE_SUBMIT,
             Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
@@ -1662,6 +1671,8 @@ impl App {
             return Ok(());
         }
         match &self.overlay {
+            Some(Overlay::Keys(group)) => return self.keys_key(*group, key, area),
+            Some(Overlay::Menu { .. }) | None if self.is_prefix(key) => self.overlay = Some(Overlay::Keys(None)),
             Some(Overlay::Menu { .. }) if key.code == KeyCode::Esc => self.overlay = None,
             None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
@@ -3518,6 +3529,9 @@ impl App {
             self.group_style_mouse(group, ev, pos, area);
             return Ok(());
         }
+        if let Some(Overlay::Keys(group)) = self.overlay {
+            return self.keys_mouse(group, ev, pos, area);
+        }
         let MouseEventKind::Down(button) = ev.kind else { return Ok(()) };
         if let Some(Overlay::Menu { at, actions }) = &self.overlay {
             let at = *at;
@@ -3714,6 +3728,10 @@ impl App {
                 if let Some((p, w, t)) = self.tab_index(project, workspace, tab) {
                     self.close_tab(p, w, t);
                 }
+                None
+            }
+            Overlay::ClosePane { pane } => {
+                self.pane_action(pane, PaneAction::Close, area)?;
                 None
             }
             Overlay::Update(step) => self.submit_update(step),
@@ -4265,6 +4283,9 @@ impl App {
     }
 
     fn handle_paste(&mut self, text: &str) {
+        if matches!(self.overlay, Some(Overlay::Keys(_))) {
+            self.overlay = None;
+        }
         if let Some(Overlay::Picker { picker, .. }) = &mut self.overlay {
             text.chars().filter(|c| !c.is_control()).for_each(|c| picker.push(c));
             return;
@@ -4528,6 +4549,13 @@ impl App {
                 note: None,
                 submit: overlay.submit_label(),
             }),
+            Overlay::ClosePane { pane } => ui::Overlay::Confirm(ui::Confirm {
+                title: "close pane",
+                message: self.close_pane_message(*pane)?,
+                note: None,
+                submit: overlay.submit_label(),
+            }),
+            Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
             Overlay::Issues(b) => b.view(area, issues::now()),
             Overlay::Search(search) => self.search_view(search),
@@ -4592,6 +4620,17 @@ impl App {
         let (p, w, t) = self.tab_index(project, workspace, tab)?;
         let name = self.projects[p].workspaces[w].tabs[t].label(&self.config);
         Some(format!("Close the tab {name}? The programs running in it are stopped."))
+    }
+
+    fn close_pane_message(&self, pane: u64) -> Option<String> {
+        let term = self
+            .projects
+            .iter()
+            .flat_map(|p| &p.workspaces)
+            .flat_map(|w| &w.tabs)
+            .find_map(|t| t.panes.iter().find(|term| term.id == pane))?;
+        let name = term.program(&self.config).unwrap_or_else(|| "?".into());
+        Some(format!("Close the pane running {name}? What runs in it is stopped."))
     }
 
     fn search_view(&self, search: &Search) -> ui::Overlay {
@@ -5266,6 +5305,325 @@ mod tests {
             send_key(&mut app, KeyCode::Char('b'), KeyModifiers::CONTROL);
             send_key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
             assert_eq!(app.projects.len(), 1);
+        }
+    }
+
+    mod shortcuts {
+        use super::*;
+        use crate::activity::Activity;
+        use crate::files::Mode;
+        use crate::shortcuts::Group;
+
+        fn with_prefix(mut app: App) -> App {
+            app.config.prefix_key = "ctrl+]".into();
+            app
+        }
+
+        fn prefix(app: &mut App) {
+            send_key(app, KeyCode::Char(']'), KeyModifiers::CONTROL);
+        }
+
+        fn keys(app: &mut App, typed: &str) {
+            prefix(app);
+            for c in typed.chars() {
+                send_key(app, KeyCode::Char(c), KeyModifiers::NONE);
+            }
+        }
+
+        fn add_tabs(app: &mut App, n: usize) {
+            for _ in 0..n {
+                app.push_tab(app.active, 0, AREA, None).expect("open a tab");
+            }
+        }
+
+        fn active_tab(app: &App) -> usize {
+            app.project().and_then(Project::workspace).map(|w| w.active).expect("a workspace")
+        }
+
+        fn add_workspace(app: &mut App) {
+            let path = app.projects[app.active].path.clone();
+            let workspace = app.new_workspace(AREA, path, Some("second".into()), false).expect("a workspace");
+            app.projects[app.active].workspaces.push(workspace);
+        }
+
+        fn split_right(app: &mut App) {
+            keys(app, "|");
+            assert_eq!(app.tab().map(|t| t.panes.len()), Some(2));
+        }
+
+        fn active_pane(app: &App) -> u64 {
+            app.term().map(|t| t.id).expect("a pane")
+        }
+
+        fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
+            wait_until(text, || {
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                screen(app).contains(text)
+            });
+        }
+
+        #[test]
+        fn without_a_prefix_the_key_reaches_the_pane() {
+            let (mut app, _rx) = app();
+            prefix(&mut app);
+            assert!(app.overlay.is_none());
+        }
+
+        #[test]
+        fn the_prefix_opens_the_keys_menu() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            prefix(&mut app);
+            assert!(matches!(app.overlay, Some(Overlay::Keys(None))));
+        }
+
+        #[test]
+        fn the_prefix_twice_types_it_in_the_pane() {
+            let (app, rx) = app();
+            let mut app = with_prefix(app);
+            type_line(&mut app, "echo cat-\"\"starts; cat -v");
+            shows(&mut app, &rx, "cat-starts");
+            prefix(&mut app);
+            prefix(&mut app);
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            shows(&mut app, &rx, "^]");
+            assert!(app.overlay.is_none());
+        }
+
+        #[rstest::rstest]
+        #[case::esc(KeyCode::Esc)]
+        #[case::unknown(KeyCode::Char('z'))]
+        fn a_key_that_runs_nothing_closes_the_menu(#[case] code: KeyCode) {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            prefix(&mut app);
+            send_key(&mut app, code, KeyModifiers::NONE);
+            assert_eq!((app.overlay.is_none(), app.tab().map(|t| t.panes.len())), (true, Some(1)));
+        }
+
+        #[test]
+        fn a_group_key_opens_its_menu() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "f");
+            assert!(matches!(app.overlay, Some(Overlay::Keys(Some(Group::Find)))));
+        }
+
+        #[test]
+        fn a_dialog_keeps_the_prefix() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            app.open_usage();
+            prefix(&mut app);
+            assert!(matches!(app.overlay, Some(Overlay::Usage)));
+        }
+
+        #[test]
+        fn a_paste_closes_the_menu() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            prefix(&mut app);
+            app.handle_event(AppEvent::Input(Event::Paste("x".into())), AREA).expect("paste");
+            assert!(app.overlay.is_none());
+        }
+
+        #[test]
+        fn a_click_on_an_entry_runs_it() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            prefix(&mut app);
+            let view = app.keys_view(None);
+            let menu = ui::keys::area(ui::keys::frame(app.layout(AREA).pane, AREA, &view), &view);
+            let i = view.items.iter().position(|item| item.label == "new tab").expect("a new tab entry");
+            click(&mut app, ui::keys::item(menu, &view, i).as_position());
+            assert_eq!((app.overlay.is_none(), app.projects[0].workspaces[0].tabs.len()), (true, 2));
+        }
+
+        #[test]
+        fn n_and_p_step_through_the_tabs_and_wrap() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            add_tabs(&mut app, 2);
+            let mut seen = Vec::new();
+            for typed in ["n", "n", "p", "p"] {
+                keys(&mut app, typed);
+                seen.push(active_tab(&app));
+            }
+            assert_eq!(seen, [1, 2, 1, 0]);
+        }
+
+        #[test]
+        fn a_digit_shows_that_tab() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            add_tabs(&mut app, 2);
+            keys(&mut app, "3");
+            keys(&mut app, "9");
+            assert_eq!(active_tab(&app), 2);
+        }
+
+        #[test]
+        fn brackets_switch_the_workspace() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            add_workspace(&mut app);
+            keys(&mut app, "]");
+            let next = app.projects[0].active;
+            keys(&mut app, "]");
+            assert_eq!((next, app.projects[0].active), (1, 0));
+        }
+
+        #[test]
+        fn braces_switch_the_project() {
+            let (app, _rx, _dirs) = app_with(3);
+            let mut app = with_prefix(app);
+            app.active = 0;
+            keys(&mut app, "{");
+            let previous = app.active;
+            keys(&mut app, "}");
+            assert_eq!((previous, app.active), (2, 0));
+        }
+
+        #[test]
+        fn arrows_focus_the_pane_on_that_side() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            let left = active_pane(&app);
+            split_right(&mut app);
+            let right = active_pane(&app);
+            prefix(&mut app);
+            send_key(&mut app, KeyCode::Left, KeyModifiers::NONE);
+            let after_left = active_pane(&app);
+            prefix(&mut app);
+            send_key(&mut app, KeyCode::Left, KeyModifiers::NONE);
+            assert_eq!((after_left, active_pane(&app), right != left), (left, left, true));
+        }
+
+        #[test]
+        fn a_jumps_to_the_agent_that_needs_you() {
+            let (app, _rx, _dirs) = app_with(2);
+            let mut app = with_prefix(app);
+            app.active = 0;
+            let term = app.projects[1].workspaces[0].tabs[0].pane_mut().expect("a pane");
+            term.agent.follow(Some(agents::CLAUDE));
+            term.agent.update(Some(Activity::Waiting), false, Instant::now());
+            keys(&mut app, "a");
+            assert_eq!(app.active, 1);
+        }
+
+        #[test]
+        fn a_says_when_no_agent_needs_you() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "a");
+            assert_eq!(toast(&app), Some("no agent needs you"));
+        }
+
+        #[test]
+        fn c_opens_a_tab_and_shows_it() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "c");
+            assert_eq!((app.projects[0].workspaces[0].tabs.len(), active_tab(&app)), (2, 1));
+        }
+
+        #[test]
+        fn x_asks_before_closing_a_pane_of_a_split() {
+            let (app, rx) = app();
+            let mut app = with_prefix(app);
+            split_right(&mut app);
+            keys(&mut app, "x");
+            assert_eq!(confirmation(&app).as_deref().map(|m| m.starts_with("Close the pane running")), Some(true));
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            pump_until(&mut app, &rx, "the pane closes", |app| app.tab().is_some_and(|t| t.panes.len() == 1));
+        }
+
+        #[test]
+        fn x_on_the_only_pane_asks_to_close_the_tab() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "x");
+            assert!(matches!(app.overlay, Some(Overlay::CloseTab { .. })));
+        }
+
+        #[test]
+        fn r_asks_for_the_tab_name() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "r");
+            assert!(matches!(app.overlay, Some(Overlay::Rename { target: Target::Tab(..), .. })));
+        }
+
+        #[rstest::rstest]
+        #[case::names("ff", Mode::Name)]
+        #[case::text("fw", Mode::Text)]
+        fn find_opens_the_files_panel_with_its_search_taking_the_keys(#[case] typed: &str, #[case] mode: Mode) {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, typed);
+            let workspace = app.focus().workspace.expect("a workspace");
+            assert_eq!((app.files_typing(), app.files.mode(workspace)), (true, mode));
+        }
+
+        #[test]
+        fn the_prefix_still_works_while_the_files_search_has_the_keys() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "ff");
+            keys(&mut app, "c");
+            assert_eq!(app.projects[0].workspaces[0].tabs.len(), 2);
+        }
+
+        #[test]
+        fn g_then_d_outside_git_says_so() {
+            let (app, _rx, _dirs) = app_with(1);
+            let mut app = with_prefix(app);
+            keys(&mut app, "gd");
+            assert_eq!(toast(&app), Some("this workspace is not in a git repository"));
+        }
+
+        #[test]
+        fn g_then_d_opens_the_changes_with_their_filter_taking_the_keys() {
+            let repo = git_repo(&[]);
+            let (app, _rx) = app_in(repo.path(), no_config());
+            let mut app = with_prefix(app);
+            keys(&mut app, "gd");
+            assert_eq!((app.changes_shown(), app.filtering()), (true, true));
+        }
+
+        #[test]
+        fn t_opens_the_todo_list_on_a_new_item() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "t");
+            assert!(app.todo_typing());
+        }
+
+        #[test]
+        fn w_then_n_asks_for_a_new_workspace() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "wn");
+            assert!(matches!(app.overlay, Some(Overlay::NewWorkspace { .. })));
+        }
+
+        #[test]
+        fn w_then_x_asks_before_closing_a_plain_workspace() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            add_workspace(&mut app);
+            keys(&mut app, "wx");
+            assert!(matches!(app.overlay, Some(Overlay::CloseWorkspace { .. })));
+        }
+
+        #[test]
+        fn q_detaches() {
+            let (app, _rx) = app();
+            let mut app = with_prefix(app);
+            keys(&mut app, "q");
+            assert!(app.take_detach());
         }
     }
 
@@ -8938,7 +9296,8 @@ rm -f "$1/sessions/$$.json"
                     Row::Detail(Detail::Context),
                     Row::Detail(Detail::Memory),
                     Row::Notifications,
-                    Row::Updates
+                    Row::Updates,
+                    Row::Prefix
                 ]
             );
         }

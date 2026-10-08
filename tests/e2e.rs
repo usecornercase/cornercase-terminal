@@ -743,6 +743,22 @@ fn ctrl_b_reaches_the_shell() {
 }
 
 #[test]
+fn the_prefix_key_opens_a_menu_whose_keys_run_actions() {
+    let session = Session::new();
+    std::fs::write(session.dir.join("config.json"), r#"{"prefix_key": "ctrl+]"}"#).expect("write config");
+    let mut app = Harness::open(session, ROWS, COLS);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+    app.send(b"echo in-the-first\r");
+    app.wait_for("output in the first tab", |s| s.contains("in-the-first"));
+
+    app.send(b"\x1d");
+    app.wait_for("the keys menu opens", |s| s.contains("agent that needs you"));
+    app.send(b"c");
+
+    app.wait_for("a second tab shows", |s| !s.contains("in-the-first") && !s.contains("agent that needs you"));
+}
+
+#[test]
 fn ctrl_enter_reaches_a_program_that_asked_for_kitty_keys() {
     let mut app = Harness::start();
     app.wait_for_raw("the app asks the terminal for kitty keys", |raw| raw.contains("\x1b[>1u"));

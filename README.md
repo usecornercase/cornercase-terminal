@@ -5,7 +5,7 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![Docs](https://img.shields.io/badge/docs-usecornercase.dev-875fff)](https://usecornercase.dev/docs/)
 
-A terminal multiplexer for working on several projects at once, each with its own git worktrees and coding agents. Every action is a mouse button, so you never need to learn a prefix key.
+A terminal multiplexer for working on several projects at once, each with its own git worktrees and coding agents. Every action is a mouse button, so you never need to learn a prefix key (there is an optional one with a menu of shortcuts, for when your hands stay on the keyboard).
 
 ![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away; close the terminal, they keep working.](site/public/og.png)
 

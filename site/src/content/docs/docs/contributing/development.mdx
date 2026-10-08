@@ -89,7 +89,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 - `rustfmt.toml` sets `max_width = 120`.
 
 <Aside type="caution" title="Two rules that are easy to break">
-**Mouse buttons only**: the app has no keyboard shortcuts of its own, and `e2e::ctrl_b_reaches_the_shell` guards it. Please don't add one without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.
+**Mouse first**: keys go to the program in the pane, and `e2e::ctrl_b_reaches_the_shell` guards it. The only shortcuts live in the menu behind the optional prefix key (`src/shortcuts.rs`), off by default. Please don't add others, or a default prefix, without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.
 </Aside>
 
 ## Pull requests

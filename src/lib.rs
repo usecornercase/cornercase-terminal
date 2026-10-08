@@ -33,6 +33,7 @@ pub mod search;
 pub mod secrets;
 pub mod server;
 pub mod settings;
+pub mod shortcuts;
 pub mod split;
 pub mod state;
 pub mod syntax;

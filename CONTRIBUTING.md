@@ -6,7 +6,7 @@ Thanks for helping. Bug reports, ideas and pull requests are all welcome. Everyo
 
 For anything bigger than a small fix, open an issue first so we can agree on the approach. cornercase has a few deliberate choices that are easy to break by accident:
 
-- **Mouse buttons only.** Every key goes to the program in the active pane; the app has no keyboard shortcuts of its own. Please do not add any without discussing it first.
+- **Mouse first.** Every key goes to the program in the active pane. The only keyboard shortcuts live in the menu behind the optional prefix key, which is off by default; please do not add others, or a default prefix, without discussing it first.
 - **The server owns the shells.** The UI is a thin client that only writes frames, so behaviour belongs in the server (`App`), not in `client.rs`.
 
 The rules for every change are in [AGENTS.md](AGENTS.md), and the design and the reasons behind it in [DESIGN.md](DESIGN.md). Read the section for the area you touch.

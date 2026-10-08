@@ -1136,7 +1136,7 @@ impl App {
         Ok(Some(json(&Done::default())))
     }
 
-    fn tab_target(&self, found: Option<(usize, usize, usize)>) -> Option<Target> {
+    pub(super) fn tab_target(&self, found: Option<(usize, usize, usize)>) -> Option<Target> {
         let (p, w, t) = found?;
         let project = &self.projects[p];
         let workspace = &project.workspaces[w];

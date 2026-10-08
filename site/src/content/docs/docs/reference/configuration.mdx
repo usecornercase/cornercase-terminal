@@ -74,8 +74,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-ui"
-  crop={[2, 1, 106, 13]}
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under an agent's tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release"
+  crop={[2, 1, 106, 14]}
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under an agent's tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release; prefix key off, opens a menu of keyboard shortcuts"
 />
 
 | Row | What it sets |
@@ -90,6 +90,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **memory** | Show how much memory a Claude Code, Codex or opencode tab uses at the end of that line, such as `1.2 GB`. Off by default. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
+| **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
 
 ### Keys in the settings modal
 
@@ -139,6 +140,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "agents_section": false,
   "counts": true,
   "dim_inactive_panes": true,
+  "prefix_key": "",
   "model": true,
   "context": true,
   "memory": false,
@@ -172,6 +174,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`agents_section`](#agents_section) | boolean | `false` |
 | [`counts`](#counts) | boolean | `true` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
+| [`prefix_key`](#prefix_key) | string | `""` |
 | [`model`](#model) | boolean | `true` |
 | [`context`](#context) | boolean | `true` |
 | [`memory`](#memory) | boolean | `false` |
@@ -265,6 +268,10 @@ Whether a project shows how many workspaces it has after its name, such as `(3)`
 #### `dim_inactive_panes`
 
 Whether panes you aren't typing in are dimmed, in tabs split into several panes.
+
+#### `prefix_key`
+
+The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts), such as `"ctrl+]"`, `"alt+k"` or `"f12"`: modifiers (`ctrl`, `alt`, `shift`) joined by `+`, then a character, `space` or a function key. `Ctrl` or `Alt` is needed except for function keys, and `ctrl+c`, `ctrl+d` and `ctrl+z` are refused. Empty, the default, or anything that can't be a prefix leaves keyboard shortcuts off.
 
 #### `model`
 
