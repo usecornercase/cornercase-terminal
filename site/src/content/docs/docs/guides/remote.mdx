@@ -4,6 +4,7 @@ description: Keep the shells and agents on another machine, a dev server, a clou
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Screen from '../../../../components/Screen.astro';
 
 Your agents can run on a bigger machine than the one you carry: a dev server, a cloud VM, the desktop at home. `cornercase remote` opens the window on your laptop and attaches it to the cornercase server on that machine:
 
@@ -40,16 +41,11 @@ Your laptop only shows the window. Keys, the mouse, pastes and your terminal's c
 
 The window stays open and says so:
 
-```text
-╭─ connection lost ────────────────────────────────────────╮
-│                                                          │
-│ reconnecting to devbox…                                  │
-│ trying again in 4 s                                      │
-│ ssh: connect to host devbox port 22: Connection refused  │
-│                                                          │
-│ its shells keep running on devbox                  quit  │
-╰──────────────────────────────────────────────────────────╯
-```
+<Screen
+  name="remote-reconnecting"
+  alt="The cornercase window attached to devbox after the connection dropped: the last screen stays behind a connection lost dialog that says reconnecting to devbox, trying again in 2 s, the ssh error Connection refused, that its shells keep running on devbox, and a quit button"
+  caption="The last screen stays behind the notice until the connection is back."
+/>
 
 It tries again at once, then after 1, 2, 4 and 8 seconds, then every 15 seconds, and shows the last thing `ssh` said. Your shells and agents keep running on the other machine meanwhile, and once it is back the window shows them as they are now. A laptop that slept or changed Wi-Fi comes back on its own.
 

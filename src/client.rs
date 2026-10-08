@@ -492,8 +492,40 @@ fn seconds(left: Duration) -> u64 {
     u64::try_from(left.as_millis().div_ceil(1000)).unwrap_or(u64::MAX)
 }
 
-struct Lost {
+#[derive(Debug, Default)]
+struct Retries {
     failures: u32,
+    shown: bool,
+}
+
+impl Retries {
+    fn linked(&mut self) {
+        self.shown = false;
+    }
+
+    fn showed(&mut self) {
+        self.shown = true;
+        self.failures = 0;
+    }
+
+    fn lost(&mut self) -> Duration {
+        if !self.shown {
+            self.failures += 1;
+        }
+        self.delay()
+    }
+
+    fn failed(&mut self) -> Duration {
+        self.failures += 1;
+        self.delay()
+    }
+
+    fn delay(&self) -> Duration {
+        if self.failures == 0 { Duration::ZERO } else { backoff(self.failures) }
+    }
+}
+
+struct Lost {
     retry_at: Option<Instant>,
     error: Option<String>,
     stderr: Option<Stderr>,
@@ -511,6 +543,7 @@ struct Window<'a> {
     out: Option<Sender<ClientMessage>>,
     guard: Option<Guard>,
     lost: Option<Lost>,
+    retries: Retries,
 }
 
 impl Window<'_> {
@@ -527,6 +560,7 @@ impl Window<'_> {
         self.out = Some(out);
         self.guard = Some(guard);
         self.lost = None;
+        self.retries.linked();
         Ok(())
     }
 
@@ -544,6 +578,7 @@ impl Window<'_> {
             Incoming::Server(generation, received) if generation == self.generation => {
                 match next(received, self.target.reconnects())? {
                     Next::Show(bytes) => {
+                        self.retries.showed();
                         let mut out = stdout();
                         out.write_all(&bytes)?;
                         out.flush()?;
@@ -612,14 +647,14 @@ impl Window<'_> {
         self.generation += 1;
         self.out = None;
         let stderr = self.guard.take().and_then(|mut guard| guard.stderr.take());
-        self.lost = Some(Lost { failures: 0, retry_at: Some(Instant::now()), error: None, stderr, hovered: false });
+        let retry_at = Some(Instant::now() + self.retries.lost());
+        self.lost = Some(Lost { retry_at, error: None, stderr, hovered: false });
         self.tick(Instant::now())
     }
 
     fn failed(&mut self, error: &Error) -> Result<()> {
         let Some(lost) = &mut self.lost else { return Ok(()) };
-        lost.failures += 1;
-        lost.retry_at = Some(Instant::now() + backoff(lost.failures));
+        lost.retry_at = Some(Instant::now() + self.retries.failed());
         lost.error = Some(remote::reason(error));
         self.show_notice()
     }
@@ -666,6 +701,7 @@ fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal) -> Result
         out: None,
         guard: None,
         lost: None,
+        retries: Retries::default(),
     };
     window.link(link)?;
     let _threads = Threads::spawn(tx)?;
@@ -842,6 +878,40 @@ mod tests {
             let waits: Vec<u64> = (1..=7).map(|n| backoff(n).as_secs()).collect();
 
             assert_eq!(waits, [1, 2, 4, 8, 15, 15, 15]);
+        }
+
+        #[test]
+        fn a_link_that_showed_the_screen_reconnects_at_once() {
+            let mut retries = Retries::default();
+            retries.linked();
+            retries.showed();
+
+            assert_eq!(retries.lost(), Duration::ZERO);
+        }
+
+        #[test]
+        fn a_link_that_ends_before_its_first_frame_waits_longer_each_time() {
+            let mut retries = Retries::default();
+            let waits: Vec<Duration> = (0..3)
+                .map(|_| {
+                    retries.linked();
+                    retries.lost()
+                })
+                .collect();
+
+            assert_eq!(waits, [SECOND, SECOND * 2, SECOND * 4]);
+        }
+
+        #[test]
+        fn failed_attempts_and_early_ends_add_up() {
+            let mut retries = Retries::default();
+            retries.linked();
+            retries.showed();
+            retries.lost();
+            retries.failed();
+            retries.linked();
+
+            assert_eq!(retries.lost(), SECOND * 2);
         }
 
         #[test]
