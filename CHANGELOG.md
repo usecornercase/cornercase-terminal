@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.15
+
+- Keep your agents on another machine and the window on your laptop: `cornercase remote devbox` attaches to the cornercase server on `devbox` over your own `ssh` (your config, keys and jump hosts apply), starting it there if needed. Keys, the mouse, your colours, copying and desktop notifications go through your local terminal. When the connection drops, after the laptop slept or the Wi-Fi changed, the window stays, says it is reconnecting and comes back by itself, with every shell still running there; `Esc` gives up. Both machines need the same version of cornercase, and it tells you which one to update when they differ.
+- Answering `y` when cornercase offers to restart a server from another build no longer leaves the window hanging blank now and then.
+
 ## 0.11.14
 
 - A split tab keeps the name of its first pane, the top-left one, instead of changing every time you click another pane, and its row ends with a grey `+n` saying how many other panes it holds. A long name is cut before the count is.
