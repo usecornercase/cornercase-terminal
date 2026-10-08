@@ -1670,7 +1670,7 @@ fn the_todo_list_takes_commands() {
 }
 
 #[test]
-fn a_worktree_made_from_the_command_line_is_removed_by_it() {
+fn a_worktree_made_from_the_command_line_is_removed_by_its_branch() {
     let session = Session::new();
     let worktrees = session.dir.join("worktrees");
     std::fs::write(session.dir.join("config.json"), format!("{{\"worktrees_dir\": \"{}\"}}", worktrees.display()))
@@ -1680,12 +1680,14 @@ fn a_worktree_made_from_the_command_line_is_removed_by_it() {
     git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "init"]);
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
-    let project = session.says(&["open", &repo.display().to_string()]);
+    let project = session.says(&["open", &repo.display().to_string(), "--focus"]);
 
     let workspace = session.says(&["new-workspace", "e2e/cli", "--worktree", "--project", &project]);
     let checkout = worktrees.join(repo.file_name().expect("repo name")).join("e2e-cli");
     assert!(checkout.is_dir(), "no checkout at {}", checkout.display());
-    session.says(&["close", "--workspace", &workspace, "--remove-worktree"]);
+    let missing = session.cli(&["close", "--worktree", "e2e/other", "--remove-worktree"]);
+    assert!(refused(&missing, 2, &format!("workspace {workspace}  e2e/cli  branch e2e/cli  worktree")), "{missing:?}");
+    session.says(&["close", "--worktree", "e2e/cli", "--remove-worktree"]);
 
     assert!(!checkout.exists(), "the checkout is still there");
     let _ = std::fs::remove_dir_all(&repo);

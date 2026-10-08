@@ -31,6 +31,7 @@ group 9  work  collapsed
 
 - Ids come from one counter and last as long as the server runs: after a restart, the same tabs get new ids. Take them from `status`, or from what a command printed.
 - Every pane's shell has `CORNERCASE_PANE` set to its id. Inside a pane, commands act on that pane, its tab, workspace and project unless you name another one; `(you)` marks it in `status`. Run from anywhere else, they act on what the window shows, marked `(shown)`.
+- Where a command takes `--workspace ID`, `--worktree BRANCH` names the workspace on that branch instead, looked up in the same project: the one the command runs in, else the shown one. `cornercase start claude --worktree fix/login` made it, so `cornercase close --worktree fix/login --remove-worktree` can take it down without reading its id from `status`. A branch that no workspace there is on, or that several are on (a workspace without a worktree of its own shares its project's branch), exits with status 2 and lists the workspaces to pick from.
 - The pane is what `send`, `keys`, `read` and `wait` work on. Where they take `--tab ID`, it stands for the tab's agent pane, or its active pane when no agent runs in it.
 - **Nothing changes what the window shows** except `focus` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them.
 
@@ -78,7 +79,7 @@ cornercase split --down -- tail -f server.log    # splits the pane below
 
 - `open` finds a project that is already open instead of opening it twice.
 - `new-workspace` adds to the project the command runs in (`--project ID` for another one). With `--worktree`, the project must be at a repository's root, as in the [new workspace dialog](../worktrees/): the checkout goes in the worktrees folder from settings, the branch is created from `HEAD` when it does not exist, and the command returns once git has made it. Each new workspace gets one tab.
-- `new-tab` opens the tab in the workspace the command runs in (`--workspace ID` for another one). `split` splits the pane it runs in (`--pane ID` for another one), and refuses a pane too small to split.
+- `new-tab` opens the tab in the workspace the command runs in (`--workspace ID` or `--worktree BRANCH` for another one). `split` splits the pane it runs in (`--pane ID` for another one), and refuses a pane too small to split.
 - After `--`, the words of a command are joined with spaces and typed at the prompt once the shell is ready, as `ssh` does with its command, so quote what the shell should read as one argument: `-- 'cargo test 2>&1 | tee test.log'`. The command returns once it is typed.
 - Each prints the new pane's, workspace's or project's id, so `pane=$(cornercase new-tab …)` needs nothing else. `--json` prints every id: `{"project": 1, "workspace": 2, "tab": 8, "pane": 9}`.
 - `--focus` also shows what was made.
@@ -164,14 +165,14 @@ Repeat `--pane` and `--tab` to wait on several panes, with `--any` or `--all` (s
 
 ```sh
 cornercase close --tab 9
-cornercase close --workspace 5 --remove-worktree
+cornercase close --worktree fix/login --remove-worktree
 cornercase rename 'review #42'
 cornercase rename --workspace 5 ''
 cornercase focus --pane 12
 ```
 
-- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
-- `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
+- `close` takes exactly one of `--pane`, `--tab`, `--workspace`, `--worktree` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
+- `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--worktree`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
 
 ### Leave notes
