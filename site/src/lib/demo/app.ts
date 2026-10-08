@@ -223,6 +223,7 @@ interface Running {
   place: string;
   agent: string | null;
   status: Status;
+  resumes: boolean;
 }
 
 const counted = (n: number, word: string): string => (n === 1 ? `1 ${word}` : `${n} ${word}s`);
@@ -244,6 +245,9 @@ function restartText(running: Running[]): string {
     parts.push(`${counted(others.length, agents.length ? 'other program' : 'program')} (${named})`);
   }
   const text = `${RESTART_STOPS} Running now: ${parts.join(' and ')}. ${RESTART_COMES_BACK}`;
+  const resumed = running.filter((r) => r.resumes).length;
+  if (resumed === 1) return `${text} 1 agent conversation resumes in its tab.`;
+  if (resumed > 1) return `${text} ${resumed} agent conversations resume in their tabs.`;
   return running.some((r) => r.agent === 'claude') ? `${text} ${RESTART_RESUME}` : text;
 }
 
@@ -1959,6 +1963,7 @@ export class App {
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
+        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code and Codex, in their tabs' },
       ];
       for (const kind of this.listedKinds()) {
         const mode = this.modeOf(kind);
@@ -2033,6 +2038,9 @@ export class App {
     } else if (row.id === 'trust') {
       c.trust = !c.trust;
       o.notice = c.trust ? 'trust prompts are accepted for you' : 'trust prompts are left to you';
+    } else if (row.id === 'resume') {
+      c.resume = !c.resume;
+      o.notice = c.resume ? 'conversations resume after a restart' : 'agents no longer resume after a restart';
     } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
       c[row.id] = !c[row.id];
       o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
@@ -2108,8 +2116,9 @@ export class App {
         w.tabs.flatMap((t) =>
           t.panes.flatMap((pane): Running[] => {
             const place = `${projectLabel(p)} › ${workspaceLabel(w)}`;
-            if (pane.agent) return [{ program: pane.agent, place, agent: pane.agent, status: paneStatus(pane) ?? 'idle' }];
-            return pane.shell.busy ? [{ program: pane.shell.name, place, agent: null, status: 'idle' }] : [];
+            const resumes = this.config.resume;
+            if (pane.agent) return [{ program: pane.agent, place, agent: pane.agent, status: paneStatus(pane) ?? 'idle', resumes }];
+            return pane.shell.busy ? [{ program: pane.shell.name, place, agent: null, status: 'idle', resumes: false }] : [];
           }),
         ),
       ),
@@ -2129,7 +2138,8 @@ export class App {
 
   restartNow(): void {
     this.closeOverlay();
-    this.emit('narrate', 'For real, the server starts again and every tab comes back with a new shell. The demo keeps yours running.');
+    const agents = this.config.resume ? ', agents back in their conversations' : '';
+    this.emit('narrate', `For real, the server starts again and every tab comes back with a new shell${agents}. The demo keeps yours running.`);
   }
 
   pickChoices(o: SettingsOverlay): PickItem[] {

@@ -69,7 +69,7 @@ Yes, two ways. Run `cornercase` on the remote machine: the server lives there, y
 
 ### Do my shells survive a reboot?
 
-No. Programs live in the server, and the server doesn't survive a reboot, `cornercase kill-server` or a restart after an update. What survives is the layout: your projects, workspaces, tabs and splits come back, each pane with a fresh shell in its folder.
+No. Programs live in the server, and the server doesn't survive a reboot, `cornercase kill-server` or a restart after an update. What survives is the layout: your projects, workspaces, tabs and splits come back, each pane with a fresh shell in its folder. Claude Code and Codex come back in the conversation they had, [resumed](../../guides/sessions/#agents-resume-their-conversations) in their tabs.
 
 ### Which coding agents does it support?
 
@@ -99,7 +99,7 @@ Linux and macOS, on x86_64 and arm64. The prebuilt Linux binaries need glibc 2.3
 
 ### How do I update it?
 
-From the app: when a new version is out, a button with its number appears next to `settings`. Click it to update, then restart; before restarting it says what is running and will stop, and your layout comes back with new shells. From a shell, `cornercase update` does the same at any time. Homebrew installs update with `brew update && brew upgrade cornercase`. See [Update](../../installation/#update).
+From the app: when a new version is out, a button with its number appears next to `settings`. Click it to update, then restart; before restarting it says what is running and will stop, and your layout comes back with new shells, agents in their conversations. From a shell, `cornercase update` does the same at any time. Homebrew installs update with `brew update && brew upgrade cornercase`. See [Update](../../installation/#update).
 
 ### Does it phone home?
 

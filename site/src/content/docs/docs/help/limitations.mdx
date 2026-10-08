@@ -10,7 +10,7 @@ cornercase is young. These are the gaps you may run into today.
 | Limitation | What it means for you |
 | --- | --- |
 | **No scrollback navigation** | Each pane keeps a scrollback history, but you can't scroll back through it from cornercase yet. Pipe long output through `less`, or use your program's own scrolling. |
-| **Shells don't survive the server** | After `cornercase kill-server`, a reboot or a restart after an update, the layout comes back but every pane starts a new shell: running programs and their output are gone. |
+| **Shells don't survive the server** | After `cornercase kill-server`, a reboot or a restart after an update, the layout comes back but every pane starts a new shell: running programs and their output are gone. Claude Code and Codex [resume their conversations](../../guides/sessions/#agents-resume-their-conversations), but whatever they were doing is stopped. |
 | **Terminal colours are read once** | The server asks your terminal for its colours when it starts. If you switch theme, restart it with `cornercase restart` (or **settings → restart**) to see the new colours. |
 | **No key releases** | Programs inside cornercase only see key presses, never releases, even with the kitty keyboard protocol. |
 | **One machine per window** | [`cornercase remote`](../../guides/remote/) shows the server of one machine; projects of several machines don't share a sidebar. Open a window for each. |

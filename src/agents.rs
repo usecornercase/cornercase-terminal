@@ -3,6 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::config::Config;
+use crate::state::AgentState;
 
 pub const AUTO: &str = "auto";
 pub const CLAUDE: &str = "claude";
@@ -184,6 +185,18 @@ pub fn command_line(config: &Config, kind: &str) -> String {
         .chain(args(config, kind).iter().map(|a| quote(a)))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+pub fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {
+    let kind = agent.kind.as_str();
+    let args = with_mode(&args(config, kind), &modes(config, kind), agent.mode.as_deref());
+    let conversation = agent.conversation.clone();
+    let line = match kind {
+        CLAUDE => [args, vec!["--resume".into(), conversation]].concat(),
+        CODEX => [vec!["resume".into()], args, vec![conversation]].concat(),
+        _ => return None,
+    };
+    Some(std::iter::once(command(config, kind)).chain(line).map(|a| quote(&a)).collect::<Vec<_>>().join(" "))
 }
 
 pub fn resolve(config: &Config, explicit: Option<&str>, running: Option<&str>) -> Option<String> {
@@ -380,6 +393,43 @@ mod tests {
                 (command(&c, "mine"), kinds(&c).contains(&"mine".to_string())),
                 ("/opt/bin/my-agent".into(), true)
             );
+        }
+    }
+
+    mod resuming {
+        use super::*;
+
+        fn agent(kind: &str, mode: Option<&str>) -> AgentState {
+            AgentState { kind: kind.into(), conversation: "4f2c-91".into(), mode: mode.map(str::to_string) }
+        }
+
+        #[rstest]
+        #[case::claude("claude", None, "claude --resume 4f2c-91")]
+        #[case::claude_in_its_mode("claude", Some("plan"), "claude --permission-mode plan --resume 4f2c-91")]
+        #[case::codex("codex", None, "codex resume 4f2c-91")]
+        #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
+        fn the_conversation_comes_back_in_the_mode_it_ran_in(
+            #[case] kind: &str,
+            #[case] mode: Option<&str>,
+            #[case] expected: &str,
+        ) {
+            assert_eq!(resume_line(&config(), &agent(kind, mode)).as_deref(), Some(expected));
+        }
+
+        #[test]
+        fn the_extra_arguments_stay_and_the_configured_mode_gives_way() {
+            let mut c = config();
+            c.agent_args.insert("claude".into(), strings(&["--permission-mode", "auto", "--add-dir", "../my dir"]));
+            c.agent_commands.insert("claude".into(), "/opt/claude".into());
+            assert_eq!(
+                resume_line(&c, &agent("claude", None)).as_deref(),
+                Some("/opt/claude --add-dir '../my dir' --resume 4f2c-91")
+            );
+        }
+
+        #[test]
+        fn other_agents_have_no_way_to_resume() {
+            assert_eq!(resume_line(&config(), &agent("gemini", None)), None);
         }
     }
 

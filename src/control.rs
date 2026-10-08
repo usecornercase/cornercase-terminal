@@ -433,6 +433,7 @@ pub struct PaneInfo {
     pub context: Option<u16>,
     pub active: bool,
     pub caller: bool,
+    pub resumes: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

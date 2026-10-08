@@ -11,7 +11,7 @@ description: The cornercase command, its subcommands and the messages it can sto
 cornercase              # open the UI, starting the server if needed
 cornercase remote HOST  # open the UI on the server of another machine, over ssh
 cornercase update       # install the latest release and restart the server
-cornercase restart      # restart the server; the session comes back with new shells
+cornercase restart      # restart the server; the session comes back with new shells, agents resume
 cornercase kill-server  # stop the server and every shell in it
 cornercase logs         # print the end of the server's log
 cornercase --version    # print the version
@@ -34,12 +34,11 @@ A client only attaches to a server started from the same binary. After an update
 The running cornercase server comes from another build; cornercase was probably updated.
 Restarting stops every program running in cornercase's terminals. Running now: 2 agents (1 working,
 1 waiting for you) and 1 other program (`npm` in shop › main). Your projects, workspaces, tabs and
-splits come back, each tab with a new shell in its folder. To pick up a Claude Code conversation
-afterwards, run `claude --continue` in its tab.
+splits come back, each tab with a new shell in its folder. 2 agent conversations resume in their tabs.
 Restart it now? [y/N]
 ```
 
-The list comes from the old server itself, so you see what it is running before you answer. A server too old to say, or one that doesn't answer within a second, gets a general warning instead. Answer `y` to stop the old server and start one on the new binary: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. Any other answer leaves the old server running and exits with the [message](#messages) below. When the input isn't a terminal, as in a script, it doesn't ask.
+The list comes from the old server itself, so you see what it is running before you answer. A server too old to say, or one that doesn't answer within a second, gets a general warning instead. Answer `y` to stop the old server and start one on the new binary: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code and Codex [resume their conversations](../../guides/sessions/#agents-resume-their-conversations). Any other answer leaves the old server running and exits with the [message](#messages) below. When the input isn't a terminal, as in a script, it doesn't ask.
 
 ### `cornercase remote`
 
@@ -70,12 +69,11 @@ The server that is running still has the old version, so `update` then asks:
 The running cornercase server still runs 0.4.2.
 Restarting stops every program running in cornercase's terminals. Running now: 2 agents (1 working,
 1 waiting for you) and 1 other program (`npm` in shop › main). Your projects, workspaces, tabs and
-splits come back, each tab with a new shell in its folder. To pick up a Claude Code conversation
-afterwards, run `claude --continue` in its tab.
+splits come back, each tab with a new shell in its folder. 2 agent conversations resume in their tabs.
 Restart it now? [y/N]
 ```
 
-With `y` or `--yes`, it saves your session and restarts the server. `--yes` prints the same list first, since it doesn't ask, and both print what was stopped afterwards, such as `stopped 2 agents and 1 other program`: every attached window reopens on the new version. Your projects, workspaces, tabs and splits come back, and each pane gets a new shell in its folder. If you say no, or when the input isn't a terminal and `--yes` isn't given, the old server keeps running until you run `cornercase kill-server`. `update` never opens the UI. Run `cornercase` afterwards if you want it.
+With `y` or `--yes`, it saves your session and restarts the server. `--yes` prints the same list first, since it doesn't ask, and both print what was stopped afterwards, such as `stopped 2 agents and 1 other program`: every attached window reopens on the new version. Your projects, workspaces, tabs and splits come back, each pane gets a new shell in its folder, and agents [resume their conversations](../../guides/sessions/#agents-resume-their-conversations). If you say no, or when the input isn't a terminal and `--yes` isn't given, the old server keeps running until you run `cornercase kill-server`. `update` never opens the UI. Run `cornercase` afterwards if you want it.
 
 You can run it inside one of cornercase's own panes. That pane closes with the server and reopens with the rest of your session.
 
@@ -87,7 +85,7 @@ When cornercase can't replace its own binary (Homebrew installed it, you can't w
 
 ### `cornercase restart`
 
-Restarts the server, like **settings → restart** in the app. It first lists what is running in your terminals and asks `Restart it now? [y/N]`, since restarting stops every program in them, agents included. With `y` or `--yes`, it saves your session and restarts the server: every attached window reopens, and your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. `--yes` prints the list first, since it doesn't ask, and both print what was stopped afterwards, such as `stopped 1 agent and 2 other programs`. If you say no, or when the input isn't a terminal and `--yes` isn't given, the server keeps running. If no server is running, it prints `no cornercase server is running`.
+Restarts the server, like **settings → restart** in the app. It first lists what is running in your terminals and asks `Restart it now? [y/N]`, since restarting stops every program in them, agents included. With `y` or `--yes`, it saves your session and restarts the server: every attached window reopens, and your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder and each agent in its [conversation](../../guides/sessions/#agents-resume-their-conversations). `--yes` prints the list first, since it doesn't ask, and both print what was stopped afterwards, such as `stopped 1 agent and 2 other programs`. If you say no, or when the input isn't a terminal and `--yes` isn't given, the server keeps running. If no server is running, it prints `no cornercase server is running`.
 
 You can run it inside one of cornercase's own panes. That pane closes with the server and reopens with the rest of your session.
 

@@ -41,6 +41,7 @@ The server saves your session to `~/.local/state/cornercase/session.json` (or `$
 - which projects and workspaces are folded in the [tree](../projects-workspaces-tabs/#the-tree);
 - the branch each workspace's changes panel compares with, when you picked one;
 - which panes send right-clicks to their program;
+- the conversation of each Claude Code or Codex pane, so it can [resume](#agents-resume-their-conversations);
 - the issue browser's last tab and filters.
 
 The [TODO list](../todo/) itself is kept apart, in `todos.json` next to `session.json`.
@@ -53,6 +54,12 @@ Processes can't be saved. When a **new** server starts, after `cornercase kill-s
 
 A server that is already running never restores: reattaching just shows what is there.
 
+### Agents resume their conversations
+
+A pane where Claude Code or Codex was running comes back in the same conversation: once its new shell is ready, cornercase types `claude --resume <id>` or `codex resume <id>` into it, with the command and arguments from **settings → Agents** and the mode the agent was running in (plan, read only…). The agent opens idle, with the conversation on screen, waiting for you; whatever it was doing when the server stopped is not started again.
+
+Only a conversation with something in it comes back: an agent you opened and never wrote to, or one you had already quit, leaves a plain shell. To get plain shells everywhere, turn off **settings → Agents → resume conversations**.
+
 ## Restart the server
 
 Click **settings**, then **restart** next to **done**, or run:
@@ -61,7 +68,7 @@ Click **settings**, then **restart** next to **done**, or run:
 cornercase restart
 ```
 
-Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder. To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab.
+Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code and Codex [resume their conversations](#agents-resume-their-conversations).
 
 ## Stop the server
 
@@ -73,7 +80,7 @@ This ends every shell and program in every pane, and closes all attached clients
 
 ## Updating cornercase
 
-When you [update](../../installation/#update) from the app, its last step, **restart now**, saves your session, restarts the server on the new binary and reopens every attached terminal on it. [`cornercase update`](../../reference/command-line/#cornercase-update) does the same from a shell when you answer `y`. Your layout comes back from the saved session; programs that were running, agents included, are stopped, and each pane starts a new shell in its folder. Before restarting, cornercase says what is running right now, so you can wait for an agent to finish first: how many agents are working or waiting for you, and which other programs run where. Panes sitting at their shell prompt aren't listed.
+When you [update](../../installation/#update) from the app, its last step, **restart now**, saves your session, restarts the server on the new binary and reopens every attached terminal on it. [`cornercase update`](../../reference/command-line/#cornercase-update) does the same from a shell when you answer `y`. Your layout comes back from the saved session; programs that were running, agents included, are stopped, each pane starts a new shell in its folder, and agents [resume their conversations](#agents-resume-their-conversations). Before restarting, cornercase says what is running right now, so you can wait for an agent to finish first: how many agents are working or waiting for you, and which other programs run where. Panes sitting at their shell prompt aren't listed.
 
 A client only attaches to a server built from the same binary. If you skip the restart, or update with Homebrew or by rebuilding, the old server keeps running and the next `cornercase` asks:
 
@@ -81,8 +88,7 @@ A client only attaches to a server built from the same binary. If you skip the r
 The running cornercase server comes from another build; cornercase was probably updated.
 Restarting stops every program running in cornercase's terminals. Running now: 2 agents (1 working,
 1 waiting for you) and 1 other program (`npm` in shop › main). Your projects, workspaces, tabs and
-splits come back, each tab with a new shell in its folder. To pick up a Claude Code conversation
-afterwards, run `claude --continue` in its tab.
+splits come back, each tab with a new shell in its folder. 2 agent conversations resume in their tabs.
 Restart it now? [y/N]
 ```
 

@@ -20,6 +20,7 @@ use crate::host_theme::HostTheme;
 use crate::memory;
 use crate::process;
 use crate::protocol;
+use crate::state::AgentState;
 
 const SCROLLBACK: usize = 5_000;
 const READ_BUFFER: usize = 16 * 1024;
@@ -44,6 +45,7 @@ pub struct Term {
     pub agent: activity::Pane,
     pub context: context::Pane,
     pub memory: memory::Pane,
+    pub resume: Option<AgentState>,
     pub output_at: Instant,
     pub input_at: Option<Instant>,
     pub submitted: Option<Instant>,
@@ -112,6 +114,7 @@ impl Term {
             agent: activity::Pane::default(),
             context: context::Pane::default(),
             memory: memory::Pane::default(),
+            resume: None,
             output_at: Instant::now(),
             input_at: None,
             submitted: None,

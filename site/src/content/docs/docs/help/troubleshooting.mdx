@@ -117,6 +117,10 @@ Sessions are restored only by a **new** server, and projects or workspaces whose
 
 If some tabs were missing and a message said `could not restore … see server.log`, their shells couldn't start: `server.log` says why, and the session as it was saved is in `session.json.bak` (an older copy, if there was one, in `session.json.bak.1`). To get it back, stop the server (`cornercase kill-server`) and copy `session.json.bak` over `session.json`.
 
+### An agent didn't resume its conversation
+
+Only Claude Code and Codex [resume](../../guides/sessions/#agents-resume-their-conversations), and only a conversation that had something in it when the server stopped. cornercase remembers it while the agent runs, so one started a second or two before the server stopped may be missed. If the pane shows the resume command and then an error such as `No conversation found`, the conversation was deleted or lives under another account or config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) than the shell's; run `claude --resume` or `codex resume` there to pick one. If no pane resumes, check that **settings → Agents → resume conversations** is on.
+
 ## Using cornercase
 
 ### "cornercase hit a bug, see server.log"

@@ -154,6 +154,7 @@ export interface Config {
   agent: string;
   submit: boolean;
   trust: boolean;
+  resume: boolean;
   sidebar: string;
   tabs: string;
   agentsSection: boolean;
@@ -178,6 +179,7 @@ export const defaultConfig = (): Config => ({
   agent: 'claude',
   submit: false,
   trust: false,
+  resume: true,
   sidebar: 'projects_on_top',
   tabs: 'sidebar',
   agentsSection: false,

@@ -99,6 +99,11 @@ impl Pane {
     pub fn codex_turn(&self) -> bool {
         self.codex.as_ref().is_some_and(codex::Rollout::turn)
     }
+
+    pub fn conversation(&self) -> Option<&str> {
+        let claude = self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str());
+        claude.or_else(|| self.codex.as_ref()?.id())
+    }
 }
 
 fn transcript_path(dir: &Path, cwd: &Path, id: &str) -> Option<PathBuf> {

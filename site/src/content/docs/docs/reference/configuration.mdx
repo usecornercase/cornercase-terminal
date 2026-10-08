@@ -32,7 +32,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 <Screen
   name="settings-agents"
   crop={[2, 1, 106, 28]}
-  alt="The Agents tab: default agent claude, send the prompt unticked, trust prompts left to you, and how each agent starts: claude in plan mode, codex and gemini in their default mode, plus another agent"
+  alt="The Agents tab: default agent claude, send the prompt unticked, trust prompts left to you, conversations resumed after a restart, and how each agent starts: claude in plan mode, codex and gemini in their default mode, plus another agent"
 />
 
 | Row | What it sets |
@@ -40,6 +40,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
+| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code or Codex comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
 
@@ -130,6 +131,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "prompt": "{url}",
   "submit": false,
   "accept_trust_prompts": false,
+  "resume_agents": true,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "sidebar": "projects_on_top",
@@ -162,6 +164,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`prompt`](#prompt) | string | `"{url}"` |
 | [`submit`](#submit) | boolean | `false` |
 | [`accept_trust_prompts`](#accept_trust_prompts) | boolean | `false` |
+| [`resume_agents`](#resume_agents) | boolean | `true` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
@@ -226,6 +229,10 @@ The [prompt template](../prompt/) handed to an agent started on an issue. Placeh
 #### `accept_trust_prompts`
 
 Whether cornercase answers yes to the agent's "do you trust this folder?" question when it starts one. Off by default: you answer, and the prompt waits until you have. Older versions called this key `auto_accept_trust_prompt` and had it on; that key is ignored now, so it is off until you turn it on again. See [Trust prompts](../agents/#trust-prompts).
+
+#### `resume_agents`
+
+Whether a pane that ran Claude Code or Codex comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>` or `codex resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 #### `trust_prompt_pattern`
 

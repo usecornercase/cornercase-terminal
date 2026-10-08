@@ -692,6 +692,7 @@ impl App {
             context: context.and_then(|c| c.percent),
             active,
             caller: caller == Some(term.id),
+            resumes: self.config.resume_agents && term.resume.is_some(),
         }
     }
 

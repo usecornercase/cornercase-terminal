@@ -149,7 +149,7 @@ Astro + Starlight, deployed to GitHub Pages by `.github/workflows/pages.yml` (Pa
 
 ## Known limitations
 
-- No scrollback navigation. Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells.
+- No scrollback navigation. Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells (Claude Code and Codex resume their conversations in them).
 - Host colours are read once; a theme switch is not seen.
 - Inner programs never get key releases.
 - Runs on Linux and macOS only.

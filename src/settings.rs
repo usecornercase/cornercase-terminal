@@ -41,6 +41,7 @@ pub enum Row {
     DefaultAgent,
     Submit,
     Trust,
+    Resume,
     Kind(String),
     AddAgent,
 }
@@ -61,7 +62,7 @@ impl Row {
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
-            Self::DefaultAgent | Self::Submit | Self::Trust => "Agent",
+            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
         }
     }
@@ -69,7 +70,9 @@ impl Row {
     pub fn page(&self) -> Page {
         match self {
             Self::Folder | Self::Fetch => Page::Worktrees,
-            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Kind(_) | Self::AddAgent => Page::Agents,
+            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::Kind(_) | Self::AddAgent => {
+                Page::Agents
+            }
             Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
@@ -271,7 +274,7 @@ impl Settings {
             }
         }
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
-        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust]);
+        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
@@ -394,6 +397,10 @@ impl Settings {
             Row::Trust => self.flip(
                 |c| &mut c.accept_trust_prompts,
                 ["trust prompts are accepted for you", "trust prompts are left to you"],
+            ),
+            Row::Resume => self.flip(
+                |c| &mut c.resume_agents,
+                ["conversations resume after a restart", "agents no longer resume after a restart"],
             ),
             Row::Kind(kind) => {
                 let modes = agents::modes(&self.config, &kind);
@@ -835,6 +842,10 @@ impl Settings {
             Row::Trust => {
                 let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
+            }
+            Row::Resume => {
+                let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
+                ("resume conversations".into(), value.into(), "Claude Code and Codex, in their tabs".into(), false)
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),

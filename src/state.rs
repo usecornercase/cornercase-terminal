@@ -96,13 +96,23 @@ pub struct PaneState {
     pub cwd: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub right_clicks: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentState {
+    pub kind: String,
+    pub conversation: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 impl WorkspaceState {
     fn plain(path: PathBuf, cwds: Vec<Option<PathBuf>>, active: usize) -> Self {
         let tabs = cwds.into_iter().map(|cwd| TabState {
             name: None,
-            panes: vec![PaneState { cwd, right_clicks: false }],
+            panes: vec![PaneState { cwd, right_clicks: false, agent: None }],
             active: 0,
             layout: None,
         });
@@ -193,7 +203,7 @@ impl From<V1State> for V2State {
             if i <= old.active {
                 active = workspaces.len();
             }
-            let terminals = vec![PaneState { cwd: Some(cwd.clone()), right_clicks: false }];
+            let terminals = vec![PaneState { cwd: Some(cwd.clone()), right_clicks: false, agent: None }];
             workspaces.push(V2Workspace { path: cwd, name: term.name, terminals, active: 0 });
         }
         Self { workspaces, active }
@@ -375,6 +385,19 @@ mod tests {
             workspace.worktree = true;
             workspace.tabs[0].name = Some("server".into());
             saved.projects[0].workspaces.push(workspace);
+
+            save(&path, &saved).expect("save");
+
+            assert_eq!(load(&path), Some(saved));
+        }
+
+        #[test]
+        fn round_trips_the_conversation_of_an_agent_pane() {
+            let tmp = TempDir::new();
+            let path = tmp.path().join("session.json");
+            let mut saved = state(&["/a"]);
+            let agent = AgentState { kind: "claude".into(), conversation: "4f2c-91".into(), mode: Some("plan".into()) };
+            saved.projects[0].workspaces[0].tabs[0].panes[0].agent = Some(agent);
 
             save(&path, &saved).expect("save");
 

@@ -137,6 +137,10 @@ impl Rollout {
         self.turn
     }
 
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
     pub fn update(&mut self) {
         if self.read_file().is_none() {
             *self = Self::new(std::mem::take(&mut self.path));

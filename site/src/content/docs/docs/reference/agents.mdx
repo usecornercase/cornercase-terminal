@@ -128,6 +128,17 @@ If the shell is still in the foreground 3 s after the command was typed, the age
 
 The prompt is pasted with bracketed paste when the agent supports it. When the prompt is left for you to send, or the agent doesn't support bracketed paste, it is put on a single line first.
 
+## Resuming after a restart
+
+When a new server restores your session, a pane where Claude Code or Codex was running types the agent's resume command into its new shell, once the shell has been quiet for 0.3 s:
+
+| Agent | Command typed |
+| --- | --- |
+| Claude Code | `claude <arguments> --resume <session id>` |
+| Codex | `codex resume <arguments> <session id>` |
+
+The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+
 ## Trust prompts
 
 Many agents ask whether you trust a folder the first time they run in it, and a new worktree is always a new folder. Saying yes lets the agent use the repository's own agent configuration, such as project settings, hooks and MCP servers.

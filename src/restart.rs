@@ -25,6 +25,7 @@ pub struct Running {
     pub place: String,
     pub agent: Option<String>,
     pub status: Option<String>,
+    pub resumes: bool,
 }
 
 pub fn from_report(report: &Report) -> Vec<Running> {
@@ -37,6 +38,7 @@ pub fn from_report(report: &Report) -> Vec<Running> {
                 place: format!("{}{CRUMB_SEPARATOR}{}", project.name, workspace.name),
                 agent: pane.agent.clone(),
                 status: pane.status.clone(),
+                resumes: pane.resumes,
             }));
         }
     }
@@ -61,10 +63,12 @@ pub fn confirmation(running: Option<&[Running]>) -> String {
     let now: Vec<String> =
         parts(running).into_iter().map(|(counted, detail)| format!("{counted} ({detail})")).collect();
     let text = format!("{STOPS} Running now: {}. {COMES_BACK}", now.join(" and "));
-    if running.iter().any(|r| r.agent.as_deref() == Some(agents::CLAUDE)) {
-        return format!("{text} {RESUME}");
+    match running.iter().filter(|r| r.resumes).count() {
+        0 if running.iter().any(|r| r.agent.as_deref() == Some(agents::CLAUDE)) => format!("{text} {RESUME}"),
+        0 => text,
+        1 => format!("{text} 1 agent conversation resumes in its tab."),
+        n => format!("{text} {n} agent conversations resume in their tabs."),
     }
-    text
 }
 
 pub fn stopped(running: &[Running]) -> Option<String> {
@@ -112,6 +116,7 @@ mod tests {
             place: "shop › main".into(),
             agent: agent.map(str::to_string),
             status: status.map(str::to_string),
+            resumes: false,
         }
     }
 
@@ -150,6 +155,17 @@ mod tests {
              Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder. \
              To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab."
         );
+    }
+
+    #[rstest]
+    #[case::one(1, "1 agent conversation resumes in its tab.")]
+    #[case::two(2, "2 agent conversations resume in their tabs.")]
+    fn conversations_that_resume_are_counted_instead_of_the_hint(#[case] n: usize, #[case] said: &str) {
+        let agents = [running("claude", Some("claude"), None), running("codex", Some("codex"), None)];
+        let all: Vec<Running> =
+            agents.into_iter().enumerate().map(|(i, agent)| Running { resumes: i < n, ..agent }).collect();
+        let text = confirmation(Some(&all));
+        assert_eq!((text.ends_with(said), text.contains("--continue")), (true, false));
     }
 
     #[rstest]
