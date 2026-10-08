@@ -233,8 +233,10 @@ impl Message {
 
 fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Session {
     let messages: Vec<Message> = newest_first.iter().filter_map(|data| serde_json::from_str(data).ok()).collect();
-    let turn =
-        messages.iter().find(|m| m.assistant()).is_some_and(|m| m.time.as_ref().is_none_or(|t| t.completed.is_none()));
+    let turn = messages
+        .iter()
+        .find(|m| matches!(m.role.as_deref(), Some("user" | "assistant")))
+        .is_some_and(|m| !m.assistant() || m.time.as_ref().is_none_or(|t| t.completed.is_none()));
     let context = messages.iter().find_map(Message::key).map(|(provider, model)| {
         let found = models.find(file, provider, model);
         let reply = messages.iter().find(|m| m.assistant() && m.used().is_some());
@@ -292,7 +294,7 @@ mod tests {
     #[case::a_turn_after_a_reply(&[REPLY, WORKING], true, Some(shown("DeepSeek V4 Pro", Some(12))))]
     #[case::an_interrupted_turn(&[REPLY, ABORTED], false, Some(shown("DeepSeek V4 Pro", Some(12))))]
     #[case::a_compaction(&[REPLY, COMPACTION], false, Some(shown("DeepSeek V4 Pro", Some(0))))]
-    #[case::another_model_picked(&[REPLY, FLASH], false, Some(shown("DeepSeek V4 Flash", None)))]
+    #[case::a_message_sent_before_its_reply_starts(&[REPLY, FLASH], true, Some(shown("DeepSeek V4 Flash", None)))]
     #[case::nothing_yet(&[], false, None)]
     fn the_versioned_messages_give_the_turn_and_the_line_opencode_shows(
         #[case] messages: &[&str],
