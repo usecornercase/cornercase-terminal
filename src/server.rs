@@ -628,7 +628,7 @@ impl Server {
         }
         self.restart = self.app.take_restart();
         if self.restart.is_some() {
-            log::info!("server", "restart chosen in the update dialog", client = id);
+            log::info!("server", "restart chosen in the window", client = id);
         }
         if self.app.take_detach() {
             log::info!("server", "client detached", client = id);

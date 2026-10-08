@@ -68,6 +68,7 @@ const NO_TAB: &str = "no tab open";
 const NO_TAB_HINT: &str = " opens a shell here";
 const TAGLINE: &str = "every agent in its own corner";
 const WELCOME_HINT: &str = " opens a folder";
+pub const NEW_BUTTON: &str = "+ new";
 const LOGO: [(&str, &str); 6] =
     [("   █████████", ""), ("▄▄▄▀▀▀▀▀▀▀▀▀", ""), ("███", ""), ("███   ", "██"), ("███   ", "██"), ("███   ", "▀▀")];
 const BRAND_COLOR: Color = Color::Indexed(99);
@@ -81,6 +82,10 @@ const DARK_LINE: Color = Color::Indexed(239);
 const LIGHT_LINE: Color = Color::Indexed(250);
 const CLOSE_BUTTON_WIDTH: u16 = 3;
 const COMPACT_CLOSE_WIDTH: u16 = 5;
+const MENU_BUTTON_WIDTH: u16 = 2;
+const COMPACT_MENU_WIDTH: u16 = 4;
+const MIN_MENU_ROW_WIDTH: u16 = 20;
+pub const ROW_MENU_ICON: &str = "⋯";
 const TOAST_ICON: &str = " ✓ ";
 const BUG_ICON: &str = " ✗ ";
 const TOAST_MARGIN: u16 = 1;
@@ -94,6 +99,8 @@ const WAITING_COLOR: Color = Color::Indexed(208);
 const GROUP_INDENT: &str = "  ";
 pub const GROUP_ICONS: [char; 12] = ['●', '◉', '◐', '◆', '■', '▲', '▼', '★', '✦', '♥', '♣', '♠'];
 pub const GROUP_COLOURS: [u8; 16] = [1, 9, 208, 214, 3, 11, 2, 10, 6, 14, 4, 12, 99, 5, 13, 205];
+pub const GROUP_STYLES: [(char, u8); 8] =
+    [('●', 12), ('◆', 2), ('★', 99), ('♥', 9), ('▲', 208), ('■', 214), ('✦', 205), ('◉', 6)];
 const ICONS_PER_ROW: usize = 6;
 const COLOURS_PER_ROW: usize = 8;
 const ICON_CELL: u16 = 3;
@@ -841,8 +848,10 @@ pub fn new_project_button(list: Rect, pitch: u16, rows: &[SidebarRow]) -> Rect {
 pub enum SidebarHit {
     Select(usize),
     Close(usize),
+    Menu(usize),
     Group(usize),
     CloseGroup(usize),
+    GroupMenu(usize),
     New,
 }
 
@@ -855,13 +864,15 @@ pub fn sidebar_hit(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, p
         return Some(SidebarHit::New);
     }
     let i = layout.at(pos)?;
-    let on_close = row_close_button(layout.item(i), pitch).contains(pos);
-    match rows[i] {
-        SidebarRow::Gap | SidebarRow::Landing => None,
-        SidebarRow::Group(g) if on_close => Some(SidebarHit::CloseGroup(g)),
-        SidebarRow::Group(g) => Some(SidebarHit::Group(g)),
-        SidebarRow::Project(p) if on_close => Some(SidebarHit::Close(p)),
-        SidebarRow::Project(p) => Some(SidebarHit::Select(p)),
+    let button = row_button(layout.item(i), pitch, pos);
+    match (rows[i], button) {
+        (SidebarRow::Gap | SidebarRow::Landing, _) => None,
+        (SidebarRow::Group(g), Some(RowButton::Close)) => Some(SidebarHit::CloseGroup(g)),
+        (SidebarRow::Group(g), Some(RowButton::Menu)) => Some(SidebarHit::GroupMenu(g)),
+        (SidebarRow::Group(g), None) => Some(SidebarHit::Group(g)),
+        (SidebarRow::Project(p), Some(RowButton::Close)) => Some(SidebarHit::Close(p)),
+        (SidebarRow::Project(p), Some(RowButton::Menu)) => Some(SidebarHit::Menu(p)),
+        (SidebarRow::Project(p), None) => Some(SidebarHit::Select(p)),
     }
 }
 
@@ -917,12 +928,41 @@ pub fn row_close_button(row: Rect, pitch: u16) -> Rect {
     Rect::new(row.right().saturating_sub(width), row.y, width.min(row.width), pitch.min(row.height))
 }
 
+pub fn row_menu_button(row: Rect, pitch: u16) -> Rect {
+    let close = row_close_button(row, pitch);
+    let width = match pitch {
+        _ if row.width < MIN_MENU_ROW_WIDTH => 0,
+        1 => MENU_BUTTON_WIDTH,
+        _ => COMPACT_MENU_WIDTH,
+    };
+    let x = close.x.saturating_sub(width).max(row.x);
+    Rect::new(x, row.y, close.x - x, close.height)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowButton {
+    Close,
+    Menu,
+}
+
+fn row_button(row: Rect, pitch: u16, pos: Position) -> Option<RowButton> {
+    if row_close_button(row, pitch).contains(pos) {
+        Some(RowButton::Close)
+    } else if row_menu_button(row, pitch).contains(pos) {
+        Some(RowButton::Menu)
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceHit {
     Workspace(usize),
     CloseWorkspace(usize),
+    WorkspaceMenu(usize),
     Tab(usize, usize),
     CloseTab(usize, usize),
+    TabMenu(usize, usize),
     NewTab(usize),
     NewWorkspace,
 }
@@ -930,9 +970,13 @@ pub enum WorkspaceHit {
 impl WorkspaceHit {
     pub fn workspace(self) -> Option<usize> {
         match self {
-            Self::Workspace(w) | Self::CloseWorkspace(w) | Self::Tab(w, _) | Self::CloseTab(w, _) | Self::NewTab(w) => {
-                Some(w)
-            }
+            Self::Workspace(w)
+            | Self::CloseWorkspace(w)
+            | Self::WorkspaceMenu(w)
+            | Self::Tab(w, _)
+            | Self::CloseTab(w, _)
+            | Self::TabMenu(w, _)
+            | Self::NewTab(w) => Some(w),
             Self::NewWorkspace => None,
         }
     }
@@ -947,14 +991,16 @@ pub fn workspace_hit(list: Rect, pitch: u16, tabs: &[Vec<u16>], scroll: usize, p
         return Some(WorkspaceHit::NewWorkspace);
     }
     let i = layout.at(pos)?;
-    let on_close = row_close_button(layout.item(i), pitch).contains(pos);
-    Some(match workspace_rows(tabs)[i] {
-        WorkspaceRow::Gap | WorkspaceRow::Landing => return None,
-        WorkspaceRow::Workspace(w) if on_close => WorkspaceHit::CloseWorkspace(w),
-        WorkspaceRow::Workspace(w) => WorkspaceHit::Workspace(w),
-        WorkspaceRow::Tab(w, t) if on_close => WorkspaceHit::CloseTab(w, t),
-        WorkspaceRow::Tab(w, t) => WorkspaceHit::Tab(w, t),
-        WorkspaceRow::NewTab(w) => WorkspaceHit::NewTab(w),
+    let button = row_button(layout.item(i), pitch, pos);
+    Some(match (workspace_rows(tabs)[i], button) {
+        (WorkspaceRow::Gap | WorkspaceRow::Landing, _) => return None,
+        (WorkspaceRow::Workspace(w), Some(RowButton::Close)) => WorkspaceHit::CloseWorkspace(w),
+        (WorkspaceRow::Workspace(w), Some(RowButton::Menu)) => WorkspaceHit::WorkspaceMenu(w),
+        (WorkspaceRow::Workspace(w), None) => WorkspaceHit::Workspace(w),
+        (WorkspaceRow::Tab(w, t), Some(RowButton::Close)) => WorkspaceHit::CloseTab(w, t),
+        (WorkspaceRow::Tab(w, t), Some(RowButton::Menu)) => WorkspaceHit::TabMenu(w, t),
+        (WorkspaceRow::Tab(w, t), None) => WorkspaceHit::Tab(w, t),
+        (WorkspaceRow::NewTab(w), _) => WorkspaceHit::NewTab(w),
     })
 }
 
@@ -1006,6 +1052,7 @@ pub enum TreeHit {
     Fold(TreeRow),
     Select(TreeRow),
     Close(TreeRow),
+    Menu(TreeRow),
     NewTab(usize, usize),
     NewWorkspace(usize),
     NewProject,
@@ -1023,7 +1070,7 @@ impl TreeRow {
 impl TreeHit {
     pub fn workspace(self) -> Option<(usize, usize)> {
         match self {
-            Self::Fold(row) | Self::Select(row) | Self::Close(row) => row.workspace(),
+            Self::Fold(row) | Self::Select(row) | Self::Close(row) | Self::Menu(row) => row.workspace(),
             Self::NewTab(p, w) => Some((p, w)),
             Self::NewWorkspace(_) | Self::NewProject => None,
         }
@@ -1149,12 +1196,13 @@ pub fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Position) -> 
     }
     let i = layout.at(pos)?;
     let (r, row) = (layout.item(i), rows[i]);
-    let on_close = row_close_button(r, 1).contains(pos);
+    let button = row_button(r, 1, pos);
     Some(match row {
         TreeRow::Gap | TreeRow::Landing => return None,
         TreeRow::NewTab(p, w) => TreeHit::NewTab(p, w),
         TreeRow::NewWorkspace(p) => TreeHit::NewWorkspace(p),
-        _ if on_close => TreeHit::Close(row),
+        _ if button == Some(RowButton::Close) => TreeHit::Close(row),
+        _ if button == Some(RowButton::Menu) => TreeHit::Menu(row),
         TreeRow::Group(_) => TreeHit::Fold(row),
         _ if arrow_in(r, shape, row).contains(pos) => TreeHit::Fold(row),
         _ => TreeHit::Select(row),
@@ -1712,7 +1760,16 @@ pub fn settings_edit(settings: Rect) -> Rect {
 }
 
 pub fn settings_done(settings: Rect) -> Rect {
-    issue_buttons_in(settings_rows(settings)[4], &[crate::settings::DONE])[0]
+    settings_buttons(settings)[1]
+}
+
+pub fn settings_restart(settings: Rect) -> Rect {
+    settings_buttons(settings)[0]
+}
+
+fn settings_buttons(settings: Rect) -> [Rect; 2] {
+    let rects = issue_buttons_in(settings_rows(settings)[4], &[crate::settings::RESTART, crate::settings::DONE]);
+    [rects[0], rects[1]]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1778,6 +1835,7 @@ pub enum SettingsHit {
     MoveDown(usize),
     Pick(usize),
     Done,
+    Restart,
 }
 
 pub struct SettingsLayout<'a> {
@@ -1793,6 +1851,9 @@ pub fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -> Optio
     let settings = settings_area(area);
     if settings_done(settings).contains(pos) {
         return Some(SettingsHit::Done);
+    }
+    if settings_restart(settings).contains(pos) {
+        return Some(SettingsHit::Restart);
     }
     if let Some(i) = settings_tabs(settings, layout.tabs).iter().position(|r| r.contains(pos)) {
         return Some(SettingsHit::Tab(i));
@@ -2005,6 +2066,7 @@ pub struct Confirm {
 }
 
 pub struct Update {
+    pub title: &'static str,
     pub message: String,
     pub notes: Vec<Line<'static>>,
     pub scroll: usize,
@@ -2264,6 +2326,7 @@ pub struct TabView {
     pub landing: Option<(Rect, Place)>,
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "each flag is a state or a setting the drawing follows")]
 pub struct View<'a> {
     pub groups: Vec<GroupEntry>,
     pub projects: Vec<ProjectEntry>,
@@ -2294,6 +2357,7 @@ pub struct View<'a> {
     pub drag: Option<Drag>,
     pub tree: Option<TreeView>,
     pub agents: Option<AgentsView>,
+    pub counts: bool,
 }
 
 impl View<'_> {
@@ -2468,10 +2532,7 @@ fn welcome_text(muted: Color) -> Vec<Line<'static>> {
         Line::from(wordmark()),
         Line::from(Span::styled(TAGLINE, dim)),
         Line::default(),
-        Line::from(vec![
-            Span::styled("+ new project", Style::default().fg(Color::Cyan)),
-            Span::styled(WELCOME_HINT, dim),
-        ]),
+        Line::from(vec![Span::styled(NEW_BUTTON, Style::default().fg(Color::Cyan)), Span::styled(WELCOME_HINT, dim)]),
     ]
 }
 
@@ -2851,7 +2912,7 @@ fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm) {
 fn draw_update(f: &mut Frame, view: &View, update: &Update) {
     let r = picker_area(f.area());
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, "update"), r);
+    f.render_widget(overlay_block(view.muted, update.title), r);
     let [message, notes, note, _] = update_rows(r);
     f.render_widget(Paragraph::new(update.message.as_str()).wrap(Wrap { trim: true }), message);
     let scroll = update_scroll(f.area(), update.notes.len(), update.scroll);
@@ -3085,7 +3146,8 @@ fn draw_settings(f: &mut Frame, view: &View, settings: &Settings) {
         None => (settings.hint.as_str(), dim),
     };
     f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(note.width)), style)), note);
-    draw_submit(f, view, settings_done(r), settings.submit);
+    let buttons = [settings_done(r), settings_restart(r)];
+    draw_dialog_buttons(f, view, buttons, settings.submit, crate::settings::RESTART);
     if let Some(pos) = cursor.filter(|_| !matches!(settings.note, Some(Note::Busy(_)))) {
         f.set_cursor_position(pos);
     }
@@ -3266,7 +3328,8 @@ fn draw_hidden<R: Copy>(f: &mut Frame, muted: Color, layout: &Rows, rows: &[R], 
 }
 
 fn draw_new_project(f: &mut Frame, view: &View, r: Rect) {
-    draw_button(f, r, " ", "+ new project", button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan));
+    f.render_widget(Clear, r);
+    draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan));
 }
 
 fn draw_landing(f: &mut Frame, r: Rect, indent: Option<u16>) {
@@ -3633,8 +3696,8 @@ impl Band {
     }
 
     fn room(&self) -> usize {
-        usize::from(self.r.width)
-            .saturating_sub(self.lead_width() + usize::from(row_close_button(self.r, self.pitch).width) + 1)
+        let buttons = row_close_button(self.r, self.pitch).width + row_menu_button(self.r, self.pitch).width;
+        usize::from(self.r.width).saturating_sub(self.lead_width() + usize::from(buttons) + 1)
     }
 }
 
@@ -3665,7 +3728,7 @@ fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, entry: &Workspace
     marks.push_onto(&mut line, used, room);
     draw_band(f, band.r, Line::from(line), band.bg);
     if !entry.removing {
-        draw_row_close(f, view, band.r, band.pitch, band.bg);
+        draw_row_buttons(f, view, band.r, band.pitch, band.bg);
     }
 }
 
@@ -3682,9 +3745,10 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     line.push(Span::styled(truncate_right(&tab.name, max), style));
     draw_band(f, band.r, Line::from(line), band.bg);
     if tab.details.lines() > 1 {
-        draw_details(f, view.muted, (band.r, band.pitch), &tab.details, None, indent);
+        let buttons = row_menu_button(band.r, band.pitch).union(row_close_button(band.r, band.pitch));
+        draw_details(f, view.muted, (band.r, buttons), &tab.details, None, indent);
     }
-    draw_row_close(f, view, band.r, band.pitch, band.bg);
+    draw_row_buttons(f, view, band.r, band.pitch, band.bg);
 }
 
 fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
@@ -3722,14 +3786,13 @@ fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: boo
 fn draw_details(
     f: &mut Frame,
     muted: Color,
-    (row, pitch): (Rect, u16),
+    (row, buttons): (Rect, Rect),
     details: &Details,
     agent: Option<&str>,
     indent: usize,
 ) {
     let r = Rect { y: middle(row).y + 1, height: 1, ..row }.intersection(row);
-    let close = row_close_button(row, pitch);
-    let reserved = if close.bottom() > r.y { usize::from(close.width) } else { 0 };
+    let reserved = if buttons.bottom() > r.y { usize::from(buttons.width) } else { 0 };
     let dim = Style::default().fg(muted);
     let percent = details.percent.map(|used| {
         let level = match Severity::of(used) {
@@ -3844,15 +3907,25 @@ fn draw_more(f: &mut Frame, muted: Color, [top, bottom]: [Rect; 2], above: Optio
     }
 }
 
-fn draw_row_close(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) {
+fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) {
     let hover = sidebar_hovered(view, row);
     if !hover && pitch == 1 {
         return;
     }
-    let r = row_close_button(row, pitch);
-    let style =
-        if hover && hovered(view, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
-    draw_band(f, r, Span::styled(centered("×", r.width), style), style);
+    let style = |r: Rect, lit: Color| {
+        if hover && hovered(view, r) { bg.fg(lit).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) }
+    };
+    let menu = row_menu_button(row, pitch);
+    let menu_style = style(menu, Color::Cyan);
+    draw_band(
+        f,
+        menu,
+        Span::styled(format!("{ROW_MENU_ICON:>width$}", width = usize::from(menu.width)), menu_style),
+        menu_style,
+    );
+    let close = row_close_button(row, pitch);
+    let close_style = style(close, Color::Red);
+    draw_band(f, close, Span::styled(centered("×", close.width), close_style), close_style);
 }
 
 fn draw_settings_button(f: &mut Frame, view: &View, r: Rect) {
@@ -3921,7 +3994,7 @@ fn arrow(muted: Color, folded: bool) -> Span<'static> {
 
 fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
     let group = &view.groups[g];
-    let count = if group.collapsed {
+    let count = if group.collapsed && view.counts {
         format!(" ({})", view.projects.iter().filter(|p| p.group == Some(g)).count())
     } else {
         String::new()
@@ -3941,7 +4014,7 @@ fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
     ]);
     marks.push_onto(&mut line, shown, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    draw_row_close(f, view, band.r, band.pitch, band.bg);
+    draw_row_buttons(f, view, band.r, band.pitch, band.bg);
 }
 
 fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: bool) {
@@ -3951,7 +4024,7 @@ fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: 
     } else {
         Style::default().fg(Color::Gray)
     };
-    let count = if summary { format!(" ({})", entry.workspaces) } else { String::new() };
+    let count = if summary && view.counts { format!(" ({})", entry.workspaces) } else { String::new() };
     let room = band.room();
     let badge = entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status));
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(count.chars().count()));
@@ -3962,7 +4035,7 @@ fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize, summary: 
     line.extend([Span::styled(name, title_style), Span::styled(count, Style::default().fg(view.muted))]);
     marks.push_onto(&mut line, shown, room);
     draw_band(f, band.r, Line::from(line), band.bg);
-    draw_row_close(f, view, band.r, band.pitch, band.bg);
+    draw_row_buttons(f, view, band.r, band.pitch, band.bg);
 }
 
 fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas: &Areas) {
@@ -4007,7 +4080,7 @@ fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &AgentEntr
     let colour = if entry.active { Color::White } else { Color::Gray };
     line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
     draw_band(f, r, Line::from(line), bg);
-    draw_details(f, view.muted, (r, pitch), &entry.details, Some(&entry.agent), indent);
+    draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);
     if entry.active {
         draw_rail(f, r);
     }
@@ -4204,6 +4277,7 @@ mod tests {
             drag: None,
             tree: None,
             agents: None,
+            counts: true,
         }
     }
 
@@ -4994,6 +5068,16 @@ mod tests {
             assert_eq!(tree_hit(LIST, &shape(), 0, x.as_position()), Some(TreeHit::Close(row)));
         }
 
+        #[rstest]
+        #[case::a_group(TreeRow::Group(0))]
+        #[case::a_project(TreeRow::Project(1))]
+        #[case::a_workspace(TreeRow::Workspace(1, 0))]
+        #[case::a_tab(TreeRow::Tab(1, 0, 1))]
+        fn the_menu_button_opens_the_row_menu(#[case] row: TreeRow) {
+            let menu = row_menu_button(tree_row(LIST, &shape(), 0, row), 1);
+            assert_eq!(tree_hit(LIST, &shape(), 0, menu.as_position()), Some(TreeHit::Menu(row)));
+        }
+
         #[test]
         fn the_button_at_the_bottom_adds_a_project() {
             let rows = tree_rows(&shape());
@@ -5280,6 +5364,22 @@ mod tests {
             assert_eq!(sidebar_hit(list(), 1, &plain(2), 0, pos), Some(SidebarHit::Close(usize::from(i))));
         }
 
+        #[test]
+        fn a_narrow_row_leaves_the_menu_to_the_right_click() {
+            let narrow = Rect::new(0, 0, MIN_MENU_ROW_WIDTH - 1, 1);
+            assert_eq!((row_menu_button(narrow, 1).width, row_close_button(narrow, 1).width), (0, CLOSE_BUTTON_WIDTH));
+        }
+
+        #[rstest]
+        #[case::wide(1)]
+        #[case::compact(COMPACT_PITCH)]
+        fn the_menu_button_sits_left_of_the_close_button(#[case] pitch: u16) {
+            let row = entry_row(list(), pitch, &plain(2), 0, SidebarRow::Project(1));
+            let (menu, close) = (row_menu_button(row, pitch), row_close_button(row, pitch));
+            assert_eq!(menu.right(), close.x);
+            assert_eq!(sidebar_hit(list(), pitch, &plain(2), 0, menu.as_position()), Some(SidebarHit::Menu(1)));
+        }
+
         #[rstest]
         #[case::search(areas().search.y)]
         #[case::title(areas().title.y)]
@@ -5359,6 +5459,15 @@ mod tests {
             assert_eq!(sidebar_hit(list(), 1, &rows, 0, pos), Some(expected));
         }
 
+        #[rstest]
+        #[case::grouped_project(SidebarRow::Project(2), SidebarHit::Menu(2))]
+        #[case::header(SidebarRow::Group(0), SidebarHit::GroupMenu(0))]
+        fn the_menu_button_opens_its_row_menu(#[case] row: SidebarRow, #[case] expected: SidebarHit) {
+            let rows = grouped(0, false).sidebar_rows();
+            let pos = row_menu_button(entry_row(list(), 1, &rows, 0, row), 1).as_position();
+            assert_eq!(sidebar_hit(list(), 1, &rows, 0, pos), Some(expected));
+        }
+
         #[test]
         fn renders_expanded_groups_with_the_active_project_inside() {
             insta::assert_snapshot!(render_sized(&grouped(1, false), W, TALL).backend());
@@ -5375,6 +5484,19 @@ mod tests {
         }
 
         #[test]
+        fn counts_can_be_turned_off() {
+            let row_of = |v: &View, row| {
+                let r = entry_row(tall_list(), 1, &v.sidebar_rows(), 0, row);
+                row_text(&render_sized(v, W, TALL), r)
+            };
+            let on = grouped(0, true);
+            let off = View { counts: false, ..grouped(0, true) };
+            let rows = [SidebarRow::Group(0), SidebarRow::Project(0)];
+            assert_eq!(rows.map(|row| row_of(&on, row).contains('(')), [true, true]);
+            assert_eq!(rows.map(|row| row_of(&off, row).contains('(')), [false, false]);
+        }
+
+        #[test]
         fn the_header_takes_the_group_colour() {
             let rows = grouped(0, false).sidebar_rows();
             let header = entry_row(tall_list(), 1, &rows, 0, SidebarRow::Group(1));
@@ -5385,6 +5507,13 @@ mod tests {
         fn styling(icon: char, colour: u8) -> View<'static> {
             let group = GroupEntry { name: "work".into(), icon, colour, collapsed: false };
             View { overlay: Some(Overlay::GroupStyle(group)), ..grouped(1, false) }
+        }
+
+        #[test]
+        fn every_preset_is_offered_in_the_modal() {
+            assert!(
+                GROUP_STYLES.iter().all(|(icon, colour)| GROUP_ICONS.contains(icon) && GROUP_COLOURS.contains(colour))
+            );
         }
 
         #[test]
@@ -5707,7 +5836,7 @@ mod tests {
         #[test]
         fn the_new_button_stays_at_the_bottom_while_scrolled() {
             let t = render(&many(20, 3));
-            assert!(row_text(&t, new_project_button(list(), 1, &plain(20))).contains("+ new project"));
+            assert!(row_text(&t, new_project_button(list(), 1, &plain(20))).contains(NEW_BUTTON));
         }
 
         #[test]
@@ -5937,8 +6066,8 @@ mod tests {
 
         #[rstest]
         #[case::nothing_to_pull("login", 0, "  login")]
-        #[case::some("login", 3, "  login            ↓3")]
-        #[case::long_name_is_cut_first("feature-with-a-very-long-name", 3, "  feature-with-a-… ↓3")]
+        #[case::some("login", 3, "  login          ↓3")]
+        #[case::long_name_is_cut_first("feature-with-a-very-long-name", 3, "  feature-with-… ↓3")]
         fn commits_to_pull_sit_at_the_end_of_the_row(#[case] name: &str, #[case] behind: u32, #[case] expected: &str) {
             let mut v = with_workspaces(Some(0));
             v.workspaces[0] = WorkspaceEntry { name: name.into(), behind, ..v.workspaces.remove(0) };
@@ -6035,7 +6164,7 @@ mod tests {
 
         fn mark_cell(v: &View, r: Rect) -> (String, Color) {
             let t = render(v);
-            let cell = &t.backend().buffer()[(r.right() - CLOSE_BUTTON_WIDTH - 2, r.y)];
+            let cell = &t.backend().buffer()[(r.right() - CLOSE_BUTTON_WIDTH - MENU_BUTTON_WIDTH - 2, r.y)];
             (cell.symbol().to_string(), cell.fg)
         }
 
@@ -6066,21 +6195,21 @@ mod tests {
 
         #[test]
         fn the_workspace_mark_comes_before_the_commits_to_pull() {
-            assert_eq!(workspace_line(&with_agents(), 0), "  login          ! ↓2");
+            assert_eq!(workspace_line(&with_agents(), 0), "  login        ! ↓2");
         }
 
         #[test]
         fn only_what_needs_you_reaches_the_workspace() {
             let mut v = with_agents();
             v.workspaces[0].tabs = vec![tab("claude", Some(Status::Working)), tab("claude", Some(Status::Idle))];
-            assert_eq!(workspace_line(&v, 0), "  login            ↓2");
+            assert_eq!(workspace_line(&v, 0), "  login          ↓2");
         }
 
         #[test]
         fn done_waits_behind_what_needs_you() {
             let mut v = with_agents();
             v.workspaces[0].tabs = vec![tab("claude", Some(Status::Done)), tab("claude", Some(Status::Waiting))];
-            assert_eq!(workspace_line(&v, 0), "  login          ! ↓2");
+            assert_eq!(workspace_line(&v, 0), "  login        ! ↓2");
         }
 
         #[rstest]
@@ -6290,15 +6419,32 @@ mod tests {
             let hit = |x: u16, y: u16| {
                 workspace_hit(areas().workspaces_list, areas().pitch, &v.tab_lines(), 0, Position::new(x, y))
             };
+            let menu = row_menu_button(r, areas().pitch);
             assert_eq!(
-                [hit(r.x + 4, r.y + 1), hit(r.right() - 2, r.y + 1), hit(r.right() - 2, r.y)],
-                [Some(WorkspaceHit::Tab(0, 0)), Some(WorkspaceHit::Tab(0, 0)), Some(WorkspaceHit::CloseTab(0, 0))]
+                [hit(r.x + 4, r.y + 1), hit(r.right() - 2, r.y + 1), hit(r.right() - 2, r.y), hit(menu.x, menu.y)],
+                [
+                    Some(WorkspaceHit::Tab(0, 0)),
+                    Some(WorkspaceHit::Tab(0, 0)),
+                    Some(WorkspaceHit::CloseTab(0, 0)),
+                    Some(WorkspaceHit::TabMenu(0, 0))
+                ]
             );
         }
 
         #[test]
         fn the_close_button_covers_only_the_first_band_of_a_taller_row() {
             assert_eq!(row_close_button(Rect::new(0, 4, 25, 2), 1), Rect::new(22, 4, CLOSE_BUTTON_WIDTH, 1));
+        }
+
+        #[test]
+        fn a_narrow_compact_band_keeps_the_percentage_clear_of_the_buttons() {
+            let narrow = Rect { width: 34, ..SMALL };
+            let details = Details { model: Some("Opus 5.5 with a long name".into()), ..opus(95) };
+            let v = View { nav: Some(Nav::Workspaces), ..with_details(details) };
+            let r = row(&v, narrow, WorkspaceRow::Tab(0, 0));
+            let t = render_sized(&v, narrow.width, narrow.height);
+            let end = u16::try_from(line(&t, r, 2).chars().count()).expect("fits");
+            assert!(r.x + end <= row_menu_button(r, COMPACT_PITCH).x, "{}", line(&t, r, 2));
         }
 
         #[test]
@@ -6310,7 +6456,7 @@ mod tests {
                 (r.height, line(&t, r, 1), line(&t, r, 2)),
                 (
                     COMPACT_PITCH,
-                    format!("▌ ├ ◐ claude{}×", " ".repeat(usize::from(SMALL.width) - 15)),
+                    format!("▌ ├ ◐ claude{}{ROW_MENU_ICON}  ×", " ".repeat(usize::from(SMALL.width) - 18)),
                     "▌ │   Opus 5.5 · 17%".into()
                 )
             );
@@ -6473,6 +6619,7 @@ mod tests {
         fn renders_an_update_with_its_notes() {
             let notes = (1..=40).map(|i| Line::from(format!("• change {i}"))).collect();
             let update = Update {
+                title: "update",
                 message: "cornercase 9.0.0 is out (you have 0.1.0). Updating replaces ~/.local/bin/cornercase; \
                     your terminals keep running until you restart."
                     .into(),
@@ -7409,6 +7556,23 @@ mod tests {
         }
 
         #[test]
+        fn the_menu_button_shows_beside_the_close_button_while_the_row_is_hovered() {
+            let menu = row_menu_button(entry_row(list(), 1, &plain(1), 0, SidebarRow::Project(0)), 1);
+            let at = Position::new(menu.right() - 1, menu.y);
+            let hidden = render(&view(&["~"])).backend().buffer()[at].symbol().to_string();
+            let v = View { hover: Some(Position::new(list().x + 3, list().y)), ..view(&["~"]) };
+            let cell = render(&v).backend().buffer()[at].clone();
+            assert_eq!((hidden.as_str(), cell.symbol(), cell.fg), (" ", ROW_MENU_ICON, Color::DarkGray));
+        }
+
+        #[test]
+        fn the_menu_button_turns_cyan_on_hover() {
+            let menu = row_menu_button(entry_row(list(), 1, &plain(1), 0, SidebarRow::Project(0)), 1);
+            let v = View { hover: Some(menu.as_position()), ..view(&["~"]) };
+            assert_eq!(render(&v).backend().buffer()[Position::new(menu.right() - 1, menu.y)].fg, Color::Cyan);
+        }
+
+        #[test]
         fn close_button_turns_red_on_hover() {
             let v = View { hover: Some(close_pos()), ..view(&["~"]) };
             assert_eq!(render(&v).backend().buffer()[close_pos()].fg, Color::Red);
@@ -7546,7 +7710,7 @@ mod tests {
         fn the_close_button_and_the_behind_tag_sit_on_the_hover_background() {
             let (v, r) = hovering(sample(false), AREA, Row::Workspace);
             let t = render(&v);
-            let cells: Vec<(String, Color)> = [r.right() - 2, r.right() - 5]
+            let cells: Vec<(String, Color)> = [r.right() - 2, r.right() - 7]
                 .into_iter()
                 .map(|x| t.backend().buffer()[(x, r.y)].clone())
                 .map(|c| (c.symbol().to_string(), c.bg))
@@ -7569,10 +7733,10 @@ mod tests {
             let mut v = sample(false);
             v.groups[0].name = "x".repeat(200);
             let (v, r) = hovering(v, AREA, Row::Group);
-            let close = row_close_button(r, 1);
+            let menu = row_menu_button(r, 1);
             let t = render(&v);
             let cell = |x: u16| t.backend().buffer()[(x, r.y)].symbol().to_string();
-            assert_eq!([cell(close.x - 2), cell(close.x - 1)], ["…", " "]);
+            assert_eq!([cell(menu.x - 2), cell(menu.x - 1)], ["…", " "]);
         }
 
         #[test]

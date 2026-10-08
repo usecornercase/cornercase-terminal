@@ -10,7 +10,7 @@ expression: render(&v).backend()
 "▌ api (1)                      │                         │                                          "
 "  tmp (0)                      │                         │                                          "
 "                               │                         │                                          "
-"  + new project                │                         │                                          "
+"  + new                        │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "

@@ -155,6 +155,10 @@ pub enum Command {
     Skill,
     #[command(about = "Install the latest release, then offer to restart the server")]
     Update(UpdateArgs),
+    #[command(
+        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells"
+    )]
+    Restart(RestartArgs),
     #[command(about = "Stop the server and every shell in it")]
     KillServer,
     #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
@@ -502,6 +506,12 @@ pub struct LogsArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct RestartArgs {
+    #[arg(short, long, help = "Restart the server without asking")]
+    pub yes: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct UpdateArgs {
     #[arg(long, help = "Only say whether a newer version is out")]
     pub check: bool,
@@ -533,6 +543,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Control(control) => run_control(control)?,
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return client::update(update.check, update.yes),
+        Command::Restart(restart) => client::restart(restart.yes)?,
         Command::KillServer => {
             let running = client::running_now();
             if !client::kill_server()? {
@@ -883,9 +894,11 @@ mod tests {
         fn the_old_commands_stay() {
             let update = parse(&["update", "--check", "-y"]).expect("parse");
             let kill = parse(&["kill-server"]).expect("parse");
+            let restart = parse(&["restart", "--yes"]).expect("parse");
 
             assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true }))));
             assert!(matches!(kill.command, Some(Command::KillServer)));
+            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true }))));
         }
 
         #[rstest]

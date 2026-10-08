@@ -29,6 +29,7 @@ import {
   landed,
   landingIndent,
   menuArea,
+  menuButton,
   moreAbove,
   pickerArea,
   right,
@@ -48,6 +49,7 @@ import {
   treeLandingIndent,
   treeLayout,
   treeRows,
+  updateNotes,
   usageArea,
   usageDone,
   workspaceLayout,
@@ -56,6 +58,7 @@ import {
   FILES_LABEL,
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
+import { render as markdown } from './markdown';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
@@ -112,6 +115,11 @@ const SWAP_LABEL = 'swap';
 const NO_TAB_HINT = ' opens a shell here';
 const TAGLINE = 'every agent in its own corner';
 const WELCOME_HINT = ' opens a folder';
+const NEW_BUTTON = '+ new';
+const ROW_MENU_ICON = '⋯';
+const RESTART = 'restart';
+const RESTART_MESSAGE = 'Restart cornercase now? Its server starts again and every client comes back.';
+const RESTART_SUBMIT = 'restart now';
 const LOGO: [string, string][] = [
   ['   █████████', ''],
   ['▄▄▄▀▀▀▀▀▀▀▀▀', ''],
@@ -248,7 +256,7 @@ export class Painter {
       wordmark(),
       [seg(TAGLINE, DARK)],
       [],
-      [seg('+ new project', CYAN), seg(WELCOME_HINT, DARK)],
+      [seg(NEW_BUTTON, CYAN), seg(WELCOME_HINT, DARK)],
     ];
     const size = Math.max(...LOGO.map(([c, k]) => [...c].length + [...k].length));
     const logo: Line[] = LOGO.map(([c, k]) => [seg(c, { fg: BRAND }), seg(k, CYAN), seg(' '.repeat(size - [...c].length - [...k].length))]);
@@ -504,13 +512,16 @@ export class Painter {
     }
   }
 
-  private closeX(row: Rect, pitch: number, bg: Style, act: () => void): void {
+  private rowButtons(row: Rect, pitch: number, bg: Style, close: () => void, menu: (x: number, y: number) => void): void {
     const hover = this.sidebarHovered(row);
     if (!hover && pitch === 1) return;
+    const style = (r: Rect, lit: number): Style => (hover && this.hovered(r) ? { ...bg, fg: lit, add: BOLD } : { ...bg, fg: 8 });
+    const m = menuButton(row, pitch);
+    this.band(m, [seg(ROW_MENU_ICON.padStart(m.w))], style(m, 6));
+    this.region({ r: m, click: menu, right: menu, cursor: 'pointer' });
     const r = closeButton(row, pitch);
-    const style = hover && this.hovered(r) ? { ...bg, fg: 1, add: BOLD } : { ...bg, fg: 8 };
-    this.band(r, [seg(centered('×', r.w))], style);
-    this.region({ r, click: act, cursor: 'pointer' });
+    this.band(r, [seg(centered('×', r.w))], style(r, 1));
+    this.region({ r, click: close, right: menu, cursor: 'pointer' });
   }
 
   private details(row: Rect, pitch: number, d: Details, indent: number, agent: string | null = null): void {
@@ -538,13 +549,13 @@ export class Painter {
   }
 
   private room(b: Band): number {
-    return b.r.w - width(b.lead) - closeButton(b.r, b.pitch).w - 1;
+    return b.r.w - width(b.lead) - closeButton(b.r, b.pitch).w - menuButton(b.r, b.pitch).w - 1;
   }
 
   private groupRow(b: Band, g: number): void {
     const app = this.app;
     const group = app.groups[g];
-    const count = group.collapsed ? ` (${app.groupSize(group.id)})` : '';
+    const count = group.collapsed && app.config.counts ? ` (${app.groupSize(group.id)})` : '';
     const badge = group.collapsed ? attention(app.projects.filter((p) => p.group === group.id).map(projectAttention)) : null;
     const room = this.room(b) - 2;
     const used = 2 + count.length;
@@ -554,14 +565,15 @@ export class Painter {
     pushTags(line, marks, used + [...truncateRight(group.name, max)].length, room);
     this.band(b.r, line, b.bg);
     const grab: Target = { kind: 'group', group: group.id };
-    this.region({ r: b.r, click: () => app.toggleGroup(g), right: (x, y) => app.openGroupMenu({ x, y }, g), grab, cursor: 'pointer' });
-    this.closeX(b.r, b.pitch, b.bg, () => app.askDeleteGroup(group.id));
+    const menu = (x: number, y: number) => app.openGroupMenu({ x, y }, g);
+    this.region({ r: b.r, click: () => app.toggleGroup(g), right: menu, grab, cursor: 'pointer' });
+    this.rowButtons(b.r, b.pitch, b.bg, () => app.askDeleteGroup(group.id), menu);
   }
 
   private projectRow(b: Band, p: number, summary: boolean, click: (x: number, y: number) => void): void {
     const app = this.app;
     const project = app.projects[p];
-    const count = summary ? ` (${project.workspaces.length})` : '';
+    const count = summary && app.config.counts ? ` (${project.workspaces.length})` : '';
     const room = this.room(b);
     const badge = summary ? projectAttention(project) : null;
     const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - count.length);
@@ -570,8 +582,9 @@ export class Painter {
     pushTags(line, marks, [...name].length + count.length, room);
     this.band(b.r, line, b.bg);
     const grab: Target = { kind: 'project', project: project.id };
-    this.region({ r: b.r, click, right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-    this.closeX(b.r, b.pitch, b.bg, () => app.askCloseProject(project.id));
+    const menu = (x: number, y: number) => app.openMenu({ x, y }, grab);
+    this.region({ r: b.r, click, right: menu, grab, cursor: 'pointer' });
+    this.rowButtons(b.r, b.pitch, b.bg, () => app.askCloseProject(project.id), menu);
   }
 
   private workspaceRow(b: Band, p: number, w: number, badge: boolean, click: (x: number, y: number) => void): void {
@@ -591,8 +604,9 @@ export class Painter {
     this.band(b.r, line, b.bg);
     if (ws.removing) return;
     const grab: Target = { kind: 'workspace', project: project.id, workspace: ws.id };
-    this.region({ r: b.r, click, right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-    this.closeX(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseWorkspace(p, w) : app.closeWorkspace(p, w)));
+    const menu = (x: number, y: number) => app.openMenu({ x, y }, grab);
+    this.region({ r: b.r, click, right: menu, grab, cursor: 'pointer' });
+    this.rowButtons(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseWorkspace(p, w) : app.closeWorkspace(p, w)), menu);
   }
 
   private tabRow(b: Band, p: number, w: number, t: number, active: boolean): void {
@@ -610,8 +624,9 @@ export class Painter {
     const details = app.tabDetails(tab);
     if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + icon);
     const grab: Target = { kind: 'tab', project: project.id, workspace: ws.id, tab: tab.id };
-    this.region({ r: b.r, click: () => app.selectTab(p, w, t), right: (x, y) => app.openMenu({ x, y }, grab), grab, cursor: 'pointer' });
-    this.closeX(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseTab(p, w, t) : app.closeTab(p, w, t)));
+    const menu = (x: number, y: number) => app.openMenu({ x, y }, grab);
+    this.region({ r: b.r, click: () => app.selectTab(p, w, t), right: menu, grab, cursor: 'pointer' });
+    this.rowButtons(b.r, b.pitch, b.bg, () => (b.pitch > 1 ? app.askCloseTab(p, w, t) : app.closeTab(p, w, t)), menu);
   }
 
   private newTab(r: Rect, indent: string, p: number, w: number): void {
@@ -626,7 +641,8 @@ export class Painter {
   }
 
   private newProject(b: Rect): void {
-    this.button(b, ' ', '+ new project', this.buttonStyle(b, CYAN, 6));
+    this.g.clear(b);
+    this.button(b, ' ', NEW_BUTTON, this.buttonStyle(b, CYAN, 6));
     this.region({ r: b, click: (x, y) => this.app.openNewMenu({ x, y }), cursor: 'pointer' });
   }
 
@@ -865,6 +881,7 @@ export class Painter {
     if (o.kind === 'menu') return this.menu();
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
+    if (o.kind === 'restart') return this.restart(o.scroll);
     const confirm = this.app.confirmView();
     if (confirm) return this.confirm(confirm);
     if (o.kind === 'picker') return this.picker();
@@ -941,7 +958,7 @@ export class Painter {
         this.span(c.x, c.y + 4, 'creating…', DARK);
         this.cursor = null;
       } else if (o.error) this.span(c.x, c.y + 4, truncateRight(o.error, c.w), { fg: 1 });
-    } else if (o.kind === 'newGroup') this.span(c.x, c.y + 2, truncateLeft('right-click a project to move it into the group', c.w), DARK);
+    } else if (o.kind === 'newGroup') this.span(c.x, c.y + 2, truncateLeft('right-click a project or its ⋯ to move it into the group', c.w), DARK);
     else this.span(c.x, c.y + 2, truncateLeft(app.renameHint(o.target), c.w), DARK);
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), o.kind === 'rename' ? 'rename' : 'create', () => app.submitForm(), () => app.closeOverlay());
   }
@@ -1019,13 +1036,30 @@ export class Painter {
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), submit, () => app.submitConfirm(), () => app.closeOverlay());
   }
 
+  private restart(scroll: number): void {
+    const app = this.app;
+    const r = pickerArea(app.cols, app.rows);
+    this.backdrop(false);
+    this.box(r, RESTART);
+    const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
+    markdown(RESTART_MESSAGE, c.w)
+      .slice(0, 3)
+      .forEach((line, i) => drawLine(this.g, c.x, c.y + i, line, c.w));
+    const notes = updateNotes(app.cols, app.rows);
+    const lines = app.restartNotes(notes.w);
+    const first = Math.min(scroll, Math.max(0, lines.length - notes.h));
+    lines.slice(first, first + notes.h).forEach((line, i) => drawLine(this.g, notes.x, notes.y + i, line, notes.w));
+    this.region({ r: notes, wheel: (dy) => app.scrollRestart(dy) });
+    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), RESTART_SUBMIT, () => app.restartNow(), () => app.closeOverlay());
+  }
+
   private picker(): void {
     const app = this.app;
     const o = app.overlay;
     if (!o || o.kind !== 'picker') return;
     const r = pickerArea(app.cols, app.rows);
     this.backdrop(false);
-    this.box(r, 'new project');
+    this.box(r, 'open project');
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     const path = app.pickerPath(o);
     const max = Math.max(0, c.w - INPUT_PROMPT.length - 1);
@@ -1076,7 +1110,7 @@ export class Painter {
     const editRow = rect(c.x, bottom(body), c.w, 1);
     const noteRow = rect(c.x, bottom(body) + 1, c.w, 1);
     const buttonsRow = rect(c.x, bottom(body) + 2, c.w, 1);
-    this.tabs(tabsRow, ['Worktrees', 'Agents', 'Issues', 'TUI'], o.page, (i) => app.settingsPage(i));
+    this.tabs(tabsRow, ['Worktrees', 'Agents', 'Issues', 'UI'], o.page, (i) => app.settingsPage(i));
     if (o.pick) {
       this.input(rect(body.x, body.y, body.w, 1), o.pick.title, o.pick.filter);
       const list = rect(body.x, body.y + 2, body.w, Math.max(0, body.h - 2));
@@ -1125,7 +1159,10 @@ export class Painter {
     const note = o.busy ?? o.edit?.error ?? o.notice ?? app.settingsHint(o);
     this.span(noteRow.x, noteRow.y, truncateRight(note, noteRow.w), o.edit?.error && !o.busy ? { fg: 1 } : DARK);
     if (o.busy) this.cursor = null;
-    this.submitButton(rightAligned(buttonsRow, [DONE], buttonWidth, 1)[0], DONE, () => app.closeOverlay());
+    const [restart, done] = rightAligned(buttonsRow, [RESTART, DONE], buttonWidth, 1);
+    this.span(restart.x, restart.y, ` ${RESTART} `, this.pill(restart, false), restart.w);
+    this.region({ r: restart, click: () => app.openRestart(), cursor: 'pointer' });
+    this.submitButton(done, DONE, () => app.closeOverlay());
   }
 
   private issues(o: IssuesOverlay): void {

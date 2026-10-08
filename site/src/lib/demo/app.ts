@@ -6,8 +6,7 @@ import { TodoPanel, todoWidth } from './todo';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
-  GROUP_COLOURS,
-  GROUP_ICONS,
+  GROUP_STYLES,
   type Landing,
   type Nav,
   type Rows,
@@ -33,6 +32,7 @@ import {
   treeDrop,
   treeLayout,
   treeRows,
+  updateNotes,
   workspaceDrop,
   workspaceLayout,
   workspaceRows,
@@ -201,6 +201,46 @@ const DETAIL_NOTICES = {
   context: ['agent tabs show how full their context is', 'agent tabs hide their context'],
   memory: ['agent tabs show the memory they use', 'agent tabs hide their memory'],
 } as const;
+
+const RESTART_STOPS = "Restarting stops every program running in cornercase's terminals.";
+const RESTART_NOTHING = 'Nothing is running in your terminals.';
+const RESTART_COMES_BACK = 'Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder.';
+const RESTART_RESUME = 'To pick up a Claude Code conversation afterwards, run `claude --continue` in its tab.';
+const RUNNING_STATUSES: [Status, string][] = [
+  ['working', 'working'],
+  ['waiting', 'waiting for you'],
+  ['done', 'done'],
+  ['idle', 'idle'],
+];
+
+interface Running {
+  program: string;
+  place: string;
+  agent: string | null;
+  status: Status;
+}
+
+const counted = (n: number, word: string): string => (n === 1 ? `1 ${word}` : `${n} ${word}s`);
+
+function restartText(running: Running[]): string {
+  if (!running.length) return `${RESTART_NOTHING} ${RESTART_COMES_BACK}`;
+  const agents = running.filter((r) => r.agent);
+  const others = running.filter((r) => !r.agent);
+  const parts: string[] = [];
+  if (agents.length) {
+    const statuses = RUNNING_STATUSES.flatMap(([status, said]) => {
+      const n = agents.filter((a) => a.status === status).length;
+      return n ? [`${n} ${said}`] : [];
+    });
+    parts.push(`${counted(agents.length, 'agent')} (${statuses.join(', ')})`);
+  }
+  if (others.length) {
+    const named = others.map((r) => `\`${r.program}\` in ${r.place}`).join(', ');
+    parts.push(`${counted(others.length, agents.length ? 'other program' : 'program')} (${named})`);
+  }
+  const text = `${RESTART_STOPS} Running now: ${parts.join(' and ')}. ${RESTART_COMES_BACK}`;
+  return running.some((r) => r.agent === 'claude') ? `${text} ${RESTART_RESUME}` : text;
+}
 
 function stoppedTabs(tabs: number): string {
   if (tabs === 1) return ' Its tab and the programs running in it are stopped.';
@@ -797,9 +837,10 @@ export class App {
     for (const p of this.projects) if (p.group === id) p.group = undefined;
   }
 
-  addGroup(name: string, colour?: number): Group {
-    const n = this.groups.length;
-    const group = { id: this.id(), name, icon: GROUP_ICONS[n % GROUP_ICONS.length], colour: colour ?? GROUP_COLOURS[n % GROUP_COLOURS.length], collapsed: false };
+  addGroup(name: string): Group {
+    const taken = ([icon, colour]: [string, number]) => this.groups.some((g) => g.icon === icon && g.colour === colour);
+    const [icon, colour] = GROUP_STYLES.find((style) => !taken(style)) ?? GROUP_STYLES[this.groups.length % GROUP_STYLES.length];
+    const group = { id: this.id(), name, icon, colour, collapsed: false };
     this.groups.push(group);
     return group;
   }
@@ -1519,7 +1560,7 @@ export class App {
     else if (a.kind === 'newGroup') {
       this.nav = null;
       this.overlay = { kind: 'newGroup', input: '' };
-      this.emit('narrate', 'Name the group. Right-click a project to move it in.');
+      this.emit('narrate', 'Name the group. Right-click a project or its ⋯ to move it in.');
     } else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -1579,8 +1620,8 @@ export class App {
     if (o.kind === 'newGroup') {
       const name = o.input.trim();
       if (!name) return;
-      this.overlay = { kind: 'groupStyle', group: this.addGroup(name).id };
-      this.dirty();
+      this.addGroup(name);
+      this.closeOverlay();
       return;
     }
     if (o.kind === 'rename') {
@@ -1883,6 +1924,7 @@ export class App {
     return [
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'how projects, workspaces and tabs are laid out' },
       { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
+      { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or folded group holds, such as (3)' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
@@ -1924,6 +1966,9 @@ export class App {
     } else if (row.id === 'agents') {
       c.agentsSection = !c.agentsSection;
       o.notice = c.agentsSection ? 'the sidebar lists every agent' : 'the sidebar no longer lists agents';
+    } else if (row.id === 'counts') {
+      c.counts = !c.counts;
+      o.notice = c.counts ? 'rows show how many they hold' : 'rows no longer show how many they hold';
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
@@ -1973,6 +2018,41 @@ export class App {
       if (!o.notice) o.notice = `tabs: ${c.sources.join(', ')}`;
     }
     this.dirty();
+  }
+
+  openRestart(): void {
+    this.overlay = { kind: 'restart', scroll: 0 };
+    this.dirty();
+  }
+
+  restartNotes(width: number): Line[] {
+    const running = this.projects.flatMap((p) =>
+      p.workspaces.flatMap((w) =>
+        w.tabs.flatMap((t) =>
+          t.panes.flatMap((pane): Running[] => {
+            const place = `${projectLabel(p)} › ${workspaceLabel(w)}`;
+            if (pane.agent) return [{ program: pane.agent, place, agent: pane.agent, status: paneStatus(pane) ?? 'idle' }];
+            return pane.shell.busy ? [{ program: pane.shell.name, place, agent: null, status: 'idle' }] : [];
+          }),
+        ),
+      ),
+    );
+    return markdown(restartText(running), width);
+  }
+
+  scrollRestart(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'restart') return false;
+    const notes = updateNotes(this.cols, this.rows);
+    const max = Math.max(0, this.restartNotes(notes.w).length - notes.h);
+    o.scroll = Math.max(0, Math.min(max, o.scroll + dy));
+    this.dirty();
+    return true;
+  }
+
+  restartNow(): void {
+    this.closeOverlay();
+    this.emit('narrate', 'For real, the server starts again and every tab comes back with a new shell. The demo keeps yours running.');
   }
 
   pickChoices(o: SettingsOverlay): PickItem[] {
@@ -2863,6 +2943,12 @@ export class App {
     }
     if (o.kind === 'groupStyle' || o.kind === 'usage') {
       if (k.key === 'Escape' || k.key === 'Enter') this.closeOverlay();
+      return true;
+    }
+    if (o.kind === 'restart') {
+      if (k.key === 'Escape') this.closeOverlay();
+      else if (k.key === 'Enter') this.restartNow();
+      else if (k.key === 'ArrowDown' || k.key === 'ArrowUp') this.scrollRestart(k.key === 'ArrowDown' ? 1 : -1);
       return true;
     }
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') {

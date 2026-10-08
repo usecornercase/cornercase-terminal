@@ -1,15 +1,14 @@
 ---
 source: src/ui.rs
-assertion_line: 5737
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
 " projects                      │ workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)               │  login     removing…    │                                          "
+"▌ cornercase (1)               │  login   removing…      │                                          "
 "                               │  └                      │                                          "
-"  + new project                │                         │                                          "
+"  + new                        │                         │                                          "
 "                               │  main                   │                                          "
 "                               │▌ ├ zsh                  │                no tab open               "
 "                               │  └ + tab                │         + tab opens a shell here         "

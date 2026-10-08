@@ -11,7 +11,7 @@ cornercase is young. These are the gaps you may run into today.
 | --- | --- |
 | **No scrollback navigation** | Each pane keeps a scrollback history, but you can't scroll back through it from cornercase yet. Pipe long output through `less`, or use your program's own scrolling. |
 | **Shells don't survive the server** | After `cornercase kill-server`, a reboot or a restart after an update, the layout comes back but every pane starts a new shell: running programs and their output are gone. |
-| **Terminal colours are read once** | The server asks your terminal for its colours when it starts. If you switch theme, restart it with `cornercase kill-server` to see the new colours. |
+| **Terminal colours are read once** | The server asks your terminal for its colours when it starts. If you switch theme, restart it with `cornercase restart` (or **settings → restart**) to see the new colours. |
 | **No key releases** | Programs inside cornercase only see key presses, never releases, even with the kitty keyboard protocol. |
 | **One size for all clients** | When several terminals are attached, all of them use the size of the one you used last. The others show the session cut off or with empty space around it. |
 | **100 issues per source** | The issue browser lists up to 100 issues from each tracker. Use the filters to narrow the list down. |

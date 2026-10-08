@@ -1,11 +1,10 @@
 ---
 source: src/ui.rs
-assertion_line: 6289
 expression: "render_sized(&v, W, 6).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │ $ top                                    "
 "                                                         │                                          "
 " projects                      │ workspaces              │                                          "
 "                               │                         │                                          "
-"  + new project                │                         │                                          "
+"  + new                        │                         │                                          "
 "  settings                     │                         │                                          "
