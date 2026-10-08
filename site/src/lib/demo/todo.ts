@@ -7,7 +7,7 @@ import type { Painter } from './ui';
 
 const TEXT_X = 5;
 const BUTTONS = 4;
-const NEW_TODO = '+ new todo';
+const NEW_TODO = '+ New TODO';
 const CLEAR_DONE = 'clear done';
 const PLACEHOLDER = 'enter adds, esc closes';
 const DARK: Style = { fg: 8 };
@@ -207,7 +207,7 @@ export function drawTodo(p: Painter, areas: Areas): void {
   drawPanelBorder(p, areas);
   p.g.clear(area);
   const header = rect(area.x + 1, area.y, Math.max(0, area.w - 2), 1);
-  const x = p.span(header.x, header.y, 'todo', { add: BOLD });
+  const x = p.span(header.x, header.y, 'TODO', { add: BOLD });
   const pending = t.items.filter((i) => !i.done).length;
   if (pending) p.span(x + 1, header.y, String(pending), DARK);
   const close = rect(right(header) - 3, header.y, 3, 1);

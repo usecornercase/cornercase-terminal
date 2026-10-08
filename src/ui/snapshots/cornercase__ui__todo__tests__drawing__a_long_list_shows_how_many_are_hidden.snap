@@ -1,8 +1,9 @@
 ---
 source: src/ui/todo.rs
+assertion_line: 481
 expression: "render(&v, None).backend()"
 ---
-" todo 20                             ×  "
+" TODO 20                             ×  "
 "                                        "
 "  ○  task 0                             "
 "  ○  task 1                             "
@@ -15,4 +16,4 @@ expression: "render(&v, None).backend()"
 "  ○  task 8                             "
 "  ○  task 9                             "
 "  ↓ 10 more                             "
-"  + new todo                            "
+"  + New TODO                            "

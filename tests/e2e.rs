@@ -180,7 +180,7 @@ impl Harness {
 
     fn attach(&self, rows: u16, cols: u16) -> Self {
         let mut harness = Self::open(Arc::clone(&self.session), rows, cols);
-        harness.wait_for("client shows the sidebar", |s| s.contains("projects"));
+        harness.wait_for("client shows the sidebar", |s| s.contains("Projects"));
         harness
     }
 
@@ -316,7 +316,7 @@ impl Harness {
 
     fn open_picker(&mut self, entries: usize) {
         self.open_new_menu(entries, 0);
-        self.wait_for("the folder picker opens", |s| s.contains("open project") && s.contains("cancel"));
+        self.wait_for("the folder picker opens", |s| s.contains("Open project") && s.contains("cancel"));
     }
 
     fn open_project(&mut self, entries: usize, dir: &std::path::Path) {
@@ -548,7 +548,7 @@ fn sidebar_shows_the_search_and_the_title() {
     let search = app.row(areas.search.y);
     assert!(search.contains("search projects"), "search row: {search:?}");
     let title = app.row(areas.title.y);
-    assert!(title.starts_with(" projects"), "title row: {title:?}");
+    assert!(title.starts_with(" Projects"), "title row: {title:?}");
 }
 
 #[test]
@@ -724,10 +724,10 @@ fn a_narrow_terminal_gets_a_menu_bar() {
     app.wait_for("the shell gets the whole width", |s| s.contains(&format!("{} {narrow}", ROWS - ui::COMPACT_PITCH)));
 
     app.click(areas.bar.as_position());
-    app.wait_for("the menu lists the workspaces", |s| s.contains("‹ projects") && s.contains("+ new workspace"));
+    app.wait_for("the menu lists the workspaces", |s| s.contains("‹ Projects") && s.contains("+ New workspace"));
     app.click(areas.back.as_position());
     app.wait_for("back lists the projects", |s| {
-        s.contains(ui::NEW_BUTTON) && !s.contains("+ new workspace") && s.contains("quit")
+        s.contains(ui::NEW_BUTTON) && !s.contains("+ New workspace") && s.contains("Quit")
     });
 }
 
@@ -843,7 +843,7 @@ fn a_hung_small_client_does_not_shrink_a_new_big_one() {
     drop(first);
 
     let mut big = Harness::open(Arc::clone(&small.session), ROWS, COLS);
-    big.wait_for("client shows the sidebar", |s| s.contains("projects"));
+    big.wait_for("client shows the sidebar", |s| s.contains("Projects"));
     big.send(b"stty size\r");
 
     big.wait_for("pane fits the new big client", |s| s.contains(&format!("{ROWS} {}", COLS - columns())));
@@ -870,7 +870,7 @@ fn a_smaller_client_sees_the_frame_cut_off() {
 fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     let mut app = Harness::start();
     app.click(areas().todo_button.as_position());
-    app.wait_for("the todo panel opens", |s| s.contains("+ new todo"));
+    app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
     let panel = ui::layout_with(AREA, ui::Widths::default(), true, ui::Sidebar::default()).changes;
     let view = ui::todo::View {
         items: Vec::new(),
@@ -1237,10 +1237,10 @@ fn a_workspace_with_its_own_worktree_is_created_and_removed() {
     assert_eq!(std::fs::read_to_string(checkout.join(".env")).ok().as_deref(), Some("TOKEN=1\n"));
 
     app.click(ui::row_close_button(label_row, 1).as_position());
-    app.wait_for("it asks first", |s| s.contains("remove workspace"));
+    app.wait_for("it asks first", |s| s.contains("Remove workspace"));
     app.click(ui::form_buttons(ui::form_area(AREA), "remove")[0].as_position());
 
-    app.wait_for("git removes it and says so", |s| s.contains("removed e2e/login") && !s.contains("remove workspace"));
+    app.wait_for("git removes it and says so", |s| s.contains("removed e2e/login") && !s.contains("Remove workspace"));
     assert!(!app.row(y).contains("e2e/login") && !checkout.exists(), "the row or the checkout is still there");
     let _ = std::fs::remove_dir_all(&repo);
 }
@@ -1333,7 +1333,7 @@ fn a_project_moves_into_a_new_group() {
     let at = Position::new(list().x + 3, list().y);
 
     app.open_new_menu(1, 1);
-    app.wait_for("the group form opens", |s| s.contains("new group") && s.contains("right-click a project"));
+    app.wait_for("the group form opens", |s| s.contains("New group") && s.contains("right-click a project"));
     app.send(b"work\r");
     app.wait_for("the group shows", |s| s.contains(&format!("  ▾ {} work", ui::GROUP_STYLES[0].0)));
     app.right_click(at);
@@ -1390,12 +1390,12 @@ fn the_changes_panel_shows_what_changed_in_the_repo() {
     let mut app = Harness::start();
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
-    app.wait_for("the button counts the changed file", |s| s.contains("changes 1"));
+    app.wait_for("the button counts the changed file", |s| s.contains("Changes 1"));
 
-    app.click(ui::changes_button(areas().issues, "changes 1").as_position());
+    app.click(ui::changes_button(areas().issues, "Changes 1").as_position());
 
     app.wait_for("the panel shows the diff", |s| {
-        s.contains("uncommitted") && s.contains("notes.txt") && s.contains("TWO")
+        s.contains("Uncommitted") && s.contains("notes.txt") && s.contains("TWO")
     });
     let _ = std::fs::remove_dir_all(&repo);
 }

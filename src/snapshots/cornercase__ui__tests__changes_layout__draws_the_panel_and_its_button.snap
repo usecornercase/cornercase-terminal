@@ -1,20 +1,21 @@
 ---
 source: src/ui.rs
+assertion_line: 4526
 expression: "render_sized(&with_panel(), 140, 16).backend()"
 ---
-"  ⌕ search projects, workspaces, tabs                    │                                          │  uncommitted   commits   all    ⌕  ×  "
+"  ⌕ search projects, workspaces, tabs                    │                                          │  Uncommitted   Commits   All    ⌕  ×  "
 "                                                         │                                          │ reading changes…                      "
-" projects                      │ workspaces              │                                          │                                       "
+" Projects                      │ Workspaces              │                                          │                                       "
 "                               │                         │                                          │                                       "
 "▌ shop (1)                     │  main                   │                                          │                                       "
 "                               │▌ ├ zsh                  │                                          │                                       "
-"  + new                        │  └ + tab                │                                          │                                       "
+"  + New                        │  └ + Tab                │                                          │                                       "
 "                               │                         │                no tab open               │                                       "
-"                               │  + new workspace        │         + tab opens a shell here         │                                       "
+"                               │  + New workspace        │         + Tab opens a shell here         │                                       "
 "                               │                         │                                          │                                       "
 "                               │                         │                                          │                                       "
 "                               │                         │                                          │                                       "
 " ───────────────────────────── │ ─────────────────────── │                                          │                                       "
-"  settings                     │  issues      changes 3  │                                          │                                       "
-"  usage                        │  files            todo  │                                          │ ───────────────────────────────────── "
-"  quit                         │                         │                                          │                                       "
+"  Settings                     │  Issues      Changes 3  │                                          │                                       "
+"  Usage                        │  Files            TODO  │                                          │ ───────────────────────────────────── "
+"  Quit                         │                         │                                          │                                       "

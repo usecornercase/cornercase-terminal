@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 5742
 expression: render_small(&in_a_project(None)).backend()
 ---
 "                                                                                "
@@ -18,7 +19,7 @@ expression: render_small(&in_a_project(None)).backend()
 "                                                                                "
 "                                                                                "
 "                                   no tab open                                  "
-"                            + tab opens a shell here                            "
+"                            + Tab opens a shell here                            "
 "                                                                                "
 "                                                                                "
 "                                                                                "

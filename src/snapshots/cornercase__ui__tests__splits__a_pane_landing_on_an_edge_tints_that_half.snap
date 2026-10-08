@@ -1,5 +1,6 @@
 ---
 source: src/ui.rs
+assertion_line: 6916
 expression: "landing(Place::Below)"
 ---
 TestBackend { buffer: Buffer {
@@ -7,11 +8,11 @@ TestBackend { buffer: Buffer {
     content: [
         "  ⌕ search projects, workspaces, tabs                    │ $ left              │ $ top              ",
         "                                                         │                     │                    ",
-        " projects                      │ workspaces              │                     │                    ",
+        " Projects                      │ Workspaces              │                     │                    ",
         "                               │                         │                     │                    ",
         "▌ ~ (1)                        │                         │                     │                    ",
         "                               │                         │                     │                    ",
-        "  + new                        │                         │                     │                    ",
+        "  + New                        │                         │                     │                    ",
         "                               │                         │                     │                    ",
         "                               │                         │                     │                    ",
         "                               │                         │                     ├────────────────────",
@@ -20,9 +21,9 @@ TestBackend { buffer: Buffer {
         "                               │                         │                     │                    ",
         "                               │                         │      move here      │                    ",
         " ───────────────────────────── │                         │                     │                    ",
-        "  settings                     │                         │                     │                    ",
-        "  usage                        │                         │                     │                    ",
-        "  quit                         │                         │                     │                    ",
+        "  Settings                     │                         │                     │                    ",
+        "  Usage                        │                         │                     │                    ",
+        "  Quit                         │                         │                     │                    ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,

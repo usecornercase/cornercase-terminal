@@ -105,11 +105,11 @@ If you already have a checkout of Ghostty, point `GHOSTTY_SOURCE_DIR` at it befo
 
 cornercase updates itself. When the server starts, and then every hour, it asks GitHub for the latest release. That is a single request to GitHub's API (plus the changelog once a new version is out); nothing about you or your projects is sent.
 
-When a newer version is out, a toast says *a new cornercase is out* and a button with the new version, such as ` ↑ 0.2.0 `, appears at the right end of the ` settings ` row in the sidebar (in a [small terminal](../guides/small-terminals/), in the same row of the menu's footer). Click it:
+When a newer version is out, a toast says *a new cornercase is out* and a button with the new version, such as ` ↑ 0.2.0 `, appears at the right end of the ` Settings ` row in the sidebar (in a [small terminal](../guides/small-terminals/), in the same row of the menu's footer). Click it:
 
 <Steps>
 
-1. The **update** dialog tells you which version is out and which one you have, and what is new since yours: the notes of every version in between, newest first, so nothing is missed when you skipped a few. Scroll long release notes with the wheel or `↑` `↓`.
+1. The **Update** dialog tells you which version is out and which one you have, and what is new since yours: the notes of every version in between, newest first, so nothing is missed when you skipped a few. Scroll long release notes with the wheel or `↑` `↓`.
 
 2. Click **update**. cornercase downloads the binary for your system, checks it against its checksum, makes sure the new binary runs on this machine, and only then replaces the old one. If something fails, the error shows in red, the old binary stays, and the button becomes **try again**.
 

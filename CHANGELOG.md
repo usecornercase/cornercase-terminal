@@ -7,6 +7,10 @@ Every pull request that changes the app adds a section here for its new version.
 - `cornercase send --enter` now makes sure the prompt was submitted: for Claude Code, Codex and opencode it returns once the agent has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have been submitted` when it records nothing, instead of reporting success for a prompt that went nowhere. A Codex that is working keeps a prompt until its next step, so `send` returns then; `--timeout` now works without `--wait` to give up sooner.
 - `cornercase send` refuses a Claude Code agent that shows a dialog, a panel or its `!` shell mode instead of its input box, such as the details of a background shell, where the text could stop the shell and the Enter would just close the panel. `--force` sends anyway. `cornercase status` shows such an agent as `(dialog open)`, and `"dialog": true` in `--json`.
 
+## 0.12.9
+
+- The sidebar, the panels and the dialogs start their labels and titles with a capital letter, so they read as names: **Projects**, **Workspaces**, **+ New workspace**, **+ Tab**, **Issues**, **Changes**, **Files**, **TODO**, **Settings**, **Usage**, **Quit**, the changes panel's **Uncommitted**, **Commits** and **All**, and dialog titles such as **New workspace** or **Remove workspace**. Menu entries and the buttons inside dialogs stay as they were.
+
 ## 0.12.8
 
 - `cornercase events` follows what happens as it happens, for scripts and agents that coordinate other agents: it prints a line when an agent starts working, waits for an answer, is left with a background shell, finishes or goes idle, when the program in a pane ends, and when a project, workspace, tab or pane opens or closes. `--pane` keeps only some panes and stops once they have all closed, and `--json` prints one JSON object per line, with the ids, the old and new state and the time. Without `--pane` it keeps running until the server stops, so a script can react to each change instead of polling `cornercase status`.

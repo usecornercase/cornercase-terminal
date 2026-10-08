@@ -49,7 +49,7 @@ The window stays open and says so:
 
 It tries again at once, then after 1, 2, 4 and 8 seconds, then every 15 seconds, and shows the last thing `ssh` said. Your shells and agents keep running on the other machine meanwhile, and once it is back the window shows them as they are now. A laptop that slept or changed Wi-Fi comes back on its own.
 
-`Esc` or ` quit ` gives up: the window closes and everything keeps running there, so `cornercase remote devbox` attaches again later. The ` quit ` in the sidebar works as always: it detaches, and nothing reconnects.
+`Esc` or ` quit ` gives up: the window closes and everything keeps running there, so `cornercase remote devbox` attaches again later. The ` Quit ` in the sidebar works as always: it detaches, and nothing reconnects.
 
 <Aside>
 Reconnecting never asks for a password or a passphrase, since the window has your keys: use a key that is in your SSH agent, or one without a passphrase. The first connection, before the window opens, can still ask for them. To notice a connection that died without a word, cornercase asks `ssh` to check every 5 seconds (`ServerAliveInterval=5`, `ServerAliveCountMax=3`), so it reacts within about 15 seconds.

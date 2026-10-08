@@ -1,8 +1,9 @@
 ---
 source: src/ui/todo.rs
+assertion_line: 475
 expression: "render(&v, None).backend()"
 ---
-" todo 2                 clear done   ×  "
+" TODO 2                 clear done   ×  "
 "                                        "
 " ────────────────────────────────────── "
 "  ○  fix the login bug in safari        "
@@ -10,7 +11,7 @@ expression: "render(&v, None).backend()"
 "  ○  write docs                         "
 "  ✓  renew the domain                   "
 "                                        "
-"  + new todo                            "
+"  + New TODO                            "
 "                                        "
 "                                        "
 "                                        "

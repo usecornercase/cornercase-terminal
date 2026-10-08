@@ -30,8 +30,8 @@ On the left are your projects and the workspaces of the active one, in one colum
 | Area | What it holds |
 | --- | --- |
 | Top left | The **search bar**: click it to jump to any project, workspace or tab. |
-| **projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ new` at the end of the list; `settings`, [`usage`](../guides/projects-workspaces-tabs/#plan-usage) and `quit` at the bottom, with an [update](../installation/#update) button next to `settings` when a new version is out. |
-| **workspaces** | The workspaces of the active project, each with its tabs. `+ tab` adds a tab to a workspace, `+ new workspace` starts a new one, `issues` opens the issue browser, `files` the [files panel](../guides/files/), `todo` your [TODO list](../guides/todo/). |
+| **Projects** | Every project you opened, with its number of workspaces, optionally in [groups](../guides/projects-workspaces-tabs/#groups). `+ New` at the end of the list; `Settings`, [`Usage`](../guides/projects-workspaces-tabs/#plan-usage) and `Quit` at the bottom, with an [update](../installation/#update) button next to `Settings` when a new version is out. |
+| **Workspaces** | The workspaces of the active project, each with its tabs. `+ Tab` adds a tab to a workspace, `+ New workspace` starts a new one, `Issues` opens the issue browser, `Files` the [files panel](../guides/files/), `TODO` your [TODO list](../guides/todo/). |
 | The pane | The active tab: one shell, or several in splits. |
 
 The active project and tab are marked with a cyan bar `▌` on the left edge and a highlighted background. Tabs hang from their workspace on thin tree lines.
@@ -40,7 +40,7 @@ The active project and tab are marked with a cyan bar `▌` on the left edge and
 
 <Steps>
 
-1. Click **`+ new`**, then **open project**. A folder picker opens in the folder above your current project.
+1. Click **`+ New`**, then **open project**. A folder picker opens in the folder above your current project.
 
 2. Type to filter the folders. Folders that are git repositories show their branch on the right.
 
@@ -63,7 +63,7 @@ A **workspace** is a line of work in a project: a feature, a bug, an experiment.
 
 <Steps>
 
-1. Click **`+ new workspace`** under the workspaces.
+1. Click **`+ New workspace`** under the workspaces.
 
 2. Type a name. When the project folder is the root of a git repository, the name is also a branch and **with its own worktree** is ticked: the workspace gets its own checkout of the repository, so its files don't mix with your other work.
 
@@ -81,7 +81,7 @@ Untick the box (click it or press `Tab`) to create a workspace in the project fo
 
 ## Add tabs and split them
 
-Click **`+ tab`** under a workspace to open another shell in its folder. Tabs are named after the program running in them, so a tab where you start `nvim` is called `nvim`.
+Click **`+ Tab`** under a workspace to open another shell in its folder. Tabs are named after the program running in them, so a tab where you start `nvim` is called `nvim`.
 
 To split a tab, **right-click** inside a pane:
 
@@ -115,7 +115,7 @@ To rename something, click the `⋯` at the end of its row, or right-click the r
 
 ## Leave and come back
 
-Click **`quit`** at the bottom of the projects column, or simply close the terminal window. cornercase detaches, but your shells, editors and agents keep running in the background server.
+Click **`Quit`** at the bottom of the projects column, or simply close the terminal window. cornercase detaches, but your shells, editors and agents keep running in the background server.
 
 Run `cornercase` again, from any terminal, and you are back where you left off. You can even attach from two terminals at once: they show the same session.
 
@@ -129,5 +129,5 @@ After `kill-server` or a reboot, the next `cornercase` brings back your projects
 ## Where to go next
 
 - Let an agent work on an issue: [Issues and agents](../guides/issues-and-agents/).
-- Tune cornercase in **settings**: [Settings and config.json](../reference/configuration/).
+- Tune cornercase in **Settings**: [Settings and config.json](../reference/configuration/).
 - Every click and key, in one place: [Keyboard and mouse](../reference/keyboard-and-mouse/).

@@ -7,7 +7,7 @@ use ratatui::widgets::{Clear, Paragraph, Widget};
 use super::{muted, overlay_block, surface_colour, truncate_right};
 use crate::host_theme::HostTheme;
 
-pub const TITLE: &str = "connection lost";
+pub const TITLE: &str = "Connection lost";
 pub const QUIT: &str = " quit ";
 const WIDTH: u16 = 60;
 const HEIGHT: u16 = 8;

@@ -1,10 +1,11 @@
 ---
 source: src/ui/remote.rs
+assertion_line: 110
 expression: "drawn(70, 12, &notice).backend()"
 ---
 "                                                                      "
 "                                                                      "
-"     ╭─ connection lost ────────────────────────────────────────╮     "
+"     ╭─ Connection lost ────────────────────────────────────────╮     "
 "     │                                                          │     "
 "     │ reconnecting to devbox…                                  │     "
 "     │ trying again in 4 s                                      │     "

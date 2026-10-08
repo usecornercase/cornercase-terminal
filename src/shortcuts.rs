@@ -158,9 +158,9 @@ pub enum Group {
 impl Group {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Find => "find",
-            Self::Git => "git",
-            Self::Workspace => "workspace",
+            Self::Find => "Find",
+            Self::Git => "Git",
+            Self::Workspace => "Workspace",
         }
     }
 
