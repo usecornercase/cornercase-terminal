@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.5
+## 0.12.6
 
 - Commands for scripts and agents can name a workspace by its branch: wherever they take `--workspace ID` (`new-tab`, `close`, `rename`, `focus`), `--worktree BRANCH` picks the workspace on that branch in the current project, the way `start --worktree` already did. So `cornercase close --worktree feat/x --remove-worktree` takes down a worktree an agent started, without looking its id up in `cornercase status`. A branch no workspace is on, or one several are on, exits with status 2 and lists the workspaces to pick from.
+
+## 0.12.5
+
+- Scripts and orchestrating agents can now tell when a Claude Code agent's turn is over but a command it started in the background (a test watcher, a dev server) still runs. The tab keeps showing it as working, as before, since Claude wakes up when that command ends, but `cornercase status` now says `working (background shell)` (`"background_shell": true` in `--json`), and `cornercase wait --until turn-over` returns as soon as the turn is over, printing `shell` in that case. `start --wait` and `send --wait` take the same `--until`. A plain `wait` that times out on such an agent now says so.
 
 ## 0.12.4
 

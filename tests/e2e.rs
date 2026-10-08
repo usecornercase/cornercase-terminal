@@ -1546,6 +1546,8 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
          while printf 'agent> ' && IFS= read -r line; do\n\
          printf '{\"pid\":%s,\"status\":\"busy\"}' $$ > \"$s\"\n\
          while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\"\n\
+         case \"$line\" in *background*) printf '{\"pid\":%s,\"status\":\"shell\"}' $$ > \"$s\"\n\
+         while [ ! -e \"$CLAUDE_CONFIG_DIR/finish\" ]; do sleep 0.02; done; rm -f \"$CLAUDE_CONFIG_DIR/finish\";; esac\n\
          printf 'done: %s\\n' \"$line\"; printf '{\"pid\":%s,\"status\":\"idle\"}' $$ > \"$s\"; done\n",
     );
     let config = format!("{{\"agent_commands\": {{\"claude\": \"{}\"}}}}", agent.display());
@@ -1565,8 +1567,24 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_and_is_waited_for() 
     let send = session.spawn(&["send", "--pane", pane, "--enter", "--wait", "--timeout", "30", "add tests"]);
     finish();
     let next = Session::output(send);
+    let send = session.spawn(&[
+        "send",
+        "--pane",
+        pane,
+        "--enter",
+        "--wait",
+        "--until",
+        "turn-over",
+        "watch in the background",
+    ]);
+    finish();
+    let turn = Session::output(send);
+    let status = session.says(&["status"]);
+    std::fs::write(session.claude_dir().join("finish"), "").expect("let the background shell end");
+    let last = session.says(&["wait", "--pane", pane, "--timeout", "30"]);
 
-    assert_eq!((ended, next.as_str()), ("done", "done"));
+    assert_eq!((ended, next.as_str(), turn.as_str(), last.as_str()), ("done", "done", "shell", "done"));
+    assert!(status.contains("working (background shell)"), "{status}");
     let screen = session.says(&["read", "--pane", pane]);
     assert!(screen.contains("done: fix the login") && screen.contains("done: add tests"), "{screen}");
 }

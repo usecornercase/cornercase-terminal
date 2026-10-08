@@ -23,10 +23,12 @@ const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 const IDLE: char = '✳';
 const ACTION_REQUIRED: [&str; 2] = ["[ ! ] Action Required", "[ . ] Action Required"];
 const NOTIFY_AFTER: Duration = Duration::from_secs(1);
+pub const SHELL: &str = "shell";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Activity {
     Working,
+    Shell,
     Waiting,
     Idle,
 }
@@ -78,7 +80,7 @@ impl Pane {
 
     pub fn update(&mut self, activity: Option<Activity>, seen: bool, now: Instant) -> Option<Status> {
         let before = self.status();
-        let finished = matches!(self.activity, Some(Activity::Working | Activity::Waiting));
+        let finished = matches!(self.activity, Some(Activity::Working | Activity::Shell | Activity::Waiting));
         if activity == Some(Activity::Working) {
             self.worked = Some(now);
         }
@@ -114,9 +116,17 @@ impl Pane {
         [self.worked, self.moved].into_iter().flatten().any(|at| at >= since)
     }
 
+    pub fn background_shell(&self) -> bool {
+        self.activity == Some(Activity::Shell)
+    }
+
+    pub fn state(&self) -> Option<&'static str> {
+        if self.background_shell() { Some(SHELL) } else { self.status().map(Status::name) }
+    }
+
     pub fn status(&self) -> Option<Status> {
         Some(match self.activity? {
-            Activity::Working => Status::Working,
+            Activity::Working | Activity::Shell => Status::Working,
             Activity::Waiting => Status::Waiting,
             Activity::Idle if self.unseen => Status::Done,
             Activity::Idle => Status::Idle,
@@ -146,7 +156,8 @@ impl Session {
 
     fn activity(&self) -> Option<Activity> {
         match self.status.as_deref()? {
-            "busy" | "shell" => Some(Activity::Working),
+            "busy" => Some(Activity::Working),
+            "shell" => Some(Activity::Shell),
             "waiting" => Some(Activity::Waiting),
             "idle" => Some(Activity::Idle),
             _ => None,
@@ -232,7 +243,7 @@ mod tests {
         #[case::permission(r#"{"pid":7,"status":"waiting","waitingFor":"permission prompt"}"#, Some(Activity::Waiting))]
         #[case::question(r#"{"pid":7,"status":"waiting","waitingFor":"input needed"}"#, Some(Activity::Waiting))]
         #[case::idle(r#"{"pid":7,"status":"idle"}"#, Some(Activity::Idle))]
-        #[case::background_shell(r#"{"pid":7,"status":"shell"}"#, Some(Activity::Working))]
+        #[case::background_shell(r#"{"pid":7,"status":"shell"}"#, Some(Activity::Shell))]
         #[case::no_status_yet(r#"{"pid":7,"sessionId":"a"}"#, None)]
         #[case::unknown_status(r#"{"pid":7,"status":"dreaming"}"#, None)]
         #[case::another_process(r#"{"pid":8,"status":"busy"}"#, None)]
@@ -339,6 +350,11 @@ mod tests {
         )]
         #[case::answered_out_of_sight(&[(Some(Activity::Waiting), false), (Some(Activity::Idle), false)], Some(Status::Done))]
         #[case::exited(&[(Some(Activity::Working), false), (Some(Activity::Idle), false), (None, false)], None)]
+        #[case::left_a_background_shell(&[(Some(Activity::Working), false), (Some(Activity::Shell), false)], Some(Status::Working))]
+        #[case::its_background_shell_ended(
+            &[(Some(Activity::Shell), false), (Some(Activity::Idle), false)],
+            Some(Status::Done)
+        )]
         fn follows_the_agent(#[case] steps: &[(Option<Activity>, bool)], #[case] expected: Option<Status>) {
             assert_eq!(after(steps), expected);
         }
@@ -358,6 +374,14 @@ mod tests {
         #[case::its_question_was_answered(Some(Activity::Waiting), Some(Activity::Waiting), Some(Activity::Idle), true)]
         #[case::it_stayed_idle(Some(Activity::Idle), Some(Activity::Idle), Some(Activity::Idle), false)]
         #[case::it_only_lost_and_found_its_agent(Some(Activity::Idle), None, Some(Activity::Idle), false)]
+        #[case::its_background_shell_still_runs(
+            Some(Activity::Shell),
+            Some(Activity::Shell),
+            Some(Activity::Shell),
+            false
+        )]
+        #[case::it_took_the_prompt(Some(Activity::Shell), Some(Activity::Shell), Some(Activity::Working), true)]
+        #[case::it_left_a_background_shell(Some(Activity::Idle), Some(Activity::Idle), Some(Activity::Shell), true)]
         fn reacting_is_working_or_changing_after_the_moment(
             #[case] first: Option<Activity>,
             #[case] between: Option<Activity>,
@@ -365,6 +389,19 @@ mod tests {
             #[case] expected: bool,
         ) {
             assert_eq!(reacted(first, between, last), expected);
+        }
+
+        #[rstest]
+        #[case::nothing_runs(None, None)]
+        #[case::working(Some(Activity::Working), Some("working"))]
+        #[case::background_shell(Some(Activity::Shell), Some("shell"))]
+        #[case::waiting(Some(Activity::Waiting), Some("waiting"))]
+        #[case::idle(Some(Activity::Idle), Some("idle"))]
+        fn tells_scripts_about_a_background_shell(#[case] activity: Option<Activity>, #[case] expected: Option<&str>) {
+            let mut pane = Pane::default();
+            pane.update(activity, true, Instant::now());
+
+            assert_eq!(pane.state(), expected);
         }
 
         #[test]
