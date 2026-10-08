@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.11.12
+
+- The server now keeps a log of what it does, so when something goes wrong there is a trail to follow: windows attaching, commands from scripts and their answers, tabs and panes opening and closing, each step of starting an agent, every change of an agent's status, dialogs opening, git runs and issue lists that failed or took long, and every error. It never holds what you type, paste or see in a pane, nor tokens. `cornercase logs` prints the end of it (`--follow` keeps printing, `--path` says where it is).
+- The log moved to `~/.local/state/cornercase/server.log`, next to your session, so it survives a logout or reboot. Past 8 MiB it moves to `server.log.1` and starts over. Restart the server with `CORNERCASE_LOG=debug` to log every click and key name it handled too.
+
 ## 0.11.11
 
 - Removing a worktree that is locked no longer stops its programs and then fails with git's "cannot remove a locked working tree". The dialog says it is locked and why, and when the lock names a process, whether it still runs: Claude Code locks the worktrees it creates, and a restart that ends its session leaves the lock behind. **unlock and remove** unlocks and removes it. `cornercase close --remove-worktree` refuses a locked worktree before anything stops and says how to unlock it.
