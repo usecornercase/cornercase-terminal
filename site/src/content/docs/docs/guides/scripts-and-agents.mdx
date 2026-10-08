@@ -3,7 +3,7 @@ title: Scripts and agents
 description: Drive a running cornercase from scripts, git hooks and coding agents — open tabs, type into panes, start agents in their own worktrees, wait for them and read what they wrote.
 ---
 
-Besides opening the window, the `cornercase` command drives the server that is already running. A script can open a tab and run the tests in it, a git hook can leave a note, and a coding agent in one tab can start others in their own worktrees, wait until they finish or need an answer, read what they wrote and send them the next step.
+Besides opening the window, the `cornercase` command drives the server that is already running. A script can open a tab and run the tests in it, a git hook can leave a note, and a coding agent in one tab can start others in their own worktrees, wait until they finish or need an answer, read what they wrote and send them the next step, or follow all of them at once as things happen.
 
 ```sh
 pane=$(cornercase new-tab --name tests -- cargo test)
@@ -49,6 +49,7 @@ group 9  work  collapsed
 | `keys KEY…` | Presses keys in a pane. |
 | `read` | Prints a pane's screen, or its last lines. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
+| `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -161,6 +162,41 @@ Repeat `--pane` and `--tab` to wait on several panes, with `--any` or `--all` (s
 - A timeout says what each pane still being waited for is doing.
 - `--json` prints `{"panes": [...]}`, one entry per line of text.
 
+### Follow events
+
+```sh
+cornercase events                          # everything, until the server stops
+cornercase events --pane 12 --pane 14      # only these panes, until they all closed
+cornercase events --json | while read -r event; do …; done
+```
+
+`events` keeps running and prints one line per event, as it happens, so a script that coordinates agents can react to each change, such as an agent asking for an answer or a pane closing, instead of polling `status` or waiting again after each `wait`:
+
+```text
+tab 15  opened in workspace 2
+pane 14  opened in tab 15
+pane 14  claude  none → idle
+pane 14  claude  idle → working
+pane 12  claude  working → waiting
+pane 14  claude  working → shell
+pane 7  cargo  exited
+pane 14  closed
+tab 15  closed
+```
+
+| Event | When |
+| --- | --- |
+| `pane ID  AGENT  FROM → TO` | An agent changed state: `working`, `shell` (its turn is over, but a [background shell](#look) it started still runs), `waiting` for an answer, `done` while you were elsewhere, `idle`, or `none` before it started and once it left the pane. Claude Code, Codex and opencode only, as for `wait`. |
+| `pane ID  PROGRAM  exited` | The program in the foreground ended and the shell is back, or another program took its place. |
+| `KIND ID  opened in PARENT` | A project, workspace, tab or pane opened. |
+| `KIND ID  closed` | A project, workspace, tab or pane closed. A pane closes when its shell exits, whatever closed it. |
+
+- `--pane ID`, given once or more, keeps only what happens to those panes, and ends the command once they have all closed. Without it, `events` ends when the server stops (`kill-server`, a restart), with status 0.
+- `--json` prints one JSON object per line instead: `event` (`status`, `exited`, `opened`, `closed`), `time` (UTC, as in the [server's log](../../reference/command-line/#cornercase-logs)), the `project`, `workspace`, `tab` and `pane` ids it concerns, and `agent`, `from` and `to` for a `status` (`null` for no agent), `program` for `exited`, `kind` for `opened` and `closed`.
+- It only tells what happens after it starts. Start it before what you want to follow, or read `cornercase status` once it runs, so nothing falls in between.
+- cornercase looks at the program in each pane every half second while something follows events, so a program that runs for less than that may not show. To wait for one program, `wait --until shell` is exact.
+- A reader that falls far behind (over a thousand events waiting for it) loses events, and gets a line such as `12 events dropped` when it catches up, so it knows to read `status` again. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client; the command then says the connection ended and exits with status 1.
+
 ### Arrange
 
 ```sh
@@ -198,6 +234,7 @@ cornercase todo rm 3
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
 | `read` | `pane` and `text`. |
+| `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 
 ## Exit status

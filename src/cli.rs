@@ -7,7 +7,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 
 use crate::client::{answer, ask};
-use crate::control::{self, Done, Item, ProjectInfo, Report, TodoList, Until};
+use crate::control::{self, Done, Event, Item, ProjectInfo, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::keys;
 use crate::log;
@@ -137,6 +137,22 @@ const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
   cornercase todo done 3";
+const EVENTS_HELP: &str = "It keeps running and prints one line per event, as it happens:
+  pane 5  claude  working → waiting   an agent changed state: working, shell (its turn is over but a
+                                      background shell it started still runs), waiting, done, idle,
+                                      or none once it left the pane
+  pane 7  cargo  exited               the program in the foreground ended and the shell is back
+  tab 3  opened in workspace 2        a project, workspace, tab or pane opened, or closed
+With --json, each line is a JSON object with the event, the ids, the old and new state and the time.
+
+It ends when the server stops, or once every pane given with --pane has closed. Programs are looked
+at every half second while something follows events, so one that ends sooner may not show. Start it
+before what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
+A reader that falls far behind loses events, and a line says how many.
+
+Examples:
+  cornercase events
+  cornercase events --pane 12 --pane 14 --json";
 const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
@@ -254,6 +270,8 @@ pub enum Control {
     Notify(NotifyArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
+    #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
+    Events(EventsArgs),
 }
 
 #[derive(Debug, Args)]
@@ -571,6 +589,19 @@ pub enum TodoAction {
 }
 
 #[derive(Debug, Args)]
+pub struct EventsArgs {
+    #[arg(
+        long = "pane",
+        value_name = "ID",
+        num_args = 1..,
+        help = "Only what happens to these panes, and stop once they all closed"
+    )]
+    pub panes: Vec<u64>,
+    #[arg(long, help = "Print one JSON object per line instead of text")]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct RemoteArgs {
     #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
     pub destination: String,
@@ -691,15 +722,7 @@ fn quietly(written: io::Result<()>) -> Result<bool> {
 
 fn run_control(command: Control) -> Result<()> {
     match command {
-        Control::Status(print) => {
-            let value = ask("status", control::Command::Status(control::Status {}))?;
-            if print.json {
-                return print_json(&value);
-            }
-            let report: Report = answer(value)?;
-            print!("{}", render(&report, home().as_deref()));
-            Ok(())
-        }
+        Control::Status(print) => run_status(&print),
         Control::Open(open) => {
             let path = std::path::absolute(&open.path)?;
             let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
@@ -779,6 +802,49 @@ fn run_control(command: Control) -> Result<()> {
             ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
         }
         Control::Todo(todo) => run_todo(todo.action),
+        Control::Events(events) => follow_events(events),
+    }
+}
+
+fn run_status(print: &Print) -> Result<()> {
+    let value = ask("status", control::Command::Status(control::Status {}))?;
+    if print.json {
+        return print_json(&value);
+    }
+    let report: Report = answer(value)?;
+    print!("{}", render(&report, home().as_deref()));
+    Ok(())
+}
+
+fn follow_events(args: EventsArgs) -> Result<()> {
+    let mut out = io::stdout().lock();
+    let command = control::Command::Events(control::Events { panes: args.panes });
+    client::follow("events", command, |value| {
+        let line = if args.json { value.to_string() } else { event_line(&value) };
+        quietly(writeln!(out, "{line}").and_then(|()| out.flush()))
+    })
+}
+
+fn event_line(value: &Value) -> String {
+    let Ok(event) = serde_json::from_value::<Event>(value.clone()) else { return value.to_string() };
+    let named = |kind: control::Kind| kind.id(&event.ids).map(|id| format!("{} {id}", kind.name()));
+    let subject = event.kind().and_then(named);
+    match (subject, &event.what) {
+        (Some(subject), What::Opened { kind }) => {
+            let parent = kind.parent().and_then(named).map(|parent| format!(" in {parent}")).unwrap_or_default();
+            format!("{subject}  opened{parent}")
+        }
+        (Some(subject), What::Closed { .. }) => format!("{subject}  closed"),
+        (Some(subject), What::Status { agent, from, to }) => {
+            let state = |state: &Option<String>| state.clone().unwrap_or_else(|| "none".into());
+            format!("{subject}  {agent}  {} → {}", state(from), state(to))
+        }
+        (Some(subject), What::Exited { program }) => format!("{subject}  {program}  exited"),
+        (_, What::Dropped { count }) => format!(
+            "{count} event{} dropped: this command fell behind; `cornercase status` shows where things are now",
+            if *count == 1 { "" } else { "s" }
+        ),
+        (None, _) => value.to_string(),
     }
 }
 
@@ -1098,6 +1164,17 @@ mod tests {
             assert_eq!(until.map(Until::from), Some(Until::TurnOver));
         }
 
+        #[rstest]
+        #[case::repeated(&["events", "--pane", "4", "--pane", "7"])]
+        #[case::listed(&["events", "--pane", "4", "7", "--json"])]
+        fn events_follow_the_panes_given(#[case] args: &[&str]) {
+            let Some(Command::Control(Control::Events(events))) = parse(args).expect("parse").command else {
+                panic!("not events")
+            };
+
+            assert_eq!(events.panes, [4, 7]);
+        }
+
         #[test]
         fn a_worktree_is_closed_by_its_branch() {
             let cli = parse(&["close", "--worktree", " fix/login ", "--remove-worktree", "--force"]).expect("parse");
@@ -1197,6 +1274,49 @@ mod tests {
                 text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"),
                 "{text}"
             );
+        }
+
+        fn event(what: What, ids: Ids) -> Value {
+            let event = Event { time: "2026-10-08T12:00:00.000Z".into(), what, ids };
+            serde_json::to_value(event).expect("json")
+        }
+
+        const PANE: Ids = Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) };
+        const TAB: Ids = Ids { pane: None, ..PANE };
+
+        #[rstest]
+        #[case::a_pane_opened(What::Opened { kind: control::Kind::Pane }, PANE, "pane 4  opened in tab 3")]
+        #[case::a_project_opened(
+            What::Opened { kind: control::Kind::Project },
+            Ids { project: Some(1), ..Ids::default() },
+            "project 1  opened"
+        )]
+        #[case::a_tab_closed(What::Closed { kind: control::Kind::Tab }, TAB, "tab 3  closed")]
+        #[case::an_agent_at_work(
+            What::Status { agent: "claude".into(), from: Some("working".into()), to: Some("waiting".into()) },
+            PANE,
+            "pane 4  claude  working → waiting"
+        )]
+        #[case::an_agent_arrived(
+            What::Status { agent: "codex".into(), from: None, to: Some("idle".into()) },
+            PANE,
+            "pane 4  codex  none → idle"
+        )]
+        #[case::a_program_ended(What::Exited { program: "cargo".into() }, PANE, "pane 4  cargo  exited")]
+        #[case::one_dropped(
+            What::Dropped { count: 1 },
+            Ids::default(),
+            "1 event dropped: this command fell behind; `cornercase status` shows where things are now"
+        )]
+        fn an_event_reads_as_one_line(#[case] what: What, #[case] ids: Ids, #[case] expected: &str) {
+            assert_eq!(event_line(&event(what, ids)), expected);
+        }
+
+        #[test]
+        fn an_event_from_a_newer_server_is_printed_as_it_came() {
+            let value = serde_json::json!({"time": "2026-10-08T12:00:00.000Z", "event": "renamed", "tab": 3});
+
+            assert_eq!(event_line(&value), value.to_string());
         }
 
         #[rstest]

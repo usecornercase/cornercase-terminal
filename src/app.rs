@@ -54,10 +54,13 @@ use crate::vscode;
 use crate::worktree;
 
 mod control;
+mod events;
 mod files_panel;
 mod shortcuts;
 mod todo_panel;
 mod trace;
+
+pub use events::Streamed;
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -651,6 +654,7 @@ pub struct App {
     todo: todo::Panel,
     files: files::Panel,
     requests: control::Requests,
+    events: events::Events,
     seen: trace::Seen,
 }
 
@@ -752,6 +756,7 @@ impl App {
             todo: todo::Panel::default(),
             files: files::Panel::default(),
             requests: control::Requests::default(),
+            events: events::Events::default(),
             seen: trace::Seen::default(),
         }
     }
@@ -887,6 +892,7 @@ impl App {
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
         let (config, dir, tree) = (&self.config, self.claude_dir.as_deref(), self.drawn.tree);
+        let jobs = self.events.listening();
         let mut notices = Vec::new();
         for (project, open) in self.projects.iter_mut().zip(open) {
             let shown = if tree { open } else { active == Some(project.id) };
@@ -920,6 +926,7 @@ impl App {
                                     notices.push(notice);
                                 }
                             }
+                            term.job = if jobs { term.current_job(config) } else { None };
                         } else if seen {
                             term.agent.see();
                         }
@@ -12980,6 +12987,67 @@ rm -f "$s"
             })
         }
 
+        fn follow(app: &mut App, panes: &[u64]) {
+            let ack = done(now(app, None, Command::Events(wire::Events { panes: panes.to_vec() })));
+            assert_eq!(ack, Done::default());
+        }
+
+        fn streamed(app: &mut App) -> Vec<Streamed> {
+            app.trace();
+            let streamed = app.take_events();
+            assert!(streamed.iter().all(|(client, _)| *client == CLIENT), "{streamed:?}");
+            streamed.into_iter().map(|(_, streamed)| streamed).collect()
+        }
+
+        fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
+            streamed
+                .iter()
+                .filter_map(|streamed| match streamed {
+                    Streamed::Event(text) => {
+                        let event: wire::Event = serde_json::from_value(match serde_json::from_str(text) {
+                            Ok(Response::Ok(value)) => value,
+                            other => panic!("not an event: {other:?}"),
+                        })
+                        .expect("an event");
+                        Some((event.what, event.ids))
+                    }
+                    Streamed::End => None,
+                })
+                .collect()
+        }
+
+        fn until_told(
+            app: &mut App,
+            rx: &Receiver<AppEvent>,
+            what: &str,
+            enough: impl Fn(&[Streamed]) -> bool,
+        ) -> Vec<Streamed> {
+            let mut got = Vec::new();
+            wait_until(what, || {
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                app.refresh(Instant::now());
+                got.extend(streamed(app));
+                enough(&got)
+            });
+            got
+        }
+
+        fn statuses(streamed: &[Streamed], pane: u64) -> Vec<(Option<String>, Option<String>)> {
+            told(streamed)
+                .into_iter()
+                .filter_map(|(what, ids)| match what {
+                    wire::What::Status { from, to, .. } if ids.pane == Some(pane) => Some((from, to)),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn change(from: Option<&str>, to: Option<&str>) -> (Option<String>, Option<String>) {
+            (from.map(str::to_string), to.map(str::to_string))
+        }
+
         mod creating {
             use super::*;
 
@@ -13615,6 +13683,35 @@ rm -f "$s"
             }
 
             #[test]
+            fn events_tell_each_change_of_what_the_agent_does() {
+                let mut agent = Agent::new();
+                follow(&mut agent.app, &[]);
+                let id = agent.start(None);
+                let says = |expected: Vec<(Option<String>, Option<String>)>| {
+                    move |streamed: &[Streamed]| statuses(streamed, id) == expected
+                };
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                let mut got = until_told(app, rx, "the agent shows up", says(vec![change(None, Some("idle"))]));
+
+                ask(&mut agent.app, None, send_text(id, "next step", true, false));
+                done(agent.answered("the enter is pressed"));
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                got.extend(until_told(app, rx, "the agent works", says(vec![change(Some("idle"), Some("working"))])));
+                agent.finish();
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                got.extend(until_told(app, rx, "the agent is done", says(vec![change(Some("working"), Some("done"))])));
+
+                let agents: Vec<String> = told(&got)
+                    .into_iter()
+                    .filter_map(|(what, _)| match what {
+                        wire::What::Status { agent, .. } => Some(agent),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(agents, ["claude"; 3]);
+            }
+
+            #[test]
             fn send_refuses_an_agent_waiting_for_an_answer() {
                 let mut agent = Agent::new();
                 let id = agent.start(Some("please ask"));
@@ -13628,6 +13725,140 @@ rm -f "$s"
 
                 assert!(message.contains("waiting for an answer"), "{message}");
                 assert_eq!(agent.status(id), Some(activity::Status::Waiting));
+            }
+        }
+
+        mod events {
+            use super::*;
+
+            fn first_tab(app: &App, pane: u64) -> wire::Ids {
+                let workspace = &app.projects[0].workspaces[0];
+                let (project, workspace, tab) = (app.projects[0].id, workspace.id, workspace.tabs[0].id);
+                wire::Ids { project: Some(project), workspace: Some(workspace), tab: Some(tab), pane: Some(pane) }
+            }
+
+            #[test]
+            fn tabs_and_panes_are_told_as_they_open_and_close_with_their_ids() {
+                let (mut app, rx, _dirs) = app_with(1);
+                follow(&mut app, &[]);
+
+                let ids = done(now(&mut app, None, new_tab(None))).ids;
+                let opened = told(&streamed(&mut app));
+                let close =
+                    wire::Close { item: Item::Tab(ids.tab.expect("a tab")), remove_worktree: false, force: false };
+                done(now(&mut app, None, Command::Close(close)));
+                let gone = until_told(&mut app, &rx, "the tab closes", |streamed| told(streamed).len() >= 2);
+
+                let tab = wire::Ids { pane: None, ..ids };
+                assert_eq!(
+                    opened,
+                    [
+                        (wire::What::Opened { kind: wire::Kind::Tab }, tab),
+                        (wire::What::Opened { kind: wire::Kind::Pane }, ids)
+                    ]
+                );
+                assert_eq!(
+                    told(&gone),
+                    [
+                        (wire::What::Closed { kind: wire::Kind::Pane }, ids),
+                        (wire::What::Closed { kind: wire::Kind::Tab }, tab)
+                    ]
+                );
+            }
+
+            #[test]
+            fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
+                let (mut app, rx, _dirs) = app_with(1);
+                let followed = term(&app, 0).id;
+                let ids = first_tab(&app, followed);
+                let other = done(now(&mut app, None, new_tab(None))).ids.pane.expect("a pane");
+                follow(&mut app, &[followed]);
+
+                done(now(&mut app, None, new_tab(None)));
+                for pane in [other, followed] {
+                    let close = wire::Close { item: Item::Pane(pane), remove_worktree: false, force: false };
+                    done(now(&mut app, None, Command::Close(close)));
+                }
+                let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| {
+                    streamed.last() == Some(&Streamed::End)
+                });
+
+                assert_eq!(told(&got), [(wire::What::Closed { kind: wire::Kind::Pane }, ids)]);
+                assert!(!app.events.listening());
+            }
+
+            #[test]
+            fn a_pane_that_does_not_exist_cannot_be_followed() {
+                let (mut app, _rx, _dirs) = app_with(1);
+
+                let message = error(now(&mut app, None, Command::Events(wire::Events { panes: vec![999] })));
+
+                assert!(message.contains("there is no pane 999"), "{message}");
+                assert!(!app.events.listening());
+            }
+
+            #[test]
+            fn a_client_that_left_is_told_nothing_more() {
+                let (mut app, _rx, _dirs) = app_with(1);
+                follow(&mut app, &[]);
+
+                app.forget(CLIENT);
+                done(now(&mut app, None, new_tab(None)));
+
+                assert_eq!(streamed(&mut app), []);
+            }
+
+            #[test]
+            fn a_program_that_ends_is_told_by_its_name() {
+                let (mut app, rx, _dirs) = app_with(1);
+                follow(&mut app, &[]);
+                let pane = term(&app, 0).id;
+                let typed = Launch::command(pane, "sleep 30".into(), Instant::now());
+                app.launches.push(typed);
+                pump_refreshing(&mut app, &rx, "sleep runs", |app| {
+                    pane_job(app, pane).is_some_and(|job| job.program == "sleep")
+                });
+
+                done(now(&mut app, None, press_keys(pane, &["ctrl+c"])));
+                let got = until_told(&mut app, &rx, "sleep ends", |streamed| {
+                    told(streamed).iter().any(|(what, _)| matches!(what, wire::What::Exited { .. }))
+                });
+
+                let ids = first_tab(&app, pane);
+                assert!(
+                    told(&got).contains(&(wire::What::Exited { program: "sleep".into() }, ids)),
+                    "{:?}",
+                    told(&got)
+                );
+            }
+
+            #[test]
+            fn programs_are_not_looked_up_while_nobody_follows() {
+                let (mut app, rx, _dirs) = app_with(1);
+                let id = term(&app, 0).id;
+                app.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
+                pump_refreshing(&mut app, &rx, "sleep runs", |app| {
+                    pane(app, id).program(&app.config).as_deref() == Some("sleep")
+                });
+
+                app.watched = None;
+                app.refresh(Instant::now());
+
+                assert_eq!(pane_job(&app, id), None);
+            }
+
+            fn pane_job(app: &App, id: u64) -> Option<crate::term::Job> {
+                pane(app, id).job.clone()
+            }
+
+            fn pump_refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
+                wait_until(what, || {
+                    while let Ok(ev) = rx.try_recv() {
+                        app.handle_event(ev, AREA).expect("handle event");
+                    }
+                    app.refresh(Instant::now());
+                    cond(app)
+                });
             }
         }
 
@@ -13944,6 +14175,7 @@ rm -f "$s"
 
         fn told(app: &mut App) -> Vec<String> {
             app.observe()
+                .0
                 .into_iter()
                 .map(|note| {
                     let fields: Vec<String> = note.fields.iter().map(|(k, v)| format!(" {k}={v}")).collect();

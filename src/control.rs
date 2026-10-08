@@ -58,6 +58,7 @@ pub enum Command {
     Focus(Focus),
     Notify(Notify),
     Todo(Todo),
+    Events(Events),
 }
 
 impl Command {
@@ -79,6 +80,7 @@ impl Command {
             Self::Notify(_) => 13,
             Self::Todo(_) => 14,
             Self::WaitSeveral(_) => 15,
+            Self::Events(_) => 16,
         }]
     }
 
@@ -147,11 +149,15 @@ impl Command {
                     Todo::Rm(id) => fields.add("todo", "rm").add("id", id),
                 };
             }
+            Self::Events(events) => {
+                let panes: Vec<String> = events.panes.iter().map(u64::to_string).collect();
+                fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(",")));
+            }
         }
         fields.0
     }
 
-    pub const NAMES: [&str; 16] = [
+    pub const NAMES: [&str; 17] = [
         "status",
         "open",
         "new-workspace",
@@ -168,6 +174,7 @@ impl Command {
         "notify",
         "todo",
         "wait-several",
+        "events",
     ];
 }
 
@@ -358,6 +365,83 @@ pub enum Todo {
     List,
     Done(u64),
     Rm(u64),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Events {
+    pub panes: Vec<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Project,
+    Workspace,
+    Tab,
+    Pane,
+}
+
+impl Kind {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Workspace => "workspace",
+            Self::Tab => "tab",
+            Self::Pane => "pane",
+        }
+    }
+
+    pub fn id(self, ids: &Ids) -> Option<u64> {
+        match self {
+            Self::Project => ids.project,
+            Self::Workspace => ids.workspace,
+            Self::Tab => ids.tab,
+            Self::Pane => ids.pane,
+        }
+    }
+
+    pub fn parent(self) -> Option<Self> {
+        match self {
+            Self::Project => None,
+            Self::Workspace => Some(Self::Project),
+            Self::Tab => Some(Self::Workspace),
+            Self::Pane => Some(Self::Tab),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "lowercase")]
+pub enum What {
+    Opened { kind: Kind },
+    Closed { kind: Kind },
+    Status { agent: String, from: Option<String>, to: Option<String> },
+    Exited { program: String },
+    Dropped { count: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Event {
+    pub time: String,
+    #[serde(flatten)]
+    pub what: What,
+    #[serde(flatten)]
+    pub ids: Ids,
+}
+
+impl Event {
+    pub fn kind(&self) -> Option<Kind> {
+        match &self.what {
+            What::Opened { kind } | What::Closed { kind } => Some(*kind),
+            What::Status { .. } | What::Exited { .. } => Some(Kind::Pane),
+            What::Dropped { .. } => None,
+        }
+    }
+
+    pub fn streamed(&self) -> Option<String> {
+        serde_json::to_string(&Response::Ok(serde_json::to_value(self).ok()?)).ok()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -587,6 +671,7 @@ mod tests {
             Command::Notify(Notify::default()),
             Command::Todo(Todo::List),
             Command::WaitSeveral(Wait::default()),
+            Command::Events(Events::default()),
         ];
 
         let names: Vec<String> = commands
@@ -721,6 +806,43 @@ mod tests {
         let sent = serde_json::to_value(Request { caller: None, server: None, command: wait }).expect("json");
 
         assert_eq!(sent["args"]["until"], json!("turn-over"));
+    }
+
+    #[test]
+    fn an_event_names_what_happened_next_to_its_ids() {
+        let event = Event {
+            time: "2026-10-08T12:00:00.000Z".into(),
+            what: What::Status { agent: "claude".into(), from: None, to: Some("working".into()) },
+            ids: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
+        };
+
+        let sent = serde_json::to_value(&event).expect("json");
+
+        assert_eq!(
+            sent,
+            json!({
+                "time": "2026-10-08T12:00:00.000Z", "event": "status", "agent": "claude", "from": null,
+                "to": "working", "project": 1, "workspace": 2, "tab": 3, "pane": 4
+            })
+        );
+        assert_eq!(serde_json::from_value::<Event>(sent).expect("an event"), event);
+    }
+
+    #[test]
+    fn an_event_streams_as_one_more_answer() {
+        let event = Event {
+            time: "2026-10-08T12:00:00.000Z".into(),
+            what: What::Closed { kind: Kind::Tab },
+            ids: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: None },
+        };
+
+        let text = event.streamed().expect("json");
+
+        let Ok(Response::Ok(value)) = serde_json::from_str(&text) else { panic!("not an answer: {text}") };
+        assert_eq!(
+            (value["event"].as_str(), value["kind"].as_str(), value.get("pane")),
+            (Some("closed"), Some("tab"), None)
+        );
     }
 
     #[test]

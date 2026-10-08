@@ -50,11 +50,18 @@ pub struct Term {
     pub output_at: Instant,
     pub input_at: Option<Instant>,
     pub submitted: Option<Instant>,
+    pub job: Option<Job>,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
     size: (u16, u16),
     interactive: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Job {
+    pub pid: i32,
+    pub program: String,
 }
 
 pub struct SpawnOptions<'a> {
@@ -120,6 +127,7 @@ impl Term {
             output_at: Instant::now(),
             input_at: None,
             submitted: None,
+            job: None,
             master: pair.master,
             writer,
             child,
@@ -171,6 +179,15 @@ impl Term {
         let pid = self.foreground_pid()?;
         let name = process::name(pid)?;
         Some(program(config, &name, &process::args(pid)))
+    }
+
+    pub fn current_job(&self, config: &Config) -> Option<Job> {
+        if self.shell_in_foreground() {
+            return None;
+        }
+        let pid = self.foreground_pid()?;
+        let name = process::name(pid)?;
+        Some(Job { pid, program: program(config, &name, &process::args(pid)) })
     }
 
     pub fn shell_in_foreground(&self) -> bool {
@@ -554,6 +571,23 @@ mod tests {
             term.write(b"./node bin/tool.js\r");
 
             wait_until("shows the script", || term.program(&Config::default()).as_deref() == Some("tool"));
+        }
+    }
+
+    mod current_job {
+        use super::*;
+
+        #[test]
+        fn is_none_at_the_prompt_and_the_program_while_it_runs() {
+            let (mut term, _rx) = spawn_sh();
+            wait_until("the shell is at its prompt", || term.shell_in_foreground());
+            let idle = term.current_job(&Config::default());
+
+            term.write(b"sleep 30\r");
+
+            wait_until("sleep runs", || term.current_job(&Config::default()).is_some_and(|job| job.program == "sleep"));
+            let job = term.current_job(&Config::default()).expect("a job");
+            assert_eq!((idle, Some(job.pid)), (None, term.foreground_pid()));
         }
     }
 
