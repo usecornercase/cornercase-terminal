@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.12
+
+- Nothing changes in the app. A test that checks how cornercase tells two opencode in one folder apart failed now and then on macOS; it now runs a fake opencode that cannot be mistaken for a second one.
+
 ## 0.12.9
 
 - The sidebar, the panels and the dialogs start their labels and titles with a capital letter, so they read as names: **Projects**, **Workspaces**, **+ New workspace**, **+ Tab**, **Issues**, **Changes**, **Files**, **TODO**, **Settings**, **Usage**, **Quit**, the changes panel's **Uncommitted**, **Commits** and **All**, and dialog titles such as **New workspace** or **Remove workspace**. Menu entries and the buttons inside dialogs stay as they were.
