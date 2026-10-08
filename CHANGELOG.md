@@ -7,6 +7,14 @@ Every pull request that changes the app adds a section here for its new version.
 - `cornercase send --enter` now makes sure the prompt was submitted: for Claude Code, Codex and opencode it returns once the agent has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have been submitted` when it records nothing, instead of reporting success for a prompt that went nowhere. A Codex that is working keeps a prompt until its next step, so `send` returns then; `--timeout` now works without `--wait` to give up sooner.
 - `cornercase send` refuses a Claude Code agent that shows a dialog, a panel or its `!` shell mode instead of its input box, such as the details of a background shell, where the text could stop the shell and the Enter would just close the panel. `--force` sends anyway. `cornercase status` shows such an agent as `(dialog open)`, and `"dialog": true` in `--json`.
 
+## 0.12.7
+
+- `cornercase wait` can watch several panes at once: repeat `--pane` or `--tab` and add `--any` to return as soon as one of them meets the condition, or `--all` to return once every one has. It prints one line per pane, its id and how it ended (`15 idle`), and `--json` gives the same as a list. A pane that closes meanwhile ends as `closed` instead of failing the wait. An agent coordinating others no longer needs one background wait per agent.
+
+## 0.12.6
+
+- Commands for scripts and agents can name a workspace by its branch: wherever they take `--workspace ID` (`new-tab`, `close`, `rename`, `focus`), `--worktree BRANCH` picks the workspace on that branch in the current project, the way `start --worktree` already did. So `cornercase close --worktree feat/x --remove-worktree` takes down a worktree an agent started, without looking its id up in `cornercase status`. A branch no workspace is on, or one several are on, exits with status 2 and lists the workspaces to pick from.
+
 ## 0.12.5
 
 - Scripts and orchestrating agents can now tell when a Claude Code agent's turn is over but a command it started in the background (a test watcher, a dev server) still runs. The tab keeps showing it as working, as before, since Claude wakes up when that command ends, but `cornercase status` now says `working (background shell)` (`"background_shell": true` in `--json`), and `cornercase wait --until turn-over` returns as soon as the turn is over, printing `shell` in that case. `start --wait` and `send --wait` take the same `--until`. A plain `wait` that times out on such an agent now says so.

@@ -3,7 +3,7 @@ use std::io::{self, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 
 use crate::client::{answer, ask};
@@ -25,8 +25,10 @@ commands drive the running server from scripts, git hooks and the agents in its 
 start a server.";
 const AFTER_HELP: &str = "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window
-shows. Only `focus` and `--focus` change what the window shows. The commands exit with 1 on errors
-and timeouts, and 2 on wrong usage.
+shows. Where a command takes --workspace ID, --worktree BRANCH names the workspace on that branch
+instead, in that same project. Only `focus` and `--focus` change what the window shows. The
+commands exit with 1 on errors and timeouts, and 2 on wrong usage, a branch no workspace is on
+included, or one several are on (both list the workspaces to pick from).
 
 Examples:
   cornercase status
@@ -114,17 +116,24 @@ how it ended (idle, done, waiting, working, shell or quiet), or the line that ma
 an agent fails on a pane without one. A timeout exits with 1 and does not prove that the agent missed
 what you sent: read the pane before sending it again.
 
+Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
+one of them meets it and prints one line, its id and how it ended; --all returns once every one has
+met it, and prints one such line each, in the order given. The id is the one given, so a tab's line
+starts with the tab's id. A pane that closes meanwhile ends as `closed` instead of failing the wait.
+
 Examples:
   cornercase wait --pane 12 --timeout 600
   cornercase wait --pane 7 --until shell
   cornercase wait --pane 12 --until turn-over --timeout 600
-  cornercase wait --pane 7 --text 'test result: (ok|FAILED)'";
+  cornercase wait --pane 7 --text 'test result: (ok|FAILED)'
+  cornercase wait --any --pane 12 --pane 15 --tab 9 --timeout 1800";
 const CLOSE_HELP: &str = "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
 
 Examples:
   cornercase close --tab 9
-  cornercase close --workspace 5 --remove-worktree";
+  cornercase close --workspace 5 --remove-worktree
+  cornercase close --worktree fix/login --remove-worktree";
 const RENAME_HELP: &str = "Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''";
@@ -167,7 +176,11 @@ Examples:
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
+const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
+    the shown one]";
+const WAIT_TAB: &str = "A tab: its agent's pane, else its active one; repeat it to wait on several";
 const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
+const BY_BRANCH: &str = "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
 #[derive(Debug, Parser)]
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]
@@ -300,6 +313,8 @@ pub struct NewWorkspaceArgs {
 pub struct NewTabArgs {
     #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
     pub workspace: Option<u64>,
+    #[arg(long, value_name = "BRANCH", value_parser = branch, conflicts_with = "workspace", help = BY_BRANCH)]
+    pub worktree: Option<String>,
     #[arg(long, help = "The tab's name [default: the name of the program it runs]")]
     pub name: Option<String>,
     #[command(flatten)]
@@ -434,8 +449,14 @@ impl From<UntilArg> for Until {
 
 #[derive(Debug, Args)]
 pub struct WaitArgs {
-    #[command(flatten)]
-    pub target: Target,
+    #[arg(long = "pane", value_name = "ID", help = WAIT_PANE)]
+    pub panes: Vec<u64>,
+    #[arg(long = "tab", value_name = "ID", help = WAIT_TAB)]
+    pub tabs: Vec<u64>,
+    #[arg(long, conflicts_with = "all", help = "Return once any of the panes meets the condition")]
+    pub any: bool,
+    #[arg(long, help = "Return once every one of the panes has met the condition")]
+    pub all: bool,
     #[arg(long, value_enum, conflicts_with_all = ["text", "quiet"], help = "Until the pane is in this state")]
     pub until: Option<UntilArg>,
     #[arg(
@@ -463,17 +484,21 @@ pub struct Which {
     pub tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "A workspace and its tabs")]
     pub workspace: Option<u64>,
+    #[arg(long, value_name = "BRANCH", value_parser = branch, help = BY_BRANCH)]
+    pub worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "A project and its workspaces")]
     pub project: Option<u64>,
 }
 
 impl Which {
-    fn item(&self) -> Option<Item> {
-        self.pane
+    fn item(&self, command: &'static str) -> Result<Option<Item>> {
+        let workspace = workspace(command, self.workspace, self.worktree.as_deref())?;
+        Ok(self
+            .pane
             .map(Item::Pane)
             .or_else(|| self.tab.map(Item::Tab))
-            .or_else(|| self.workspace.map(Item::Workspace))
-            .or_else(|| self.project.map(Item::Project))
+            .or_else(|| workspace.map(Item::Workspace))
+            .or_else(|| self.project.map(Item::Project)))
     }
 }
 
@@ -504,6 +529,13 @@ pub struct Renamed {
     pub tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this workspace instead")]
     pub workspace: Option<u64>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        value_parser = branch,
+        help = "Rename the workspace on this branch instead, looked up in the project this runs in, else the shown one"
+    )]
+    pub worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "Rename this project instead")]
     pub project: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this group instead")]
@@ -599,6 +631,11 @@ fn pattern(text: &str) -> std::result::Result<String, String> {
     regex::Regex::new(text).map(|_| text.to_string()).map_err(|e| e.to_string())
 }
 
+fn branch(text: &str) -> std::result::Result<String, String> {
+    let branch = text.trim();
+    if branch.is_empty() { Err("the branch needs a name".into()) } else { Ok(branch.to_string()) }
+}
+
 fn key(text: &str) -> std::result::Result<String, String> {
     keys::named(text).map(|_| text.to_string()).ok_or_else(|| format!("unknown key; use {KEY_NAMES}"))
 }
@@ -689,7 +726,7 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::NewTab(new) => {
             let request = control::NewTab {
-                workspace: new.workspace,
+                workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
                 name: new.name,
                 command: typed(&new.command),
                 focus: new.create.focus,
@@ -731,24 +768,15 @@ fn run_control(command: Control) -> Result<()> {
             let value = ask("read", control::Command::Read(control::Read { pane, tab, lines }))?;
             say(value, read.print.json, |done| done.text.clone().into_iter().collect())
         }
-        Control::Wait(wait) => {
-            let until = match (wait.until, wait.text, wait.quiet) {
-                (Some(until), ..) => until.into(),
-                (None, Some(text), _) => Until::Text(text),
-                (None, None, Some(quiet)) => Until::Quiet(quiet),
-                (None, None, None) => Until::Stops,
-            };
-            let Target { pane, tab } = wait.target;
-            let request = control::Wait { pane, tab, until, timeout: wait.timeout };
-            say(ask("wait", control::Command::Wait(request))?, wait.print.json, ending)
-        }
+        Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
-            let item = close.which.item().ok_or_else(|| Error::Control("say what to close".into()))?;
+            let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
             let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
             ask("close", control::Command::Close(request)).map(drop)
         }
         Control::Rename(rename) => {
-            let Renamed { tab, workspace, project, group } = rename.renamed;
+            let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;
+            let workspace = workspace("rename", id, worktree.as_deref())?;
             let item = tab
                 .map(Item::Tab)
                 .or_else(|| workspace.map(Item::Workspace))
@@ -757,7 +785,7 @@ fn run_control(command: Control) -> Result<()> {
             ask("rename", control::Command::Rename(control::Rename { item, name: rename.name })).map(drop)
         }
         Control::Focus(focus) => {
-            let item = focus.which.item().ok_or_else(|| Error::Control("say what to show".into()))?;
+            let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
             ask("focus", control::Command::Focus(control::Focus { item })).map(drop)
         }
         Control::Notify(notify) => {
@@ -766,6 +794,12 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::Todo(todo) => run_todo(todo.action),
     }
+}
+
+fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Result<Option<u64>> {
+    let Some(branch) = branch else { return Ok(id) };
+    let report: Report = answer(ask(command, control::Command::Status(control::Status {}))?)?;
+    report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
 fn run_start(start: StartArgs) -> Result<()> {
@@ -792,6 +826,39 @@ fn run_start(start: StartArgs) -> Result<()> {
     say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
+}
+
+fn run_wait(wait: WaitArgs) -> Result<()> {
+    let several = several(&wait).unwrap_or_else(|e| e.exit());
+    let until = match (wait.until, wait.text, wait.quiet) {
+        (Some(until), ..) => until.into(),
+        (None, Some(text), _) => Until::Text(text),
+        (None, None, Some(quiet)) => Until::Quiet(quiet),
+        (None, None, None) => Until::Stops,
+    };
+    let request = control::Wait { until, timeout: wait.timeout, ..control::Wait::default() };
+    if !several {
+        let (pane, tab) = (wait.panes.first().copied(), wait.tabs.first().copied());
+        return say(
+            ask("wait", control::Command::Wait(control::Wait { pane, tab, ..request }))?,
+            wait.print.json,
+            ending,
+        );
+    }
+    let request = control::Wait { panes: wait.panes, tabs: wait.tabs, all: wait.all, ..request };
+    say(ask("wait", control::Command::WaitSeveral(request))?, wait.print.json, endings)
+}
+
+fn several(wait: &WaitArgs) -> std::result::Result<bool, clap::Error> {
+    if wait.any || wait.all {
+        return Ok(true);
+    }
+    if wait.panes.len() + wait.tabs.len() > 1 {
+        let command = Cli::command().find_subcommand("wait").cloned().unwrap_or_else(Cli::command);
+        let mut command = command.bin_name("cornercase wait");
+        return Err(command.error(clap::error::ErrorKind::MissingRequiredArgument, "several panes need --any or --all"));
+    }
+    Ok(false)
 }
 
 fn run_todo(action: TodoAction) -> Result<()> {
@@ -842,6 +909,11 @@ fn ending(done: &Done) -> Vec<String> {
         ended => ended.map(str::to_string),
     };
     line.into_iter().collect()
+}
+
+fn endings(done: &Done) -> Vec<String> {
+    let line = |pane: &Done| Some(format!("{} {}", pane.ids.tab.or(pane.ids.pane)?, ending(pane).first()?));
+    done.panes.iter().filter_map(line).collect()
 }
 
 fn typed(words: &[String]) -> Option<String> {
@@ -933,7 +1005,6 @@ fn line(depth: usize, kind: &str, id: u64, parts: &[String], marks: &[&str]) -> 
 
 #[cfg(test)]
 mod tests {
-    use clap::CommandFactory;
     use rstest::rstest;
 
     use super::*;
@@ -998,14 +1069,37 @@ mod tests {
         #[case::an_unknown_state(&["wait", "--until", "sleeping"])]
         #[case::a_broken_pattern(&["wait", "--text", "("])]
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
+        #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
         #[case::an_unknown_key(&["keys", "hello"])]
         #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
         #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
         #[case::two_things_to_rename(&["rename", "--tab", "1", "--group", "2", "x"])]
+        #[case::a_branch_and_a_workspace_to_close(&["close", "--worktree", "x", "--workspace", "1"])]
+        #[case::a_branch_and_a_tab_to_show(&["focus", "--worktree", "x", "--tab", "1"])]
+        #[case::a_branch_and_a_workspace_for_a_tab(&["new-tab", "--worktree", "x", "--workspace", "1"])]
+        #[case::a_branch_and_a_project_to_rename(&["rename", "--worktree", "x", "--project", "1", "y"])]
+        #[case::a_blank_branch(&["close", "--worktree", " "])]
         #[case::an_unknown_command(&["frobnicate"])]
         fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
             assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
+        }
+
+        #[rstest]
+        #[case::two_panes(&["wait", "--pane", "1", "--pane", "2"], None)]
+        #[case::a_pane_and_a_tab(&["wait", "--pane", "1", "--tab", "2"], None)]
+        #[case::one_pane(&["wait", "--pane", "1"], Some(false))]
+        #[case::any(&["wait", "--any", "--pane", "1", "--tab", "2"], Some(true))]
+        #[case::all_of_one(&["wait", "--all", "--pane", "1"], Some(true))]
+        fn several_panes_need_any_or_all(#[case] args: &[&str], #[case] expected: Option<bool>) {
+            let Some(Command::Control(Control::Wait(wait))) = parse(args).expect("parse").command else {
+                panic!("not wait")
+            };
+
+            match several(&wait) {
+                Ok(several) => assert_eq!(Some(several), expected),
+                Err(e) => assert_eq!((expected, e.exit_code()), (None, 2)),
+            }
         }
 
         #[rstest]
@@ -1029,6 +1123,15 @@ mod tests {
 
             let Some(Command::Control(Control::Send(send))) = cli.command else { panic!("not send") };
             assert_eq!((send.timeout, send.force, send.wait), (Some(5.0), true, false));
+        }
+
+        #[test]
+        fn a_worktree_is_closed_by_its_branch() {
+            let cli = parse(&["close", "--worktree", " fix/login ", "--remove-worktree", "--force"]).expect("parse");
+
+            let Some(Command::Control(Control::Close(close))) = cli.command else { panic!("not close") };
+            assert_eq!(close.which.worktree.as_deref(), Some("fix/login"));
+            assert!(close.remove_worktree && close.force);
         }
 
         #[test]
@@ -1153,6 +1256,26 @@ mod tests {
             let done = Done { ended: ended.map(str::to_string), line: line.map(str::to_string), ..Done::default() };
 
             assert_eq!(ending(&done), expected);
+        }
+
+        #[test]
+        fn several_panes_end_one_line_each_with_the_id_they_were_given() {
+            let pane = |tab, pane, ended: &str, line: Option<&str>| Done {
+                ids: Ids { tab, pane: Some(pane), ..Ids::default() },
+                ended: Some(ended.into()),
+                line: line.map(str::to_string),
+                ..Done::default()
+            };
+            let done = Done {
+                panes: vec![
+                    pane(None, 4, "idle", None),
+                    pane(Some(9), 12, "text", Some("ok")),
+                    pane(None, 7, "closed", None),
+                ],
+                ..Done::default()
+            };
+
+            assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
         }
     }
 }

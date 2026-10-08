@@ -85,6 +85,7 @@ enum Stage {
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
     Watch(Watch),
+    Several { all: bool, parts: Vec<Pending> },
 }
 
 impl Stage {
@@ -247,6 +248,13 @@ fn not_reading(pane: u64) -> String {
     )
 }
 
+fn endings(value: &Value) -> String {
+    let ended = |value: &Value| value.get("ended").and_then(Value::as_str).unwrap_or("-").to_string();
+    let Some(panes) = value.get("panes").and_then(Value::as_array) else { return ended(value) };
+    let id = |pane: &Value| pane.get("tab").or_else(|| pane.get("pane")).and_then(Value::as_u64).unwrap_or_default();
+    panes.iter().map(|pane| format!("{}:{}", id(pane), ended(pane))).collect::<Vec<_>>().join(",")
+}
+
 fn pane_ids(pane: u64) -> Done {
     Done { ids: Ids { pane: Some(pane), ..Ids::default() }, ..Done::default() }
 }
@@ -313,7 +321,9 @@ impl App {
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
-        self.requests.pending.retain(|p| p.client.is_some() || !matches!(p.stage, Stage::Confirm(_) | Stage::Watch(_)));
+        self.requests.pending.retain(|p| {
+            p.client.is_some() || !matches!(p.stage, Stage::Confirm(_) | Stage::Watch(_) | Stage::Several { .. })
+        });
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
@@ -323,7 +333,7 @@ impl App {
             let ms = at.elapsed().as_millis();
             match &reply {
                 Ok(value) => {
-                    let ended = value.get("ended").and_then(Value::as_str).unwrap_or("-");
+                    let ended = endings(value);
                     log::info!("control", "answered", client = client, command = command, ms = ms, ended = ended);
                 }
                 Err(message) => {
@@ -353,6 +363,7 @@ impl App {
             Command::Keys(keys) => self.keys_request(caller, &keys, now),
             Command::Read(read) => self.read_request(caller, &read),
             Command::Wait(wait) => self.wait_request(client, caller, wait, now),
+            Command::WaitSeveral(wait) => self.wait_several_request(client, caller, wait, now),
             Command::Close(close) => self.close_request(client, &close),
             Command::Rename(rename) => self.rename_request(caller, rename),
             Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
@@ -434,6 +445,24 @@ impl App {
                 Verdict::Failed(message) => return Some(Err(message)),
             }
         }
+        if let Stage::Several { all, parts } = &mut pending.stage {
+            for part in parts.iter_mut().filter(|part| part.done.ended.is_none()) {
+                if self.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
+                    part.done.ended = Some("closed".into());
+                } else if let Some(Err(message)) = self.advance(part, launched, now) {
+                    return Some(Err(message));
+                }
+            }
+            let mut ended = parts.iter().filter(|part| part.done.ended.is_some()).map(|part| part.done.clone());
+            let panes: Vec<Done> = if *all {
+                if parts.iter().all(|part| part.done.ended.is_some()) { ended.collect() } else { Vec::new() }
+            } else {
+                ended.next().into_iter().collect()
+            };
+            if !panes.is_empty() {
+                return Some(Ok(json(&Done { panes, ..Done::default() })));
+            }
+        }
         let (at, seconds) = pending.timeout.filter(|_| pending.client.is_some())?;
         (now >= at).then(|| Err(format!("timed out after {seconds}s: {}", self.waiting_on(&pending.stage, pane))))
     }
@@ -455,6 +484,11 @@ impl App {
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
+            Stage::Several { parts, .. } => {
+                let pending = parts.iter().filter(|part| part.done.ended.is_none());
+                let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));
+                return waits.collect::<Vec<_>>().join("; ");
+            }
             Stage::Watch(watch) => watch,
         };
         let pane = watch.pane;
@@ -544,22 +578,35 @@ impl App {
     pub(super) fn next_request(&self, now: Instant) -> Option<Duration> {
         let due = self.requests.pending.iter().flat_map(|pending| {
             let deadline = pending.timeout.filter(|_| pending.client.is_some()).map(|(at, _)| at);
-            let (quiet, start_by) = match &pending.stage {
-                Stage::Watch(watch) => {
-                    let quiet = self.pane_by(watch.pane).and_then(|term| match watch.until {
-                        Condition::Quiet(quiet) => term.output_at.checked_add(quiet),
-                        Condition::Shell => term.output_at.checked_add(watch.settles(term)),
-                        Condition::Text(_) => watch.next_look(term),
+            let watches: Vec<&Watch> = match &pending.stage {
+                Stage::Watch(watch) => vec![watch],
+                Stage::Several { parts, .. } => parts
+                    .iter()
+                    .filter(|part| part.done.ended.is_none())
+                    .filter_map(|part| match &part.stage {
+                        Stage::Watch(watch) => Some(watch),
                         _ => None,
-                    });
-                    (quiet, watch.since.map(|since| since + STARTS_WITHIN))
-                }
-                Stage::Confirm(confirm) => (None, Some(confirm.by)),
-                _ => (None, None),
+                    })
+                    .collect(),
+                _ => Vec::new(),
             };
-            [deadline, quiet, start_by].into_iter().flatten()
+            let confirm = match &pending.stage {
+                Stage::Confirm(confirm) => Some(confirm.by),
+                _ => None,
+            };
+            deadline.into_iter().chain(confirm).chain(watches.into_iter().flat_map(|watch| self.due(watch)))
         });
         due.filter(|at| *at > now).min().map(|at| at.saturating_duration_since(now).max(SOONEST))
+    }
+
+    fn due(&self, watch: &Watch) -> impl Iterator<Item = Instant> {
+        let quiet = self.pane_by(watch.pane).and_then(|term| match watch.until {
+            Condition::Quiet(quiet) => term.output_at.checked_add(quiet),
+            Condition::Shell => term.output_at.checked_add(watch.settles(term)),
+            Condition::Text(_) => watch.next_look(term),
+            _ => None,
+        });
+        [quiet, watch.since.map(|since| since + STARTS_WITHIN)].into_iter().flatten()
     }
 
     fn pane_by(&self, id: u64) -> Option<&Term> {
@@ -1105,6 +1152,34 @@ impl App {
         let watch = self.watch(pane, until, now);
         let pending = Pending { client: Some(client), key, timeout, done: pane_ids(pane), stage: Stage::Watch(watch) };
         self.requests.pending.push(pending);
+        Ok(None)
+    }
+
+    fn wait_several_request(&mut self, client: u64, caller: Option<u64>, wait: control::Wait, now: Instant) -> Handled {
+        let timeout = deadline(wait.timeout, now)?;
+        let given = wait.pane.into_iter().chain(wait.panes).map(|id| (None, Some(id)));
+        let given = given.chain(wait.tab.into_iter().chain(wait.tabs).map(|id| (Some(id), None)));
+        let mut targets: Vec<(Option<u64>, Option<u64>)> = Vec::new();
+        for target in given {
+            if !targets.contains(&target) {
+                targets.push(target);
+            }
+        }
+        if targets.is_empty() {
+            targets.push((None, None));
+        }
+        let mut parts = Vec::new();
+        for (tab, pane) in targets {
+            let id = self.target(caller, pane, tab)?;
+            let until = Condition::of(wait.until.clone())?;
+            self.can_wait(caller, id, &until)?;
+            let done = Done { ids: Ids { tab, pane: Some(id), ..Ids::default() }, ..Done::default() };
+            let stage = Stage::Watch(self.watch(id, until, now));
+            parts.push(Pending { client: None, key: 0, timeout: None, done, stage });
+        }
+        let key = self.requests.key();
+        let stage = Stage::Several { all: wait.all, parts };
+        self.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
         Ok(None)
     }
 

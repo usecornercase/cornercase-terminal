@@ -31,6 +31,7 @@ group 9  work  collapsed
 
 - Ids come from one counter and last as long as the server runs: after a restart, the same tabs get new ids. Take them from `status`, or from what a command printed.
 - Every pane's shell has `CORNERCASE_PANE` set to its id. Inside a pane, commands act on that pane, its tab, workspace and project unless you name another one; `(you)` marks it in `status`. Run from anywhere else, they act on what the window shows, marked `(shown)`.
+- Where a command takes `--workspace ID`, `--worktree BRANCH` names the workspace on that branch instead, looked up in the same project: the one the command runs in, else the shown one. `cornercase start claude --worktree fix/login` made it, so `cornercase close --worktree fix/login --remove-worktree` can take it down without reading its id from `status`. A branch that no workspace there is on, or that several are on (a workspace without a worktree of its own shares its project's branch), exits with status 2 and lists the workspaces to pick from.
 - The pane is what `send`, `keys`, `read` and `wait` work on. Where they take `--tab ID`, it stands for the tab's agent pane, or its active pane when no agent runs in it.
 - **Nothing changes what the window shows** except `focus` and the `--focus` option. Whoever is looking at the window keeps seeing what they were looking at while a script opens tabs next to them.
 
@@ -47,7 +48,7 @@ group 9  work  collapsed
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
 | `read` | Prints a pane's screen, or its last lines. |
-| `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops. |
+| `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -78,7 +79,7 @@ cornercase split --down -- tail -f server.log    # splits the pane below
 
 - `open` finds a project that is already open instead of opening it twice.
 - `new-workspace` adds to the project the command runs in (`--project ID` for another one). With `--worktree`, the project must be at a repository's root, as in the [new workspace dialog](../worktrees/): the checkout goes in the worktrees folder from settings, the branch is created from `HEAD` when it does not exist, and the command returns once git has made it. Each new workspace gets one tab.
-- `new-tab` opens the tab in the workspace the command runs in (`--workspace ID` for another one). `split` splits the pane it runs in (`--pane ID` for another one), and refuses a pane too small to split.
+- `new-tab` opens the tab in the workspace the command runs in (`--workspace ID` or `--worktree BRANCH` for another one). `split` splits the pane it runs in (`--pane ID` for another one), and refuses a pane too small to split.
 - After `--`, the words of a command are joined with spaces and typed at the prompt once the shell is ready, as `ssh` does with its command, so quote what the shell should read as one argument: `-- 'cargo test 2>&1 | tee test.log'`. The command returns once it is typed.
 - Each prints the new pane's, workspace's or project's id, so `pane=$(cornercase new-tab …)` needs nothing else. `--json` prints every id: `{"project": 1, "workspace": 2, "tab": 8, "pane": 9}`.
 - `--focus` also shows what was made.
@@ -147,18 +148,34 @@ cornercase wait --pane 7 --quiet 5                             # until it writes
 - After a prompt reached the agent (through `start`, `send --enter` or `keys … enter`), a wait for it to stop first gives the agent up to 10 seconds to take the prompt, so it doesn't end at once on an agent that hasn't started yet. If the agent shows no change in that time, the wait fails: it may have finished at once, or never got the text, and `read` tells which. If the agent was already working when the text arrived, the wait ends when it next stops. An agent that only had a background shell left counts as taking the prompt once it works again.
 - Waits run in the server and don't slow it down. They end with their condition, their `--timeout` (none by default) or when you interrupt the command. A timeout exits with status 1 and says what the pane was doing. It doesn't prove that the agent missed what you sent: read the pane before sending it again.
 
+#### Several panes at once
+
+```sh
+cornercase wait --any --pane 12 --pane 15 --tab 9 --timeout 1800   # until the first of them stops
+cornercase wait --all --pane 7 --pane 8 --until shell               # until both programs end
+```
+
+Repeat `--pane` and `--tab` to wait on several panes, with `--any` or `--all` (several without either is wrong usage). The condition and the `--timeout` apply to each of them.
+
+- `--any` returns as soon as one of them meets the condition and prints one line: the id you gave and how it ended, such as `15 idle`. When several meet it at the same moment, it prints the first in the order you gave them; wait again on the rest to hear about the others.
+- `--all` returns once every one of them has met the condition, and prints one such line each, in the order you gave them (`--pane` ones first, then `--tab` ones). A pane that met the condition counts as done even if it changed again before the others caught up.
+- The id on each line is the one you gave, so a `--tab` line starts with the tab's id; panes and tabs never share an id.
+- A pane that closes while you wait ends as `closed` (`12 closed`) instead of failing the wait, so `--all` goes on with the others and `--any` returns it. Anything else that fails a wait on one pane (its agent exits, it doesn't take a prompt) fails the whole wait, naming the pane.
+- A timeout says what each pane still being waited for is doing.
+- `--json` prints `{"panes": [...]}`, one entry per line of text.
+
 ### Arrange
 
 ```sh
 cornercase close --tab 9
-cornercase close --workspace 5 --remove-worktree
+cornercase close --worktree fix/login --remove-worktree
 cornercase rename 'review #42'
 cornercase rename --workspace 5 ''
 cornercase focus --pane 12
 ```
 
-- `close` takes exactly one of `--pane`, `--tab`, `--workspace` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
-- `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
+- `close` takes exactly one of `--pane`, `--tab`, `--workspace`, `--worktree` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
+- `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--worktree`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
 
 ### Leave notes
@@ -182,6 +199,7 @@ cornercase todo rm 3
 | `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
+| `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
 | `read` | `pane` and `text`. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 

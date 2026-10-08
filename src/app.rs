@@ -12970,7 +12970,12 @@ rm -f "$s"
         }
 
         fn wait_for(pane: u64, until: Until, timeout: Option<f64>) -> Command {
-            Command::Wait(wire::Wait { pane: Some(pane), tab: None, until, timeout })
+            Command::Wait(wire::Wait { pane: Some(pane), until, timeout, ..wire::Wait::default() })
+        }
+
+        fn wait_on(panes: &[u64], tabs: &[u64], all: bool, until: Until, timeout: Option<f64>) -> Command {
+            let (panes, tabs) = (panes.to_vec(), tabs.to_vec());
+            Command::WaitSeveral(wire::Wait { panes, tabs, all, until, timeout, ..wire::Wait::default() })
         }
 
         fn send_text(pane: u64, text: &str, enter: bool, wait: bool) -> Command {
@@ -13302,11 +13307,13 @@ rm -f "$s"
                 assert!(message.contains("it would wait for itself"), "{message}");
             }
 
-            #[test]
-            fn a_client_that_leaves_takes_its_wait_with_it() {
+            #[rstest::rstest]
+            #[case::one_pane(|id| wait_for(id, Until::Text("gone-\\d".into()), None))]
+            #[case::several(|id| wait_on(&[id], &[], true, Until::Text("gone-\\d".into()), None))]
+            fn a_client_that_leaves_takes_its_wait_with_it(#[case] wait: fn(u64) -> Command) {
                 let (mut app, rx) = app();
                 let id = first(&app);
-                ask(&mut app, None, wait_for(id, Until::Text("gone-\\d".into()), None));
+                ask(&mut app, None, wait(id));
 
                 app.forget(CLIENT);
                 type_line(&mut app, "echo gone-$((1+1))");
@@ -13314,6 +13321,112 @@ rm -f "$s"
                 app.refresh(Instant::now());
 
                 assert_eq!(answers(&mut app), []);
+            }
+
+            fn new_shell(app: &mut App, rx: &Receiver<AppEvent>) -> Done {
+                let made = done(now(app, None, new_tab(None)));
+                let pane = made.ids.pane.expect("the new pane");
+                pump_until(app, rx, "the new shell is ready", |a| pane_screen(a, pane).contains('$'));
+                made
+            }
+
+            fn typed_in(app: &mut App, tab: usize, line: &str) {
+                let term = &mut app.projects[0].workspaces[0].tabs[tab].panes[0];
+                assert!(term.write(format!("{line}\r").as_bytes()), "the shell takes the line");
+            }
+
+            fn ended(tab: Option<u64>, pane: Option<u64>, ended: &str, line: Option<&str>) -> Done {
+                Done {
+                    ids: wire::Ids { tab, pane, ..wire::Ids::default() },
+                    ended: Some(ended.into()),
+                    line: line.map(str::to_string),
+                    ..Done::default()
+                }
+            }
+
+            #[test]
+            fn waiting_for_any_of_several_answers_the_first_with_the_id_it_was_given() {
+                let (mut app, rx) = app();
+                let id = first(&app);
+                let made = new_shell(&mut app, &rx);
+                let tab = made.ids.tab.expect("the new tab");
+                ask(&mut app, None, wait_on(&[id], &[tab], false, Until::Text(r"mark-\d".into()), None));
+                app.refresh(Instant::now());
+                let early = answers(&mut app);
+
+                typed_in(&mut app, 1, "echo mark-$((1+1))");
+
+                let answer = done(answered(&mut app, &rx, "the line shows in the tab"));
+                assert_eq!(early, []);
+                assert_eq!(answer.panes, [ended(Some(tab), made.ids.pane, "text", Some("mark-2"))]);
+            }
+
+            #[test]
+            fn waiting_for_all_answers_once_every_pane_has_matched_in_the_order_given() {
+                let (mut app, rx) = app();
+                let id = first(&app);
+                let other = new_shell(&mut app, &rx).ids.pane.expect("the new pane");
+                ask(&mut app, None, wait_on(&[id, other], &[], true, Until::Text(r"mark-\d".into()), None));
+
+                typed_in(&mut app, 1, "echo mark-$((1+1))");
+                pump_until(&mut app, &rx, "the second pane prints", |a| pane_screen(a, other).contains("mark-2"));
+                app.refresh(Instant::now());
+                let early = answers(&mut app);
+                typed_in(&mut app, 0, "echo mark-$((2+1))");
+
+                let answer = done(answered(&mut app, &rx, "the first pane prints too"));
+                assert_eq!(early, []);
+                assert_eq!(
+                    answer.panes,
+                    [ended(None, Some(id), "text", Some("mark-3")), ended(None, Some(other), "text", Some("mark-2"))]
+                );
+            }
+
+            #[test]
+            fn a_pane_that_closes_ends_a_wait_on_several_as_closed() {
+                let (mut app, rx) = app();
+                let id = first(&app);
+                let made = new_shell(&mut app, &rx);
+                let other = made.ids.pane.expect("the new pane");
+                ask(&mut app, None, wait_on(&[other, id], &[], true, Until::Text(r"mark-\d".into()), None));
+
+                let close = wire::Close {
+                    item: Item::Tab(made.ids.tab.expect("the tab")),
+                    remove_worktree: false,
+                    force: false,
+                };
+                done(now(&mut app, None, Command::Close(close)));
+                pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
+                app.refresh(Instant::now());
+                let early = answers(&mut app);
+                typed_in(&mut app, 0, "echo mark-$((1+1))");
+
+                let answer = done(answered(&mut app, &rx, "the open pane prints"));
+                assert_eq!(early, []);
+                assert_eq!(
+                    answer.panes,
+                    [ended(None, Some(other), "closed", None), ended(None, Some(id), "text", Some("mark-2"))]
+                );
+            }
+
+            #[test]
+            fn a_wait_on_several_refuses_a_pane_that_is_not_there_and_times_out_naming_the_rest() {
+                let (mut app, rx) = app();
+                let id = first(&app);
+                let other = new_shell(&mut app, &rx).ids.pane.expect("the new pane");
+
+                let refused = error(now(&mut app, None, wait_on(&[id, 999_999], &[], false, Until::Shell, None)));
+                ask(&mut app, None, wait_on(&[id, other], &[], false, Until::Text("never".into()), Some(0.05)));
+
+                let message = error(answered(&mut app, &rx, "the wait times out"));
+                assert_eq!(refused, "there is no pane 999999; `cornercase status` lists them");
+                assert_eq!(
+                    message,
+                    format!(
+                        "timed out after 0.05s: no line on the screen of pane {id} matches `never`; \
+                         no line on the screen of pane {other} matches `never`"
+                    )
+                );
             }
         }
 
@@ -13515,6 +13628,38 @@ rm -f "$s"
                     unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"),
                     "{unconfirmed}"
                 );
+            }
+
+            #[test]
+            fn a_wait_on_several_ends_at_the_turn_over_of_an_agent_with_a_background_shell() {
+                let mut agent = Agent::new();
+                let id = agent.start(None);
+                let tab = agent.app.projects[0].workspaces[0].tabs[1].id;
+                ask(&mut agent.app, None, send_text(id, "watch the tests in the background", true, false));
+                done(agent.answered("the enter is pressed"));
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                refreshing(app, rx, "the agent works", |a| {
+                    pane(a, id).agent.status() == Some(activity::Status::Working)
+                });
+                agent.finish();
+                let (app, rx) = (&mut agent.app, &agent.rx);
+                refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+
+                ask(&mut agent.app, None, wait_on(&[id], &[tab], false, Until::TurnOver, None));
+                let any = done(agent.answered("the first one's turn is over"));
+                ask(&mut agent.app, None, wait_on(&[id], &[tab], true, Until::TurnOver, None));
+                let all = done(agent.answered("every turn is over"));
+                ask(&mut agent.app, None, wait_on(&[id], &[], true, Until::Stops, Some(0.3)));
+                let timed_out = error(agent.answered("waiting for it to stop times out"));
+                agent.finish();
+
+                let endings = |done: &Done| {
+                    done.panes.iter().map(|p| (p.ids.tab, p.ids.pane, p.ended.clone())).collect::<Vec<_>>()
+                };
+                let shell = Some("shell".to_string());
+                assert_eq!(endings(&any), [(None, Some(id), shell.clone())]);
+                assert_eq!(endings(&all), [(None, Some(id), shell.clone()), (Some(tab), Some(id), shell)]);
+                assert!(timed_out.contains("--until turn-over"), "{timed_out}");
             }
 
             #[test]

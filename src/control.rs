@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -51,6 +52,7 @@ pub enum Command {
     Keys(Keys),
     Read(Read),
     Wait(Wait),
+    WaitSeveral(Wait),
     Close(Close),
     Rename(Rename),
     Focus(Focus),
@@ -76,6 +78,7 @@ impl Command {
             Self::Focus(_) => 12,
             Self::Notify(_) => 13,
             Self::Todo(_) => 14,
+            Self::WaitSeveral(_) => 15,
         }]
     }
 
@@ -116,9 +119,13 @@ impl Command {
             Self::Read(read) => {
                 fields.maybe("pane", read.pane).maybe("tab", read.tab).maybe("lines", read.lines);
             }
-            Self::Wait(wait) => {
+            Self::Wait(wait) | Self::WaitSeveral(wait) => {
                 fields.maybe("pane", wait.pane).maybe("tab", wait.tab).add("until", wait.until.name());
                 fields.maybe("timeout", wait.timeout);
+                if let Self::WaitSeveral(_) = self {
+                    fields.add("panes", listed(&wait.panes)).add("tabs", listed(&wait.tabs));
+                    fields.add("mode", if wait.all { "all" } else { "any" });
+                }
             }
             Self::Close(close) => {
                 fields.add("item", close.item).add("remove_worktree", close.remove_worktree).add("force", close.force);
@@ -144,7 +151,7 @@ impl Command {
         fields.0
     }
 
-    pub const NAMES: [&str; 15] = [
+    pub const NAMES: [&str; 16] = [
         "status",
         "open",
         "new-workspace",
@@ -160,7 +167,12 @@ impl Command {
         "focus",
         "notify",
         "todo",
+        "wait-several",
     ];
+}
+
+fn listed(ids: &[u64]) -> String {
+    ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",")
 }
 
 #[derive(Default)]
@@ -276,6 +288,9 @@ pub struct Read {
 pub struct Wait {
     pub pane: Option<u64>,
     pub tab: Option<u64>,
+    pub panes: Vec<u64>,
+    pub tabs: Vec<u64>,
+    pub all: bool,
     pub until: Until,
     pub timeout: Option<f64>,
 }
@@ -379,6 +394,8 @@ pub struct Done {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todo: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub panes: Vec<Done>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -389,6 +406,51 @@ pub struct Report {
     pub shown: Ids,
     pub groups: Vec<GroupInfo>,
     pub projects: Vec<ProjectInfo>,
+}
+
+impl Report {
+    pub fn workspace_on(&self, branch: &str) -> Result<u64, String> {
+        let project = self.here().ok_or("no project is open; open one with `cornercase open PATH`")?;
+        let on = |w: &&WorkspaceInfo| w.branch.as_deref() == Some(branch);
+        let found: Vec<&WorkspaceInfo> = project.workspaces.iter().filter(on).collect();
+        let place = format!("project {} ({})", project.id, project.name);
+        match found[..] {
+            [workspace] => Ok(workspace.id),
+            [] if project.workspaces.is_empty() => {
+                Err(format!("{place} has no workspace, so none is on branch {branch}"))
+            }
+            [] => Err(format!(
+                "no workspace of {place} is on branch {branch}; its workspaces:{}",
+                candidates(&project.workspaces)
+            )),
+            _ => Err(format!(
+                "branch {branch} is checked out in {} workspaces of {place}; pick one with --workspace:{}",
+                found.len(),
+                candidates(found.iter().copied())
+            )),
+        }
+    }
+
+    fn here(&self) -> Option<&ProjectInfo> {
+        let panes =
+            |p: &ProjectInfo| p.workspaces.iter().flat_map(|w| &w.tabs).flat_map(|t| &t.panes).any(|pane| pane.caller);
+        let shown = |p: &ProjectInfo| Some(p.id) == self.shown.project;
+        self.projects.iter().find(|p| panes(p)).or_else(|| self.projects.iter().find(|p| shown(p)))
+    }
+}
+
+fn candidates<'a>(workspaces: impl IntoIterator<Item = &'a WorkspaceInfo>) -> String {
+    let mut text = String::new();
+    for workspace in workspaces {
+        let _ = write!(text, "\n  workspace {}  {}", workspace.id, workspace.name);
+        if let Some(branch) = &workspace.branch {
+            let _ = write!(text, "  branch {branch}");
+        }
+        if workspace.worktree {
+            text.push_str("  worktree");
+        }
+    }
+    text
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -526,6 +588,7 @@ mod tests {
             Command::Focus(Focus { item: Item::Pane(1) }),
             Command::Notify(Notify::default()),
             Command::Todo(Todo::List),
+            Command::WaitSeveral(Wait::default()),
         ];
 
         let names: Vec<String> = commands
@@ -551,6 +614,7 @@ mod tests {
             Command::NewTab(NewTab { command: Some(secret.into()), ..NewTab::default() }),
             Command::Split(Split { command: Some(secret.into()), ..Split::default() }),
             Command::Wait(Wait { until: Until::Text(secret.into()), ..Wait::default() }),
+            Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
             Command::Notify(Notify { text: secret.into() }),
             Command::Todo(Todo::Add(secret.into())),
         ];
@@ -558,6 +622,97 @@ mod tests {
         for command in commands {
             let fields = command.fields();
             assert!(fields.iter().all(|(_, value)| !value.contains(secret)), "{fields:?}");
+        }
+    }
+
+    mod workspace_on {
+        use super::*;
+
+        fn workspace(id: u64, name: &str, branch: Option<&str>, worktree: bool) -> WorkspaceInfo {
+            WorkspaceInfo {
+                id,
+                name: name.into(),
+                branch: branch.map(str::to_string),
+                worktree,
+                ..WorkspaceInfo::default()
+            }
+        }
+
+        fn project(id: u64, name: &str, workspaces: Vec<WorkspaceInfo>) -> ProjectInfo {
+            ProjectInfo { id, name: name.into(), workspaces, ..ProjectInfo::default() }
+        }
+
+        fn shop() -> ProjectInfo {
+            project(
+                1,
+                "shop",
+                vec![
+                    workspace(2, "default", Some("main"), false),
+                    workspace(3, "fix/login", Some("fix/login"), true),
+                    workspace(4, "experiments", Some("main"), false),
+                ],
+            )
+        }
+
+        fn api(caller: bool) -> ProjectInfo {
+            let mut api = project(5, "api", vec![workspace(6, "fix/login", Some("fix/login"), true)]);
+            let pane = PaneInfo { id: 8, caller, ..PaneInfo::default() };
+            api.workspaces[0].tabs = vec![TabInfo { id: 7, panes: vec![pane], ..TabInfo::default() }];
+            api
+        }
+
+        fn shown(project: u64, projects: Vec<ProjectInfo>) -> Report {
+            Report { shown: Ids { project: Some(project), ..Ids::default() }, projects, ..Report::default() }
+        }
+
+        #[test]
+        fn finds_the_workspace_on_the_branch_in_the_shown_project() {
+            let report = shown(1, vec![api(false), shop()]);
+
+            assert_eq!(report.workspace_on("fix/login"), Ok(3));
+        }
+
+        #[test]
+        fn looks_in_the_project_of_the_pane_that_asks_before_the_shown_one() {
+            let report = shown(1, vec![shop(), api(true)]);
+
+            assert_eq!(report.workspace_on("fix/login"), Ok(6));
+        }
+
+        #[test]
+        fn a_missing_branch_lists_the_workspaces_of_the_project() {
+            let report = shown(1, vec![shop(), api(false)]);
+
+            assert_eq!(
+                report.workspace_on("feat/x"),
+                Err("no workspace of project 1 (shop) is on branch feat/x; its workspaces:\n\
+                     \x20 workspace 2  default  branch main\n\
+                     \x20 workspace 3  fix/login  branch fix/login  worktree\n\
+                     \x20 workspace 4  experiments  branch main"
+                    .into())
+            );
+        }
+
+        #[test]
+        fn a_branch_in_several_workspaces_lists_them() {
+            let report = shown(1, vec![shop()]);
+
+            assert_eq!(
+                report.workspace_on("main"),
+                Err("branch main is checked out in 2 workspaces of project 1 (shop); pick one with --workspace:\n\
+                     \x20 workspace 2  default  branch main\n\
+                     \x20 workspace 4  experiments  branch main"
+                    .into())
+            );
+        }
+
+        #[rstest::rstest]
+        #[case::no_project(shown(1, vec![]), "no project is open")]
+        #[case::no_workspace(shown(9, vec![project(9, "empty", vec![])]), "project 9 (empty) has no workspace")]
+        fn says_why_nothing_is_found(#[case] report: Report, #[case] expected: &str) {
+            let error = report.workspace_on("main").expect_err("nothing found");
+
+            assert!(error.starts_with(expected), "{error}");
         }
     }
 
