@@ -332,36 +332,24 @@ mod tests {
     }
 
     struct Running {
+        opencode: Sleeper,
         fake: FakeOpencode,
         project: TempDir,
-        child: std::process::Child,
     }
 
     impl Running {
         fn start() -> Self {
             let fake = FakeOpencode::new();
             let project = TempDir::new();
-            let child = fake.spawn(project.path());
-            let running = Self { fake, project, child };
-            wait_until("fake opencode opens its database", || {
-                process::open_files(running.pid()).contains(&running.fake.database)
-            });
-            running
+            Self { opencode: fake.start(project.path()), fake, project }
         }
 
         fn pid(&self) -> i32 {
-            i32::try_from(self.child.id()).expect("pid")
+            self.opencode.pid()
         }
 
         fn look(&self, since: SystemTime) -> Option<Session> {
             look(self.pid(), since, &mut super::Models::default())
-        }
-    }
-
-    impl Drop for Running {
-        fn drop(&mut self) {
-            self.fake.quit();
-            let _ = self.child.wait();
         }
     }
 
@@ -401,15 +389,10 @@ mod tests {
     fn two_opencode_in_one_folder_show_nothing() {
         let running = Running::start();
         running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
-        let mut other = running.fake.spawn(running.project.path());
-        let pid = i32::try_from(other.id()).expect("pid");
-        wait_until("the second one opens the same database", || {
-            process::open_files(pid).contains(&running.fake.database)
-        });
+        let other = running.fake.start(running.project.path());
 
         assert_eq!(running.look(SystemTime::UNIX_EPOCH), None);
-        other.kill().expect("stop the second one");
-        other.wait().expect("the second one exits");
+        drop(other);
         assert!(running.look(SystemTime::UNIX_EPOCH).is_some());
     }
 
@@ -448,8 +431,7 @@ mod tests {
             pane.update_opencode(running.pid());
             pane.opencode_turn() == Some(false) && pane.context().is_some_and(|c| c.percent == Some(12))
         });
-        running.fake.quit();
-        running.child.wait().expect("fake opencode exits");
+        running.opencode.stop();
         wait_until("the line clears", || {
             pane.update_opencode(running.pid());
             pane.context().is_none() && pane.opencode_turn().is_none()

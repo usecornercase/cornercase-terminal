@@ -86,6 +86,14 @@ impl Sleeper {
     }
 
     pub fn named(name: &Path, dir: &Path, vars: &[(&str, &str)]) -> Self {
+        Self::spawn(name, dir, vars, std::process::Stdio::inherit())
+    }
+
+    pub fn holding(name: &Path, dir: &Path, vars: &[(&str, &str)], file: &Path) -> Self {
+        Self::spawn(name, dir, vars, std::fs::File::open(file).expect("open the file to hold").into())
+    }
+
+    fn spawn(name: &Path, dir: &Path, vars: &[(&str, &str)], stdin: std::process::Stdio) -> Self {
         use std::os::unix::process::CommandExt;
         let child = std::process::Command::new("/bin/sleep")
             .arg0(name)
@@ -93,6 +101,7 @@ impl Sleeper {
             .current_dir(dir)
             .env_clear()
             .envs(vars.iter().copied())
+            .stdin(stdin)
             .spawn()
             .expect("spawn sleep");
         let sleeper = Self(child);
@@ -105,12 +114,16 @@ impl Sleeper {
     pub fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
+
+    pub fn stop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 impl Drop for Sleeper {
     fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+        self.stop();
     }
 }
 
@@ -338,13 +351,9 @@ impl FakeOpencode {
         )
     }
 
-    pub fn spawn(&self, cwd: &Path) -> std::process::Child {
-        std::process::Command::new(&self.script)
-            .args([&self.database, &self.dir.path().to_path_buf()])
-            .current_dir(cwd)
-            .env("XDG_CACHE_HOME", self.dir.path().join("cache"))
-            .spawn()
-            .expect("spawn fake opencode")
+    pub fn start(&self, cwd: &Path) -> Sleeper {
+        let cache = self.dir.path().join("cache");
+        Sleeper::holding(&self.script, cwd, &[("XDG_CACHE_HOME", &cache.to_string_lossy())], &self.database)
     }
 
     pub fn write(&self, session: &str, cwd: &Path, messages: &str) {

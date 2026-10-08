@@ -8315,11 +8315,10 @@ rm -f "$1/sessions/$$.json"
         fn a_second_opencode_in_its_folder_hides_the_status_instead_of_finishing_it() {
             let mut w = Watched::start(agents::OPENCODE, true);
             let Fake::Opencode(opencode, _) = &w.agents[0] else { unreachable!("an opencode was started") };
-            let mut other = opencode.spawn(&w.app.projects[0].path.clone());
+            let other = opencode.start(&w.app.projects[0].path.clone());
 
             watch_until(&mut w.app, &w.rx, "the status goes", |a| status(a, 0, 0).is_none());
-            other.kill().expect("stop the second opencode");
-            other.wait().expect("the second opencode exits");
+            drop(other);
 
             assert_eq!(w.told().1, []);
         }
