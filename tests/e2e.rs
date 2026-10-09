@@ -9,7 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use cornercase::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
-use cornercase::control::{PANE_ENV, PaneInfo, Report};
+use cornercase::control::{PANE_ENV, PaneInfo, PaneRow, PaneRows, Report};
 use cornercase::protocol::{NESTED_ENV, SOCKET_ENV};
 use cornercase::split::{self, Dir};
 use cornercase::ui::{self, SidebarRow, WorkspaceRow};
@@ -1482,6 +1482,32 @@ fn status_lists_the_window_and_marks_the_pane_it_runs_in() {
     let seen: Report = serde_json::from_str(&std::fs::read_to_string(&inside).expect("read it")).expect("a report");
     assert_eq!(report.projects[0].path, temp());
     assert_eq!((report.caller, seen.caller), (None, report.shown.pane));
+}
+
+#[test]
+fn status_panes_gives_every_pane_a_row_of_its_own() {
+    let mut app = Harness::start();
+    let split = app.session.says(&["split"]);
+    let inside = app.session.dir.join("panes.tsv");
+
+    app.send(format!("{} status --panes > '{}'; echo panes-\"\"saved\r", bin(), inside.display()).as_bytes());
+    app.wait_for("the panes are saved", |s| s.contains("panes-saved"));
+
+    let report = app.session.report();
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
+    let text = std::fs::read_to_string(&inside).expect("read it");
+    let lines: Vec<Vec<&str>> = text.lines().map(|line| line.split('\t').collect()).collect();
+    let column = |name: &str| PaneRow::COLUMNS.iter().position(|c| *c == name).expect("a column");
+    let marked = |name: &str| lines[1..].iter().filter(|l| l[column(name)] == "true").map(|l| l[0]).collect::<Vec<_>>();
+    let shown = report.shown.pane.expect("a shown pane").to_string();
+    let ids: Vec<u64> = panes(report).map(|p| p.id).collect();
+    assert_eq!(lines[0], PaneRow::COLUMNS);
+    assert!(lines.iter().all(|line| line.len() == PaneRow::COLUMNS.len()), "{text}");
+    assert_eq!(lines[1..].iter().map(|line| line[0].parse().expect("an id")).collect::<Vec<u64>>(), ids);
+    assert!(ids.contains(&split.parse().expect("an id")), "{text}");
+    assert_eq!((marked("caller"), marked("shown")), (vec![shown.as_str()], vec![shown.as_str()]));
+    assert_eq!(rows.panes.iter().map(|row| row.pane).collect::<Vec<_>>(), ids);
+    assert!(rows.panes.iter().all(|row| !row.caller), "{rows:?}");
 }
 
 #[test]

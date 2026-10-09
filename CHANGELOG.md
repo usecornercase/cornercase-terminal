@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.17
+
+- `cornercase send` no longer answers Claude Code's feedback survey. While Claude Code shows `How is Claude doing this session? (optional)` with `1: Bad  2: Fine  3: Good  0: Dismiss` above its input box, a digit sent alone, such as `send --enter 2` answering an agent's numbered question, rated the session instead and the prompt was lost. `send` now refuses while the survey shows and says how to dismiss it, `cornercase keys --pane N 0`; `--force` sends anyway. `cornercase status` marks such a pane `(survey open)` (`survey` in `--json`, and a new last column of `status --panes`).
+
 ## 0.12.16
 
-- `cornercase send` no longer answers Claude Code's feedback survey. While Claude Code shows `How is Claude doing this session? (optional)` with `1: Bad  2: Fine  3: Good  0: Dismiss` above its input box, a digit sent alone, such as `send --enter 2` answering an agent's numbered question, rated the session instead and the prompt was lost. `send` now refuses while the survey shows and says how to dismiss it, `cornercase keys --pane N 0`; `--force` sends anyway. `cornercase status` marks such a pane `(survey open)` (`survey` in `--json`).
+- `cornercase status --panes` lists every pane on a line of its own, for scripts: the ids of the pane, its tab, workspace and project, what runs in it and what its agent is doing, the workspace's branch and the pane's folder, in columns separated by tabs under a header line. `--panes --json` gives the same rows as JSON, in one flat list. A script or an agent coordinating others no longer has to walk the tree of `status --json` to find a pane by its agent, status or branch. `status` and `status --json` stay as they were.
+- `cornercase status` no longer ends with a panic message when what reads its output stops early, as `head` does.
 
 ## 0.12.15
 
