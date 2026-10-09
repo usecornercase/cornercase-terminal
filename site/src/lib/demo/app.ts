@@ -157,6 +157,18 @@ function checkEmail(input: string): [string, string?] {
   const at = email.indexOf('@');
   return at > 0 && at < email.length - 1 && !/\s/.test(email) ? [email] : ['', 'type the email of your Atlassian account'];
 }
+
+function checkPlaneUrl(input: string): string | undefined {
+  if (!input) return;
+  try {
+    const url = new URL(input);
+    if (input.includes('@') || input.includes('?') || input.includes('#')) return 'type an instance URL without credentials, a query or a fragment';
+    const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.\d+){3}$/.test(url.hostname);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) return 'use HTTPS for remote Plane instances; HTTP is allowed only on loopback hosts';
+  } catch {
+    return 'type a URL such as https://plane.example.com';
+  }
+}
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
 
@@ -2411,8 +2423,9 @@ export class App {
       }
     } else if (edit.row.startsWith('plane-')) {
       const value = edit.input.trim();
+      const urlError = edit.row === 'plane-url' ? checkPlaneUrl(value) : undefined;
       if (edit.row === 'plane-workspace' && value && !/^[a-z0-9-]+$/.test(value)) edit.error = 'type a Plane workspace slug using lowercase letters, numbers and hyphens';
-      else if (edit.row === 'plane-url' && value && !/^https?:\/\/[^@?#]+$/.test(value)) edit.error = 'type an HTTP or HTTPS instance URL without credentials, a query or a fragment';
+      else if (urlError) edit.error = urlError;
       else if (edit.row === 'plane-filter' && value && value.split('&').some((p) => !/^[a-z_]+=/.test(p) || /^(per_page|paginate|cursor|offset|order_by|expand|fields|assignee_id|created_by_id|state_group|state_group__in)=/.test(p))) edit.error = 'use query parameters without replacing the people and closed toggles';
       else {
         const field = edit.row === 'plane-workspace' ? 'planeWorkspace' : edit.row === 'plane-url' ? 'planeUrl' : 'planeFilter';

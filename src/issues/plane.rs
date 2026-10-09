@@ -1,5 +1,7 @@
 pub mod html;
 
+use std::net::IpAddr;
+
 use serde_json::Value;
 
 use super::http::{self, Answer, Service, text};
@@ -23,8 +25,9 @@ pub struct Api {
 
 impl Api {
     fn get(&self, path: &str, params: &[(&str, &str)], missing: &str) -> Result<Value> {
-        let url = format!("{}{path}", self.base.trim_end_matches('/'));
-        let answer = http::get(&SERVICE, &url, params, &[("X-API-Key", &self.token)])?;
+        let base = check_url(&self.base).map_err(|e| Error::Api(e.into()))?;
+        let url = format!("{base}{path}");
+        let answer = http::get_direct(&SERVICE, &url, params, &[("X-API-Key", &self.token)])?;
         http::checked(answer, missing, failure)
     }
 
@@ -251,12 +254,13 @@ pub fn check_url(input: &str) -> std::result::Result<String, &'static str> {
         return Ok(String::new());
     }
     let parsed = url.parse::<ureq::http::Uri>().map_err(|_| "type a URL such as https://plane.example.com")?;
-    if !matches!(parsed.scheme_str(), Some("https" | "http"))
-        || parsed.host().is_none()
-        || parsed.query().is_some()
-        || url.contains(['@', '#'])
-    {
-        return Err("type an HTTP or HTTPS instance URL without credentials, a query or a fragment");
+    if parsed.host().is_none() || parsed.query().is_some() || url.contains(['@', '#']) {
+        return Err("type an instance URL without credentials, a query or a fragment");
+    }
+    let host = parsed.host().unwrap_or_default().trim_matches(['[', ']']);
+    let loopback = host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+    if !(parsed.scheme_str() == Some("https") || (parsed.scheme_str() == Some("http") && loopback)) {
+        return Err("use HTTPS for remote Plane instances; HTTP is allowed only on loopback hosts");
     }
     Ok(url.to_string())
 }
@@ -474,12 +478,61 @@ mod tests {
     #[case::cloud("", true)]
     #[case::instance("https://plane.example.com/", true)]
     #[case::local("http://localhost:8000/plane", true)]
+    #[case::ipv4_loopback("http://127.0.0.2:8000", true)]
+    #[case::ipv6_loopback("http://[::1]:8000", true)]
+    #[case::remote_http("http://plane.example.com", false)]
+    #[case::lan_http("http://192.168.1.10:8000", false)]
+    #[case::remote_ipv6("http://[2001:db8::1]", false)]
+    #[case::lookalike("http://localhost.example.com", false)]
     #[case::credentials("https://user:secret@plane.example.com", false)]
     #[case::query("https://plane.example.com?key=x", false)]
     #[case::fragment("https://plane.example.com/#x", false)]
     #[case::scheme("ftp://plane.example.com", false)]
     fn validates_instance_urls(#[case] input: &str, #[case] valid: bool) {
         assert_eq!(check_url(input).is_ok(), valid);
+    }
+
+    #[test]
+    fn rejects_remote_http_before_sending_the_key() {
+        let api = Api {
+            base: "http://plane.example.com".into(),
+            slug: "acme".into(),
+            token: "secret".into(),
+            filter: String::new(),
+            app_url: DEFAULT_APP.into(),
+        };
+        assert!(api.whoami().expect_err("insecure API URL").to_string().contains("use HTTPS"));
+    }
+
+    #[test]
+    fn does_not_forward_the_key_to_a_redirect_target() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let target = FakeHttp::start(vec![("GET /redirect", 200, ME)]);
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind redirect server");
+        let base = format!("http://{}", listener.local_addr().expect("redirect address"));
+        let location = format!("{}/redirect", target.url());
+        let redirect = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("redirect request");
+            let mut request = Vec::new();
+            let mut buf = [0; 4096];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).expect("read request");
+                assert!(n > 0, "complete headers");
+                request.extend_from_slice(&buf[..n]);
+            }
+            write!(
+                stream,
+                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .expect("write redirect");
+        });
+        let mut api = api(&target);
+        api.base = base;
+        assert!(api.whoami().expect_err("redirect rejected").to_string().contains("302"));
+        redirect.join().expect("redirect server");
+        assert_eq!(target.requests(), Vec::<String>::new());
     }
 
     #[test]

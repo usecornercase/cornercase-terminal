@@ -31,7 +31,24 @@ fn agent(timeout: Duration) -> Agent {
 }
 
 pub fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
+    get_with_redirects(service, url, query, headers, true)
+}
+
+pub fn get_direct(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
+    get_with_redirects(service, url, query, headers, false)
+}
+
+fn get_with_redirects(
+    service: &Service,
+    url: &str,
+    query: &[(&str, &str)],
+    headers: &[(&str, &str)],
+    redirects: bool,
+) -> Result<Answer> {
     let mut request = agent(TIMEOUT).get(url).header("Accept", "application/json");
+    if !redirects {
+        request = request.config().max_redirects(0).build();
+    }
     for (key, value) in headers {
         request = request.header(*key, *value);
     }

@@ -220,7 +220,7 @@ The Plane workspace slug, such as `acme`. Set from the issue browser or **settin
 
 #### `plane_url`
 
-The self-hosted Plane instance URL, such as `https://plane.example.com`. Empty uses Plane Cloud (`https://api.plane.so` for the API and `https://app.plane.so` for issue links). The instance must support the workspace-wide API v2 work item list, plus API v1 user, member, detail and comment reads.
+The self-hosted Plane instance URL, such as `https://plane.example.com`. Remote instances require HTTPS; HTTP is accepted only on loopback hosts (`localhost`, `127.0.0.0/8` or `::1`) for local development. Credentials, query strings and fragments are rejected. API requests do not follow redirects, so enter the final instance URL. Empty uses Plane Cloud (`https://api.plane.so` for the API and `https://app.plane.so` for issue links). The instance must support the workspace-wide API v2 work item list, plus API v1 user, member, detail and comment reads.
 
 #### `plane_filter`
 

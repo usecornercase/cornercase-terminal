@@ -84,7 +84,7 @@ Jira Server and Data Center are not supported.
 Plane needs your workspace slug and a personal API key:
 
 1. In Plane, open **Profile settings → Personal access tokens** and create a key.
-2. For a self-hosted instance, first set **settings → Issues → Plane → Plane URL**, such as `https://plane.example.com`. Leave it empty for Plane Cloud.
+2. For a self-hosted instance, first set **settings → Issues → Plane → Plane URL**, such as `https://plane.example.com`. Remote instances require HTTPS; HTTP is accepted only on loopback hosts for local development. Leave it empty for Plane Cloud.
 3. Open the **Plane** tab of the issue browser. Type the workspace slug (`acme` in `https://app.plane.so/acme/projects/`) and press `Enter`, then paste the key and press `Enter`. **back** returns to the workspace step.
 
 cornercase checks the key and access to the workspace, then saves the key to `secrets.json`. You can use `PLANE_API_KEY` instead; the workspace is still required. The workspace and instance URL are saved in `config.json` and can be changed in **settings → Issues → Plane**.
@@ -109,7 +109,7 @@ Self-hosted instances must provide the workspace-wide `/api/v2` work item endpoi
 Saved tokens go to `secrets.json` next to your `config.json`, readable only by you (mode `0600`). They are never written to logs, to the issue cache or to the screen. The **disconnect** button in a tracker's tab removes its saved token.
 
 <Aside type="caution" title="Environment variables win">
-When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY` or `JIRA_API_TOKEN` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
+When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `PLANE_API_KEY` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
 </Aside>
 
 ## Browse and filter
