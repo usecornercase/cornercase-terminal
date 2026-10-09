@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.15
+
+- A click outside a dialog now closes it, as its cancel button would: settings, issues, usage, the folder picker, the update and restart dialogs, confirmations and forms, like right-click menus and the search already did. A dialog that is busy, such as one creating a worktree or installing an update, stays open until it is done.
+
 ## 0.12.14
 
 - Tabs without an agent now show an icon before their name too, so every tab's name starts in the same column: a grey `▸` while a program runs in the tab (a dev server, a build, an editor) and a grey `›` while the shell waits at its prompt. They never light up the workspace or project rows.
