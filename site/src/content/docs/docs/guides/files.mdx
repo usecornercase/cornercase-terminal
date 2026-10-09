@@ -88,7 +88,8 @@ Terminals draw pictures with one of three protocols. When it starts, cornercase 
 | **foot** | sixel | On unless `foot.ini` says `sixel=no`. |
 | **Konsole** | sixel | 22.04 or later. |
 | **xterm** | sixel | Running as a VT340: `xterm -ti vt340`. |
-| **mlterm**, **Contour** | sixel | Nothing. |
+| **mlterm** | sixel | Built with sixel. |
+| **Contour** | sixel | Nothing. |
 
 With kitty graphics, cornercase draws the picture as the panel's own cells (kitty's Unicode placeholders), so it goes through tmux and anything drawn over it, such as a menu, covers just that part.
 
@@ -102,7 +103,7 @@ If you once declined and told iTerm2 to remember, it shows no pictures and says 
 
 ### Inside tmux
 
-tmux shows pictures only when it may pass them through to the terminal around it. Add this line to `~/.tmux.conf`:
+tmux shows pictures only when it may pass them through to the terminal around it. Add this line to `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that is where yours is:
 
 ```sh title="~/.tmux.conf"
 set -g allow-passthrough on
@@ -114,10 +115,12 @@ Load it into the running tmux, then quit cornercase with **Quit** and start it a
 tmux source-file ~/.tmux.conf
 ```
 
-With `on`, tmux drops a picture sent while cornercase's window isn't the one tmux shows. Use `all` instead (tmux 3.4 or later) so pictures arrive even then.
+`tmux show -g allow-passthrough` says whether it took: `on` or `all`, or `1` on tmux 3.3. With `on`, tmux drops a picture sent while cornercase's window isn't the one tmux shows. Use `all` instead (tmux 3.4 or later) so pictures arrive even then.
+
+When cornercase runs on another machine, reached with SSH from inside tmux, it asks the terminal through tmux when it starts. If its pane was hidden or wasn't the active one at that moment, no answer comes back: start cornercase again in a pane you are looking at.
 
 - **Ghostty, kitty and Rio** show pictures through tmux, also when cornercase runs on another machine you reach with SSH from inside tmux.
-- **Terminals with sixel**, such as foot, Konsole, WezTerm or iTerm2, show them when tmux itself was built with sixel (tmux 3.4 or later; Ubuntu's and Debian's packages are): tmux then draws the pictures.
+- **Terminals with sixel**, such as foot, Konsole, WezTerm or iTerm2, show them when tmux itself was built with sixel (tmux 3.4 or later; Ubuntu's and Debian's packages are): tmux then draws the pictures. A tmux without sixel says `this tmux (…) cannot draw sixel images`.
 - **iTerm2 inline images** don't survive tmux's own redraws, so cornercase doesn't send them through tmux. A terminal that only has them, such as Warp, shows no pictures inside tmux: run cornercase outside tmux there.
 - tmux inside tmux doesn't pass pictures through.
 
@@ -125,7 +128,9 @@ With `on`, tmux drops a picture sent while cornercase's window isn't the one tmu
 
 GNU screen can't pass pictures through: run cornercase outside screen, or in tmux.
 
-Zellij draws sixel pictures itself, so in a terminal with sixel, such as foot, Konsole, WezTerm or xterm as a VT340, cornercase shows them inside Zellij. kitty graphics and iTerm2 inline images don't pass through it: in Ghostty, kitty, Rio, iTerm2 or Warp, run cornercase outside Zellij.
+Zellij 0.45 or later draws sixel pictures itself, so in a terminal with sixel, such as foot, Konsole, WezTerm or xterm as a VT340, cornercase shows them inside Zellij. Older versions claim sixel whatever the terminal can do, so cornercase can't tell and shows none: update Zellij. kitty graphics and iTerm2 inline images don't pass through Zellij: in Ghostty, kitty, Rio, iTerm2 or Warp, run cornercase outside it.
+
+Another multiplexer that cornercase only knows by its `TERM`, such as `screen-256color` without GNU screen's variables, doesn't pass pictures either.
 
 ### Choose the protocol yourself
 
@@ -150,25 +155,28 @@ The panel says why where the picture would be, and what to do. The messages, wit
 
 | The panel says | What to do |
 | --- | --- |
-| `images need tmux to pass them through` | Allow passthrough in tmux, as in [Inside tmux](#inside-tmux), then quit cornercase and start it again. |
-| `inside tmux, images need set -g allow-passthrough on in ~/.tmux.conf` | No answer came back through tmux. Allow passthrough as in [Inside tmux](#inside-tmux); if it is on already, the terminal running tmux can't show pictures. |
-| `… cannot show images through tmux` | The terminal running tmux has no protocol that goes through tmux; see [Inside tmux](#inside-tmux). Outside tmux, it may show them. |
+| `images need tmux to pass them through` | Allow passthrough as in [Inside tmux](#inside-tmux), in `~/.tmux.conf` or `~/.config/tmux/tmux.conf`, run `tmux source-file` on that file, then start cornercase again. `all` instead of `on` (tmux 3.4 or later) also lets pictures arrive while the window is hidden. |
+| `inside tmux, images need set -g allow-passthrough on` | No answer came back through tmux. Allow passthrough as in [Inside tmux](#inside-tmux). If it is on already, cornercase's pane was hidden or not the active one when it started: start it again there (`all`, tmux 3.4 or later, also covers a hidden window). Otherwise the terminal running tmux can't show pictures. |
+| `cornercase cannot show images in … through tmux` | Ghostty, kitty and Rio can show pictures through tmux; outside tmux, more terminals can. See [Inside tmux](#inside-tmux). |
+| `this tmux (…) cannot draw sixel images` | Your terminal has sixel, but this tmux wasn't built with it. Use tmux 3.4 or later built with sixel, or run cornercase outside tmux. |
 | `images do not pass through tmux inside tmux` | Run cornercase in the outer tmux, or outside tmux. |
-| `GNU screen cannot pass images through` | Run cornercase outside screen, or in tmux with passthrough allowed. |
-| `Zellij passes images only to terminals that show sixel` | Run cornercase outside Zellij, or in a terminal with sixel, such as foot, WezTerm or Konsole. |
-| `Ghostty did not answer the image query: its image-storage-limit is 0` | Remove `image-storage-limit` from Ghostty's config (its default is 320000000), then start cornercase again. |
+| `GNU screen cannot pass images through` | Run cornercase outside screen, or in tmux with `set -g allow-passthrough on`. |
+| `this multiplexer (TERM=…) cannot pass images through` | Run cornercase outside it. |
+| `cornercase shows images in Zellij only as sixel, and this terminal has no sixel` | Run cornercase outside Zellij, or in a terminal with sixel, such as foot, WezTerm or Konsole. |
+| `Zellij … claims sixel whatever the terminal can do, so cornercase cannot tell` | Update Zellij to 0.45 or later, or run cornercase outside it. |
+| `Ghostty did not answer the image query: its image-storage-limit is 0` | Remove `image-storage-limit` from Ghostty's config (the default is 320000000), reload it (`ctrl+shift+,`, or `cmd+shift+,` on macOS), then start cornercase again. |
 | `kitty … is too old for images in cornercase` | Update kitty to 0.28 or later. |
 | `Konsole … cannot show images` | Update Konsole to 22.04 or later. |
-| `xterm shows images only when it runs as a VT340` | Start it with `xterm -ti vt340`, or add `XTerm*decTerminalID: vt340` to `~/.Xresources`, run `xrdb -merge ~/.Xresources` and open a new xterm. |
+| `xterm shows images only when it runs as a VT340` | Start it with `xterm -ti vt340`, or add `XTerm*decTerminalID: vt340` to `~/.Xresources` and run `xrdb -merge ~/.Xresources`. |
 | `sixel images are turned off in foot` | Remove `sixel=no` from the `[tweak]` section of `foot.ini` and restart foot. |
-| `VS Code's terminal shows images only with terminal.integrated.enableImages on` | Turn it on in the settings (it also needs `terminal.integrated.gpuAcceleration` not to be `off`), open a new terminal and start cornercase again. Cursor has the same setting. |
+| `VS Code's terminal shows images only with terminal.integrated.enableImages on` | Turn it on in Settings (it also needs `terminal.integrated.gpuAcceleration`), open a new terminal and start cornercase again. Cursor shows the same message and has the same setting. |
 | `Tabby shows images only with its Sixel setting on` | Turn on **Settings › Terminal › Sixel**, then start cornercase again. |
 | `WezTerm did not report the window's size in pixels, so it shows no images` | Run cornercase in a local WezTerm tab rather than through a WezTerm multiplexer domain. |
-| `the terminal did not report its cell size in pixels, which sixel images need` | Run cornercase straight in the terminal: mosh and some multiplexers hide the window's size in pixels. |
-| `… cannot show images` | This terminal can't draw pictures, such as Alacritty, Terminal.app or GNOME Terminal. Use one of the [terminals that can](#which-terminals-show-them). |
-| `this terminal cannot show images, or cornercase could not tell which terminal it is` | If your terminal can show pictures, [choose the protocol yourself](#choose-the-protocol-yourself). |
+| `the terminal did not report its cell size in pixels, which sixel images need` | Run cornercase directly in the terminal: mosh and some multiplexers hide the window's size in pixels. |
+| `… cannot show images` | This terminal can't draw pictures, such as Alacritty, Terminal.app, GNOME Console or mlterm without sixel. Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can; see [Which terminals show them](#which-terminals-show-them). |
+| `this terminal cannot show images, or cornercase could not tell which terminal it is` | Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can show them. If yours can, start cornercase with `CORNERCASE_IMAGES=kitty`, `iterm` or `sixel`; see [Choose the protocol yourself](#choose-the-protocol-yourself). |
 | `cornercase does not know how to show images in …` | The terminal said its name, but cornercase doesn't know it. If it can show pictures, [choose the protocol yourself](#choose-the-protocol-yourself). |
-| `images are turned off in this window` | `CORNERCASE_IMAGES=off` was set when this window started. Start cornercase without it. |
+| `images are turned off in this window` | `CORNERCASE_IMAGES=off` was set when cornercase started: start it without it to see them. |
 | `cannot read this image: …` | The file isn't an image cornercase can decode, it is damaged, or it is too large (over 16384 pixels on a side). |
 
 ## Search
