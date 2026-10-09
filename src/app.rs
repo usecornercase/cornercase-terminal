@@ -4429,13 +4429,14 @@ impl App {
             && dragging.is_none();
         let pointer = self.hover.filter(|_| still);
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
+        let home = self.home.clone();
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout.map(&|id| tab.panes.iter().position(|t| t.id == id))?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             let link = pointer
                 .zip(root.as_deref())
-                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root));
+                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
             Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
@@ -12527,6 +12528,41 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
+            let (repo, other) = (repo(), TempDir::new());
+            let path = other.path().join("note.md").display().to_string();
+            std::fs::write(&path, "# Note\nRead this.\n").expect("write");
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "shop");
+            app.open_link(&files::link::Target { path: path.clone(), lines: Some((1, 2)) });
+            settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
+            assert!(file(&app).gutter.is_none());
+            let ask = action_pos(&app, Action::Ask);
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+            let copy = action_pos(&app, Action::Copy);
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
+            let workspace = app.project().expect("project").workspace().expect("workspace").id;
+            app.files.viewer_mut(workspace).expect("viewer").selection = None;
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            open(&mut app);
+            open(&mut app);
+            assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");
+            let back = panel::back(panel_area(&app)).as_position();
+            click(&mut app, back);
+            assert!(!results(&view(&app)).is_empty(), "back returns to the previous search");
+            assert_eq!(app.files.last(workspace), Some(path.as_str()));
+            let field = panel::field(panel_area(&app)).as_position();
+            click(&mut app, field);
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            assert!(matches!(view(&app).screen, Screen::Tree(t) if t.rows.iter().all(|r| r.path != path)));
+        }
+
+        #[test]
         fn the_viewer_follows_edits() {
             let repo = repo();
             let (mut app, rx) = opened(&repo);
@@ -12639,6 +12675,7 @@ rm -f "$1/sessions/$$.json"
         use ratatui::Terminal;
         use ratatui::backend::TestBackend;
         use ratatui::style::Modifier;
+        use rstest::rstest;
 
         use super::*;
 
@@ -12672,6 +12709,44 @@ rm -f "$1/sessions/$$.json"
             click(&mut app, cell(12, 0));
             assert!(app.files.open);
             assert_eq!(shown(&app), Some(("src/main.rs".to_string(), Some((2, 3)))));
+        }
+
+        #[rstest]
+        #[case::absolute_path(false, false)]
+        #[case::home_path(true, false)]
+        #[case::absolute_path_with_mouse_reporting(false, true)]
+        #[case::home_path_with_mouse_reporting(true, true)]
+        fn an_outside_path_is_underlined_and_opens_in_the_viewer(#[case] home_path: bool, #[case] reads_mouse: bool) {
+            let (repo, other) = (repo(), TempDir::new());
+            let path = other.path().join("plan.md").display().to_string();
+            std::fs::write(&path, "# Plan\n\nFix the return label.\n").expect("write");
+            let printed = if home_path { "~/plan.md" } else { &path };
+            let mode = if reads_mouse { "\x1b[?1000h\x1b[?1006h" } else { "" };
+            let area = Rect { width: 200, ..AREA };
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            app.resize(area);
+            app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{mode}{printed}:2-3").as_bytes());
+            app.home = Some(other.path().to_path_buf());
+            app.term_mut().expect("a pane").input_at = None;
+            let pane = app.layout(area).pane;
+            let pos = Position::new(pane.x + 2, pane.y);
+            mouse_in(&mut app, MouseEventKind::Moved, pos, area);
+            let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
+            terminal.draw(|f| app.draw(f)).expect("draw");
+            assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
+            click_in(&mut app, pos, area);
+            assert_eq!(shown(&app), Some((path, Some((2, 3)))));
+            assert!(app.files.open);
+            assert!(!written(&app), "the program never gets the click");
+            wait_until("the outside file is read", || {
+                app.refresh(Instant::now());
+                while let Ok(event) = rx.try_recv() {
+                    app.handle_event(event, area).expect("handle event");
+                }
+                matches!(app.files_view().expect("files view").screen, ui::files::Screen::File(f)
+                    if f.content.as_ref().is_some_and(|c| c.lines() == ["# Plan", "", "Fix the return label."])
+                    && f.gutter.is_none())
+            });
         }
 
         #[test]
