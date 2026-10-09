@@ -62,7 +62,7 @@ import {
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -948,7 +948,7 @@ export class Painter {
   private overlay(areas: Areas): void {
     const o = this.app.overlay;
     if (!o) return;
-    if (o.kind !== 'menu' && o.kind !== 'search' && o.kind !== 'keys') this.dim();
+    if (isModal(o)) this.dim();
     if (o.kind === 'menu') return this.menu();
     if (o.kind === 'keys') return this.keys(areas, o.group);
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();

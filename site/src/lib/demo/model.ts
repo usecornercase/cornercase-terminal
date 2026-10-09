@@ -152,6 +152,8 @@ export type Overlay =
   | SettingsOverlay
   | IssuesOverlay;
 
+export const isModal = (o: Overlay): boolean => o.kind !== 'menu' && o.kind !== 'search' && o.kind !== 'keys';
+
 export interface Config {
   worktreesDir: string;
   fetchMinutes: number;
