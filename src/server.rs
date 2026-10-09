@@ -954,14 +954,33 @@ mod tests {
             pub(super) server: Server,
             rx: Receiver<ServerEvent>,
             client: Client,
-            _dir: TempDir,
+            dir: TempDir,
         }
 
-        struct Client {
+        pub(super) struct Client {
+            id: u64,
             tx: Sender<ServerEvent>,
             frames: Receiver<ServerMessage>,
             screen: vt100::Parser,
+            pub(super) raw: Vec<u8>,
             clears: usize,
+        }
+
+        fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64) -> Client {
+            let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+            let _ = server.handle(ServerEvent::Accepted(ours));
+            let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
+            let hello = Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
+            let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
+            let (frames_tx, frames) = mpsc::channel();
+            thread::spawn(move || {
+                while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs) {
+                    if frames_tx.send(msg).is_err() {
+                        return;
+                    }
+                }
+            });
+            Client { id, tx, frames, screen: vt100::Parser::new(ROWS, COLS, 0), raw: Vec::new(), clears: 0 }
         }
 
         impl Attached {
@@ -980,22 +999,22 @@ mod tests {
                 let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
                 let todo_saver = Saver::new(dir.path().join("todos.json"), None);
                 let mut server = Server::new(app, session, todo_saver, tx.clone());
-                let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
-                let _ = server.handle(ServerEvent::Accepted(ours));
-                let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
-                let hello =
-                    Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
-                let _ = server.handle(ServerEvent::Message(1, ClientMessage::Hello(Box::new(hello))));
-                let (frames_tx, frames) = mpsc::channel();
-                thread::spawn(move || {
-                    while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs) {
-                        if frames_tx.send(msg).is_err() {
-                            return;
-                        }
-                    }
-                });
-                let client = Client { tx, frames, screen: vt100::Parser::new(ROWS, COLS, 0), clears: 0 };
-                Self { server, rx, client, _dir: dir }
+                let client = connect(&mut server, tx, 1);
+                Self { server, rx, client, dir }
+            }
+
+            pub(super) fn dir(&self) -> &Path {
+                self.dir.path()
+            }
+
+            pub(super) fn join(&mut self) -> Client {
+                let id = self.server.next_client;
+                connect(&mut self.server, self.client.tx.clone(), id)
+            }
+
+            pub(super) fn sees(&mut self, id: u64, support: Support) {
+                let client = self.server.client_mut(id).expect("an attached client");
+                client.graphics = Graphics::new(id, support, None);
             }
 
             pub(super) fn shows_frame(&self, bytes: &[u8]) {
@@ -1011,12 +1030,12 @@ mod tests {
                 got
             }
 
-            fn serve(
+            pub(super) fn serve(
                 self,
                 run: impl Fn(&mut Server, Step) -> ControlFlow<()>,
                 script: impl FnOnce(&mut Client) + Send + 'static,
             ) {
-                let Self { mut server, rx, mut client, _dir } = self;
+                let Self { mut server, rx, mut client, dir: _dir } = self;
                 let stop = client.tx.clone();
                 let script = thread::spawn(move || {
                     let done = panics::contain(|| script(&mut client));
@@ -1033,15 +1052,34 @@ mod tests {
                 self.tx.send(ev).expect("the server listens");
             }
 
-            fn input(&self, ev: Event) {
-                self.send(ServerEvent::Message(1, ClientMessage::Event(ev)));
+            pub(super) fn input(&self, ev: Event) {
+                self.send(ServerEvent::Message(self.id, ClientMessage::Event(ev)));
             }
 
-            fn key(&self, code: KeyCode) {
+            pub(super) fn key(&self, code: KeyCode) {
                 self.input(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)));
             }
 
-            fn type_line(&self, line: &str) {
+            pub(super) fn click(&self, column: u16, row: u16) {
+                for kind in [MouseEventKind::Down(MouseButton::Left), MouseEventKind::Up(MouseButton::Left)] {
+                    self.input(Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE }));
+                }
+            }
+
+            pub(super) fn click_on(&mut self, text: &str) {
+                self.shows(text);
+                let rows = self.screen.screen().rows(0, COLS).collect::<Vec<_>>();
+                let (row, column) = rows
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(y, line)| Some((y, line.find(text)?)))
+                    .expect("the text is on screen");
+                let column = u16::try_from(rows[row][..column].chars().count()).expect("on screen");
+                self.click(column + 1, u16::try_from(row).expect("on screen"));
+            }
+
+            pub(super) fn type_line(&self, line: &str) {
                 line.chars().map(KeyCode::Char).chain([KeyCode::Enter]).for_each(|code| self.key(code));
             }
 
@@ -1052,23 +1090,28 @@ mod tests {
                 }
             }
 
-            fn text(&self) -> String {
+            pub(super) fn text(&self) -> String {
                 self.screen.screen().contents()
             }
 
-            fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
+            pub(super) fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
                 wait_until(what, || {
                     while let Ok(msg) = self.frames.try_recv() {
                         if let ServerMessage::Frame(bytes) = msg {
                             self.clears += usize::from(bytes == CLEAR_SCREEN);
                             self.screen.process(&bytes);
+                            self.raw.extend_from_slice(&bytes);
                         }
                     }
                     cond(self)
                 });
             }
 
-            fn shows(&mut self, text: &str) {
+            pub(super) fn count(&self, needle: &[u8]) -> usize {
+                self.raw.windows(needle.len()).filter(|w| *w == needle).count()
+            }
+
+            pub(super) fn shows(&mut self, text: &str) {
                 self.until(text, |client| client.text().contains(text));
             }
         }
@@ -1249,6 +1292,97 @@ mod tests {
             let attached = Attached::with(dir, &saved);
 
             assert_eq!(attached.server.app.state().projects.len(), 1);
+        }
+    }
+
+    mod showing_images {
+        use super::a_bug::{Attached, Client};
+        use super::*;
+        use crate::graphics::{CellSize, Protocol, Support, Tmux};
+        use crate::ui;
+
+        const TRANSMIT: &[u8] = b"a=t,";
+        const PLACE: &[u8] = b"a=p,";
+        const KITTY: &[u8] = b"\x1b_G";
+        const ITERM: &[u8] = b"\x1b]1337;File=";
+
+        fn support(protocol: Protocol) -> Support {
+            Support {
+                protocol: Some(protocol),
+                missing: None,
+                cell: Some(CellSize { width: 10, height: 20 }),
+                tmux: Tmux::None,
+                id_hi: 42,
+            }
+        }
+
+        fn with_image() -> Attached {
+            let attached = Attached::new();
+            let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
+            pixels.save_with_format(attached.dir().join("logo.png"), image::ImageFormat::Png).expect("a png");
+            attached
+        }
+
+        fn open_the_image(client: &mut Client) {
+            client.type_line("echo lo\"\"go.png");
+            client.click_on("logo.png");
+            client.shows("PNG · 400×200");
+        }
+
+        fn settings() -> Position {
+            ui::full_layout(Rect::new(0, 0, 100, 20), ui::Widths::default(), true, ui::Sidebar::default(), false)
+                .settings
+                .as_position()
+        }
+
+        #[test]
+        fn kitty_gets_the_image_once_and_only_a_new_placement_when_the_window_shrinks() {
+            let mut attached = with_image();
+            attached.sees(1, support(Protocol::Kitty));
+            attached.serve(Server::step, |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
+                let placed = client.count(PLACE);
+
+                client.input(Event::Resize(80, 20));
+
+                client.until("the image is placed again", |c| c.count(PLACE) > placed);
+                assert_eq!(client.count(TRANSMIT), 1);
+            });
+        }
+
+        #[test]
+        fn an_inline_image_waits_while_a_dialog_is_open_and_comes_back_after() {
+            let mut attached = with_image();
+            attached.sees(1, support(Protocol::Iterm));
+            attached.serve(Server::step, |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(ITERM) == 1);
+
+                let at = settings();
+                client.click(at.x, at.y);
+                client.shows("Settings");
+                client.type_line("");
+                assert_eq!(client.count(ITERM), 1, "nothing while the dialog is open");
+                client.key(KeyCode::Esc);
+
+                client.until("the image is sent again", |c| c.count(ITERM) == 2);
+            });
+        }
+
+        #[test]
+        fn a_window_without_images_gets_none_while_another_gets_its_own() {
+            let mut attached = with_image();
+            attached.sees(1, support(Protocol::Kitty));
+            let mut blind = attached.join();
+            attached.serve(Server::step, move |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
+
+                blind.shows("PNG · 400×200");
+                blind.until("the window says why", |c| !c.text().contains("reading"));
+                assert_eq!((blind.count(KITTY), blind.count(ITERM)), (0, 0));
+            });
         }
     }
 
