@@ -1,4 +1,21 @@
+import returnsPage from '../../assets/demo/returns-page.png';
+
 export type Tree = { [name: string]: string | Tree };
+
+export interface Picture {
+  format: string;
+  width: number;
+  height: number;
+  bytes: number;
+  src: string;
+}
+
+const PNG = '\u0089PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR';
+const RETURNS_PAGE_PNG = `${PNG}returns-page`;
+
+const PICTURES = new Map<string, Picture>([[RETURNS_PAGE_PNG, { format: 'PNG', width: returnsPage.width, height: returnsPage.height, bytes: 31762, src: returnsPage.src }]]);
+
+export const picture = (content: string | undefined): Picture | null => (content?.startsWith(PNG) ? (PICTURES.get(content) ?? null) : null);
 
 export const ADDRESS_RS = `use serde::Deserialize;
 
@@ -83,6 +100,9 @@ The storefront and returns service.
 `,
   '.worktreeinclude': '.env\n',
   '.env': 'DATABASE_URL=postgres://localhost/shop\n',
+  docs: {
+    'returns-page.png': RETURNS_PAGE_PNG,
+  },
   src: {
     'main.rs': `mod checkout;
 mod returns;

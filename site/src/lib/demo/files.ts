@@ -1,10 +1,11 @@
-import { BOLD, type Rect, type Style, rect } from '../term/grid';
+import { ASPECT } from '../term/canvas';
+import { BOLD, IMAGE_CELL, type Rect, type Style, rect } from '../term/grid';
 import type { App } from './app';
 import { type FileDiff, TINTS, drawPanelBorder } from './changes';
-import type { Tree } from './data';
+import { type Picture, type Tree, picture } from './data';
 import { highlight, language } from './highlight';
-import { type Areas, FILES_LABEL, right } from './layout';
-import type { Project, Workspace } from './model';
+import { type Areas, FILES_LABEL, bottom, right } from './layout';
+import { type Project, type Workspace, isModal } from './model';
 import { type Line, truncateLeft, truncateRight } from './text';
 import type { Painter } from './ui';
 
@@ -14,6 +15,8 @@ type Mark = 'added' | 'modified' | 'deleted' | 'above';
 type Lines = [number, number];
 
 const ACTIONS: FileAction[] = ['open', 'ask agent', 'copy'];
+const IMAGE_ACTIONS: FileAction[] = ['ask agent', 'copy'];
+const CELL = { w: 9, h: 9 * ASPECT };
 const DARK: Style = { fg: 8 };
 const LIT: Style = { fg: 0, bg: 3 };
 const HEADER_ROWS = 3;
@@ -219,6 +222,8 @@ function codeRows(count: number, g: Gutter | null, unfolded: Set<number>): CodeR
 
 const textLines = (text: string): string[] => (text ? text.replace(/\n$/, '').split('\n') : []);
 
+const binary = (text: string): boolean => text.slice(0, 8000).includes('\u0000');
+
 export function occurrences(text: string, query: string): Lines[] {
   if (!query) return [];
   const fold = !/\p{Lu}/u.test(query);
@@ -281,7 +286,9 @@ function search(files: Map<string, string>, mode: FilesMode, query: string): { r
   let count = 0;
   for (const path of paths) {
     const hits: Found[] = [];
-    textLines(files.get(path) ?? '').forEach((text, i) => {
+    const content = files.get(path) ?? '';
+    if (binary(content)) continue;
+    textLines(content).forEach((text, i) => {
       const shown = text.replace(/\t/g, '    ').trimStart();
       const ranges = occurrences(shown, query);
       if (!ranges.length || matches >= MAX_MATCHES) return;
@@ -535,6 +542,35 @@ function drawFound(p: Painter, f: Panel, rows: Found[]): void {
   });
 }
 
+function size(bytes: number): string {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function described(pic: Picture): string[] {
+  const pixels = `${pic.width}×${pic.height}`;
+  return [`${pic.format} · ${pixels} · ${size(pic.bytes)}`, `${pic.format} · ${pixels}`, pic.format];
+}
+
+function fitImage(width: number, height: number, cols: number, rows: number): { cols: number; rows: number } | null {
+  if (cols <= 0 || rows <= 0 || !width || !height) return null;
+  const scale = Math.min(1, (cols * CELL.w) / width, (rows * CELL.h) / height);
+  return { cols: Math.max(1, Math.ceil(Math.round(width * scale) / CELL.w)), rows: Math.max(1, Math.ceil(Math.round(height * scale) / CELL.h)) };
+}
+
+function drawPicture(p: Painter, f: Panel, pic: Picture): void {
+  const { app, body } = f;
+  if (app.overlay && isModal(app.overlay)) return;
+  const rows = bottom(body) >= app.rows ? body.h - 1 : body.h;
+  const room = rect(body.x + 1, body.y, body.w - 2, rows);
+  const cells = fitImage(pic.width, pic.height, room.w, room.h);
+  if (!cells) return;
+  const r = rect(room.x + Math.floor((room.w - cells.cols) / 2), room.y, cells.cols, cells.rows);
+  p.g.fill(r, {}, IMAGE_CELL);
+  p.g.images.push({ r, src: pic.src, width: pic.width, height: pic.height });
+}
+
 function summary(path: string, count: number): string[] {
   const lines = count === 1 ? '1 line' : `${count} lines`;
   const name = languageName(path);
@@ -554,19 +590,20 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   p.span(px, inner.y, shown.slice(cut), { fg: 15, add: BOLD }, Math.max(0, end - px));
 
   const info = inner.y + 1;
+  const content = f.files.get(viewer.path);
+  const pic = picture(content);
   let bx = right(inner) - 1;
-  const buttons = [...ACTIONS].reverse().map((action) => {
+  const buttons = [...(pic ? IMAGE_ACTIONS : ACTIONS)].reverse().map((action) => {
     const w = action.length + 2;
     const r = rect(bx - w, info, w, 1);
     bx -= w + 1;
     return { action, r };
   });
-  const content = f.files.get(viewer.path);
-  const text = textLines(content ?? '');
+  const text = pic ? [] : textLines(content ?? '');
   const sel = viewer.selection && ordered(viewer.selection);
   const room = Math.max(0, Math.min(...buttons.map((b) => b.r.x)) - 1 - (inner.x + 1));
   const [a, b] = sel ?? [0, 0];
-  const options = !sel ? summary(viewer.path, text.length) : a === b ? [`line ${a}`, String(a)] : [`lines ${a}–${b}`, `${a}–${b}`];
+  const options = pic ? described(pic) : !sel ? summary(viewer.path, text.length) : a === b ? [`line ${a}`, String(a)] : [`lines ${a}–${b}`, `${a}–${b}`];
   const fit = options.find((o) => [...o].length <= room) ?? options[options.length - 1];
   p.span(inner.x + 1, info, truncateRight(fit, room), sel ? { fg: 6 } : DARK);
   for (const { action, r } of buttons) {
@@ -574,6 +611,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
     p.region({ r, click: () => app.fileAction(action), cursor: 'pointer' });
   }
 
+  if (pic) return drawPicture(p, f, pic);
   const note = content === undefined ? 'this file is gone' : !text.length ? 'an empty file' : null;
   if (note) {
     p.span(body.x + 2, body.y, note, DARK, Math.max(0, body.w - 2));
@@ -619,7 +657,9 @@ export function lineNear(app: App, y: number): number | null {
   const f = panel(app, app.areas().changes);
   const viewer = f?.place.viewer;
   if (!f || !viewer || !f.body.h) return null;
-  const text = textLines(f.files.get(viewer.path) ?? '');
+  const content = f.files.get(viewer.path);
+  if (picture(content)) return null;
+  const text = textLines(content ?? '');
   const g = gutter(
     app.changesDiff().find((d) => d.change.path === viewer.path),
     text.length,
