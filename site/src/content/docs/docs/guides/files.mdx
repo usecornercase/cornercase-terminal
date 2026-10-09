@@ -103,7 +103,7 @@ If you once declined and told iTerm2 to remember, it shows no pictures and says 
 
 ### Inside tmux
 
-tmux shows pictures only when it may pass them through to the terminal around it. Add this line to `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that is where yours is:
+tmux shows pictures in one of two ways, depending on your terminal. Ghostty, kitty and Rio get them passed through, which tmux allows only with `allow-passthrough`; a terminal with sixel gets them drawn by tmux itself, which needs a tmux built with sixel and no setting (both are described below). For passthrough, add this line to `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that is where yours is:
 
 ```sh title="~/.tmux.conf"
 set -g allow-passthrough on
