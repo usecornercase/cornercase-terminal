@@ -22,7 +22,6 @@ use crate::app::{App, AppEvent, Streamed};
 use crate::config;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
-use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::log::{self, Level};
 use crate::notify::Channel;
@@ -628,6 +627,19 @@ impl Server {
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
                 self.app.request(id, &text, self.area, Instant::now());
             }
+            ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
+                log::info!(
+                    "server",
+                    "client images changed",
+                    client = id,
+                    images = graphics.images(),
+                    cell = graphics.cell_size(),
+                    missing = graphics.why_not()
+                );
+                if let Some(client) = self.client_mut(id) {
+                    client.graphics.update(graphics);
+                }
+            }
             ServerEvent::Incompatible(id) => self.reject(id, OTHER_BUILD),
             ServerEvent::Gone(id) => self.remove(id),
         }
@@ -680,12 +692,18 @@ impl Server {
             notify = hello.notify.id(),
             background = if hello.theme.background.is_some() { "known" } else { "unknown" },
             truecolor = hello.theme.truecolor,
+            images = hello.graphics.images(),
+            cell = hello.graphics.cell_size(),
+            tmux = hello.graphics.tmux.id(),
+            missing = hello.graphics.why_not(),
+            id_hi = hello.graphics.id_hi,
+            probe = hello.probe,
         );
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
-        client.graphics = Graphics::new(id, Support::default(), background);
+        client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
         self.fit(Some(id));
         if !self.started {
@@ -898,6 +916,7 @@ mod tests {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 
         use super::*;
+        use crate::graphics::Support;
         use crate::state::{PaneState, ProjectState, State, TabState, WorkspaceState};
         use crate::test_util::wait_until;
 
@@ -966,11 +985,13 @@ mod tests {
             clears: usize,
         }
 
-        fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64) -> Client {
+        fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64, graphics: Support) -> Client {
             let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
             let _ = server.handle(ServerEvent::Accepted(ours));
             let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
-            let hello = Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
+            let (notify, probe) = (Channel::Bell, String::new());
+            let hello =
+                Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, graphics, probe };
             let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
             let (frames_tx, frames) = mpsc::channel();
             thread::spawn(move || {
@@ -985,12 +1006,20 @@ mod tests {
 
         impl Attached {
             pub(super) fn new() -> Self {
+                Self::seeing(Support::default())
+            }
+
+            pub(super) fn seeing(graphics: Support) -> Self {
                 let dir = TempDir::new();
                 let saved = one_shell_in(dir.path());
-                Self::with(dir, &saved)
+                Self::with_graphics(dir, &saved, graphics)
             }
 
             pub(super) fn with(dir: TempDir, saved: &State) -> Self {
+                Self::with_graphics(dir, saved, Support::default())
+            }
+
+            fn with_graphics(dir: TempDir, saved: &State, graphics: Support) -> Self {
                 let session = dir.path().join("session.json");
                 state::save(&session, saved).expect("save a session");
                 let (tx, rx) = mpsc::channel();
@@ -999,7 +1028,7 @@ mod tests {
                 let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
                 let todo_saver = Saver::new(dir.path().join("todos.json"), None);
                 let mut server = Server::new(app, session, todo_saver, tx.clone());
-                let client = connect(&mut server, tx, 1);
+                let client = connect(&mut server, tx, 1, graphics);
                 Self { server, rx, client, dir }
             }
 
@@ -1007,14 +1036,9 @@ mod tests {
                 self.dir.path()
             }
 
-            pub(super) fn join(&mut self) -> Client {
+            pub(super) fn join(&mut self, graphics: Support) -> Client {
                 let id = self.server.next_client;
-                connect(&mut self.server, self.client.tx.clone(), id)
-            }
-
-            pub(super) fn sees(&mut self, id: u64, support: Support) {
-                let client = self.server.client_mut(id).expect("an attached client");
-                client.graphics = Graphics::new(id, support, None);
+                connect(&mut self.server, self.client.tx.clone(), id, graphics)
             }
 
             pub(super) fn shows_frame(&self, bytes: &[u8]) {
@@ -1316,8 +1340,8 @@ mod tests {
             }
         }
 
-        fn with_image() -> Attached {
-            let attached = Attached::new();
+        fn with_image(graphics: Support) -> Attached {
+            let attached = Attached::seeing(graphics);
             let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
             pixels.save_with_format(attached.dir().join("logo.png"), image::ImageFormat::Png).expect("a png");
             attached
@@ -1337,8 +1361,7 @@ mod tests {
 
         #[test]
         fn kitty_gets_the_image_once_and_only_a_new_placement_when_the_window_shrinks() {
-            let mut attached = with_image();
-            attached.sees(1, support(Protocol::Kitty));
+            let attached = with_image(support(Protocol::Kitty));
             attached.serve(Server::step, |client| {
                 open_the_image(client);
                 client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
@@ -1353,8 +1376,7 @@ mod tests {
 
         #[test]
         fn an_inline_image_waits_while_a_dialog_is_open_and_comes_back_after() {
-            let mut attached = with_image();
-            attached.sees(1, support(Protocol::Iterm));
+            let attached = with_image(support(Protocol::Iterm));
             attached.serve(Server::step, |client| {
                 open_the_image(client);
                 client.until("the image is sent", |c| c.count(ITERM) == 1);
@@ -1372,9 +1394,8 @@ mod tests {
 
         #[test]
         fn a_window_without_images_gets_none_while_another_gets_its_own() {
-            let mut attached = with_image();
-            attached.sees(1, support(Protocol::Kitty));
-            let mut blind = attached.join();
+            let mut attached = with_image(support(Protocol::Kitty));
+            let mut blind = attached.join(Support::default());
             attached.serve(Server::step, move |client| {
                 open_the_image(client);
                 client.until("the image is sent", |c| c.count(TRANSMIT) == 1);

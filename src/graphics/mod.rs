@@ -17,11 +17,53 @@ pub struct Support {
     pub id_hi: u8,
 }
 
+pub const KITTY_LO: [u8; 2] = [0xf0, 0xf1];
+const CAN: &str = "Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can show them";
+const PASSTHROUGH: &str =
+    "add set -g allow-passthrough on to ~/.tmux.conf, run tmux source-file ~/.tmux.conf, then start cornercase again";
+
+impl Support {
+    pub fn images(&self) -> &'static str {
+        self.protocol.map_or("none", Protocol::id)
+    }
+
+    pub fn cell_size(&self) -> String {
+        self.cell.map_or_else(|| "unknown".into(), |cell| cell.to_string())
+    }
+
+    pub fn why_not(&self) -> &'static str {
+        self.missing.as_ref().map_or("-", Missing::id)
+    }
+
+    pub fn forget(&self) -> Vec<u8> {
+        if self.protocol != Some(Protocol::Kitty) {
+            return Vec::new();
+        }
+        KITTY_LO
+            .iter()
+            .flat_map(|&lo| {
+                let delete = kitty::delete(kitty::id(self.id_hi, lo));
+                if self.tmux == Tmux::Wrap { tmux::wrap(&delete) } else { delete }
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Protocol {
     Kitty,
     Iterm,
     Sixel { registers: u16, max: Option<(u32, u32)> },
+}
+
+impl Protocol {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Kitty => "kitty",
+            Self::Iterm => "iterm",
+            Self::Sixel { .. } => "sixel",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -31,25 +73,167 @@ pub enum Tmux {
     Wrap,
 }
 
+impl Tmux {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Wrap => "wrap",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CellSize {
     pub width: u16,
     pub height: u16,
 }
 
+impl std::fmt::Display for CellSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{}", self.width, self.height)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Missing {
+    Off,
     Unknown { name: Option<String> },
     Cannot { name: String },
-    Off,
+    VsCode,
+    Tabby,
+    Xterm,
+    Foot,
+    OldKonsole { version: String },
+    OldWindowsTerminal,
+    OldKitty { version: String },
+    GhosttyStorage,
+    WezTermPixels,
+    NoCellSize,
+    TmuxPassthrough,
+    TmuxSilent,
+    TmuxOuter { name: Option<String> },
+    TmuxNested,
+    Zellij,
+    Screen,
 }
 
 impl Missing {
+    pub fn id(&self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Unknown { .. } => "unknown",
+            Self::Cannot { .. } => "cannot",
+            Self::VsCode => "vscode",
+            Self::Tabby => "tabby",
+            Self::Xterm => "xterm",
+            Self::Foot => "foot",
+            Self::OldKonsole { .. } => "old-konsole",
+            Self::OldWindowsTerminal => "old-windows-terminal",
+            Self::OldKitty { .. } => "old-kitty",
+            Self::GhosttyStorage => "ghostty-storage",
+            Self::WezTermPixels => "wezterm-pixels",
+            Self::NoCellSize => "no-cell-size",
+            Self::TmuxPassthrough => "tmux-passthrough",
+            Self::TmuxSilent => "tmux-silent",
+            Self::TmuxOuter { .. } => "tmux-outer",
+            Self::TmuxNested => "tmux-nested",
+            Self::Zellij => "zellij",
+            Self::Screen => "screen",
+        }
+    }
+
     pub fn lines(&self) -> Vec<String> {
         match self {
-            Self::Unknown { .. } | Self::Cannot { .. } | Self::Off => {
-                vec!["this terminal cannot show images".to_string()]
+            Self::Off => vec![
+                "images are turned off in this window".into(),
+                "CORNERCASE_IMAGES=off was set when cornercase started: start it without it to see them".into(),
+            ],
+            Self::Unknown { name } => vec![
+                name.as_ref().map_or_else(
+                    || "this terminal cannot show images, or cornercase could not tell which terminal it is".into(),
+                    |name| format!("cornercase does not know how to show images in {name}"),
+                ),
+                CAN.into(),
+                "if yours can, start cornercase with CORNERCASE_IMAGES=kitty, iterm or sixel".into(),
+            ],
+            Self::Cannot { name } => vec![format!("{name} cannot show images"), CAN.into()],
+            Self::VsCode => vec![
+                "VS Code's terminal shows images only with terminal.integrated.enableImages on".into(),
+                "turn it on in Settings (it also needs terminal.integrated.gpuAcceleration), open a new terminal \
+                 and start cornercase again"
+                    .into(),
+            ],
+            Self::Tabby => vec![
+                "Tabby shows images only with its Sixel setting on".into(),
+                "turn on Settings › Terminal › Sixel, then start cornercase again".into(),
+            ],
+            Self::Xterm => vec![
+                "xterm shows images only when it runs as a VT340".into(),
+                "start it with xterm -ti vt340, or add XTerm*decTerminalID: vt340 to ~/.Xresources and run \
+                 xrdb -merge ~/.Xresources"
+                    .into(),
+            ],
+            Self::Foot => vec![
+                "sixel images are turned off in foot".into(),
+                "remove sixel=no from the [tweak] section of foot.ini and restart foot".into(),
+            ],
+            Self::OldKonsole { version } => {
+                vec![format!("Konsole {version} cannot show images"), "update Konsole to 22.04 or later".into()]
             }
+            Self::OldWindowsTerminal => vec![
+                "this version of Windows Terminal cannot show images".into(),
+                "update Windows Terminal to 1.22 or later".into(),
+            ],
+            Self::OldKitty { version } => {
+                vec![
+                    format!("kitty {version} is too old for images in cornercase"),
+                    "update kitty to 0.28 or later".into(),
+                ]
+            }
+            Self::GhosttyStorage => vec![
+                "Ghostty did not answer the image query: its image-storage-limit is 0".into(),
+                "remove image-storage-limit from Ghostty's config (the default is 320000000), then start cornercase \
+                 again"
+                    .into(),
+            ],
+            Self::WezTermPixels => vec![
+                "WezTerm did not report the window's size in pixels, so it shows no images".into(),
+                "run cornercase in a local WezTerm tab rather than through a WezTerm multiplexer domain".into(),
+            ],
+            Self::NoCellSize => vec![
+                "the terminal did not report its cell size in pixels, which sixel images need".into(),
+                "run cornercase directly in the terminal: mosh and some multiplexers hide the window's size in pixels"
+                    .into(),
+            ],
+            Self::TmuxPassthrough => vec![
+                "images need tmux to pass them through".into(),
+                PASSTHROUGH.into(),
+                "all instead of on also lets images arrive while this window is hidden".into(),
+            ],
+            Self::TmuxSilent => vec![
+                "inside tmux, images need set -g allow-passthrough on in ~/.tmux.conf".into(),
+                PASSTHROUGH.into(),
+                "if it is on already, the terminal running tmux cannot show images".into(),
+            ],
+            Self::TmuxOuter { name } => vec![
+                name.as_ref().map_or_else(
+                    || "the terminal running tmux cannot show images through it".into(),
+                    |name| format!("{name} cannot show images through tmux"),
+                ),
+                "Ghostty and kitty can; outside tmux, more terminals can".into(),
+            ],
+            Self::TmuxNested => vec![
+                "images do not pass through tmux inside tmux".into(),
+                "run cornercase in the outer tmux, or outside tmux".into(),
+            ],
+            Self::Zellij => vec![
+                "Zellij passes images only to terminals that show sixel".into(),
+                "run cornercase outside Zellij, or in a terminal with sixel such as foot, WezTerm or Konsole".into(),
+            ],
+            Self::Screen => vec![
+                "GNU screen cannot pass images through".into(),
+                "run cornercase outside screen, or in tmux with set -g allow-passthrough on".into(),
+            ],
         }
     }
 }

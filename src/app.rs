@@ -62,7 +62,7 @@ mod todo_panel;
 mod trace;
 
 pub use events::Streamed;
-pub use images::{Placed, Sight, protocol_name};
+pub use images::{Placed, Sight};
 
 #[derive(Debug)]
 pub enum AppEvent {

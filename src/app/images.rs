@@ -97,14 +97,6 @@ impl Payloads {
     }
 }
 
-pub fn protocol_name(protocol: Protocol) -> &'static str {
-    match protocol {
-        Protocol::Kitty => "kitty",
-        Protocol::Iterm => "iterm",
-        Protocol::Sixel { .. } => "sixel",
-    }
-}
-
 fn own(buf: &mut Buffer, rect: Rect, protocol: Protocol) -> bool {
     let mut owned = true;
     for p in rect.intersection(buf.area).positions() {
@@ -202,7 +194,7 @@ impl App {
             let (cols, rows, ..) = key.fit;
             let job = Job::new(Level::Debug, "images", "encode")
                 .with("path", path)
-                .with("protocol", protocol_name(key.protocol))
+                .with("protocol", key.protocol.id())
                 .with("cols", cols)
                 .with("rows", rows)
                 .begin();
@@ -220,11 +212,11 @@ impl App {
         let payload = match result {
             Ok(payload) if !payload.is_empty() => Some(payload),
             Ok(_) => {
-                log::warning!("images", "the encoder made nothing", protocol = protocol_name(key.protocol));
+                log::warning!("images", "the encoder made nothing", protocol = key.protocol.id());
                 None
             }
             Err(e) => {
-                log::warning!("images", "encoding failed", protocol = protocol_name(key.protocol), error = e);
+                log::warning!("images", "encoding failed", protocol = key.protocol.id(), error = e);
                 None
             }
         };

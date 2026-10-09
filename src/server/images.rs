@@ -3,12 +3,11 @@ use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
 
-use crate::app::{Placed, Sight, protocol_name};
+use crate::app::{Placed, Sight};
 use crate::graphics::encode::Key;
-use crate::graphics::{Protocol, Support, Tmux, kitty, tmux};
+use crate::graphics::{KITTY_LO, Protocol, Support, Tmux, kitty, tmux};
 use crate::log;
 
-pub const LOS: [u8; 2] = [0xF0, 0xF1];
 const AFTER_RESET: Duration = Duration::from_millis(100);
 const BEGIN: &[u8] = b"\x1b[?2026h\x1b7\x1b[0m";
 const END: &[u8] = b"\x1b8\x1b[?2026l";
@@ -57,8 +56,13 @@ impl Graphics {
         Self { client, support, background, ..Self::default() }
     }
 
+    pub fn update(&mut self, support: Support) {
+        self.support = support;
+        self.damaged();
+    }
+
     fn id(&self, slot: usize) -> u32 {
-        kitty::id(self.support.id_hi, LOS[slot])
+        kitty::id(self.support.id_hi, KITTY_LO[slot])
     }
 
     fn wrapped(&self, sequence: &[u8]) -> Vec<u8> {
@@ -81,7 +85,7 @@ impl Graphics {
     pub fn sight(&self, visible: Rect, picture: Option<u64>) -> Sight {
         let slot = self.slot_for(picture);
         let sent = self.slots[slot].map(|s| s.picture).filter(|p| Some(*p) == picture);
-        Sight { support: self.support.clone(), visible, background: self.background, lo: LOS[slot], sent }
+        Sight { support: self.support.clone(), visible, background: self.background, lo: KITTY_LO[slot], sent }
     }
 
     pub fn watched(&self) -> Option<Rect> {
@@ -115,7 +119,7 @@ impl Graphics {
     }
 
     fn sent(&mut self, placed: &Placed, bytes: usize) {
-        let (client, protocol, path) = (self.client, protocol_name(placed.key.protocol), &placed.path);
+        let (client, protocol, path) = (self.client, placed.key.protocol.id(), &placed.path);
         let (cols, rows, ..) = placed.key.fit;
         if self.logged.replace(placed.key.picture) == Some(placed.key.picture) {
             log::debug!("images", "image sent again", client = client, cols = cols, rows = rows, bytes = bytes);
@@ -129,7 +133,7 @@ impl Graphics {
         self.current = None;
         self.logged = None;
         let mut out = Vec::new();
-        for slot in 0..LOS.len() {
+        for slot in 0..KITTY_LO.len() {
             if self.slots[slot].take().is_some() {
                 out.extend(self.wrapped(&kitty::delete(self.id(slot))));
             }
@@ -141,7 +145,7 @@ impl Graphics {
         self.waiting = false;
         let Some(picture) = picture else { return self.forget() };
         let Some(placed) = placed.filter(|p| p.drawn && p.key.picture == picture) else { return Vec::new() };
-        let Some(slot) = (0..LOS.len()).find(|&i| self.id(i) == placed.key.kitty_id) else { return Vec::new() };
+        let Some(slot) = (0..KITTY_LO.len()).find(|&i| self.id(i) == placed.key.kitty_id) else { return Vec::new() };
         let (cols, rows, width, height) = placed.key.fit;
         let have = self.slots[slot].filter(|s| s.picture == picture);
         let enough = have.is_some_and(|s| s.sent.0 >= width && s.sent.1 >= height);

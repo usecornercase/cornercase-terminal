@@ -280,6 +280,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::graphics::Support;
     use crate::host_theme::HostTheme;
     use crate::notify::Channel;
     use crate::protocol::Hello;
@@ -500,6 +501,8 @@ mod tests {
                 theme: HostTheme::default(),
                 notify: Channel::Bell,
                 terminal: None,
+                graphics: Support::default(),
+                probe: String::new(),
             };
 
             let message = rebuilt(ClientMessage::Hello(Box::new(hello)), "the server's".into());
