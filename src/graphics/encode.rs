@@ -41,8 +41,9 @@ pub fn fit(width: u32, height: u32, cell: Option<CellSize>, room: (u16, u16), pr
         }
         scale = scale.min((f64::from(SIXEL_PIXELS) / (w * h)).sqrt());
     }
-    let width = round(w * scale).max(1);
-    let height = round(h * scale).max(1);
+    let (width, height) = (round(w * scale).max(1), round(h * scale).max(1));
+    let (width, height) =
+        if let Protocol::Sixel { .. } = protocol { sixel::bands(width, height) } else { (width, height) };
     let cells = |pixels: u32, size: u16, most: u16| {
         u16::try_from(pixels.div_ceil(u32::from(size))).unwrap_or(most).clamp(1, most)
     };
@@ -265,15 +266,15 @@ pub mod tests {
             Some(cell(10, 20)),
             (300, 100),
             Protocol::Sixel { registers: 256, max: Some((1000, 1000)) },
-            (100, 13, 1000, 250)
+            (99, 13, 984, 246)
         )]
-        #[case::sixel_stays_within_its_area((2000, 2000), Some(cell(10, 20)), (300, 150), SIXEL, (110, 55, 1095, 1095))]
+        #[case::sixel_stays_within_its_area((2000, 2000), Some(cell(10, 20)), (300, 150), SIXEL, (110, 55, 1092, 1092))]
         #[case::sixel_ignores_an_empty_geometry(
             (100, 50),
             Some(cell(10, 20)),
             (80, 40),
             Protocol::Sixel { registers: 256, max: Some((0, 0)) },
-            (10, 3, 100, 50)
+            (10, 3, 96, 48)
         )]
         fn sizes_the_picture_in_cells_and_pixels(
             #[case] size: (u32, u32),
@@ -311,13 +312,18 @@ pub mod tests {
                 assert!(fit.cols >= 1 && fit.cols <= room.0 && fit.rows >= 1 && fit.rows <= room.1, "{case}");
                 assert!(protocol != Protocol::Kitty || fit.cols.max(fit.rows) <= kitty::MAX_CELLS, "{case}");
                 assert!(protocol != Protocol::Iterm || fit.rows <= ITERM_ROWS, "{case}");
+                assert!(
+                    protocol != SIXEL || fit.height.is_multiple_of(sixel::BAND) || fit.height < sixel::BAND,
+                    "{case}"
+                );
                 assert!(fit.width <= width && fit.height <= height, "{case}");
                 assert!(fit.width <= u32::from(fit.cols) * cw && fit.width > u32::from(fit.cols - 1) * cw, "{case}");
                 assert!(fit.height <= u32::from(fit.rows) * ch && fit.height > u32::from(fit.rows - 1) * ch, "{case}");
                 if fit.width > 1 && fit.height > 1 {
                     let skew =
                         (u64::from(fit.width) * u64::from(height)).abs_diff(u64::from(fit.height) * u64::from(width));
-                    assert!(skew <= u64::from(width + height) / 2 + 1, "{case}");
+                    let banded = if protocol == SIXEL { u64::from(height) / 2 } else { 0 };
+                    assert!(skew <= u64::from(width + height) / 2 + banded + 1, "{case}");
                 }
             }
         }

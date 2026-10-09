@@ -7,15 +7,25 @@ use super::encode::{Key, flatten, round, sized};
 pub const COLOURS: u16 = 256;
 pub const FEWEST: u16 = 64;
 pub const DIFFUSION: f32 = 0.875;
+pub const BAND: u32 = 6;
 
 pub fn image(picture: &Picture, key: &Key, colours: u16, scale: f64) -> Vec<u8> {
     let fit = key.fit;
     let side = |pixels: u32| round(f64::from(pixels) * scale).max(1);
-    let mut image = sized(picture, side(fit.width), side(fit.height)).into_owned();
+    let (width, height) = bands(side(fit.width), side(fit.height));
+    let mut image = sized(picture, width, height).into_owned();
     if let Some(background) = key.background {
         flatten(&mut image, background);
     }
     encode(image, colours)
+}
+
+pub fn bands(width: u32, height: u32) -> (u32, u32) {
+    let whole = height - height % BAND;
+    if whole == 0 || whole == height {
+        return (width, height);
+    }
+    (round(f64::from(width) * f64::from(whole) / f64::from(height)).max(1), whole)
 }
 
 pub fn colours(registers: u16) -> u16 {
@@ -40,9 +50,9 @@ mod tests {
     use image::Rgba;
     use rstest::rstest;
 
+    use super::super::Protocol;
     use super::super::encode::tests::{CLEAR, RED, SIXEL, cell, key, noise, photo, picture};
     use super::super::encode::{BUDGET, Fit, encode, fit};
-    use super::super::Protocol;
     use super::*;
 
     const BLUE: Rgba<u8> = Rgba([0, 0, 255, 255]);
@@ -75,11 +85,11 @@ mod tests {
 
     #[test]
     fn draws_from_the_cursor_and_leaves_no_line_feed_after_the_last_band() {
-        let picture = picture(photo(40, 40), "PNG");
+        let picture = picture(photo(42, 42), "PNG");
 
-        let out = encode(&picture, &key(SIXEL, exact(40, 40), Some((0, 0, 0))));
+        let out = encode(&picture, &key(SIXEL, exact(42, 42), Some((0, 0, 0))));
 
-        assert!(out.starts_with(b"\x1bP9;1;0q\"1;1;40;40#"));
+        assert!(out.starts_with(b"\x1bP9;1;0q\"1;1;42;42#"));
         assert!(out.ends_with(b"$\x1b\\") && !out.ends_with(b"-\x1b\\"));
         for mode in [&b"\x1b[?80"[..], b"8452", b"1070"] {
             assert!(!out.windows(mode.len()).any(|window| window == mode));
@@ -96,6 +106,24 @@ mod tests {
         assert_eq!((fit.width, fit.height), (80, 60));
         assert_eq!(image.dimensions(), (80, 60));
         assert_eq!((image.get_pixel(0, 0), image.get_pixel(79, 59)), (&RED, &BLUE));
+    }
+
+    #[rstest]
+    #[case::whole_bands(60, 42, (60, 42))]
+    #[case::cut_to_whole_bands(100, 50, (96, 48))]
+    #[case::thinner_than_a_band(9, 4, (9, 4))]
+    #[case::one_band_and_a_row(7, 7, (6, 6))]
+    fn keeps_a_picture_in_whole_bands(#[case] width: u32, #[case] height: u32, #[case] expected: (u32, u32)) {
+        assert_eq!(bands(width, height), expected);
+    }
+
+    #[test]
+    fn never_draws_a_band_it_cannot_fill() {
+        let picture = picture(photo(100, 50), "PNG");
+
+        let out = encode(&picture, &key(SIXEL, exact(100, 50), None));
+
+        assert_eq!(raster(&out), "1;1;96;48");
     }
 
     #[test]
@@ -151,7 +179,7 @@ mod tests {
 
         assert!(image(&picture, &key(SIXEL, fit, Some((0, 0, 0))), COLOURS, 1.0).len() > BUDGET);
         assert!(out.len() <= BUDGET, "{}", out.len());
-        assert_eq!(raster(&out), "1;1;1000;1000");
+        assert_eq!(raster(&out), "1;1;996;996");
         assert!(palette(&out) <= usize::from(FEWEST));
     }
 

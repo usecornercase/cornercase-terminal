@@ -49,9 +49,9 @@ mod tests {
     use image::Rgba;
     use rstest::rstest;
 
+    use super::super::Protocol;
     use super::super::encode::tests::{CLEAR, RED, cell, image_of, key, noise, photo, picture};
     use super::super::encode::{Fit, encode};
-    use super::super::Protocol;
     use super::*;
 
     struct Sent {
