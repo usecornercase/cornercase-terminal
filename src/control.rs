@@ -540,6 +540,109 @@ impl Report {
         let shown = |p: &ProjectInfo| Some(p.id) == self.shown.project;
         self.projects.iter().find(|p| panes(p)).or_else(|| self.projects.iter().find(|p| shown(p)))
     }
+
+    pub fn loose(&self) -> impl Iterator<Item = &ProjectInfo> {
+        let grouped = |p: &ProjectInfo| p.group.is_some_and(|g| self.groups.iter().any(|group| group.id == g));
+        self.projects.iter().filter(move |p| !grouped(p))
+    }
+
+    pub fn grouped(&self, group: u64) -> impl Iterator<Item = &ProjectInfo> {
+        self.projects.iter().filter(move |p| p.group == Some(group))
+    }
+
+    pub fn panes(&self) -> Vec<PaneRow> {
+        let projects = self.loose().chain(self.groups.iter().flat_map(|group| self.grouped(group.id)));
+        let mut rows = Vec::new();
+        for project in projects {
+            for workspace in &project.workspaces {
+                for tab in &workspace.tabs {
+                    rows.extend(tab.panes.iter().map(|pane| PaneRow {
+                        pane: pane.id,
+                        tab: tab.id,
+                        workspace: workspace.id,
+                        project: project.id,
+                        program: pane.program.clone(),
+                        agent: pane.agent.clone(),
+                        status: pane.status.clone(),
+                        background_shell: pane.background_shell,
+                        dialog: pane.dialog,
+                        at_prompt: pane.at_prompt,
+                        model: pane.model.clone(),
+                        context: pane.context,
+                        caller: pane.caller,
+                        shown: self.shown.pane == Some(pane.id),
+                        active: pane.active,
+                        tab_name: tab.name.clone(),
+                        workspace_name: workspace.name.clone(),
+                        branch: workspace.branch.clone(),
+                        worktree: workspace.worktree,
+                        project_name: project.name.clone(),
+                        path: pane.path.clone(),
+                    }));
+                }
+            }
+        }
+        rows
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PaneRows {
+    pub panes: Vec<PaneRow>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own key in the JSON of `status --panes`")]
+pub struct PaneRow {
+    pub pane: u64,
+    pub tab: u64,
+    pub workspace: u64,
+    pub project: u64,
+    pub program: Option<String>,
+    pub agent: Option<String>,
+    pub status: Option<String>,
+    pub background_shell: bool,
+    pub dialog: bool,
+    pub at_prompt: Option<bool>,
+    pub model: Option<String>,
+    pub context: Option<u16>,
+    pub caller: bool,
+    pub shown: bool,
+    pub active: bool,
+    pub tab_name: String,
+    pub workspace_name: String,
+    pub branch: Option<String>,
+    pub worktree: bool,
+    pub project_name: String,
+    pub path: Option<PathBuf>,
+}
+
+impl PaneRow {
+    pub const COLUMNS: [&str; 21] = [
+        "pane",
+        "tab",
+        "workspace",
+        "project",
+        "program",
+        "agent",
+        "status",
+        "background_shell",
+        "dialog",
+        "at_prompt",
+        "model",
+        "context",
+        "caller",
+        "shown",
+        "active",
+        "tab_name",
+        "workspace_name",
+        "branch",
+        "worktree",
+        "project_name",
+        "path",
+    ];
 }
 
 fn candidates<'a>(workspaces: impl IntoIterator<Item = &'a WorkspaceInfo>) -> String {
@@ -819,6 +922,21 @@ mod tests {
 
             assert!(error.starts_with(expected), "{error}");
         }
+    }
+
+    #[test]
+    fn the_columns_of_a_pane_row_are_its_keys_in_order() {
+        let row = PaneRow::default();
+
+        let text = serde_json::to_string(&row).expect("json");
+
+        let keys = serde_json::to_value(&row).expect("json").as_object().expect("an object").len();
+        let at: Vec<usize> = PaneRow::COLUMNS
+            .iter()
+            .map(|column| text.find(&format!("\"{column}\":")).unwrap_or_else(|| panic!("no {column} in {text}")))
+            .collect();
+        assert_eq!(keys, PaneRow::COLUMNS.len());
+        assert!(at.is_sorted(), "{text}");
     }
 
     #[test]

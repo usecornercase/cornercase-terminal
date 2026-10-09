@@ -39,7 +39,7 @@ group 9  work  collapsed
 
 | Command | What it does |
 | --- | --- |
-| `status` | Lists groups, projects, workspaces, tabs and panes with their ids. |
+| `status` | Lists groups, projects, workspaces, tabs and panes with their ids, or one line per pane with `--panes`. |
 | `open PATH` | Opens a folder as a project, or finds the open one. Prints the project's id. |
 | `new-workspace NAME` | Adds a workspace to a project, or a git worktree with `--worktree`. Prints its id. |
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
@@ -62,11 +62,55 @@ group 9  work  collapsed
 ### Look
 
 ```sh
-cornercase status          # the tree above
-cornercase status --json   # the same, as JSON
+cornercase status                  # the tree above
+cornercase status --json           # the same, as JSON
+cornercase status --panes          # one line per pane, for scripts
+cornercase status --panes --json   # the same, as JSON
 ```
 
 Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+
+#### One line per pane
+
+A script that coordinates agents mostly needs the panes: which agent runs where, what it is doing, in which worktree. `status --panes` lists them flat, so nothing has to walk the tree: one line per pane, in the order of the sidebar, under a header line that names the columns, separated by tabs.
+
+```text
+pane	tab	workspace	project	program	agent	status	background_shell	dialog	at_prompt	model	context	caller	shown	active	tab_name	workspace_name	branch	worktree	project_name	path
+4	3	2	1	claude	claude	working	false	false	false	Opus 5.5	23	false	true	true	claude	default	main	false	shop	/home/ana/src/shop
+5	6	2	1	zsh	-	-	false	false	true	-	-	true	false	true	zsh	default	main	false	shop	/home/ana/src/shop
+12	11	7	1	codex	codex	waiting	false	false	false	gpt-5.4	41	false	false	true	codex	fix/login	fix/login	true	shop	/home/ana/.cornercase/worktrees/shop/fix-login
+```
+
+| Column | What it holds |
+| --- | --- |
+| `pane`, `tab`, `workspace`, `project` | The ids of the pane and of the tab, workspace and project it is in. |
+| `program` | The program in the foreground, as the tab names it. |
+| `agent` | `claude`, `codex` or `opencode` when one runs in the pane. |
+| `status` | What the agent is doing: `working`, `waiting`, `done` or `idle`. |
+| `background_shell`, `dialog`, `at_prompt` | As in the [JSON](#json): the agent's turn is over but a background shell still runs; a Claude Code agent shows a dialog instead of its input box; the shell sits at its prompt with nothing running. |
+| `model`, `context` | The agent's model and how full its context is, in percent. |
+| `caller` | `true` for the pane running the command. |
+| `shown` | `true` for the pane the window shows. |
+| `active` | `true` for its tab's active pane. |
+| `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name` | The tab's and workspace's names, the workspace's branch and whether it has a worktree of its own, and the project's name. |
+| `path` | The folder of the program in the foreground, in full. |
+
+- The values are the ones `--panes --json` gives: `true` or `false`, numbers without a unit, full paths. A `-` stands where there is no value (no agent, no branch, a field the server is too old to know), so a column never goes missing and `read` keeps them in place. A tab or a line break in a name shows as a space.
+- The columns keep their order, and new ones only ever go at the end, so `$7` stays the status.
+- `--panes --json` prints `{"panes": [...]}`, one object per pane with the columns as keys, in the same order, and `null` where the text shows `-`.
+
+```sh
+# the agents that wait for an answer
+cornercase status --panes | awk -F'\t' '$7 == "waiting" { print $1 }'
+
+# each pane with its agent and status, skipping the header
+cornercase status --panes | tail -n +2 | while IFS=$'\t' read -r pane tab workspace project program agent status rest; do
+  echo "$pane $agent $status"
+done
+
+# the agents in the worktree of fix/login
+cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" and .agent != null) | .pane'
+```
 
 ### Create
 
@@ -236,6 +280,7 @@ cornercase todo rm 3
 | Command | Fields |
 | --- | --- |
 | `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. |
+| `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
@@ -277,7 +322,7 @@ npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 
 Only the skill's name and description stay in the agent's context; the rest loads when a task needs it. `cornercase skill` prints the copy that matches your version; for an agent without skills, put that text in your `AGENTS.md` or `CLAUDE.md`. cornercase never installs it by itself, for the same reason it installs no hooks: it doesn't write into your agents' setup.
 
-The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; and to learn what another agent answered with `read --last-message`.
+The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; to find panes with `status --panes` rather than walking the tree; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; and to learn what another agent answered with `read --last-message`.
 
 ## Environment
 

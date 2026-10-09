@@ -7,7 +7,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 
 use crate::client::{answer, ask};
-use crate::control::{self, Done, Event, Item, ProjectInfo, Report, TodoList, Until, What};
+use crate::control::{self, Done, Event, Item, PaneRow, PaneRows, ProjectInfo, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::keys;
 use crate::log;
@@ -44,9 +44,21 @@ it wakes up when that shell ends (`background_shell` in the JSON, where the stat
 `(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
 input box, which `cornercase send` refuses (`dialog` in the JSON).
 
+With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
+line naming the columns, then one row per pane, its columns separated by tabs. The columns are
+pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
+at_prompt, model, context, caller (the pane running the command), shown (the pane the window
+shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name
+and path; new ones only ever go at the end. Values are as in the JSON (true or false, context as a
+number, full paths), with - where there is none and a space for a tab or line break in a name.
+With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
+where there is no value.
+
 Examples:
   cornercase status
-  cornercase status --json";
+  cornercase status --json
+  cornercase status --panes | awk -F'\\t' '$7 == \"waiting\" { print $1 }'
+  cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'";
 const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
@@ -243,7 +255,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum Control {
     #[command(about = "List the projects, workspaces, tabs and panes, with their ids", after_help = STATUS_HELP)]
-    Status(Print),
+    Status(StatusArgs),
     #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
     Open(OpenArgs),
     #[command(
@@ -297,6 +309,14 @@ pub enum Control {
 pub struct Print {
     #[arg(long, help = "Print JSON instead of text")]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct StatusArgs {
+    #[arg(long, help = "One line per pane, its columns separated by tabs, for scripts")]
+    pub panes: bool,
+    #[command(flatten)]
+    pub print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -745,7 +765,7 @@ fn quietly(written: io::Result<()>) -> Result<bool> {
 
 fn run_control(command: Control) -> Result<()> {
     match command {
-        Control::Status(print) => run_status(&print),
+        Control::Status(status) => run_status(&status),
         Control::Open(open) => {
             let path = std::path::absolute(&open.path)?;
             let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
@@ -825,14 +845,14 @@ fn run_control(command: Control) -> Result<()> {
     }
 }
 
-fn run_status(print: &Print) -> Result<()> {
+fn run_status(status: &StatusArgs) -> Result<()> {
     let value = ask("status", control::Command::Status(control::Status {}))?;
-    if print.json {
-        return print_json(&value);
+    match (status.panes, status.print.json) {
+        (false, true) => print_json(&value),
+        (false, false) => print_out(&render(&answer(value)?, home().as_deref())),
+        (true, true) => print_json(&PaneRows { panes: answer::<Report>(value)?.panes() }),
+        (true, false) => print_out(&pane_table(&answer::<Report>(value)?.panes())?),
     }
-    let report: Report = answer(value)?;
-    print!("{}", render(&report, home().as_deref()));
-    Ok(())
 }
 
 fn follow_events(args: EventsArgs) -> Result<()> {
@@ -965,10 +985,14 @@ fn run_todo(action: TodoAction) -> Result<()> {
     }
 }
 
-fn print_json(value: &Value) -> Result<()> {
+fn print_json(value: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))?;
-    println!("{text}");
-    Ok(())
+    print_out(&(text + "\n"))
+}
+
+fn print_out(text: &str) -> Result<()> {
+    let mut out = io::stdout().lock();
+    quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush())).map(drop)
 }
 
 fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result<()> {
@@ -1018,18 +1042,37 @@ fn home() -> Option<PathBuf> {
 
 pub fn render(report: &Report, home: Option<&Path>) -> String {
     let mut lines = Vec::new();
-    let grouped = |p: &&ProjectInfo| p.group.is_some_and(|g| report.groups.iter().any(|group| group.id == g));
-    for project in report.projects.iter().filter(|p| !grouped(p)) {
+    for project in report.loose() {
         project_lines(&mut lines, report, project, 0, home);
     }
     for group in &report.groups {
         let state = if group.collapsed { "collapsed" } else { "" };
         lines.push(line(0, "group", group.id, &[group.name.clone(), state.into()], &[]));
-        for project in report.projects.iter().filter(|p| p.group == Some(group.id)) {
+        for project in report.grouped(group.id) {
             project_lines(&mut lines, report, project, 1, home);
         }
     }
     lines.into_iter().map(|line| line + "\n").collect()
+}
+
+pub fn pane_table(rows: &[PaneRow]) -> Result<String> {
+    let mut text = PaneRow::COLUMNS.join("\t") + "\n";
+    for row in rows {
+        let value = serde_json::to_value(row).map_err(|e| Error::Control(e.to_string()))?;
+        let cells: Vec<String> = PaneRow::COLUMNS.iter().map(|column| cell(&value[*column])).collect();
+        text.push_str(&cells.join("\t"));
+        text.push('\n');
+    }
+    Ok(text)
+}
+
+fn cell(value: &Value) -> String {
+    match value {
+        Value::Null => "-".into(),
+        Value::String(text) if text.is_empty() => "-".into(),
+        Value::String(text) => text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect(),
+        value => value.to_string(),
+    }
 }
 
 fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
@@ -1325,6 +1368,68 @@ mod tests {
             assert!(
                 text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"),
                 "{text}"
+            );
+        }
+
+        #[test]
+        fn panes_are_one_row_each_under_a_header_with_a_dash_for_what_is_missing() {
+            let mut report = report();
+            report.projects[0].workspaces[0].tabs[0].panes[0].at_prompt = Some(true);
+
+            let text = pane_table(&report.panes()).expect("a table");
+
+            assert_eq!(
+                text,
+                "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
+                 context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\n\
+                 4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\n\
+                 5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\n"
+            );
+        }
+
+        #[test]
+        fn panes_follow_the_sidebar_with_grouped_projects_after_the_loose_ones() {
+            let one_pane = |project: u64, group| {
+                let pane = PaneInfo { id: project * 10, ..PaneInfo::default() };
+                let tab = TabInfo { id: project * 10 - 1, panes: vec![pane], ..TabInfo::default() };
+                let workspace = WorkspaceInfo { id: project * 10 - 2, tabs: vec![tab], ..WorkspaceInfo::default() };
+                ProjectInfo { id: project, group, workspaces: vec![workspace], ..ProjectInfo::default() }
+            };
+            let report = Report {
+                groups: vec![GroupInfo { id: 8, ..GroupInfo::default() }, GroupInfo { id: 7, ..GroupInfo::default() }],
+                projects: vec![one_pane(1, Some(7)), one_pane(2, Some(8)), one_pane(3, None), one_pane(4, Some(6))],
+                ..Report::default()
+            };
+
+            let order: Vec<(u64, u64)> = report.panes().iter().map(|row| (row.project, row.pane)).collect();
+
+            assert_eq!(order, [(3, 30), (4, 40), (2, 20), (1, 10)]);
+        }
+
+        #[rstest]
+        #[case::nothing(Value::Null, "-")]
+        #[case::an_empty_name(serde_json::json!(""), "-")]
+        #[case::a_name_with_a_tab_and_a_line_break(serde_json::json!("a\tb\nc"), "a b c")]
+        #[case::a_name_with_spaces(serde_json::json!("review #42"), "review #42")]
+        #[case::a_flag(serde_json::json!(false), "false")]
+        #[case::a_number(serde_json::json!(23), "23")]
+        fn a_cell_never_breaks_its_row(#[case] value: Value, #[case] expected: &str) {
+            assert_eq!(cell(&value), expected);
+        }
+
+        #[test]
+        fn panes_as_json_are_an_object_holding_the_rows() {
+            let rows = PaneRows { panes: report().panes() };
+
+            let value = serde_json::to_value(&rows).expect("json");
+
+            let panes = value["panes"].as_array().expect("a list");
+            assert_eq!(panes.len(), 2);
+            assert_eq!(
+                (&panes[1]["pane"], &panes[1]["status"], &panes[1]["caller"], &panes[0]["agent"]),
+                (&serde_json::json!(5), &serde_json::json!("working"), &serde_json::json!(true), &Value::Null)
             );
         }
 
