@@ -40,7 +40,7 @@ export const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, 
 
 export function imageBox(image: GridImage, cw: number, ch: number): { x: number; y: number; w: number; h: number } {
   const room = { w: image.r.w * cw, h: image.r.h * ch };
-  const scale = Math.min(room.w / image.width, room.h / image.height);
+  const scale = Math.min(1, room.w / image.width, room.h / image.height);
   const w = image.width * scale;
   const h = image.height * scale;
   return { x: image.r.x * cw + (room.w - w) / 2, y: image.r.y * ch + (room.h - h) / 2, w, h };
