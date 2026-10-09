@@ -9,15 +9,12 @@ pub const TMUX_FORMAT: &str = "#{pane_tty}|#{allow-passthrough}|#{client_termtyp
 pub const PANE_TITLE: &str = "\x1b]2;cornercase\x1b\\";
 const DEFAULT_REGISTERS: u16 = 256;
 const SIXEL: u32 = 4;
-const CLIPBOARD: u32 = 52;
 const MIN_KITTY: Version = (0, 28, 0);
 const MIN_RIO: Version = (0, 5, 27);
 const MIN_KONSOLE: u32 = 220_400;
 const MIN_ZELLIJ: u32 = 4500;
 const VTE_WITH_XTVERSION: u32 = 7600;
 const VTE_WITHOUT_SIXEL: u32 = 8390;
-const WINDOWS_TERMINAL: [u32; 11] = [61, 6, 7, 14, 21, 22, 23, 24, 28, 32, 42];
-const WINDOWS_TERMINAL_CELL: CellSize = CellSize { width: 10, height: 20 };
 const XTERM_JS_IMAGES: [u32; 4] = [62, 4, 9, 22];
 const NAMES: [(&str, &str); 16] = [
     ("ghostty ", "Ghostty"),
@@ -194,7 +191,6 @@ pub fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
     let mut support = Support { cell: facts.cell(), ..Support::default() };
     match choose(facts, &var) {
         Ok(pick) => {
-            support.cell = pick.cell.or(support.cell);
             if matches!(pick.protocol, Protocol::Sixel { .. }) && support.cell.is_none() {
                 support.missing = Some(Missing::NoCellSize);
             } else {
@@ -211,12 +207,11 @@ pub fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
 struct Pick {
     protocol: Protocol,
     tmux: Tmux,
-    cell: Option<CellSize>,
 }
 
 impl Pick {
     fn plain(protocol: Protocol) -> Self {
-        Self { protocol, tmux: Tmux::None, cell: None }
+        Self { protocol, tmux: Tmux::None }
     }
 }
 
@@ -262,7 +257,6 @@ enum Brand {
     Xterm,
     Mlterm,
     Contour,
-    WindowsTerminal,
     Vte { version: Option<u32>, name: Option<&'static str> },
     Without(String),
     Unknown,
@@ -287,14 +281,13 @@ impl Brand {
             | Self::XtermJs
             | Self::Tabby
             | Self::Hyper
-            | Self::WindowsTerminal
             | Self::Without(_)
             | Self::Unknown => false,
         }
     }
 
     fn draws_sixel(&self) -> bool {
-        matches!(self, Self::Konsole(_) | Self::WezTerm | Self::Iterm2 | Self::Contour | Self::WindowsTerminal)
+        matches!(self, Self::Konsole(_) | Self::WezTerm | Self::Iterm2 | Self::Contour)
     }
 
     fn places_kitty(&self) -> bool {
@@ -327,8 +320,8 @@ fn forced(value: &str, replies: &Replies, tmux: bool) -> Option<Result<Pick, Mis
     let tmux = if tmux { Tmux::Wrap } else { Tmux::None };
     match value.trim().to_ascii_lowercase().as_str() {
         "off" => Some(Err(Missing::Off)),
-        "kitty" => Some(Ok(Pick { protocol: Protocol::Kitty, tmux, cell: None })),
-        "iterm" | "iterm2" => Some(Ok(Pick { protocol: Protocol::Iterm, tmux, cell: None })),
+        "kitty" => Some(Ok(Pick { protocol: Protocol::Kitty, tmux })),
+        "iterm" | "iterm2" => Some(Ok(Pick { protocol: Protocol::Iterm, tmux })),
         "sixel" => Some(Ok(Pick::plain(replies.sixel()))),
         _ => None,
     }
@@ -397,7 +390,7 @@ fn beyond_tmux(
         return match (passthrough, &brand, kitty) {
             (false, ..) => Err(Missing::TmuxPassthrough),
             (true, Brand::Ghostty, Kitty::Silent) => Err(Missing::GhosttyStorage),
-            (true, ..) => Ok(Pick { protocol: Protocol::Kitty, tmux: Tmux::Wrap, cell: None }),
+            (true, ..) => Ok(Pick { protocol: Protocol::Kitty, tmux: Tmux::Wrap }),
         };
     }
     if outer_sixel && let Some(pick) = sixel(inner) {
@@ -434,7 +427,6 @@ fn brand(terminal: Option<&str>, attributes: Option<&[u32]>, var: Var) -> Brand 
         };
     }
     from_env(var, attributes.is_some())
-        .or_else(|| attributes.filter(|a| windows_terminal(a)).map(|_| Brand::WindowsTerminal))
         .or_else(|| attributes.filter(|a| *a == XTERM_JS_IMAGES).map(|_| xterm_js(var)))
         .unwrap_or(Brand::Unknown)
 }
@@ -489,7 +481,6 @@ fn from_env(var: Var, responsive: bool) -> Option<Brand> {
         get("KITTY_WINDOW_ID").map(|_| Brand::Kitty(None)),
         get("GHOSTTY_RESOURCES_DIR").map(|_| Brand::Ghostty),
         get("KONSOLE_VERSION").map(|v| Brand::Konsole(v.parse().ok())),
-        get("WT_SESSION").map(|_| Brand::WindowsTerminal),
         get("PTYXIS_VERSION").map(|_| Brand::Vte { version: vte(), name: Some("Ptyxis") }),
         get("VTE_VERSION").map(|v| Brand::Vte { version: v.parse().ok(), name: None }),
         get("TERMINAL_EMULATOR").filter(|t| t.contains("JetBrains")).map(|_| without("the JetBrains terminal")),
@@ -561,10 +552,6 @@ fn libvterm_name(var: Var) -> String {
     }
 }
 
-fn windows_terminal(attributes: &[u32]) -> bool {
-    attributes.iter().copied().filter(|&p| p != SIXEL && p != CLIPBOARD).eq(WINDOWS_TERMINAL)
-}
-
 fn by_brand(brand: Brand, facts: &Facts) -> Result<Pick, Missing> {
     let replies = &facts.replies;
     let kitty = Kitty::of(facts.asked_kitty, replies.kitty.as_deref());
@@ -585,9 +572,6 @@ fn by_brand(brand: Brand, facts: &Facts) -> Result<Pick, Missing> {
         Brand::Mlterm => sixel(replies).ok_or_else(|| Missing::Cannot { name: "mlterm".into() }),
         Brand::Foot => sixel(replies).ok_or(Missing::Foot),
         Brand::Xterm => sixel(replies).ok_or(Missing::Xterm),
-        Brand::WindowsTerminal => sixel(replies)
-            .map(|pick| Pick { cell: Some(WINDOWS_TERMINAL_CELL), ..pick })
-            .ok_or(Missing::OldWindowsTerminal),
         Brand::Vte { version: Some(v), .. } if v < VTE_WITHOUT_SIXEL && replies.has_sixel() => {
             Ok(Pick::plain(replies.sixel()))
         }
@@ -903,20 +887,6 @@ mod tests {
             assert_eq!(decided(env, replies), shows(protocol, CELL, Tmux::None));
         }
 
-        #[test]
-        fn draws_sixel_on_windows_terminal_s_own_cell_size() {
-            let support = decided(&[("TERM", "xterm-256color")], b"\x1b[?61;4;6;7;14;21;22;23;24;28;32;42;52c");
-
-            assert_eq!(
-                support,
-                shows(
-                    Protocol::Sixel { registers: 256, max: None },
-                    Some(CellSize { width: 10, height: 20 }),
-                    Tmux::None
-                )
-            );
-        }
-
         #[rstest]
         #[case::ghostty_with_image_storage_limit_0(GHOSTTY.env, b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c", Missing::GhosttyStorage)]
         #[case::kitty_0_27(&[("TERM", "xterm-kitty")], b"\x1bP>|kitty(0.27.0)\x1b\\\x1b[?62;52;c", Missing::OldKitty { version: "0.27.0".into() })]
@@ -925,7 +895,6 @@ mod tests {
         #[case::hyper_3(&[("TERM_PROGRAM", "Hyper")], b"\x1b[?1;2c", Missing::Cannot { name: "Hyper".into() })]
         #[case::foot_with_sixel_off(&[("TERM", "foot")], b"\x1bP>|foot(1.25.0)\x1b\\\x1b[?62;22;28;52c", Missing::Foot)]
         #[case::konsole_21_12(&[("KONSOLE_VERSION", "211208")], b"\x1b[?62;1;4c", Missing::OldKonsole { version: "21.12".into() })]
-        #[case::windows_terminal_before_1_22(&[], b"\x1b[?61;6;7;14;21;22;23;24;28;32;42c", Missing::OldWindowsTerminal)]
         #[case::gnome_console(&[("TERM_PROGRAM", "kgx"), ("VTE_VERSION", "8401")], b"\x1bP>|VTE(8401)\x1b\\\x1b[?61;1;4;21;22;28c", Missing::Cannot { name: "GNOME Console (VTE 0.84.1)".into() })]
         #[case::ptyxis(&[("PTYXIS_VERSION", "50.1"), ("VTE_VERSION", "8401")], b"\x1bP>|VTE(8401)\x1b\\\x1b[?61;1;21;22;28c", Missing::Cannot { name: "Ptyxis (VTE 0.84.1)".into() })]
         #[case::alacritty(&[("TERM", "alacritty")], b"\x1b[?6c", Missing::Cannot { name: "Alacritty".into() })]
@@ -1234,7 +1203,6 @@ mod tests {
                 Missing::Xterm,
                 Missing::Foot,
                 Missing::OldKonsole { version: "21.12".into() },
-                Missing::OldWindowsTerminal,
                 Missing::OldKitty { version: "0.27.0".into() },
                 Missing::GhosttyStorage,
                 Missing::WezTermPixels,
@@ -1287,7 +1255,7 @@ mod tests {
             let mut ids: Vec<&str> = every_missing().iter().map(Missing::id).collect();
             ids.dedup();
 
-            assert_eq!(ids.len(), 22);
+            assert_eq!(ids.len(), 21);
         }
 
         #[rstest]

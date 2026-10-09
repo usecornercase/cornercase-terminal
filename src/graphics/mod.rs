@@ -105,7 +105,6 @@ pub enum Missing {
     Xterm,
     Foot,
     OldKonsole { version: String },
-    OldWindowsTerminal,
     OldKitty { version: String },
     GhosttyStorage,
     WezTermPixels,
@@ -132,7 +131,6 @@ impl Missing {
             Self::Xterm => "xterm",
             Self::Foot => "foot",
             Self::OldKonsole { .. } => "old-konsole",
-            Self::OldWindowsTerminal => "old-windows-terminal",
             Self::OldKitty { .. } => "old-kitty",
             Self::GhosttyStorage => "ghostty-storage",
             Self::WezTermPixels => "wezterm-pixels",
@@ -187,10 +185,6 @@ impl Missing {
             Self::OldKonsole { version } => {
                 vec![format!("Konsole {version} cannot show images"), "update Konsole to 22.04 or later".into()]
             }
-            Self::OldWindowsTerminal => vec![
-                "this version of Windows Terminal cannot show images".into(),
-                "update Windows Terminal to 1.22 or later".into(),
-            ],
             Self::OldKitty { version } => {
                 vec![
                     format!("kitty {version} is too old for images in cornercase"),
