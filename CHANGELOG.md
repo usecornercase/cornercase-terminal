@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.14
+
+- Tabs without an agent now show an icon before their name too, so every tab's name starts in the same column: a grey `▸` while a program runs in the tab (a dev server, a build, an editor) and a grey `›` while the shell waits at its prompt. They never light up the workspace or project rows.
+- With **settings → UI → memory** on, every tab shows how much memory it uses, not only agent tabs: a shell tab running `yarn dev` gets `412 MB` on a second line. A split tab counts every pane, so a shell next to an agent now counts too.
+
 ## 0.12.13
 
 - Nothing changes in the app. A test that checks how cornercase tells two opencode in one folder apart failed now and then on macOS; it now runs a fake opencode that cannot be mistaken for a second one.
