@@ -307,9 +307,7 @@ fn parse(text: &str) -> Result<Request, String> {
     let name = control::command_name(&value).unwrap_or_default().to_string();
     let server = update::CURRENT;
     if !Command::NAMES.contains(&name.as_str()) {
-        return Err(format!(
-            "the running cornercase server ({server}) has no `{name}` command; update cornercase and restart the server"
-        ));
+        return Err(control::unknown_command(&name));
     }
     serde_json::from_value(value)
         .map_err(|e| format!("the running cornercase server ({server}) cannot read this `{name}` request: {e}"))

@@ -746,6 +746,13 @@ pub struct TodoItem {
     pub done: bool,
 }
 
+pub fn unknown_command(name: &str) -> String {
+    format!(
+        "the running cornercase server ({}) has no `{name}` command; update cornercase and restart the server",
+        crate::update::CURRENT
+    )
+}
+
 pub fn command_name(request: &Value) -> Option<&str> {
     request.get("command").and_then(Value::as_str)
 }
