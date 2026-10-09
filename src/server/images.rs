@@ -37,6 +37,7 @@ pub struct Graphics {
     shown: Option<Shown>,
     hold: Option<Instant>,
     waiting: bool,
+    logged: Option<u64>,
 }
 
 pub fn emit(rect: Rect, payload: &[u8]) -> Vec<u8> {
@@ -113,9 +114,20 @@ impl Graphics {
         }
     }
 
-    pub fn forget(&mut self) -> Vec<u8> {
-        self.shown = None;
+    fn sent(&mut self, placed: &Placed, bytes: usize) {
+        let (client, protocol, path) = (self.client, protocol_name(placed.key.protocol), &placed.path);
+        let (cols, rows, ..) = placed.key.fit;
+        if self.logged.replace(placed.key.picture) == Some(placed.key.picture) {
+            log::debug!("images", "image sent again", client = client, cols = cols, rows = rows, bytes = bytes);
+        } else {
+            log::info!("images", "image shown", client = client, protocol = protocol, path = path);
+            log::debug!("images", "payload", client = client, cols = cols, rows = rows, bytes = bytes);
+        }
+    }
+
+    fn forget(&mut self) -> Vec<u8> {
         self.current = None;
+        self.logged = None;
         let mut out = Vec::new();
         for slot in 0..LOS.len() {
             if self.slots[slot].take().is_some() {
@@ -142,9 +154,7 @@ impl Graphics {
                 }
                 out.extend_from_slice(payload);
                 self.slots[slot] = Some(Slot { picture, sent: (width, height), placed: (cols, rows) });
-                let client = self.client;
-                log::info!("images", "image sent", client = client, protocol = "kitty", path = &placed.path);
-                log::debug!("images", "payload", client = client, cols = cols, rows = rows, bytes = payload.len());
+                self.sent(placed, payload.len());
             }
             (Some(was), _) if was.placed != (cols, rows) => {
                 out.extend(self.wrapped(&kitty::place(placed.key.kitty_id, cols, rows)));
@@ -164,6 +174,7 @@ impl Graphics {
     fn cells(&mut self, placed: Option<&Placed>) -> Vec<u8> {
         let Some(placed) = placed else {
             self.shown = None;
+            self.logged = None;
             return Vec::new();
         };
         let Some(payload) = placed.payload.as_ref().filter(|_| placed.drawn) else { return Vec::new() };
@@ -171,16 +182,8 @@ impl Graphics {
         if self.shown == Some(shown) {
             return Vec::new();
         }
-        let again = self.shown.is_some_and(|s| s.key == placed.key && s.rect == placed.rect);
         self.shown = Some(shown);
-        let (client, protocol) = (self.client, protocol_name(placed.key.protocol));
-        let (cols, rows, bytes) = (placed.rect.width, placed.rect.height, payload.len());
-        if again {
-            log::debug!("images", "image sent again", client = client, protocol = protocol, bytes = bytes);
-        } else {
-            log::info!("images", "image sent", client = client, protocol = protocol, path = &placed.path);
-            log::debug!("images", "payload", client = client, cols = cols, rows = rows, bytes = bytes);
-        }
+        self.sent(placed, payload.len());
         emit(placed.rect, payload)
     }
 }
