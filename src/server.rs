@@ -22,6 +22,7 @@ use crate::app::{App, AppEvent, Streamed};
 use crate::config;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
+use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::log::{self, Level};
 use crate::notify::Channel;
@@ -29,6 +30,10 @@ use crate::panics;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state::{self, Saver};
 use crate::todo;
+
+mod images;
+
+use images::Graphics;
 
 const TICK: Duration = Duration::from_millis(500);
 const SLOW_STEP: Duration = Duration::from_millis(100);
@@ -128,6 +133,8 @@ struct CropBackend {
     inner: CrosstermBackend<FrameWriter>,
     area: Rect,
     visible: Rect,
+    watched: Option<Rect>,
+    damaged: bool,
 }
 
 impl Backend for CropBackend {
@@ -137,8 +144,14 @@ impl Backend for CropBackend {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
-        let visible = self.visible;
-        self.inner.draw(content.filter(|&(x, y, _)| visible.contains(Position::new(x, y))))
+        let (visible, watched) = (self.visible, self.watched);
+        let mut damaged = false;
+        let shown = content.filter(|&(x, y, _)| visible.contains(Position::new(x, y)));
+        let drawn = self.inner.draw(shown.inspect(|&(x, y, _)| {
+            damaged |= watched.is_some_and(|r| r.contains(Position::new(x, y)));
+        }));
+        self.damaged |= damaged;
+        drawn
     }
 
     fn hide_cursor(&mut self) -> io::Result<()> {
@@ -189,6 +202,7 @@ struct Client {
     size: Option<(u16, u16)>,
     used: u64,
     notify: Channel,
+    graphics: Graphics,
     screen: Option<Screen>,
     out: Outbox,
     writer: JoinHandle<()>,
@@ -225,9 +239,26 @@ impl Client {
     fn reset_screen(&mut self, area: Rect) {
         let Some((width, height)) = self.size else { return };
         self.send(ServerMessage::Frame(CLEAR_SCREEN.to_vec()));
+        self.graphics.reset(Instant::now());
         let inner = CrosstermBackend::new(FrameWriter { buf: Vec::new(), out: self.out.clone() });
-        let backend = CropBackend { inner, area, visible: Rect::new(0, 0, width, height) };
+        let visible = Rect::new(0, 0, width, height);
+        let backend = CropBackend { inner, area, visible, watched: None, damaged: false };
         self.screen = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Fixed(area) }).ok();
+    }
+
+    fn draw(&mut self, app: &mut App, picture: Option<u64>, now: Instant) {
+        let (Some(screen), Some((cols, rows))) = (self.screen.as_mut(), self.size) else { return };
+        let sight = self.graphics.sight(Rect::new(0, 0, cols, rows), picture);
+        screen.backend_mut().watched = self.graphics.watched();
+        let mut placed = None;
+        let _ = screen.draw(|f| placed = app.draw(f, &sight));
+        if std::mem::take(&mut screen.backend_mut().damaged) {
+            self.graphics.damaged();
+        }
+        let bytes = self.graphics.after(picture, placed.as_ref(), now);
+        if !bytes.is_empty() {
+            self.send(ServerMessage::Frame(bytes));
+        }
     }
 }
 
@@ -546,8 +577,10 @@ impl Server {
     }
 
     fn next_frame(&self, now: Instant) -> Option<Duration> {
-        let at = self.printed_at.filter(|_| self.printed)?;
-        Some(FRAME.saturating_sub(now.saturating_duration_since(at)))
+        let images = self.clients.iter().filter_map(|c| c.graphics.wake(now)).min();
+        let at = self.printed_at.filter(|_| self.printed);
+        let printed = at.map(|at| FRAME.saturating_sub(now.saturating_duration_since(at)));
+        printed.into_iter().chain(images).min()
     }
 
     fn draw(&mut self) {
@@ -561,8 +594,9 @@ impl Server {
         let Self { app, clients, area, .. } = self;
         let Some(area) = *area else { return };
         app.resize(area);
-        for screen in clients.iter_mut().filter_map(|c| c.screen.as_mut()) {
-            let _ = screen.draw(|f| app.draw(f));
+        let picture = app.picture();
+        for client in clients.iter_mut() {
+            client.draw(app, picture, now);
         }
     }
 
@@ -622,8 +656,8 @@ impl Server {
         let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
         let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
         spawn_client_reader(id, reader, self.tx.clone());
-        let notify = Channel::Bell;
-        self.clients.push(Client { id, size: None, used: 0, notify, screen: None, out, writer, dropped: 0 });
+        let (notify, graphics) = (Channel::Bell, Graphics::default());
+        self.clients.push(Client { id, size: None, used: 0, notify, graphics, screen: None, out, writer, dropped: 0 });
     }
 
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
@@ -650,6 +684,8 @@ impl Server {
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
+        client.graphics = Graphics::new(id, Support::default(), background);
         self.touch(id);
         self.fit(Some(id));
         if !self.started {
@@ -1086,7 +1122,21 @@ mod tests {
             let (tx, rx) = mpsc::channel();
             let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
             let writer = thread::spawn(|| {});
-            (Client { id: 1, size: None, used: 0, notify: Channel::Bell, screen: None, out, writer, dropped: 0 }, rx)
+            let graphics = Graphics::default();
+            (
+                Client {
+                    id: 1,
+                    size: None,
+                    used: 0,
+                    notify: Channel::Bell,
+                    graphics,
+                    screen: None,
+                    out,
+                    writer,
+                    dropped: 0,
+                },
+                rx,
+            )
         }
 
         fn texts(rx: &Receiver<ServerMessage>) -> Vec<String> {

@@ -3,15 +3,23 @@ use std::fs;
 use std::io;
 use std::io::Read as _;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{self, AtomicU64};
 use std::time::SystemTime;
 
 use ignore::WalkBuilder;
 
+use crate::graphics::Picture;
+use crate::graphics::decode;
 use crate::syntax::{self, Segments};
 
 pub const MAX_ENTRIES: usize = 10_000;
 pub const MAX_BYTES: u64 = 8 << 20;
+pub const MAX_IMAGE_BYTES: u64 = 32 << 20;
 const BINARY_PROBE: usize = 8000;
+const SNIFF_BYTES: u64 = 64;
+
+static PICTURES: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -52,6 +60,8 @@ const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body {
     Text { lines: Vec<String>, styles: Option<Vec<Segments>> },
+    Image(Arc<Picture>),
+    Unreadable { format: &'static str, bytes: u64, reason: String },
     Binary,
     TooLarge(u64),
     Missing,
@@ -65,6 +75,10 @@ pub struct Content {
 }
 
 impl Content {
+    pub fn is_image(&self) -> bool {
+        matches!(self.body, Body::Image(_) | Body::Unreadable { .. })
+    }
+
     pub fn lines(&self) -> &[String] {
         match &self.body {
             Body::Text { lines, .. } => lines,
@@ -98,14 +112,18 @@ pub fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
     if !meta.is_file() {
         return plain(Body::Binary);
     }
-    if stamp.len > MAX_BYTES {
+    let limit = if stamp.len > MAX_BYTES && sniff(path).is_some() { MAX_IMAGE_BYTES } else { MAX_BYTES };
+    if stamp.len > limit {
         return plain(Body::TooLarge(stamp.len));
     }
-    let mut bytes = Vec::new();
-    if fs::File::open(path).and_then(|file| file.take(MAX_BYTES + 1).read_to_end(&mut bytes)).is_err() {
-        return plain(Body::Missing);
-    }
+    let Ok(bytes) = head(path, limit + 1) else { return plain(Body::Missing) };
     let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if size > limit {
+        return plain(Body::TooLarge(size));
+    }
+    if let Some(format) = decode::sniff(&bytes) {
+        return plain(image(format, &bytes));
+    }
     if size > MAX_BYTES {
         return plain(Body::TooLarge(size));
     }
@@ -117,6 +135,23 @@ pub fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
     let first = syntax::lines(&source).next().map_or("", |(_, line)| line);
     let language = syntax::language(path, first);
     Some(Read { content: content(language, Body::Text { lines, styles: None }), source: Some(source) })
+}
+
+fn head(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)?.take(limit).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+fn sniff(path: &Path) -> Option<&'static str> {
+    decode::sniff(&head(path, SNIFF_BYTES).ok()?)
+}
+
+fn image(format: &'static str, bytes: &[u8]) -> Body {
+    match decode::decode(bytes, PICTURES.fetch_add(1, atomic::Ordering::Relaxed)) {
+        Ok(picture) => Body::Image(Arc::new(picture)),
+        Err(reason) => Body::Unreadable { format, bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX), reason },
+    }
 }
 
 pub fn highlighted(read: Read) -> Option<Content> {
@@ -203,5 +238,69 @@ mod tests {
         let path = dir.path().join("null");
         std::os::unix::fs::symlink("/dev/null", &path).expect("link");
         assert_eq!(read(&path, None).expect("read").content.body, Body::Binary);
+    }
+
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = io::Cursor::new(Vec::new());
+        image::RgbaImage::new(width, height).write_to(&mut out, image::ImageFormat::Png).expect("encode a png");
+        out.into_inner()
+    }
+
+    fn picture(content: &Content) -> &Picture {
+        match &content.body {
+            Body::Image(picture) => picture,
+            body => panic!("not an image: {body:?}"),
+        }
+    }
+
+    #[test]
+    fn an_image_is_decoded_again_each_time_it_changes() {
+        let dir = TempDir::new();
+        let path = dir.path().join("logo");
+        fs::write(&path, png(4, 3)).expect("write");
+        let first = read(&path, None).expect("read").content;
+        assert_eq!((picture(&first).width, picture(&first).height), (4, 3));
+        assert!(first.lines().is_empty() && first.language.is_none());
+
+        fs::write(&path, png(6, 2)).expect("write again");
+        let second = read(&path, Some(first.stamp)).expect("read again").content;
+
+        assert_eq!((picture(&second).width, picture(&second).height), (6, 2));
+        assert_ne!(picture(&first).id, picture(&second).id);
+    }
+
+    #[test]
+    fn a_broken_image_says_why() {
+        let dir = TempDir::new();
+        let path = dir.path().join("broken.png");
+        let mut bytes = png(4, 3);
+        bytes.truncate(40);
+        fs::write(&path, &bytes).expect("write");
+
+        let body = read(&path, None).expect("read").content.body;
+
+        assert!(matches!(body, Body::Unreadable { bytes: 40, ref reason, .. } if !reason.is_empty()), "{body:?}");
+    }
+
+    #[test]
+    fn an_image_may_be_larger_than_a_text_file() {
+        let dir = TempDir::new();
+        let (photo, text) = (dir.path().join("photo.png"), dir.path().join("big.txt"));
+        let mut bytes = png(2, 2);
+        bytes.resize(usize::try_from(MAX_BYTES).expect("fits") + 1024, 0);
+        fs::write(&photo, &bytes).expect("write the image");
+        fs::write(&text, vec![b'a'; bytes.len()]).expect("write the text");
+
+        assert!(matches!(read(&photo, None).expect("read").content.body, Body::Image(_)));
+        assert!(matches!(read(&text, None).expect("read").content.body, Body::TooLarge(_)));
+    }
+
+    #[test]
+    fn an_svg_stays_text() {
+        let dir = TempDir::new();
+        let path = dir.path().join("icon.svg");
+        fs::write(&path, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n").expect("write");
+
+        assert_eq!(read(&path, None).expect("read").content.lines().len(), 1);
     }
 }

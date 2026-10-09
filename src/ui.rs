@@ -2283,7 +2283,7 @@ pub enum Overlay {
 }
 
 impl Overlay {
-    fn is_modal(&self) -> bool {
+    pub fn is_modal(&self) -> bool {
         !matches!(self, Self::Menu { .. } | Self::Search(_) | Self::Keys(_))
     }
 

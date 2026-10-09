@@ -18,6 +18,7 @@ use crate::context::{self, Context};
 use crate::error::{Error, Result};
 use crate::files;
 use crate::git;
+use crate::graphics::encode;
 use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
@@ -55,11 +56,13 @@ use crate::worktree;
 mod control;
 mod events;
 mod files_panel;
+mod images;
 mod shortcuts;
 mod todo_panel;
 mod trace;
 
 pub use events::Streamed;
+pub use images::{Placed, Sight, protocol_name};
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -166,6 +169,10 @@ pub enum AppEvent {
         request: u64,
         result: Result<Option<context::Said>>,
     },
+    Encoded {
+        key: encode::Key,
+        result: Result<Vec<u8>>,
+    },
 }
 
 impl AppEvent {
@@ -194,6 +201,7 @@ impl AppEvent {
             Self::Updated(_) => "updated",
             Self::Usage(..) => "usage",
             Self::LastMessage { .. } => "last message",
+            Self::Encoded { .. } => "image encoded",
         }
     }
 }
@@ -672,6 +680,7 @@ pub struct App {
     todos: Todos,
     todo: todo::Panel,
     files: files::Panel,
+    images: images::Payloads,
     requests: control::Requests,
     events: events::Events,
     seen: trace::Seen,
@@ -775,6 +784,7 @@ impl App {
             todos: Todos::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
+            images: images::Payloads::default(),
             requests: control::Requests::default(),
             events: events::Events::default(),
             seen: trace::Seen::default(),
@@ -1680,6 +1690,7 @@ impl App {
             AppEvent::Updated(result) => self.updated(result),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
+            AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Output(id, bytes) => {
                 for launch in self.launches.iter_mut().filter(|l| l.term == id) {
                     launch.output(Instant::now());
@@ -4386,7 +4397,7 @@ impl App {
         }
     }
 
-    pub fn draw(&mut self, f: &mut Frame) {
+    pub fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
         self.follow(f.area());
         if !self.drawn.compact() {
             self.nav = None;
@@ -4418,6 +4429,8 @@ impl App {
         };
         let area = f.area();
         let overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
+        let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
+        let (files, placed) = self.files_seen(sight, area, modal);
         let dim_inactive = self.config.dim_inactive_panes;
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
@@ -4478,12 +4491,13 @@ impl App {
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
             todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
-            files: if self.files_shown() { self.files_view() } else { None },
+            files,
             attention,
             drag,
             tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
         };
         ui::draw(f, &view);
+        placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }
 
     fn tab_entry(&self, t: &Tab) -> ui::TabEntry {
@@ -7953,7 +7967,7 @@ rm -f "$1/sessions/$$.json"
 
         fn rendered(app: &mut App, area: Rect) -> Terminal<TestBackend> {
             let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             t
         }
 
@@ -8848,7 +8862,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx) = app();
             open_menu(&mut app);
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             assert_eq!(app.nav, None);
         }
 
@@ -9599,7 +9613,7 @@ rm -f "$1/sessions/$$.json"
                 .map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
 
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
 
             assert_eq!(app.toast, None);
         }
@@ -10288,7 +10302,7 @@ rm -f "$1/sessions/$$.json"
             });
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
 
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
 
             let settings = areas().settings;
             assert_eq!(t.backend().buffer()[(settings.x + 2, settings.y)].fg, Color::Indexed(243));
@@ -10360,7 +10374,7 @@ rm -f "$1/sessions/$$.json"
 
         fn drawn_in(app: &mut App, area: Rect) {
             let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
         }
 
         fn on_top(tabs: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -10500,7 +10514,7 @@ rm -f "$1/sessions/$$.json"
 
         fn drawn(app: &mut App) {
             let mut t = Terminal::new(TestBackend::new(TALL.width, TALL.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
         }
 
         fn tree(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -12389,7 +12403,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         fn action_pos(app: &App, action: Action) -> Position {
-            panel::action(panel_area(app), action).as_position()
+            panel::action(panel_area(app), &file(app), action).as_position()
         }
 
         fn show(app: &mut App, rx: &Receiver<AppEvent>, path: &str) {
@@ -12709,7 +12723,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx) = showing(&repo, "open src/main.rs now");
             mouse(&mut app, MouseEventKind::Moved, cell(7, 0));
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             let lined = |col: u16| t.backend().buffer()[cell(col, 0)].modifier.contains(Modifier::UNDERLINED);
             assert_eq!([lined(4), lined(5), lined(15), lined(16)], [false, true, true, false]);
         }
