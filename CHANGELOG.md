@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.16
+
+- `cornercase status --panes` lists every pane on a line of its own, for scripts: the ids of the pane, its tab, workspace and project, what runs in it and what its agent is doing, the workspace's branch and the pane's folder, in columns separated by tabs under a header line. `--panes --json` gives the same rows as JSON, in one flat list. A script or an agent coordinating others no longer has to walk the tree of `status --json` to find a pane by its agent, status or branch. `status` and `status --json` stay as they were.
+- `cornercase status` no longer ends with a panic message when what reads its output stops early, as `head` does.
+
 ## 0.12.15
 
 - A click outside a dialog now closes it, as its cancel button would: settings, issues, usage, the folder picker, the update and restart dialogs, confirmations and forms, like right-click menus and the search already did. A dialog that is busy, such as one creating a worktree or installing an update, stays open until it is done.
