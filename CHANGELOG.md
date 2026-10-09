@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.16
+
+- `cornercase send` no longer answers Claude Code's feedback survey. While Claude Code shows `How is Claude doing this session? (optional)` with `1: Bad  2: Fine  3: Good  0: Dismiss` above its input box, a digit sent alone, such as `send --enter 2` answering an agent's numbered question, rated the session instead and the prompt was lost. `send` now refuses while the survey shows and says how to dismiss it, `cornercase keys --pane N 0`; `--force` sends anyway. `cornercase status` marks such a pane `(survey open)` (`survey` in `--json`).
+
 ## 0.12.15
 
 - A click outside a dialog now closes it, as its cancel button would: settings, issues, usage, the folder picker, the update and restart dialogs, confirmations and forms, like right-click menus and the search already did. A dialog that is busy, such as one creating a worktree or installing an update, stays open until it is done.
