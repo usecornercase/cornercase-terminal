@@ -831,6 +831,7 @@ impl App {
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
             dialog: term.dialog(),
+            survey: term.survey(),
             at_prompt: Some(term.shell_in_foreground()),
             model: context.map(|c| c.model.clone()),
             context: context.and_then(|c| c.percent),
@@ -1088,6 +1089,13 @@ impl App {
                 "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
                  what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
                  closed, or with --force"
+            ));
+        }
+        if !send.force && term.survey() {
+            return Err(format!(
+                "the agent in pane {pane} shows Claude Code's feedback survey above its input box (`1: Bad  2: Fine  \
+                 3: Good  0: Dismiss`), and a digit sent alone would answer it; dismiss it with `cornercase keys \
+                 --pane {pane} 0` and send again, or send with --force"
             ));
         }
         let confirm = (send.enter && self.watched_agent(term).is_ok()).then(SystemTime::now);

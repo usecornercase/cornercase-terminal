@@ -12967,6 +12967,10 @@ state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "
 state idle
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
   case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
+  case "$line" in *survey*)
+    printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
+    printf '────────────\n❯ '; IFS= read -r line; [ "$line" = 0 ] && continue ;;
+  esac
   printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy
   while [ ! -e "$d/finish" ]; do sleep 0.02; done
@@ -13759,11 +13763,11 @@ rm -f "$s"
                 assert_eq!(ended.ended.as_deref(), Some("done"));
             }
 
-            fn dialog_in_status(app: &mut App, id: u64) -> bool {
+            fn in_status(app: &mut App, id: u64) -> wire::PaneInfo {
                 let report: Report =
                     serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
                 let mut tabs = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
-                tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").dialog
+                tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").clone()
             }
 
             #[test]
@@ -13774,7 +13778,7 @@ rm -f "$s"
                 done(now(&mut agent.app, None, press_keys(id, &["p", "a", "n", "e", "l", "enter"])));
                 agent.until("the panel shows", |a| pane_screen(a, id).contains("Shell details"));
 
-                let shown = dialog_in_status(&mut agent.app, id);
+                let shown = in_status(&mut agent.app, id).dialog;
                 let refused = error(now(&mut agent.app, None, send_text(id, "next step", true, false)));
                 agent.app.confirm_within = Duration::from_millis(300);
                 let forced = wire::SendText {
@@ -13788,12 +13792,32 @@ rm -f "$s"
                 let unconfirmed = error(agent.answered("the confirmation gives up"));
                 agent.until("the panel closes", |a| pane_screen(a, id).contains('❯'));
 
-                assert_eq!((shown, dialog_in_status(&mut agent.app, id)), (true, false));
+                assert_eq!((shown, in_status(&mut agent.app, id).dialog), (true, false));
                 assert!(refused.contains("shows a dialog, a panel or its shell mode"), "{refused}");
                 assert!(
                     unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"),
                     "{unconfirmed}"
                 );
+            }
+
+            #[test]
+            fn send_refuses_an_agent_showing_the_survey_until_keys_dismiss_it() {
+                let mut agent = Agent::new();
+                let id = agent.start(None);
+                agent.until("its input box is seen", |a| pane(a, id).input_seen.is_some());
+                done(now(&mut agent.app, None, press_keys(id, &["s", "u", "r", "v", "e", "y", "enter"])));
+                agent.until("the survey shows", |a| pane_screen(a, id).contains("0: Dismiss"));
+
+                let shown = in_status(&mut agent.app, id);
+                let refused = error(now(&mut agent.app, None, send_text(id, "2", true, false)));
+                done(now(&mut agent.app, None, press_keys(id, &["0", "enter"])));
+                agent.until("the survey goes", |a| !pane_screen(a, id).contains("0: Dismiss"));
+                let gone = in_status(&mut agent.app, id);
+                ask(&mut agent.app, None, send_text(id, "2", true, false));
+                done(agent.answered("the agent records the prompt"));
+
+                assert_eq!([(shown.survey, shown.dialog), (gone.survey, gone.dialog)], [(true, false), (false, false)]);
+                assert!(refused.contains(&format!("dismiss it with `cornercase keys --pane {id} 0`")), "{refused}");
             }
 
             #[test]

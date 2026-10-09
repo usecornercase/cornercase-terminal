@@ -609,6 +609,7 @@ pub struct PaneInfo {
     pub status: Option<String>,
     pub background_shell: bool,
     pub dialog: bool,
+    pub survey: bool,
     pub at_prompt: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,

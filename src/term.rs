@@ -198,9 +198,16 @@ impl Term {
     }
 
     pub fn dialog(&self) -> bool {
-        let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return false };
-        self.foreground_pid() == Some(seen)
-            && agents::input_box(agent, &self.emulator.screen_text().unwrap_or_default()) == Some(false)
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::input_box(agent, &screen) == Some(false))
+    }
+
+    pub fn survey(&self) -> bool {
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::survey(agent, &screen))
+    }
+
+    fn seen_agent_screen(&self) -> Option<(&str, String)> {
+        let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return None };
+        (self.foreground_pid() == Some(seen)).then(|| (agent, self.emulator.screen_text().unwrap_or_default()))
     }
 
     pub fn foreground_args(&self) -> Vec<String> {
