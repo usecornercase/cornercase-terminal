@@ -58,6 +58,8 @@ impl Graphics {
 
     pub fn update(&mut self, support: Support) {
         self.support = support;
+        self.hold = None;
+        self.waiting = false;
         self.damaged();
     }
 
@@ -106,8 +108,7 @@ impl Graphics {
     }
 
     pub fn wake(&self, now: Instant) -> Option<Duration> {
-        let until = self.hold.filter(|_| self.waiting)?;
-        Some(until.saturating_duration_since(now))
+        self.hold.filter(|_| self.waiting)?.checked_duration_since(now)
     }
 
     pub fn after(&mut self, picture: Option<u64>, placed: Option<&Placed>, now: Instant) -> Vec<u8> {
@@ -322,6 +323,22 @@ mod tests {
             assert_eq!(graphics.wake(now), Some(AFTER_RESET));
             assert_eq!(graphics.after(Some(7), Some(&first), now + AFTER_RESET), b"wrapped");
             assert_eq!(graphics.wake(now + AFTER_RESET), None);
+        }
+
+        #[test]
+        fn a_send_held_back_never_wakes_the_server_once_its_time_has_passed() {
+            let mut graphics = Graphics::new(1, support(Protocol::Kitty, Tmux::Wrap), None);
+            let now = Instant::now();
+            graphics.reset(now);
+            graphics.after(Some(7), Some(&placed(&graphics, 7, FIT, Some(b"wrapped"))), now);
+
+            graphics.update(support(Protocol::Iterm, Tmux::None));
+
+            assert_eq!(graphics.wake(now), None, "nothing is held back for a terminal that changed");
+            graphics.update(support(Protocol::Kitty, Tmux::Wrap));
+            graphics.reset(now);
+            graphics.after(Some(7), Some(&placed(&graphics, 7, FIT, Some(b"wrapped"))), now);
+            assert_eq!(graphics.wake(now + AFTER_RESET * 2), None, "a past deadline is no reason to wake");
         }
     }
 
