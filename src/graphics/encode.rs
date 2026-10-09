@@ -62,9 +62,19 @@ pub struct Key {
 pub fn encode(picture: &Picture, key: &Key) -> Vec<u8> {
     match key.protocol {
         Protocol::Kitty => join(&kitty::image(picture, key), key.tmux),
-        Protocol::Iterm => within(key.tmux == Tmux::Wrap, |scale| join(&[iterm::image(picture, key, scale)], key.tmux)),
+        Protocol::Iterm => {
+            let build = |scale| join(&[iterm::image(picture, key, scale)], key.tmux);
+            let out = build(1.0);
+            if key.tmux == Tmux::Wrap { within(out, build) } else { out }
+        }
         Protocol::Sixel { registers, .. } => {
-            within(true, |scale| join(&[sixel::image(picture, key, registers, scale)], key.tmux))
+            let build = |colours, scale| join(&[sixel::image(picture, key, colours, scale)], key.tmux);
+            let most = sixel::colours(registers);
+            let out = build(most, 1.0);
+            if out.len() <= BUDGET || most <= sixel::FEWEST {
+                return within(out, |scale| build(most, scale));
+            }
+            within(build(sixel::FEWEST, 1.0), |scale| build(sixel::FEWEST, scale))
         }
     }
 }
@@ -76,14 +86,14 @@ fn join(sequences: &[Vec<u8>], tmux: Tmux) -> Vec<u8> {
     }
 }
 
-fn within(bounded: bool, build: impl Fn(f64) -> Vec<u8>) -> Vec<u8> {
+fn within(first: Vec<u8>, build: impl Fn(f64) -> Vec<u8>) -> Vec<u8> {
     let mut scale = 1.0;
-    let mut out = build(scale);
+    let mut out = first;
     for _ in 0..3 {
-        if !bounded || out.is_empty() || out.len() <= BUDGET {
+        if out.is_empty() || out.len() <= BUDGET {
             break;
         }
-        scale *= (share(BUDGET, out.len())).sqrt() * 0.9;
+        scale *= share(BUDGET, out.len()).sqrt() * 0.9;
         out = build(scale);
     }
     out
@@ -395,32 +405,33 @@ pub mod tests {
 
         #[test]
         fn shrinks_a_payload_until_tmux_takes_it() {
-            let sizes = std::cell::RefCell::new(Vec::new());
-
-            let out = within(true, |scale| {
-                sizes.borrow_mut().push(scale);
+            let scales = std::cell::RefCell::new(Vec::new());
+            let build = |scale: f64| {
+                scales.borrow_mut().push(scale);
                 vec![0; usize::try_from(round(3_000_000.0 * scale * scale)).expect("a size")]
-            });
+            };
+
+            let out = within(build(1.0), build);
 
             assert!(out.len() <= BUDGET, "{}", out.len());
-            assert_eq!(sizes.borrow().len(), 2);
+            assert_eq!(scales.borrow().len(), 2);
         }
 
         #[test]
-        fn leaves_a_payload_alone_when_nothing_bounds_it() {
-            assert_eq!(within(false, |_| vec![0; 3_000_000]).len(), 3_000_000);
+        fn leaves_a_payload_that_fits_alone() {
+            assert_eq!(within(vec![0; BUDGET], |_| Vec::new()).len(), BUDGET);
         }
 
         #[test]
         fn gives_up_after_a_few_tries() {
             let tries = std::cell::Cell::new(0);
 
-            let out = within(true, |_| {
+            let out = within(vec![0; BUDGET + 1], |_| {
                 tries.set(tries.get() + 1);
                 vec![0; BUDGET + 1]
             });
 
-            assert_eq!((out.len(), tries.get()), (BUDGET + 1, 4));
+            assert_eq!((out.len(), tries.get()), (BUDGET + 1, 3));
         }
     }
 

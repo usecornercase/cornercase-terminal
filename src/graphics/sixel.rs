@@ -5,16 +5,17 @@ use super::Picture;
 use super::encode::{Key, flatten, round, sized};
 
 pub const COLOURS: u16 = 256;
+pub const FEWEST: u16 = 64;
 pub const DIFFUSION: f32 = 0.875;
 
-pub fn image(picture: &Picture, key: &Key, registers: u16, scale: f64) -> Vec<u8> {
+pub fn image(picture: &Picture, key: &Key, colours: u16, scale: f64) -> Vec<u8> {
     let fit = key.fit;
     let side = |pixels: u32| round(f64::from(pixels) * scale).max(1);
     let mut image = sized(picture, side(fit.width), side(fit.height)).into_owned();
     if let Some(background) = key.background {
         flatten(&mut image, background);
     }
-    encode(image, colours(registers))
+    encode(image, colours)
 }
 
 pub fn colours(registers: u16) -> u16 {
@@ -39,7 +40,7 @@ mod tests {
     use image::Rgba;
     use rstest::rstest;
 
-    use super::super::encode::tests::{CLEAR, RED, SIXEL, cell, key, photo, picture};
+    use super::super::encode::tests::{CLEAR, RED, SIXEL, cell, key, noise, photo, picture};
     use super::super::encode::{BUDGET, Fit, Key, encode, fit};
     use super::super::{Protocol, Tmux};
     use super::*;
@@ -126,21 +127,44 @@ mod tests {
 
         let out = encode(&picture, &key(protocol, exact(64, 64), Some((0, 0, 0))));
 
-        let text = std::str::from_utf8(&out).expect("ASCII");
-        let defined = text.split('#').filter(|colour| colour.split(';').nth(1) == Some("2")).count();
+        let defined = palette(&out);
         assert_eq!(colours(registers), u16::try_from(most).expect("small"));
         assert!(defined <= most && defined > 1, "{defined}");
     }
 
+    fn palette(sixel: &[u8]) -> usize {
+        let text = std::str::from_utf8(sixel).expect("ASCII");
+        text.split('#').filter(|colour| colour.split(';').nth(1) == Some("2")).count()
+    }
+
+    fn raster(sixel: &[u8]) -> &str {
+        let text = std::str::from_utf8(sixel).expect("ASCII");
+        text.split_once('"').and_then(|(_, rest)| rest.split('#').next()).expect("raster attributes")
+    }
+
     #[test]
-    fn shrinks_a_picture_too_heavy_for_one_write() {
+    fn spends_fewer_colours_before_fewer_pixels() {
         let picture = picture(photo(1000, 1000), "PNG");
         let fit = fit(1000, 1000, Some(cell(10, 20)), (100, 50), SIXEL).expect("room");
 
         let out = encode(&picture, &key(SIXEL, fit, Some((0, 0, 0))));
 
+        assert!(image(&picture, &key(SIXEL, fit, Some((0, 0, 0))), COLOURS, 1.0).len() > BUDGET);
         assert!(out.len() <= BUDGET, "{}", out.len());
-        assert!(shown(&out).width() >= 500, "{}", shown(&out).width());
+        assert_eq!(raster(&out), "1;1;1000;1000");
+        assert!(palette(&out) <= usize::from(FEWEST));
+    }
+
+    #[test]
+    fn shrinks_a_picture_too_heavy_even_in_few_colours() {
+        let picture = picture(noise(700, 700), "PNG");
+        let fit = fit(700, 700, Some(cell(10, 20)), (100, 50), SIXEL).expect("room");
+
+        let out = encode(&picture, &key(SIXEL, fit, Some((0, 0, 0))));
+
+        assert!(out.len() <= BUDGET, "{}", out.len());
+        let width: u32 = raster(&out).split(';').nth(2).and_then(|width| width.parse().ok()).expect("a width");
+        assert!((200..700).contains(&width), "{width}");
     }
 
     #[test]
