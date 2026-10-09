@@ -58,7 +58,7 @@ src/cli.rs        clap definitions of every command; the commands for scripts an
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
 src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; `kill-server`, `restart` and `update`
 src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
-src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client
+src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
 src/state.rs      the saved session as JSON, migrations, and the Saver that writes it (or todos.json) once it settles
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
@@ -82,6 +82,7 @@ src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
+src/graphics/     images in the files panel: mod.rs (Support, Missing, Picture), detect.rs (which protocol a client's terminal shows), decode.rs, encode.rs (fit, payloads), kitty.rs, iterm.rs, sixel.rs, tmux.rs (passthrough)
 src/files/        files panel: mod.rs (open folders, viewer, search bar and mode, jobs, tree marks and margin marks from the changes diff), disk.rs (one folder's listing with `ignore`, reading a file), search.rs (the workspace's file index, fuzzy names with nucleo, text with ripgrep's searcher), link.rs (the path under a pane click and where it points)
 src/syntax.rs     tree-sitter highlighting through arborium: which grammar a file gets, captures -> palette colours
 src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps)
@@ -91,7 +92,7 @@ src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailin
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
-src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/events.rs keeps who follows `cornercase events`; app/shortcuts.rs runs the keys menu's actions; app/trace.rs finds what changed after each step, for the log and for events
+src/app.rs        App state; turns AppEvents into actions; builds the View; app/todo_panel.rs wires the TODO panel, app/files_panel.rs the files panel; app/control.rs answers the commands for scripts and keeps their waits; app/events.rs keeps who follows `cornercase events`; app/shortcuts.rs runs the keys menu's actions; app/trace.rs finds what changed after each step, for the log and for events; app/images.rs places the image per client and runs the encode jobs
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
 src/ui.rs         layout, hit testing and drawing from a plain View (no PTYs); ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/keys.rs the keys menu
