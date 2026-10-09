@@ -1556,6 +1556,12 @@ export class App {
     this.dirty();
   }
 
+  dismissDialog(): void {
+    const o = this.overlay;
+    if (!o || (o.kind === 'newWorkspace' && o.creating) || ('busy' in o && o.busy)) return;
+    this.closeOverlay();
+  }
+
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });

@@ -939,6 +939,12 @@ export class Painter {
     this.region({ r: rect(0, 0, app.cols, app.rows), click: close ? () => app.closeOverlay() : () => {}, right: close ? () => app.closeOverlay() : () => {} });
   }
 
+  private dialogBackdrop(r: Rect): void {
+    const app = this.app;
+    this.region({ r: rect(0, 0, app.cols, app.rows), click: () => app.dismissDialog(), right: () => {} });
+    this.region({ r, click: () => {}, right: () => {} });
+  }
+
   private overlay(areas: Areas): void {
     const o = this.app.overlay;
     if (!o) return;
@@ -1028,7 +1034,7 @@ export class Painter {
     const o = app.overlay;
     if (!o || (o.kind !== 'newWorkspace' && o.kind !== 'rename' && o.kind !== 'newGroup')) return;
     const r = formArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     const title = o.kind === 'rename' ? app.renameTitle(o.target) : o.kind === 'newGroup' ? 'New group' : 'New workspace';
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
@@ -1055,7 +1061,7 @@ export class Painter {
     const group = app.group(id);
     if (!group) return;
     const { cols, rows } = app;
-    this.backdrop(false);
+    this.dialogBackdrop(formArea(cols, rows));
     this.box(formArea(cols, rows), group.name);
     const [iconLabel, colourLabel, last] = styleLabels(cols, rows);
     this.span(iconLabel.x, iconLabel.y, 'icon', DARK, iconLabel.w);
@@ -1104,7 +1110,7 @@ export class Painter {
       }
     }
     const r = usageArea(app.cols, app.rows, lines.length);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, 'Usage');
     const c = inner(r);
     lines.slice(0, Math.max(0, c.h - 1)).forEach((line, i) => this.line(rect(c.x, c.y + i, c.w, 1), line));
@@ -1114,7 +1120,7 @@ export class Painter {
   private confirm({ title, message, submit, note }: ConfirmView): void {
     const app = this.app;
     const r = formArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, title);
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     const rows = wrapAll([[seg(message)]], c.w);
@@ -1126,7 +1132,7 @@ export class Painter {
   private restart(scroll: number): void {
     const app = this.app;
     const r = pickerArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, RESTART_TITLE);
     const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
     markdown(RESTART_MESSAGE, c.w)
@@ -1145,7 +1151,7 @@ export class Painter {
     const o = app.overlay;
     if (!o || o.kind !== 'picker') return;
     const r = pickerArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, o.group === undefined ? 'Open project' : 'Add project');
     const c = rect(r.x + 2, r.y + 1, r.w - 4, r.h - 2);
     const path = app.pickerPath(o);
@@ -1189,7 +1195,7 @@ export class Painter {
   private settings(o: SettingsOverlay): void {
     const app = this.app;
     const r = issuesArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, 'Settings');
     const c = inner(r);
     const tabsRow = rect(c.x, c.y, c.w, 1);
@@ -1255,7 +1261,7 @@ export class Painter {
   private issues(o: IssuesOverlay): void {
     const app = this.app;
     const r = issuesArea(app.cols, app.rows);
-    this.backdrop(false);
+    this.dialogBackdrop(r);
     this.box(r, `Issues · ${app.issuesProjectName(o)}`);
     const c = inner(r);
     const tabsRow = rect(c.x, c.y, c.w, 1);

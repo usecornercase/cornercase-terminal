@@ -2285,6 +2285,17 @@ impl Overlay {
     fn is_modal(&self) -> bool {
         !matches!(self, Self::Menu { .. } | Self::Search(_) | Self::Keys(_))
     }
+
+    pub fn area(&self, area: Rect) -> Option<Rect> {
+        match self {
+            Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
+            Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
+            Self::Usage(usage) => Some(usage_area(area, usage)),
+            Self::Issues(_) => Some(issues_area(area)),
+            Self::Settings(_) => Some(settings_area(area)),
+            Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
+        }
+    }
 }
 
 pub struct Entry {
@@ -4395,6 +4406,13 @@ mod tests {
 
     fn tabs(counts: &[usize]) -> TabLines {
         TabLines::from(counts.iter().map(|&n| vec![Details::default().lines(); n]).collect::<Vec<_>>())
+    }
+
+    fn corners_of_its_area(view: &View) -> (String, String) {
+        let r = view.overlay.as_ref().and_then(|o| o.area(AREA)).expect("a dialog");
+        let t = render(view);
+        let cell = |x, y| t.backend().buffer()[(x, y)].symbol().to_string();
+        (cell(r.x, r.y), cell(r.right() - 1, r.bottom() - 1))
     }
 
     fn render(view: &View) -> Terminal<TestBackend> {
@@ -6678,6 +6696,13 @@ mod tests {
         }
 
         #[test]
+        fn a_form_and_the_usage_are_drawn_where_their_area_says() {
+            let form = corners_of_its_area(&with(Overlay::Form(new_workspace_form(true))));
+            let usage = corners_of_its_area(&with(Overlay::Usage(usage())));
+            assert_eq!((form, usage), ((String::from("╭"), String::from("╯")), (String::from("╭"), String::from("╯"))));
+        }
+
+        #[test]
         fn renders_the_worktree_toggle() {
             insta::assert_snapshot!(render(&with(Overlay::Form(new_workspace_form(true)))).backend());
         }
@@ -7253,6 +7278,11 @@ mod tests {
             View { overlay: Some(Overlay::Picker(picker)), ..view(&["cornercase"]) }
         }
 
+        #[test]
+        fn is_drawn_where_its_area_says() {
+            assert_eq!(corners_of_its_area(&with(picker(None))), (String::from("╭"), String::from("╯")));
+        }
+
         fn item(i: usize) -> Position {
             picker_item(picker_area(AREA), 3, 0, i).as_position()
         }
@@ -7360,6 +7390,11 @@ mod tests {
 
         fn with(settings: Settings) -> View<'static> {
             View { overlay: Some(Overlay::Settings(settings)), ..view(&["shop"]) }
+        }
+
+        #[test]
+        fn are_drawn_where_their_area_says() {
+            assert_eq!(corners_of_its_area(&with(settings(0))), (String::from("╭"), String::from("╯")));
         }
 
         fn sections() -> Vec<&'static str> {
@@ -7521,6 +7556,11 @@ mod tests {
 
         fn with(issues: Issues) -> View<'static> {
             View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) }
+        }
+
+        #[test]
+        fn are_drawn_where_their_area_says() {
+            assert_eq!(corners_of_its_area(&with(issues(list(None)))), (String::from("╭"), String::from("╯")));
         }
 
         fn item(i: usize) -> Position {
