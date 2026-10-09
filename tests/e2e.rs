@@ -1981,7 +1981,7 @@ fn showing_an_image(reply: &[u8], name: &str) -> Harness {
     app.wait_for("the name is printed", |s| s.contains("logo.png"));
     let at = app.position_of("logo.png");
     app.click(at);
-    app.wait_for("the image opens", |s| s.contains("  PNG "));
+    app.wait_for("the image opens", |s| s.contains("400×200"));
     app
 }
 

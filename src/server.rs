@@ -1350,7 +1350,7 @@ mod tests {
         fn open_the_image(client: &mut Client) {
             client.type_line("echo lo\"\"go.png");
             client.click_on("logo.png");
-            client.shows("PNG ");
+            client.shows("400×200");
         }
 
         fn settings() -> Position {
@@ -1399,7 +1399,7 @@ mod tests {
                 open_the_image(client);
                 client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
 
-                blind.shows("PNG ");
+                blind.shows("400×200");
                 blind.until("the window says why", |c| !c.text().contains("reading"));
                 assert_eq!((blind.count(KITTY), blind.count(ITERM)), (0, 0));
             });

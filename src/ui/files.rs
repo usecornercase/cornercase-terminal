@@ -564,7 +564,7 @@ fn summary(file: &FileView) -> Vec<String> {
         Body::Image(picture) => {
             let (format, size) = (picture.format.to_uppercase(), size(picture.bytes));
             let pixels = format!("{}×{}", picture.width, picture.height);
-            return vec![format!("{format} · {pixels} · {size}"), format!("{format} · {pixels}"), format];
+            return vec![format!("{format} · {pixels} · {size}"), format!("{format} · {pixels}"), pixels];
         }
         Body::Unreadable { format, bytes, .. } => {
             let format = format.to_uppercase();
