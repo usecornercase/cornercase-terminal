@@ -59,7 +59,11 @@ export function parseAnsi(text: string, cols?: number, rows?: number): Grid {
       }
       const ch = String.fromCodePoint(line.codePointAt(i) ?? 32);
       i += ch.length;
-      if (MARK.test(ch)) continue;
+      if (MARK.test(ch)) {
+        const prev = grid.at(x - 1, y);
+        if (prev) prev.ch += ch;
+        continue;
+      }
       const cell = grid.at(x, y);
       if (cell) {
         cell.ch = ch;

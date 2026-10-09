@@ -80,7 +80,7 @@ export function paint(grid: Grid, m: Metrics): Op[] {
       }
       if (!ascii(cell.ch)) {
         flushText();
-        if (cell.ch.trim() && cell.ch !== IMAGE_CELL) {
+        if (cell.ch.trim() && !cell.ch.startsWith(IMAGE_CELL)) {
           texts.push({ k: 'text', x, y, text: cell.ch, fill, bold, italic, alpha, cells: 1, single: true });
         }
         continue;

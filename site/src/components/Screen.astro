@@ -20,7 +20,7 @@ if (!source) throw new Error(`unknown screen: ${name}`);
 const full = parseAnsi(source);
 const grid = crop ? full.crop(rect(...crop)) : full;
 if (image) {
-  const cells = grid.cells.flatMap((c, i) => (c.ch === IMAGE_CELL ? [{ x: i % grid.cols, y: Math.floor(i / grid.cols) }] : []));
+  const cells = grid.cells.flatMap((c, i) => (c.ch.startsWith(IMAGE_CELL) ? [{ x: i % grid.cols, y: Math.floor(i / grid.cols) }] : []));
   if (!cells.length) throw new Error(`screen ${name} shows no image cells`);
   const x = Math.min(...cells.map((c) => c.x));
   const y = Math.min(...cells.map((c) => c.y));

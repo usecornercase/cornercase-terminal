@@ -170,7 +170,7 @@ export class Grid {
     for (let y = image.r.y; y < image.r.y + image.r.h; y++) {
       let start = -1;
       for (let x = image.r.x; x <= image.r.x + image.r.w; x++) {
-        const shown = x < image.r.x + image.r.w && this.at(x, y)?.ch === IMAGE_CELL;
+        const shown = x < image.r.x + image.r.w && this.at(x, y)?.ch.startsWith(IMAGE_CELL);
         if (shown && start < 0) start = x;
         if (!shown && start >= 0) {
           runs.push(rect(start, y, x - start, 1));
