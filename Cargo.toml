@@ -89,3 +89,30 @@ opt-level = 3
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
+[profile.dev.package.image-webp]
+opt-level = 3
+
+[profile.dev.package.gif]
+opt-level = 3
+
+[profile.dev.package.icy_sixel]
+opt-level = 3
+
+[profile.dev.package.quantette]
+opt-level = 3
+
+[profile.dev.package.palette]
+opt-level = 3
