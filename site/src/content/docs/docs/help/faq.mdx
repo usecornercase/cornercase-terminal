@@ -59,7 +59,7 @@ Each one ran in a 160×48 pseudo-terminal driven by a script that answers the qu
 
 ### How is it different from Orca, Warp or Conductor?
 
-Orca and Warp are desktop applications that build an IDE around their terminals, with an editor, a file tree and review tools; Conductor is a desktop app for macOS. cornercase is a terminal multiplexer: it runs inside the terminal you already use, on your machine or on any server you reach over SSH, and gives every agent a worktree, a tab, a status, its diff and its files, all one click away. It shows files but doesn't edit them or preview pages; your editor and your browser do that.
+Orca and Warp are desktop applications that build an IDE around their terminals, with an editor, a file tree and review tools; Conductor is a desktop app for macOS. cornercase is a terminal multiplexer: it runs inside the terminal you already use, on your machine or on any server you reach over SSH, and gives every agent a worktree, a tab, a status, its diff and its files, all one click away. It shows files, images included, but doesn't edit them or preview pages; your editor and your browser do that.
 
 It is also much lighter: it opens in 34 ms and uses about 50 MB, where the desktop apps we measured take 0.45 to 8.5 seconds and 0.4 to 1.9 GB (see [Is it fast?](#is-it-fast)). Like Orca, it keeps your agents running when you close it; Warp stops them.
 
@@ -92,6 +92,10 @@ In `secrets.json` next to your `config.json`, readable only by you, or in the `S
 Yes. cornercase asks your terminal for its colours when it starts and draws its interface with palette colours, so it follows light and dark themes. The programs in your panes get the same colours.
 
 The exceptions are greys. Grey text, such as titles, the buttons at the bottom and the tree's arrows, uses your theme's *bright black* unless that colour is too close to the background, as in Solarized Dark, or your terminal does not say what it is, as Warp does not. Then cornercase uses a fixed grey that shows on any dark or light background. Borders, separators and tree lines always use a fixed grey a step quieter than the text, so they stay in the background.
+
+### Can it show images?
+
+Yes, in the [files panel](../../guides/files/#images): click a PNG, JPEG, GIF, WebP, BMP or ICO file and your terminal draws it, in Ghostty, kitty, iTerm2, WezTerm, foot, Konsole and [others](../../guides/files/#which-terminals-show-them), also over SSH and inside tmux. Pictures that programs in your panes draw, such as `kitten icat`, don't show; see [Known limitations](../limitations/).
 
 ### Which platforms does it run on?
 

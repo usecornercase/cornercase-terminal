@@ -543,7 +543,7 @@ function drawFound(p: Painter, f: Panel, rows: Found[]): void {
 }
 
 function size(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${bytes} bytes`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
@@ -560,10 +560,10 @@ function fitImage(width: number, height: number, cols: number, rows: number): { 
 }
 
 function drawPicture(p: Painter, f: Panel, pic: Picture): void {
-  const { app, inner, body } = f;
+  const { app, body } = f;
   if (app.overlay && isModal(app.overlay)) return;
   const rows = bottom(body) >= app.rows ? body.h - 1 : body.h;
-  const room = rect(inner.x + 1, body.y, inner.w - 2, rows);
+  const room = rect(body.x + 1, body.y, body.w - 2, rows);
   const cells = fitImage(pic.width, pic.height, room.w, room.h);
   if (!cells) return;
   const r = rect(room.x + Math.floor((room.w - cells.cols) / 2), room.y, cells.cols, cells.rows);
