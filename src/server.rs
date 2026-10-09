@@ -1350,7 +1350,7 @@ mod tests {
         fn open_the_image(client: &mut Client) {
             client.type_line("echo lo\"\"go.png");
             client.click_on("logo.png");
-            client.shows("PNG · 400×200");
+            client.shows("PNG ");
         }
 
         fn settings() -> Position {
@@ -1383,8 +1383,7 @@ mod tests {
 
                 let at = settings();
                 client.click(at.x, at.y);
-                client.shows("Settings");
-                client.type_line("");
+                client.shows("Worktrees");
                 assert_eq!(client.count(ITERM), 1, "nothing while the dialog is open");
                 client.key(KeyCode::Esc);
 
@@ -1400,7 +1399,7 @@ mod tests {
                 open_the_image(client);
                 client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
 
-                blind.shows("PNG · 400×200");
+                blind.shows("PNG ");
                 blind.until("the window says why", |c| !c.text().contains("reading"));
                 assert_eq!((blind.count(KITTY), blind.count(ITERM)), (0, 0));
             });

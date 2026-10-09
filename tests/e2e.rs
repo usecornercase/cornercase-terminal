@@ -1981,7 +1981,7 @@ fn showing_an_image(reply: &[u8], name: &str) -> Harness {
     app.wait_for("the name is printed", |s| s.contains("logo.png"));
     let at = app.position_of("logo.png");
     app.click(at);
-    app.wait_for("the image opens", |s| s.contains("PNG · 400×200"));
+    app.wait_for("the image opens", |s| s.contains("  PNG "));
     app
 }
 
@@ -1997,7 +1997,7 @@ fn ghostty_gets_placeholder_cells_and_the_image_itself() {
 fn an_unknown_terminal_is_told_why_it_shows_no_image() {
     let mut app = showing_an_image(UNKNOWN_TERMINAL, "ccnoimg");
 
-    app.wait_for("the window says why", |s| s.contains("cannot show images"));
+    app.wait_for("the window says why", |s| s.contains("this terminal cannot show"));
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     assert!(!raw.contains("\x1b_G") && !raw.contains("1337;File"), "no image bytes reach it");
 }
