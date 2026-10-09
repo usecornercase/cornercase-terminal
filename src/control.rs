@@ -590,6 +590,7 @@ impl Report {
                         worktree: workspace.worktree,
                         project_name: project.name.clone(),
                         path: pane.path.clone(),
+                        survey: pane.survey,
                     }));
                 }
             }
@@ -629,10 +630,11 @@ pub struct PaneRow {
     pub worktree: bool,
     pub project_name: String,
     pub path: Option<PathBuf>,
+    pub survey: bool,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 21] = [
+    pub const COLUMNS: [&str; 22] = [
         "pane",
         "tab",
         "workspace",
@@ -654,6 +656,7 @@ impl PaneRow {
         "worktree",
         "project_name",
         "path",
+        "survey",
     ];
 }
 
@@ -724,6 +727,7 @@ pub struct PaneInfo {
     pub status: Option<String>,
     pub background_shell: bool,
     pub dialog: bool,
+    pub survey: bool,
     pub at_prompt: Option<bool>,
     pub model: Option<String>,
     pub context: Option<u16>,
@@ -957,6 +961,14 @@ mod tests {
             .collect();
         assert_eq!(keys, PaneRow::COLUMNS.len());
         assert!(at.is_sorted(), "{text}");
+    }
+
+    #[test]
+    fn new_columns_of_a_pane_row_go_after_the_released_ones() {
+        let released = "pane tab workspace project program agent status background_shell dialog at_prompt model \
+                        context caller shown active tab_name workspace_name branch worktree project_name path";
+
+        assert!(PaneRow::COLUMNS.join(" ").starts_with(released), "{:?}", PaneRow::COLUMNS);
     }
 
     #[test]

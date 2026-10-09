@@ -43,13 +43,15 @@ is a Claude Code agent whose turn is over while a shell it started in the backgr
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
 `(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
 input box, which `cornercase send` refuses (`dialog` in the JSON).
+`(survey open)` is Claude Code's feedback survey above its input box, which `cornercase send`
+refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
 pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
-shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name
-and path; new ones only ever go at the end. Values are as in the JSON (true or false, context as a
+shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
+path and survey (Claude Code's feedback survey shows); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
 number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.
@@ -93,7 +95,9 @@ const SEND_HELP: &str = "The text goes in as one paste, bracketed when the progr
 waits for an answer to a question or a permission prompt is refused, since the text would answer
 it; use `cornercase keys` for that. So is a Claude Code agent that shows a dialog, a panel or
 its shell mode instead of its input box (`dialog` in `cornercase status --json`), unless you pass
---force.
+--force. So is its feedback survey above the input box (`1: Bad  2: Fine  3: Good  0: Dismiss`,
+`survey` in the JSON), where a digit sent alone would answer it: dismiss it with
+`cornercase keys --pane N 0`, or pass --force.
 
 With --enter, the command returns once Claude Code, Codex or opencode has recorded the prompt in
 its own history, and fails with `not confirmed: the prompt may not have been submitted` when it
@@ -123,6 +127,10 @@ own record (Claude Code's transcript, Codex's rollout, opencode's database) inst
 it comes whole even once it scrolled off, without the input box or status lines. While the agent
 works it is the newest one so far. --json adds when it was written and whether the agent's turn is
 over. It fails on a pane without Claude Code, Codex or opencode, and before the agent wrote anything.
+
+Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
+`1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
+not the agent's output. `cornercase keys --pane N 0` dismisses it.
 
 Examples:
   cornercase read --pane 12
@@ -457,7 +465,11 @@ pub struct SendArgs {
         help = "Give up waiting after this long, with status 1"
     )]
     pub timeout: Option<f64>,
-    #[arg(long, help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box")]
+    #[arg(
+        long,
+        help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or its \
+                feedback survey"
+    )]
     pub force: bool,
     #[command(flatten)]
     pub print: Print,
@@ -1140,10 +1152,14 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
-                let notes: Vec<&str> = [(pane.background_shell, "background shell"), (pane.dialog, "dialog open")]
-                    .into_iter()
-                    .filter_map(|(on, note)| on.then_some(note))
-                    .collect();
+                let notes: Vec<&str> = [
+                    (pane.background_shell, "background shell"),
+                    (pane.dialog, "dialog open"),
+                    (pane.survey, "survey open"),
+                ]
+                .into_iter()
+                .filter_map(|(on, note)| on.then_some(note))
+                .collect();
                 let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),
@@ -1433,17 +1449,19 @@ mod tests {
         fn panes_are_one_row_each_under_a_header_with_a_dash_for_what_is_missing() {
             let mut report = report();
             report.projects[0].workspaces[0].tabs[0].panes[0].at_prompt = Some(true);
+            report.projects[0].workspaces[0].tabs[0].panes[1].survey = true;
 
             let text = pane_table(&report.panes()).expect("a table");
 
             assert_eq!(
                 text,
                 "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
-                 context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\n\
+                 context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
+                 survey\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\n"
             );
         }
 
@@ -1535,17 +1553,19 @@ mod tests {
         }
 
         #[rstest]
-        #[case::a_dialog(false, true, "idle (dialog open)")]
-        #[case::both(true, true, "working (background shell, dialog open)")]
+        #[case::a_dialog(false, true, false, "idle (dialog open)")]
+        #[case::both(true, true, false, "working (background shell, dialog open)")]
+        #[case::the_survey(true, false, true, "working (background shell, survey open)")]
         fn what_covers_an_agent_is_said_after_its_status(
             #[case] background_shell: bool,
             #[case] dialog: bool,
+            #[case] survey: bool,
             #[case] shown: &str,
         ) {
             let mut report = report();
             let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
             pane.status = Some(if background_shell { "working" } else { "idle" }.into());
-            (pane.background_shell, pane.dialog) = (background_shell, dialog);
+            (pane.background_shell, pane.dialog, pane.survey) = (background_shell, dialog, survey);
 
             let text = render(&report, Some(Path::new("/home/ana")));
 

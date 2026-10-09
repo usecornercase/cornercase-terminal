@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.17
+## 0.12.18
 
 - `cornercase restart --when-idle` and `cornercase update --when-idle` restart the server only once no agent is working, so none loses a turn in the middle of a tool call or a build. Idle, done and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started in the background still runs. The server restarts in the same moment it sees that, so no agent starts a new turn in between. Meanwhile every window shows `restart pending until 2 agents end their turn` in its corner, with a **cancel** button. `--timeout` gives up after that many seconds and keeps the server running, as does stopping the command. `update --when-idle` installs the release at once and restarts on it once the agents are done.
+
+## 0.12.17
+
+- `cornercase send` no longer answers Claude Code's feedback survey. While Claude Code shows `How is Claude doing this session? (optional)` with `1: Bad  2: Fine  3: Good  0: Dismiss` above its input box, a digit sent alone, such as `send --enter 2` answering an agent's numbered question, rated the session instead and the prompt was lost. `send` now refuses while the survey shows and says how to dismiss it, `cornercase keys --pane N 0`; `--force` sends anyway. `cornercase status` marks such a pane `(survey open)` (`survey` in `--json`, and a new last column of `status --panes`).
 
 ## 0.12.16
 
