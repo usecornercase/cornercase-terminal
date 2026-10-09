@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.16
+## 0.12.17
 
 - `cornercase restart --when-idle` and `cornercase update --when-idle` restart the server only once no agent is working, so none loses a turn in the middle of a tool call or a build. Idle, done and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started in the background still runs. The server restarts in the same moment it sees that, so no agent starts a new turn in between. Meanwhile every window shows `restart pending until 2 agents end their turn` in its corner, with a **cancel** button. `--timeout` gives up after that many seconds and keeps the server running, as does stopping the command. `update --when-idle` installs the release at once and restarts on it once the agents are done.
+
+## 0.12.16
+
+- `cornercase status --panes` lists every pane on a line of its own, for scripts: the ids of the pane, its tab, workspace and project, what runs in it and what its agent is doing, the workspace's branch and the pane's folder, in columns separated by tabs under a header line. `--panes --json` gives the same rows as JSON, in one flat list. A script or an agent coordinating others no longer has to walk the tree of `status --json` to find a pane by its agent, status or branch. `status` and `status --json` stay as they were.
+- `cornercase status` no longer ends with a panic message when what reads its output stops early, as `head` does.
 
 ## 0.12.15
 

@@ -9,6 +9,7 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 
 - Use it only when the user asks you to open tabs, run something in another pane, or start and coordinate agents, and only when `CORNERCASE=1`.
 - Learn the syntax from `cornercase --help` and `cornercase <command> --help`. Never guess flags. `cornercase status` lists the ids; your own pane is marked `(you)`.
+- To find panes by agent, status, branch or project, use `cornercase status --panes`: one tab-separated line per pane under a header naming the columns (`-` for no value), or `--panes --json` for `{"panes": [...]}`. Filter that with `awk -F'\t'` or `jq` instead of walking the tree of `status --json`.
 - To act on a worktree you started, name it by its branch with `--worktree BRANCH` where a command takes `--workspace ID` (`cornercase close --worktree fix/login --remove-worktree`) instead of reading its id from `status`.
 - Never steal focus: no `cornercase focus` or `--focus` unless the user asks. Never run `cornercase kill-server`. Close only what you created.
 - Restart or update cornercase only when the user asks, and then with `--when-idle --yes` (`cornercase update --when-idle --yes`), in the background as your last step: it waits until no other agent is working, so none loses its turn, then stops you too. Ending it, or its `--timeout`, calls the restart off.
