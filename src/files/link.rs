@@ -94,6 +94,7 @@ pub fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option<&Path>
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::process::Command;
 
     use ratatui::style::Style;
     use rstest::rstest;
@@ -230,7 +231,7 @@ mod tests {
     fn outside_folders_devices_and_fifos_are_not_links() {
         let (root, other) = (TempDir::new(), TempDir::new());
         let fifo = other.path().join("pipe");
-        rustix::fs::mkfifoat(rustix::fs::CWD, &fifo, rustix::fs::Mode::RUSR).expect("fifo");
+        assert!(Command::new("mkfifo").arg(&fifo).status().expect("create fifo").success());
         let device = other.path().join("device");
         std::os::unix::fs::symlink("/dev/zero", &device).expect("symlink");
         for path in [other.path(), fifo.as_path(), device.as_path(), Path::new("/dev/zero")] {
