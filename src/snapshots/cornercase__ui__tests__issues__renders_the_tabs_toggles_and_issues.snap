@@ -1,11 +1,10 @@
 ---
 source: src/ui.rs
-assertion_line: 7491
 expression: render(&with(issues(list(Some(0))))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
-" P│  All   GitHub   Shortcut   Linear                                    [ ] closed    [x] mine  │  "
+" P│  All   GitHub   Shortcut   Linear   Jira   Plane                     [ ] closed    [x] mine  │  "
 "  │                                                                                              │  "
 "▌ │ ›                                                                                            │  "
 "  │                                                                                              │  "

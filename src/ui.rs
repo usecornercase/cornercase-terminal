@@ -7544,7 +7544,7 @@ mod tests {
     mod issues {
         use super::*;
 
-        const TABS: [&str; 4] = ["All", "GitHub", "Shortcut", "Linear"];
+        const TABS: [&str; 6] = ["All", "GitHub", "Shortcut", "Linear", "Jira", "Plane"];
         const TOGGLES: [&str; 2] = ["closed", "mine"];
 
         fn row(key: &str, title: &str, meta: &str) -> IssueRow {

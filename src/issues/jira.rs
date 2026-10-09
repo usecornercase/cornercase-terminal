@@ -2,7 +2,7 @@ pub mod adf;
 
 use serde_json::Value;
 
-use super::http::{self, Answer, Service, text};
+use super::http::{self, Answer, Service, path_segment, text};
 use super::{
     Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body, parse_time,
 };
@@ -36,13 +36,7 @@ impl Api {
         let auth = format!("Basic {}", clipboard::base64(login.as_bytes()));
         let url = format!("{}{path}", self.base.trim_end_matches('/'));
         let answer = http::get(&SERVICE, &url, query, &[("Authorization", &auth)])?;
-        if answer.status == 404 {
-            return Err(Error::Api(missing.into()));
-        }
-        if !answer.ok() {
-            return Err(failure(&answer));
-        }
-        Ok(answer.json)
+        http::checked(answer, missing, failure)
     }
 
     pub fn whoami(&self) -> Result<Account> {
@@ -244,18 +238,6 @@ fn without_order(jql: &str) -> &str {
 
 fn quoted(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
-fn path_segment(key: &str) -> String {
-    key.bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
-                char::from(b).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]

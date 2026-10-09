@@ -1,6 +1,6 @@
 ---
 title: Issues and agents
-description: Browse GitHub issues, Shortcut stories, Linear issues and Jira issues, read them as Markdown, and start a coding agent on one in its own worktree.
+description: Browse GitHub issues, Shortcut stories, Linear issues, Jira issues and Plane work items, read them as Markdown, and start a coding agent on one in its own worktree.
 ---
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -25,6 +25,7 @@ Click **`Issues`** at the bottom of the sidebar. The browser opens for the activ
 | **Shortcut** | Stories from your Shortcut workspace. |
 | **Linear** | Issues from your Linear workspace. |
 | **Jira** | Issues from your Jira Cloud site. |
+| **Plane** | Work items from your Plane workspace, on Cloud or a current self-hosted instance. |
 
 You can hide tabs and change their order in **settings → Issues → Sources shown**. The browser remembers the last tab you used.
 
@@ -78,6 +79,25 @@ The Jira tab lists the issues of the whole site you can see. To narrow it down, 
 Jira Server and Data Center are not supported.
 
 </TabItem>
+<TabItem label="Plane">
+
+Plane needs your workspace slug and a personal API key:
+
+1. In Plane, open **Profile settings → Personal access tokens** and create a key.
+2. For a self-hosted instance, first set **settings → Issues → Plane → Plane URL**, such as `https://plane.example.com`. Leave it empty for Plane Cloud.
+3. Open the **Plane** tab of the issue browser. Type the workspace slug (`acme` in `https://app.plane.so/acme/projects/`) and press `Enter`, then paste the key and press `Enter`. **back** returns to the workspace step.
+
+cornercase checks the key and access to the workspace, then saves the key to `secrets.json`. You can use `PLANE_API_KEY` instead; the workspace is still required. The workspace and instance URL are saved in `config.json` and can be changed in **settings → Issues → Plane**.
+
+<Screen name="plane-workspace" alt="The Plane connection form asking for a workspace slug before the API key" />
+
+<Screen name="plane-token" alt="The Plane connection form, with workspace acme saved, a masked API key field, and connect and back buttons" />
+
+The list spans the workspace. **Plane filter** accepts API query parameters, such as `project_id=UUID&priority=high`, combined with the people and closed toggles. Pagination, ordering, expansion and those toggles cannot be replaced by this filter. The assignee filter goes to Plane; the creator filter applies locally to the latest 100 fetched work items.
+
+Self-hosted instances must provide the workspace-wide `/api/v2` work item endpoint. Older instances that only provide project lists in `/api/v1` need an upgrade. Descriptions and comments use the `/api/v1` endpoints, which remain available on current Plane.
+
+</TabItem>
 </Tabs>
 
 <Screen
@@ -108,8 +128,8 @@ Each row shows the issue's key, its title and, on the right, its state (for clos
 
 Two toggles at the top right narrow the list down:
 
-- **closed** includes closed (GitHub), done (Shortcut), completed and canceled (Linear) or done (Jira) issues.
-- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear, *assignee* and *reporter* on Jira.
+- **closed** includes closed (GitHub), done (Shortcut), completed and canceled (Linear) done (Jira), or completed and cancelled (Plane) issues.
+- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear and Plane, *assignee* and *reporter* on Jira.
 
 <Screen
   name="issues-people"
@@ -149,7 +169,7 @@ At the top you see the issue's details and its link, then exactly what **start**
 | **agent** | Which agent will be started, in which mode, and its full command line. |
 | **prompt** | What will be pasted into the agent, and whether it is sent for you or left for you to send. |
 
-Below comes the description, rendered from Markdown (Jira descriptions and comments are converted to Markdown first): headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
+Below comes the description, rendered from Markdown (Jira and Plane descriptions and comments are converted to Markdown first): headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
 
 <Screen
   name="issue-detail-end"
@@ -169,7 +189,7 @@ Press **start** in the issue, or select an issue in the list and press **start**
 ### Where
 
 - **GitHub** issues belong to the project you opened the browser from.
-- **Shortcut**, **Linear** and **Jira** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
+- **Shortcut**, **Linear**, **Jira** and **Plane** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
 
 In a repository, the issue gets its own worktree on a branch named after it:
 
@@ -179,6 +199,7 @@ In a repository, the issue gets its own worktree on a branch named after it:
 | Shortcut | sc-48 Dark mode | `sc-48-dark-mode` |
 | Linear | ENG-123 Returns page crashes | `ENG-123-returns-page-crashes` |
 | Jira | SHOP-77 Returns page crashes | `SHOP-77-returns-page-crashes` |
+| Plane | ENG-42 Fix login | `ENG-42-fix-login` |
 
 The title part is lowercased, accents become plain letters, everything else becomes dashes, and it is cut at a word boundary to at most 40 characters. The workspace is named after the issue's key and title, like `#482 Returns page crashes on empty addr…`.
 

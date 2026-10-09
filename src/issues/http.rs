@@ -90,6 +90,28 @@ fn finish(service: &Service, result: std::result::Result<Response<ureq::Body>, u
     Ok(Answer { status, json })
 }
 
+pub fn checked(answer: Answer, missing: &str, failure: impl FnOnce(&Answer) -> Error) -> Result<Value> {
+    if answer.status == 404 {
+        Err(Error::Api(missing.into()))
+    } else if answer.ok() {
+        Ok(answer.json)
+    } else {
+        Err(failure(&answer))
+    }
+}
+
+pub fn path_segment(key: &str) -> String {
+    key.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
+                char::from(b).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
 pub fn origin(url: &str) -> &str {
     let after_scheme = url.find("://").map_or(0, |i| i + 3);
     url[after_scheme..].find('/').map_or(url, |i| &url[..after_scheme + i])

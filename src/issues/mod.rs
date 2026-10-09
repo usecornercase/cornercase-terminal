@@ -4,6 +4,8 @@ pub mod github;
 pub mod http;
 pub mod jira;
 pub mod linear;
+mod markup;
+pub mod plane;
 pub mod shortcut;
 
 use std::fmt;
@@ -24,11 +26,12 @@ pub enum Source {
     Shortcut,
     Linear,
     Jira,
+    Plane,
 }
 
 impl Source {
-    pub const ALL: [Self; 4] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira];
-    pub const REMOTE: [Self; 3] = [Self::Shortcut, Self::Linear, Self::Jira];
+    pub const ALL: [Self; 5] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
+    pub const REMOTE: [Self; 4] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -36,6 +39,7 @@ impl Source {
             Self::Shortcut => "shortcut",
             Self::Linear => "linear",
             Self::Jira => "jira",
+            Self::Plane => "plane",
         }
     }
 
@@ -45,13 +49,14 @@ impl Source {
             Self::Shortcut => "Shortcut",
             Self::Linear => "Linear",
             Self::Jira => "Jira",
+            Self::Plane => "Plane",
         }
     }
 
     pub fn token_name(self) -> &'static str {
         match self {
             Self::Github | Self::Shortcut | Self::Jira => "API token",
-            Self::Linear => "API key",
+            Self::Linear | Self::Plane => "API key",
         }
     }
 
@@ -61,6 +66,7 @@ impl Source {
             Self::Shortcut => Some(shortcut::TOKEN_ENV),
             Self::Linear => Some(linear::TOKEN_ENV),
             Self::Jira => Some(jira::TOKEN_ENV),
+            Self::Plane => Some(plane::TOKEN_ENV),
         }
     }
 
@@ -70,6 +76,7 @@ impl Source {
             Self::Shortcut => Some("shortcut_token"),
             Self::Linear => Some("linear_api_key"),
             Self::Jira => Some("jira_api_token"),
+            Self::Plane => Some("plane_api_key"),
         }
     }
 
@@ -77,7 +84,7 @@ impl Source {
         match self {
             Self::Github => ["assignee", "author"],
             Self::Shortcut => ["owner", "requester"],
-            Self::Linear => ["assignee", "creator"],
+            Self::Linear | Self::Plane => ["assignee", "creator"],
             Self::Jira => ["assignee", "reporter"],
         }
     }
@@ -90,6 +97,9 @@ impl Source {
             }
             Self::Linear => {
                 "Create a personal API key in Linear under Settings → Security & access → Personal API keys, paste it here and press Enter."
+            }
+            Self::Plane => {
+                "Create an API key in Plane under Profile settings → Personal access tokens, paste it here and press Enter."
             }
             Self::Jira => {
                 "Create an API token at id.atlassian.com under Security → Create and manage API tokens, paste it here and press Enter."
@@ -144,6 +154,7 @@ pub struct People {
     pub shortcut: [Who; 2],
     pub linear: [Who; 2],
     pub jira: [Who; 2],
+    pub plane: [Who; 2],
 }
 
 impl People {
@@ -153,6 +164,7 @@ impl People {
             Source::Shortcut => &self.shortcut,
             Source::Linear => &self.linear,
             Source::Jira => &self.jira,
+            Source::Plane => &self.plane,
         }
     }
 
@@ -162,6 +174,7 @@ impl People {
             Source::Shortcut => &mut self.shortcut,
             Source::Linear => &mut self.linear,
             Source::Jira => &mut self.jira,
+            Source::Plane => &mut self.plane,
         }
     }
 
@@ -249,6 +262,7 @@ pub enum Client {
     Shortcut { base: String, token: String },
     Linear { url: String, token: String },
     Jira(jira::Api),
+    Plane(plane::Api),
 }
 
 impl Client {
@@ -258,6 +272,7 @@ impl Client {
             Self::Shortcut { base, token } => shortcut::Api { base, token }.people(),
             Self::Linear { url, token } => linear::Api { url, token }.people(),
             Self::Jira(api) => api.people(),
+            Self::Plane(api) => api.people(),
         }
     }
 
@@ -267,6 +282,7 @@ impl Client {
             Self::Shortcut { base, token } => shortcut::Api { base, token }.list(query),
             Self::Linear { url, token } => linear::Api { url, token }.list(query),
             Self::Jira(api) => api.list(query),
+            Self::Plane(api) => api.list(query),
         }
     }
 
@@ -276,6 +292,7 @@ impl Client {
             Self::Shortcut { base, token } => shortcut::Api { base, token }.view(issue.number),
             Self::Linear { url, token } => linear::Api { url, token }.view(&issue.key),
             Self::Jira(api) => api.view(&issue.key),
+            Self::Plane(api) => api.view(&issue.key),
         }
     }
 
@@ -285,6 +302,7 @@ impl Client {
             Self::Shortcut { base, token } => shortcut::Api { base, token }.whoami(),
             Self::Linear { url, token } => linear::Api { url, token }.whoami(),
             Self::Jira(api) => api.whoami(),
+            Self::Plane(api) => api.whoami(),
         }
     }
 }
@@ -311,7 +329,7 @@ pub fn branch(issue: &Issue) -> String {
     let prefix = match issue.source {
         Source::Github => format!("issue-{}", issue.number),
         Source::Shortcut => format!("sc-{}", issue.number),
-        Source::Linear | Source::Jira => issue.key.clone(),
+        Source::Linear | Source::Jira | Source::Plane => issue.key.clone(),
     };
     let slug = slug(&issue.title, SLUG_MAX);
     if slug.is_empty() { prefix } else { format!("{prefix}-{slug}") }
@@ -476,7 +494,7 @@ pub fn issue(source: Source, number: u64, title: &str) -> Issue {
     let key = match source {
         Source::Github => format!("#{number}"),
         Source::Shortcut => format!("sc-{number}"),
-        Source::Linear => format!("ENG-{number}"),
+        Source::Linear | Source::Plane => format!("ENG-{number}"),
         Source::Jira => format!("PROJ-{number}"),
     };
     Issue {

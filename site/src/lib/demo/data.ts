@@ -162,7 +162,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   infra: [['7a7d2b0', 'Add terraform skeleton', '2 months ago']],
 };
 
-export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira';
+export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira' | 'plane';
 
 export interface Issue {
   source: SourceId;
@@ -273,6 +273,12 @@ export const ISSUES: Issue[] = [
     url: 'https://linear.app/acme/issue/ENG-131',
     body: 'Customers want to pay part with a gift card and the rest with a card.',
     mine: false,
+  },
+  {
+    source: 'plane', number: 42, key: 'ENG-42', title: 'Fix the login redirect',
+    labels: ['bug'], state: 'In Progress', author: 'ana', age: '1d',
+    url: 'https://app.plane.so/acme/browse/ENG-42/',
+    body: 'After signing in, return to the page the customer opened.\n\n- [ ] Keep the original path\n- [ ] Test an expired session', mine: true,
   },
   {
     source: 'jira',

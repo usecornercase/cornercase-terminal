@@ -22,7 +22,7 @@ use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self, Job, Level};
@@ -681,6 +681,7 @@ struct Apis {
     shortcut: String,
     linear: String,
     jira: Option<String>,
+    plane: Option<String>,
 }
 
 impl Apis {
@@ -690,6 +691,7 @@ impl Apis {
             shortcut: var(shortcut::API_ENV, shortcut::DEFAULT_API),
             linear: var(linear::API_ENV, linear::DEFAULT_API),
             jira: std::env::var(jira::API_ENV).ok(),
+            plane: std::env::var(plane::API_ENV).ok(),
         }
     }
 }
@@ -2818,9 +2820,27 @@ impl App {
         })
     }
 
+    fn plane(&self, token: String) -> Option<plane::Api> {
+        let config = &self.config;
+        plane::check_workspace(&config.plane_workspace).ok()?;
+        let base = if config.plane_url.is_empty() { plane::DEFAULT_API.into() } else { config.plane_url.clone() };
+        Some(plane::Api {
+            base: self.apis.plane.clone().unwrap_or(base),
+            slug: config.plane_workspace.clone(),
+            token,
+            filter: config.plane_filter.clone(),
+            app_url: if config.plane_url.is_empty() { plane::DEFAULT_APP.into() } else { config.plane_url.clone() },
+        })
+    }
+
     fn connected(&self, source: Source) -> Option<bool> {
         let (token, from_env) = self.token(source)?;
-        (source != Source::Jira || self.jira(token).is_some()).then_some(from_env)
+        let ready = match source {
+            Source::Jira => self.jira(token).is_some(),
+            Source::Plane => self.plane(token).is_some(),
+            _ => true,
+        };
+        ready.then_some(from_env)
     }
 
     fn client(&self, source: Source, project: u64) -> Option<Client> {
@@ -2834,6 +2854,7 @@ impl App {
             }
             Source::Linear => Some(Client::Linear { url: self.apis.linear.clone(), token: self.token(source)?.0 }),
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
+            Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
         }
     }
 
@@ -2885,6 +2906,7 @@ impl App {
             forms: HashMap::new(),
             jira_site: self.config.jira_site.clone(),
             jira_email: self.config.jira_email.clone(),
+            plane_workspace: self.config.plane_workspace.clone(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -2967,7 +2989,20 @@ impl App {
                 }
             }
             Action::CheckToken(source, token) => self.check_token(source, token),
-            Action::SaveJira { site, email } => return self.save_jira(site, email, area),
+            Action::SaveJira { site, email } => {
+                return self.save_connection(
+                    Source::Jira,
+                    Config { jira_site: site, jira_email: email, ..self.config.clone() },
+                    area,
+                );
+            }
+            Action::SavePlane { workspace } => {
+                return self.save_connection(
+                    Source::Plane,
+                    Config { plane_workspace: workspace, ..self.config.clone() },
+                    area,
+                );
+            }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
                 self.host_writes.push(clipboard::osc52(&url));
@@ -3106,18 +3141,17 @@ impl App {
         });
     }
 
-    fn save_jira(&mut self, site: String, email: String, area: Rect) -> Result<()> {
-        let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
+    fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
         let saved = config::save(&self.config_path, &config);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         if let Err(e) = saved {
-            b.token_rejected(Source::Jira, format!("failed to save the settings: {e}"));
+            b.token_rejected(source, format!("failed to save the settings: {e}"));
             return Ok(());
         }
         self.set_config(config);
-        let Some(from_env) = self.connected(Source::Jira) else { return Ok(()) };
+        let Some(from_env) = self.connected(source) else { return Ok(()) };
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        b.connected(Source::Jira, Connection { from_env, account: None });
+        b.connected(source, Connection { from_env, account: None });
         let action = b.needs_load();
         self.act(action, area)
     }
@@ -3132,6 +3166,11 @@ impl App {
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
         if jira(&config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
+        }
+        if (config.plane_workspace.as_str(), config.plane_url.as_str(), config.plane_filter.as_str())
+            != (self.config.plane_workspace.as_str(), self.config.plane_url.as_str(), self.config.plane_filter.as_str())
+        {
+            self.forget_issues(Source::Plane);
         }
         self.config = config;
     }
@@ -3152,6 +3191,15 @@ impl App {
             Source::Github => return,
             Source::Shortcut => Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() },
             Source::Linear => Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() },
+            Source::Plane => {
+                let Some(api) = self.plane(token.0.clone()) else {
+                    let epoch = self.epoch(source);
+                    let result = Err(Error::Api("set the Plane workspace first".into()));
+                    let _ = self.tx.send(AppEvent::TokenChecked { source, epoch, token, result });
+                    return;
+                };
+                Client::Plane(api)
+            }
             Source::Jira => {
                 let Some(api) = self.jira(token.0.clone()) else {
                     let error = Err(Error::Api("set the Jira site and email first".into()));
@@ -10870,6 +10918,21 @@ rm -f "$1/sessions/$$.json"
             secrets::path(&s.config.path().join("config.json"))
         }
 
+        fn answer(s: &mut Setup, wanted: impl Fn(&AppEvent) -> bool) {
+            loop {
+                let event = s.rx.recv_timeout(Duration::from_secs(10)).expect("the answer arrives");
+                let found = wanted(&event);
+                s.app.handle_event(event, AREA).expect("handle event");
+                if found {
+                    return;
+                }
+            }
+        }
+
+        fn saved_config(s: &Setup) -> Config {
+            config::load(&s.config.path().join("config.json"))
+        }
+
         fn browser(app: &App) -> &Browser {
             let Some(Overlay::Issues(b)) = &app.overlay else { panic!("the list is not open") };
             b
@@ -11384,6 +11447,95 @@ rm -f "$1/sessions/$$.json"
             }
         }
 
+        mod plane {
+            use rstest::rstest;
+
+            use super::*;
+
+            fn plane(s: &mut Setup) -> FakeHttp {
+                let server = FakeHttp::start(vec![
+                    ("GET /api/v1/users/me/", 200, r#"{"id":"ana-id","display_name":"Ana"}"#),
+                    ("GET /api/v1/workspaces/acme/members/", 200, "[]"),
+                    (
+                        "GET /api/v2/workspaces/acme/work-items/",
+                        200,
+                        r#"{"data":[{"identifier":"ENG-42","sequence_id":42,"name":"Fix login","updated_at":"2026-10-09T00:00:00Z"}]}"#,
+                    ),
+                ]);
+                s.app.apis.plane = Some(server.url());
+                server
+            }
+
+            fn workspace(s: &mut Setup) {
+                open_list(s);
+                to_tab(s, IssueTab::One(Source::Plane));
+                type_text(&mut s.app, "acme");
+                enter(s);
+            }
+
+            #[rstest]
+            #[case::saved(false)]
+            #[case::environment(true)]
+            fn connecting_saves_the_workspace_and_lists_with_the_key(#[case] from_env: bool) {
+                let mut s = setup(false, "echo '[]'");
+                let server = plane(&mut s);
+                if from_env {
+                    s.app.env_tokens.insert(Source::Plane, "t0k".into());
+                }
+                workspace(&mut s);
+                if !from_env {
+                    type_text(&mut s.app, "t0k");
+                    enter(&mut s);
+                }
+                pump_until(&mut s.app, &s.rx, "Plane issues load", |a| loaded(a, Source::Plane));
+                assert_eq!(shown(&s.app), ["ENG-42"]);
+                assert_eq!(saved_config(&s).plane_workspace, "acme");
+                assert_eq!(secrets::read(&secrets_file(&s), "plane_api_key"), (!from_env).then(|| "t0k".into()));
+                assert!(server.request(0).to_lowercase().contains("x-api-key: t0k"));
+            }
+
+            #[test]
+            fn a_key_without_a_workspace_is_not_connected() {
+                let mut s = setup(false, "echo '[]'");
+                s.app.env_tokens.insert(Source::Plane, "t0k".into());
+                open_list(&mut s);
+                assert!(!browser(&s.app).connections.contains_key(&Source::Plane));
+            }
+
+            #[rstest]
+            #[case::workspace("workspace")]
+            #[case::url("url")]
+            #[case::filter("filter")]
+            fn changed_settings_drop_an_in_flight_list(#[case] field: &str) {
+                let mut s = setup(false, "echo '[]'");
+                let _server = plane(&mut s);
+                s.app.config.plane_workspace = "acme".into();
+                s.app.env_tokens.insert(Source::Plane, "t0k".into());
+                open_list(&mut s);
+                let key = s.app.cache_key(Source::Plane, browser(&s.app).project, &Query::default());
+                let mut config = s.app.config.clone();
+                match field {
+                    "workspace" => config.plane_workspace = "other".into(),
+                    "url" => config.plane_url = "https://plane.example.com".into(),
+                    _ => config.plane_filter = "priority=high".into(),
+                }
+                s.app.set_config(config);
+                answer(&mut s, |e| matches!(e, AppEvent::IssuesLoaded { source: Source::Plane, .. }));
+                assert_eq!((s.app.accounts.get(&Source::Plane), s.app.issue_cache.get(&key)), (None, None));
+            }
+
+            #[test]
+            fn a_key_checked_against_an_old_workspace_is_not_saved() {
+                let mut s = setup(false, "echo '[]'");
+                let _server = plane(&mut s);
+                s.app.config.plane_workspace = "acme".into();
+                s.app.check_token(Source::Plane, Secret("t0k".into()));
+                s.app.set_config(Config { plane_workspace: "other".into(), ..s.app.config.clone() });
+                answer(&mut s, |e| matches!(e, AppEvent::TokenChecked { source: Source::Plane, .. }));
+                assert_eq!(secrets::read(&secrets_file(&s), "plane_api_key"), None);
+            }
+        }
+
         mod jira {
             use super::*;
 
@@ -11407,21 +11559,6 @@ rm -f "$1/sessions/$$.json"
                 enter(s);
                 type_text(&mut s.app, "ana@acme.dev");
                 enter(s);
-            }
-
-            fn answer(s: &mut Setup, wanted: impl Fn(&AppEvent) -> bool) {
-                loop {
-                    let event = s.rx.recv_timeout(Duration::from_secs(10)).expect("the answer arrives");
-                    let found = wanted(&event);
-                    s.app.handle_event(event, AREA).expect("handle event");
-                    if found {
-                        return;
-                    }
-                }
-            }
-
-            fn saved_config(s: &Setup) -> Config {
-                config::load(&s.config.path().join("config.json"))
             }
 
             #[test]
