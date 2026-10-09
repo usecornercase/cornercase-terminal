@@ -665,6 +665,7 @@ impl Server {
             cell = hello.graphics.cell_size(),
             tmux = hello.graphics.tmux.id(),
             missing = hello.graphics.why_not(),
+            id_hi = hello.graphics.id_hi,
             probe = hello.probe,
         );
         let Some(client) = self.client_mut(id) else { return };
