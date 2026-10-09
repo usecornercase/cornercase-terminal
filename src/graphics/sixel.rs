@@ -41,8 +41,8 @@ mod tests {
     use rstest::rstest;
 
     use super::super::encode::tests::{CLEAR, RED, SIXEL, cell, key, noise, photo, picture};
-    use super::super::encode::{BUDGET, Fit, Key, encode, fit};
-    use super::super::{Protocol, Tmux};
+    use super::super::encode::{BUDGET, Fit, encode, fit};
+    use super::super::Protocol;
     use super::*;
 
     const BLUE: Rgba<u8> = Rgba([0, 0, 255, 255]);
@@ -165,15 +165,5 @@ mod tests {
         assert!(out.len() <= BUDGET, "{}", out.len());
         let width: u32 = raster(&out).split(';').nth(2).and_then(|width| width.parse().ok()).expect("a width");
         assert!((200..700).contains(&width), "{width}");
-    }
-
-    #[test]
-    fn wraps_for_tmux_when_asked() {
-        let picture = picture(RgbaImage::from_pixel(6, 6, RED), "PNG");
-        let plain = key(SIXEL, exact(6, 6), None);
-
-        let wrapped = encode(&picture, &Key { tmux: Tmux::Wrap, ..plain });
-
-        assert_eq!(wrapped, super::super::tmux::wrap(&encode(&picture, &plain)));
     }
 }

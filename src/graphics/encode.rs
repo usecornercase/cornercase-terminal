@@ -452,5 +452,18 @@ pub mod tests {
             assert_eq!(out, commands.iter().flat_map(|command| tmux::wrap(command)).collect::<Vec<u8>>());
             assert_eq!(encode(&picture, &plain), commands.concat());
         }
+
+        #[rstest]
+        #[case::iterm(Protocol::Iterm)]
+        #[case::sixel(SIXEL)]
+        fn wraps_a_single_sequence_whole(#[case] protocol: Protocol) {
+            let picture = picture(RgbaImage::from_pixel(8, 16, RED), "PNG");
+            let fit = fit(8, 16, Some(cell(8, 16)), (80, 40), protocol).expect("room");
+            let plain = key(protocol, fit, None);
+
+            let wrapped = encode(&picture, &Key { tmux: Tmux::Wrap, ..plain });
+
+            assert_eq!(wrapped, tmux::wrap(&encode(&picture, &plain)));
+        }
     }
 }

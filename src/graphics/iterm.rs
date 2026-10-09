@@ -51,7 +51,7 @@ mod tests {
 
     use super::super::encode::tests::{CLEAR, RED, cell, image_of, key, noise, photo, picture};
     use super::super::encode::{Fit, encode};
-    use super::super::{Protocol, Tmux};
+    use super::super::Protocol;
     use super::*;
 
     struct Sent {
@@ -152,15 +152,5 @@ mod tests {
 
         assert_eq!((sent.cols, sent.rows), (8, 4));
         assert_eq!(image_of(&sent.data).dimensions(), (32, 32));
-    }
-
-    #[test]
-    fn wraps_for_tmux_when_asked() {
-        let picture = picture(RgbaImage::from_pixel(8, 16, RED), "PNG");
-        let plain = key(Protocol::Iterm, fit(1, 1, 8, 16), None);
-
-        let wrapped = encode(&picture, &Key { tmux: Tmux::Wrap, ..plain });
-
-        assert_eq!(wrapped, super::super::tmux::wrap(&encode(&picture, &plain)));
     }
 }
