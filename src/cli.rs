@@ -199,6 +199,30 @@ Examples:
   cornercase logs -n 50
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
+const RESTART_HELP: &str =
+    "It lists what runs in the terminals and asks first, since every program in them stops; agents
+resume their conversations afterwards. Every attached window reopens on the new server.
+
+With --when-idle, it waits until no agent is working before restarting: idle, done and waiting for
+you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started
+in the background still runs. The server restarts in the same step it sees that, so no agent starts
+a turn in between, and every window shows that a restart is pending meanwhile, with a button that
+cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
+this runs in never holds the restart. --timeout gives up with status 1 and the server keeps running,
+as it does when the command is interrupted.
+
+Examples:
+  cornercase restart
+  cornercase restart --when-idle --yes --timeout 3600";
+const UPDATE_HELP: &str =
+    "With --when-idle, it installs the release at once, then restarts the server on it once no agent
+is working, as `cornercase restart --when-idle` does.
+
+Examples:
+  cornercase update
+  cornercase update --when-idle --yes";
+const WHEN_IDLE: &str = "Wait until no agent is working, then restart";
+const RESTART_TIMEOUT: &str = "With --when-idle, give up after this many seconds and keep the server running";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
     the shown one]";
@@ -224,10 +248,11 @@ pub enum Command {
     Remote(RemoteArgs),
     #[command(about = "Print the instructions that teach coding agents these commands", after_help = SKILL_HELP)]
     Skill,
-    #[command(about = "Install the latest release, then offer to restart the server")]
+    #[command(about = "Install the latest release, then offer to restart the server", after_help = UPDATE_HELP)]
     Update(UpdateArgs),
     #[command(
-        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells"
+        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells",
+        after_help = RESTART_HELP
     )]
     Restart(RestartArgs),
     #[command(about = "Stop the server and every shell in it")]
@@ -651,14 +676,32 @@ pub struct LogsArgs {
 pub struct RestartArgs {
     #[arg(short, long, help = "Restart the server without asking")]
     pub yes: bool,
+    #[command(flatten)]
+    pub when: WhenArgs,
 }
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    #[arg(long, help = "Only say whether a newer version is out")]
+    #[arg(long, conflicts_with = "when_idle", help = "Only say whether a newer version is out")]
     pub check: bool,
     #[arg(short, long, help = "Restart the server without asking")]
     pub yes: bool,
+    #[command(flatten)]
+    pub when: WhenArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct WhenArgs {
+    #[arg(long, help = WHEN_IDLE)]
+    pub when_idle: bool,
+    #[arg(long, value_name = "SECONDS", value_parser = seconds, requires = "when_idle", help = RESTART_TIMEOUT)]
+    pub timeout: Option<f64>,
+}
+
+impl WhenArgs {
+    fn when(&self) -> client::When {
+        if self.when_idle { client::When::Idle { timeout: self.timeout } } else { client::When::Now }
+    }
 }
 
 fn seconds(text: &str) -> std::result::Result<f64, String> {
@@ -690,8 +733,8 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Control(control) => run_control(control)?,
         Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
         Command::Skill => print!("{SKILL}"),
-        Command::Update(update) => return client::update(update.check, update.yes),
-        Command::Restart(restart) => client::restart(restart.yes)?,
+        Command::Update(update) => return client::update(update.check, update.yes, update.when.when()),
+        Command::Restart(restart) => client::restart(restart.yes, restart.when.when())?,
         Command::KillServer => {
             let running = client::running_now();
             if !client::kill_server()? {
@@ -1131,9 +1174,22 @@ mod tests {
             let kill = parse(&["kill-server"]).expect("parse");
             let restart = parse(&["restart", "--yes"]).expect("parse");
 
-            assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true }))));
+            assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true, .. }))));
             assert!(matches!(kill.command, Some(Command::KillServer)));
-            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true }))));
+            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true, .. }))));
+        }
+
+        #[rstest]
+        #[case::now(&["restart"], client::When::Now)]
+        #[case::when_idle(&["restart", "--when-idle"], client::When::Idle { timeout: None })]
+        #[case::with_a_timeout(&["update", "--when-idle", "--timeout", "90"], client::When::Idle { timeout: Some(90.0) })]
+        fn a_restart_can_wait_for_the_agents(#[case] args: &[&str], #[case] expected: client::When) {
+            let when = match parse(args).expect("parse").command {
+                Some(Command::Restart(RestartArgs { when, .. }) | Command::Update(UpdateArgs { when, .. })) => when,
+                other => panic!("not a restart: {other:?}"),
+            };
+
+            assert_eq!(when.when(), expected);
         }
 
         #[rstest]
@@ -1151,6 +1207,8 @@ mod tests {
         #[case::an_unknown_state(&["wait", "--until", "sleeping"])]
         #[case::a_broken_pattern(&["wait", "--text", "("])]
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
+        #[case::a_restart_timeout_without_waiting(&["restart", "--timeout", "60"])]
+        #[case::checking_and_waiting(&["update", "--check", "--when-idle"])]
         #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
         #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]

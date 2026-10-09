@@ -60,6 +60,7 @@ pub enum Command {
     Todo(Todo),
     Events(Events),
     LastMessage(LastMessage),
+    RestartWhenIdle(RestartWhenIdle),
 }
 
 impl Command {
@@ -83,6 +84,7 @@ impl Command {
             Self::WaitSeveral(_) => 15,
             Self::Events(_) => 16,
             Self::LastMessage(_) => 17,
+            Self::RestartWhenIdle(_) => 18,
         }]
     }
 
@@ -158,11 +160,14 @@ impl Command {
                 let panes: Vec<String> = events.panes.iter().map(u64::to_string).collect();
                 fields.maybe("panes", (!panes.is_empty()).then(|| panes.join(",")));
             }
+            Self::RestartWhenIdle(restart) => {
+                fields.maybe("timeout", restart.timeout);
+            }
         }
         fields.0
     }
 
-    pub const NAMES: [&str; 18] = [
+    pub const NAMES: [&str; 19] = [
         "status",
         "open",
         "new-workspace",
@@ -181,6 +186,7 @@ impl Command {
         "wait-several",
         "events",
         "last-message",
+        "restart-when-idle",
     ];
 }
 
@@ -385,6 +391,12 @@ pub enum Todo {
 #[serde(default)]
 pub struct Events {
     pub panes: Vec<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RestartWhenIdle {
+    pub timeout: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -694,6 +706,7 @@ mod tests {
             Command::WaitSeveral(Wait::default()),
             Command::Events(Events::default()),
             Command::LastMessage(LastMessage::default()),
+            Command::RestartWhenIdle(RestartWhenIdle::default()),
         ];
 
         let names: Vec<String> = commands

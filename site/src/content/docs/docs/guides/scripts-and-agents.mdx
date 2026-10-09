@@ -229,6 +229,17 @@ cornercase todo rm 3
 
 `notify` shows a toast in the window and sends a [desktop notification](../projects-workspaces-tabs/#notifications) through the terminal of every open window, like the one for an agent that needs you.
 
+### Restart without cutting an agent off
+
+An agent that coordinates others may need a newer cornercase, for a command that was just released. A plain restart would stop every agent in the middle of its turn. `--when-idle` restarts the server only once no agent is working, in the same step it sees that, so none starts a turn in between:
+
+```sh
+cornercase update --when-idle --yes --timeout 3600
+cornercase restart --when-idle --yes
+```
+
+The pane the command runs in doesn't hold the restart, so an agent can run it as its last step: the restart stops it too, and its conversation [resumes](../sessions/#agents-resume-their-conversations). Until then every window says a restart is pending, with a button that cancels it. [`cornercase restart`](../../reference/command-line/#once-no-agent-is-working) has the details.
+
 ## JSON
 
 `--json` prints a command's answer as JSON. These fields are kept stable; new ones may be added.
@@ -265,6 +276,7 @@ Some messages you may meet:
 | `the … agent in pane … has not written a message yet` | `read --last-message` found the agent's record, with no message in it. |
 | `the program in pane … is not reading its input …` | Over 16 MiB sent to the pane are still waiting for its program to read them, so `send` and `keys` stop adding more. |
 | `timed out after …` | The `--timeout` passed; the rest of the message says what the pane was doing. |
+| `the restart was cancelled in the window …` | Someone pressed **cancel** on the window's notice while `restart --when-idle` waited; the server keeps running. |
 | `cornercase hit a bug, see server.log` | cornercase hit a bug while it handled the command or waited for it. Your shells keep running; see [this message in troubleshooting](../../help/troubleshooting/#cornercase-hit-a-bug-see-serverlog). |
 
 ## Teach your agents
@@ -277,7 +289,7 @@ npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 
 Only the skill's name and description stay in the agent's context; the rest loads when a task needs it. `cornercase skill` prints the copy that matches your version; for an agent without skills, put that text in your `AGENTS.md` or `CLAUDE.md`. cornercase never installs it by itself, for the same reason it installs no hooks: it doesn't write into your agents' setup.
 
-The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; and to learn what another agent answered with `read --last-message`.
+The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; to learn what another agent answered with `read --last-message`; and to restart or update cornercase only when you ask, with `--when-idle`.
 
 ## Environment
 

@@ -48,7 +48,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - Closing the last project leaves the app open and empty. ` Quit ` only detaches.
 - `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`ui::truncate_right`), paths at the start (`truncate_left`).
 - At most one overlay is open (menu, form, confirmation, settings, usage, picker, issues, search, keys menu). While it is open, no mouse event reaches the columns or the pane.
-- Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s.
+- Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s, or a ` cancel ` (a pending restart, shown for as long as it waits).
 
 ## Architecture
 

@@ -401,7 +401,9 @@ impl Server {
     fn serve_with(&mut self, rx: &Receiver<ServerEvent>, run: impl Fn(&mut Self, Step) -> ControlFlow<()>) {
         loop {
             for step in [Step::Refresh, Step::Answer, Step::Flush] {
-                self.contain(step, &run);
+                if self.contain(step, &run) == Some(ControlFlow::Break(())) {
+                    return;
+                }
             }
             if self.due(Instant::now()) {
                 self.contain(Step::Draw, &run);
@@ -431,7 +433,13 @@ impl Server {
         if traced {
             self.app.trace();
         }
-        flow
+        if self.restart.is_none()
+            && let Some(exe) = self.app.take_restart()
+        {
+            log::info!("server", "restart once no agent is at work");
+            self.restart = Some(exe);
+        }
+        if self.restart.is_some() { ControlFlow::Break(()) } else { flow }
     }
 
     fn run_step(&mut self, step: Step) -> ControlFlow<()> {
@@ -752,6 +760,7 @@ impl Server {
     }
 
     fn shutdown(&mut self) {
+        self.answer();
         if let Err(e) =
             self.todo_saver.observe(self.app.todos_saved(), Instant::now()).and_then(|_| self.todo_saver.flush())
         {
@@ -954,10 +963,16 @@ mod tests {
             }
 
             pub(super) fn shows_frame(&self, bytes: &[u8]) {
-                wait_until("the frame arrives", || {
-                    std::iter::from_fn(|| self.client.frames.try_recv().ok())
-                        .any(|msg| matches!(msg, ServerMessage::Frame(frame) if frame == bytes))
+                self.received(|msg| matches!(msg, ServerMessage::Frame(frame) if frame == bytes));
+            }
+
+            pub(super) fn received(&self, last: impl Fn(&ServerMessage) -> bool) -> Vec<ServerMessage> {
+                let mut got = Vec::new();
+                wait_until("the message arrives", || {
+                    got.extend(std::iter::from_fn(|| self.client.frames.try_recv().ok()));
+                    got.iter().any(&last)
                 });
+                got
             }
 
             fn serve(
@@ -1113,6 +1128,29 @@ mod tests {
             client.catch_up();
 
             assert_eq!((full.len(), texts(&rx).len(), client.dropped), (0, 1, 0));
+        }
+    }
+
+    mod restarting_when_idle {
+        use super::a_bug::Attached;
+        use super::*;
+        use crate::test_util::wait_until;
+
+        #[test]
+        fn the_command_is_answered_before_every_client_is_told() {
+            let mut attached = Attached::new();
+            let request = r#"{"command":"restart-when-idle","args":{}}"#.to_string();
+            let _ = attached.server.handle(ServerEvent::Message(1, ClientMessage::Request(request)));
+
+            wait_until("no agent is at work", || attached.server.step(Step::Refresh).is_break());
+            attached.server.shutdown();
+
+            let told = attached.received(|msg| matches!(msg, ServerMessage::Restart(_)));
+            let last: Vec<&ServerMessage> = told.iter().filter(|msg| !matches!(msg, ServerMessage::Frame(_))).collect();
+            assert!(
+                matches!(last[..], [ServerMessage::Response(text), ServerMessage::Restart(_)] if text.starts_with(r#"{"ok""#)),
+                "{last:?}"
+            );
         }
     }
 

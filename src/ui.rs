@@ -94,6 +94,7 @@ const MIN_MENU_ROW_WIDTH: u16 = 20;
 pub const ROW_MENU_ICON: &str = "⋯";
 const TOAST_ICON: &str = " ✓ ";
 const BUG_ICON: &str = " ✗ ";
+const RESTART_ICON: &str = " ↻ ";
 const TOAST_MARGIN: u16 = 1;
 const BEHIND_ICON: &str = "↓";
 const REMOVING_LABEL: &str = "removing…";
@@ -2410,13 +2411,29 @@ pub enum ToastIcon {
     Check,
     Agent(Status),
     Bug,
+    Restart,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastButton {
+    Undo,
+    Cancel,
+}
+
+impl ToastButton {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Undo => UNDO_LABEL,
+            Self::Cancel => CANCEL_LABEL,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Toast<'a> {
     pub message: &'a str,
     pub icon: ToastIcon,
-    pub undo: bool,
+    pub button: Option<ToastButton>,
 }
 
 pub struct TabView {
@@ -2673,8 +2690,8 @@ fn wordmark() -> Vec<Span<'static>> {
 }
 
 pub fn toast_area(area: Rect, toast: Toast) -> Rect {
-    let undo = if toast.undo { UNDO_LABEL.chars().count() + 3 } else { 0 };
-    let text = TOAST_ICON.chars().count() + toast.message.chars().count() + 1 + undo;
+    let button = toast.button.map_or(0, |button| button.label().chars().count() + 3);
+    let text = TOAST_ICON.chars().count() + toast.message.chars().count() + 1 + button;
     let width = u16::try_from(text).unwrap_or(u16::MAX).saturating_add(2).min(area.width);
     let height = 3.min(area.height);
     let x = area.right().saturating_sub(width + TOAST_MARGIN).max(area.x);
@@ -2682,12 +2699,10 @@ pub fn toast_area(area: Rect, toast: Toast) -> Rect {
     Rect::new(x, y, width, height)
 }
 
-pub fn toast_undo(area: Rect, toast: Toast) -> Rect {
-    if !toast.undo {
-        return Rect::default();
-    }
+pub fn toast_button(area: Rect, toast: Toast) -> Rect {
+    let Some(button) = toast.button else { return Rect::default() };
     let r = toast_area(area, toast).inner(Margin::new(1, 1));
-    let width = button_width(UNDO_LABEL).min(r.width);
+    let width = button_width(button.label()).min(r.width);
     Rect { x: r.right().saturating_sub(width + 1), width, ..r }
 }
 
@@ -2700,20 +2715,21 @@ fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
             Span::styled(format!(" {} ", icon.content), icon.style)
         }
         ToastIcon::Bug => Span::styled(BUG_ICON, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ToastIcon::Restart => Span::styled(RESTART_ICON, Style::default().fg(Color::Cyan)),
     };
     let border = Style::default().fg(icon.style.fg.unwrap_or(Color::Green));
     f.render_widget(Clear, r);
     f.render_widget(Block::bordered().border_type(BorderType::Rounded).border_style(border), r);
     f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(toast.message)])), r.inner(Margin::new(1, 1)));
-    let undo = toast_undo(f.area(), toast);
-    if !undo.is_empty() {
-        let lit = view.hover.is_some_and(|p| undo.contains(p));
+    let button = toast_button(f.area(), toast);
+    if let Some(label) = toast.button.map(ToastButton::label).filter(|_| !button.is_empty()) {
+        let lit = view.hover.is_some_and(|p| button.contains(p));
         let style = if lit {
             Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
         };
-        f.render_widget(Paragraph::new(Span::styled(format!(" {UNDO_LABEL} "), style)), undo);
+        f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), button);
     }
 }
 
@@ -7057,21 +7073,28 @@ mod tests {
         use super::*;
 
         fn copied() -> Toast<'static> {
-            Toast { message: "copied to clipboard", icon: ToastIcon::Check, undo: false }
+            Toast { message: "copied to clipboard", icon: ToastIcon::Check, button: None }
         }
 
-        #[test]
-        fn an_undo_button_sits_at_its_end() {
-            let toast = Toast { message: "deleted", icon: ToastIcon::Check, undo: true };
-            let (r, undo) = (toast_area(AREA, toast), toast_undo(AREA, toast));
+        #[rstest]
+        #[case::undo("deleted", ToastIcon::Check, ToastButton::Undo, " undo ")]
+        #[case::cancel("restart pending", ToastIcon::Restart, ToastButton::Cancel, " cancel ")]
+        fn a_button_sits_at_its_end(
+            #[case] message: &str,
+            #[case] icon: ToastIcon,
+            #[case] button: ToastButton,
+            #[case] label: &str,
+        ) {
+            let toast = Toast { message, icon, button: Some(button) };
+            let (r, at) = (toast_area(AREA, toast), toast_button(AREA, toast));
             let t = render(&View { toast: Some(toast), ..view(&["~"]) });
-            let text: String = (undo.x..undo.right()).map(|x| t.backend().buffer()[(x, undo.y)].symbol()).collect();
-            assert_eq!((text.as_str(), undo.right(), undo.y), (" undo ", r.right() - 2, r.y + 1));
+            let text: String = (at.x..at.right()).map(|x| t.backend().buffer()[(x, at.y)].symbol()).collect();
+            assert_eq!((text.as_str(), at.right(), at.y), (label, r.right() - 2, r.y + 1));
         }
 
         #[test]
-        fn without_undo_there_is_no_button() {
-            assert_eq!(toast_undo(AREA, copied()), Rect::default());
+        fn without_a_button_there_is_none() {
+            assert_eq!(toast_button(AREA, copied()), Rect::default());
         }
 
         #[test]
@@ -7097,12 +7120,13 @@ mod tests {
         #[case::agent_waiting(ToastIcon::Agent(Status::Waiting), "!", WAITING_COLOR)]
         #[case::agent_done(ToastIcon::Agent(Status::Done), "✓", Color::Green)]
         #[case::bug(ToastIcon::Bug, "✗", Color::Red)]
+        #[case::restart(ToastIcon::Restart, "↻", Color::Cyan)]
         fn its_icon_and_border_say_what_it_is_about(
             #[case] icon: ToastIcon,
             #[case] glyph: &str,
             #[case] colour: Color,
         ) {
-            let toast = Toast { message: "something happened", icon, undo: false };
+            let toast = Toast { message: "something happened", icon, button: None };
             let r = toast_area(AREA, toast);
             let v = View { toast: Some(toast), ..view(&["~"]) };
             let t = render(&v);

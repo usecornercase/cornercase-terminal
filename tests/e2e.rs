@@ -17,6 +17,7 @@ use cornercase::update;
 use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use ratatui::layout::{Position, Rect};
+use rstest::rstest;
 use sha2::{Digest, Sha256};
 
 const ROWS: u16 = 24;
@@ -1051,6 +1052,33 @@ fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
 }
 
 #[test]
+fn restart_when_idle_waits_for_the_agent_to_end_its_turn() {
+    let mut app = Harness::start();
+    std::fs::create_dir(app.session.dir.join("bin")).expect("create bin");
+    let agent = app.session.dir.join("bin").join("claude");
+    write_executable(
+        &agent,
+        r#"#!/bin/sh
+d="$CLAUDE_CONFIG_DIR"; mkdir -p "$d/sessions"; printf '{"pid":%s,"status":"busy"}' $$ > "$d/sessions/$$.json"
+while [ ! -e "$d/finish" ]; do sleep 0.02; done
+printf '{"pid":%s,"status":"idle"}' $$ > "$d/sessions/$$.json"; while :; do sleep 1; done
+"#,
+    );
+    let pane = app.session.says(&["new-tab", "--", &agent.display().to_string()]);
+    app.session.wait_for_working();
+
+    let early = app.session.cli(&["restart", "--when-idle", "--yes", "--timeout", "0.5"]);
+    let restart = app.session.spawn(&["restart", "--when-idle", "--yes", "--timeout", "30"]);
+    app.wait_for("the window says a restart is pending", |s| s.contains("restart pending until 1 agent ends its turn"));
+    std::fs::write(app.session.claude_dir().join("finish"), "").expect("let the agent finish");
+    let out = Session::output(restart);
+
+    assert!(refused(&early, 1, &format!("the agent in pane {pane} has not ended its turn")), "{early:?}");
+    assert!(out.contains("restarted the cornercase server") && out.contains("stopped 1 agent"), "{out}");
+    app.wait_for("the window comes back", |s| s.contains(&first_entry()) && !s.contains("restart pending"));
+}
+
+#[test]
 fn restart_without_a_server_says_so() {
     let session = Session::new();
 
@@ -1060,12 +1088,14 @@ fn restart_without_a_server_says_so() {
     assert!(out.status.success() && stderr.contains("no cornercase server is running"), "{out:?}");
 }
 
-#[test]
-fn update_installs_the_latest_release_and_restarts_the_server() {
-    let bin = installed_copy("update");
+#[rstest]
+#[case::at_once("99.0.0", &[][..])]
+#[case::once_no_agent_works("99.0.1", &["--when-idle"][..])]
+fn update_installs_the_latest_release_and_restarts_the_server(#[case] version: &str, #[case] when: &[&str]) {
+    let bin = installed_copy(&format!("update-{version}"));
     let mut app = Harness::open_from(&bin, Session::new(), ROWS, COLS, &[]);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
-    let name = format!("ccup-{}", std::process::id());
+    let name = format!("ccup-{version}-{}", std::process::id());
     let dir = temp_dir_named(&name);
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
@@ -1075,7 +1105,7 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     app.session.wait_for_program("sleep");
     let marker = bin.with_file_name("new-client-ran");
     let new = format!(
-        "#!/bin/sh\n[ \"$1\" = --version ] && exec echo 'cornercase 99.0.0'\n[ $# -eq 0 ] && touch '{}'\nexec '{}' \"$@\"\n",
+        "#!/bin/sh\n[ \"$1\" = --version ] && exec echo 'cornercase {version}'\n[ $# -eq 0 ] && touch '{}'\nexec '{}' \"$@\"\n",
         marker.display(),
         env!("CARGO_BIN_EXE_cornercase")
     );
@@ -1083,15 +1113,16 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     let out = app
         .session
         .command_of(&bin)
-        .args(["update", "--yes"])
-        .env(update::LATEST_ENV, fake_release("99.0.0", &new))
+        .args([&["update", "--yes"][..], when].concat())
+        .env(update::LATEST_ENV, fake_release(version, &new))
         .output()
         .expect("run update");
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{out:?}");
-    assert!(stdout.contains(&format!("updated cornercase {} → 99.0.0", update::CURRENT)), "{stdout}");
+    assert!(stdout.contains(&format!("updated cornercase {} → {version}", update::CURRENT)), "{stdout}");
     assert!(stdout.contains("restarted the cornercase server"), "{stdout}");
+    assert_eq!(stdout.contains("restarts once no agent is working"), !when.is_empty(), "{stdout}");
     assert!(stdout.contains("1 program (`sleep` in ") && stdout.contains("stopped 1 program"), "{stdout}");
     assert_eq!(std::fs::read_to_string(&bin).expect("the new binary"), new);
     app.wait_for("the client comes back with both projects and new shells", |s| {

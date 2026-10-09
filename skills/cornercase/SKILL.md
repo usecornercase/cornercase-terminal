@@ -11,6 +11,7 @@ When the environment has `CORNERCASE=1`, you run in a pane of cornercase, a term
 - Learn the syntax from `cornercase --help` and `cornercase <command> --help`. Never guess flags. `cornercase status` lists the ids; your own pane is marked `(you)`.
 - To act on a worktree you started, name it by its branch with `--worktree BRANCH` where a command takes `--workspace ID` (`cornercase close --worktree fix/login --remove-worktree`) instead of reading its id from `status`.
 - Never steal focus: no `cornercase focus` or `--focus` unless the user asks. Never run `cornercase kill-server`. Close only what you created.
+- Restart or update cornercase only when the user asks, and then with `--when-idle --yes` (`cornercase update --when-idle --yes`), in the background as your last step: it waits until no other agent is working, so none loses its turn, then stops you too. Ending it, or its `--timeout`, calls the restart off.
 - Do not answer another agent's permission prompt or question (status `waiting`) without asking the user.
 - An agent shown as `working (background shell)` has ended its turn but left a background command running, and may wake up when it ends; `--until turn-over` stops waiting there. Read its pane, and stop that command if nothing should wake it.
 - After a timeout, or `send --enter` failing with `not confirmed`, `cornercase read` the pane before sending anything again: the agent may have received it.

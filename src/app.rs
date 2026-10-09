@@ -488,13 +488,21 @@ impl Toast {
     }
 
     fn lasts(&self) -> Duration {
-        if self.undo.is_some() {
-            UNDO_FOR
-        } else if self.icon == ui::ToastIcon::Bug {
-            BUG_FOR
-        } else {
-            TOAST_FOR
+        match self.icon {
+            _ if self.undo.is_some() => UNDO_FOR,
+            ui::ToastIcon::Bug => BUG_FOR,
+            ui::ToastIcon::Restart => Duration::MAX,
+            ui::ToastIcon::Check | ui::ToastIcon::Agent(_) => TOAST_FOR,
         }
+    }
+
+    fn view(&self) -> ui::Toast<'_> {
+        let button = match self.icon {
+            _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
+            ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
+            ui::ToastIcon::Check | ui::ToastIcon::Agent(_) | ui::ToastIcon::Bug => None,
+        };
+        ui::Toast { message: &self.message, icon: self.icon, button }
     }
 }
 
@@ -1717,6 +1725,19 @@ impl App {
         if !bytes.is_empty() && !term.write(&bytes) {
             self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
         }
+    }
+
+    fn toast_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
+        let Some(toast) = &self.toast else { return false };
+        if ev.kind != MouseEventKind::Down(MouseButton::Left) || !ui::toast_button(area, toast.view()).contains(pos) {
+            return false;
+        }
+        match self.toast.take() {
+            Some(Toast { undo: Some(removed), .. }) => self.todos.restore(removed),
+            Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
+            _ => {}
+        }
+        true
     }
 
     fn handle_mouse(&mut self, ev: MouseEvent, area: Rect) -> Result<()> {
@@ -4451,7 +4472,7 @@ impl App {
             muted: ui::muted(&self.theme),
             tab,
             overlay,
-            toast: self.toast.as_ref().map(|t| ui::Toast { message: &t.message, icon: t.icon, undo: t.undo.is_some() }),
+            toast: self.toast.as_ref().map(Toast::view),
             nav: self.nav,
             update: self.update_label(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
@@ -12742,7 +12763,11 @@ rm -f "$1/sessions/$$.json"
         fn undo(app: &mut App, message: &str) {
             click(
                 app,
-                ui::toast_undo(AREA, ui::Toast { message, icon: ui::ToastIcon::Check, undo: true }).as_position(),
+                ui::toast_button(
+                    AREA,
+                    ui::Toast { message, icon: ui::ToastIcon::Check, button: Some(ui::ToastButton::Undo) },
+                )
+                .as_position(),
             );
         }
 
@@ -13961,6 +13986,162 @@ rm -f "$s"
 
                 let message = error(agent.answered("the transcript is looked for"));
                 assert_eq!(message, format!("the claude agent in pane {id} has not written a message yet"));
+            }
+
+            mod restarting_when_idle {
+                use super::*;
+
+                fn when_idle(timeout: Option<f64>) -> Command {
+                    Command::RestartWhenIdle(wire::RestartWhenIdle { timeout })
+                }
+
+                fn working(agent: &mut Agent, prompt: &str) -> u64 {
+                    let id = agent.start(None);
+                    ask(&mut agent.app, None, send_text(id, prompt, true, false));
+                    done(agent.answered("the enter is pressed"));
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent works", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Working)
+                    });
+                    id
+                }
+
+                fn looked_again(agent: &mut Agent) {
+                    let since = Instant::now();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "another look at the agents", |a| a.watched.is_some_and(|at| at > since));
+                }
+
+                fn report(response: Response) -> Report {
+                    match response {
+                        Response::Ok(value) => serde_json::from_value(value).expect("a report"),
+                        Response::Error(message) => panic!("the restart failed: {message}"),
+                    }
+                }
+
+                #[test]
+                fn waits_until_the_agent_ends_its_turn_then_restarts() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+
+                    ask(&mut agent.app, None, when_idle(None));
+                    looked_again(&mut agent);
+                    let pending = (answers(&mut agent.app), toast(&agent.app).map(str::to_owned));
+                    let early = agent.app.take_restart();
+                    agent.finish();
+                    let stopped = report(agent.answered("the agent ends its turn"));
+
+                    assert_eq!(pending, (Vec::new(), Some("restart pending until 1 agent ends its turn".into())));
+                    let notice = agent.app.toast.as_ref().map(|t| t.icon);
+                    assert_eq!((early, agent.app.take_restart().is_some()), (None, true));
+                    assert_ne!(notice, Some(ui::ToastIcon::Restart));
+                    let panes = stopped.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+                    let info = panes.flat_map(|t| &t.panes).find(|p| p.id == id).expect("the agent's pane");
+                    assert_eq!(info.status.as_deref(), Some("done"));
+                }
+
+                #[test]
+                fn a_turn_left_with_a_background_shell_is_over() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "watch in the background");
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+
+                    ask(&mut agent.app, None, when_idle(None));
+                    report(agent.answered("the restart"));
+
+                    assert!(agent.app.take_restart().is_some());
+                    agent.finish();
+                }
+
+                #[test]
+                fn the_pane_that_asks_never_holds_it() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "update cornercase");
+
+                    ask(&mut agent.app, Some(id), when_idle(None));
+                    report(agent.answered("the restart"));
+
+                    assert!(agent.app.take_restart().is_some());
+                    agent.finish();
+                }
+
+                #[test]
+                fn what_was_just_typed_into_an_agent_holds_it_a_moment() {
+                    let mut agent = Agent::new();
+                    let id = agent.start(None);
+                    done(now(&mut agent.app, None, send_text(id, "half a thought", false, false)));
+                    ask(&mut agent.app, None, when_idle(None));
+                    let typed = Instant::now();
+
+                    agent.app.watched = None;
+                    agent.app.refresh(typed);
+                    let held = (answers(&mut agent.app), agent.app.take_restart());
+                    agent.app.watched = None;
+                    agent.app.refresh(typed + Duration::from_secs(3));
+
+                    assert_eq!(held, (Vec::new(), None));
+                    assert!(agent.app.take_restart().is_some());
+                }
+
+                #[test]
+                fn a_timeout_gives_up_and_keeps_the_server() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+
+                    ask(&mut agent.app, None, when_idle(Some(0.05)));
+                    let message = error(agent.answered("the timeout"));
+
+                    assert_eq!(
+                        message,
+                        format!(
+                            "timed out after 0.05s: the agent in pane {id} has not ended its turn, so the server \
+                             keeps running"
+                        )
+                    );
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app)), (None, None));
+                    agent.finish();
+                }
+
+                #[test]
+                fn the_window_cancels_it() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+                    ask(&mut agent.app, None, when_idle(None));
+
+                    let shown = agent.app.toast.as_ref().expect("the pending restart").view();
+                    let cancel = ui::toast_button(AREA, shown).as_position();
+                    click(&mut agent.app, cancel);
+                    let message = error(answers(&mut agent.app).remove(0));
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent stops", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    looked_again(&mut agent);
+
+                    assert_eq!(message, "the restart was cancelled in the window; the server keeps running");
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app)), (None, None));
+                }
+
+                #[test]
+                fn a_command_that_goes_away_takes_it_along() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+                    ask(&mut agent.app, None, when_idle(None));
+
+                    agent.app.forget(CLIENT);
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent stops", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    looked_again(&mut agent);
+
+                    let answered = answers(&mut agent.app);
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app), answered), (None, None, Vec::new()));
+                }
             }
         }
 

@@ -35,6 +35,7 @@ const STARTS_WITHIN: Duration = Duration::from_secs(10);
 pub(super) const CONFIRM_WITHIN: Duration = Duration::from_secs(10);
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 const SHELL_UNSEEN: Duration = Duration::from_secs(1);
+const INPUT_HOLDS: Duration = Duration::from_secs(2);
 const TEXT_EVERY: Duration = Duration::from_millis(100);
 const SOONEST: Duration = Duration::from_millis(10);
 const WATCHED: [&str; 3] = [agents::CLAUDE, agents::CODEX, agents::OPENCODE];
@@ -44,6 +45,7 @@ const NO_PROJECT: &str = "no project is open; open one with `cornercase open PAT
 const NO_PANE: &str = "no pane is open here; pass --pane or --tab (`cornercase status` lists them)";
 const NO_AGENT: &str = "say which agent to start, such as `cornercase start claude`: settings → agents is on auto \
     and no agent runs here";
+const RESTART_CANCELLED: &str = "the restart was cancelled in the window; the server keeps running";
 
 type Reply = Result<Value, String>;
 type Handled = Result<Option<Value>, String>;
@@ -90,6 +92,7 @@ enum Stage {
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
     Reading,
+    Restart { caller: Option<u64> },
 }
 
 impl Stage {
@@ -275,6 +278,26 @@ fn turn_over(agent: &activity::Pane) -> Option<bool> {
     agent.status().map(|_| Condition::TurnOver.ended(agent).is_some())
 }
 
+fn held(panes: &[u64]) -> String {
+    let ids: Vec<String> = panes.iter().map(u64::to_string).collect();
+    match ids.as_slice() {
+        [] => "the server keeps running".into(),
+        [one] => format!("the agent in pane {one} has not ended its turn, so the server keeps running"),
+        [first @ .., last] => format!(
+            "the agents in panes {} and {last} have not ended their turn, so the server keeps running",
+            first.join(", ")
+        ),
+    }
+}
+
+fn pending_restart(agents: usize) -> String {
+    match agents {
+        0 => "restart pending".into(),
+        1 => "restart pending until 1 agent ends its turn".into(),
+        n => format!("restart pending until {n} agents end their turn"),
+    }
+}
+
 fn pane_ids(pane: u64) -> Done {
     Done { ids: Ids { pane: Some(pane), ..Ids::default() }, ..Done::default() }
 }
@@ -344,7 +367,14 @@ impl App {
         }
         self.requests.pending.retain(|p| {
             p.client.is_some()
-                || !matches!(p.stage, Stage::Confirm(_) | Stage::Watch(_) | Stage::Several { .. } | Stage::Reading)
+                || !matches!(
+                    p.stage,
+                    Stage::Confirm(_)
+                        | Stage::Watch(_)
+                        | Stage::Several { .. }
+                        | Stage::Reading
+                        | Stage::Restart { .. }
+                )
         });
     }
 
@@ -393,6 +423,7 @@ impl App {
             Command::Todo(todo) => self.todo_request(todo),
             Command::Events(events) => self.events_request(client, events),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
+            Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
         }
     }
 
@@ -419,6 +450,9 @@ impl App {
             match self.advance(&mut pending, &launched, now) {
                 None => kept.push(pending),
                 Some(reply) => {
+                    if reply.is_ok() && matches!(pending.stage, Stage::Restart { .. }) {
+                        self.restart = true;
+                    }
                     self.answer(pending.client, reply);
                     if matches!(pending.stage, Stage::Worktree(_)) {
                         kept.push(Pending { client: None, timeout: None, ..pending });
@@ -428,6 +462,7 @@ impl App {
         }
         kept.append(&mut self.requests.pending);
         self.requests.pending = kept;
+        self.show_pending_restart(now);
     }
 
     fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
@@ -487,6 +522,12 @@ impl App {
                 return Some(Ok(json(&Done { panes, ..Done::default() })));
             }
         }
+        if let Stage::Restart { caller } = pending.stage
+            && self.watched == Some(now)
+            && self.holding(caller, now).is_empty()
+        {
+            return Some(Ok(json(&self.report(caller))));
+        }
         let (at, seconds) = pending.timeout.filter(|_| pending.client.is_some())?;
         (now >= at).then(|| Err(format!("timed out after {seconds}s: {}", self.waiting_on(&pending.stage, pane))))
     }
@@ -509,6 +550,7 @@ impl App {
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
             Stage::Reading => return format!("the record of pane {pane} is still being read"),
+            Stage::Restart { caller } => return held(&self.holding(*caller, Instant::now())),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
                 let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));
@@ -529,6 +571,50 @@ impl App {
                  --until turn-over ends there"
             ),
             _ => format!("the agent in pane {pane} is {}", term.agent.status().map_or("starting", Status::name)),
+        }
+    }
+
+    fn holding(&self, caller: Option<u64>, now: Instant) -> Vec<u64> {
+        let launching: Vec<u64> = self.launches.iter().filter(|l| !l.waits_for_you()).map(|l| l.term).collect();
+        let terms = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms);
+        let holds = |term: &&Term| Some(term.id) != caller && (launching.contains(&term.id) || self.at_work(term, now));
+        terms.filter(holds).map(|term| term.id).collect()
+    }
+
+    fn at_work(&self, term: &Term, now: Instant) -> bool {
+        if term.agent.status().is_some() && Condition::TurnOver.ended(&term.agent).is_none() {
+            return true;
+        }
+        let within = |at: Instant, limit: Duration| now.saturating_duration_since(at) < limit;
+        let typed = term.input_at.is_some_and(|at| within(at, INPUT_HOLDS));
+        let unanswered = term.submitted.is_some_and(|at| within(at, STARTS_WITHIN) && !term.agent.reacted(at));
+        (typed || unanswered) && self.runs_agent(term)
+    }
+
+    pub(super) fn show_pending_restart(&mut self, now: Instant) {
+        let shown = self.toast.as_ref().is_some_and(|t| t.icon == ui::ToastIcon::Restart);
+        let pending = self.requests.pending.iter().find_map(|p| match p.stage {
+            Stage::Restart { caller } => Some(caller),
+            _ => None,
+        });
+        match pending {
+            None if shown => self.toast = None,
+            Some(caller) if shown || self.toast.is_none() => {
+                let message = pending_restart(self.holding(caller, now).len());
+                self.toast = Some(Toast::new(message, ui::ToastIcon::Restart));
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn cancel_restarts(&mut self) {
+        let (cancelled, kept): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.requests.pending)
+            .into_iter()
+            .partition(|p| matches!(p.stage, Stage::Restart { .. }));
+        self.requests.pending = kept;
+        log::info!("control", "restart cancelled in the window", waits = cancelled.len());
+        for pending in cancelled {
+            self.answer(pending.client, Err(RESTART_CANCELLED.into()));
         }
     }
 
@@ -1376,6 +1462,21 @@ impl App {
         self.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Check));
         Ok(Some(json(&Done::default())))
+    }
+
+    fn restart_request(
+        &mut self,
+        client: u64,
+        caller: Option<u64>,
+        restart: &control::RestartWhenIdle,
+        now: Instant,
+    ) -> Handled {
+        let timeout = deadline(restart.timeout, now)?;
+        let key = self.requests.key();
+        let stage = Stage::Restart { caller };
+        self.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
+        self.show_pending_restart(now);
+        Ok(None)
     }
 
     fn events_request(&mut self, client: u64, events: control::Events) -> Handled {
