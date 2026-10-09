@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6421
+assertion_line: 6463
 expression: render(&with_details(opus(17))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -10,7 +10,7 @@ expression: render(&with_details(opus(17))).backend()
 "▌ shop (1)                     │  login                  │                                          "
 "                               │▌ ├ ◐ claude             │                                          "
 "  + New                        │▌ │   Opus 5.5 · 17%     │                                          "
-"                               │  ├ nvim                 │                                          "
+"                               │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "
 "                               │                         │         + Tab opens a shell here         "
 "                               │  + New workspace        │                                          "

@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6449
+assertion_line: 6488
 expression: render(&view).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -10,7 +10,7 @@ expression: render(&view).backend()
 "▌ shop (1)                     │  login                  │                                          "
 "                               │▌ ├ ◐ opencode           │                                          "
 "  + New                        │▌ │   DeepSeek V4… · 12% │                                          "
-"                               │  ├ nvim                 │                                          "
+"                               │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "
 "                               │                         │         + Tab opens a shell here         "
 "                               │  + New workspace        │                                          "

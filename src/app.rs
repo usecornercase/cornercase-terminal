@@ -27,7 +27,6 @@ use crate::issues::{
 use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self, Job, Level};
 use crate::markdown;
-use crate::memory;
 use crate::mouse;
 use crate::notify::{self, Notification};
 use crate::panics;
@@ -551,14 +550,6 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
     }
 }
 
-fn measure_memory(term: &mut Term, measure: bool, now: Instant) {
-    if term.agent.status().is_none() {
-        term.memory = memory::Pane::default();
-    } else if measure && let Some(pid) = term.shell_pid() {
-        term.memory.update(pid, now);
-    }
-}
-
 fn lock_message(label: &str, lock: &worktree::Lock) -> String {
     let reason = ui::truncate_right(&lock.reason, MAX_LOCK_REASON);
     let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
@@ -951,7 +942,9 @@ impl App {
                         } else if seen {
                             term.agent.see();
                         }
-                        measure_memory(term, measure, now);
+                        if measure && let Some(pid) = term.shell_pid() {
+                            term.memory.update(pid, now);
+                        }
                     }
                 }
             }
@@ -4467,6 +4460,7 @@ impl App {
         ui::TabEntry {
             name: t.label(&self.config),
             status: t.status(),
+            running: t.running(),
             details: self.tab_details(t),
             others: t.others(),
         }
@@ -8038,59 +8032,70 @@ rm -f "$1/sessions/$$.json"
             assert_eq!((height, below.ends_with(" MB")), (2, true), "{below}");
         }
 
+        fn measured_shell() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(1);
+            app.config.memory = true;
+            watch_until(&mut app, &rx, "the shell is measured", |a| memory(a).is_some());
+            (app, rx, dirs)
+        }
+
         #[test]
         fn turning_the_memory_off_gives_the_tab_its_row_back() {
-            let (mut app, _rx, _dirs, claude) = measured_claude();
+            let (mut app, _rx, _dirs) = measured_shell();
 
             app.config.memory = false;
             let (height, below) = second_row(&mut app);
-            claude.signal("quit");
 
             assert_eq!((height, below.contains(" MB")), (1, false), "{below}");
         }
 
         #[test]
-        fn the_memory_goes_once_the_agent_quits() {
-            let (mut app, rx, _dirs, claude) = measured_claude();
+        fn with_the_memory_on_a_shell_tab_shows_how_much_it_uses_under_its_name() {
+            let (mut app, _rx, _dirs) = measured_shell();
 
-            claude.signal("quit");
+            let (height, below) = second_row(&mut app);
 
-            watch_until(&mut app, &rx, "the memory goes", |a| memory(a).is_none());
+            assert_eq!((height, below.ends_with(" MB")), (2, true), "{below}");
         }
 
         #[test]
-        fn a_split_tab_adds_up_the_memory_of_its_agents() {
-            let (mut app, rx, _dirs, claude) = measured_claude();
+        fn a_shell_tab_says_whether_a_program_runs_in_it() {
+            let (mut app, rx, _dirs) = app_with(1);
+            let running = |a: &App| a.projects[0].workspaces[0].tabs[0].running();
+            watch_until(&mut app, &rx, "the shell is at its prompt", |a| !running(a));
+
+            type_line(&mut app, "sleep 30");
+            watch_until(&mut app, &rx, "sleep runs", running);
+            send_key(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+            watch_until(&mut app, &rx, "the shell is back", |a| !running(a));
+        }
+
+        #[test]
+        fn a_split_tab_adds_up_the_memory_of_every_pane() {
+            let (mut app, rx, _dirs) = measured_shell();
             let pane = areas().pane;
             right_click(&mut app, Position::new(pane.x + 1, pane.y + 1));
             pick(&mut app, "split right");
-            claude.start(&mut app);
             let panes = |a: &App| -> Vec<Option<u64>> {
                 a.projects[0].workspaces[0].tabs[0].panes.iter().map(|t| t.memory.bytes()).collect()
             };
-            watch_until(&mut app, &rx, "both agents are measured", |a| panes(a).iter().all(Option::is_some));
+            watch_until(&mut app, &rx, "both panes are measured", |a| panes(a).iter().all(Option::is_some));
 
             let sum = panes(&app).into_iter().flatten().sum::<u64>();
-            claude.signal("quit");
 
             assert_eq!(memory(&app), Some(sum));
         }
 
         #[test]
-        fn the_tree_measures_the_agents_of_every_open_project() {
+        fn the_tree_measures_the_tabs_of_every_open_project() {
             let (mut app, rx, _dirs) = app_with(2);
             app.config.memory = true;
             app.config.sidebar = ui::Sidebar::Tree.id().into();
-            let claude = Claude::running(SILENT_CLAUDE);
-            for p in 0..2 {
-                app.active = p;
-                claude.start(&mut app);
-            }
             rendered(&mut app, Rect::new(0, 0, 100, 30));
 
             let measured = |a: &App| a.projects.iter().all(|p| p.workspaces[0].tabs[0].memory().is_some());
-            watch_until(&mut app, &rx, "the agents of both projects are measured", measured);
-            claude.signal("quit");
+            watch_until(&mut app, &rx, "the tabs of both projects are measured", measured);
         }
 
         #[test]
@@ -10279,7 +10284,7 @@ rm -f "$1/sessions/$$.json"
                 app.add_tab(0, 0, AREA).expect("add a tab");
             }
             for (t, tab) in app.projects[0].workspaces[0].tabs.iter_mut().enumerate() {
-                tab.name = Some(format!("tab {t}"));
+                tab.name = Some(format!("t{t}"));
             }
             drawn_in(&mut app, AREA);
             (app, rx, dirs)

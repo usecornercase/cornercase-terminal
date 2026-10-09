@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6434
+assertion_line: 6480
 expression: "render(&codex(\"gpt-5.4\", Some(20))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -8,9 +8,9 @@ expression: "render(&codex(\"gpt-5.4\", Some(20))).backend()"
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ shop (1)                     │  login                  │                                          "
-"                               │▌ ├ codex                │                                          "
-"  + New                        │▌ │ gpt-5.4 · 20%        │                                          "
-"                               │  ├ nvim                 │                                          "
+"                               │▌ ├ › codex              │                                          "
+"  + New                        │▌ │   gpt-5.4 · 20%      │                                          "
+"                               │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "
 "                               │                         │         + Tab opens a shell here         "
 "                               │  + New workspace        │                                          "

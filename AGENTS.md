@@ -69,7 +69,7 @@ src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tre
 src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt
 src/activity.rs   what the agent in a pane is doing: Claude Code's session file, its title glyph, Codex's title and turns, opencode's turns, done-but-unseen, rollups
 src/context.rs    model/context lines for Claude Code, Codex and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line, its last message), context/message.rs the last message each wrote (`read --last-message`), reading JSONL backwards
-src/memory.rs     how much memory an agent pane uses (its shell and descendants), measured on a thread
+src/memory.rs     how much memory a pane uses (its shell and descendants), measured on a thread
 src/usage/        plan usage: claude.rs (the `get_usage` control request), codex.rs (`codex app-server`, `account/rateLimits/read`), mod.rs (running a probe, the modal's state per agent)
 src/notify.rs     desktop notifications through the outer terminal: which escape sequence a terminal understands, encoding
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them

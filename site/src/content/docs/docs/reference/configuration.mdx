@@ -87,7 +87,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
 | **model** | Show the model of a Claude Code, Codex or opencode tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
-| **memory** | Show how much memory a Claude Code, Codex or opencode tab uses at the end of that line, such as `1.2 GB`. Off by default. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses). |
+| **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 | **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
@@ -283,7 +283,7 @@ Whether that line shows how full the agent's context is, such as `23%`, after th
 
 #### `memory`
 
-Whether a Claude Code, Codex or opencode tab shows how much memory its processes use at the end of its second line, such as `Opus 5.5 · 23% · 1.2 GB`, or `1.2 GB` alone with `model` and `context` off. While it is `true`, the agents of the project on screen are measured every 2 seconds; in the [tree](../../guides/projects-workspaces-tabs/#the-tree), those of every open workspace. See [How much memory an agent uses](../../guides/projects-workspaces-tabs/#how-much-memory-an-agent-uses).
+Whether every tab shows how much memory its processes use on its second line, such as `Opus 5.5 · 23% · 1.2 GB`, or `1.2 GB` alone in a shell tab or with `model` and `context` off. While it is `true`, the tabs of the project on screen are measured every 2 seconds; in the [tree](../../guides/projects-workspaces-tabs/#the-tree), those of every open workspace. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses).
 
 #### `desktop_notifications`
 

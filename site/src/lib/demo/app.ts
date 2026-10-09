@@ -205,7 +205,7 @@ const DETAILS = [
 const DETAIL_NOTICES = {
   model: ['agent tabs show their model', 'agent tabs hide their model'],
   context: ['agent tabs show how full their context is', 'agent tabs hide their context'],
-  memory: ['agent tabs show the memory they use', 'agent tabs hide their memory'],
+  memory: ['tabs show the memory they use', 'tabs hide their memory'],
 } as const;
 
 const RESTART_STOPS = "Restarting stops every program running in cornercase's terminals.";
@@ -424,8 +424,7 @@ export class App {
             const agent = agentIn(pane);
             const fg = pane.shell.fg;
             pane.context = fg instanceof Agent ? fg.context : null;
-            if (!agent) pane.memory = null;
-            else if (measured) pane.memory = agent.memory;
+            if (measured) pane.memory = agent ? agent.memory : pane.shell.memory;
             followAgent(pane, agent?.name ?? null);
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
             if (status && agent) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
@@ -645,7 +644,7 @@ export class App {
 
   tabStrip(bar: Rect): Strip {
     const tabs = this.workspace()?.tabs ?? [];
-    return new Strip(bar, tabs.map((t) => tabWidth(tabLabel(t), !!tabStatus(t), t.panes.length - 1)), this.tabBarScroll);
+    return new Strip(bar, tabs.map((t) => tabWidth(tabLabel(t), t.panes.length - 1)), this.tabBarScroll);
   }
 
   barDetails(): Details {

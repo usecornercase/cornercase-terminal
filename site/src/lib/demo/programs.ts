@@ -122,6 +122,10 @@ export class Shell implements Program {
     return this.fg !== null || this.job !== null;
   }
 
+  get memory(): number {
+    return this.busy ? PROGRAM_MEMORY : SHELL_MEMORY;
+  }
+
   folder(): string {
     const place = this.host.place();
     if (this.cwd.length) return shortFolder(this.cwd[this.cwd.length - 1]);
@@ -733,6 +737,8 @@ const AGENT_WINDOW = 1_000_000;
 const MB = 1 << 20;
 const CLAUDE_MEMORY = 412 * MB;
 const CODEX_MEMORY = 168 * MB;
+const SHELL_MEMORY = 6 * MB;
+const PROGRAM_MEMORY = 184 * MB;
 const MEMORY_PER_TOKEN = 4_000;
 const PROMPT_TOKENS = 38_000;
 const REPLY_TOKENS = 9_000;

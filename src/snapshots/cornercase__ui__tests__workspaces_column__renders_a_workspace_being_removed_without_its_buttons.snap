@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6158
+assertion_line: 6170
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -11,7 +11,7 @@ expression: render(&v).backend()
 "                               │  └                      │                                          "
 "  + New                        │                         │                                          "
 "                               │  main                   │                                          "
-"                               │▌ ├ zsh                  │                no tab open               "
+"                               │▌ ├ › zsh                │                no tab open               "
 "                               │  └ + Tab                │         + Tab opens a shell here         "
 "                               │                         │                                          "
 "                               │  + New workspace        │                                          "

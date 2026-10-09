@@ -136,11 +136,18 @@ cornercase reads what each agent reports about itself. Nothing is installed and 
 - **Codex**: the title Codex gives the terminal, which starts with a spinner while it works and with `[ ! ] Action Required` while it waits for an approval, and the session's rollout file (the one behind the [context line](#how-full-the-context-is)), which records when each turn starts and ends. If you take the activity out of Codex's terminal title (its `/title` setting), the tab still shows working and finished, but not `!`. Verified against Codex CLI 0.160.0.
 - **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows `◐` and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
 
-Other agents don't get an icon yet.
+A tab without one of these agents shows its shell instead, in grey, so every tab's name starts in the same column:
+
+| Icon | Means |
+| --- | --- |
+| `▸` grey | A program runs in the tab, such as `yarn dev`, a build or an editor. |
+| `›` grey | The shell waits at its prompt. |
+
+They never show on the workspace, project or group rows, and a program that ends in another tab gets no `✓`. Other agents show as programs.
 
 ### How full the context is
 
-Claude Code, Codex and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-an-agent-uses).
+Claude Code, Codex and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-a-tab-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -170,11 +177,11 @@ The numbers come from the end of the conversation's transcript, which Claude Cod
 
 The variables are read from the running `claude` and from the `env` of its settings. After switching models with `/model`, the percentage can be off until the new model is also in one of those places.
 
-### How much memory an agent uses
+### How much memory a tab uses
 
-Turn on **settings → UI → memory** and Claude Code, Codex and opencode tabs also show how much memory they use, at the end of the same line: `Opus 5.5 · 23% · 1.2 GB`, or just `1.2 GB` with the model and the context off. Other tabs keep one row.
+Turn on **settings → UI → memory** and every tab also shows how much memory it uses: at the end of an agent's line, `Opus 5.5 · 23% · 1.2 GB`, and on a second line of its own in a shell tab, `412 MB`, or just `1.2 GB` with the model and the context off.
 
-It is the memory held by everything running in the tab's agent panes: the shell, the agent and whatever the agent started, such as MCP servers, language servers and background commands. Each process counts only what it keeps on its own (on macOS, the figure Activity Monitor shows in its Memory column; on Linux, its private memory, including what was swapped out), so code that several processes share, such as the agent's own program, is not counted again for each of them, and the total is close to what the agent costs you. It is measured every 2 seconds, only for the project on screen (in the [tree](#the-tree), for every workspace you have open) and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
+It is the memory held by everything running in the tab's panes: each shell and whatever runs in it, such as an agent and what the agent started (MCP servers, language servers, background commands) or a dev server and its workers. In a split tab every pane counts. Each process counts only what it keeps on its own (on macOS, the figure Activity Monitor shows in its Memory column; on Linux, its private memory, including what was swapped out), so code that several processes share, such as the agent's own program, is not counted again for each of them, and the total is close to what the agent costs you. It is measured every 2 seconds, only for the project on screen (in the [tree](#the-tree), for every workspace you have open) and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
 
 ### Notifications
 
@@ -317,7 +324,7 @@ With **settings → UI → tabs** set to *top*, a workspace's tabs leave the sid
 />
 
 - Each tab shows its status and its name, and a split tab how many other panes it has (`+2`); the one on screen sits on a highlighted background. Click a tab to show it, hover it and click **`⋯`** for its menu or **`×`** to close it, and click **`+`** to open a shell.
-- The second line shows the model, the context and, if turned on, the memory of the pane you are in, in grey; a shell leaves it empty. The [model, context and memory](#how-full-the-context-is) switches apply as on the sidebar's tab rows.
+- The second line shows the model, the context and, if turned on, the memory of the pane you are in, in grey; a shell shows only its memory, if turned on. The [model, context and memory](#how-full-the-context-is) switches apply as on the sidebar's tab rows.
 - Both lines are always there, so switching tabs never resizes the terminal.
 - When the tabs don't fit, **`‹`** and **`›`** at the ends and the mouse wheel scroll them; the tab you switch to always comes into view.
 - Drag a tab sideways to reorder it; right-click it, or use its `⋯`, to rename it.

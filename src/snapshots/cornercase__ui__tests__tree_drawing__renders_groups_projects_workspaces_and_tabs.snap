@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 5300
+assertion_line: 5312
 expression: "render_sized(&with_tree(), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -14,7 +14,7 @@ expression: "render_sized(&with_tree(), W, TALL.height).backend()"
 "      ▾ main                   │                                                                    "
 "▌     ├ ◐ claude               │                                                                    "
 "▌     │   Opus 5.5 · 23%       │                                                                    "
-"      ├ zsh                    │                                                                    "
+"      ├ › zsh                  │                                                                    "
 "      └ + Tab                  │                                                                    "
 "      ▸ issue-50-re… ✓ ↓2      │                                                                    "
 "      + New workspace          │                             no tab open                            "

@@ -49,6 +49,9 @@ const INPUT_PROMPT: &str = "› ";
 const SEARCH_ICON: &str = " ⌕ ";
 const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
 const MENU_ICON: &str = "≡";
+const SHELL_ICON: &str = "›";
+const PROGRAM_ICON: &str = "▸";
+pub const ICON_WIDTH: usize = 2;
 const BACK_LABEL: &str = "‹ Projects";
 pub const AGENTS_LABEL: &str = "Agents ›";
 const AGENTS_TITLE: &str = "Agents";
@@ -2322,8 +2325,23 @@ pub struct WorkspaceEntry {
 pub struct TabEntry {
     pub name: String,
     pub status: Option<Status>,
+    pub running: bool,
     pub details: Details,
     pub others: usize,
+}
+
+impl TabEntry {
+    pub fn icon(&self, muted: Color) -> Span<'static> {
+        match self.status {
+            Some(status) => status_icon(muted, status),
+            None => Span::styled(if self.running { PROGRAM_ICON } else { SHELL_ICON }, dim(muted)),
+        }
+    }
+
+    pub fn prefix(&self, muted: Color, bg: Style) -> [Span<'static>; 2] {
+        let icon = self.icon(muted);
+        [Span::styled(icon.content, bg.patch(icon.style)), Span::styled(" ", bg)]
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -2347,7 +2365,7 @@ impl From<&str> for TabEntry {
 
 impl From<String> for TabEntry {
     fn from(name: String) -> Self {
-        Self { name, status: None, details: Details::default(), others: 0 }
+        Self { name, status: None, running: false, details: Details::default(), others: 0 }
     }
 }
 
@@ -3816,10 +3834,8 @@ fn draw_workspace_band(f: &mut Frame, view: &View, band: Band, entry: &Workspace
 
 fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active: bool) {
     let style = Style::default().fg(if active { Color::White } else { Color::Gray });
-    let icon = tab.status.map(|status| status_icon(view.muted, status));
-    let icon_width = if icon.is_some() { 2 } else { 0 };
-    let indent = band.lead_width() + icon_width;
-    let max = band.room().saturating_sub(icon_width);
+    let indent = band.lead_width() + ICON_WIDTH;
+    let max = band.room().saturating_sub(ICON_WIDTH);
     let others = (tab.others > 0).then(|| Span::styled(format!("+{}", tab.others), Style::default().fg(view.muted)));
     let marks = Tags::fit(others.into_iter().collect(), max);
     let name = if marks.is_empty() {
@@ -3830,9 +3846,7 @@ fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEntry, active:
     };
     let used = name.chars().count();
     let mut line = band.lead;
-    if let Some(icon) = icon {
-        line.extend([icon, Span::raw(" ")]);
-    }
+    line.extend(tab.prefix(view.muted, Style::default()));
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, max);
     draw_band(f, band.r, Line::from(line), band.bg);
@@ -6101,7 +6115,7 @@ mod tests {
             v.workspaces[0].name = long.into();
             v.workspaces[0].tabs[0] = long.into();
             let text = row_text(&v, row);
-            assert!(text.contains("feature-with-") && text.contains('…'), "{text:?}");
+            assert!(text.contains("feature-with") && text.contains('…'), "{text:?}");
         }
 
         #[test]
@@ -6284,10 +6298,41 @@ mod tests {
             assert_eq!((row_text(&t, r).trim_end().to_string(), cell.fg), (format!("  ├ {icon} claude"), colour));
         }
 
+        #[rstest]
+        #[case::at_its_prompt(false, "›")]
+        #[case::running_a_program(true, "▸")]
+        fn a_tab_without_an_agent_shows_its_shell_before_the_name(#[case] running: bool, #[case] icon: &str) {
+            let mut v = with_agents();
+            v.workspaces[0].tabs[2].running = running;
+            let r = tab_row(&v, 0, 2);
+            let t = render(&v);
+            let cell = &t.backend().buffer()[(r.x + 4, r.y)];
+            assert_eq!(
+                (row_text(&t, r).trim_end().to_string(), cell.fg),
+                (format!("  ├ {icon} nvim"), Color::DarkGray)
+            );
+        }
+
         #[test]
-        fn a_tab_without_an_agent_has_no_icon() {
-            let v = with_agents();
-            assert_eq!(row_text(&render(&v), tab_row(&v, 0, 2)).trim_end(), "  ├ nvim");
+        fn every_tab_icon_takes_one_cell() {
+            let agents = [Status::Idle, Status::Working, Status::Done, Status::Waiting].map(|s| (Some(s), false));
+            let widths: Vec<usize> = agents
+                .into_iter()
+                .chain([(None, false), (None, true)])
+                .map(|(status, running)| {
+                    TabEntry { status, running, ..TabEntry::from("") }.icon(Color::DarkGray).width()
+                })
+                .collect();
+            assert_eq!(widths, vec![1; 6]);
+        }
+
+        #[test]
+        fn agent_and_shell_tabs_start_their_names_in_the_same_column() {
+            let mut v = with_agents();
+            v.workspaces[0].tabs[1] = TabEntry { running: true, ..TabEntry::from("yarn") };
+            let t = render(&v);
+            let rows: Vec<String> = (0..3).map(|i| row_text(&t, tab_row(&v, 0, i)).trim_end().to_string()).collect();
+            assert_eq!(rows, ["▌ ├ ◐ claude", "  ├ ▸ yarn", "  ├ › nvim"]);
         }
 
         #[test]
@@ -6300,7 +6345,7 @@ mod tests {
             let count: String = (end - 1..=end).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect();
             let text = row_text(&t, r).trim_end().to_string();
             assert_eq!(
-                (text.starts_with("  ├ nvim "), count.as_str(), t.backend().buffer()[(end, r.y)].fg),
+                (text.starts_with("  ├ › nvim "), count.as_str(), t.backend().buffer()[(end, r.y)].fg),
                 (true, "+2", Color::DarkGray),
                 "{text}"
             );
@@ -6317,12 +6362,12 @@ mod tests {
         #[test]
         fn a_row_too_narrow_for_the_name_still_shows_the_count() {
             let v = with_agents();
-            let r = Rect::new(0, 0, 12, 1);
+            let r = Rect::new(0, 0, 14, 1);
             let band = Band { r, pitch: 1, lead: vec![Span::raw("  ├ ")], bg: Style::default() };
             let tab = TabEntry { others: 1, .."claude".into() };
             let mut t = Terminal::new(TestBackend::new(r.width, 1)).expect("test backend");
             t.draw(|f| draw_tab_band(f, &v, band, &tab, false)).expect("draw");
-            assert_eq!(row_text(&t, r).trim_end(), "  ├ c +1");
+            assert_eq!(row_text(&t, r).trim_end(), "  ├ › c +1");
         }
 
         #[test]
@@ -8516,8 +8561,8 @@ mod tests {
             v.tab_bar.as_mut().expect("a bar").tabs[1].others = 2;
             let t = render(&v);
             let item = v.tab_bar.as_ref().expect("a bar").strip(bar()).item(1);
-            assert_eq!(row_text(&t, item).trim_end(), " zsh +2");
-            let count = t.backend().buffer()[(item.x + 5, item.y)].clone();
+            assert_eq!(row_text(&t, item).trim_end(), " › zsh +2");
+            let count = t.backend().buffer()[(item.x + 7, item.y)].clone();
             assert_eq!((count.symbol(), count.fg), ("+", Color::DarkGray));
         }
 

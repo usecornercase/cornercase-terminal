@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 8373
+assertion_line: 8466
 expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -15,7 +15,7 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.h
 " Workspaces                    │                                                                    "
 "                               │                                                                    "
 "  default                      │                                                                    "
-"▌ ├ codex                      │                                                                    "
+"▌ ├ › codex                    │                                                                    "
 "  └ + Tab                      │                                                                    "
 "                               │                             no tab open                            "
 "  + New workspace              │                      + Tab opens a shell here                      "

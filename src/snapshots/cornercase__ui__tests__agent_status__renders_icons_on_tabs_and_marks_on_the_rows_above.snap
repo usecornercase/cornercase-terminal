@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6267
+assertion_line: 6279
 expression: render(&with_agents()).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -10,7 +10,7 @@ expression: render(&with_agents()).backend()
 "▌ shop (1)              !      │  login        ! ↓2      │                                          "
 "  api (1)               ✓      │▌ ├ ◐ claude             │                                          "
 "                               │  ├ ! claude             │                                          "
-"  ▸ ● work (2)          !      │  ├ nvim                 │                                          "
+"  ▸ ● work (2)          !      │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "
 "  + New                        │                         │         + Tab opens a shell here         "
 "                               │  main            ✓      │                                          "

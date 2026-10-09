@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 4557
+assertion_line: 4569
 expression: "render_sized(&with_todo(), 140, 18).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          │ TODO 2                clear done   ×  "
@@ -8,7 +8,7 @@ expression: "render_sized(&with_todo(), 140, 18).backend()"
 " Projects                      │ Workspaces              │                                          │  ○  fix the login bug in safari       "
 "                               │                         │                                          │  ○  renew the domain                  "
 "▌ shop (1)                     │  main                   │                                          │  ✓  write docs                        "
-"                               │▌ ├ zsh                  │                                          │                                       "
+"                               │▌ ├ › zsh                │                                          │                                       "
 "  + New                        │  └ + Tab                │                                          │  + New TODO                           "
 "                               │                         │                                          │                                       "
 "                               │  + New workspace        │                no tab open               │                                       "

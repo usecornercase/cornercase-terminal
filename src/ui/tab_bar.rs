@@ -7,8 +7,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::{
-    Details, Drag, ROW_MENU_ICON, TabEntry, View, button_style, centered, draw_band, draw_details, hovered,
-    status_icon, truncate_right,
+    Details, Drag, ICON_WIDTH, ROW_MENU_ICON, TabEntry, View, button_style, centered, draw_band, draw_details, hovered,
+    truncate_right,
 };
 
 pub const HEIGHT: u16 = 2;
@@ -34,10 +34,9 @@ impl TabBar {
 }
 
 pub fn width(tab: &TabEntry) -> u16 {
-    let icon = if tab.status.is_some() { 2 } else { 0 };
     let name = tab.name.chars().count().min(MAX_NAME);
     let others = others(tab).map_or(0, |n| 1 + n.chars().count());
-    u16::try_from(1 + icon + name + others).unwrap_or(u16::MAX).saturating_add(MENU_WIDTH + CLOSE_WIDTH)
+    u16::try_from(1 + ICON_WIDTH + name + others).unwrap_or(u16::MAX).saturating_add(MENU_WIDTH + CLOSE_WIDTH)
 }
 
 fn others(tab: &TabEntry) -> Option<String> {
@@ -278,11 +277,8 @@ fn draw_tab(f: &mut Frame, view: &View, tab: &TabEntry, (r, bg): (Rect, Style), 
     let style = if marked { bg.fg(Color::White).add_modifier(Modifier::BOLD) } else { bg.fg(Color::Gray) };
     let mut line = vec![Span::styled(" ", bg)];
     let mut used = 1;
-    if let Some(status) = tab.status {
-        let icon = status_icon(view.muted, status);
-        line.extend([Span::styled(icon.content, icon.style.patch(bg)), Span::styled(" ", bg)]);
-        used += 2;
-    }
+    line.extend(tab.prefix(view.muted, bg));
+    used += ICON_WIDTH;
     let others = others(tab);
     let reserved = others.as_ref().map_or(0, |n| 1 + n.chars().count());
     let room =
@@ -339,31 +335,31 @@ mod tests {
         use super::*;
 
         #[test]
-        fn a_tab_is_its_name_padded_with_room_for_the_close_button() {
-            assert_eq!(width(&TabEntry::from("zsh")), 1 + 3 + MENU_WIDTH + CLOSE_WIDTH);
+        fn a_tab_is_its_icon_and_name_padded_with_room_for_the_close_button() {
+            assert_eq!(width(&TabEntry::from("zsh")), 1 + 2 + 3 + MENU_WIDTH + CLOSE_WIDTH);
         }
 
         #[test]
-        fn a_status_takes_two_more_cells() {
+        fn an_agent_tab_is_as_wide_as_a_shell_tab_with_the_same_name() {
             let tab = TabEntry { status: Some(Status::Working), ..TabEntry::from("claude") };
-            assert_eq!(width(&tab), 1 + 2 + 6 + MENU_WIDTH + CLOSE_WIDTH);
+            assert_eq!(width(&tab), width(&TabEntry::from("claude")));
         }
 
         #[test]
         fn the_other_panes_of_a_split_take_their_count() {
             let tab = TabEntry { others: 2, ..TabEntry::from("zsh") };
-            assert_eq!(width(&tab), 1 + 3 + 3 + MENU_WIDTH + CLOSE_WIDTH);
+            assert_eq!(width(&tab), 1 + 2 + 3 + 3 + MENU_WIDTH + CLOSE_WIDTH);
         }
 
         #[test]
         fn a_long_name_is_cut() {
-            assert_eq!(width(&TabEntry::from("x".repeat(80).as_str())), 1 + 24 + MENU_WIDTH + CLOSE_WIDTH);
+            assert_eq!(width(&TabEntry::from("x".repeat(80).as_str())), 1 + 2 + 24 + MENU_WIDTH + CLOSE_WIDTH);
         }
 
         #[test]
         fn tabs_that_fit_sit_side_by_side_with_the_new_button_after_them() {
             let s = strip(&["zsh", "claude"], 0);
-            assert_eq!((s.item(0).x, s.item(1).x, s.new_button().x), (10, 19, 31));
+            assert_eq!((s.item(0).x, s.item(1).x, s.new_button().x), (10, 21, 35));
             assert_eq!((s.left(), s.right()), (Rect::default(), Rect::default()));
         }
 
@@ -405,10 +401,10 @@ mod tests {
         use super::*;
 
         #[rstest]
-        #[case::the_name(11, Some(Hit::Tab(0)))]
-        #[case::the_menu_button(15, Some(Hit::Menu(0)))]
-        #[case::the_close_button(17, Some(Hit::Close(0)))]
-        #[case::the_new_button(32, Some(Hit::New))]
+        #[case::the_name(13, Some(Hit::Tab(0)))]
+        #[case::the_menu_button(17, Some(Hit::Menu(0)))]
+        #[case::the_close_button(19, Some(Hit::Close(0)))]
+        #[case::the_new_button(36, Some(Hit::New))]
         #[case::past_the_tabs(40, None)]
         fn on_a_bar_that_fits(#[case] x: u16, #[case] hit: Option<Hit>) {
             assert_eq!(strip(&["zsh", "claude"], 0).hit(Position::new(x, 0)), hit);

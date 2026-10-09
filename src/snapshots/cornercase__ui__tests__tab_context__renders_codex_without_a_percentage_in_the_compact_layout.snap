@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6441
+assertion_line: 6495
 expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
@@ -15,10 +15,10 @@ expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 "  login                                                                   ⋯  ×  "
 "  │                                                                             "
 "▌ │                                                                             "
-"▌ ├ codex                                                                 ⋯  ×  "
-"▌ │ gpt-5.4-mini                                                                "
+"▌ ├ › codex                                                               ⋯  ×  "
+"▌ │   gpt-5.4-mini                                                              "
 "  │                                                                             "
-"  ├ nvim                                                                  ⋯  ×  "
+"  ├ › nvim                                                                ⋯  ×  "
 "  │                                                                             "
 "  │                                                                             "
 "  └ + Tab                                                                       "

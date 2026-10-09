@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 5815
+assertion_line: 5827
 expression: "render_small(&View\n{ drag: Some(Drag::Workspaces(dragged, landing)), ..v }).backend()"
 ---
 "                                                                                "
@@ -15,10 +15,10 @@ expression: "render_small(&View\n{ drag: Some(Drag::Workspaces(dragged, landing)
 "  feat/login                                                              ⋯  ×  "
 "  │                                                                             "
 "▌ │                                                                             "
-"▌ ├ claude                                                                ⋯  ×  "
+"▌ ├ › claude                                                              ⋯  ×  "
 "▌ │                                                                             "
 "  │                                                                             "
-"  ├ nvim                                                                  ⋯  ×  "
+"  ├ › nvim                                                                ⋯  ×  "
 "  │                                                                             "
 "  │ ─────────────────────────────────────────────────────────────────────────── "
 "  │                                                                             "

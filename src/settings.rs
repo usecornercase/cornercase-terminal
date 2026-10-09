@@ -137,8 +137,8 @@ impl Detail {
             (Self::Model, false) => "agent tabs hide their model",
             (Self::Context, true) => "agent tabs show how full their context is",
             (Self::Context, false) => "agent tabs hide their context",
-            (Self::Memory, true) => "agent tabs show the memory they use",
-            (Self::Memory, false) => "agent tabs hide their memory",
+            (Self::Memory, true) => "tabs show the memory they use",
+            (Self::Memory, false) => "tabs hide their memory",
         }
     }
 }

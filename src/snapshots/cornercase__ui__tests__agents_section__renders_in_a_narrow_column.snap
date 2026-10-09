@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 8368
+assertion_line: 8461
 expression: "render_sized(&v, W, TALL.height).backend()"
 ---
 "  ⌕ search proje…  │                                                                                "
@@ -15,7 +15,7 @@ expression: "render_sized(&v, W, TALL.height).backend()"
 " Workspaces        │                                                                                "
 "                   │                                                                                "
 "  default          │                                                                                "
-"▌ ├ codex          │                                                                                "
+"▌ ├ › codex        │                                                                                "
 "  └ + Tab          │                                                                                "
 "                   │                                   no tab open                                  "
 "  + New workspace  │                            + Tab opens a shell here                            "

@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 4970
+assertion_line: 4982
 expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -8,8 +8,8 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 " Workspaces                    │                                                                    "
 "                               │                                                                    "
 "  login                        │                                                                    "
-"▌ ├ claude                     │                                                                    "
-"  ├ nvim                       │                                                                    "
+"▌ ├ › claude                   │                                                                    "
+"  ├ › nvim                     │                                                                    "
 "  └ + Tab                      │                                                                    "
 "                               │                                                                    "
 "  main                         │                                                                    "

@@ -67,7 +67,7 @@ Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty),
 
 Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every key once a program enables the kitty protocol; a legacy encoder for the rest. Mouse events are encoded in `mouse.rs`, in the mode and encoding the program asked for, relative to its pane.
 
-`process.rs` finds the cwd, name and arguments of a PTY's foreground process: `/proc` on Linux, `proc_pidinfo`, `proc_name` and `sysctl(KERN_PROCARGS2)` on macOS (the only `unsafe` code). Tab names, agent detection and agent launches depend on it. It also lists a process's descendants and reads the memory each holds on its own (`RssAnon` and `VmSwap` in `/proc/<pid>/status`, `ri_phys_footprint` from `proc_pid_rusage` on macOS) for the memory at the end of an agent tab's line.
+`process.rs` finds the cwd, name and arguments of a PTY's foreground process: `/proc` on Linux, `proc_pidinfo`, `proc_name` and `sysctl(KERN_PROCARGS2)` on macOS (the only `unsafe` code). Tab names, agent detection and agent launches depend on it. It also lists a process's descendants and reads the memory each holds on its own (`RssAnon` and `VmSwap` in `/proc/<pid>/status`, `ri_phys_footprint` from `proc_pid_rusage` on macOS) for the memory on a tab's second line.
 
 ## State and side effects
 
@@ -104,7 +104,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `agents.rs` | Known agents, modes and arguments, choosing and detecting an agent, the trust prompt. |
 | `activity.rs` | What the agent in a pane is doing: Claude Code's session file and terminal title, Codex's terminal title and turns, opencode's turns, and the finished-but-unseen mark. |
 | `context.rs`, `context/codex.rs`, `context/opencode.rs` | Model/context lines for Claude Code, Codex and opencode. Claude uses its session transcript and configured window rules; Codex follows the process's open rollout, recorded model and latest usage/window, reading incrementally and clearing obsolete context on session changes and compaction. opencode reads the SQLite database its process holds open, on a thread: the session in its folder, whether a turn is running, and the last answer's tokens over the window in opencode's `models.json`. |
-| `memory.rs` | How much memory an agent pane uses: the memory its shell and everything under it hold on their own, measured on a thread every 2 seconds. |
+| `memory.rs` | How much memory a pane uses: the memory its shell and everything under it hold on their own, measured on a thread every 2 seconds. |
 | `usage/` | Plan usage: `claude.rs` asks `claude` over its control protocol, `codex.rs` asks `codex app-server` over JSON-RPC; `mod.rs` runs either, reads the answer and keeps the dialog's state, one section per agent. |
 | `launch.rs` | Starting an agent in a new tab, as a pure state machine. |
 | `todo/` | The TODO list (`mod.rs`: ordering, undo, `todos.json`) and the text field with a cursor (`editor.rs`); `ui/todo.rs` draws the panel and `app/todo_panel.rs` wires it into `App`. |

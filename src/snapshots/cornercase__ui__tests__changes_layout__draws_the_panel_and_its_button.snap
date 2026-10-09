@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 4526
+assertion_line: 4538
 expression: "render_sized(&with_panel(), 140, 16).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          │  Uncommitted   Commits   All    ⌕  ×  "
@@ -8,7 +8,7 @@ expression: "render_sized(&with_panel(), 140, 16).backend()"
 " Projects                      │ Workspaces              │                                          │                                       "
 "                               │                         │                                          │                                       "
 "▌ shop (1)                     │  main                   │                                          │                                       "
-"                               │▌ ├ zsh                  │                                          │                                       "
+"                               │▌ ├ › zsh                │                                          │                                       "
 "  + New                        │  └ + Tab                │                                          │                                       "
 "                               │                         │                no tab open               │                                       "
 "                               │  + New workspace        │         + Tab opens a shell here         │                                       "

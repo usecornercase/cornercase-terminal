@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 8343
+assertion_line: 8436
 expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -8,7 +8,7 @@ expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "  cornercase (1)               │  default                │                                          "
-"▌ website (1)                  │▌ ├ codex                │                                          "
+"▌ website (1)                  │▌ ├ › codex              │                                          "
 "  api (1)                      │  └ + Tab                │                                          "
 "                               │                         │                                          "
 "  + New                        │  + New workspace        │                                          "

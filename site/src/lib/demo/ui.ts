@@ -13,6 +13,7 @@ import {
   agentLayout,
   GROUP_COLOURS,
   GROUP_ICONS,
+  ICON_WIDTH,
   type Rows,
   type SidebarRow,
   type TreeRow,
@@ -61,7 +62,7 @@ import {
 } from './layout';
 import { USAGE, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -101,6 +102,12 @@ const STATUS_ICONS: Record<Status, Seg> = {
   working: seg('◐', { fg: 3 }),
   done: seg('✓', { fg: 2, add: BOLD }),
   waiting: seg('!', { fg: 208, add: BOLD }),
+};
+const SHELL_ICON = seg('›', DARK);
+const PROGRAM_ICON = seg('▸', DARK);
+const tabIcon = (t: Tab): Seg => {
+  const status = tabStatus(t);
+  return status ? STATUS_ICONS[status] : tabRunning(t) ? PROGRAM_ICON : SHELL_ICON;
 };
 const BRAND = 99;
 const UNDO = 'undo';
@@ -334,9 +341,8 @@ export class Painter {
       if (isEmpty(r)) return;
       const active = tab === app.tab();
       const bg = this.rowBackground(r, active || dragged === t);
-      const status = tabStatus(tab);
-      const line: Line = [seg(' ', bg)];
-      if (status) line.push({ ...STATUS_ICONS[status], s: { ...bg, ...STATUS_ICONS[status].s } }, seg(' ', bg));
+      const icon = tabIcon(tab);
+      const line: Line = [seg(' ', bg), { ...icon, s: { ...bg, ...icon.s } }, seg(' ', bg)];
       const count = tabOthers(tab.panes.length - 1);
       const room = Math.max(0, r.w - width(line) - 5 - (count ? 1 + count.length : 0));
       line.push(seg(truncateRight(tabLabel(tab), room), active ? { ...bg, fg: 15, add: BOLD } : { ...bg, fg: 7 }));
@@ -670,20 +676,18 @@ export class Painter {
     const project = app.projects[p];
     const ws = project.workspaces[w];
     const tab = ws.tabs[t];
-    const status = tabStatus(tab);
-    const icon = status ? 2 : 0;
-    const room = this.room(b) - icon;
+    const room = this.room(b) - ICON_WIDTH;
     const others = tab.panes.length - 1;
     const marks = fitTags(others > 0 ? [seg(`+${others}`, DARK)] : [], room);
     const fit = room - marks.reserved;
     const name = marks.segs.length ? [...truncateRight(tabLabel(tab), fit)].slice(0, Math.max(0, fit)).join('') : truncateRight(tabLabel(tab), room);
     const line = [...b.lead];
-    if (status) line.push(STATUS_ICONS[status], seg(' '));
+    line.push(tabIcon(tab), seg(' '));
     line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
     const details = app.tabDetails(tab);
-    if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + icon);
+    if (tabLines(details) > 1) this.details(b.r, b.pitch, details, width(b.lead) + ICON_WIDTH);
     const grab: Target = { kind: 'tab', project: project.id, workspace: ws.id, tab: tab.id };
     const menu = (x: number, y: number) => app.openMenu({ x, y }, grab);
     this.region({ r: b.r, click: () => app.selectTab(p, w, t), right: menu, grab, cursor: 'pointer' });

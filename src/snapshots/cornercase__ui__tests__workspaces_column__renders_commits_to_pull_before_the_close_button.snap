@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 6151
+assertion_line: 6163
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -8,12 +8,12 @@ expression: render(&v).backend()
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │  login          ↓3  ⋯ × │                                          "
-"                               │▌ ├ claude               │                                          "
-"  + New                        │  ├ nvim                 │                                          "
+"                               │▌ ├ › claude             │                                          "
+"  + New                        │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                                          "
 "                               │                         │                no tab open               "
 "                               │  main           ↓1      │         + Tab opens a shell here         "
-"                               │  ├ zsh                  │                                          "
+"                               │  ├ › zsh                │                                          "
 "                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
 "                               │  + New workspace        │                                          "

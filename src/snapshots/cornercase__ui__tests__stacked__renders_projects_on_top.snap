@@ -1,6 +1,6 @@
 ---
 source: src/ui.rs
-assertion_line: 4965
+assertion_line: 4977
 expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -19,12 +19,12 @@ expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).b
 " Workspaces                    │                                                                    "
 "                               │                             no tab open                            "
 "  login                        │                      + Tab opens a shell here                      "
-"▌ ├ claude                     │                                                                    "
-"  ├ nvim                       │                                                                    "
+"▌ ├ › claude                   │                                                                    "
+"  ├ › nvim                     │                                                                    "
 "  └ + Tab                      │                                                                    "
 "                               │                                                                    "
 "  main                         │                                                                    "
-"  ├ zsh                        │                                                                    "
+"  ├ › zsh                      │                                                                    "
 "  ↓ more                       │                                                                    "
 "  + New workspace              │                                                                    "
 " ───────────────────────────── │                                                                    "
