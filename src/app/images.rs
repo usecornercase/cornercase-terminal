@@ -149,14 +149,14 @@ impl App {
             return Some((Image::Message(missing.lines()), None));
         };
         let room = panel::image_room(self.layout(area).shown(self.nav).changes, sight.visible);
-        let fit = encode::fit(picture.width, picture.height, sight.support.cell, (room.width, room.height))?;
+        let fit = encode::fit(picture.width, picture.height, sight.support.cell, (room.width, room.height), protocol)?;
         let rect = panel::image_rect(room, fit.cols, fit.rows);
         let kitty_id = if protocol == Protocol::Kitty { kitty::id(sight.support.id_hi, sight.lo) } else { 0 };
         let key = Key {
             picture: picture.id,
             protocol,
             tmux: sight.support.tmux,
-            fit: (fit.cols, fit.rows, fit.width, fit.height),
+            fit,
             background: sight.background,
             kitty_id,
         };
@@ -191,7 +191,7 @@ impl App {
         }
         if self.images.start(*key) {
             let (tx, key, picture) = (self.tx.clone(), *key, Arc::clone(picture));
-            let (cols, rows, ..) = key.fit;
+            let (cols, rows) = (key.fit.cols, key.fit.rows);
             let job = Job::new(Level::Debug, "images", "encode")
                 .with("path", path)
                 .with("protocol", key.protocol.id())
@@ -227,10 +227,11 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphics::Tmux;
+    use crate::graphics::{CellSize, Tmux};
 
     fn key(picture: u64) -> Key {
-        Key { picture, protocol: Protocol::Iterm, tmux: Tmux::None, fit: (4, 2, 40, 40), background: None, kitty_id: 0 }
+        let fit = encode::Fit { cols: 4, rows: 2, width: 40, height: 40, cell: CellSize { width: 10, height: 20 } };
+        Key { picture, protocol: Protocol::Iterm, tmux: Tmux::None, fit, background: None, kitty_id: 0 }
     }
 
     #[test]

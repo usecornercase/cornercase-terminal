@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use crate::app::{Placed, Sight};
-use crate::graphics::encode::Key;
+use crate::graphics::encode::{Fit, Key};
 use crate::graphics::{KITTY_LO, Protocol, Support, Tmux, kitty, tmux};
 use crate::log;
 
@@ -120,7 +120,7 @@ impl Graphics {
 
     fn sent(&mut self, placed: &Placed, bytes: usize) {
         let (client, protocol, path) = (self.client, placed.key.protocol.id(), &placed.path);
-        let (cols, rows, ..) = placed.key.fit;
+        let Fit { cols, rows, .. } = placed.key.fit;
         if self.logged.replace(placed.key.picture) == Some(placed.key.picture) {
             log::debug!("images", "image sent again", client = client, cols = cols, rows = rows, bytes = bytes);
         } else {
@@ -146,7 +146,7 @@ impl Graphics {
         let Some(picture) = picture else { return self.forget() };
         let Some(placed) = placed.filter(|p| p.drawn && p.key.picture == picture) else { return Vec::new() };
         let Some(slot) = (0..KITTY_LO.len()).find(|&i| self.id(i) == placed.key.kitty_id) else { return Vec::new() };
-        let (cols, rows, width, height) = placed.key.fit;
+        let Fit { cols, rows, width, height, .. } = placed.key.fit;
         let have = self.slots[slot].filter(|s| s.picture == picture);
         let enough = have.is_some_and(|s| s.sent.0 >= width && s.sent.1 >= height);
         let mut out = Vec::new();
@@ -213,12 +213,16 @@ mod tests {
         }
     }
 
-    fn placed(graphics: &Graphics, picture: u64, fit: (u16, u16, u32, u32), payload: Option<&[u8]>) -> Placed {
+    const fn fit(cols: u16, rows: u16, width: u32, height: u32) -> Fit {
+        Fit { cols, rows, width, height, cell: CellSize { width: 10, height: 20 } }
+    }
+
+    fn placed(graphics: &Graphics, picture: u64, fit: Fit, payload: Option<&[u8]>) -> Placed {
         let sight = graphics.sight(Rect::new(0, 0, 120, 40), Some(picture));
         let protocol = graphics.support.protocol.expect("a protocol");
         let kitty_id = if protocol == Protocol::Kitty { kitty::id(HI, sight.lo) } else { 0 };
         let key = Key { picture, protocol, tmux: graphics.support.tmux, fit, background: None, kitty_id };
-        let rect = Rect { width: fit.0, height: fit.1, ..RECT };
+        let rect = Rect { width: fit.cols, height: fit.rows, ..RECT };
         let drawn = payload.is_some() || sight.sent == Some(picture);
         Placed { key, rect, path: "logo.png".into(), payload: payload.map(|p| Arc::new(p.to_vec())), drawn }
     }
@@ -226,9 +230,9 @@ mod tests {
     mod kitty_images {
         use super::*;
 
-        const FIT: (u16, u16, u32, u32) = (20, 10, 200, 200);
-        const SMALLER: (u16, u16, u32, u32) = (10, 5, 100, 100);
-        const BIGGER: (u16, u16, u32, u32) = (30, 15, 300, 300);
+        const FIT: Fit = fit(20, 10, 200, 200);
+        const SMALLER: Fit = fit(10, 5, 100, 100);
+        const BIGGER: Fit = fit(30, 15, 300, 300);
 
         fn kitty() -> Graphics {
             Graphics::new(1, support(Protocol::Kitty, Tmux::None), None)
@@ -324,7 +328,7 @@ mod tests {
     mod cell_images {
         use super::*;
 
-        const FIT: (u16, u16, u32, u32) = (20, 10, 200, 200);
+        const FIT: Fit = fit(20, 10, 200, 200);
 
         fn iterm() -> Graphics {
             Graphics::new(1, support(Protocol::Iterm, Tmux::None), None)
