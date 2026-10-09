@@ -44,7 +44,7 @@ use crate::update::{self, CURRENT, Install, Outcome};
 const THEME_QUERY_TIMEOUT: Duration = Duration::from_secs(1);
 const TMUX_CHECK_TIMEOUT: Duration = Duration::from_millis(500);
 const TMUX_CHECK_POLL: Duration = Duration::from_millis(5);
-const TMUX_SETTLE: Duration = Duration::from_millis(150);
+const TMUX_SETTLE: Duration = Duration::from_millis(50);
 const OUTER_WAIT: Duration = Duration::from_millis(300);
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
