@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.19
+
+- The files panel shows images. A click on a PNG, JPEG, GIF, WebP, BMP or ICO file shows the picture itself, drawn by your terminal, with its format, size in pixels and file size above it; ` ask agent ` and ` copy ` take its path. Ghostty and kitty show it with kitty graphics, iTerm2, WezTerm, Warp and mintty with iTerm2's inline images, and foot, Konsole and xterm (started as a VT340) with sixel; tmux passes them on with `set -g allow-passthrough on`. A terminal that cannot show images gets, where the picture would be, a line saying why and what to do about it. Every window attached to the server gets what its own terminal can show, in its own size, and an image an agent rewrites shows again as it changes. `CORNERCASE_IMAGES=kitty`, `iterm`, `sixel` or `off`, set where you start cornercase, picks for a terminal cornercase does not recognise.
+- `cornercase remote` no longer loses its window when the link to the other machine is slow while a large frame, such as an image, is on its way.
+
 ## 0.12.18
 
 - `cornercase restart --when-idle` and `cornercase update --when-idle` restart the server only once no agent is working, so none loses a turn in the middle of a tool call or a build. Idle, done and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started in the background still runs. The server restarts in the same moment it sees that, so no agent starts a new turn in between. Meanwhile every window shows `restart pending until 2 agents end their turn` in its corner, with a **cancel** button. `--timeout` gives up after that many seconds and keeps the server running, as does stopping the command. `update --when-idle` installs the release at once and restarts on it once the agents are done.
