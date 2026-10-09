@@ -1367,7 +1367,7 @@ mod tests {
                 client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
                 let placed = client.count(PLACE);
 
-                client.input(Event::Resize(80, 20));
+                client.input(Event::Resize(100, 12));
 
                 client.until("the image is placed again", |c| c.count(PLACE) > placed);
                 assert_eq!(client.count(TRANSMIT), 1);
