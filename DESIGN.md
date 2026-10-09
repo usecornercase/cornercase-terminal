@@ -107,6 +107,16 @@ Why cornercase works the way it does, area by area. The rules every change follo
 - **Paths in panes** (`files/link.rs`): a path printed in the active pane, by an agent, a compiler, `git` or `rg`, opens in the files panel on a click, at its line or lines (`:12`, `:12:5`, `:12-30`, `#L12-L30`) and with them selected, so ` ask agent ` takes them at once; the panel opens if it was closed. The path is the run of path characters under the pointer (letters, digits, `_-./~@+,%:#`; brackets, quotes and backticks end it, a trailing `.,:;#` is dropped, a URL is none), resolved from the foreground program's folder, then the workspace's root, and taken only if it is a file inside the workspace. The one under the pointer is underlined in cyan (`ui::TabView::link`), checked on each draw: a snapshot row is already there and the check is a `canonicalize`. Claude Code's fullscreen renderer reads the mouse, so its clicks would never reach cornercase, but a plain click on a path does nothing there (it opens links with Ctrl+click, through a desktop file manager a server lacks). So a press on a path in a program that reads the mouse is held back (`App::link_press`): released on the same cell it opens the file and the program never sees it; moved to another cell, the held press is sent first and the drag goes on, so the program's own selection still works. The cost: a click right on a path in a Claude tool's header no longer expands it (a click elsewhere on the row does). A program that does not read the mouse keeps cornercase's selection; a release without moving opens the path instead of copying nothing. Modifier clicks were rejected: the protocol cannot carry Cmd, and Ctrl and Alt clicks are taken by the outer terminal on some systems.
 - **Lines for the agent**: a press on a line selects it and dragging selects a range (`Panel::selecting`, followed by `continue_drag` even outside the panel; past the body's edges the nearest line counts). Any event but a left drag ends it, like the other drags: a release outside the window may never be reported, and the next click would be swallowed. ` ask agent ` pastes `path:a-b ` (`path ` with nothing selected) into the workspace's agent like the hunk action, ` copy ` copies the selected lines (else the path), ` open ` opens the editor at the first selected line in a new tab.
 
+## Images (`graphics/`, files panel)
+
+- **Overview** (rendering builder): to be written.
+
+- **Detection** (detection builder, `graphics/detect.rs`, `client.rs`, `host_theme.rs`): to be written.
+
+- **Decoding and encoding** (encoders builder, `graphics/decode.rs`, `encode.rs`, `kitty.rs`, `iterm.rs`, `sixel.rs`, `tmux.rs`): to be written.
+
+- **Rendering** (rendering builder, `server.rs`, `ui/files.rs`, `app/files_panel.rs`): to be written.
+
 ## Issues (`issues/`)
 
 - `Browser` is pure state that returns `Action`s; `App` does the I/O on threads. Answers carry their query and issue key so stale ones are dropped, and lists, people, reads and token checks also the source's epoch, bumped by `App::forget_issues` when its connection goes or changes (disconnect, token removed or replaced, Jira settings changed), so an answer still in flight cannot refill the cache with the old connection or save a token checked against it. Lists are cached in memory and in `issues.json` (titles and metadata only, never tokens).
