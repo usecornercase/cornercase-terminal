@@ -5,7 +5,7 @@ pub const KITTY_QUERY: &str = "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
 pub const KITTY_QUERY_ID: &str = "31";
 pub const TMUX_PROBE: &str = "\x1bPtmux;\x1b\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\x1b\\\x1b\\\
      \x1bPtmux;\x1b\x1b[>q\x1b\\\x1bPtmux;\x1b\x1b[c\x1b\\";
-pub const TMUX_FORMAT: &str = "#{allow-passthrough}|#{client_termtype}|#{client_termfeatures}";
+pub const TMUX_FORMAT: &str = "#{pane_tty}|#{allow-passthrough}|#{client_termtype}|#{client_termfeatures}";
 pub const PANE_TITLE: &str = "\x1b]2;cornercase\x1b\\";
 const DEFAULT_REGISTERS: u16 = 256;
 const SIXEL: u32 = 4;
@@ -13,10 +13,30 @@ const CLIPBOARD: u32 = 52;
 const MIN_KITTY: Version = (0, 28, 0);
 const MIN_RIO: Version = (0, 5, 27);
 const MIN_KONSOLE: u32 = 220_400;
+const MIN_ZELLIJ: u32 = 4500;
 const VTE_WITH_XTVERSION: u32 = 7600;
 const VTE_WITHOUT_SIXEL: u32 = 8390;
 const WINDOWS_TERMINAL: [u32; 11] = [61, 6, 7, 14, 21, 22, 23, 24, 28, 32, 42];
 const WINDOWS_TERMINAL_CELL: CellSize = CellSize { width: 10, height: 20 };
+const XTERM_JS_IMAGES: [u32; 4] = [62, 4, 9, 22];
+const NAMES: [(&str, &str); 16] = [
+    ("ghostty ", "Ghostty"),
+    ("kitty(", "kitty"),
+    ("rio ", "Rio"),
+    ("iterm2 ", "iTerm2"),
+    ("wezterm ", "WezTerm"),
+    ("warp(", "Warp"),
+    ("mintty ", "mintty"),
+    ("xterm.js(", "xterm.js"),
+    ("konsole ", "Konsole"),
+    ("foot(", "foot"),
+    ("xterm(", "xterm"),
+    ("mlterm(", "mlterm"),
+    ("contour ", "contour"),
+    ("vte(", "VTE"),
+    ("libvterm(", "libvterm"),
+    ("zellij(", "Zellij"),
+];
 
 type Version = (u32, u32, u32);
 type Var<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -47,6 +67,7 @@ impl Replies {
 pub enum Outer {
     Local { passthrough: bool, terminal: Option<String>, sixel: bool },
     Probed(Replies),
+    Stale,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -67,6 +88,10 @@ impl Facts {
             self.replies.cell = None;
             self.window = window;
         }
+    }
+
+    pub fn checks_tmux_again(&self) -> bool {
+        matches!(self.tmux, Some(Outer::Local { .. }))
     }
 
     pub fn renamed_tmux_pane(&self) -> bool {
@@ -97,6 +122,7 @@ impl Facts {
                     kitty_summary(true, outer.kitty.as_deref()),
                     attributes(outer.attributes.as_deref())
                 ),
+                Some(Outer::Stale) => "stale".to_string(),
             }
         )
     }
@@ -127,6 +153,10 @@ pub fn overridden(var: impl Fn(&str) -> Option<String>) -> bool {
     var(OVERRIDE_ENV).is_some_and(|value| forced(&value, &Replies::default(), false).is_some())
 }
 
+pub fn ignored_override(var: impl Fn(&str) -> Option<String>) -> Option<String> {
+    var(OVERRIDE_ENV).filter(|value| forced(value, &Replies::default(), false).is_none())
+}
+
 pub fn in_multiplexer(var: impl Fn(&str) -> Option<String>) -> bool {
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
     let term = var("TERM").unwrap_or_default();
@@ -143,15 +173,18 @@ pub fn likely_kitty(var: impl Fn(&str) -> Option<String>) -> bool {
 }
 
 pub fn in_tmux(terminal: Option<&str>, var: impl Fn(&str) -> Option<String>) -> bool {
-    multiplexer(terminal, &var) == Some(Mux::Tmux)
+    multiplexer(terminal, &var, true) == Some(Mux::Tmux)
 }
 
-pub fn local_tmux(output: &str) -> Option<Outer> {
-    let mut parts = output.lines().next()?.splitn(3, '|');
-    let (passthrough, terminal) = (parts.next()?.trim(), parts.next()?.trim());
+pub fn local_tmux(output: &str, own_tty: Option<&str>) -> Option<Outer> {
+    let mut parts = output.lines().next()?.splitn(4, '|');
+    let (tty, passthrough, terminal) = (parts.next()?.trim(), parts.next()?.trim(), parts.next()?.trim());
     let features = parts.next().unwrap_or_default();
+    if own_tty.is_some_and(|own| !tty.is_empty() && own != tty) {
+        return Some(Outer::Stale);
+    }
     Some(Outer::Local {
-        passthrough: passthrough != "off",
+        passthrough: !matches!(passthrough, "off" | "0"),
         terminal: (!terminal.is_empty()).then(|| terminal.to_string()),
         sixel: features.split(',').any(|feature| feature.trim() == "sixel"),
     })
@@ -192,6 +225,7 @@ enum Mux {
     Tmux,
     Zellij,
     Screen,
+    Unnamed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,8 +239,8 @@ impl Kitty {
     fn of(asked: bool, reply: Option<&str>) -> Self {
         match (asked, reply) {
             (false, _) => Self::NotAsked,
-            (true, None) => Self::Silent,
-            (true, Some(_)) => Self::Answered,
+            (true, Some("OK")) => Self::Answered,
+            (true, _) => Self::Silent,
         }
     }
 }
@@ -259,6 +293,10 @@ impl Brand {
         }
     }
 
+    fn draws_sixel(&self) -> bool {
+        matches!(self, Self::Konsole(_) | Self::WezTerm | Self::Iterm2 | Self::Contour | Self::WindowsTerminal)
+    }
+
     fn places_kitty(&self) -> bool {
         match self {
             Self::Ghostty => true,
@@ -272,14 +310,15 @@ impl Brand {
 fn choose(facts: &Facts, var: Var) -> Result<Pick, Missing> {
     let replies = &facts.replies;
     let terminal = replies.terminal.as_deref();
-    let mux = multiplexer(terminal, var);
+    let mux = multiplexer(terminal, var, facts.tmux != Some(Outer::Stale));
     if let Some(forced) = var(OVERRIDE_ENV).and_then(|value| forced(&value, replies, mux == Some(Mux::Tmux))) {
         return forced;
     }
     match mux {
         Some(Mux::Tmux) => through_tmux(facts),
-        Some(Mux::Zellij) => sixel(replies).ok_or(Missing::Zellij),
+        Some(Mux::Zellij) => zellij(replies),
         Some(Mux::Screen) => Err(Missing::Screen),
+        Some(Mux::Unnamed) => Err(Missing::Multiplexer { term: var("TERM").unwrap_or_default() }),
         None => by_brand(brand(terminal, replies.attributes.as_deref(), var), facts),
     }
 }
@@ -295,15 +334,26 @@ fn forced(value: &str, replies: &Replies, tmux: bool) -> Option<Result<Pick, Mis
     }
 }
 
-fn multiplexer(terminal: Option<&str>, var: Var) -> Option<Mux> {
+fn multiplexer(terminal: Option<&str>, var: Var, tmux_is_ours: bool) -> Option<Mux> {
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
     match terminal.map(str::to_ascii_lowercase) {
         Some(t) if t.starts_with("tmux ") => Some(Mux::Tmux),
         Some(t) if t.starts_with("zellij(") => Some(Mux::Zellij),
-        None if set("TMUX") => Some(Mux::Tmux),
+        None if tmux_is_ours && set("TMUX") => Some(Mux::Tmux),
         None if set("ZELLIJ") => Some(Mux::Zellij),
-        None if set("STY") || var("TERM").is_some_and(|term| term.starts_with("screen")) => Some(Mux::Screen),
+        None if set("STY") => Some(Mux::Screen),
+        None if var("TERM").is_some_and(|term| term.starts_with("screen")) => Some(Mux::Unnamed),
         Some(_) | None => None,
+    }
+}
+
+fn zellij(replies: &Replies) -> Result<Pick, Missing> {
+    let lower = replies.terminal.as_deref().map(str::to_ascii_lowercase);
+    match lower.as_deref().and_then(|t| t.strip_prefix("zellij(")).and_then(number) {
+        Some(v) if v >= MIN_ZELLIJ => sixel(replies).ok_or(Missing::Zellij),
+        version => Err(Missing::OldZellij {
+            version: version.map(|v| format!("{}.{}.{}", v / 10_000, v / 100 % 100, v % 100)),
+        }),
     }
 }
 
@@ -317,7 +367,7 @@ fn sixel(replies: &Replies) -> Option<Pick> {
 
 fn through_tmux(facts: &Facts) -> Result<Pick, Missing> {
     match &facts.tmux {
-        None => Err(Missing::TmuxSilent),
+        None | Some(Outer::Stale) => Err(Missing::TmuxSilent),
         Some(Outer::Local { passthrough, terminal, sixel }) => {
             beyond_tmux(terminal.as_deref(), Kitty::NotAsked, *passthrough, *sixel, &facts.replies)
         }
@@ -353,7 +403,25 @@ fn beyond_tmux(
     if outer_sixel && let Some(pick) = sixel(inner) {
         return Ok(pick);
     }
-    Err(Missing::TmuxOuter { name: outer.map(str::to_string) })
+    if (outer_sixel || brand.draws_sixel()) && !inner.has_sixel() {
+        let version = inner.terminal.as_deref().and_then(|t| t.strip_prefix("tmux ")).map(str::to_string);
+        return Err(Missing::TmuxNoSixel { version });
+    }
+    Err(Missing::TmuxOuter { name: outer.map(pretty) })
+}
+
+fn pretty(text: &str) -> String {
+    let lower = text.to_ascii_lowercase();
+    let Some((prefix, name)) = NAMES.iter().find(|(prefix, _)| lower.starts_with(prefix)) else {
+        return text.to_string();
+    };
+    let version: String =
+        text[prefix.len()..].chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-')).collect();
+    if version.is_empty() || matches!(*name, "WezTerm" | "Warp") {
+        (*name).to_string()
+    } else {
+        format!("{name} {version}")
+    }
 }
 
 fn brand(terminal: Option<&str>, attributes: Option<&[u32]>, var: Var) -> Brand {
@@ -361,12 +429,22 @@ fn brand(terminal: Option<&str>, attributes: Option<&[u32]>, var: Var) -> Brand 
         return match by_xtversion(terminal) {
             Brand::Vte { version, .. } => Brand::Vte { version, name: vte_name(var) },
             Brand::Without(name) if name.starts_with("libvterm") => Brand::Without(libvterm_name(var)),
+            Brand::XtermJs => xterm_js(var),
             brand => brand,
         };
     }
     from_env(var, attributes.is_some())
         .or_else(|| attributes.filter(|a| windows_terminal(a)).map(|_| Brand::WindowsTerminal))
+        .or_else(|| attributes.filter(|a| *a == XTERM_JS_IMAGES).map(|_| xterm_js(var)))
         .unwrap_or(Brand::Unknown)
+}
+
+fn xterm_js(var: Var) -> Brand {
+    match var("TERM_PROGRAM").unwrap_or_default().to_ascii_lowercase().as_str() {
+        "tabby" => Brand::Tabby,
+        "hyper" => Brand::Hyper,
+        _ => Brand::XtermJs,
+    }
 }
 
 fn by_xtversion(text: &str) -> Brand {
@@ -503,7 +581,8 @@ fn by_brand(brand: Brand, facts: &Facts) -> Result<Pick, Missing> {
         Brand::Tabby => iterm_or(Missing::Tabby),
         Brand::Hyper => iterm_or(Missing::Cannot { name: "Hyper".into() }),
         Brand::Konsole(Some(v)) if v < MIN_KONSOLE => Err(Missing::OldKonsole { version: konsole(v) }),
-        Brand::Konsole(_) | Brand::Mlterm | Brand::Contour => Ok(Pick::plain(replies.sixel())),
+        Brand::Konsole(_) | Brand::Contour => Ok(Pick::plain(replies.sixel())),
+        Brand::Mlterm => sixel(replies).ok_or_else(|| Missing::Cannot { name: "mlterm".into() }),
         Brand::Foot => sixel(replies).ok_or(Missing::Foot),
         Brand::Xterm => sixel(replies).ok_or(Missing::Xterm),
         Brand::WindowsTerminal => sixel(replies)
@@ -515,7 +594,7 @@ fn by_brand(brand: Brand, facts: &Facts) -> Result<Pick, Missing> {
         Brand::Vte { version, name } => Err(Missing::Cannot { name: vte_label(version, name) }),
         Brand::Without(name) => Err(Missing::Cannot { name }),
         Brand::Ghostty | Brand::Kitty(_) | Brand::Unknown => {
-            sixel(replies).ok_or_else(|| Missing::Unknown { name: replies.terminal.clone() })
+            sixel(replies).ok_or_else(|| Missing::Unknown { name: replies.terminal.as_deref().map(pretty) })
         }
     }
 }
@@ -655,18 +734,24 @@ mod tests {
         decide(&facts(bench.env, bench.replies, bench.window), vars(bench.env))
     }
 
+    const OWN_TTY: &str = "/dev/pts/7";
+
     fn local_tmux_with(bench: &Bench, passthrough: &str) -> Support {
+        local_tmux_built(bench, passthrough, "tmux 3.6", "1;2;4")
+    }
+
+    fn local_tmux_built(bench: &Bench, passthrough: &str, tmux: &str, attributes: &str) -> Support {
         let outer = heard(bench.replies);
         let features = if outer.has_sixel() { "256,RGB,bpaste,sixel,sync" } else { "256,RGB,bpaste,sync" };
-        let output = format!("{passthrough}|{}|{features}\n", outer.terminal.as_deref().unwrap_or_default());
+        let output = format!("{OWN_TTY}|{passthrough}|{}|{features}\n", outer.terminal.as_deref().unwrap_or_default());
         let (cols, rows, width, height) = bench.window;
         let answers = format!(
-            "\x1b[6;{};{}t\x1b[?1;0;1024S\x1b[?2;3;0S\x1bP>|tmux 3.6\x1b\\\x1b[?1;2;4c",
+            "\x1b[6;{};{}t\x1b[?1;0;1024S\x1b[?2;3;0S\x1bP>|{tmux}\x1b\\\x1b[?{attributes}c",
             height / rows,
             width / cols
         );
         let mut facts = facts(TMUX_ENV, answers.as_bytes(), bench.window);
-        facts.tmux = local_tmux(&output);
+        facts.tmux = local_tmux(&output, Some(OWN_TTY));
         decide(&facts, vars(TMUX_ENV))
     }
 
@@ -710,7 +795,7 @@ mod tests {
         #[case::konsole(KONSOLE, shows(TMUX_SIXEL, CELL, Tmux::None))]
         #[case::foot(FOOT, shows(TMUX_SIXEL, CELL, Tmux::None))]
         #[case::xterm_as_a_vt340(XTERM_VT340, shows(TMUX_SIXEL, XTERM_CELL, Tmux::None))]
-        #[case::xterm(XTERM, says(Missing::TmuxOuter { name: Some("XTerm(407)".into()) }, XTERM_CELL))]
+        #[case::xterm(XTERM, says(Missing::TmuxOuter { name: Some("xterm 407".into()) }, XTERM_CELL))]
         fn passes_kitty_placeholders_through_tmux_or_lets_tmux_draw_sixel(
             #[case] bench: Bench,
             #[case] expected: Support,
@@ -733,9 +818,31 @@ mod tests {
         #[case::wezterm_nightly_with_kitty_graphics_on(WEZTERM_NIGHTLY_WITH_KITTY, shows(TMUX_SIXEL, CELL, Tmux::None))]
         #[case::konsole(KONSOLE, shows(TMUX_SIXEL, CELL, Tmux::None))]
         #[case::foot(FOOT, shows(TMUX_SIXEL, CELL, Tmux::None))]
-        #[case::xterm(XTERM, says(Missing::TmuxOuter { name: Some("XTerm(407)".into()) }, CELL))]
+        #[case::xterm(XTERM, says(Missing::TmuxOuter { name: Some("xterm 407".into()) }, CELL))]
         fn asks_the_terminal_outside_a_tmux_it_reaches_over_ssh(#[case] bench: Bench, #[case] expected: Support) {
             assert_eq!(remote_tmux_with(bench.through_tmux), expected);
+        }
+
+        #[rstest]
+        #[case::foot(FOOT)]
+        #[case::wezterm(WEZTERM)]
+        #[case::konsole(KONSOLE)]
+        #[case::xterm_as_a_vt340(XTERM_VT340)]
+        fn says_a_tmux_without_sixel_cannot_draw_it_for_a_sixel_terminal(#[case] bench: Bench) {
+            let support = local_tmux_built(&bench, "on", "tmux 3.3a", "1;2");
+
+            assert_eq!(support.missing, Some(Missing::TmuxNoSixel { version: Some("3.3a".into()) }));
+        }
+
+        #[test]
+        fn says_so_over_ssh_too() {
+            let mut facts = facts(OVER_SSH_FROM_TMUX, b"\x1b[6;19;10t\x1bP>|tmux 3.3a\x1b\\\x1b[?1;2c", WINDOW);
+            facts.tmux = Some(Outer::Probed(heard(FOOT.through_tmux)));
+
+            assert_eq!(
+                decide(&facts, vars(OVER_SSH_FROM_TMUX)),
+                says(Missing::TmuxNoSixel { version: Some("3.3a".into()) }, CELL)
+            );
         }
 
         #[test]
@@ -780,6 +887,9 @@ mod tests {
         #[case::warp(&[("TERM_PROGRAM", "WarpTerminal")], b"\x1bP>|Warp(v0.2026.06.03.09.49.stable_01)\x1b\\\x1b[?62c", Protocol::Iterm)]
         #[case::mintty(&[], b"\x1bP>|mintty 3.8.3\x1b\\\x1b[?64;2;3;4;6;9;11;15;21;28;29;1;22c", Protocol::Iterm)]
         #[case::rio_with_placeholders(&[("TERM", "xterm-rio")], b"\x1b_Gi=31;OK\x1b\\\x1bP>|Rio 0.5.28\x1b\\\x1b[?62;4;6;22;52c", Protocol::Kitty)]
+        #[case::rio_answering_an_error(&[("TERM", "xterm-rio")], b"\x1b_Gi=31;EINVAL:bad\x1b\\\x1bP>|Rio 0.5.28\x1b\\\x1b[?62;4;6;22;52c", Protocol::Iterm)]
+        #[case::zellij_0_45_on_a_terminal_with_sixel(&[], b"\x1b[?1;0;256S\x1bP>|Zellij(4500)\x1b\\\x1b[?62;4;52c", Protocol::Sixel { registers: 256, max: None })]
+        #[case::mlterm_with_images(&[], b"\x1bP>|mlterm(3.9.4)\x1b\\\x1b[?63;1;2;3;4;6;9;15;18;22;29c", Protocol::Sixel { registers: 256, max: None })]
         #[case::rio_before_placeholders_worked(&[("TERM", "xterm-rio")], b"\x1b_Gi=31;OK\x1b\\\x1bP>|Rio 0.5.26\x1b\\\x1b[?62;4;6;22;52c", Protocol::Iterm)]
         #[case::ghostty_over_ssh_without_its_terminfo(&[("TERM", "xterm-256color")], b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c", Protocol::Kitty)]
         #[case::vs_code_with_images_on(&[("TERM_PROGRAM", "vscode")], b"\x1bP>|xterm.js(6.1.0-beta.91)\x1b\\\x1b[?62;4;9;22c", Protocol::Iterm)]
@@ -831,7 +941,14 @@ mod tests {
         #[case::an_unknown_terminal_without_sixel(&[], b"\x1bP>|Bobcat 1.0\x1b\\\x1b[?62c", Missing::Unknown { name: Some("Bobcat 1.0".into()) })]
         #[case::zellij_on_a_terminal_without_sixel(&[("ZELLIJ", "0")], b"\x1bP>|Zellij(4501)\x1b\\\x1b[?62;52c", Missing::Zellij)]
         #[case::gnu_screen(&[("STY", "1234.pts-0.host"), ("TERM", "screen-256color")], b"\x1b[?1;2c", Missing::Screen)]
-        #[case::gnu_screen_over_ssh(&[("TERM", "screen.xterm-256color")], b"\x1b[?1;2c", Missing::Screen)]
+        #[case::a_multiplexer_without_a_name(&[("TERM", "screen.xterm-256color")], b"\x1b[?1;2c", Missing::Multiplexer { term: "screen.xterm-256color".into() })]
+        #[case::zellij_0_44(&[("ZELLIJ", "0")], b"\x1bP>|Zellij(4401)\x1b\\\x1b[?62;4;52c", Missing::OldZellij { version: Some("0.44.1".into()) })]
+        #[case::zellij_before_xtversion(&[("ZELLIJ", "0")], b"\x1b[?62;4c", Missing::OldZellij { version: None })]
+        #[case::ghostty_answering_an_error(GHOSTTY.env, b"\x1b_Gi=31;ENOSPC:no room\x1b\\\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c", Missing::GhosttyStorage)]
+        #[case::tabby_once_xterm_js_answers(&[("TERM_PROGRAM", "Tabby")], b"\x1bP>|xterm.js(6.1.0)\x1b\\\x1b[?62;9;22c", Missing::Tabby)]
+        #[case::hyper_once_xterm_js_answers(&[("TERM_PROGRAM", "Hyper")], b"\x1bP>|xterm.js(6.1.0)\x1b\\\x1b[?1;2c", Missing::Cannot { name: "Hyper".into() })]
+        #[case::mlterm_without_images(&[], b"\x1bP>|mlterm(3.9.4)\x1b\\\x1b[?63;1;2;3;6;9;15;18;22;29c", Missing::Cannot { name: "mlterm".into() })]
+        #[case::an_unknown_name_as_the_terminal_says_it(&[], b"\x1bP>|Bobcat 1.0\x1b\\\x1b[?62c", Missing::Unknown { name: Some("Bobcat 1.0".into()) })]
         #[case::tmux_that_was_never_asked(TMUX_ENV, TMUX_ANSWERS, Missing::TmuxSilent)]
         fn says_why_there_are_no_images_in(#[case] env: Vars, #[case] replies: &[u8], #[case] missing: Missing) {
             assert_eq!(decided(env, replies), says(missing, CELL));
@@ -840,7 +957,7 @@ mod tests {
         #[test]
         fn says_tmux_inside_tmux_cannot_pass_images() {
             let mut facts = facts(TMUX_ENV, TMUX_ANSWERS, WINDOW);
-            facts.tmux = local_tmux("on|tmux 3.6|256,RGB,sixel\n");
+            facts.tmux = local_tmux("/dev/pts/7|on|tmux 3.6|256,RGB,sixel\n", Some("/dev/pts/7"));
 
             assert_eq!(decide(&facts, vars(TMUX_ENV)), says(Missing::TmuxNested, CELL));
         }
@@ -871,6 +988,13 @@ mod tests {
             );
 
             assert_eq!(support, says(Missing::WezTermPixels, None));
+        }
+
+        #[test]
+        fn recognises_xterm_js_images_over_ssh_without_a_cell_size() {
+            let support = decide(&facts(&[("TERM", "xterm-256color")], b"\x1b[?62;4;9;22c", (0, 0, 0, 0)), vars(&[]));
+
+            assert_eq!(support, shows(Protocol::Iterm, None, Tmux::None));
         }
 
         #[test]
@@ -946,6 +1070,15 @@ mod tests {
             assert_eq!(likely_kitty(vars(env)), expected);
         }
 
+        #[rstest]
+        #[case::a_typo("sixels", Some("sixels"))]
+        #[case::valid("iterm", None)]
+        fn keeps_an_unknown_override_for_the_log(#[case] value: &'static str, #[case] expected: Option<&str>) {
+            let ignored = ignored_override(|name| (name == OVERRIDE_ENV).then(|| value.to_string()));
+
+            assert_eq!(ignored.as_deref(), expected);
+        }
+
         #[test]
         fn knows_it_renamed_a_tmux_pane_it_did_not_know_about() {
             let facts =
@@ -958,15 +1091,61 @@ mod tests {
     mod tmux_answer {
         use super::*;
 
+        fn ghostty(passthrough: bool) -> Outer {
+            Outer::Local { passthrough, terminal: Some("ghostty 1.3.1".into()), sixel: false }
+        }
+
         #[rstest]
-        #[case::on("on|ghostty 1.3.1|256,RGB,bpaste,clipboard,mouse,strikethrough,title,ccolour,cstyle,extkeys,focus,margins,overline,rectfill,sync,usstyle\n", Some(Outer::Local { passthrough: true, terminal: Some("ghostty 1.3.1".into()), sixel: false }))]
-        #[case::all("all|kitty(0.45.0)|256,RGB\n", Some(Outer::Local { passthrough: true, terminal: Some("kitty(0.45.0)".into()), sixel: false }))]
-        #[case::off_with_sixel("off|foot(1.25.0)|256,RGB,sixel,sync\n", Some(Outer::Local { passthrough: false, terminal: Some("foot(1.25.0)".into()), sixel: true }))]
-        #[case::before_the_option_existed("|ghostty 1.3.1|256\n", Some(Outer::Local { passthrough: true, terminal: Some("ghostty 1.3.1".into()), sixel: false }))]
-        #[case::an_outer_terminal_without_a_name("on||256\n", Some(Outer::Local { passthrough: true, terminal: None, sixel: false }))]
+        #[case::on(
+            "/dev/pts/7|on|ghostty 1.3.1|bpaste,ccolour,clipboard,cstyle,focus,RGB,title\n",
+            Some(ghostty(true))
+        )]
+        #[case::all("/dev/pts/7|all|ghostty 1.3.1|256,RGB\n", Some(ghostty(true)))]
+        #[case::off("/dev/pts/7|off|ghostty 1.3.1|256,RGB\n", Some(ghostty(false)))]
+        #[case::off_in_tmux_3_3("/dev/pts/7|0|ghostty 1.3.1|256,RGB\n", Some(ghostty(false)))]
+        #[case::on_in_tmux_3_3("/dev/pts/7|1|ghostty 1.3.1|256,RGB\n", Some(ghostty(true)))]
+        #[case::before_the_option_existed("/dev/pts/7||ghostty 1.3.1|256\n", Some(ghostty(true)))]
+        #[case::off_with_sixel("/dev/pts/7|off|foot(1.25.0)|256,RGB,sixel,sync\n", Some(Outer::Local { passthrough: false, terminal: Some("foot(1.25.0)".into()), sixel: true }))]
+        #[case::an_outer_terminal_without_a_name("/dev/pts/7|on||256\n", Some(Outer::Local { passthrough: true, terminal: None, sixel: false }))]
+        #[case::another_tty("/dev/pts/3|on|ghostty 1.3.1|256\n", Some(Outer::Stale))]
         #[case::nothing("", None)]
         fn reads_what_tmux_display_message_prints(#[case] output: &str, #[case] expected: Option<Outer>) {
-            assert_eq!(local_tmux(output), expected);
+            assert_eq!(local_tmux(output, Some("/dev/pts/7")), expected);
+        }
+
+        #[test]
+        fn trusts_a_pane_whose_tty_it_cannot_compare() {
+            assert_eq!(local_tmux("/dev/pts/3|on|ghostty 1.3.1|256\n", None), Some(ghostty(true)));
+        }
+
+        #[test]
+        fn ignores_a_tmux_variable_left_over_from_another_terminal() {
+            let env: Vars = &[("TMUX", "/tmp/tmux-1000/default,1,0"), ("TMUX_PANE", "%3"), ("TERM", "alacritty")];
+            let mut facts = facts(env, b"\x1b[?6c", WINDOW);
+            facts.tmux = local_tmux("/dev/pts/3|on|ghostty 1.3.1|256\n", Some("/dev/pts/7"));
+
+            assert_eq!(decide(&facts, vars(env)), says(Missing::Cannot { name: "Alacritty".into() }, CELL));
+        }
+
+        #[test]
+        fn asks_tmux_again_only_when_it_answered_locally() {
+            let local = Facts { tmux: Some(ghostty(true)), ..Facts::default() };
+            let probed = Facts { tmux: Some(Outer::Probed(Replies::default())), ..Facts::default() };
+
+            assert_eq!((local.checks_tmux_again(), probed.checks_tmux_again()), (true, false));
+        }
+
+        #[test]
+        fn follows_another_terminal_attaching_to_the_session() {
+            let mut facts = facts(TMUX_ENV, TMUX_ANSWERS, WINDOW);
+            facts.tmux = Some(ghostty(true));
+            let before = decide(&facts, vars(TMUX_ENV));
+            facts.tmux = local_tmux("/dev/pts/7|on|XTerm(407)|256,RGB\n", Some("/dev/pts/7"));
+
+            assert_eq!(
+                (before.protocol, decide(&facts, vars(TMUX_ENV)).missing),
+                (Some(Protocol::Kitty), Some(Missing::TmuxOuter { name: Some("xterm 407".into()) }))
+            );
         }
     }
 
@@ -1063,14 +1242,19 @@ mod tests {
                 Missing::TmuxPassthrough,
                 Missing::TmuxSilent,
                 Missing::TmuxOuter { name: None },
-                Missing::TmuxOuter { name: Some("XTerm(407)".into()) },
+                Missing::TmuxOuter { name: Some("xterm 407".into()) },
+                Missing::TmuxNoSixel { version: None },
+                Missing::TmuxNoSixel { version: Some("3.3a".into()) },
                 Missing::TmuxNested,
                 Missing::Zellij,
+                Missing::OldZellij { version: None },
+                Missing::OldZellij { version: Some("0.44.1".into()) },
                 Missing::Screen,
+                Missing::Multiplexer { term: "screen-256color".into() },
             ]
         }
 
-        const NAMES: [&str; 12] = [
+        const NAMES: [&str; 11] = [
             "Alacritty",
             "Bobcat",
             "CORNERCASE_IMAGES=off",
@@ -1080,7 +1264,6 @@ mod tests {
             "Tabby",
             "VS",
             "WezTerm",
-            "XTerm(407)",
             "Zellij",
             "Ghostty,",
         ];
@@ -1104,7 +1287,7 @@ mod tests {
             let mut ids: Vec<&str> = every_missing().iter().map(Missing::id).collect();
             ids.dedup();
 
-            assert_eq!(ids.len(), 19);
+            assert_eq!(ids.len(), 22);
         }
 
         #[rstest]
@@ -1114,7 +1297,15 @@ mod tests {
         #[case::old_kitty(Missing::OldKitty { version: "0.27.0".into() }, "kitty 0.27.0 is too old")]
         #[case::xterm(Missing::Xterm, "xterm -ti vt340")]
         #[case::ghostty(Missing::GhosttyStorage, "image-storage-limit")]
-        #[case::outer_terminal(Missing::TmuxOuter { name: Some("XTerm(407)".into()) }, "XTerm(407) cannot show images through tmux")]
+        #[case::outer_terminal(Missing::TmuxOuter { name: Some("xterm 407".into()) }, "cornercase cannot show images in xterm 407 through tmux")]
+        #[case::tmux_3_3_has_no_all(Missing::TmuxPassthrough, "all instead of on (tmux 3.4 or later)")]
+        #[case::tmux_config_folder(Missing::TmuxPassthrough, "~/.config/tmux/tmux.conf")]
+        #[case::an_inactive_pane(Missing::TmuxSilent, "not the active one")]
+        #[case::a_hidden_window(Missing::TmuxSilent, "covers a hidden window")]
+        #[case::ghostty_reload(Missing::GhosttyStorage, "reload it (ctrl+shift+, or cmd+shift+, on macOS)")]
+        #[case::tmux_without_sixel(Missing::TmuxNoSixel { version: Some("3.3a".into()) }, "this tmux (3.3a) cannot draw sixel images")]
+        #[case::old_zellij(Missing::OldZellij { version: Some("0.44.1".into()) }, "update Zellij to 0.45 or later")]
+        #[case::unnamed_multiplexer(Missing::Multiplexer { term: "screen-256color".into() }, "this multiplexer (TERM=screen-256color) cannot pass images through")]
         fn names_the_fix(#[case] missing: Missing, #[case] fix: &str) {
             assert!(missing.lines().join("\n").contains(fix), "{:?}", missing.lines());
         }

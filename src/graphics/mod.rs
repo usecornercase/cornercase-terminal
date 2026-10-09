@@ -19,8 +19,9 @@ pub struct Support {
 
 pub const KITTY_LO: [u8; 2] = [0xf0, 0xf1];
 const CAN: &str = "Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can show them";
-const PASSTHROUGH: &str =
-    "add set -g allow-passthrough on to ~/.tmux.conf, run tmux source-file ~/.tmux.conf, then start cornercase again";
+const PASSTHROUGH: &str = "add set -g allow-passthrough on to ~/.tmux.conf (or ~/.config/tmux/tmux.conf), run tmux \
+     source-file on that file, then start cornercase again";
+const ALL: &str = "all instead of on (tmux 3.4 or later) also lets images arrive while this window is hidden";
 
 impl Support {
     pub fn images(&self) -> &'static str {
@@ -112,9 +113,12 @@ pub enum Missing {
     TmuxPassthrough,
     TmuxSilent,
     TmuxOuter { name: Option<String> },
+    TmuxNoSixel { version: Option<String> },
     TmuxNested,
     Zellij,
+    OldZellij { version: Option<String> },
     Screen,
+    Multiplexer { term: String },
 }
 
 impl Missing {
@@ -136,9 +140,12 @@ impl Missing {
             Self::TmuxPassthrough => "tmux-passthrough",
             Self::TmuxSilent => "tmux-silent",
             Self::TmuxOuter { .. } => "tmux-outer",
+            Self::TmuxNoSixel { .. } => "tmux-no-sixel",
             Self::TmuxNested => "tmux-nested",
             Self::Zellij => "zellij",
+            Self::OldZellij { .. } => "old-zellij",
             Self::Screen => "screen",
+            Self::Multiplexer { .. } => "multiplexer",
         }
     }
 
@@ -192,8 +199,8 @@ impl Missing {
             }
             Self::GhosttyStorage => vec![
                 "Ghostty did not answer the image query: its image-storage-limit is 0".into(),
-                "remove image-storage-limit from Ghostty's config (the default is 320000000), then start cornercase \
-                 again"
+                "remove image-storage-limit from Ghostty's config (the default is 320000000), reload it \
+                 (ctrl+shift+, or cmd+shift+, on macOS), then start cornercase again"
                     .into(),
             ],
             Self::WezTermPixels => vec![
@@ -205,35 +212,68 @@ impl Missing {
                 "run cornercase directly in the terminal: mosh and some multiplexers hide the window's size in pixels"
                     .into(),
             ],
-            Self::TmuxPassthrough => vec![
-                "images need tmux to pass them through".into(),
-                PASSTHROUGH.into(),
-                "all instead of on also lets images arrive while this window is hidden".into(),
-            ],
+            Self::TmuxPassthrough
+            | Self::TmuxSilent
+            | Self::TmuxOuter { .. }
+            | Self::TmuxNoSixel { .. }
+            | Self::TmuxNested
+            | Self::Zellij
+            | Self::OldZellij { .. }
+            | Self::Screen
+            | Self::Multiplexer { .. } => self.multiplexer_lines(),
+        }
+    }
+
+    fn multiplexer_lines(&self) -> Vec<String> {
+        match self {
+            Self::TmuxPassthrough => {
+                vec!["images need tmux to pass them through".into(), PASSTHROUGH.into(), ALL.into()]
+            }
             Self::TmuxSilent => vec![
-                "inside tmux, images need set -g allow-passthrough on in ~/.tmux.conf".into(),
+                "inside tmux, images need set -g allow-passthrough on".into(),
                 PASSTHROUGH.into(),
-                "if it is on already, the terminal running tmux cannot show images".into(),
+                "if it is on already, cornercase's pane was hidden or not the active one when it started: start it \
+                 again there (all instead of on, tmux 3.4 or later, also covers a hidden window)"
+                    .into(),
+                "otherwise the terminal running tmux cannot show images".into(),
             ],
             Self::TmuxOuter { name } => vec![
-                name.as_ref().map_or_else(
-                    || "the terminal running tmux cannot show images through it".into(),
-                    |name| format!("{name} cannot show images through tmux"),
+                format!("cornercase cannot show images in {} through tmux", name.as_deref().unwrap_or("this terminal")),
+                "Ghostty, kitty and Rio can; outside tmux, more terminals can".into(),
+            ],
+            Self::TmuxNoSixel { version } => vec![
+                version.as_ref().map_or_else(
+                    || "this tmux cannot draw sixel images".into(),
+                    |version| format!("this tmux ({version}) cannot draw sixel images"),
                 ),
-                "Ghostty and kitty can; outside tmux, more terminals can".into(),
+                "tmux 3.4 or later built with sixel can, or run cornercase outside tmux".into(),
             ],
             Self::TmuxNested => vec![
                 "images do not pass through tmux inside tmux".into(),
                 "run cornercase in the outer tmux, or outside tmux".into(),
             ],
             Self::Zellij => vec![
-                "Zellij passes images only to terminals that show sixel".into(),
+                "cornercase shows images in Zellij only as sixel, and this terminal has no sixel".into(),
                 "run cornercase outside Zellij, or in a terminal with sixel such as foot, WezTerm or Konsole".into(),
+            ],
+            Self::OldZellij { version } => vec![
+                format!(
+                    "{} claims sixel whatever the terminal can do, so cornercase cannot tell",
+                    version.as_ref().map_or_else(|| "this Zellij".to_string(), |version| format!("Zellij {version}"))
+                ),
+                "update Zellij to 0.45 or later, or run cornercase outside it".into(),
             ],
             Self::Screen => vec![
                 "GNU screen cannot pass images through".into(),
                 "run cornercase outside screen, or in tmux with set -g allow-passthrough on".into(),
             ],
+            Self::Multiplexer { term } => {
+                vec![
+                    format!("this multiplexer (TERM={term}) cannot pass images through"),
+                    "run cornercase outside it".into(),
+                ]
+            }
+            _ => Vec::new(),
         }
     }
 }

@@ -1,6 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::hash::{BuildHasher, RandomState};
 use std::io::{self, BufRead, IsTerminal, Read, Write, stdin, stdout};
+use std::os::fd::AsFd;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
@@ -44,8 +45,10 @@ use crate::update::{self, CURRENT, Install, Outcome};
 const THEME_QUERY_TIMEOUT: Duration = Duration::from_secs(1);
 const TMUX_CHECK_TIMEOUT: Duration = Duration::from_millis(500);
 const TMUX_CHECK_POLL: Duration = Duration::from_millis(5);
-const TMUX_SETTLE: Duration = Duration::from_millis(50);
+const TMUX_SETTLE: Duration = Duration::from_millis(150);
 const OUTER_WAIT: Duration = Duration::from_millis(300);
+const DRAIN_QUIET: Duration = Duration::from_millis(200);
+const DRAIN_LIMIT: Duration = Duration::from_secs(1);
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
@@ -532,7 +535,9 @@ pub(crate) fn stop(mut child: Child) {
 fn install_panic_hook(forget: Vec<u8>) {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        write_out(&forget);
+        if thread::current().name() == Some("main") {
+            write_out(&forget);
+        }
         restore_input_modes();
         prev_hook(info);
     }));
@@ -554,6 +559,7 @@ enum Incoming {
     Server(u64, Received),
     Linked(u64, Result<Link>),
     Signal,
+    Tmux(Option<Outer>),
 }
 
 enum Received {
@@ -648,6 +654,8 @@ struct Window<'a> {
     facts: Facts,
     graphics: Support,
     probe: String,
+    tty: Option<String>,
+    tmux_check: TmuxCheck,
     generation: u64,
     out: Option<Sender<ClientMessage>>,
     guard: Option<Guard>,
@@ -686,6 +694,10 @@ impl Window<'_> {
         match incoming {
             Incoming::Signal => Ok(Some(Ending::Detached)),
             Incoming::Input(ev) => self.input(ev),
+            Incoming::Tmux(outer) => {
+                self.tmux_checked(outer);
+                Ok(None)
+            }
             Incoming::Server(generation, received) if generation == self.generation => {
                 match next(received, self.target.reconnects())? {
                     Next::Show(bytes) => {
@@ -713,11 +725,16 @@ impl Window<'_> {
     }
 
     fn input(&mut self, ev: Event) -> Result<Option<Ending>> {
-        let resized = matches!(ev, Event::Resize(..)) && self.resized();
-        if let Some(out) = &self.out {
-            if resized {
-                let _ = out.send(ClientMessage::Graphics(self.graphics.clone()));
+        if matches!(ev, Event::Resize(..)) {
+            self.facts.resized(window_cell());
+            if self.decide_again() {
+                self.send_graphics();
             }
+            if self.facts.checks_tmux_again() {
+                self.check_tmux();
+            }
+        }
+        if let Some(out) = &self.out {
             let _ = out.send(ClientMessage::Event(ev));
             return Ok(None);
         }
@@ -746,12 +763,43 @@ impl Window<'_> {
         Ok(None)
     }
 
-    fn resized(&mut self) -> bool {
-        self.facts.resized(window_cell());
+    fn decide_again(&mut self) -> bool {
         let graphics = Support { id_hi: self.graphics.id_hi, ..detect::decide(&self.facts, env) };
         let changed = graphics != self.graphics;
         self.graphics = graphics;
         changed
+    }
+
+    fn send_graphics(&self) {
+        if let Some(out) = &self.out {
+            let _ = out.send(ClientMessage::Graphics(self.graphics.clone()));
+        }
+    }
+
+    fn check_tmux(&mut self) {
+        if self.tmux_check.running {
+            self.tmux_check.again = true;
+            return;
+        }
+        self.tmux_check.running = true;
+        let (tx, tty) = (self.tx.clone(), self.tty.clone());
+        thread::spawn(move || {
+            let outer = start_tmux_check().and_then(|child| finish_tmux_check(child, tty.as_deref()));
+            let _ = tx.send(Incoming::Tmux(outer));
+        });
+    }
+
+    fn tmux_checked(&mut self, outer: Option<Outer>) {
+        self.tmux_check.running = false;
+        if let Some(outer @ Outer::Local { .. }) = outer {
+            self.facts.tmux = Some(outer);
+            if self.decide_again() {
+                self.send_graphics();
+            }
+        }
+        if std::mem::take(&mut self.tmux_check.again) {
+            self.check_tmux();
+        }
     }
 
     fn tick(&mut self, now: Instant) -> Result<()> {
@@ -813,10 +861,17 @@ struct Host {
     facts: Facts,
     graphics: Support,
     probe: String,
+    tty: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct TmuxCheck {
+    running: bool,
+    again: bool,
 }
 
 fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Host) -> Result<Ending> {
-    let Host { theme, facts, graphics, probe } = host;
+    let Host { theme, facts, graphics, probe, tty } = host;
     let name = facts.replies.terminal.clone();
     let notify = notify::detect(name.as_deref(), env);
     let (tx, rx) = mpsc::channel();
@@ -830,6 +885,8 @@ fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Hos
         facts,
         graphics,
         probe,
+        tty,
+        tmux_check: TmuxCheck::default(),
         generation: 0,
         out: None,
         guard: None,
@@ -891,6 +948,7 @@ fn env(name: &str) -> Option<String> {
 
 fn probe_host() -> Host {
     let started = Instant::now();
+    let tty = own_tty();
     let forced = detect::overridden(env);
     let asked_kitty = !forced && !detect::in_multiplexer(env) && detect::likely_kitty(env);
     let tmux_check = if forced { None } else { start_tmux_check() };
@@ -903,37 +961,69 @@ fn probe_host() -> Host {
         write_out(detect::PANE_TITLE.as_bytes());
     }
     if !forced && detect::in_tmux(facts.replies.terminal.as_deref(), env) {
-        let local = tmux_check.and_then(finish_tmux_check);
-        facts.tmux = Some(local.unwrap_or_else(|| probe_outer(started, round_trip)));
+        let local = tmux_check.and_then(|child| finish_tmux_check(child, tty.as_deref()));
+        facts.tmux = Some(match local {
+            Some(Outer::Stale) if facts.replies.terminal.is_none() => Outer::Stale,
+            Some(local @ Outer::Local { .. }) => local,
+            _ => probe_outer(started, round_trip),
+        });
     } else if let Some(child) = tmux_check {
         stop(child);
     }
     let graphics = Support { id_hi: id_hi(), ..detect::decide(&facts, env) };
-    let probe = format!("{} ms={}", facts.summary(), started.elapsed().as_millis());
-    Host { theme, facts, graphics, probe }
+    let mut probe = format!("{} ms={}", facts.summary(), started.elapsed().as_millis());
+    if let Some(value) = detect::ignored_override(env) {
+        probe = format!("{probe} ignored-{}={value}", detect::OVERRIDE_ENV);
+    }
+    Host { theme, facts, graphics, probe, tty }
 }
 
 fn query_terminal(query: &[u8], timeout: Duration) -> ThemeProbe {
-    let mut probe = ThemeProbe::default();
     let mut out = stdout();
     if out.write_all(query).and_then(|()| out.flush()).is_err() {
-        return probe;
+        return ThemeProbe::default();
     }
-    let input = stdin();
+    listen(&stdin(), timeout)
+}
+
+fn listen(input: &impl AsFd, timeout: Duration) -> ThemeProbe {
+    let mut probe = ThemeProbe::default();
     let deadline = Instant::now() + timeout;
     let mut buf = [0u8; 4096];
     while !probe.is_done() {
-        let Ok(left) = Timespec::try_from(deadline.saturating_duration_since(Instant::now())) else { break };
-        let mut fds = [PollFd::new(&input, PollFlags::IN)];
-        if !matches!(poll(&mut fds, Some(&left)), Ok(1..)) {
+        if !readable(input, deadline.saturating_duration_since(Instant::now())) {
             break;
         }
-        match rustix::io::read(&input, &mut buf) {
+        match rustix::io::read(input, &mut buf) {
             Ok(n @ 1..) => probe.feed(&buf[..n]),
             _ => break,
         }
     }
+    if !probe.is_done() {
+        drain(input);
+    }
     probe
+}
+
+fn drain(input: &impl AsFd) {
+    let limit = Instant::now() + DRAIN_LIMIT;
+    let mut buf = [0u8; 4096];
+    loop {
+        let wait = DRAIN_QUIET.min(limit.saturating_duration_since(Instant::now()));
+        if wait.is_zero() || !readable(input, wait) || !matches!(rustix::io::read(input, &mut buf), Ok(1..)) {
+            return;
+        }
+    }
+}
+
+fn readable(input: &impl AsFd, wait: Duration) -> bool {
+    let Ok(wait) = Timespec::try_from(wait) else { return false };
+    let mut fds = [PollFd::new(input, PollFlags::IN)];
+    matches!(poll(&mut fds, Some(&wait)), Ok(1..))
+}
+
+fn own_tty() -> Option<String> {
+    rustix::termios::ttyname(stdin(), Vec::new()).ok().map(|name| name.to_string_lossy().into_owned())
 }
 
 fn window_cell() -> Option<graphics::CellSize> {
@@ -956,14 +1046,14 @@ fn start_tmux_check() -> Option<Child> {
     command.arg(detect::TMUX_FORMAT).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()
 }
 
-fn finish_tmux_check(mut child: Child) -> Option<Outer> {
+fn finish_tmux_check(mut child: Child, tty: Option<&str>) -> Option<Outer> {
     let deadline = Instant::now() + TMUX_CHECK_TIMEOUT;
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => {
                 let mut output = String::new();
                 child.stdout.take()?.read_to_string(&mut output).ok()?;
-                return detect::local_tmux(&output);
+                return detect::local_tmux(&output, tty);
             }
             Ok(None) if Instant::now() < deadline => thread::sleep(TMUX_CHECK_POLL),
             Ok(None) => {
@@ -1038,6 +1128,39 @@ mod tests {
         let refused = Error::Control(control::unknown_command("restart-when-idle"));
 
         assert_eq!(too_old_to_wait(refused).to_string(), TOO_OLD_TO_WAIT);
+    }
+
+    mod probe {
+        use std::os::unix::net::UnixStream;
+
+        use super::*;
+
+        #[test]
+        fn a_reply_that_comes_after_the_probe_gave_up_is_read_and_dropped() {
+            let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+            let slow_terminal = thread::spawn(move || {
+                thread::sleep(Duration::from_millis(50));
+                theirs.write_all(b"\x1b_Gi=31;OK\x1b\\").expect("write the late reply");
+                theirs
+            });
+
+            let probe = listen(&ours, Duration::from_millis(10));
+            let _theirs = slow_terminal.join().expect("the slow terminal");
+
+            assert!(!probe.is_done());
+            assert!(!readable(&ours, Duration::ZERO), "the late reply would reach a pane");
+        }
+
+        #[test]
+        fn a_probe_that_ends_on_its_marker_waits_for_nothing_more() {
+            let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+            theirs.write_all(b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c").expect("write the replies");
+            let started = Instant::now();
+
+            let probe = listen(&ours, THEME_QUERY_TIMEOUT);
+
+            assert!(probe.is_done() && started.elapsed() < DRAIN_QUIET);
+        }
     }
 
     mod restart {

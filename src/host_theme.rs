@@ -207,7 +207,7 @@ fn parse_reply(buf: &[u8]) -> Reply {
     match buf {
         [ESC] => Reply::Incomplete,
         [ESC, kind @ (b']' | b'P' | b'_'), rest @ ..] => match string_end(rest) {
-            Some((body_len, term_len)) => {
+            End::Found(body_len, term_len) => {
                 let body = String::from_utf8_lossy(&rest[..body_len]).into_owned();
                 let len = 2 + body_len + term_len;
                 match kind {
@@ -216,7 +216,8 @@ fn parse_reply(buf: &[u8]) -> Reply {
                     _ => Reply::Apc(body, len),
                 }
             }
-            None => Reply::Incomplete,
+            End::Cut(at) => Reply::Other(2 + at),
+            End::Incomplete => Reply::Incomplete,
         },
         [ESC, b'[', rest @ ..] => parse_csi(rest),
         _ => Reply::Other(1),
@@ -244,12 +245,22 @@ fn parse_csi(rest: &[u8]) -> Reply {
     }
 }
 
-fn string_end(rest: &[u8]) -> Option<(usize, usize)> {
-    rest.iter().enumerate().find_map(|(i, &b)| match (b, rest.get(i + 1)) {
-        (BEL, _) => Some((i, 1)),
-        (ESC, Some(b'\\')) => Some((i, 2)),
-        _ => None,
-    })
+enum End {
+    Found(usize, usize),
+    Cut(usize),
+    Incomplete,
+}
+
+fn string_end(rest: &[u8]) -> End {
+    rest.iter()
+        .enumerate()
+        .find_map(|(i, &b)| match (b, rest.get(i + 1)) {
+            (BEL, _) => Some(End::Found(i, 1)),
+            (ESC, Some(b'\\')) => Some(End::Found(i, 2)),
+            (ESC, Some(_)) => Some(End::Cut(i)),
+            _ => None,
+        })
+        .unwrap_or(End::Incomplete)
 }
 
 fn contrast(a: RgbColor, b: RgbColor) -> f64 {
@@ -480,6 +491,29 @@ mod tests {
             p.feed(b"\x1b[?62;22c");
 
             assert_eq!(p.finish().1.attributes, Some(vec![62, 22]));
+        }
+
+        #[rstest]
+        #[case::ghostty(GHOSTTY)]
+        #[case::foot(FOOT)]
+        fn reads_the_same_however_the_replies_are_split(#[case] stream: &[u8]) {
+            let whole = replies(stream);
+            for at in 1..stream.len() {
+                let mut p = ThemeProbe::default();
+                p.feed(&stream[..at]);
+                p.feed(&stream[at..]);
+
+                assert_eq!(p.finish().1, whole, "split at {at}");
+            }
+        }
+
+        #[rstest]
+        #[case::alt_underscore(b"\x1b_")]
+        #[case::alt_p(b"\x1bP")]
+        #[case::alt_bracket(b"\x1b]")]
+        #[case::alt_underscore_and_a_letter(b"\x1b_x")]
+        fn a_key_typed_during_the_probe_does_not_swallow_the_replies(#[case] key: &[u8]) {
+            assert_eq!(replies(&[key, GHOSTTY].concat()), replies(GHOSTTY));
         }
 
         #[test]
