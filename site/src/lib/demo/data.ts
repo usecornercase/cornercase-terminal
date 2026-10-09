@@ -177,6 +177,7 @@ export interface Issue {
   body: string;
   mine: boolean;
   closed?: boolean;
+  plane?: { priority: string; projectId: string; stateId: string; labelIds: string[] };
 }
 
 const BODY_482 = `When a customer starts a return without an address line, the returns page crashes with a 500.
@@ -279,6 +280,10 @@ export const ISSUES: Issue[] = [
     labels: ['bug'], state: 'In Progress', author: 'ana', age: '1d',
     url: 'https://app.plane.so/acme/browse/ENG-42/',
     body: 'After signing in, return to the page the customer opened.\n\n- [ ] Keep the original path\n- [ ] Test an expired session', mine: true,
+    plane: {
+      priority: 'high', projectId: '4af68566-94a4-4eb3-94aa-50dc9427067b',
+      stateId: 'f960d3c2-8524-4a41-b8eb-055ce4be2a7f', labelIds: ['16c61a3a-512a-48ac-b0be-b6b46fe6f430'],
+    },
   },
   {
     source: 'jira',

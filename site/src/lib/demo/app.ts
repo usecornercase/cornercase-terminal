@@ -169,6 +169,22 @@ function checkPlaneUrl(input: string): string | undefined {
     return 'type a URL such as https://plane.example.com';
   }
 }
+
+function planeMatches(issue: Issue, filter: URLSearchParams): boolean {
+  const values: Record<string, string[]> = {
+    priority: issue.plane ? [issue.plane.priority] : [],
+    project_id: issue.plane ? [issue.plane.projectId] : [],
+    state_id: issue.plane ? [issue.plane.stateId] : [],
+    label_id: issue.plane?.labelIds ?? [],
+  };
+  return Array.from(filter).every(([key, value]) => {
+    if (key === 'search') return issue.title.toLowerCase().includes(value.toLowerCase());
+    if (key === 'label_id__isnull') return (values.label_id.length === 0) === (value === 'true');
+    const many = key.endsWith('__in');
+    const field = many ? key.slice(0, -4) : key;
+    return !Object.hasOwn(values, field) || (many ? value.split(',') : [value]).some((v) => values[field].includes(v));
+  });
+}
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
 
@@ -2508,8 +2524,10 @@ export class App {
     const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s]);
     const f = o.filter.trim().toLowerCase();
     const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
+    const planeFilter = new URLSearchParams(this.config.planeFilter.trim().replace(/^\?/, ''));
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
       .filter((i) => i.source !== 'jira' || !project || i.key.startsWith(`${project}-`))
+      .filter((i) => i.source !== 'plane' || planeMatches(i, planeFilter))
       .filter((i) => !o.mine || i.mine)
       .filter((i) => !f || [i.key, i.title, i.author, i.state, ...i.labels].some((k) => k.toLowerCase().includes(f)));
   }
