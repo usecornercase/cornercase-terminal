@@ -22,6 +22,7 @@ use crate::app::{App, AppEvent, Streamed};
 use crate::config;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
+use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::log::{self, Level};
 use crate::notify::Channel;
@@ -189,6 +190,7 @@ struct Client {
     size: Option<(u16, u16)>,
     used: u64,
     notify: Channel,
+    graphics: Support,
     screen: Option<Screen>,
     out: Outbox,
     writer: JoinHandle<()>,
@@ -594,6 +596,19 @@ impl Server {
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
                 self.app.request(id, &text, self.area, Instant::now());
             }
+            ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
+                log::info!(
+                    "server",
+                    "client images changed",
+                    client = id,
+                    images = graphics.images(),
+                    cell = graphics.cell_size(),
+                    missing = graphics.why_not()
+                );
+                if let Some(client) = self.client_mut(id) {
+                    client.graphics = graphics;
+                }
+            }
             ServerEvent::Incompatible(id) => self.reject(id, OTHER_BUILD),
             ServerEvent::Gone(id) => self.remove(id),
         }
@@ -622,8 +637,8 @@ impl Server {
         let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
         let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
         spawn_client_reader(id, reader, self.tx.clone());
-        let notify = Channel::Bell;
-        self.clients.push(Client { id, size: None, used: 0, notify, screen: None, out, writer, dropped: 0 });
+        let (notify, graphics) = (Channel::Bell, Support::default());
+        self.clients.push(Client { id, size: None, used: 0, notify, graphics, screen: None, out, writer, dropped: 0 });
     }
 
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
@@ -646,10 +661,16 @@ impl Server {
             notify = hello.notify.id(),
             background = if hello.theme.background.is_some() { "known" } else { "unknown" },
             truecolor = hello.theme.truecolor,
+            images = hello.graphics.images(),
+            cell = hello.graphics.cell_size(),
+            tmux = hello.graphics.tmux.id(),
+            missing = hello.graphics.why_not(),
+            probe = hello.probe,
         );
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        client.graphics = hello.graphics;
         self.touch(id);
         self.fit(Some(id));
         if !self.started {
@@ -947,8 +968,18 @@ mod tests {
                 let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
                 let _ = server.handle(ServerEvent::Accepted(ours));
                 let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
-                let hello =
-                    Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
+                let (graphics, probe) = (Support::default(), String::new());
+                let hello = Hello {
+                    version,
+                    build,
+                    cols: COLS,
+                    rows: ROWS,
+                    theme,
+                    notify: Channel::Bell,
+                    terminal: None,
+                    graphics,
+                    probe,
+                };
                 let _ = server.handle(ServerEvent::Message(1, ClientMessage::Hello(Box::new(hello))));
                 let (frames_tx, frames) = mpsc::channel();
                 thread::spawn(move || {
@@ -1086,7 +1117,8 @@ mod tests {
             let (tx, rx) = mpsc::channel();
             let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
             let writer = thread::spawn(|| {});
-            (Client { id: 1, size: None, used: 0, notify: Channel::Bell, screen: None, out, writer, dropped: 0 }, rx)
+            let (notify, graphics) = (Channel::Bell, Support::default());
+            (Client { id: 1, size: None, used: 0, notify, graphics, screen: None, out, writer, dropped: 0 }, rx)
         }
 
         fn texts(rx: &Receiver<ServerMessage>) -> Vec<String> {
