@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.20
+
+- `cornercase read --last-message` reads several agents in one call: repeat `--pane` or `--tab` to get each message under a header with its pane, agent, whether its turn is over and when it was written. `--json` puts their answers in a `panes` list. A pane without a message gets its own error, the others are still read, and the command exits 1 once it has read them all. Reading one agent keeps the same output as before.
+
 ## 0.12.19
 
 - The files panel shows images. A click on a PNG, JPEG, GIF, WebP, BMP or ICO file shows the picture itself, drawn by your terminal, with its format, size in pixels and file size above it; ` ask agent ` and ` copy ` take its path. Ghostty and kitty show it with kitty graphics, iTerm2, WezTerm and Warp with iTerm2's inline images, and foot, Konsole and xterm (started as a VT340) with sixel; inside tmux, Ghostty and kitty need `set -g allow-passthrough on`, and a tmux built with sixel draws sixel pictures itself, with no setting. A terminal that cannot show images gets, where the picture would be, a line saying why and what to do about it. Every window attached to the server gets what its own terminal can show, in its own size, and an image an agent rewrites shows again as it changes. `CORNERCASE_IMAGES=kitty`, `iterm`, `sixel` or `off`, set where you start cornercase, picks for a terminal cornercase does not recognise.
