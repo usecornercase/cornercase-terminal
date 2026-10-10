@@ -1,6 +1,6 @@
 [package]
 name = "cornercase"
-version = "0.12.21"
+version = "0.12.22"
 edition = "2024"
 description = "A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse"
 license = "MIT OR Apache-2.0"
