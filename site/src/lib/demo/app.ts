@@ -115,9 +115,9 @@ export interface SearchResult {
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
 
-type Remote = 'shortcut' | 'linear' | 'jira';
+type Remote = 'shortcut' | 'linear' | 'jira' | 'plane';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
   shortcut: {
     name: 'Shortcut',
@@ -137,9 +137,29 @@ const REMOTES: Record<Remote, { name: string; token: string; env: string; help: 
     env: 'JIRA_API_TOKEN',
     help: 'Create an API token at id.atlassian.com under Security → Create and manage API tokens, paste it here and press Enter.',
   },
+  plane: {
+    name: 'Plane',
+    token: 'API key',
+    env: 'PLANE_API_KEY',
+    help: 'Create an API key in Plane under Profile settings → Personal access tokens, paste it here and press Enter.',
+  },
 };
 const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
 const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
+
+function checkWorkspace(input: string): [string, string?] {
+  const slug = input.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (!slug) return ['', 'type your workspace, the part after app.plane.so/, such as acme'];
+  if (!/^[a-z0-9_-]+$/.test(slug)) return ['', 'a workspace is lowercase letters, numbers and dashes, such as acme'];
+  return [slug];
+}
+
+function checkUrl(input: string): [string, string?] {
+  const url = input.trim().replace(/\/+$/, '');
+  if (!url) return [''];
+  const m = url.match(/^https?:\/\/([^/\s]+)/);
+  return m && !/\s/.test(url) ? [url] : ['', 'a URL starts with https://, such as https://plane.acme.dev'];
+}
 
 function checkSite(input: string): [string, string?] {
   const host = (input.trim().split('://').pop() ?? '').split('/')[0].replace(/\.+$/, '').toLowerCase();
@@ -2159,8 +2179,12 @@ export class App {
         { id: 'jira-email', section: 'Jira', label: 'Jira email', value: c.jiraEmail || 'not set', note: 'the one you sign in with' },
         token('jira', 'Jira'),
         { id: 'jira-jql', section: 'Jira', label: 'Jira filter', value: c.jiraJql || 'none', note: 'JQL, such as project = SHOP' },
+        { id: 'plane-workspace', section: 'Plane', label: 'Plane workspace', value: c.planeWorkspace || 'not set', note: 'the part after app.plane.so/' },
+        { id: 'plane-url', section: 'Plane', label: 'Plane URL', value: c.planeUrl || 'Plane Cloud', note: 'for a self-hosted server' },
+        token('plane', 'Plane'),
+        { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
       ];
-      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -2273,6 +2297,12 @@ export class App {
       o.edit = { row: row.id, label: 'Jira email', input: c.jiraEmail, token: false };
     } else if (row.id === 'jira-jql') {
       o.edit = { row: row.id, label: 'Jira filter (JQL, such as project = SHOP; empty lists everything)', input: c.jiraJql, token: false };
+    } else if (row.id === 'plane-workspace') {
+      o.edit = { row: row.id, label: 'Plane workspace, the part after app.plane.so/, such as acme', input: c.planeWorkspace, token: false };
+    } else if (row.id === 'plane-url') {
+      o.edit = { row: row.id, label: 'Plane URL for a self-hosted server (empty is Plane Cloud)', input: c.planeUrl, token: false };
+    } else if (row.id === 'plane-filter') {
+      o.edit = { row: row.id, label: 'Plane filter (query parameters, such as priority=high)', input: c.planeFilter, token: false };
     } else if (row.id.startsWith('src:')) {
       const id = row.id.slice(4);
       if (c.sources.includes(id)) {
@@ -2389,6 +2419,8 @@ export class App {
       const source = edit.row.slice(6) as Remote;
       if (source === 'jira' && (!this.config.jiraSite || !this.config.jiraEmail)) {
         edit.error = 'set the Jira site and email first';
+      } else if (source === 'plane' && !this.config.planeWorkspace) {
+        edit.error = 'set the Plane workspace first';
       } else if (!edit.input.trim()) {
         edit.error = `paste the ${REMOTES[source].token} first`;
       } else {
@@ -2414,6 +2446,24 @@ export class App {
         o.edit = undefined;
         o.notice = value ? `Jira ${name}: ${value}` : `the Jira ${name} was cleared`;
       }
+    } else if (edit.row === 'plane-workspace' || edit.row === 'plane-url') {
+      const workspace = edit.row === 'plane-workspace';
+      const input = edit.input.trim();
+      const [value, error] = workspace ? (input ? checkWorkspace(input) : ['']) : checkUrl(input);
+      if (error) edit.error = error;
+      else {
+        if (workspace) this.config.planeWorkspace = value;
+        else this.config.planeUrl = value;
+        if (workspace && !value) this.config.accounts.plane = false;
+        o.edit = undefined;
+        o.notice = workspace
+          ? value ? `Plane workspace: ${value}` : 'the Plane workspace was cleared'
+          : value ? `Plane server: ${value}` : 'Plane is the cloud at app.plane.so';
+      }
+    } else if (edit.row === 'plane-filter') {
+      this.config.planeFilter = edit.input.trim();
+      o.edit = undefined;
+      o.notice = this.config.planeFilter ? `Plane lists only: ${this.config.planeFilter}` : 'Plane lists every work item you can see';
     } else if (edit.row === 'jira-jql') {
       this.config.jiraJql = edit.input.trim();
       o.edit = undefined;
@@ -2452,7 +2502,7 @@ export class App {
       chosen: null,
     };
     this.overlay.token = this.freshToken(this.issuesSource(this.overlay));
-    this.emit('narrate', 'Your issues from GitHub, Shortcut, Linear and Jira. Click one to read it, then press start.');
+    this.emit('narrate', 'Your issues from GitHub, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.');
     this.after(450, () => {
       const o = this.overlay;
       if (o?.kind === 'issues') {
@@ -2473,11 +2523,13 @@ export class App {
   }
 
   private accountOf(source: Remote): string {
-    return `@you in ${source === 'jira' ? this.config.jiraSite : 'acme'}`;
+    return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
 
   private freshToken(source: string): IssuesOverlay['token'] {
-    return source === 'jira' ? { input: this.config.jiraSite, checking: false, step: 'site' } : { input: '', checking: false };
+    if (source === 'jira') return { input: this.config.jiraSite, checking: false, step: 'site' };
+    if (source === 'plane') return { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+    return { input: '', checking: false };
   }
 
   private issuesList(o: IssuesOverlay): Issue[] {
@@ -2598,7 +2650,10 @@ export class App {
       const help = [`Connect ${remote.name}.`, ''];
       let label = remote.token;
       let input = '•'.repeat(Math.min(o.token.input.length, 40));
-      if (step === 'site') {
+      if (step === 'workspace') {
+        help.push("Type your Plane workspace, the part after the server's name, such as acme.", 'Then press Enter.');
+        [label, input] = ['workspace', o.token.input];
+      } else if (step === 'site') {
         help.push('Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.');
         [label, input] = ['site', o.token.input];
       } else if (step === 'email') {
@@ -2606,15 +2661,18 @@ export class App {
         [label, input] = ['email', o.token.input];
       } else {
         if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
+        if (source === 'plane') help.push(`Connecting to the Plane workspace ${this.config.planeWorkspace}.`, '');
         help.push(remote.help);
       }
       help.push(
         '',
         step === 'token'
           ? `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${remote.env}, when set, takes precedence.`
-          : 'The site and the email are saved in your settings.',
+          : source === 'plane'
+            ? 'The workspace is saved in your settings.'
+            : 'The site and the email are saved in your settings.',
       );
-      const back = step !== 'site' && source === 'jira' ? ['back'] : [];
+      const back = (step !== 'site' && source === 'jira') || (step === 'token' && source === 'plane') ? ['back'] : [];
       return {
         tabs,
         toggles,
@@ -2641,7 +2699,7 @@ export class App {
         : source === 'github' && !p?.repo
           ? 'this project is not in a git repository'
           : nothing
-            ? 'nothing to list here: connect Shortcut, Linear or Jira in their tabs'
+            ? 'nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs'
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
@@ -2725,7 +2783,11 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
-    if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site') {
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
+      o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+      return this.dirty();
+    }
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site' && o.token.step !== 'workspace') {
       const email = o.token.step === 'token';
       o.token = { input: email ? this.config.jiraEmail : this.config.jiraSite, checking: false, step: email ? 'email' : 'site' };
       return this.dirty();
@@ -2790,6 +2852,15 @@ export class App {
     if (o?.kind !== 'issues') return;
     const source = this.issuesSource(o) as Remote;
     const input = o.token.input.trim();
+    if (o.token.step === 'workspace') {
+      const [value, error] = checkWorkspace(input);
+      if (error) o.token.error = error;
+      else {
+        this.config.planeWorkspace = value;
+        o.token = { input: '', checking: false, step: 'token' };
+      }
+      return this.dirty();
+    }
     if (o.token.step === 'site' || o.token.step === 'email') {
       const site = o.token.step === 'site';
       const [value, error] = site ? checkSite(input) : checkEmail(input);

@@ -120,7 +120,7 @@ export interface IssuesOverlay {
   loading: boolean;
   busy?: string;
   notice?: string;
-  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'token' };
+  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
 }
@@ -174,10 +174,13 @@ export interface Config {
   prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
-  accounts: { shortcut: boolean; linear: boolean; jira: boolean };
+  accounts: { shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
   jiraSite: string;
   jiraEmail: string;
   jiraJql: string;
+  planeWorkspace: string;
+  planeUrl: string;
+  planeFilter: string;
 }
 
 export const defaultConfig = (): Config => ({
@@ -199,11 +202,14 @@ export const defaultConfig = (): Config => ({
   updates: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
-  sources: ['all', 'github', 'shortcut', 'linear', 'jira'],
-  accounts: { shortcut: false, linear: false, jira: false },
+  sources: ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'],
+  accounts: { shortcut: false, linear: false, jira: false, plane: false },
   jiraSite: '',
   jiraEmail: '',
   jiraJql: '',
+  planeWorkspace: '',
+  planeUrl: '',
+  planeFilter: '',
 });
 
 export const projectLabel = (p: Project) => p.name || p.folder;
