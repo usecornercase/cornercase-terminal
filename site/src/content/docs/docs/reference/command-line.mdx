@@ -24,7 +24,7 @@ The commands that drive a running server, `status`, `open`, `new-workspace`, `ne
 
 Attaches to the server, starting it first if none is running. A new server restores your [saved session](../../guides/sessions/#what-is-restored), or, when there is nothing to restore, opens the folder you ran the command from as a project.
 
-When it starts, the client asks your terminal for its colours (it waits at most a second for the answer), then turns on mouse reporting, bracketed paste and unambiguous key reporting. It puts your terminal back the way it was when it exits.
+When it starts, the client asks your terminal for its foreground, background and 16 ANSI colours (it waits at most a second for the answer, then briefly drains late replies), then turns on mouse reporting, bracketed paste and unambiguous key reporting. Late replies are dropped without reaching the pane. It puts your terminal back the way it was when it exits, and detaches cleanly if terminal input ends.
 
 ### A server from another build
 

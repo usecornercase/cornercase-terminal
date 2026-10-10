@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.27
+
+- Fix windows that stop accepting keys and clicks after startup, including over SSH. The smaller terminal query avoids dropped replies, late replies stay out of your shell or agent prompt, and malformed input no longer disables the window's terminal modes. A lost terminal now detaches cleanly while its shells keep running.
+
 ## 0.12.26
 
 - Deleting a group that holds projects now asks what to do with them: **keep projects** leaves them open without a group, as before, and **close projects** closes them along with the group, stopping their shells, instead of closing them one by one afterwards. Folders and worktrees stay on disk. `Enter` still keeps the projects.
