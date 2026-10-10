@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.20
+
+- A new **Plane** tab in the issues browser reads work items from Plane (plane.so), on Plane Cloud or a self-hosted server, and starts an agent on one like on any other tracker's issue. Connect it from the tab: type your workspace (the part after `app.plane.so/`, such as `acme`), then paste an API key from **Profile settings → Personal access tokens**; `PLANE_API_KEY` works too. The list shows the work items that are not done, newest first, and **people** filters them by assignee and creator, with *me* or any member. A work item's description and comments are read as Markdown, and its branch is named after its key, such as `ENG-42-fix-login`.
+- **Settings → Issues → Plane** has the workspace, the URL of a self-hosted server (empty is Plane Cloud), a filter and the API key. The filter takes query parameters, such as `priority=high&label_id=…`, added to what the list asks for. Lists saved before this version get the Plane tab once; hide it in **Sources shown**.
+
 ## 0.12.19
 
 - The files panel shows images. A click on a PNG, JPEG, GIF, WebP, BMP or ICO file shows the picture itself, drawn by your terminal, with its format, size in pixels and file size above it; ` ask agent ` and ` copy ` take its path. Ghostty and kitty show it with kitty graphics, iTerm2, WezTerm and Warp with iTerm2's inline images, and foot, Konsole and xterm (started as a VT340) with sixel; inside tmux, Ghostty and kitty need `set -g allow-passthrough on`, and a tmux built with sixel draws sixel pictures itself, with no setting. A terminal that cannot show images gets, where the picture would be, a line saying why and what to do about it. Every window attached to the server gets what its own terminal can show, in its own size, and an image an agent rewrites shows again as it changes. `CORNERCASE_IMAGES=kitty`, `iterm`, `sixel` or `off`, set where you start cornercase, picks for a terminal cornercase does not recognise.
