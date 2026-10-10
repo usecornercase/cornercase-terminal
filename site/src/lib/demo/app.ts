@@ -216,7 +216,7 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
   tab: { label: 'rename tab', hint: 'leave it empty to use the program name' },
 };
 
-const WATCHED = ['claude', 'codex'];
+const WATCHED = ['claude', 'codex', 'gemini'];
 const DETAILS = [
   ['model', "under an agent's tab, such as Opus 5.5"],
   ['context', 'how full its context is, such as 23%'],

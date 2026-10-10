@@ -806,6 +806,9 @@ export class Agent implements Program {
     if (this.name === 'codex') {
       return { model: 'gpt-5.4', percent: this.tokens ? Math.min(100, Math.round((this.tokens / 272_000) * 100)) : null };
     }
+    if (this.name === 'gemini') {
+      return { model: 'gemini-3.8-flash', percent: this.tokens ? Math.min(100, Math.round((this.tokens / 1_048_576) * 100)) : null };
+    }
     return this.name === 'claude' && this.tokens
       ? { model: AGENT_MODEL, percent: Math.min(100, Math.round((this.tokens / AGENT_WINDOW) * 100)) }
       : null;

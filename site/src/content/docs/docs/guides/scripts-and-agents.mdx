@@ -85,7 +85,7 @@ pane	tab	workspace	project	program	agent	status	background_shell	dialog	at_promp
 | --- | --- |
 | `pane`, `tab`, `workspace`, `project` | The ids of the pane and of the tab, workspace and project it is in. |
 | `program` | The program in the foreground, as the tab names it. |
-| `agent` | `claude`, `codex` or `opencode` when one runs in the pane. |
+| `agent` | `claude`, `codex`, `gemini` or `opencode` when one runs in the pane. |
 | `status` | What the agent is doing: `working`, `waiting`, `done` or `idle`. |
 | `background_shell`, `dialog`, `at_prompt` | As in the [JSON](#json): the agent's turn is over but a background shell still runs; a Claude Code agent shows a dialog instead of its input box; the shell sits at its prompt with nothing running. |
 | `model`, `context` | The agent's model and how full its context is, in percent. |
@@ -302,7 +302,7 @@ The pane the command runs in doesn't hold the restart, so an agent can run it as
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
-| `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
+| `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
