@@ -4,15 +4,18 @@ use std::sync::Arc;
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
+use ratatui::buffer::CellDiffOption;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
-use super::changes::{Action, actions, close};
+use super::changes::{Action, buttons, close};
 use super::{action_style, dim, draw_close, hovered_at as hovered, put, truncate_left, truncate_right};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
 use crate::files::search::occurrences;
 use crate::files::{Gutter, Line, Lines, Mark, Mode};
+use crate::graphics::kitty;
+use crate::markdown;
 use crate::syntax::Segments;
 
 pub const LABEL: &str = "Files";
@@ -28,7 +31,10 @@ const SEARCH_ICON: &str = "⌕";
 const NAME_PLACEHOLDER: &str = "file names";
 const TEXT_PLACEHOLDER: &str = "text in the files";
 const NAME_ICON: &str = "▤";
+const UNREADABLE: &str = "cannot read this image";
 const LIT: Style = Style::new().fg(Color::Black).bg(Color::Yellow);
+const IMAGE_ACTIONS: [Action; 2] = [Action::Ask, Action::Copy];
+pub const MARKER: &str = "\u{10FFFD}";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct View {
@@ -102,9 +108,26 @@ pub struct FileView {
     pub scroll: usize,
     pub selection: Option<(u32, u32)>,
     pub find: Option<String>,
+    pub image: Option<Image>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Image {
+    Placeholders { id: u32, rect: Rect },
+    Markers(Rect),
+    Message(Vec<String>),
+    Blank,
 }
 
 impl FileView {
+    pub fn is_image(&self) -> bool {
+        self.content.as_ref().is_some_and(|c| c.is_image())
+    }
+
+    fn actions(&self, row: Rect) -> Vec<(Action, Rect)> {
+        buttons(row, if self.is_image() { &IMAGE_ACTIONS } else { &Action::ALL })
+    }
+
     fn count(&self) -> usize {
         self.content.as_ref().map_or(0, |c| c.lines().len())
     }
@@ -153,8 +176,20 @@ pub fn parts(area: Rect) -> Parts {
     }
 }
 
-pub fn action(area: Rect, action: Action) -> Rect {
-    actions(parts(area).info).into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
+pub fn action(area: Rect, file: &FileView, action: Action) -> Rect {
+    file.actions(parts(area).info).into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
+}
+
+pub fn image_room(area: Rect, visible: Rect) -> Rect {
+    let body = parts(area).body;
+    let room = Rect::new(body.x + 1, body.y, body.width.saturating_sub(2), body.height).intersection(visible);
+    let last = visible.bottom().saturating_sub(1);
+    Rect { height: room.height.min(last.saturating_sub(room.y)), ..room }
+}
+
+pub fn image_rect(room: Rect, cols: u16, rows: u16) -> Rect {
+    let (cols, rows) = (cols.min(room.width), rows.min(room.height));
+    Rect::new(room.x + (room.width - cols) / 2, room.y, cols, rows)
 }
 
 pub fn field(area: Rect) -> Rect {
@@ -228,7 +263,7 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
             if back(area).contains(pos) {
                 return Some(Hit::Back);
             }
-            if let Some((action, _)) = actions(parts(area).info).into_iter().find(|(_, r)| r.contains(pos)) {
+            if let Some((action, _)) = file.actions(parts(area).info).into_iter().find(|(_, r)| r.contains(pos)) {
                 return Some(Hit::Action(action));
             }
             match file.lines().at(row_at(area, view, pos.y)?)? {
@@ -490,7 +525,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let (folder, name) = shown.split_at(split);
     let x = put(buf, start, b.y, folder, dim(view.muted), end);
     put(buf, x, b.y, name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD), end);
-    let buttons = actions(p.info);
+    let buttons = file.actions(p.info);
     let end = buttons.first().map_or(p.info.right(), |(_, r)| r.x.saturating_sub(1));
     let (texts, style) = match file.selection {
         Some((a, b)) if a == b => (vec![format!("line {a}"), a.to_string()], Style::default().fg(Color::Cyan)),
@@ -510,8 +545,33 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     }
 }
 
+pub fn size(bytes: u64) -> String {
+    const KB: u64 = 1 << 10;
+    const MB: u64 = 1 << 20;
+    match bytes {
+        0..KB => format!("{bytes} bytes"),
+        KB..MB => format!("{} KB", (bytes + KB / 2) / KB),
+        _ => {
+            let tenths = (bytes.saturating_mul(10) + MB / 2) / MB;
+            format!("{}.{} MB", tenths / 10, tenths % 10)
+        }
+    }
+}
+
 fn summary(file: &FileView) -> Vec<String> {
     let Some(content) = &file.content else { return vec![READING.into()] };
+    match &content.body {
+        Body::Image(picture) => {
+            let (format, size) = (picture.format.to_uppercase(), size(picture.bytes));
+            let pixels = format!("{}×{}", picture.width, picture.height);
+            return vec![format!("{format} · {pixels} · {size}"), format!("{format} · {pixels}"), pixels];
+        }
+        Body::Unreadable { format, bytes, .. } => {
+            let format = format.to_uppercase();
+            return vec![format!("{format} · {}", size(*bytes)), format];
+        }
+        _ => {}
+    }
     let n = content.lines().len();
     let lines = if n == 1 { "1 line".to_string() } else { format!("{n} lines") };
     let mut texts = vec![lines.clone(), n.to_string()];
@@ -524,6 +584,11 @@ fn summary(file: &FileView) -> Vec<String> {
 fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: Option<Position>) {
     let body = parts(area).body;
     let note = match file.content.as_ref().map(|c| &c.body) {
+        Some(Body::Image(_)) => {
+            draw_image(buf, body, view, file.image.as_ref());
+            return;
+        }
+        Some(Body::Unreadable { reason, .. }) => Some(format!("{UNREADABLE}: {reason}")),
         None => Some(READING.to_string()),
         Some(Body::Binary) => Some(BINARY.to_string()),
         Some(Body::Missing) => Some(GONE.to_string()),
@@ -582,6 +647,38 @@ fn draw_file(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover: 
             }
             None => {}
         }
+    }
+}
+
+fn draw_image(buf: &mut Buffer, body: Rect, view: &View, image: Option<&Image>) {
+    match image {
+        Some(Image::Placeholders { id, rect }) => {
+            let cell = |(x, y): (u16, u16)| (x, y, kitty::cell(*id, y - rect.y, x - rect.x));
+            let cells = rect.intersection(body).positions().map(|p| cell((p.x, p.y)));
+            for (x, y, (symbol, colour)) in cells {
+                buf[(x, y)]
+                    .set_symbol(&symbol)
+                    .set_style(Style::reset().fg(Color::Indexed(colour)))
+                    .set_diff_option(CellDiffOption::ForcedWidth(std::num::NonZeroU16::MIN));
+            }
+        }
+        Some(Image::Markers(rect)) => {
+            for p in rect.intersection(body).positions() {
+                buf[p].set_symbol(MARKER).set_style(Style::reset()).set_diff_option(CellDiffOption::Skip);
+            }
+        }
+        Some(Image::Message(lines)) => {
+            let width = usize::from(body.width.saturating_sub(4));
+            let wrapped = lines.iter().enumerate().flat_map(|(i, line)| {
+                let style = if i == 0 { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+                let gap = (i == 1).then(ratatui::text::Line::default);
+                gap.into_iter().chain(markdown::wrap_text(line, style.fg(view.muted), width))
+            });
+            for (line, y) in wrapped.zip(body.y..body.bottom()) {
+                buf.set_line(body.x + 2, y, &line, body.width.saturating_sub(4));
+            }
+        }
+        Some(Image::Blank) | None => {}
     }
 }
 
@@ -668,6 +765,7 @@ mod tests {
                 scroll: 0,
                 selection,
                 find: None,
+                image: None,
             }),
             light: false,
             muted: Color::DarkGray,
@@ -804,7 +902,7 @@ mod tests {
         assert_eq!(hit(AREA, &file, Position::new(mark_cell(AREA, f), body.y + 1)), Some(Hit::Fold(2)));
         assert_eq!(hit(AREA, &file, back(AREA).as_position()), Some(Hit::Back));
         assert_eq!(hit(AREA, &file, close(AREA).as_position()), Some(Hit::Close));
-        assert_eq!(hit(AREA, &file, action(AREA, Action::Ask).as_position()), Some(Hit::Action(Action::Ask)));
+        assert_eq!(hit(AREA, &file, action(AREA, f, Action::Ask).as_position()), Some(Hit::Action(Action::Ask)));
     }
 
     #[test]
@@ -819,5 +917,157 @@ mod tests {
         let body = parts(AREA).body;
         assert_eq!(line_near(AREA, &view, 0), Some(1));
         assert_eq!(line_near(AREA, &view, body.bottom() + 5), Some(4));
+    }
+
+    mod images {
+        use rstest::rstest;
+
+        use super::*;
+        use crate::graphics::Picture;
+
+        const PLACEHOLDER: char = '\u{10EEEE}';
+        const ID: u32 = 0x2A00_00F0;
+
+        fn imaged(body: Body, image: Option<Image>) -> View {
+            let content = Content { stamp: disk::Stamp::default(), language: None, body };
+            View {
+                screen: Screen::File(FileView {
+                    path: "docs/logo.png".into(),
+                    content: Some(Arc::new(content)),
+                    gutter: None,
+                    unfolded: HashSet::new(),
+                    scroll: 0,
+                    selection: None,
+                    find: None,
+                    image,
+                }),
+                ..tree()
+            }
+        }
+
+        fn logo() -> Body {
+            let picture = Picture {
+                id: 1,
+                format: "png",
+                width: 1280,
+                height: 720,
+                bytes: 250_880,
+                rgba: image::RgbaImage::new(1, 1),
+                opaque: true,
+            };
+            Body::Image(Arc::new(picture))
+        }
+
+        fn rect() -> Rect {
+            image_rect(image_room(AREA, AREA), 6, 3)
+        }
+
+        fn drawn(view: &View) -> Buffer {
+            let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+            terminal.draw(|f| draw(f, AREA, view, None)).expect("draw").buffer.clone()
+        }
+
+        fn picture(buffer: &Buffer) -> String {
+            (0..AREA.height)
+                .map(|y| {
+                    let row: String = (0..AREA.width)
+                        .map(|x| match buffer[(x, y)].symbol() {
+                            s if s.starts_with(PLACEHOLDER) => "#",
+                            MARKER => "@",
+                            s => s,
+                        })
+                        .collect();
+                    row.trim_end().to_string()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        #[test]
+        fn draws_the_header_and_the_kitty_placeholders() {
+            let buffer = drawn(&imaged(logo(), Some(Image::Placeholders { id: ID, rect: rect() })));
+            let first = &buffer[rect().as_position()];
+
+            insta::assert_snapshot!(picture(&buffer));
+            assert_eq!(first.fg, Color::Indexed(0xF0));
+            assert_eq!(first.diff_option, CellDiffOption::ForcedWidth(std::num::NonZeroU16::MIN));
+        }
+
+        #[test]
+        fn every_placeholder_names_its_row_and_column() {
+            let buffer = drawn(&imaged(logo(), Some(Image::Placeholders { id: ID, rect: rect() })));
+            let r = rect();
+            let corner = Position::new(r.right() - 1, r.bottom() - 1);
+
+            assert_eq!(buffer[corner].symbol(), kitty::cell(ID, r.height - 1, r.width - 1).0);
+        }
+
+        #[test]
+        fn draws_markers_that_the_diff_skips() {
+            let buffer = drawn(&imaged(logo(), Some(Image::Markers(rect()))));
+
+            insta::assert_snapshot!(picture(&buffer));
+            assert!(rect().positions().all(|p| buffer[p].diff_option == CellDiffOption::Skip));
+        }
+
+        #[test]
+        fn says_why_this_terminal_shows_no_image() {
+            let lines = vec![
+                "xterm shows images only when it runs as a VT340".to_string(),
+                "start it with xterm -ti vt340".to_string(),
+            ];
+
+            insta::assert_snapshot!(picture(&drawn(&imaged(logo(), Some(Image::Message(lines))))));
+        }
+
+        #[test]
+        fn an_unreadable_image_says_why() {
+            let body = Body::Unreadable { format: "png", bytes: 40, reason: "unexpected end of file".into() };
+
+            insta::assert_snapshot!(picture(&drawn(&imaged(body, None))));
+        }
+
+        #[test]
+        fn a_hidden_image_leaves_its_room_blank() {
+            let buffer = drawn(&imaged(logo(), Some(Image::Blank)));
+
+            assert!(rect().positions().all(|p| buffer[p].symbol() == " "));
+        }
+
+        #[test]
+        fn an_image_has_no_open_button_and_no_lines_to_pick() {
+            let view = imaged(logo(), None);
+            let Screen::File(file) = &view.screen else { unreachable!() };
+            let body = parts(AREA).body;
+
+            assert_eq!(action(AREA, file, Action::Open), Rect::default());
+            assert_eq!(hit(AREA, &view, action(AREA, file, Action::Ask).as_position()), Some(Hit::Action(Action::Ask)));
+            assert_eq!(hit(AREA, &view, Position::new(body.x + 4, body.y + 1)), None);
+        }
+
+        #[test]
+        fn the_image_stays_off_the_last_row_and_is_centred() {
+            let visible = Rect::new(0, 0, AREA.width, AREA.height);
+            let room = image_room(AREA, visible);
+
+            assert_eq!(room.bottom(), AREA.bottom() - 1);
+            assert_eq!(image_rect(room, 6, 3).x, room.x + (room.width - 6) / 2);
+            assert_eq!(image_rect(room, 500, 500), room);
+        }
+
+        #[test]
+        fn a_client_that_sees_less_gets_less_room() {
+            let room = image_room(AREA, Rect::new(0, 0, 20, 8));
+
+            assert_eq!((room.right(), room.bottom()), (20, 7));
+        }
+
+        #[rstest]
+        #[case::bytes(900, "900 bytes")]
+        #[case::kilobytes(250_880, "245 KB")]
+        #[case::megabytes(3_250_000, "3.1 MB")]
+        fn sizes_read_like_a_file_manager(#[case] bytes: u64, #[case] shown: &str) {
+            assert_eq!(size(bytes), shown);
+        }
     }
 }

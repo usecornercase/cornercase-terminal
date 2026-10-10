@@ -26,6 +26,27 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(30);
 const AREA: Rect = Rect { x: 0, y: 0, width: COLS, height: ROWS };
 const HOST_THEME_REPLY: &[u8] = b"\x1b]11;rgb:12/56/9a\x1b\\\x1bP>|ghostty 1.2.0\x1b\\\x1b[?62;22c";
+const GHOSTTY_1_3_1: &[u8] = b"\x1b]11;rgb:20/20/20\x1b\\\x1b[6;20;10t\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c";
+const UNKNOWN_TERMINAL: &[u8] = b"\x1b]11;rgb:20/20/20\x1b\\\x1b[?62;22c";
+const TERMINAL_ENV: [&str; 17] = [
+    "TMUX",
+    "STY",
+    "ZELLIJ",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "LC_TERMINAL",
+    "CORNERCASE_IMAGES",
+    "GHOSTTY_RESOURCES_DIR",
+    "KITTY_WINDOW_ID",
+    "ALACRITTY_WINDOW_ID",
+    "KONSOLE_VERSION",
+    "VTE_VERSION",
+    "PTYXIS_VERSION",
+    "WT_SESSION",
+    "TERMINAL_EMULATOR",
+    "INSIDE_EMACS",
+    "XTERM_VERSION",
+];
 
 struct Session {
     dir: PathBuf,
@@ -197,12 +218,31 @@ impl Harness {
         Self::run(bin, &[], session, (rows, cols), env)
     }
 
+    fn answering(reply: &[u8]) -> Self {
+        let bin = std::path::Path::new(env!("CARGO_BIN_EXE_cornercase"));
+        let env = [("TERM", "xterm-256color")];
+        let mut harness = Self::run_answering(bin, &[], Session::new(), (ROWS, COLS), &env, reply);
+        harness.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+        harness
+    }
+
     fn run(
+        bin: &std::path::Path,
+        args: &[&str],
+        session: Arc<Session>,
+        size: (u16, u16),
+        env: &[(&str, &str)],
+    ) -> Self {
+        Self::run_answering(bin, args, session, size, env, HOST_THEME_REPLY)
+    }
+
+    fn run_answering(
         bin: &std::path::Path,
         args: &[&str],
         session: Arc<Session>,
         (rows, cols): (u16, u16),
         env: &[(&str, &str)],
+        reply: &[u8],
     ) -> Self {
         let pair =
             native_pty_system().openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("open pty");
@@ -214,7 +254,7 @@ impl Harness {
         cmd.env(CLAUDE_DIR_ENV, session.claude_dir());
         cmd.env_remove(NESTED_ENV);
         cmd.env_remove(PANE_ENV);
-        for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY", "TMUX", "STY", "ZELLIJ", "TERM_PROGRAM", "LC_TERMINAL"] {
+        for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
         }
         for (key, value) in env {
@@ -239,7 +279,7 @@ impl Harness {
         let writer = pair.master.take_writer().expect("pty writer");
         let mut harness = Self { session, cols, screen, raw, writer, child, _master: pair.master };
         harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
-        harness.send(HOST_THEME_REPLY);
+        harness.send(reply);
         harness
     }
 
@@ -249,6 +289,17 @@ impl Harness {
 
     fn row(&self, y: u16) -> String {
         self.screen.lock().screen().contents_between(y, 0, y, self.cols)
+    }
+
+    fn position_of(&self, text: &str) -> Position {
+        (0..ROWS)
+            .rev()
+            .find_map(|y| {
+                let row = self.row(y);
+                let at = row.find(text)?;
+                Some(Position::new(u16::try_from(row[..at].chars().count()).ok()?, y))
+            })
+            .expect("the text is on screen")
     }
 
     fn wait_for(&mut self, what: &str, cond: impl Fn(&str) -> bool) {
@@ -1916,4 +1967,37 @@ fn a_remote_without_cornercase_says_how_to_point_at_it() {
     let out = remote_refusal("/nonexistent/cornercase");
 
     assert!(refused(&out, 1, "cornercase was not found on `devbox`"), "{out:?}");
+}
+
+fn showing_an_image(reply: &[u8], name: &str) -> Harness {
+    let name = format!("{name}-{}", std::process::id());
+    let dir = temp_dir_named(&name);
+    let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
+    pixels.save_with_format(dir.join("logo.png"), image::ImageFormat::Png).expect("write a png");
+    let mut app = Harness::answering(reply);
+    app.open_project(1, &dir);
+    app.wait_for("the project opens", |s| s.contains(&entry(&name)) && !s.contains("cancel"));
+    app.send(b"echo lo\"\"go.png\r");
+    app.wait_for("the name is printed", |s| s.contains("logo.png"));
+    let at = app.position_of("logo.png");
+    app.click(at);
+    app.wait_for("the image opens", |s| s.contains("400×200"));
+    app
+}
+
+#[test]
+fn ghostty_gets_placeholder_cells_and_the_image_itself() {
+    let mut app = showing_an_image(GHOSTTY_1_3_1, "ccimg");
+
+    app.wait_for_raw("the image is transmitted", |raw| raw.contains("\x1b_Ga=t,"));
+    app.wait_for_raw("its placeholder cells are drawn", |raw| raw.contains('\u{10EEEE}'));
+}
+
+#[test]
+fn an_unknown_terminal_is_told_why_it_shows_no_image() {
+    let mut app = showing_an_image(UNKNOWN_TERMINAL, "ccnoimg");
+
+    app.wait_for("the window says why", |s| s.contains("this terminal cannot show"));
+    let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
+    assert!(!raw.contains("\x1b_G") && !raw.contains("1337;File"), "no image bytes reach it");
 }

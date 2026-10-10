@@ -1,4 +1,4 @@
-import type { Grid } from './grid';
+import { type Grid, imageBox } from './grid';
 import { type Metrics, paint } from './paint';
 import { theme as defaultTheme } from './palette';
 
@@ -6,6 +6,8 @@ const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
 
 const n = (v: number) => (Math.round(v * 100) / 100).toString();
+
+let clips = 0;
 
 export interface SvgOptions extends Partial<Metrics> {
   label: string;
@@ -40,6 +42,15 @@ export function toSvg(grid: Grid, opts: SvgOptions): string {
         parts.push(`<text x="${n(op.x)}" y="${y}" fill="${op.fill}"${fit}${weight}${style}${alpha} xml:space="preserve">${esc(op.text)}</text>`);
       }
     }
+  }
+  for (const image of grid.images) {
+    const runs = grid.imageRuns(image);
+    if (!runs.length) continue;
+    const id = `term-image-${clips++}`;
+    const box = imageBox(image, cw, ch);
+    const cells = runs.map((r) => `<rect x="${n(r.x * cw)}" y="${n(r.y * ch)}" width="${n(r.w * cw)}" height="${n(r.h * ch)}"/>`);
+    parts.push(`<clipPath id="${id}">${cells.join('')}</clipPath>`);
+    parts.push(`<image href="${esc(image.src)}" x="${n(box.x)}" y="${n(box.y)}" width="${n(box.w)}" height="${n(box.h)}" preserveAspectRatio="none" clip-path="url(#${id})"/>`);
   }
   const cls = opts.className ? ` class="${opts.className}"` : '';
   return [

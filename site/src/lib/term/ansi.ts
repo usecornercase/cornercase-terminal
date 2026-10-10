@@ -7,6 +7,8 @@ interface Pen {
   attr: number;
 }
 
+const MARK = /^\p{M}$/u;
+
 const ATTRS: Record<number, number> = { 1: BOLD, 2: DIM, 3: ITALIC, 4: UNDERLINE, 7: INVERSE, 9: STRIKE };
 const CLEARS: Record<number, number> = { 22: BOLD | DIM, 23: ITALIC, 24: UNDERLINE, 27: INVERSE, 29: STRIKE };
 
@@ -39,7 +41,7 @@ function sgr(pen: Pen, raw: string): void {
 
 export function parseAnsi(text: string, cols?: number, rows?: number): Grid {
   const lines = text.replace(/\r/g, '').replace(/\n$/, '').split('\n');
-  const visible = (line: string) => [...line.replace(/\x1b\[[0-9;:?]*[A-Za-z]/g, '')].length;
+  const visible = (line: string) => [...line.replace(/\x1b\[[0-9;:?]*[A-Za-z]/g, '')].filter((c) => !MARK.test(c)).length;
   const width = cols ?? Math.max(...lines.map(visible));
   const grid = new Grid(width, rows ?? lines.length);
   const pen: Pen = { fg: DEFAULT, bg: DEFAULT, attr: 0 };
@@ -57,6 +59,11 @@ export function parseAnsi(text: string, cols?: number, rows?: number): Grid {
       }
       const ch = String.fromCodePoint(line.codePointAt(i) ?? 32);
       i += ch.length;
+      if (MARK.test(ch)) {
+        const prev = grid.at(x - 1, y);
+        if (prev) prev.ch += ch;
+        continue;
+      }
       const cell = grid.at(x, y);
       if (cell) {
         cell.ch = ch;

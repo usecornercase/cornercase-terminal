@@ -3,6 +3,9 @@ use std::fmt::Write as _;
 use libghostty_vt::style::RgbColor;
 use serde::{Deserialize, Serialize};
 
+use crate::graphics::CellSize;
+use crate::graphics::detect::{self, Replies};
+
 pub const PALETTE_LEN: usize = 256;
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
@@ -65,8 +68,9 @@ impl From<WireTheme> for HostTheme {
 }
 
 impl HostTheme {
-    pub fn query() -> String {
-        let mut query = String::from("\x1b]10;?\x1b\\\x1b]11;?\x1b\\");
+    pub fn query(kitty: bool) -> String {
+        let mut query = String::from(if kitty { detect::KITTY_QUERY } else { "" });
+        query.push_str("\x1b[16t\x1b[?1;1;0S\x1b[?2;1;0S\x1b]10;?\x1b\\\x1b]11;?\x1b\\");
         for i in 0..PALETTE_LEN {
             let _ = write!(query, "\x1b]4;{i};?\x1b\\");
         }
@@ -104,7 +108,7 @@ impl HostTheme {
 pub struct ThemeProbe {
     pending: Vec<u8>,
     theme: HostTheme,
-    terminal: Option<String>,
+    replies: Replies,
     done: bool,
 }
 
@@ -121,12 +125,16 @@ impl ThemeProbe {
                 }
                 Reply::Dcs(body, len) => {
                     if let Some(name) = body.strip_prefix(">|") {
-                        self.terminal = Some(name.to_string());
+                        self.replies.terminal = Some(name.to_string());
                     }
                     start += len;
                 }
-                Reply::DeviceAttributes(len) => {
-                    self.done = true;
+                Reply::Apc(body, len) => {
+                    self.replies.kitty = kitty_reply(&body).or(self.replies.kitty.take());
+                    start += len;
+                }
+                Reply::Csi(csi, len) => {
+                    self.apply_csi(&csi);
                     start += len;
                 }
                 Reply::Other(len) => start += len,
@@ -135,53 +143,124 @@ impl ThemeProbe {
         self.pending.drain(..start);
     }
 
+    fn apply_csi(&mut self, csi: &Csi) {
+        let params = csi.numbers();
+        match (csi.private, csi.intermediate, csi.last) {
+            (Some(b'?'), false, b'c') => {
+                self.replies.attributes = Some(params.into_iter().flatten().collect());
+                self.done = true;
+            }
+            (Some(b'?'), false, b'S') => match params.as_slice() {
+                [Some(1), Some(0), Some(registers), ..] => self.replies.registers = Some(*registers),
+                [Some(2), Some(0), Some(width), Some(height), ..] => self.replies.geometry = Some((*width, *height)),
+                _ => {}
+            },
+            (None, false, b't') => {
+                if let [Some(6), Some(height), Some(width), ..] = params.as_slice() {
+                    let (width, height) = (u16::try_from(*width), u16::try_from(*height));
+                    if let (Ok(width), Ok(height)) = (width, height) {
+                        self.replies.cell = Some(CellSize { width, height });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn is_done(&self) -> bool {
         self.done
     }
 
-    pub fn terminal(&self) -> Option<&str> {
-        self.terminal.as_deref()
+    pub fn finish(self) -> (HostTheme, Replies) {
+        (self.theme, self.replies)
     }
+}
 
-    pub fn finish(self) -> HostTheme {
-        self.theme
-    }
+fn kitty_reply(body: &str) -> Option<String> {
+    let (keys, message) = body.strip_prefix('G')?.split_once(';')?;
+    keys.split(',').any(|key| key.strip_prefix("i=") == Some(detect::KITTY_QUERY_ID)).then(|| message.to_string())
 }
 
 enum Reply {
     Incomplete,
     Osc(String, usize),
     Dcs(String, usize),
-    DeviceAttributes(usize),
+    Apc(String, usize),
+    Csi(Csi, usize),
     Other(usize),
+}
+
+struct Csi {
+    private: Option<u8>,
+    params: String,
+    intermediate: bool,
+    last: u8,
+}
+
+impl Csi {
+    fn numbers(&self) -> Vec<Option<u32>> {
+        self.params.split(';').map(|p| p.parse().ok()).collect()
+    }
 }
 
 fn parse_reply(buf: &[u8]) -> Reply {
     match buf {
-        [ESC] | [ESC, b'['] => Reply::Incomplete,
-        [ESC, kind @ (b']' | b'P'), rest @ ..] => match string_end(rest) {
-            Some((body_len, term_len)) => {
+        [ESC] => Reply::Incomplete,
+        [ESC, kind @ (b']' | b'P' | b'_'), rest @ ..] => match string_end(rest) {
+            End::Found(body_len, term_len) => {
                 let body = String::from_utf8_lossy(&rest[..body_len]).into_owned();
                 let len = 2 + body_len + term_len;
-                if *kind == b']' { Reply::Osc(body, len) } else { Reply::Dcs(body, len) }
+                match kind {
+                    b']' => Reply::Osc(body, len),
+                    b'P' => Reply::Dcs(body, len),
+                    _ => Reply::Apc(body, len),
+                }
             }
-            None => Reply::Incomplete,
+            End::Cut(at) => Reply::Other(2 + at),
+            End::Incomplete => Reply::Incomplete,
         },
-        [ESC, b'[', b'?', rest @ ..] => match rest.iter().position(|b| !b.is_ascii_digit() && *b != b';') {
-            Some(i) if rest[i] == b'c' => Reply::DeviceAttributes(3 + i + 1),
-            Some(_) => Reply::Other(1),
-            None => Reply::Incomplete,
-        },
+        [ESC, b'[', rest @ ..] => parse_csi(rest),
         _ => Reply::Other(1),
     }
 }
 
-fn string_end(rest: &[u8]) -> Option<(usize, usize)> {
-    rest.iter().enumerate().find_map(|(i, &b)| match (b, rest.get(i + 1)) {
-        (BEL, _) => Some((i, 1)),
-        (ESC, Some(b'\\')) => Some((i, 2)),
-        _ => None,
-    })
+fn parse_csi(rest: &[u8]) -> Reply {
+    let private = rest.first().copied().filter(|b| matches!(b, b'<'..=b'?'));
+    let params_start = usize::from(private.is_some());
+    let params_len = rest[params_start..].iter().take_while(|b| matches!(b, b'0'..=b';')).count();
+    let after_params = params_start + params_len;
+    let intermediates = rest[after_params..].iter().take_while(|b| matches!(b, b' '..=b'/')).count();
+    match rest.get(after_params + intermediates) {
+        None => Reply::Incomplete,
+        Some(&last @ b'@'..=b'~') => Reply::Csi(
+            Csi {
+                private,
+                params: String::from_utf8_lossy(&rest[params_start..after_params]).into_owned(),
+                intermediate: intermediates > 0,
+                last,
+            },
+            2 + after_params + intermediates + 1,
+        ),
+        Some(_) => Reply::Other(1),
+    }
+}
+
+enum End {
+    Found(usize, usize),
+    Cut(usize),
+    Incomplete,
+}
+
+fn string_end(rest: &[u8]) -> End {
+    rest.iter()
+        .enumerate()
+        .find_map(|(i, &b)| match (b, rest.get(i + 1)) {
+            (BEL, _) => Some(End::Found(i, 1)),
+            (ESC, Some(b'\\')) => Some(End::Found(i, 2)),
+            (ESC, Some(_)) => Some(End::Cut(i)),
+            _ => None,
+        })
+        .unwrap_or(End::Incomplete)
 }
 
 fn contrast(a: RgbColor, b: RgbColor) -> f64 {
@@ -256,26 +335,39 @@ mod tests {
     mod probe {
         use super::*;
 
+        const GHOSTTY: &[u8] = b"\x1b_Gi=31;OK\x1b\\\x1b[6;19;10t\x1b]10;rgb:e0e0/e0e0/e0e0\x1b\\\
+            \x1b]11;rgb:2020/2020/2020\x1b\\\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c";
+        const FOOT: &[u8] = b"\x1b[6;19;10t\x1b[?1;0;1024S\x1b[?2;0;1000;570S\x1bP>|foot(1.25.0)\x1b\\\
+            \x1b[?62;4;22;28;52c";
+
+        fn theme(input: &[u8]) -> HostTheme {
+            probe(input).finish().0
+        }
+
+        fn replies(input: &[u8]) -> Replies {
+            probe(input).finish().1
+        }
+
         #[rstest]
         #[case::st_terminated(b"\x1b]11;rgb:0000/0000/0000\x1b\\")]
         #[case::bel_terminated(b"\x1b]11;rgb:0000/0000/0000\x07")]
         fn reads_the_background(#[case] input: &[u8]) {
-            assert_eq!(probe(input).finish().background, Some(rgb(0, 0, 0)));
+            assert_eq!(theme(input).background, Some(rgb(0, 0, 0)));
         }
 
         #[test]
         fn reads_the_foreground() {
-            assert_eq!(probe(b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\").finish().foreground, Some(rgb(255, 255, 255)));
+            assert_eq!(theme(b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\").foreground, Some(rgb(255, 255, 255)));
         }
 
         #[test]
         fn reads_palette_entries() {
-            assert_eq!(probe(b"\x1b]4;1;rgb:cc/00/00\x1b\\").finish().palette[1], Some(rgb(0xcc, 0, 0)));
+            assert_eq!(theme(b"\x1b]4;1;rgb:cc/00/00\x1b\\").palette[1], Some(rgb(0xcc, 0, 0)));
         }
 
         #[test]
         fn ignores_out_of_range_palette_entries() {
-            assert_eq!(probe(b"\x1b]4;300;rgb:cc/00/00\x1b\\").finish(), HostTheme::default());
+            assert_eq!(theme(b"\x1b]4;300;rgb:cc/00/00\x1b\\"), HostTheme::default());
         }
 
         #[test]
@@ -291,26 +383,147 @@ mod tests {
         #[test]
         fn joins_replies_split_across_reads() {
             let mut p = ThemeProbe::default();
-            for chunk in [&b"\x1b"[..], b"]11;rgb:12", b"/34/56\x1b", b"\\\x1b[?6", b"2c"] {
+            for chunk in [
+                &b"\x1b"[..],
+                b"]11;rgb:12",
+                b"/34/56\x1b",
+                b"\\\x1b[6;1",
+                b"9;10t\x1b_Gi=3",
+                b"1;OK\x1b",
+                b"\\\x1b[?6",
+                b"2c",
+            ] {
                 p.feed(chunk);
             }
-            assert_eq!((p.is_done(), p.finish().background), (true, Some(rgb(0x12, 0x34, 0x56))));
+            let done = p.is_done();
+            let (theme, replies) = p.finish();
+
+            assert_eq!(
+                (done, theme.background, replies.cell, replies.kitty.as_deref()),
+                (true, Some(rgb(0x12, 0x34, 0x56)), Some(CellSize { width: 10, height: 19 }), Some("OK"))
+            );
         }
 
         #[test]
         fn skips_unrelated_bytes() {
-            assert_eq!(probe(b"abc\x1b[A\x1b]11;#000000\x07").finish().background, Some(rgb(0, 0, 0)));
+            assert_eq!(theme(b"abc\x1b[A\x1b]11;#000000\x07").background, Some(rgb(0, 0, 0)));
         }
 
         #[test]
         fn reads_the_terminal_name_and_version() {
             let p = probe(b"\x1b]11;rgb:00/00/00\x1b\\\x1bP>|ghostty 1.2.0\x1b\\\x1b[?62;22c");
-            assert_eq!((p.terminal(), p.is_done()), (Some("ghostty 1.2.0"), true));
+            assert_eq!((p.is_done(), p.finish().1.terminal.as_deref()), (true, Some("ghostty 1.2.0")));
+        }
+
+        #[rstest]
+        #[case::decrqss(b"\x1bP1$r0m\x1b\\\x1b[?62;22c")]
+        #[case::xtgettcap(b"\x1bP1+r544E=787465726D2D67686F73747479\x1b\\\x1b[?62;22c")]
+        fn has_no_terminal_name_when_the_terminal_does_not_say(#[case] input: &[u8]) {
+            assert_eq!(replies(input).terminal, None);
         }
 
         #[test]
-        fn has_no_terminal_name_when_the_terminal_does_not_say() {
-            assert_eq!(probe(b"\x1bP1$r0m\x1b\\\x1b[?62;22c").terminal(), None);
+        fn reads_everything_ghostty_answers() {
+            let replies = replies(GHOSTTY);
+
+            assert_eq!(
+                replies,
+                Replies {
+                    terminal: Some("ghostty 1.3.1".into()),
+                    attributes: Some(vec![62, 22, 52]),
+                    kitty: Some("OK".into()),
+                    cell: Some(CellSize { width: 10, height: 19 }),
+                    registers: None,
+                    geometry: None,
+                }
+            );
+        }
+
+        #[test]
+        fn reads_the_sixel_limits_foot_answers() {
+            let replies = replies(FOOT);
+
+            assert_eq!(
+                (replies.registers, replies.geometry, replies.attributes),
+                (Some(1024), Some((1000, 570)), Some(vec![62, 4, 22, 28, 52]))
+            );
+        }
+
+        #[rstest]
+        #[case::xterm_without_sixel(b"\x1b[?1;3S\x1b[?2;3S\x1b[?62c")]
+        #[case::iterm2_with_an_empty_value(b"\x1b[?1;3;S\x1b[?62c")]
+        #[case::tmux_without_a_geometry(b"\x1b[?2;3;0S\x1b[?1;2;4c")]
+        fn ignores_sixel_limits_the_terminal_failed_to_give(#[case] input: &[u8]) {
+            let replies = replies(input);
+
+            assert_eq!((replies.registers, replies.geometry), (None, None));
+        }
+
+        #[test]
+        fn keeps_empty_device_attributes_out() {
+            assert_eq!(replies(b"\x1bP>|kitty(0.45.0)\x1b\\\x1b[?62;52;c").attributes, Some(vec![62, 52]));
+        }
+
+        #[rstest]
+        #[case::kitty_error(
+            b"\x1b_Gi=31;ENOTSUPPORTED:unicode placeholders\x1b\\",
+            Some("ENOTSUPPORTED:unicode placeholders")
+        )]
+        #[case::another_id(b"\x1b_Gi=7;OK\x1b\\", None)]
+        #[case::not_kitty(b"\x1b_hello\x1b\\", None)]
+        fn reads_the_answer_to_its_own_kitty_query(#[case] input: &[u8], #[case] expected: Option<&str>) {
+            assert_eq!(replies(input).kitty.as_deref(), expected);
+        }
+
+        #[rstest]
+        #[case::window_in_pixels(b"\x1b[4;570;1000t")]
+        #[case::window_in_cells(b"\x1b[8;30;100t")]
+        fn takes_only_the_cell_size_report_as_a_cell(#[case] input: &[u8]) {
+            assert_eq!(replies(input).cell, None);
+        }
+
+        #[rstest]
+        #[case::secondary_attributes(b"\x1b[>1;10;0c")]
+        #[case::mode_report(b"\x1b[?2026;2$y")]
+        #[case::konsole_cell_report(b"\x1b]1337;ReportCellSize=19.0;10.0;1.0\x07")]
+        fn other_reports_do_not_end_the_probe(#[case] input: &[u8]) {
+            let mut p = probe(input);
+            p.feed(b"\x1b[?62;22c");
+
+            assert_eq!(p.finish().1.attributes, Some(vec![62, 22]));
+        }
+
+        #[rstest]
+        #[case::ghostty(GHOSTTY)]
+        #[case::foot(FOOT)]
+        fn reads_the_same_however_the_replies_are_split(#[case] stream: &[u8]) {
+            let whole = replies(stream);
+            for at in 1..stream.len() {
+                let mut p = ThemeProbe::default();
+                p.feed(&stream[..at]);
+                p.feed(&stream[at..]);
+
+                assert_eq!(p.finish().1, whole, "split at {at}");
+            }
+        }
+
+        #[rstest]
+        #[case::alt_underscore(b"\x1b_")]
+        #[case::alt_p(b"\x1bP")]
+        #[case::alt_bracket(b"\x1b]")]
+        #[case::alt_underscore_and_a_letter(b"\x1b_x")]
+        fn a_key_typed_during_the_probe_does_not_swallow_the_replies(#[case] key: &[u8]) {
+            assert_eq!(replies(&[key, GHOSTTY].concat()), replies(GHOSTTY));
+        }
+
+        #[test]
+        fn reads_what_the_terminal_outside_tmux_answers_through_it() {
+            let replies = replies(b"\x1b_Gi=31;OK\x1b\\\x1bP>|kitty(0.45.0)\x1b\\\x1b[?62;52;c");
+
+            assert_eq!(
+                (replies.terminal.as_deref(), replies.kitty.as_deref(), replies.attributes),
+                (Some("kitty(0.45.0)"), Some("OK"), Some(vec![62, 52]))
+            );
         }
     }
 
@@ -319,8 +532,21 @@ mod tests {
 
         #[test]
         fn asks_for_colors_and_ends_with_device_attributes() {
-            let q = HostTheme::query();
-            assert!(q.starts_with("\x1b]10;?\x1b\\\x1b]11;?\x1b\\") && q.ends_with("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
+            let q = HostTheme::query(false);
+            assert!(q.contains("\x1b]10;?\x1b\\\x1b]11;?\x1b\\") && q.ends_with("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
+        }
+
+        #[test]
+        fn asks_for_the_cell_size_and_the_sixel_limits_first() {
+            assert!(HostTheme::query(false).starts_with("\x1b[16t\x1b[?1;1;0S\x1b[?2;1;0S\x1b]10;?"));
+        }
+
+        #[rstest]
+        #[case::asked(true, true)]
+        #[case::not_asked(false, false)]
+        fn sends_the_kitty_query_only_when_asked(#[case] kitty: bool, #[case] expected: bool) {
+            assert_eq!(HostTheme::query(kitty).starts_with(detect::KITTY_QUERY), expected);
+            assert_eq!(HostTheme::query(kitty).contains("\x1b_G"), expected);
         }
     }
 

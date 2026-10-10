@@ -109,6 +109,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `launch.rs` | Starting an agent in a new tab, as a pure state machine. |
 | `todo/` | The TODO list (`mod.rs`: ordering, undo, `todos.json`) and the text field with a cursor (`editor.rs`); `ui/todo.rs` draws the panel and `app/todo_panel.rs` wires it into `App`. |
 | `files/` | The files panel: its state per workspace, the tree's git marks and the marks beside each line (`mod.rs`), reading folders and files on threads (`disk.rs`), the list of files and the name and text searches (`search.rs`), and the paths printed in panes (`link.rs`); `ui/files.rs` draws the panel and `app/files_panel.rs` wires it into `App`. |
+| `graphics/` | Images in the files panel: which protocol each window's terminal understands (`detect.rs`), decoding an image and fitting it to the panel (`decode.rs`, `encode.rs`), the bytes for kitty graphics, iTerm2 inline images and sixel (`kitty.rs`, `iterm.rs`, `sixel.rs`), and wrapping them for tmux (`tmux.rs`). |
 | `syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
 | `search.rs`, `picker.rs` | Global search; the folder picker. |

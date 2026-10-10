@@ -73,6 +73,7 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
   const schedule = () => {
     if (!raf) raf = requestAnimationFrame(paint);
   };
+  view.onImage = schedule;
   app.on((event, detail) => {
     if (event === 'dirty') schedule();
     if (event === 'narrate' && detail && opts.narrate) opts.narrate(richText(detail));

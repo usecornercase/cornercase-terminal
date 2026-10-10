@@ -30,6 +30,10 @@ use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state::{self, Saver};
 use crate::todo;
 
+mod images;
+
+use images::Graphics;
+
 const TICK: Duration = Duration::from_millis(500);
 const SLOW_STEP: Duration = Duration::from_millis(100);
 const FRAME: Duration = Duration::from_millis(16);
@@ -128,6 +132,8 @@ struct CropBackend {
     inner: CrosstermBackend<FrameWriter>,
     area: Rect,
     visible: Rect,
+    watched: Option<Rect>,
+    damaged: bool,
 }
 
 impl Backend for CropBackend {
@@ -137,8 +143,14 @@ impl Backend for CropBackend {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
-        let visible = self.visible;
-        self.inner.draw(content.filter(|&(x, y, _)| visible.contains(Position::new(x, y))))
+        let (visible, watched) = (self.visible, self.watched);
+        let mut damaged = false;
+        let shown = content.filter(|&(x, y, _)| visible.contains(Position::new(x, y)));
+        let drawn = self.inner.draw(shown.inspect(|&(x, y, _)| {
+            damaged |= watched.is_some_and(|r| r.contains(Position::new(x, y)));
+        }));
+        self.damaged |= damaged;
+        drawn
     }
 
     fn hide_cursor(&mut self) -> io::Result<()> {
@@ -189,6 +201,7 @@ struct Client {
     size: Option<(u16, u16)>,
     used: u64,
     notify: Channel,
+    graphics: Graphics,
     screen: Option<Screen>,
     out: Outbox,
     writer: JoinHandle<()>,
@@ -225,9 +238,26 @@ impl Client {
     fn reset_screen(&mut self, area: Rect) {
         let Some((width, height)) = self.size else { return };
         self.send(ServerMessage::Frame(CLEAR_SCREEN.to_vec()));
+        self.graphics.reset(Instant::now());
         let inner = CrosstermBackend::new(FrameWriter { buf: Vec::new(), out: self.out.clone() });
-        let backend = CropBackend { inner, area, visible: Rect::new(0, 0, width, height) };
+        let visible = Rect::new(0, 0, width, height);
+        let backend = CropBackend { inner, area, visible, watched: None, damaged: false };
         self.screen = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Fixed(area) }).ok();
+    }
+
+    fn draw(&mut self, app: &mut App, picture: Option<u64>, now: Instant) {
+        let (Some(screen), Some((cols, rows))) = (self.screen.as_mut(), self.size) else { return };
+        let sight = self.graphics.sight(Rect::new(0, 0, cols, rows), picture);
+        screen.backend_mut().watched = self.graphics.watched();
+        let mut placed = None;
+        let _ = screen.draw(|f| placed = app.draw(f, &sight));
+        if std::mem::take(&mut screen.backend_mut().damaged) {
+            self.graphics.damaged();
+        }
+        let bytes = self.graphics.after(picture, placed.as_ref(), now);
+        if !bytes.is_empty() {
+            self.send(ServerMessage::Frame(bytes));
+        }
     }
 }
 
@@ -546,8 +576,10 @@ impl Server {
     }
 
     fn next_frame(&self, now: Instant) -> Option<Duration> {
-        let at = self.printed_at.filter(|_| self.printed)?;
-        Some(FRAME.saturating_sub(now.saturating_duration_since(at)))
+        let images = self.clients.iter().filter_map(|c| c.graphics.wake(now)).min();
+        let at = self.printed_at.filter(|_| self.printed);
+        let printed = at.map(|at| FRAME.saturating_sub(now.saturating_duration_since(at)));
+        printed.into_iter().chain(images).min()
     }
 
     fn draw(&mut self) {
@@ -561,8 +593,9 @@ impl Server {
         let Self { app, clients, area, .. } = self;
         let Some(area) = *area else { return };
         app.resize(area);
-        for screen in clients.iter_mut().filter_map(|c| c.screen.as_mut()) {
-            let _ = screen.draw(|f| app.draw(f));
+        let picture = app.picture();
+        for client in clients.iter_mut() {
+            client.draw(app, picture, now);
         }
     }
 
@@ -594,6 +627,19 @@ impl Server {
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
                 self.app.request(id, &text, self.area, Instant::now());
             }
+            ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
+                log::info!(
+                    "server",
+                    "client images changed",
+                    client = id,
+                    images = graphics.images(),
+                    cell = graphics.cell_size(),
+                    missing = graphics.why_not()
+                );
+                if let Some(client) = self.client_mut(id) {
+                    client.graphics.update(graphics);
+                }
+            }
             ServerEvent::Incompatible(id) => self.reject(id, OTHER_BUILD),
             ServerEvent::Gone(id) => self.remove(id),
         }
@@ -622,8 +668,8 @@ impl Server {
         let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
         let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
         spawn_client_reader(id, reader, self.tx.clone());
-        let notify = Channel::Bell;
-        self.clients.push(Client { id, size: None, used: 0, notify, screen: None, out, writer, dropped: 0 });
+        let (notify, graphics) = (Channel::Bell, Graphics::default());
+        self.clients.push(Client { id, size: None, used: 0, notify, graphics, screen: None, out, writer, dropped: 0 });
     }
 
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
@@ -646,10 +692,18 @@ impl Server {
             notify = hello.notify.id(),
             background = if hello.theme.background.is_some() { "known" } else { "unknown" },
             truecolor = hello.theme.truecolor,
+            images = hello.graphics.images(),
+            cell = hello.graphics.cell_size(),
+            tmux = hello.graphics.tmux.id(),
+            missing = hello.graphics.why_not(),
+            id_hi = hello.graphics.id_hi,
+            probe = hello.probe,
         );
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
+        client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
         self.fit(Some(id));
         if !self.started {
@@ -862,6 +916,7 @@ mod tests {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 
         use super::*;
+        use crate::graphics::Support;
         use crate::state::{PaneState, ProjectState, State, TabState, WorkspaceState};
         use crate::test_util::wait_until;
 
@@ -918,24 +973,53 @@ mod tests {
             pub(super) server: Server,
             rx: Receiver<ServerEvent>,
             client: Client,
-            _dir: TempDir,
+            dir: TempDir,
         }
 
-        struct Client {
+        pub(super) struct Client {
+            id: u64,
             tx: Sender<ServerEvent>,
             frames: Receiver<ServerMessage>,
             screen: vt100::Parser,
+            pub(super) raw: Vec<u8>,
             clears: usize,
+        }
+
+        fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64, graphics: Support) -> Client {
+            let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
+            let _ = server.handle(ServerEvent::Accepted(ours));
+            let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
+            let (notify, probe) = (Channel::Bell, String::new());
+            let hello =
+                Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, graphics, probe };
+            let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
+            let (frames_tx, frames) = mpsc::channel();
+            thread::spawn(move || {
+                while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs) {
+                    if frames_tx.send(msg).is_err() {
+                        return;
+                    }
+                }
+            });
+            Client { id, tx, frames, screen: vt100::Parser::new(ROWS, COLS, 0), raw: Vec::new(), clears: 0 }
         }
 
         impl Attached {
             pub(super) fn new() -> Self {
+                Self::seeing(Support::default())
+            }
+
+            pub(super) fn seeing(graphics: Support) -> Self {
                 let dir = TempDir::new();
                 let saved = one_shell_in(dir.path());
-                Self::with(dir, &saved)
+                Self::with_graphics(dir, &saved, graphics)
             }
 
             pub(super) fn with(dir: TempDir, saved: &State) -> Self {
+                Self::with_graphics(dir, saved, Support::default())
+            }
+
+            fn with_graphics(dir: TempDir, saved: &State, graphics: Support) -> Self {
                 let session = dir.path().join("session.json");
                 state::save(&session, saved).expect("save a session");
                 let (tx, rx) = mpsc::channel();
@@ -944,22 +1028,17 @@ mod tests {
                 let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
                 let todo_saver = Saver::new(dir.path().join("todos.json"), None);
                 let mut server = Server::new(app, session, todo_saver, tx.clone());
-                let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
-                let _ = server.handle(ServerEvent::Accepted(ours));
-                let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
-                let hello =
-                    Hello { version, build, cols: COLS, rows: ROWS, theme, notify: Channel::Bell, terminal: None };
-                let _ = server.handle(ServerEvent::Message(1, ClientMessage::Hello(Box::new(hello))));
-                let (frames_tx, frames) = mpsc::channel();
-                thread::spawn(move || {
-                    while let Ok(Some(msg)) = protocol::recv::<ServerMessage>(&mut theirs) {
-                        if frames_tx.send(msg).is_err() {
-                            return;
-                        }
-                    }
-                });
-                let client = Client { tx, frames, screen: vt100::Parser::new(ROWS, COLS, 0), clears: 0 };
-                Self { server, rx, client, _dir: dir }
+                let client = connect(&mut server, tx, 1, graphics);
+                Self { server, rx, client, dir }
+            }
+
+            pub(super) fn dir(&self) -> &Path {
+                self.dir.path()
+            }
+
+            pub(super) fn join(&mut self, graphics: Support) -> Client {
+                let id = self.server.next_client;
+                connect(&mut self.server, self.client.tx.clone(), id, graphics)
             }
 
             pub(super) fn shows_frame(&self, bytes: &[u8]) {
@@ -975,12 +1054,12 @@ mod tests {
                 got
             }
 
-            fn serve(
+            pub(super) fn serve(
                 self,
                 run: impl Fn(&mut Server, Step) -> ControlFlow<()>,
                 script: impl FnOnce(&mut Client) + Send + 'static,
             ) {
-                let Self { mut server, rx, mut client, _dir } = self;
+                let Self { mut server, rx, mut client, dir: _dir } = self;
                 let stop = client.tx.clone();
                 let script = thread::spawn(move || {
                     let done = panics::contain(|| script(&mut client));
@@ -997,15 +1076,34 @@ mod tests {
                 self.tx.send(ev).expect("the server listens");
             }
 
-            fn input(&self, ev: Event) {
-                self.send(ServerEvent::Message(1, ClientMessage::Event(ev)));
+            pub(super) fn input(&self, ev: Event) {
+                self.send(ServerEvent::Message(self.id, ClientMessage::Event(ev)));
             }
 
-            fn key(&self, code: KeyCode) {
+            pub(super) fn key(&self, code: KeyCode) {
                 self.input(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)));
             }
 
-            fn type_line(&self, line: &str) {
+            pub(super) fn click(&self, column: u16, row: u16) {
+                for kind in [MouseEventKind::Down(MouseButton::Left), MouseEventKind::Up(MouseButton::Left)] {
+                    self.input(Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE }));
+                }
+            }
+
+            pub(super) fn click_on(&mut self, text: &str) {
+                self.shows(text);
+                let rows = self.screen.screen().rows(0, COLS).collect::<Vec<_>>();
+                let (row, column) = rows
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(y, line)| Some((y, line.find(text)?)))
+                    .expect("the text is on screen");
+                let column = u16::try_from(rows[row][..column].chars().count()).expect("on screen");
+                self.click(column + 1, u16::try_from(row).expect("on screen"));
+            }
+
+            pub(super) fn type_line(&self, line: &str) {
                 line.chars().map(KeyCode::Char).chain([KeyCode::Enter]).for_each(|code| self.key(code));
             }
 
@@ -1016,23 +1114,28 @@ mod tests {
                 }
             }
 
-            fn text(&self) -> String {
+            pub(super) fn text(&self) -> String {
                 self.screen.screen().contents()
             }
 
-            fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
+            pub(super) fn until(&mut self, what: &str, cond: impl Fn(&Self) -> bool) {
                 wait_until(what, || {
                     while let Ok(msg) = self.frames.try_recv() {
                         if let ServerMessage::Frame(bytes) = msg {
                             self.clears += usize::from(bytes == CLEAR_SCREEN);
                             self.screen.process(&bytes);
+                            self.raw.extend_from_slice(&bytes);
                         }
                     }
                     cond(self)
                 });
             }
 
-            fn shows(&mut self, text: &str) {
+            pub(super) fn count(&self, needle: &[u8]) -> usize {
+                self.raw.windows(needle.len()).filter(|w| *w == needle).count()
+            }
+
+            pub(super) fn shows(&mut self, text: &str) {
                 self.until(text, |client| client.text().contains(text));
             }
         }
@@ -1086,7 +1189,21 @@ mod tests {
             let (tx, rx) = mpsc::channel();
             let out = Outbox { tx, queued: Arc::new(AtomicUsize::new(0)) };
             let writer = thread::spawn(|| {});
-            (Client { id: 1, size: None, used: 0, notify: Channel::Bell, screen: None, out, writer, dropped: 0 }, rx)
+            let graphics = Graphics::default();
+            (
+                Client {
+                    id: 1,
+                    size: None,
+                    used: 0,
+                    notify: Channel::Bell,
+                    graphics,
+                    screen: None,
+                    out,
+                    writer,
+                    dropped: 0,
+                },
+                rx,
+            )
         }
 
         fn texts(rx: &Receiver<ServerMessage>) -> Vec<String> {
@@ -1199,6 +1316,93 @@ mod tests {
             let attached = Attached::with(dir, &saved);
 
             assert_eq!(attached.server.app.state().projects.len(), 1);
+        }
+    }
+
+    mod showing_images {
+        use super::a_bug::{Attached, Client};
+        use super::*;
+        use crate::graphics::{CellSize, Protocol, Support, Tmux};
+        use crate::ui;
+
+        const TRANSMIT: &[u8] = b"a=t,";
+        const PLACE: &[u8] = b"a=p,";
+        const KITTY: &[u8] = b"\x1b_G";
+        const ITERM: &[u8] = b"\x1b]1337;File=";
+
+        fn support(protocol: Protocol) -> Support {
+            Support {
+                protocol: Some(protocol),
+                missing: None,
+                cell: Some(CellSize { width: 10, height: 20 }),
+                tmux: Tmux::None,
+                id_hi: 42,
+            }
+        }
+
+        fn with_image(graphics: Support) -> Attached {
+            let attached = Attached::seeing(graphics);
+            let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
+            pixels.save_with_format(attached.dir().join("logo.png"), image::ImageFormat::Png).expect("a png");
+            attached
+        }
+
+        fn open_the_image(client: &mut Client) {
+            client.type_line("echo lo\"\"go.png");
+            client.click_on("logo.png");
+            client.shows("400×200");
+        }
+
+        fn settings() -> Position {
+            ui::full_layout(Rect::new(0, 0, 100, 20), ui::Widths::default(), true, ui::Sidebar::default(), false)
+                .settings
+                .as_position()
+        }
+
+        #[test]
+        fn kitty_gets_the_image_once_and_only_a_new_placement_when_the_window_shrinks() {
+            let attached = with_image(support(Protocol::Kitty));
+            attached.serve(Server::step, |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
+                let placed = client.count(PLACE);
+
+                client.input(Event::Resize(100, 12));
+
+                client.until("the image is placed again", |c| c.count(PLACE) > placed);
+                assert_eq!(client.count(TRANSMIT), 1);
+            });
+        }
+
+        #[test]
+        fn an_inline_image_waits_while_a_dialog_is_open_and_comes_back_after() {
+            let attached = with_image(support(Protocol::Iterm));
+            attached.serve(Server::step, |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(ITERM) == 1);
+
+                let at = settings();
+                client.click(at.x, at.y);
+                client.shows("Worktrees");
+                assert_eq!(client.count(ITERM), 1, "nothing while the dialog is open");
+                client.key(KeyCode::Esc);
+
+                client.until("the image is sent again", |c| c.count(ITERM) == 2);
+            });
+        }
+
+        #[test]
+        fn a_window_without_images_gets_none_while_another_gets_its_own() {
+            let mut attached = with_image(support(Protocol::Kitty));
+            let mut blind = attached.join(Support::default());
+            attached.serve(Server::step, move |client| {
+                open_the_image(client);
+                client.until("the image is sent", |c| c.count(TRANSMIT) == 1);
+
+                blind.shows("400×200");
+                blind.until("the window says why", |c| !c.text().contains("reading"));
+                assert_eq!((blind.count(KITTY), blind.count(ITERM)), (0, 0));
+            });
         }
     }
 

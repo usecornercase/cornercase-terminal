@@ -150,6 +150,16 @@ Over SSH, it's your local terminal that needs to allow it.
 - Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour and VS Code are asked not to: look for the toast.
 - Inside tmux, screen or Zellij, cornercase only rings the bell, which your multiplexer decides what to do with.
 
+### An image shows a message instead of the picture
+
+Your terminal can't draw pictures, or something between it and cornercase stops them, such as tmux without passthrough. The message says which and what to do; every message and its fix is in [When a picture doesn't show](../../guides/files/#when-a-picture-doesnt-show). cornercase checks your terminal when it starts, so after changing a setting, quit it with **Quit** and start it again.
+
+If the panel stays empty instead, with no message:
+
+- **iTerm2** may be waiting for your answer to *Allow Terminal-Initiated Display?*, or remember that you declined it; see [iTerm2 asks first](../../guides/files/#iterm2-asks-first).
+- **tmux** with `allow-passthrough on` drops a picture sent while cornercase's window is hidden. Open the file again, or use `all` (tmux 3.4 or later); see [Inside tmux](../../guides/files/#inside-tmux).
+- `CORNERCASE_IMAGES` may name a protocol your terminal doesn't understand. Start cornercase without it.
+
 ### Dragging doesn't select text
 
 The program in the pane is using the mouse, so the drag goes to it. Many such programs have their own way to select and copy, or a setting to turn their mouse support off.

@@ -246,10 +246,15 @@ fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
 }
 
 pub(super) fn actions(row: Rect) -> Vec<(Action, Rect)> {
+    buttons(row, &Action::ALL)
+}
+
+pub(super) fn buttons(row: Rect, which: &[Action]) -> Vec<(Action, Rect)> {
     let mut right = row.right().saturating_sub(1);
-    let mut out: Vec<(Action, Rect)> = Action::ALL
-        .into_iter()
+    let mut out: Vec<(Action, Rect)> = which
+        .iter()
         .rev()
+        .copied()
         .map(|action| {
             let w = width(action.label()) + 2;
             let r = Rect::new(right.saturating_sub(w), row.y, w, 1).intersection(row);

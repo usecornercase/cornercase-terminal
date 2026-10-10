@@ -53,6 +53,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `CORNERCASE_SOCKET` | Use another socket, which means another, independent server; its files live next to it. Keep the path short: Unix sockets allow about 100 bytes. cornercase doesn't add it to panes: a pane has it only when the server was started with it. |
 | `SHELL` | The shell started in every pane. Without it, `/bin/sh`. |
 | `CORNERCASE_LOG` | How much the server writes to `server.log`: `info` (the default), `debug` for every event it handles, every git run and slow frames, or `warn` / `error` for less. Read when the server starts. |
+| `CORNERCASE_IMAGES` | Which protocol the files panel draws [images](../../guides/files/#choose-the-protocol-yourself) with in this window: `kitty`, `iterm`, `sixel`, or `off` for none. Without it, cornercase picks one from your terminal's name. Read by each `cornercase` window when it starts, not by the server, so two windows can use different values. |
 | `SHORTCUT_API_TOKEN` | Shortcut token. Takes precedence over a saved one. |
 | `LINEAR_API_KEY` | Linear API key. Takes precedence over a saved one. |
 | `JIRA_API_TOKEN` | Jira API token, sent with the email of your Jira settings. Takes precedence over a saved one. |
@@ -60,8 +61,9 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets it too. |
 | `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. The `codex` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets the server's. |
 | `XDG_CACHE_HOME`, `OPENCODE_MODELS_PATH`, `OPENCODE_DB` | Read from each running opencode: where its list of models is (`$XDG_CACHE_HOME/opencode/models.json`, or `OPENCODE_MODELS_PATH`), and the name of its database when `OPENCODE_DB` sets one. Without them, `~/.cache` and the database it has open whose name starts with `opencode`. |
-| `TERM_PROGRAM`, `LC_TERMINAL`, `TERM`, `KITTY_WINDOW_ID`, `KONSOLE_VERSION` | Recognising your terminal when it doesn't say its name, to send it [desktop notifications](../../guides/projects-workspaces-tabs/#notifications) it understands. |
-| `TMUX`, `STY`, `ZELLIJ` | Inside tmux, screen or Zellij, desktop notifications are a bell. |
+| `TERM_PROGRAM`, `LC_TERMINAL`, `TERM`, `KITTY_WINDOW_ID`, `KONSOLE_VERSION` | Recognising your terminal when it doesn't say its name, to send it [desktop notifications](../../guides/projects-workspaces-tabs/#notifications) and [images](../../guides/files/#which-terminals-show-them) it understands. |
+| `TERM_PROGRAM_VERSION`, `GHOSTTY_RESOURCES_DIR`, `VTE_VERSION`, `PTYXIS_VERSION`, `ALACRITTY_WINDOW_ID`, `XTERM_VERSION`, `TERMINAL_EMULATOR`, `INSIDE_EMACS` | More hints about your terminal, for [images](../../guides/files/#which-terminals-show-them), when it doesn't say its name: its version, a terminal built on VTE, JetBrains' terminal, Emacs' vterm. |
+| `TMUX`, `TMUX_PANE`, `STY`, `ZELLIJ` | Inside tmux, screen or Zellij, desktop notifications are a bell, and images take the way the multiplexer lets through; inside tmux on the same machine, cornercase asks tmux whether it [passes images through](../../guides/files/#inside-tmux). |
 | `XDG_CONFIG_HOME` | Folder for `config.json` and `secrets.json`. |
 | `XDG_STATE_HOME` | Folder for `session.json`, `issues.json` and `todos.json`. |
 | `XDG_RUNTIME_DIR`, `TMPDIR` | Folder for the socket, lock and log. |

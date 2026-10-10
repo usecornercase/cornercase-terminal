@@ -1,6 +1,7 @@
 ---
+import type { ImageMetadata } from 'astro';
 import { parseAnsi } from '../lib/term/ansi';
-import { rect } from '../lib/term/grid';
+import { IMAGE_CELL, rect } from '../lib/term/grid';
 import { toSvg } from '../lib/term/svg';
 
 interface Props {
@@ -9,14 +10,23 @@ interface Props {
   caption?: string;
   crop?: [number, number, number, number];
   title?: string;
+  image?: ImageMetadata;
 }
 
 const screens = import.meta.glob<string>('../screens/*.ansi', { query: '?raw', import: 'default', eager: true });
-const { name, alt, caption, crop, title } = Astro.props;
+const { name, alt, caption, crop, title, image } = Astro.props;
 const source = screens[`../screens/${name}.ansi`];
 if (!source) throw new Error(`unknown screen: ${name}`);
 const full = parseAnsi(source);
 const grid = crop ? full.crop(rect(...crop)) : full;
+if (image) {
+  const cells = grid.cells.flatMap((c, i) => (c.ch.startsWith(IMAGE_CELL) ? [{ x: i % grid.cols, y: Math.floor(i / grid.cols) }] : []));
+  if (!cells.length) throw new Error(`screen ${name} shows no image cells`);
+  const x = Math.min(...cells.map((c) => c.x));
+  const y = Math.min(...cells.map((c) => c.y));
+  const r = rect(x, y, Math.max(...cells.map((c) => c.x)) + 1 - x, Math.max(...cells.map((c) => c.y)) + 1 - y);
+  grid.images.push({ r, src: image.src, width: image.width, height: image.height });
+}
 const svg = toSvg(grid, { label: alt, className: 'screen-svg' });
 const size = `${grid.cols}×${grid.rows}`;
 ---
