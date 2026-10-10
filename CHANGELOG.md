@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.22
 
-- Gemini CLI tabs now show working, waiting and finished status, notifications, model and context use, and resume their conversations after a restart in the same mode. Status needs Gemini’s dynamic window title; two Gemini sharing a home and folder hide their conversation data.
+- Gemini CLI tabs now show working, waiting and finished status, notifications, model and context use, and resume their conversations after a restart in the same mode. Status needs Gemini's dynamic window title; two Gemini sharing a home and folder hide their conversation data.
 - Scripts can wait for Gemini, follow its events, confirm submitted prompts and read its last message. Local slash commands and shell input return after Enter without a prompt confirmation.
 - Gemini CLI has a built-in plan mode.
 

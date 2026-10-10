@@ -160,7 +160,6 @@ pub(super) fn look(pid: i32, since: SystemTime, previous: Option<Session>, foote
             && folder(other).as_ref() == Some(&cwd)
             && home(other, "GEMINI_CLI_HOME", ".gemini", ".gemini").as_ref() == Some(&dir)
             && !process::descendants(other).contains(&pid)
-            && !process::descendants(pid).contains(&other)
     }) {
         return None;
     }
@@ -216,7 +215,11 @@ fn prompt(entry: &Value) -> bool {
     entry["type"] == "user"
         && !entry["content"].as_array().is_some_and(|parts| parts.iter().any(|p| p.get("functionResponse").is_some()))
         && text(&entry["content"]).is_some_and(|t| {
-            !["<session_context>", "<state_snapshot>", "<scratchpad>"].iter().any(|tag| t.trim_start().starts_with(tag))
+            let text = t.trim();
+            !text.is_empty()
+                && !["/", "?", "<session_context>", "<hook_context>", "<state_snapshot>", "<scratchpad>"]
+                    .iter()
+                    .any(|prefix| text.starts_with(prefix))
         })
 }
 
@@ -256,19 +259,29 @@ fn said(entry: &Value, seen: &mut HashSet<String>) -> Option<Said> {
 
 pub(super) fn footer_model(screen: &str) -> Option<String> {
     let lines: Vec<&str> = screen.lines().rev().take(6).collect();
-    let at =
-        lines.iter().position(|line| line.contains("workspace (/directory)") && line.trim_end().ends_with("/model"))?;
-    let model = lines
-        .get(at.checked_sub(1)?)?
-        .split_whitespace()
-        .rfind(|word| word.starts_with("gemini-") || word.starts_with("gemma-") || *word == "Auto")?;
-    if model == "Auto" {
-        return Some("auto".into());
+    for rows in lines.windows(2) {
+        let header = footer_cells(rows[1]);
+        let Some(at) = header.iter().position(|cell| *cell == "/model") else { continue };
+        let values = footer_cells(rows[0]);
+        if header.len() != values.len() {
+            continue;
+        }
+        let model = values[at];
+        if model == "Auto" {
+            return Some("auto".into());
+        }
+        return (model.starts_with("gemini-") || model.starts_with("gemma-"))
+            .then_some(model)
+            .filter(|model| {
+                !model.contains("...") && model.chars().all(|c| c.is_ascii_alphanumeric() || "-._".contains(c))
+            })
+            .map(str::to_string);
     }
-    (model.starts_with("gemini-") || model.starts_with("gemma-"))
-        .then_some(model)
-        .filter(|model| !model.contains("...") && model.chars().all(|c| c.is_ascii_alphanumeric() || "-._".contains(c)))
-        .map(str::to_string)
+    None
+}
+
+fn footer_cells(line: &str) -> Vec<&str> {
+    line.split("  ").map(str::trim).filter(|cell| !cell.is_empty()).collect()
 }
 
 #[cfg(test)]
@@ -367,12 +380,22 @@ mod tests {
     }
 
     #[rstest]
-    #[case::tool_result(serde_json::json!([{"functionResponse":{"name":"shell","response":{"output":"OK"}}}]))]
-    #[case::setup(serde_json::json!([{"text":"<session_context>setup"}]))]
-    #[case::summary(serde_json::json!([{"text":"<state_snapshot>summary"}]))]
-    #[case::scratchpad(serde_json::json!([{"text":"<scratchpad>summary"}]))]
-    fn synthetic_user_messages_are_not_prompts(#[case] content: Value) {
-        assert!(!prompt(&serde_json::json!({"type":"user","content":content})));
+    #[case::tool_result(serde_json::json!([{"functionResponse":{"name":"shell","response":{"output":"OK"}}}]), false)]
+    #[case::setup(serde_json::json!([{"text":"<session_context>setup"}]), false)]
+    #[case::hook(serde_json::json!([{"text":" \n <hook_context>setup"}]), false)]
+    #[case::summary(serde_json::json!([{"text":"<state_snapshot>summary"}]), false)]
+    #[case::scratchpad(serde_json::json!([{"text":"<scratchpad>summary"}]), false)]
+    #[case::slash(serde_json::json!([{"text":" \n /clear"}]), false)]
+    #[case::help(serde_json::json!(" \n ?help"), false)]
+    #[case::empty(serde_json::json!(" \n \t "), false)]
+    #[case::real(serde_json::json!([{"text":"fix the hook / command"}]), true)]
+    fn user_content_controls_confirmation_and_resumability(#[case] content: Value, #[case] expected: bool) {
+        let entry = serde_json::json!({
+            "id": "candidate", "type": "user", "content": content, "timestamp": "2026-10-10T13:00:00.000Z"
+        });
+        let (_dir, session) = written(&format!("{entry}\n"));
+        assert_eq!(session.prompted.is_some(), expected);
+        assert_eq!(session.id().is_some(), expected);
     }
 
     #[test]
@@ -380,7 +403,8 @@ mod tests {
         let (_dir, mut session) = written(REPLY);
         append(
             &mut session,
-            "{\"id\":\"switch\",\"type\":\"info\",\"timestamp\":\"2026-10-10T13:00:00.000Z\",\"content\":\"Model set to gemma-4-31b-it\"}\n",
+            "{\"id\":\"switch\",\"type\":\"info\",\"timestamp\":\"2026-10-10T13:00:00.000Z\",\
+             \"content\":\"Model set to gemma-4-31b-it\"}\n",
         );
         assert_eq!(session.context, Some(Context { model: "gemma-4-31b-it".into(), percent: None }));
         let mut reply: Value = serde_json::from_str(REPLY).expect("reply");
@@ -412,7 +436,8 @@ mod tests {
     #[test]
     fn the_current_footer_takes_precedence_over_historical_model_settings() {
         let (_dir, session) = written(&format!(
-            "{REPLY}{{\"id\":\"setting\",\"type\":\"info\",\"content\":\"Model set to auto\",\"timestamp\":\"2026-10-10T13:00:00.000Z\"}}\n"
+            "{REPLY}{{\"id\":\"setting\",\"type\":\"info\",\"content\":\"Model set to auto\",\
+             \"timestamp\":\"2026-10-10T13:00:00.000Z\"}}\n"
         ));
         let mut first = Session::new(session.path, FakeGemini::ID.into());
         first.update(Some("gemini-3.5-flash-lite".into())).expect("first discovery with the current footer");
@@ -464,12 +489,29 @@ mod tests {
 
     #[rstest]
     #[case::model(
-        "workspace (/directory)          sandbox          /model\n/tmp/project                 no sandbox    gemini-3.8-flash",
+        "workspace (/directory)          sandbox          /model\n\
+         /tmp/project                 no sandbox    gemini-3.8-flash",
         Some("gemini-3.8-flash")
     )]
     #[case::automatic("workspace (/directory)  sandbox  /model\n/tmp/project      no sandbox      Auto", Some("auto"))]
-    #[case::truncated("workspace (/directory) sandbox /model\n/tmp/project no sandbox gemini-3…", None)]
+    #[case::context_only("/model  context\nAuto  1% used", Some("auto"))]
+    #[case::quota(
+        "workspace (/directory)  sandbox  /model  context  quota\n\
+         /tmp/project  no sandbox  gemini-3.8-flash  1% used  95% left",
+        Some("gemini-3.8-flash")
+    )]
+    #[case::hidden_workspace(
+        "sandbox  /model  context  quota\nno sandbox  gemma-4-31b-it  50% used  95% left",
+        Some("gemma-4-31b-it")
+    )]
+    #[case::branch_with_custom_model(
+        "workspace (/directory)  branch  /model\n/tmp/project  gemini-foo  custom-model",
+        None
+    )]
+    #[case::mismatched_cells("sandbox  /model  context\nno sandbox  gemini-3.8-flash", None)]
+    #[case::truncated("workspace (/directory)  sandbox  /model\n/tmp/project  no sandbox  gemini-3…", None)]
     #[case::dialog("Select Model\n● gemini-3.8-flash", None)]
+    #[case::outside_footer("/model  context\ngemini-3.8-flash  1% used\none\ntwo\nthree\nfour\nfive\nsix", None)]
     fn the_labelled_footer_only_supplies_complete_model_ids(#[case] screen: &str, #[case] expected: Option<&str>) {
         assert_eq!(footer_model(screen).as_deref(), expected);
     }

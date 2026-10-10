@@ -426,7 +426,7 @@ impl Settings {
                     note: agents::join_args(args),
                     dangerous: agents::is_dangerous(name),
                 }));
-                let extra = agents::extra_args(&agents::args(&self.config, &kind), &modes);
+                let extra = agents::extra_args(&kind, &agents::args(&self.config, &kind), &modes);
                 items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
                 self.open_pick(Row::Kind(kind), items);
                 Action::None
@@ -455,7 +455,7 @@ impl Settings {
 
     fn edit_extra(&mut self, kind: &str) {
         let modes = agents::modes(&self.config, kind);
-        let extra = agents::extra_args(&agents::args(&self.config, kind), &modes);
+        let extra = agents::extra_args(kind, &agents::args(&self.config, kind), &modes);
         self.start_edit(Row::Kind(kind.into()), agents::join_args(&extra));
     }
 
@@ -475,7 +475,7 @@ impl Settings {
             Row::Tabs => Some(ui::Tabs::from_setting(&self.config.tabs).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
             Row::Kind(kind) => Some(
-                agents::mode_of(&agents::args(&self.config, kind), &agents::modes(&self.config, kind))
+                agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
                     .unwrap_or_else(|| "default".into()),
             ),
             _ => None,
@@ -524,7 +524,7 @@ impl Settings {
             Row::Kind(kind) => {
                 let modes = agents::modes(&self.config, &kind);
                 let mode = (value != "default").then_some(value.as_str());
-                let args = agents::with_mode(&agents::args(&self.config, &kind), &modes, mode);
+                let args = agents::with_mode(&kind, &agents::args(&self.config, &kind), &modes, mode);
                 let notice = starts_with(&kind, &args);
                 self.save(with_args(&self.config, &kind, args), notice)
             }
@@ -626,7 +626,7 @@ impl Settings {
                 let extra = agents::split_args(&edit.input);
                 self.edit = None;
                 let modes = agents::modes(&self.config, &kind);
-                let args = agents::with_extra(&agents::args(&self.config, &kind), &modes, extra);
+                let args = agents::with_extra(&kind, &agents::args(&self.config, &kind), &modes, extra);
                 let notice = starts_with(&kind, &args);
                 self.save(with_args(&self.config, &kind, args), notice)
             }
@@ -1028,8 +1028,8 @@ fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
 fn kind_row(config: &Config, kind: &str) -> (String, String, String, bool) {
     let args = agents::args(config, kind);
     let modes = agents::modes(config, kind);
-    let mode = agents::mode_of(&args, &modes);
-    let extra = agents::extra_args(&args, &modes);
+    let mode = agents::mode_of(kind, &args, &modes);
+    let extra = agents::extra_args(kind, &args, &modes);
     let mut value = mode.clone().unwrap_or_else(|| "default".into());
     if !extra.is_empty() {
         value = format!("{value} + {}", agents::join_args(&extra));

@@ -145,7 +145,7 @@ When a new server restores your session, a pane where Claude Code, Codex or Gemi
 | Codex | `codex resume <arguments> <session id>` |
 | Gemini CLI | `gemini <arguments> --resume <session id>` |
 
-The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open, or Gemini’s `sessionId` in its main session JSONL. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open, or Gemini's `sessionId` in its main session JSONL. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 ## Trust prompts
 

@@ -561,7 +561,7 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
     let found = agent.zip(term.context.conversation()).map(|((agent, args), conversation)| AgentState {
         kind: agent.to_string(),
         conversation: conversation.to_string(),
-        mode: agents::mode_of(args, &agents::modes(config, agent)),
+        mode: agents::mode_of(agent, args, &agents::modes(config, agent)),
     });
     if found.is_some() {
         term.resuming = None;
@@ -2934,7 +2934,7 @@ impl App {
         let starts = kinds
             .iter()
             .map(|kind| {
-                let mode = agents::mode_of(&agents::args(config, kind), &agents::modes(config, kind));
+                let mode = agents::mode_of(kind, &agents::args(config, kind), &agents::modes(config, kind));
                 (kind.clone(), browser::AgentStart { command: agents::command_line(config, kind), mode })
             })
             .collect();
@@ -14064,6 +14064,7 @@ rm -f "$s"
 
             #[rstest::rstest]
             #[case::slash("/clear")]
+            #[case::help("?help")]
             #[case::shell("!printf OK")]
             fn local_commands_return_after_enter_without_a_prompt_record(#[case] text: &str) {
                 let mut running = Running::new();

@@ -1184,7 +1184,7 @@ impl App {
             ));
         }
         let local = agents::detect(&self.config, &term.foreground_args()).as_deref() == Some(agents::GEMINI)
-            && send.text.as_deref().is_some_and(|text| text.trim_start().starts_with(['/', '!']));
+            && send.text.as_deref().is_some_and(|text| text.trim_start().starts_with(['/', '?', '!']));
         let confirm = (send.enter && !local && self.watched_agent(term).is_ok()).then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
@@ -1215,7 +1215,10 @@ impl App {
             let runs = agent.map_or_else(
                 || "runs no agent".to_string(),
                 |agent| {
-                    format!("runs {agent}, and cornercase only knows what Claude Code, Codex, Gemini CLI and opencode are doing")
+                    format!(
+                        "runs {agent}, and cornercase only knows what Claude Code, Codex, Gemini CLI and opencode \
+                         are doing"
+                    )
                 },
             );
             return Err(format!(
@@ -1272,7 +1275,8 @@ impl App {
             other => {
                 let runs = other.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
                 return Err(format!(
-                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex, Gemini CLI and opencode; \
+                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex, Gemini CLI \
+                     and opencode; \
                      `cornercase read --pane {pane}` prints its screen"
                 ));
             }

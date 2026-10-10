@@ -342,13 +342,15 @@ trap 'kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null' EXIT
 printf '\033]0;◇  Ready (project)\007'
 while IFS= read -r line; do
   case "$line" in
-    /*|!*) printf 'local command\n' ;;
-    *) printf '{"id":"prompt-%s","timestamp":"%s.999Z","type":"user","content":[{"text":"prompt"}]}\n' "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$1"
+    /*|\?*|!*) printf 'local command\n' ;;
+    *) printf '{"id":"prompt-%s","timestamp":"%s.999Z","type":"user","content":[{"text":"prompt"}]}\n' \
+         "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$1"
        n=$((n + 1))
        printf '\033]0;✦  Working… (project)\007' ;;
   esac
 done
-"#.replace("$TITLE", TITLE_SIGNAL);
+"#
+        .replace("$TITLE", TITLE_SIGNAL);
         write_executable(&script, &body);
         Self { dir, script, session }
     }
