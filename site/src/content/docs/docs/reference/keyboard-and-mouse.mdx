@@ -22,7 +22,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Click | A group header | Collapses or expands the group. |
 | Drag | A project, group, workspace or tab | Moves it within its list; a project also into or out of a group. `Esc` cancels. See [Reorder](../../guides/projects-workspaces-tabs/#reorder). |
 | Hover, then click `×` | Any project, workspace or tab row | Closes it. A project, and a workspace with its own worktree, ask first. In the [compact layout](../../guides/small-terminals/) the `×` always shows, and a tab or workspace asks first too. |
-| Hover, then click `×` | A group header | Asks, then deletes the group. Its projects stay open, ungrouped. |
+| Hover, then click `×` | A group header | Asks, then deletes the group: **keep projects** leaves them open, ungrouped; **close projects** closes them too. |
 | Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group**. In the compact layout the `⋯` always shows. |
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Folds or unfolds a project or workspace. A click on the rest of its row opens it and unfolds it. |
@@ -57,7 +57,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | A divider between panes | Resizes the panes. |
 | Double-click | A divider | Splits the space in half again. |
 | Press, drag, release | Text, when the program doesn't use the mouse | Selects the text and copies it to your clipboard. |
-| Hover, then click | A path to a file of the workspace, in the active pane | Underlines it, then opens the file in the [files panel](../../guides/files/#paths-in-your-panes-are-links), at its line when the path has one. |
+| Hover, then click | A path to a regular file, inside or outside the workspace, in the active pane (including `~/…`) | Underlines it, then opens the file in the [files panel](../../guides/files/#paths-in-your-panes-are-links), at its line when the path has one. |
 | Anything | A program that uses the mouse | Passed to the program, relative to its pane. |
 
 Programs that use the mouse get clicks, releases, drags, movement and the wheel, depending on what they asked for, in the encoding they asked for (SGR, UTF-8 or the original X10 one). Right-clicks still open the pane menu, and right-button drags still move panes, unless you chose **send right-clicks to the pane** for that pane. See [Panes and splits](../../guides/panes-and-splits/).
@@ -66,7 +66,9 @@ Programs that use the mouse get clicks, releases, drags, movement and the wheel,
 
 | Gesture | Where | Does |
 | --- | --- | --- |
-| Click | `Uncommitted`, `Commits`, `All` | Changes what is compared. |
+| Click | Project name, `Every project` | Chooses the active workspace or uncommitted changes across projects. |
+| Click | Project or workspace header in `Every project` | Folds or unfolds its files without changing the active project. |
+| Click | `Uncommitted`, `Commits`, `All` (project scope) | Changes what is compared. |
 | Click | `vs main ▾` | Opens the list of branches to compare with. |
 | Click | A file row | Folds or unfolds the file. |
 | Hover, then click `✓` | A file row | Marks the file as viewed, or not. |

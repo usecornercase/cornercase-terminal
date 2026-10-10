@@ -41,6 +41,7 @@ interface Hunk {
 }
 
 export interface FileDiff {
+  owner?: { project: Project; workspace: Workspace };
   change: Change;
   hunks: Hunk[];
   added: number;
@@ -225,7 +226,7 @@ export function diffFile(change: Change): FileDiff {
 }
 
 export function workspaceDiff(p: Project, w: Workspace, mode: ChangesMode): FileDiff[] {
-  return demoChanges(p, w, mode).map(diffFile);
+  return demoChanges(p, w, mode).map((change) => ({ ...diffFile(change), owner: { project: p, workspace: w } }));
 }
 
 function mix(a: string, b: string, t: number): number {
@@ -243,6 +244,7 @@ export function tintsOf(app: App): typeof LIGHT_TINTS {
 }
 
 type Row =
+  | { kind: 'header'; i: number }
   | { kind: 'file'; i: number }
   | { kind: 'gap'; i: number; h: number; n: number }
   | { kind: 'hunk'; i: number; h: number }
@@ -298,10 +300,50 @@ export function keptFiles(files: FileDiff[], query: string): Set<number> | null 
 const ACTIONS = ['open', 'ask agent', 'copy'] as const;
 export type HunkAction = (typeof ACTIONS)[number];
 
-function rows(app: App, files: FileDiff[], kept: Set<number> | null): Row[] {
+interface Header {
+  id: number;
+  label: string;
+  start: number;
+  end: number;
+  workspace: boolean;
+}
+
+function headers(files: FileDiff[]): Header[] {
+  const headers: Header[] = [];
+  let start = 0;
+  while (start < files.length) {
+    const project = files[start].owner?.project;
+    if (!project) break;
+    let end = start + 1;
+    while (end < files.length && files[end].owner?.project.id === project.id) end++;
+    headers.push({ id: project.id, label: project.name ?? project.folder, start, end, workspace: false });
+    const workspaces = new Set(files.slice(start, end).map((f) => f.owner?.workspace.id));
+    if (workspaces.size > 1) {
+      let first = start;
+      while (first < end) {
+        const w = files[first].owner!.workspace;
+        let last = first + 1;
+        while (last < end && files[last].owner?.workspace.id === w.id) last++;
+        headers.push({ id: w.id, label: w.name ?? w.branch ?? 'default', start: first, end: last, workspace: true });
+        first = last;
+      }
+    }
+    start = end;
+  }
+  return headers;
+}
+
+function rows(app: App, files: FileDiff[], kept: Set<number> | null, groups: Header[]): Row[] {
   const out: Row[] = [];
+  const first = groups.map((header) => Array.from({ length: header.end - header.start }, (_, k) => header.start + k).find((k) => !kept || kept.has(k)));
   files.forEach((f, i) => {
     if (kept && !kept.has(i)) return;
+    const owners = groups.map((header, index) => ({ header, index })).filter(({ header }) => header.start <= i && i < header.end);
+    for (const { header, index } of owners) {
+      const hidden = header.workspace && owners.some(({ header: h }) => !h.workspace && app.changesHeaders.has(h.id));
+      if (first[index] === i && !hidden) out.push({ kind: 'header', i: index });
+    }
+    if (owners.some(({ header }) => app.changesHeaders.has(header.id))) return;
     out.push({ kind: 'file', i });
     if (app.changesFolded(f)) return;
     f.hunks.forEach((hunk, h) => {
@@ -338,25 +380,42 @@ export function drawChanges(p: Painter, areas: Areas): void {
   const filter = app.changesFilter;
   const kept = filter ? keptFiles(files, filter.query) : null;
 
+  const close = rect(right(inner) - 3, inner.y, 3, 1);
+  const button = rect(close.x - 3, inner.y, 3, 1);
+  const project = app.project();
+  const workspace = app.workspace();
+  let label = project?.name ?? project?.folder ?? 'Project';
+  if (project && project.workspaces.length > 1) label += ` › ${workspace?.name ?? workspace?.branch ?? 'default'}`;
+  const everyLabel = ' Every project ';
+  const room = Math.max(0, button.x - inner.x - everyLabel.length - 1);
+  const projectLabel = ` ${truncateRight(label, Math.max(0, room - 2))} `;
+  const scopes = [
+    { scope: 'project' as const, label: projectLabel, r: rect(inner.x, inner.y, Math.min(room, [...projectLabel].length), 1) },
+    { scope: 'every' as const, label: everyLabel, r: rect(inner.x + Math.min(room, [...projectLabel].length) + 1, inner.y, everyLabel.length, 1) },
+  ];
+  for (const { scope, label, r } of scopes) {
+    const style: Style = scope === app.changesScope ? { fg: 6, bg: surface, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
+    p.span(r.x, r.y, label, style);
+    p.region({ r, click: () => app.setChangesScope(scope), cursor: 'pointer' });
+  }
   let x = inner.x;
-  for (const mode of CHANGES_MODES) {
-    const r = rect(x, inner.y, MODE_LABELS[mode].length + 2, 1);
+  if (app.changesScope === 'every') p.span(inner.x + 1, inner.y + 1, 'uncommitted', DARK);
+  for (const mode of app.changesScope === 'project' ? CHANGES_MODES : []) {
+    const r = rect(x, inner.y + 1, MODE_LABELS[mode].length + 2, 1);
     const style: Style = mode === app.changesMode ? { fg: 6, bg: surface, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
     p.span(r.x, r.y, ` ${MODE_LABELS[mode]} `, style);
     p.region({ r, click: () => app.setChangesMode(mode), cursor: 'pointer' });
     x = right(r) + 1;
   }
-  const close = rect(right(inner) - 3, inner.y, 3, 1);
   p.span(close.x + 1, close.y, '×', p.hovered(close) ? { fg: 1, add: BOLD } : DARK);
   p.region({ r: close, click: () => app.toggleChanges(), cursor: 'pointer' });
-  const button = rect(close.x - 3, inner.y, 3, 1);
   p.span(button.x + 1, button.y, '⌕', filter || p.hovered(button) ? { fg: 6 } : DARK);
   p.region({ r: button, click: () => app.openChangesFilter(), cursor: 'pointer' });
-  if (filter) filterField(p, rect(inner.x, inner.y + 1, inner.w, 1), filter, surface);
+  if (filter) filterField(p, rect(inner.x, inner.y + 2, inner.w, 1), filter, surface);
 
-  const sy = inner.y + (filter ? 2 : 1);
+  const sy = inner.y + (filter ? 3 : 2);
   let selector = rect(0, 0, 0, 0);
-  if (app.changesMode !== 'uncommitted') {
+  if (app.changesScope === 'project' && app.changesMode !== 'uncommitted') {
     const label = ` vs ${app.changesBase} ▾ `;
     selector = rect(right(inner) - [...label].length, sy, [...label].length, 1);
     p.span(selector.x, sy, label, p.hovered(selector) ? { fg: 6 } : { fg: 7 });
@@ -379,21 +438,37 @@ export function drawChanges(p: Painter, areas: Areas): void {
     p.span(lx, sy, ' live', DARK);
   }
 
-  const top = filter ? 4 : 3;
+  const top = filter ? 5 : 4;
   const body = rect(area.x, area.y + top, area.w, Math.max(0, area.h - top - 2));
-  const list = rows(app, files, kept);
+  const groups = app.changesScope === 'every' ? headers(files) : [];
+  const list = rows(app, files, kept, groups);
   const max = Math.max(0, list.length - body.h);
   const first = Math.min(app.changesScroll, max);
   p.region({ r: body, wheel: (dy) => app.scrollChanges(dy, max) });
   if (!files.length) {
-    const text = app.changesMode === 'uncommitted' ? 'no changes' : app.changesMode === 'commits' ? `no commits since ${app.changesBase}` : `nothing changed since ${app.changesBase}`;
+    const text = app.changesScope === 'every' ? 'no changes in any project' : app.changesMode === 'uncommitted' ? 'no changes' : app.changesMode === 'commits' ? `no commits since ${app.changesBase}` : `nothing changed since ${app.changesBase}`;
     p.span(body.x + 1, body.y, text, DARK);
   } else if (kept && !kept.size) p.span(body.x + 1, body.y, 'no file matches', DARK);
   const shown = list.slice(first, first + body.h).map((row, k) => ({ row, r: rect(body.x, body.y + k, body.w, 1) }));
   const hot = shown.find(({ r }) => p.hovered(r))?.row;
   const hotHunk = hot && (hot.kind === 'hunk' || hot.kind === 'line') ? `${hot.i}:${hot.h}` : null;
   for (const { row, r } of shown) {
-    if (row.kind === 'file') fileRow(p, files[row.i], r, surface);
+    if (row.kind === 'header') {
+      const header = groups[row.i];
+      const selected = files.slice(header.start, header.end);
+      const added = selected.reduce((n, f) => n + f.added, 0);
+      const removed = selected.reduce((n, f) => n + f.removed, 0);
+      const counts = `${selected.length} ${selected.length === 1 ? 'file' : 'files'}`;
+      const totals = ` +${added} −${removed}`;
+      const end = right(r) - counts.length - totals.length - 2;
+      p.g.fill(r, { bg: surface });
+      let x = p.span(r.x + (header.workspace ? 3 : 1), r.y, app.changesHeaders.has(header.id) ? '▸ ' : '▾ ', DARK);
+      p.span(x, r.y, truncateRight(header.label, Math.max(0, end - x)), { fg: p.hovered(r) ? 6 : 15, add: BOLD });
+      x = p.span(end + 1, r.y, counts, DARK);
+      x = p.span(x + 1, r.y, `+${added}`, { fg: 2 });
+      p.span(x + 1, r.y, `−${removed}`, { fg: 1 });
+      p.region({ r, click: () => app.toggleChangesHeader(header.id), cursor: 'pointer' });
+    } else if (row.kind === 'file') fileRow(p, files[row.i], r, surface);
     else if (row.kind === 'gap') {
       const digits = numberWidth(files[row.i]);
       p.span(r.x + 3 + digits * 2, r.y, '↕', { fg: 6 });
@@ -438,6 +513,7 @@ function numberWidth(f: FileDiff): number {
 
 function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   const app = p.app;
+  const indent = app.changesScope === 'every' ? 2 : 0;
   const open = !app.changesFolded(f);
   const viewed = app.changesViewed(f);
   const muted = viewed || !!f.change.lockfile;
@@ -445,9 +521,9 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
     p.g.fill(r, { bg: surface });
     p.span(r.x + 1, r.y, '▌', { fg: 6 });
   }
-  p.span(r.x + 2, r.y, open ? '▾' : '▸', DARK);
+  p.span(r.x + 2 + indent, r.y, open ? '▾' : '▸', DARK);
   const colour = f.change.status === 'M' ? 3 : f.change.status === 'A' ? 2 : 1;
-  p.span(r.x + 4, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
+  p.span(r.x + 4 + indent, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
   const check = rect(right(r) - 3, r.y, 3, 1);
   if (viewed || p.hovered(r)) p.span(check.x + 1, r.y, '✓', viewed || p.hovered(check) ? { fg: 2 } : DARK);
   const tag = f.change.lockfile ? 'lockfile' : f.change.untracked ? 'new' : '';
@@ -458,9 +534,9 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   let x = check.x - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
   const pathEnd = x - 1;
   for (const [t, s] of parts) x = p.span(x, r.y, t, s) + 1;
-  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6)));
+  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
   const cut = path.lastIndexOf('/') + 1;
-  const px = p.span(r.x + 6, r.y, path.slice(0, cut), DARK);
+  const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: 15, add: BOLD });
   p.region({ r: rect(r.x, r.y, r.w - 3, 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });

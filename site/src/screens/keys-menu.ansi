@@ -1,7 +1,7 @@
  [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m web-shop ❯ git log --oneline --graph                                         
-                               [38;5;239m│[39m * [38;5;3m53ad96e ([1m[38;5;6mHEAD[0m[38;5;3m -> [1m[38;5;2mmain[0m[38;5;3m, [1m[38;5;2mfeat/gift-cards[0m[38;5;3m, [1m[38;5;2mfeat/dark-mode[0m[38;5;3m)[39m Release 0.5.0      
-[1m[38;5;8m Projects[0m                      [38;5;239m│[39m * [38;5;3ma02e4c6[39m Explain how to run it                                              
-                               [38;5;239m│[39m * [38;5;3m34ec108[39m Start the returns service                                          
+                               [38;5;239m│[39m * [38;5;3m7e125d8 ([1m[38;5;6mHEAD[0m[38;5;3m -> [1m[38;5;2mmain[0m[38;5;3m, [1m[38;5;2mfeat/gift-cards[0m[38;5;3m, [1m[38;5;2mfeat/dark-mode[0m[38;5;3m)[39m Release 0.5.0      
+[1m[38;5;8m Projects[0m                      [38;5;239m│[39m * [38;5;3m0e41f29[39m Explain how to run it                                              
+                               [38;5;239m│[39m * [38;5;3m6501897[39m Start the returns service                                          
 [38;5;6m  [38;5;8m▾ [1m[38;5;12m● work[0m                     [38;5;239m│[39m web-shop ❯                                                                   
 [38;5;6m[48;5;236m▌ [39m  [1m[38;5;15mweb-shop[0m[38;5;8m[48;5;236m (3)[39m               [38;5;239m[49m│[39m                                                                              
 [38;5;6m  [39m  [38;5;7morders-api[38;5;8m (2)[39m      [1m[38;5;208m![0m      [38;5;239m│[39m                                                                              

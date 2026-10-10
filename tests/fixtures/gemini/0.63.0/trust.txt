@@ -1,0 +1,5 @@
+Do you trust the files in this folder?
+Trusting a folder allows Gemini CLI to load its local configurations, including custom commands, hooks, MCP servers, agent skills, and settings.
+● 1. Trust folder (project)
+  2. Trust parent folder (projects)
+  3. Don't trust

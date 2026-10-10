@@ -1,8 +1,9 @@
 pub mod diff;
 pub mod filter;
 pub mod git;
+mod summary;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -18,8 +19,8 @@ use crate::picker::Cursor;
 const OPEN_EVERY: Duration = Duration::from_secs(1);
 const CLOSED_EVERY: Duration = Duration::from_secs(3);
 const LIVE_FOR: Duration = Duration::from_secs(5);
-const AUTO_FOLD_LINES: usize = 500;
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
+const AUTO_FOLD_LINES: usize = 500;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -40,6 +41,14 @@ impl Mode {
             Self::All => "All",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Scope {
+    #[default]
+    Project,
+    Every,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,10 +90,16 @@ pub struct Panel {
     pub open: bool,
     pub watched: bool,
     pub mode: Mode,
+    pub scope: Scope,
     pub scroll: usize,
     pub workspace: Option<u64>,
     pub filter: Option<filter::Filter>,
     models: HashMap<u64, Model>,
+    summaries: HashMap<u64, Model>,
+    every_folded: HashMap<FileKey, bool>,
+    pub headers: HashSet<u64>,
+    next: usize,
+    summary_requested: HashMap<u64, Instant>,
     folded: HashMap<FileKey, bool>,
     viewed: HashMap<FileKey, u64>,
     gaps: HashMap<(FileKey, u64, usize), Arc<Vec<GapLine>>>,
@@ -109,7 +124,7 @@ impl Panel {
     }
 
     pub fn request(&mut self, target: &Checkout, now: Instant) -> Option<(u64, git::Request)> {
-        if self.loading.is_some_and(|(_, _, at)| now.duration_since(at) < GIVE_UP_AFTER) {
+        if self.busy(now) {
             return None;
         }
         let every = if self.open || self.watched { OPEN_EVERY } else { CLOSED_EVERY };
@@ -124,6 +139,7 @@ impl Panel {
             base: target.base.clone(),
             last: current.and_then(|m| m.digest),
             previous: current.and_then(Model::diff).map(|d| d.files.clone()).unwrap_or_default(),
+            expanded: None,
         };
         self.generation += 1;
         self.loading = Some((target.workspace, self.generation, now));
@@ -135,11 +151,16 @@ impl Panel {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
         }
+        let models = if request.expanded.is_some() { &mut self.summaries } else { &mut self.models };
+        let requested = if request.expanded.is_some() { &self.summary_requested } else { &self.requested };
+        if !requested.contains_key(&workspace) && !models.contains_key(&workspace) {
+            return;
+        }
         let now = Instant::now();
         let model = match result {
             Ok(git::Loaded { diff: None, base, digest }) => {
                 if let Some(model) =
-                    self.models.get_mut(&workspace).filter(|m| m.mode == request.mode && m.base == request.base)
+                    models.get_mut(&workspace).filter(|m| m.mode == request.mode && m.base == request.base)
                 {
                     model.at = now;
                     model.label = base;
@@ -164,7 +185,83 @@ impl Panel {
                 at: now,
             },
         };
-        self.models.insert(workspace, model);
+        models.insert(workspace, model);
+    }
+
+    pub fn summary(&self, workspace: u64) -> Option<&Model> {
+        self.summaries.get(&workspace)
+    }
+
+    pub fn set_scope(&mut self, scope: Scope) {
+        if self.scope != scope {
+            self.scope = scope;
+            self.scroll = 0;
+        }
+    }
+
+    pub fn request_every(&mut self, targets: &[(Checkout, bool)], now: Instant) -> Option<(u64, u64, git::Request)> {
+        if self.busy(now) || targets.is_empty() {
+            return None;
+        }
+        for offset in 0..targets.len() {
+            let index = (self.next + offset) % targets.len();
+            let (target, hidden) = &targets[index];
+            let workspace = target.workspace;
+            if self.summary_requested.get(&workspace).is_some_and(|at| now.duration_since(*at) < CLOSED_EVERY) {
+                continue;
+            }
+            let current = self.summary(workspace);
+            let previous = current.and_then(Model::diff).map(|d| d.files.clone()).unwrap_or_default();
+            let query = filter::Query::parse(self.filter.as_ref().map_or("", |f| f.query()));
+            let expanded = previous
+                .iter()
+                .filter(|file| !hidden && !self.folded(workspace, &Diff::default(), file) && query.keeps(file))
+                .map(|file| file.path.clone())
+                .collect();
+            let request = git::Request {
+                dir: target.dir.clone(),
+                mode: Mode::Uncommitted,
+                base: None,
+                last: current.and_then(|m| m.digest),
+                previous,
+                expanded: Some(expanded),
+            };
+            self.generation += 1;
+            self.loading = Some((workspace, self.generation, now));
+            self.summary_requested.insert(workspace, now);
+            self.next = (index + 1) % targets.len();
+            return Some((workspace, self.generation, request));
+        }
+        None
+    }
+
+    pub fn invalidate_summary(&mut self, workspace: u64) {
+        self.summary_requested.remove(&workspace);
+    }
+
+    fn busy(&self, now: Instant) -> bool {
+        self.loading.is_some_and(|(_, _, at)| now.duration_since(at) < GIVE_UP_AFTER)
+    }
+
+    pub fn forget(&mut self, workspace: u64) {
+        self.models.remove(&workspace);
+        self.summaries.remove(&workspace);
+        self.requested.remove(&workspace);
+        self.summary_requested.remove(&workspace);
+        self.folded.retain(|k, _| k.workspace != workspace);
+        self.every_folded.retain(|k, _| k.workspace != workspace);
+        self.viewed.retain(|k, _| k.workspace != workspace);
+        self.gaps.retain(|(k, _, _), _| k.workspace != workspace);
+        self.headers.remove(&workspace);
+        if self.workspace == Some(workspace) {
+            self.workspace = None;
+        }
+    }
+
+    pub fn toggle_header(&mut self, id: u64) {
+        if !self.headers.remove(&id) {
+            self.headers.insert(id);
+        }
     }
 
     pub fn label(&self, workspace: u64) -> Option<String> {
@@ -179,34 +276,42 @@ impl Panel {
     }
 
     pub fn viewed(&self, workspace: u64, file: &File) -> bool {
-        self.viewed.get(&key(workspace, file)) == Some(&file.digest)
+        self.viewed.get(&key(workspace, file)) == Some(&file.viewed_digest)
     }
 
     pub fn toggle_viewed(&mut self, workspace: u64, file: &File) {
         let key = key(workspace, file);
-        if self.viewed.get(&key) == Some(&file.digest) {
+        if self.viewed.get(&key) == Some(&file.viewed_digest) {
             self.viewed.remove(&key);
         } else {
-            self.viewed.insert(key.clone(), file.digest);
+            self.viewed.insert(key.clone(), file.viewed_digest);
         }
         self.folded.remove(&key);
+        self.every_folded.remove(&key);
+        self.invalidate_summary(workspace);
     }
 
     fn auto_folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {
         let big = diff.files.iter().map(|f| f.lines()).sum::<usize>() > AUTO_FOLD_LINES;
-        file.fold != diff::Fold::Open || self.viewed(workspace, file) || big
+        let reviewed_change =
+            self.viewed.get(&key(workspace, file)).is_some_and(|digest| *digest != file.viewed_digest);
+        (self.scope == Scope::Every && !reviewed_change)
+            || file.fold != diff::Fold::Open
+            || self.viewed(workspace, file)
+            || big
     }
 
     pub fn folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {
         if !file.fold.shows_lines() {
             return true;
         }
-        self.folded.get(&key(workspace, file)).copied().unwrap_or_else(|| self.auto_folded(workspace, diff, file))
+        self.folds().get(&key(workspace, file)).copied().unwrap_or_else(|| self.auto_folded(workspace, diff, file))
     }
 
     pub fn toggle_fold(&mut self, workspace: u64, diff: &Diff, file: &File) {
         let folded = self.folded(workspace, diff, file);
-        self.folded.insert(key(workspace, file), !folded);
+        self.folds_mut().insert(key(workspace, file), !folded);
+        self.invalidate_summary(workspace);
     }
 
     pub fn close(&mut self) {
@@ -219,8 +324,21 @@ impl Panel {
     pub fn fold_all(&mut self, workspace: u64, diff: &Diff) {
         let fold = diff.files.iter().any(|f| !self.folded(workspace, diff, f));
         for file in &diff.files {
-            self.folded.insert(key(workspace, file), fold);
+            self.folds_mut().insert(key(workspace, file), fold);
         }
+    }
+
+    fn folds(&self) -> &HashMap<FileKey, bool> {
+        if self.scope == Scope::Every { &self.every_folded } else { &self.folded }
+    }
+
+    fn folds_mut(&mut self) -> &mut HashMap<FileKey, bool> {
+        if self.scope == Scope::Every { &mut self.every_folded } else { &mut self.folded }
+    }
+
+    pub fn set_fold(&mut self, workspace: u64, file: &File, folded: bool) {
+        self.folds_mut().insert(key(workspace, file), folded);
+        self.invalidate_summary(workspace);
     }
 
     pub fn gap(&self, workspace: u64, file: &File, hunk: usize) -> Option<&Arc<Vec<GapLine>>> {
@@ -410,6 +528,7 @@ mod tests {
             fold: Fold::Open,
             hunks: vec![Hunk { old_start: 1, new_start: 1, context: String::new(), lines }],
             digest,
+            viewed_digest: digest,
         }
     }
 
@@ -480,12 +599,29 @@ mod tests {
             assert!(panel.model(1, None).is_none());
         }
 
-        #[test]
-        fn a_job_that_never_answers_is_given_up() {
-            let mut panel = Panel::default();
+        #[rstest::rstest]
+        #[case::project(Scope::Project)]
+        #[case::every_project(Scope::Every)]
+        fn a_hung_job_gives_up_its_slot_after_thirty_seconds_and_its_late_answer_is_accepted(#[case] scope: Scope) {
+            let mut panel = Panel { scope, ..Panel::default() };
             let now = Instant::now();
-            panel.request(&target(1), now).expect("first");
-            assert!(panel.request(&target(1), now + GIVE_UP_AFTER).is_some());
+            let ask = |panel: &mut Panel, workspace, at| {
+                if scope == Scope::Every {
+                    panel.request_every(&[(target(workspace), false)], at).map(|(_, g, r)| (g, r))
+                } else {
+                    panel.request(&target(workspace), at)
+                }
+            };
+            let (generation, request) = ask(&mut panel, 1, now).expect("first");
+            let before = (now + GIVE_UP_AFTER).checked_sub(Duration::from_millis(1)).expect("before the timeout");
+            assert!(ask(&mut panel, 2, before).is_none());
+            let (second, next) = ask(&mut panel, 2, now + GIVE_UP_AFTER).expect("replacement");
+            panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+            let model = if scope == Scope::Every { panel.summary(1) } else { panel.model(1, None) };
+            assert!(model.is_some());
+            assert!(ask(&mut panel, 3, now + GIVE_UP_AFTER).is_none());
+            panel.loaded(2, second, &next, Ok(loaded(Some(Diff::default()), 2)));
+            assert!(ask(&mut panel, 3, now + GIVE_UP_AFTER).is_some());
         }
 
         #[test]
@@ -541,12 +677,124 @@ mod tests {
         }
 
         #[test]
+        fn viewed_changes_open_again_in_every_project() {
+            let d = diff(vec![file("a", 1, 3)]);
+            let mut panel = Panel { scope: Scope::Every, ..Panel::default() };
+            panel.toggle_viewed(1, &d.files[0]);
+            let changed = diff(vec![file("a", 2, 3)]);
+            assert!(panel.folded(1, &d, &d.files[0]));
+            assert!(!panel.folded(1, &changed, &changed.files[0]));
+            assert!(!panel.viewed(1, &changed.files[0]));
+        }
+
+        #[test]
         fn binary_files_never_open() {
             let d = diff(vec![File { fold: Fold::Binary, ..file("a", 1, 0) }]);
             let mut panel = Panel::default();
             panel.toggle_fold(1, &d, &d.files[0]);
             assert!(panel.folded(1, &d, &d.files[0]));
         }
+    }
+
+    mod every_project {
+        use super::*;
+
+        #[test]
+        fn summaries_take_turns_in_one_slot_and_wait_three_seconds() {
+            let mut panel = Panel { open: true, scope: Scope::Every, ..Panel::default() };
+            let targets = [(target(1), false), (target(2), false)];
+            let now = Instant::now();
+            let (ws, generation, request) = panel.request_every(&targets, now).expect("first");
+            assert_eq!((ws, request.expanded.as_deref()), (1, Some([].as_slice())));
+            assert!(panel.request_every(&targets, now + Duration::from_secs(10)).is_none());
+            assert!(panel.request(&target(1), now + Duration::from_secs(10)).is_none());
+            panel.loaded(ws, generation, &request, Ok(loaded(Some(diff(vec![file("a", 1, 1)])), 1)));
+            let (ws, generation, request) = panel.request_every(&targets, now).expect("second");
+            assert_eq!(ws, 2);
+            panel.loaded(ws, generation, &request, Ok(loaded(Some(Diff::default()), 2)));
+            assert!(panel.request_every(&targets, now + Duration::from_secs(2)).is_none());
+            assert_eq!(panel.request_every(&targets, now + CLOSED_EVERY).expect("round again").0, 1);
+        }
+
+        #[test]
+        fn unfolding_requests_a_patch_and_header_folding_stops_reading_it() {
+            let mut panel = Panel { open: true, scope: Scope::Every, ..Panel::default() };
+            let now = Instant::now();
+            let targets = [(target(1), false)];
+            let d = diff(vec![file("a", 1, 1)]);
+            let (ws, generation, request) = panel.request_every(&targets, now).expect("summary");
+            panel.loaded(ws, generation, &request, Ok(loaded(Some(d.clone()), 1)));
+            assert!(panel.folded(1, &d, &d.files[0]));
+            panel.toggle_fold(1, &d, &d.files[0]);
+            let (ws, generation, request) = panel.request_every(&targets, now).expect("patch");
+            assert_eq!(request.expanded.as_deref(), Some(["a".to_string()].as_slice()));
+            panel.loaded(ws, generation, &request, Ok(loaded(Some(d), 2)));
+            panel.invalidate_summary(1);
+            let (_, _, request) = panel.request_every(&[(target(1), true)], now).expect("hidden");
+            assert_eq!(request.expanded.expect("summary"), Vec::<String>::new());
+        }
+
+        #[test]
+        fn summary_answers_do_not_replace_the_project_model() {
+            let mut panel = Panel::default();
+            let now = Instant::now();
+            let (generation, request) = panel.request(&target(1), now).expect("project");
+            panel.loaded(1, generation, &request, Ok(loaded(Some(diff(vec![file("project", 1, 1)])), 1)));
+            panel.scope = Scope::Every;
+            let (ws, generation, request) = panel.request_every(&[(target(1), false)], now).expect("summary");
+            panel.loaded(ws, generation, &request, Ok(loaded(Some(diff(vec![file("every", 2, 1)])), 2)));
+            assert_eq!(panel.model(1, None).expect("project").diff().expect("diff").files[0].path, "project");
+            assert_eq!(panel.summary(1).expect("summary").diff().expect("diff").files[0].path, "every");
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::project(Scope::Project)]
+    #[case::every_project(Scope::Every)]
+    fn forgetting_a_workspace_releases_all_its_caches_and_ignores_an_in_flight_answer(#[case] scope: Scope) {
+        let mut panel = Panel::default();
+        let now = Instant::now();
+        for workspace in [1, 2] {
+            let d = diff(vec![file("a", workspace, 1)]);
+            panel.scope = Scope::Project;
+            let (generation, request) = panel.request(&target(workspace), now).expect("project");
+            panel.loaded(workspace, generation, &request, Ok(loaded(Some(d.clone()), workspace)));
+            panel.toggle_viewed(workspace, &d.files[0]);
+            panel.set_fold(workspace, &d.files[0], true);
+            panel.scope = Scope::Every;
+            panel.set_fold(workspace, &d.files[0], true);
+            panel.set_gap(workspace, &d.files[0], 1, Vec::new());
+            panel.headers.insert(workspace);
+            let (_, generation, request) = panel.request_every(&[(target(workspace), false)], now).expect("summary");
+            panel.loaded(workspace, generation, &request, Ok(loaded(Some(d), workspace)));
+        }
+        let (generation, request) = if scope == Scope::Every {
+            let (_, generation, request) =
+                panel.request_every(&[(target(1), false)], now + CLOSED_EVERY).expect("in flight");
+            (generation, request)
+        } else {
+            panel.request(&target(1), now + CLOSED_EVERY).expect("in flight")
+        };
+        panel.workspace = Some(1);
+        panel.forget(1);
+        assert_eq!(panel.workspace, None);
+        for keys in [
+            panel.models.keys().copied().collect::<Vec<_>>(),
+            panel.summaries.keys().copied().collect(),
+            panel.requested.keys().copied().collect(),
+            panel.summary_requested.keys().copied().collect(),
+        ] {
+            assert_eq!(keys, [2]);
+        }
+        for folds in [&panel.folded, &panel.every_folded] {
+            assert!(folds.keys().all(|k| k.workspace == 2));
+        }
+        assert!(panel.viewed.keys().all(|k| k.workspace == 2));
+        assert!(panel.gaps.keys().all(|(k, _, _)| k.workspace == 2));
+        assert_eq!(panel.headers, HashSet::from([2]));
+        panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 1)));
+        assert!(panel.model(1, None).is_none() && panel.summary(1).is_none());
+        assert!(panel.request(&target(2), now + CLOSED_EVERY).is_some());
     }
 
     #[test]

@@ -4,15 +4,16 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Account, Secret, Source, jira};
+use crate::issues::{Account, Secret, Source, jira, plane};
 use crate::notify;
 use crate::search::Search;
 use crate::shortcuts::Prefix;
 use crate::ui;
 
+const RESUME_NOTE: &str = "Claude Code, Codex and Gemini, in their tabs";
 pub const DONE: &str = "done";
 pub const RESTART: &str = "restart";
-const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
+const TAB_IDS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
 const EXTRA_ARGS: &str = "extra arguments…";
 const PREFIX_OFF: &str = "keyboard shortcuts are off";
 
@@ -40,11 +41,15 @@ pub enum Row {
     JiraSite,
     JiraEmail,
     JiraJql,
+    PlaneWorkspace,
+    PlaneUrl,
+    PlaneFilter,
     Tab(&'static str),
     DefaultAgent,
     Submit,
     Trust,
     Resume,
+    KeepAwake,
     Kind(String),
     AddAgent,
 }
@@ -64,9 +69,10 @@ impl Row {
             | Self::Updates
             | Self::Prefix => "",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
+            Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
-            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume => "Agent",
+            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
         }
     }
@@ -74,10 +80,21 @@ impl Row {
     pub fn page(&self) -> Page {
         match self {
             Self::Folder | Self::Fetch => Page::Worktrees,
-            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::Kind(_) | Self::AddAgent => {
-                Page::Agents
-            }
-            Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
+            Self::DefaultAgent
+            | Self::Submit
+            | Self::Trust
+            | Self::Resume
+            | Self::KeepAwake
+            | Self::Kind(_)
+            | Self::AddAgent => Page::Agents,
+            Self::Token(_)
+            | Self::JiraSite
+            | Self::JiraEmail
+            | Self::JiraJql
+            | Self::PlaneWorkspace
+            | Self::PlaneUrl
+            | Self::PlaneFilter
+            | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
             | Self::AgentsSection
@@ -219,6 +236,7 @@ pub struct Settings {
     pub checking: Vec<Source>,
     pub notice: Option<String>,
     pub capturing: bool,
+    pub awake: String,
 }
 
 impl Settings {
@@ -235,6 +253,7 @@ impl Settings {
             checking: Vec::new(),
             notice: None,
             capturing: false,
+            awake: String::new(),
         }
     }
 
@@ -274,14 +293,16 @@ impl Settings {
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch];
         for (source, _) in &self.tokens {
-            if *source == Source::Jira {
-                rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]);
-            } else {
-                rows.push(Row::Token(*source));
+            match source {
+                Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),
+                Source::Plane => {
+                    rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
+                }
+                _ => rows.push(Row::Token(*source)),
             }
         }
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
-        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume]);
+        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
@@ -361,6 +382,9 @@ impl Settings {
             Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
             Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
             Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),
+            Row::PlaneWorkspace => self.start_edit(row, self.config.plane_workspace.clone()),
+            Row::PlaneUrl => self.start_edit(row, self.config.plane_url.clone()),
+            Row::PlaneFilter => self.start_edit(row, self.config.plane_filter.clone()),
             Row::Tab(id) => self.toggle_tab(id),
             Row::DefaultAgent => {
                 let auto = PickItem {
@@ -412,24 +436,11 @@ impl Settings {
                 |c| &mut c.resume_agents,
                 ["conversations resume after a restart", "agents no longer resume after a restart"],
             ),
-            Row::Kind(kind) => {
-                let modes = agents::modes(&self.config, &kind);
-                if modes.is_empty() {
-                    self.edit_extra(&kind);
-                    return Action::None;
-                }
-                let mut items =
-                    vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
-                items.extend(modes.iter().map(|(name, args)| PickItem {
-                    value: name.clone(),
-                    note: agents::join_args(args),
-                    dangerous: agents::is_dangerous(name),
-                }));
-                let extra = agents::extra_args(&agents::args(&self.config, &kind), &modes);
-                items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
-                self.open_pick(Row::Kind(kind), items);
-                Action::None
-            }
+            Row::KeepAwake => self.flip(
+                |c| &mut c.keep_awake,
+                ["the computer stays awake while an agent works", "the computer sleeps as usual"],
+            ),
+            Row::Kind(kind) => self.pick_mode(kind),
             Row::AddAgent => {
                 let listed = self.listed_kinds();
                 let items: Vec<PickItem> = agents::kinds(&self.config)
@@ -447,6 +458,24 @@ impl Settings {
         }
     }
 
+    fn pick_mode(&mut self, kind: String) -> Action {
+        let modes = agents::modes(&self.config, &kind);
+        if modes.is_empty() {
+            self.edit_extra(&kind);
+            return Action::None;
+        }
+        let mut items = vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
+        items.extend(modes.iter().map(|(name, args)| PickItem {
+            value: name.clone(),
+            note: agents::join_args(args),
+            dangerous: agents::is_dangerous(name),
+        }));
+        let extra = agents::extra_args(&kind, &agents::args(&self.config, &kind), &modes);
+        items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
+        self.open_pick(Row::Kind(kind), items);
+        Action::None
+    }
+
     fn start_edit(&mut self, row: Row, input: String) -> Action {
         self.edit = Some(Edit { row, input, error: None });
         Action::None
@@ -454,7 +483,7 @@ impl Settings {
 
     fn edit_extra(&mut self, kind: &str) {
         let modes = agents::modes(&self.config, kind);
-        let extra = agents::extra_args(&agents::args(&self.config, kind), &modes);
+        let extra = agents::extra_args(kind, &agents::args(&self.config, kind), &modes);
         self.start_edit(Row::Kind(kind.into()), agents::join_args(&extra));
     }
 
@@ -474,7 +503,7 @@ impl Settings {
             Row::Tabs => Some(ui::Tabs::from_setting(&self.config.tabs).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
             Row::Kind(kind) => Some(
-                agents::mode_of(&agents::args(&self.config, kind), &agents::modes(&self.config, kind))
+                agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
                     .unwrap_or_else(|| "default".into()),
             ),
             _ => None,
@@ -523,7 +552,7 @@ impl Settings {
             Row::Kind(kind) => {
                 let modes = agents::modes(&self.config, &kind);
                 let mode = (value != "default").then_some(value.as_str());
-                let args = agents::with_mode(&agents::args(&self.config, &kind), &modes, mode);
+                let args = agents::with_mode(&kind, &agents::args(&self.config, &kind), &modes, mode);
                 let notice = starts_with(&kind, &args);
                 self.save(with_args(&self.config, &kind, args), notice)
             }
@@ -536,6 +565,39 @@ impl Settings {
             }
             _ => Action::None,
         }
+    }
+
+    fn submit_checked(
+        &mut self,
+        check: fn(&str) -> Result<String, &'static str>,
+        apply: impl FnOnce(&Config, String) -> (Config, String),
+    ) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        let input = edit.input.trim();
+        let checked = if input.is_empty() { Ok(String::new()) } else { check(input) };
+        match checked {
+            Ok(value) => {
+                self.edit = None;
+                let (config, notice) = apply(&self.config, value);
+                self.save(config, notice)
+            }
+            Err(message) => {
+                edit.error = Some(message.into());
+                Action::None
+            }
+        }
+    }
+
+    fn submit_filter(&mut self, tracker: &str, item: &str, apply: impl FnOnce(&Config, String) -> Config) -> Action {
+        let Some(edit) = self.edit.take() else { return Action::None };
+        let filter = edit.input.trim().to_string();
+        let notice = if filter.is_empty() {
+            format!("{tracker} lists every {item} you can see")
+        } else {
+            format!("{tracker} lists only: {filter}")
+        };
+        let config = apply(&self.config, filter);
+        self.save(config, notice)
     }
 
     fn submit_edit(&mut self) -> Action {
@@ -571,6 +633,10 @@ impl Settings {
                 edit.error = Some("set the Jira site and email first".into());
                 Action::None
             }
+            Row::Token(Source::Plane) if self.config.plane_workspace.is_empty() => {
+                edit.error = Some("set the Plane workspace first".into());
+                Action::None
+            }
             Row::Token(source) => {
                 let token = edit.input.trim().to_string();
                 if token.is_empty() {
@@ -581,51 +647,42 @@ impl Settings {
                 self.checking.push(source);
                 Action::CheckToken(source, Secret(token))
             }
-            Row::JiraSite | Row::JiraEmail => {
-                let site = edit.row == Row::JiraSite;
-                let input = edit.input.trim();
-                let checked = match (input.is_empty(), site) {
-                    (true, _) => Ok(String::new()),
-                    (false, true) => jira::check_site(input),
-                    (false, false) => jira::check_email(input),
-                };
-                match checked {
-                    Ok(value) => {
-                        self.edit = None;
-                        let name = if site { "site" } else { "email" };
-                        let notice = if value.is_empty() {
-                            format!("the Jira {name} was cleared")
-                        } else {
-                            format!("Jira {name}: {value}")
-                        };
-                        let config = if site {
-                            Config { jira_site: value, ..self.config.clone() }
-                        } else {
-                            Config { jira_email: value, ..self.config.clone() }
-                        };
-                        self.save(config, notice)
-                    }
-                    Err(message) => {
-                        edit.error = Some(message.into());
-                        Action::None
-                    }
-                }
-            }
-            Row::JiraJql => {
-                let jira_jql = edit.input.trim().to_string();
-                self.edit = None;
-                let notice = if jira_jql.is_empty() {
-                    "Jira lists every issue you can see".to_string()
+            Row::JiraSite => self.submit_checked(jira::check_site, |config, value| {
+                let notice =
+                    if value.is_empty() { "the Jira site was cleared".into() } else { format!("Jira site: {value}") };
+                (Config { jira_site: value, ..config.clone() }, notice)
+            }),
+            Row::JiraEmail => self.submit_checked(jira::check_email, |config, value| {
+                let notice =
+                    if value.is_empty() { "the Jira email was cleared".into() } else { format!("Jira email: {value}") };
+                (Config { jira_email: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneWorkspace => self.submit_checked(plane::check_workspace, |config, value| {
+                let notice = if value.is_empty() {
+                    "the Plane workspace was cleared".into()
                 } else {
-                    format!("Jira lists only: {jira_jql}")
+                    format!("Plane workspace: {value}")
                 };
-                self.save(Config { jira_jql, ..self.config.clone() }, notice)
+                (Config { plane_workspace: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneUrl => self.submit_checked(plane::check_url, |config, value| {
+                let notice = if value.is_empty() {
+                    "Plane is the cloud at app.plane.so".into()
+                } else {
+                    format!("Plane server: {value}")
+                };
+                (Config { plane_url: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneFilter => self
+                .submit_filter("Plane", "work item", |config, plane_filter| Config { plane_filter, ..config.clone() }),
+            Row::JiraJql => {
+                self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }
             Row::Kind(kind) => {
                 let extra = agents::split_args(&edit.input);
                 self.edit = None;
                 let modes = agents::modes(&self.config, &kind);
-                let args = agents::with_extra(&agents::args(&self.config, &kind), &modes, extra);
+                let args = agents::with_extra(&kind, &agents::args(&self.config, &kind), &modes, extra);
                 let notice = starts_with(&kind, &args);
                 self.save(with_args(&self.config, &kind, args), notice)
             }
@@ -808,6 +865,11 @@ impl Settings {
         }
     }
 
+    fn keep_awake_row(&self) -> (String, String, String, bool) {
+        let value = if self.config.keep_awake { "[x] while an agent works" } else { "[ ] never" };
+        ("keep awake".into(), value.into(), self.awake.clone(), false)
+    }
+
     fn row_view(&self, row: &Row) -> ui::SettingsRow {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
@@ -835,18 +897,8 @@ impl Settings {
                 (label, value, note, false)
             }
             Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
-            Row::Tab(id) => {
-                let on = self.shown_tabs().contains(id);
-                let name = match *id {
-                    "all" => "All",
-                    "github" => "GitHub",
-                    "shortcut" => "Shortcut",
-                    "linear" => "Linear",
-                    _ => "Jira",
-                };
-                let note = if *id == "all" { "every source together".into() } else { String::new() };
-                (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
-            }
+            Row::PlaneWorkspace | Row::PlaneUrl | Row::PlaneFilter => plane_row(config, row),
+            Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
                     "the agent in your tab, otherwise ask".into()
@@ -892,8 +944,9 @@ impl Settings {
             }
             Row::Resume => {
                 let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
-                ("resume conversations".into(), value.into(), "Claude Code and Codex, in their tabs".into(), false)
+                ("resume conversations".into(), value.into(), RESUME_NOTE.into(), false)
             }
+            Row::KeepAwake => self.keep_awake_row(),
             Row::Prefix => self.prefix_row(),
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
@@ -907,6 +960,20 @@ impl Settings {
             removable: false,
             movable: matches!(row, Row::Tab(_)),
         }
+    }
+
+    fn tab_row(&self, id: &str) -> (String, String, String, bool) {
+        let on = self.shown_tabs().contains(&id);
+        let name = match id {
+            "all" => "All",
+            "github" => "GitHub",
+            "shortcut" => "Shortcut",
+            "linear" => "Linear",
+            "jira" => "Jira",
+            _ => "Plane",
+        };
+        let note = if id == "all" { "every source together".into() } else { String::new() };
+        (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
     }
 
     fn prefix_row(&self) -> (String, String, String, bool) {
@@ -937,6 +1004,9 @@ impl Settings {
                 Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
                 Row::JiraEmail => "Jira email".to_string(),
                 Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
+                Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
+                Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
+                Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 _ => String::new(),
             };
@@ -1024,11 +1094,21 @@ fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     (label.into(), value, note.into(), false)
 }
 
+fn plane_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let (label, value, empty, note) = match row {
+        Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
+        Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
+        _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
+    };
+    let value = if value.is_empty() { empty.to_string() } else { value.clone() };
+    (label.into(), value, note.into(), false)
+}
+
 fn kind_row(config: &Config, kind: &str) -> (String, String, String, bool) {
     let args = agents::args(config, kind);
     let modes = agents::modes(config, kind);
-    let mode = agents::mode_of(&args, &modes);
-    let extra = agents::extra_args(&args, &modes);
+    let mode = agents::mode_of(kind, &args, &modes);
+    let extra = agents::extra_args(kind, &args, &modes);
     let mut value = mode.clone().unwrap_or_else(|| "default".into());
     if !extra.is_empty() {
         value = format!("{value} + {}", agents::join_args(&extra));
@@ -1324,6 +1404,100 @@ mod tests {
             }
         }
 
+        mod plane {
+            use super::*;
+
+            fn with_plane() -> Settings {
+                let mut s = settings();
+                s.tokens.push((Source::Plane, Status::Missing));
+                s
+            }
+
+            fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
+                go_to(s, row);
+                press(s, KeyCode::Enter);
+                s.edit.iter_mut().for_each(|e| e.input.clear());
+                type_text(s, text);
+                press(s, KeyCode::Enter)
+            }
+
+            #[test]
+            fn has_its_own_section_after_the_accounts() {
+                let mut s = with_plane();
+                s.open_page(Page::Issues);
+                let rows: Vec<(&str, Row)> = s.rows().into_iter().map(|r| (r.section(), r)).take(6).collect();
+                assert_eq!(
+                    rows,
+                    [
+                        ("Accounts", Row::Token(Source::Shortcut)),
+                        ("Accounts", Row::Token(Source::Linear)),
+                        ("Plane", Row::PlaneWorkspace),
+                        ("Plane", Row::PlaneUrl),
+                        ("Plane", Row::Token(Source::Plane)),
+                        ("Plane", Row::PlaneFilter)
+                    ]
+                );
+            }
+
+            #[test]
+            fn the_workspace_is_saved_as_a_slug() {
+                let mut s = with_plane();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneWorkspace, " /Acme/ ")).plane_workspace, "acme");
+            }
+
+            #[test]
+            fn a_bad_workspace_stays_in_the_field() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::PlaneWorkspace, "acme corp"), Action::None);
+                let error = s.edit.and_then(|e| e.error);
+                let expected = "a workspace is lowercase letters, numbers and dashes, such as acme";
+                assert_eq!(error.as_deref(), Some(expected));
+            }
+
+            #[test]
+            fn the_url_is_saved_without_its_trailing_slash() {
+                let mut s = with_plane();
+                let config = saved(edit(&mut s, &Row::PlaneUrl, "https://plane.acme.dev/"));
+                assert_eq!(config.plane_url, "https://plane.acme.dev");
+            }
+
+            #[test]
+            fn a_bad_url_stays_in_the_field() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::PlaneUrl, "plane.acme.dev"), Action::None);
+                let error = s.edit.and_then(|e| e.error);
+                assert_eq!(error.as_deref(), Some("a URL starts with https://, such as https://plane.acme.dev"));
+            }
+
+            #[test]
+            fn an_empty_url_goes_back_to_plane_cloud() {
+                let mut s = with_plane();
+                s.config.plane_url = "https://plane.acme.dev".into();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneUrl, "")).plane_url, "");
+            }
+
+            #[test]
+            fn the_filter_is_saved_as_typed() {
+                let mut s = with_plane();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneFilter, " priority=high ")).plane_filter, "priority=high");
+            }
+
+            #[test]
+            fn the_key_needs_the_workspace_first() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::Token(Source::Plane), "k3y"), Action::None);
+                assert_eq!(s.edit.and_then(|e| e.error).as_deref(), Some("set the Plane workspace first"));
+            }
+
+            #[test]
+            fn the_key_is_checked_once_the_workspace_is_set() {
+                let mut s = with_plane();
+                s.config.plane_workspace = "acme".into();
+                let action = edit(&mut s, &Row::Token(Source::Plane), "k3y");
+                assert_eq!(action, Action::CheckToken(Source::Plane, Secret("k3y".into())));
+            }
+        }
+
         #[test]
         fn are_never_shown() {
             let mut s = settings();
@@ -1342,7 +1516,7 @@ mod tests {
         fn enter_hides_a_tab() {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("shortcut"));
-            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira"]);
+            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira", "plane"]);
         }
 
         #[test]
@@ -1366,7 +1540,7 @@ mod tests {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("linear"));
             let config = saved(key(&mut s, KeyCode::Up, KeyModifiers::SHIFT));
-            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira"]);
+            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira", "plane"]);
             assert_eq!(s.row(), Some(Row::Tab("linear")));
         }
     }
@@ -1391,6 +1565,18 @@ mod tests {
             let before = s.config.agents_section;
             go_to(&mut s, &Row::AgentsSection);
             assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).agents_section), (false, true));
+        }
+    }
+
+    mod keep_awake {
+        use super::*;
+
+        #[test]
+        fn is_a_switch_that_starts_off() {
+            let mut s = settings();
+            let before = s.config.keep_awake;
+            go_to(&mut s, &Row::KeepAwake);
+            assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).keep_awake), (false, true));
         }
     }
 

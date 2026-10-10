@@ -1,0 +1,28 @@
+---
+source: src/ui/changes.rs
+expression: terminal.backend()
+---
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"  shop › issue-482   Every project                                        ⌕  ×  "
+"  Uncommitted   Commits   All                                                   "
+" 3 files  +7 −3  ▃▃▃▃▃▃▃▃                                                ● live "
+"                                                                                "
+" ▌▾ M src/returns.rs                                                   +5 −2    "
+" ┄┄ impl Address ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ "
+"   9   9   /// The first line, when the address has one.                        "
+"  10     ▎ pub fn street(parts: &[String]) -> &str {                            "
+"  11     ▎     parts.first().unwrap()                                           "
+"      10 ▎ pub fn street(parts: &[String]) -> Option<&str> {                    "
+"      11 ▎     parts.first().map(String::as_str)                                "
+"  12  12   }                                                                    "
+"         ↕ 31 unchanged lines                                                   "
+" ┄┄ mod tests ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ "
+"  44  44       }                                                                "
+"      45 ▎                                                                      "
+"      46 ▎     #[test]                                                          "
+"      47 ▎     fn empty_address_is_rejected() {}                                "
+"  45  48   }                                                                    "
+" ────────────────────────────────────────────────────────────────────────────── "
+"  fold all                                                        0 of 3 viewed "

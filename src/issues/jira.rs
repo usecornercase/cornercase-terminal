@@ -2,7 +2,7 @@ pub mod adf;
 
 use serde_json::Value;
 
-use super::http::{self, Answer, Service, text};
+use super::http::{self, Answer, Service, path_segment, text};
 use super::{
     Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body, parse_time,
 };
@@ -36,13 +36,7 @@ impl Api {
         let auth = format!("Basic {}", clipboard::base64(login.as_bytes()));
         let url = format!("{}{path}", self.base.trim_end_matches('/'));
         let answer = http::get(&SERVICE, &url, query, &[("Authorization", &auth)])?;
-        if answer.status == 404 {
-            return Err(Error::Api(missing.into()));
-        }
-        if !answer.ok() {
-            return Err(failure(&answer));
-        }
-        Ok(answer.json)
+        http::into_json(answer, missing, failure)
     }
 
     pub fn whoami(&self) -> Result<Account> {
@@ -246,24 +240,12 @@ fn quoted(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn path_segment(key: &str) -> String {
-    key.bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
-                char::from(b).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::test_util::FakeHttp;
+    use crate::test_util::{FakeHttp, decoded};
 
     const MYSELF: &str = r#"{"accountId":"me-1","displayName":"Ana Pérez","emailAddress":"ana@acme.dev"}"#;
     const NODE: &str = r#"{"key":"SHOP-482","fields":{"summary":"Returns page crashes",
@@ -296,29 +278,6 @@ mod tests {
         let server = FakeHttp::start(routes);
         let listed = api(&server, jql).list(query).expect("list");
         (listed, server)
-    }
-
-    fn decoded(request: &str) -> String {
-        let line = request.lines().next().unwrap_or_default().replace('+', " ");
-        let mut out = Vec::new();
-        let bytes = line.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            match (
-                bytes[i],
-                bytes.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(&String::from_utf8_lossy(h), 16).ok()),
-            ) {
-                (b'%', Some(byte)) => {
-                    out.push(byte);
-                    i += 3;
-                }
-                (byte, _) => {
-                    out.push(byte);
-                    i += 1;
-                }
-            }
-        }
-        String::from_utf8_lossy(&out).into_owned()
     }
 
     #[test]
@@ -527,10 +486,5 @@ mod tests {
     #[case::no_domain("ana@", Err("type the email of your Atlassian account"))]
     fn an_email_needs_an_at(#[case] input: &str, #[case] expected: std::result::Result<&str, &str>) {
         assert_eq!(check_email(input), expected.map(String::from));
-    }
-
-    #[test]
-    fn a_key_cannot_leave_its_path_segment() {
-        assert_eq!(path_segment("../x?y"), "..%2Fx%3Fy");
     }
 }

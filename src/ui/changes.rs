@@ -9,11 +9,11 @@ use ratatui::style::{Color, Modifier, Style};
 
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::diff::{Diff, File, Kind, Line, Segments, Status};
-use crate::changes::{GapLine, Mode, Tints};
+use crate::changes::{GapLine, Mode, Scope, Tints};
 
 pub const DEFAULT_WIDTH: u16 = 64;
 pub const MIN_WIDTH: u16 = 36;
-const HEADER_ROWS: u16 = 3;
+const HEADER_ROWS: u16 = 4;
 const FOOTER_ROWS: u16 = 2;
 const BAR_CELLS: usize = 8;
 const VIEWED_WIDTH: u16 = 3;
@@ -53,6 +53,10 @@ pub enum Body {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct View {
+    pub scope: Scope,
+    pub project: String,
+    pub owners: Vec<u64>,
+    pub headers: Vec<Header>,
     pub mode: Mode,
     pub base: Option<String>,
     pub body: Body,
@@ -65,6 +69,15 @@ pub struct View {
     pub muted: Color,
     pub tints: Tints,
     pub filter: Option<FilterView>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Header {
+    pub id: u64,
+    pub label: String,
+    pub files: Range<usize>,
+    pub workspace: bool,
+    pub folded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +117,7 @@ impl View {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Row {
+    Header(usize),
     File(usize),
     Gap(usize, usize),
     GapLine(usize, usize, usize),
@@ -120,8 +134,23 @@ fn gap_size(file: &File, hunk: usize) -> u32 {
 pub fn rows(view: &View) -> Vec<Row> {
     let Some(diff) = view.diff() else { return Vec::new() };
     let mut rows = Vec::new();
+    let first: Vec<_> = view
+        .headers
+        .iter()
+        .map(|h| h.files.clone().find(|&i| !view.filter.as_ref().is_some_and(|f| f.hides(i))))
+        .collect();
     for (i, file) in diff.files.iter().enumerate() {
         if view.filter.as_ref().is_some_and(|f| f.hides(i)) {
+            continue;
+        }
+        let mut headers = view.headers.iter().enumerate().filter(|(_, h)| h.files.contains(&i));
+        let parent_folded = headers.clone().any(|(_, h)| !h.workspace && h.folded);
+        for (index, header) in headers.clone() {
+            if first[index] == Some(i) && !(header.workspace && parent_folded) {
+                rows.push(Row::Header(index));
+            }
+        }
+        if headers.any(|(_, h)| h.folded) {
             continue;
         }
         rows.push(Row::File(i));
@@ -144,6 +173,7 @@ pub fn rows(view: &View) -> Vec<Row> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Parts {
+    pub scope: Rect,
     pub tabs: Rect,
     pub field: Rect,
     pub summary: Rect,
@@ -159,9 +189,10 @@ pub fn parts(area: Rect, view: &View) -> Parts {
     let top = area.y.saturating_add(HEADER_ROWS + field);
     let separator = area.bottom().saturating_sub(FOOTER_ROWS).max(top);
     Parts {
-        tabs: row(area.y),
-        field: if view.filter.is_some() { row(area.y.saturating_add(1)) } else { Rect::default() },
-        summary: row(area.y.saturating_add(1 + field)),
+        scope: row(area.y),
+        tabs: row(area.y.saturating_add(1)),
+        field: if view.filter.is_some() { row(area.y.saturating_add(2)) } else { Rect::default() },
+        summary: row(area.y.saturating_add(2 + field)),
         body: Rect::new(area.x, top, area.width, separator.saturating_sub(top)).intersection(area),
         separator: row(separator),
         footer: row(separator.saturating_add(1)),
@@ -177,7 +208,7 @@ fn tab_row(area: Rect) -> Rect {
 }
 
 pub fn tabs(area: Rect) -> Vec<(Mode, Rect)> {
-    let row = Rect { width: filter_button(area).x.saturating_sub(area.x + 1), ..tab_row(area) };
+    let row = tab_row(Rect { y: area.y.saturating_add(1), height: area.height.saturating_sub(1), ..area });
     let mut x = row.x;
     Mode::ALL
         .into_iter()
@@ -188,6 +219,18 @@ pub fn tabs(area: Rect) -> Vec<(Mode, Rect)> {
             (mode, r)
         })
         .collect()
+}
+
+pub fn scopes(area: Rect, view: &View) -> [(Scope, Rect, String); 2] {
+    let row = parts(area, view).scope;
+    let end = filter_button(area).x;
+    let every = " Every project ".to_string();
+    let every_width = width(&every).min(end.saturating_sub(row.x));
+    let room = end.saturating_sub(row.x + every_width + 1);
+    let project = format!(" {} ", cut(&view.project, usize::from(room.saturating_sub(2))));
+    let first = Rect::new(row.x, row.y, width(&project).min(room), 1).intersection(row);
+    let second = Rect::new(first.right().saturating_add(1), row.y, every_width, 1).intersection(row);
+    [(Scope::Project, first, project), (Scope::Every, second, every)]
 }
 
 pub fn close(area: Rect) -> Rect {
@@ -210,7 +253,7 @@ fn base_label(view: &View) -> String {
 }
 
 pub fn base(area: Rect, view: &View) -> Rect {
-    if view.mode == Mode::Uncommitted {
+    if view.scope == Scope::Every || view.mode == Mode::Uncommitted {
         return Rect::default();
     }
     let row = parts(area, view).summary;
@@ -245,7 +288,7 @@ fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
         .collect()
 }
 
-pub(super) fn actions(row: Rect) -> Vec<(Action, Rect)> {
+pub fn actions(row: Rect) -> Vec<(Action, Rect)> {
     buttons(row, &Action::ALL)
 }
 
@@ -272,6 +315,8 @@ fn viewed_cell(row: Rect) -> Rect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hit {
+    Scope(Scope),
+    Header(usize),
     Mode(Mode),
     Close,
     Filter,
@@ -292,8 +337,11 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if filter_button(area).contains(pos) {
         return Some(Hit::Filter);
     }
+    if let Some((scope, _, _)) = scopes(area, view).into_iter().find(|(_, r, _)| r.contains(pos)) {
+        return Some(Hit::Scope(scope));
+    }
     if let Some((mode, _)) = tabs(area).into_iter().find(|(_, r)| r.contains(pos)) {
-        return Some(Hit::Mode(mode));
+        return (view.scope == Scope::Project).then_some(Hit::Mode(mode));
     }
     if clear_filter(area, view).contains(pos) {
         return Some(Hit::ClearFilter);
@@ -309,6 +357,7 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     }
     let (row, r) = visible(area, view).into_iter().find(|(_, r)| r.contains(pos))?;
     match row {
+        Row::Header(i) => Some(Hit::Header(i)),
         Row::File(i) if viewed_cell(r).contains(pos) => Some(Hit::Viewed(i)),
         Row::File(i) => Some(Hit::File(i)),
         Row::Gap(i, h) => Some(Hit::Gap(i, h)),
@@ -339,7 +388,9 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     if let Some(diff) = view.diff() {
         if diff.files.is_empty() {
             let text = match (view.mode, view.base.as_deref()) {
-                (Mode::Uncommitted, _) | (_, None) => "no changes".to_string(),
+                (Mode::Uncommitted, _) | (_, None) => {
+                    if view.scope == Scope::Every { "no changes in any project" } else { "no changes" }.to_string()
+                }
                 (Mode::Commits, Some(base)) => format!("no commits since {base}"),
                 (Mode::All, Some(base)) => format!("nothing changed since {base}"),
             };
@@ -371,7 +422,15 @@ pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
 }
 
 fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) {
-    for (mode, r) in tabs(area) {
+    for (scope, r, label) in scopes(area, view) {
+        let style = super::tab_style(scope == view.scope, hovered(hover, r), super::surface_colour(view.light));
+        put(buf, r.x, r.y, &label, style, r.right());
+    }
+    if view.scope == Scope::Every {
+        let row = parts(area, view).tabs;
+        put(buf, row.x + 1, row.y, "uncommitted", dim(view.muted), row.right());
+    }
+    for (mode, r) in tabs(area).into_iter().filter(|_| view.scope == Scope::Project) {
         let style = super::tab_style(mode == view.mode, hovered(hover, r), super::surface_colour(view.light));
         put(buf, r.x, r.y, &format!(" {} ", mode.label()), style, r.right());
     }
@@ -486,6 +545,7 @@ fn draw_row(
     hovered_hunk: Option<(usize, usize)>,
 ) {
     match row {
+        Row::Header(i) => draw_header(buf, view, diff, &view.headers[i], r, hover),
         Row::File(i) => draw_file(buf, view, &diff.files[i], i, r, hover),
         Row::Gap(i, h) => {
             let file = &diff.files[i];
@@ -535,7 +595,26 @@ fn draw_row(
     }
 }
 
+fn draw_header(buf: &mut Buffer, view: &View, diff: &Diff, header: &Header, r: Rect, hover: Option<Position>) {
+    fill(buf, r, super::surface_colour(view.light));
+    let files = &diff.files[header.files.clone()];
+    let added: usize = files.iter().map(|f| f.added).sum();
+    let removed: usize = files.iter().map(|f| f.removed).sum();
+    let counts = format!("{} {}", files.len(), if files.len() == 1 { "file" } else { "files" });
+    let totals = format!(" +{added} −{removed}");
+    let end = r.right().saturating_sub(width(&counts) + width(&totals) + 2);
+    let x = r.x + if header.workspace { 3 } else { 1 };
+    let arrow = if header.folded { "▸ " } else { "▾ " };
+    let x = put(buf, x, r.y, arrow, dim(view.muted), end);
+    let style = Style::default().fg(if hovered(hover, r) { Color::Cyan } else { Color::White }).bold();
+    put(buf, x, r.y, &cut(&header.label, usize::from(end.saturating_sub(x))), style, end);
+    let x = put(buf, end + 1, r.y, &counts, dim(view.muted), r.right());
+    let x = put(buf, x + 1, r.y, &format!("+{added}"), Style::default().fg(Color::Green), r.right());
+    put(buf, x + 1, r.y, &format!("−{removed}"), Style::default().fg(Color::Red), r.right());
+}
+
 fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hover: Option<Position>) {
+    let indent = if view.scope == Scope::Every { 2 } else { 0 };
     let open = !view.folded.get(i).copied().unwrap_or(true);
     let viewed = view.viewed.get(i).copied().unwrap_or(false);
     if open {
@@ -544,10 +623,10 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     }
     let muted = viewed || !matches!(file.fold, crate::changes::diff::Fold::Open);
     if file.fold.shows_lines() {
-        put(buf, r.x + 2, r.y, if open { "▾" } else { "▸" }, dim(view.muted), r.right());
+        put(buf, r.x + 2 + indent, r.y, if open { "▾" } else { "▸" }, dim(view.muted), r.right());
     }
     let status = if muted { dim(view.muted) } else { status_style(file.status) };
-    put(buf, r.x + 4, r.y, file.status.letter(), status, r.right());
+    put(buf, r.x + 4 + indent, r.y, file.status.letter(), status, r.right());
 
     let check = viewed_cell(r);
     if viewed {
@@ -581,7 +660,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     }
 
     let path = file.label();
-    let start = r.x + 6;
+    let start = r.x + 6 + indent;
     let room = usize::from(path_end.saturating_sub(start));
     let shown = crate::ui::truncate_left(&path, room);
     let split = shown.rfind('/').map_or(0, |i| i + 1);
@@ -714,6 +793,10 @@ diff --git a/Cargo.lock b/Cargo.lock
         files.push(untracked);
         let diff = Diff { files: files.into_iter().map(Arc::new).collect() };
         View {
+            scope: Scope::Project,
+            project: "shop › issue-482".into(),
+            owners: vec![1; 3],
+            headers: Vec::new(),
             mode: Mode::Uncommitted,
             base: None,
             folded: vec![false, true, true],
@@ -739,6 +822,91 @@ diff --git a/Cargo.lock b/Cargo.lock
 
     fn row_of(view: &View, wanted: Row) -> Rect {
         visible(AREA, view).into_iter().find(|(row, _)| *row == wanted).map(|(_, r)| r).expect("row is visible")
+    }
+
+    fn every() -> View {
+        View {
+            scope: Scope::Every,
+            folded: vec![true; 3],
+            headers: vec![
+                Header { id: 10, label: "shop".into(), files: 0..2, workspace: false, folded: false },
+                Header { id: 1, label: "issue-482".into(), files: 0..1, workspace: true, folded: false },
+                Header { id: 2, label: "feat/dark-mode".into(), files: 1..2, workspace: true, folded: false },
+                Header { id: 20, label: "api".into(), files: 2..3, workspace: false, folded: false },
+            ],
+            owners: vec![1, 2, 3],
+            ..sample()
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::project_wide(Scope::Project, 140)]
+    #[case::project_compact(Scope::Project, 80)]
+    #[case::every_wide(Scope::Every, 140)]
+    #[case::every_compact(Scope::Every, 80)]
+    fn scopes_draw_in_both_layouts(#[case] scope: Scope, #[case] columns: u16) {
+        let view = if scope == Scope::Every { every() } else { sample() };
+        let areas = super::super::layout_with(
+            Rect::new(0, 0, columns, 24),
+            super::super::Widths::default(),
+            true,
+            super::super::Sidebar::SideBySide,
+        );
+        let mut terminal = Terminal::new(TestBackend::new(columns, 24)).expect("terminal");
+        terminal.draw(|f| draw(f, areas.changes, &view, None)).expect("draw");
+        insta::assert_snapshot!(format!("{scope:?}_{columns}"), terminal.backend());
+    }
+
+    #[test]
+    fn headers_are_clickable_and_hide_their_own_rows() {
+        let mut view = every();
+        for index in 0..view.headers.len() {
+            assert_eq!(hit(AREA, &view, row_of(&view, Row::Header(index)).as_position()), Some(Hit::Header(index)));
+        }
+        view.headers[1].folded = true;
+        assert!(!rows(&view).contains(&Row::File(0)));
+        assert!(rows(&view).contains(&Row::File(1)));
+        view.headers[0].folded = true;
+        assert_eq!(rows(&view), [Row::Header(0), Row::Header(3), Row::File(2)]);
+    }
+
+    #[test]
+    fn files_are_indented_beyond_the_project_and_workspace_headers() {
+        let view = every();
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        for (row, indent, symbol) in
+            [(Row::Header(0), 1, "▾"), (Row::Header(1), 3, "▾"), (Row::File(0), 4, "▸"), (Row::File(2), 4, "▸")]
+        {
+            let r = row_of(&view, row);
+            assert_eq!(buffer[(r.x + indent, r.y)].symbol(), symbol);
+        }
+    }
+
+    #[test]
+    fn every_project_has_no_mode_tabs_or_base_selector() {
+        let view = View { mode: Mode::Commits, base: Some("main".into()), ..every() };
+        assert!(base(AREA, &view).is_empty());
+        assert_eq!(hit(AREA, &view, tabs(AREA)[0].1.as_position()), None);
+        for (scope, r, _) in scopes(AREA, &view) {
+            assert_eq!(hit(AREA, &view, r.as_position()), Some(Hit::Scope(scope)));
+        }
+    }
+
+    #[test]
+    fn the_empty_every_project_view_says_where_it_looked() {
+        let view =
+            View { body: Body::Ready(Arc::new(Diff::default())), headers: Vec::new(), owners: Vec::new(), ..every() };
+        insta::assert_snapshot!(render(&view, None).backend());
+    }
+
+    #[test]
+    fn a_filter_hides_headers_without_matching_files() {
+        let view = View {
+            filter: Some(FilterView { query: "tests/".into(), focused: false, kept: vec![false, false, true] }),
+            ..every()
+        };
+        assert_eq!(rows(&view), [Row::Header(3), Row::File(2)]);
     }
 
     #[test]
@@ -791,12 +959,12 @@ diff --git a/Cargo.lock b/Cargo.lock
     }
 
     #[rstest::rstest]
-    #[case::uncommitted(4, Hit::Mode(Mode::Uncommitted))]
-    #[case::commits(17, Hit::Mode(Mode::Commits))]
-    #[case::all(26, Hit::Mode(Mode::All))]
-    #[case::close(58, Hit::Close)]
-    fn header_clicks(#[case] x: u16, #[case] expected: Hit) {
-        assert_eq!(hit(AREA, &sample(), Position::new(x, 0)), Some(expected));
+    #[case::uncommitted(4, 1, Hit::Mode(Mode::Uncommitted))]
+    #[case::commits(17, 1, Hit::Mode(Mode::Commits))]
+    #[case::all(26, 1, Hit::Mode(Mode::All))]
+    #[case::close(58, 0, Hit::Close)]
+    fn header_clicks(#[case] x: u16, #[case] y: u16, #[case] expected: Hit) {
+        assert_eq!(hit(AREA, &sample(), Position::new(x, y)), Some(expected));
     }
 
     #[test]
@@ -909,10 +1077,14 @@ diff --git a/Cargo.lock b/Cargo.lock
         }
 
         #[test]
-        fn the_tabs_stop_before_its_button_on_a_narrow_panel() {
+        fn the_scope_keeps_every_project_visible_on_a_narrow_panel() {
             let narrow = Rect { width: MIN_WIDTH, ..AREA };
-            let (_, all) = tabs(narrow)[2];
-            assert!(all.right() <= filter_button(narrow).x);
+            let view = View { project: "a very long project and workspace name".into(), ..sample() };
+            let scopes = scopes(narrow, &view);
+            assert!(scopes[1].1.right() <= filter_button(narrow).x);
+            assert_eq!(scopes[1].1.width, width(" Every project "));
+            assert!(scopes[0].2.ends_with("… "));
+            assert_eq!(hit(narrow, &view, scopes[1].1.as_position()), Some(Hit::Scope(Scope::Every)));
         }
     }
 

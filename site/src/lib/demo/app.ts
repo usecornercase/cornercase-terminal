@@ -4,7 +4,7 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -116,9 +116,9 @@ export interface SearchResult {
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
 
-type Remote = 'shortcut' | 'linear' | 'jira';
+type Remote = 'shortcut' | 'linear' | 'jira' | 'plane';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
   shortcut: {
     name: 'Shortcut',
@@ -138,9 +138,29 @@ const REMOTES: Record<Remote, { name: string; token: string; env: string; help: 
     env: 'JIRA_API_TOKEN',
     help: 'Create an API token at id.atlassian.com under Security → Create and manage API tokens, paste it here and press Enter.',
   },
+  plane: {
+    name: 'Plane',
+    token: 'API key',
+    env: 'PLANE_API_KEY',
+    help: 'Create an API key in Plane under Profile settings → Personal access tokens, paste it here and press Enter.',
+  },
 };
 const isRemote = (s: string): s is Remote => Object.hasOwn(REMOTES, s);
 const tokenName = (s: Remote) => `${REMOTES[s].name} ${REMOTES[s].token}`;
+
+function checkWorkspace(input: string): [string, string?] {
+  const slug = input.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (!slug) return ['', 'type your workspace, the part after app.plane.so/, such as acme'];
+  if (!/^[a-z0-9_-]+$/.test(slug)) return ['', 'a workspace is lowercase letters, numbers and dashes, such as acme'];
+  return [slug];
+}
+
+function checkUrl(input: string): [string, string?] {
+  const url = input.trim().replace(/\/+$/, '');
+  if (!url) return [''];
+  const m = url.match(/^https?:\/\/([^/\s]+)/);
+  return m && !/\s/.test(url) ? [url] : ['', 'a URL starts with https://, such as https://plane.acme.dev'];
+}
 
 function checkSite(input: string): [string, string?] {
   const host = (input.trim().split('://').pop() ?? '').split('/')[0].replace(/\.+$/, '').toLowerCase();
@@ -156,6 +176,7 @@ function checkEmail(input: string): [string, string?] {
 }
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
+const KEEP_AWAKE_FOR = 30000;
 
 interface Focus {
   project: number | null;
@@ -197,7 +218,7 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
   tab: { label: 'rename tab', hint: 'leave it empty to use the program name' },
 };
 
-const WATCHED = ['claude', 'codex'];
+const WATCHED = ['claude', 'codex', 'gemini'];
 const DETAILS = [
   ['model', "under an agent's tab, such as Opus 5.5"],
   ['context', 'how full its context is, such as 23%'],
@@ -276,6 +297,8 @@ export class App {
   widths: Widths = { projects: 32, workspaces: 26 };
   changesOpen = false;
   changesMode: ChangesMode = 'uncommitted';
+  changesScope: 'project' | 'every' = 'project';
+  changesHeaders = new Set<number>();
   changesBase = BASES[0];
   changesScroll = 0;
   changesFilter: { query: string; focused: boolean } | null = null;
@@ -403,6 +426,7 @@ export class App {
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
     this.watchAgents();
+    this.keepAwake();
     this.grid.reset();
     this.follow();
     this.frame = new Painter(this, this.grid).draw();
@@ -416,6 +440,23 @@ export class App {
 
   private visibleTab(): Tab | undefined {
     return this.nav ? undefined : this.tab();
+  }
+
+  private awakeAt: number | null = null;
+  private awakeCheck: (() => void) | null = null;
+
+  private keepAwake(): void {
+    const now = this.now();
+    const panes = this.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.flatMap((t) => t.panes)));
+    if (!this.config.awake) this.awakeAt = null;
+    else if (panes.some((pane) => paneStatus(pane) === 'working')) this.awakeAt = now;
+    else if (this.awakeAt !== null && now - this.awakeAt >= KEEP_AWAKE_FOR) this.awakeAt = null;
+    else if (this.awakeAt !== null && !this.awakeCheck) {
+      this.awakeCheck = this.after(KEEP_AWAKE_FOR - (now - this.awakeAt), () => {
+        this.awakeCheck = null;
+        this.dirty();
+      });
+    }
   }
 
   private watchAgents(): void {
@@ -822,11 +863,15 @@ export class App {
   }
 
   deleteGroupMessage(id: number): string {
-    const inside = this.groupSize(id);
+    const inside = this.projects.filter((p) => p.group === id);
     const message = `Delete the group ${this.group(id)?.name ?? ''}?`;
-    if (inside === 0) return message;
-    if (inside === 1) return `${message} Its project stays open, ungrouped.`;
-    return `${message} Its ${inside} projects stay open, ungrouped.`;
+    if (inside.length === 0) return message;
+    const which = inside.length === 1 ? 'its project' : `its ${inside.length} projects`;
+    const them = inside.length === 1 ? 'it' : 'them';
+    const tabs = inside.reduce((n, p) => n + p.workspaces.reduce((m, w) => m + w.tabs.length, 0), 0);
+    const stops =
+      tabs === 0 ? '' : tabs === 1 ? ', which stops 1 tab and the programs running in it' : `, which stops ${tabs} tabs and the programs running in them`;
+    return `${message} Keep ${which} open, ungrouped, or close ${them} too${stops}. Folders and worktrees stay on disk.`;
   }
 
   askCloseProject(id: number): void {
@@ -883,7 +928,11 @@ export class App {
   confirmView(): ConfirmView | null {
     const o = this.overlay;
     if (o?.kind === 'remove') return { title: 'Remove workspace', message: this.removeMessage(o), submit: 'remove' };
-    if (o?.kind === 'deleteGroup') return { title: 'Delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
+    if (o?.kind === 'deleteGroup') {
+      const message = this.deleteGroupMessage(o.group);
+      if (this.groupSize(o.group) === 0) return { title: 'Delete group', message, submit: 'delete' };
+      return { title: 'Delete group', message, submit: 'keep projects', extra: 'close projects' };
+    }
     if (o?.kind === 'closeProject') return { title: 'Close project', message: this.closeProjectMessage(o.project), submit: 'close' };
     if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
@@ -909,6 +958,14 @@ export class App {
   closePaneMessage(id: number): string {
     const pane = this.findPane(id)?.pane;
     return pane ? `Close the pane running ${pane.shell.name || 'bash'}? What runs in it is stopped.` : '';
+  }
+
+  submitExtra(): void {
+    const o = this.overlay;
+    if (o?.kind !== 'deleteGroup') return;
+    this.closeOverlay();
+    for (const p of this.projects.filter((x) => x.group === o.group)) this.closeProject(p.id);
+    this.deleteGroup(o.group);
   }
 
   deleteGroup(id: number): void {
@@ -1119,17 +1176,46 @@ export class App {
   }
 
   changesShown(): boolean {
-    return this.changesOpen && hasChanges(this.workspace());
+    return this.changesOpen && (this.changesScope === 'every' || hasChanges(this.workspace()));
   }
 
   changesDiff(): FileDiff[] {
     const p = this.project();
     const w = this.workspace();
+    if (this.changesScope === 'every') {
+      const order = sidebarRows(this.projects.map((p) => this.groupIndex(p.group)), this.groups.map(() => false));
+      return order.flatMap((row) => {
+        if (row.kind !== 'project') return [];
+        const p = this.projects[row.p];
+        return p.workspaces.filter(hasChanges).flatMap((w) => workspaceDiff(p, w, 'uncommitted'));
+      });
+    }
     return p && w ? workspaceDiff(p, w, this.changesMode) : [];
   }
 
+  activeChangesDiff(): FileDiff[] {
+    const p = this.project();
+    const w = this.workspace();
+    return p && w ? workspaceDiff(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
+  }
+
+  setChangesScope(scope: 'project' | 'every'): void {
+    this.changesScope = scope;
+    this.changesScroll = 0;
+    this.dirty();
+  }
+
+  toggleChangesHeader(id: number): void {
+    if (!this.changesHeaders.delete(id)) this.changesHeaders.add(id);
+    this.dirty();
+  }
+
+  private foldKey(f: FileDiff): string {
+    return `${this.changesScope}:${this.fileKey(f)}`;
+  }
+
   private fileKey(f: FileDiff): string {
-    return `${this.workspace()?.id}:${this.changesMode}:${f.change.path}`;
+    return `${f.owner?.workspace.id ?? this.workspace()?.id}:${f.change.path}`;
   }
 
   changesViewed(f: FileDiff): boolean {
@@ -1137,7 +1223,7 @@ export class App {
   }
 
   changesFolded(f: FileDiff): boolean {
-    return this.folded.get(this.fileKey(f)) ?? (!!f.change.lockfile || this.changesViewed(f));
+    return this.folded.get(this.foldKey(f)) ?? (this.changesScope === 'every' || !!f.change.lockfile || this.changesViewed(f));
   }
 
   toggleChanges(): void {
@@ -1237,7 +1323,25 @@ export class App {
   filesMap(): Map<string, string> {
     const p = this.project();
     const w = this.workspace();
-    return workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const files = workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const path = this.filesPlace()?.viewer?.path;
+    if (path?.startsWith('/')) {
+      const text = this.linkedFiles().get(path);
+      if (text !== undefined) files.set(path, text);
+    }
+    return files;
+  }
+
+  private linkedFiles(): Map<string, string> {
+    const files = new Map([
+      ['/tmp/report.md', '# Research report\n\nReturn labels should accept an empty address.\n'],
+      ['/home/you/.claude/plans/fix.md', '# Plan\n\nCheck the address before creating a return label.\n'],
+    ]);
+    for (const p of this.projects)
+      for (const w of p.workspaces)
+        for (const [path, text] of workspaceFiles(p, w, workspaceDiff(p, w, 'all')))
+          files.set(absolutePath(`${w.root}/${path}`), text);
+    return files;
   }
 
   private filesPlace(): FilesPlace | null {
@@ -1402,7 +1506,7 @@ export class App {
     if (!w || !contains(r, x, y)) return null;
     const row = Array.from({ length: r.w }, (_, i) => grid.at(r.x + i, y)?.ch ?? ' ');
     const link = linkAt(row, x - r.x);
-    const path = link && resolveLink(link.path, pane.shell.cwd, w.root, this.filesMap());
+    const path = link && resolveLink(link.path, pane.shell.cwd, w.root, this.linkedFiles());
     return link && path ? { start: r.x + link.start, end: r.x + link.end, path, lines: link.lines } : null;
   }
 
@@ -1462,21 +1566,23 @@ export class App {
   }
 
   toggleChangesFile(f: FileDiff): void {
-    this.folded.set(this.fileKey(f), !this.changesFolded(f));
+    this.folded.set(this.foldKey(f), !this.changesFolded(f));
     this.dirty();
   }
 
   toggleChangesViewed(f: FileDiff): void {
     const key = this.fileKey(f);
     if (!this.viewed.delete(key)) this.viewed.add(key);
-    this.folded.delete(key);
+    this.folded.delete(`project:${key}`);
+    this.folded.delete(`every:${key}`);
     this.dirty();
   }
 
   foldAllChanges(): void {
     const files = this.changesDiff();
     const fold = files.some((f) => !this.changesFolded(f));
-    for (const f of files) this.folded.set(this.fileKey(f), fold);
+    if (!fold) this.changesHeaders.clear();
+    for (const f of files) this.folded.set(this.foldKey(f), fold);
     this.dirty();
   }
 
@@ -1498,8 +1604,8 @@ export class App {
     const hunk = f.hunks[h];
     const added = hunk.lines.filter((l) => l.kind === '+').map((l) => l.new ?? 0);
     const lines = added.length ? (added.length > 1 ? `${added[0]}-${added[added.length - 1]}` : `${added[0]}`) : `${hunk.newStart}`;
-    const p = this.project();
-    const w = this.workspace();
+    const p = f.owner?.project ?? this.project();
+    const w = f.owner?.workspace ?? this.workspace();
     if (!p || !w) return;
     if (action === 'copy') {
       this.emit('copy', hunk.lines.map((l) => `${l.kind}${l.text}`).join('\n'));
@@ -1517,8 +1623,7 @@ export class App {
       this.notify('no agent here, so the reference is copied');
       return;
     }
-    w.active = w.tabs.indexOf(tab);
-    tab.active = pane.id;
+    this.jumpToPane(pane.id);
     pane.shell.paste(`${reference} `);
     this.notify('sent to the agent');
   }
@@ -1527,7 +1632,7 @@ export class App {
     const pane = this.newPane(p, w);
     pane.shell.start(new Editor(this.host(p, w, () => pane.id), () => pane.shell.finish(), path, text, line - 1));
     w.tabs.push(this.newTab([pane]));
-    w.active = w.tabs.length - 1;
+    this.goto(this.projects.indexOf(p), p.workspaces.indexOf(w), w.tabs.length - 1);
   }
 
   navTo(nav: Exclude<Nav, null>): void {
@@ -2120,7 +2225,8 @@ export class App {
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
-        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code and Codex, in their tabs' },
+        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code, Codex and Gemini, in their tabs' },
+        { id: 'awake', section: 'Agent', label: 'keep awake', value: c.awake ? '[x] while an agent works' : '[ ] never', note: this.awakeNote() },
       ];
       for (const kind of this.listedKinds()) {
         const mode = this.modeOf(kind);
@@ -2148,8 +2254,12 @@ export class App {
         { id: 'jira-email', section: 'Jira', label: 'Jira email', value: c.jiraEmail || 'not set', note: 'the one you sign in with' },
         token('jira', 'Jira'),
         { id: 'jira-jql', section: 'Jira', label: 'Jira filter', value: c.jiraJql || 'none', note: 'JQL, such as project = SHOP' },
+        { id: 'plane-workspace', section: 'Plane', label: 'Plane workspace', value: c.planeWorkspace || 'not set', note: 'the part after app.plane.so/' },
+        { id: 'plane-url', section: 'Plane', label: 'Plane URL', value: c.planeUrl || 'Plane Cloud', note: 'for a self-hosted server' },
+        token('plane', 'Plane'),
+        { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
       ];
-      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -2207,6 +2317,9 @@ export class App {
     } else if (row.id === 'resume') {
       c.resume = !c.resume;
       o.notice = c.resume ? 'conversations resume after a restart' : 'agents no longer resume after a restart';
+    } else if (row.id === 'awake') {
+      c.awake = !c.awake;
+      o.notice = c.awake ? 'the computer stays awake while an agent works' : 'the computer sleeps as usual';
     } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
       c[row.id] = !c[row.id];
       o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
@@ -2262,6 +2375,12 @@ export class App {
       o.edit = { row: row.id, label: 'Jira email', input: c.jiraEmail, token: false };
     } else if (row.id === 'jira-jql') {
       o.edit = { row: row.id, label: 'Jira filter (JQL, such as project = SHOP; empty lists everything)', input: c.jiraJql, token: false };
+    } else if (row.id === 'plane-workspace') {
+      o.edit = { row: row.id, label: 'Plane workspace, the part after app.plane.so/, such as acme', input: c.planeWorkspace, token: false };
+    } else if (row.id === 'plane-url') {
+      o.edit = { row: row.id, label: 'Plane URL for a self-hosted server (empty is Plane Cloud)', input: c.planeUrl, token: false };
+    } else if (row.id === 'plane-filter') {
+      o.edit = { row: row.id, label: 'Plane filter (query parameters, such as priority=high)', input: c.planeFilter, token: false };
     } else if (row.id.startsWith('src:')) {
       const id = row.id.slice(4);
       if (c.sources.includes(id)) {
@@ -2276,6 +2395,11 @@ export class App {
   openRestart(): void {
     this.overlay = { kind: 'restart', scroll: 0 };
     this.dirty();
+  }
+
+  awakeNote(): string {
+    if (!this.config.awake) return 'no idle sleep while an agent works';
+    return this.awakeAt !== null ? 'held now, by caffeinate' : 'not held: no agent is working';
   }
 
   restartNotes(width: number): Line[] {
@@ -2378,6 +2502,8 @@ export class App {
       const source = edit.row.slice(6) as Remote;
       if (source === 'jira' && (!this.config.jiraSite || !this.config.jiraEmail)) {
         edit.error = 'set the Jira site and email first';
+      } else if (source === 'plane' && !this.config.planeWorkspace) {
+        edit.error = 'set the Plane workspace first';
       } else if (!edit.input.trim()) {
         edit.error = `paste the ${REMOTES[source].token} first`;
       } else {
@@ -2403,6 +2529,24 @@ export class App {
         o.edit = undefined;
         o.notice = value ? `Jira ${name}: ${value}` : `the Jira ${name} was cleared`;
       }
+    } else if (edit.row === 'plane-workspace' || edit.row === 'plane-url') {
+      const workspace = edit.row === 'plane-workspace';
+      const input = edit.input.trim();
+      const [value, error] = workspace ? (input ? checkWorkspace(input) : ['']) : checkUrl(input);
+      if (error) edit.error = error;
+      else {
+        if (workspace) this.config.planeWorkspace = value;
+        else this.config.planeUrl = value;
+        if (workspace && !value) this.config.accounts.plane = false;
+        o.edit = undefined;
+        o.notice = workspace
+          ? value ? `Plane workspace: ${value}` : 'the Plane workspace was cleared'
+          : value ? `Plane server: ${value}` : 'Plane is the cloud at app.plane.so';
+      }
+    } else if (edit.row === 'plane-filter') {
+      this.config.planeFilter = edit.input.trim();
+      o.edit = undefined;
+      o.notice = this.config.planeFilter ? `Plane lists only: ${this.config.planeFilter}` : 'Plane lists every work item you can see';
     } else if (edit.row === 'jira-jql') {
       this.config.jiraJql = edit.input.trim();
       o.edit = undefined;
@@ -2441,7 +2585,7 @@ export class App {
       chosen: null,
     };
     this.overlay.token = this.freshToken(this.issuesSource(this.overlay));
-    this.emit('narrate', 'Your issues from GitHub, Shortcut, Linear and Jira. Click one to read it, then press start.');
+    this.emit('narrate', 'Your issues from GitHub, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.');
     this.after(450, () => {
       const o = this.overlay;
       if (o?.kind === 'issues') {
@@ -2462,11 +2606,13 @@ export class App {
   }
 
   private accountOf(source: Remote): string {
-    return `@you in ${source === 'jira' ? this.config.jiraSite : 'acme'}`;
+    return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
 
   private freshToken(source: string): IssuesOverlay['token'] {
-    return source === 'jira' ? { input: this.config.jiraSite, checking: false, step: 'site' } : { input: '', checking: false };
+    if (source === 'jira') return { input: this.config.jiraSite, checking: false, step: 'site' };
+    if (source === 'plane') return { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+    return { input: '', checking: false };
   }
 
   private issuesList(o: IssuesOverlay): Issue[] {
@@ -2587,7 +2733,10 @@ export class App {
       const help = [`Connect ${remote.name}.`, ''];
       let label = remote.token;
       let input = '•'.repeat(Math.min(o.token.input.length, 40));
-      if (step === 'site') {
+      if (step === 'workspace') {
+        help.push("Type your Plane workspace, the part after the server's name, such as acme.", 'Then press Enter.');
+        [label, input] = ['workspace', o.token.input];
+      } else if (step === 'site') {
         help.push('Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.');
         [label, input] = ['site', o.token.input];
       } else if (step === 'email') {
@@ -2595,15 +2744,18 @@ export class App {
         [label, input] = ['email', o.token.input];
       } else {
         if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
+        if (source === 'plane') help.push(`Connecting to the Plane workspace ${this.config.planeWorkspace}.`, '');
         help.push(remote.help);
       }
       help.push(
         '',
         step === 'token'
           ? `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${remote.env}, when set, takes precedence.`
-          : 'The site and the email are saved in your settings.',
+          : source === 'plane'
+            ? 'The workspace is saved in your settings.'
+            : 'The site and the email are saved in your settings.',
       );
-      const back = step !== 'site' && source === 'jira' ? ['back'] : [];
+      const back = (step !== 'site' && source === 'jira') || (step === 'token' && source === 'plane') ? ['back'] : [];
       return {
         tabs,
         toggles,
@@ -2630,7 +2782,7 @@ export class App {
         : source === 'github' && !p?.repo
           ? 'this project is not in a git repository'
           : nothing
-            ? 'nothing to list here: connect Shortcut, Linear or Jira in their tabs'
+            ? 'nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs'
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
@@ -2714,7 +2866,11 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
-    if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site') {
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
+      o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+      return this.dirty();
+    }
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site' && o.token.step !== 'workspace') {
       const email = o.token.step === 'token';
       o.token = { input: email ? this.config.jiraEmail : this.config.jiraSite, checking: false, step: email ? 'email' : 'site' };
       return this.dirty();
@@ -2779,6 +2935,15 @@ export class App {
     if (o?.kind !== 'issues') return;
     const source = this.issuesSource(o) as Remote;
     const input = o.token.input.trim();
+    if (o.token.step === 'workspace') {
+      const [value, error] = checkWorkspace(input);
+      if (error) o.token.error = error;
+      else {
+        this.config.planeWorkspace = value;
+        o.token = { input: '', checking: false, step: 'token' };
+      }
+      return this.dirty();
+    }
     if (o.token.step === 'site' || o.token.step === 'email') {
       const site = o.token.step === 'site';
       const [value, error] = site ? checkSite(input) : checkEmail(input);

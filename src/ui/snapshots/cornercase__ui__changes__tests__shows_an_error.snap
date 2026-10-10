@@ -1,11 +1,10 @@
 ---
 source: src/ui/changes.rs
-assertion_line: 917
 expression: "render(&view, None).backend()"
 ---
-"  Uncommitted   Commits   All                         ⌕  ×  "
+"  shop › issue-482   Every project                    ⌕  ×  "
+"  Uncommitted   Commits   All                               "
 " cannot compare with nope                                   "
-"                                                            "
 "                                                            "
 "                                                            "
 "                                                            "

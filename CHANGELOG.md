@@ -2,6 +2,38 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.26
+
+- Deleting a group that holds projects now asks what to do with them: **keep projects** leaves them open without a group, as before, and **close projects** closes them along with the group, stopping their shells, instead of closing them one by one afterwards. Folders and worktrees stay on disk. `Enter` still keeps the projects.
+
+## 0.12.25
+
+- Review uncommitted changes across every project in the Changes panel, grouped by project and workspace. Files start folded and load their diff when opened; filters, viewed marks and hunk actions work across the collection.
+- Keep your chosen Changes scope across sessions. Background scans visit one workspace at a time and read patches only for unfolded files.
+
+## 0.12.24
+
+- New setting, **keep awake** (Settings → Agents, off by default): while an agent is working, the computer no longer goes to sleep on its own, so a long refactor or test run started before you walk away is finished when you come back. It lets the computer sleep again 30 seconds after the last agent stops working; an agent waiting for you, or one whose turn is over while a shell it started in the background still runs, does not keep it awake. The display still turns off and the screen still locks, and closing the lid still sleeps. It uses `caffeinate` on macOS and `gnome-session-inhibit` or `systemd-inhibit` on Linux; the row says whether the computer is being kept awake now, or why it can't be on this machine. `cornercase status --json` shows it as `keep_awake`.
+
+## 0.12.23
+
+- Gemini CLI tabs now show working, waiting and finished status, notifications, model and context use, and resume their conversations after a restart in the same mode. The status needs Gemini's dynamic window title (on by default). When two Gemini CLI instances run in the same folder with the same Gemini home, cornercase cannot tell their conversations apart, so neither tab shows its model and context, resumes, or answers `read --last-message`; their status icons still work.
+- Scripts can wait for Gemini, follow its events, confirm submitted prompts and read its last message. Local slash commands and shell input return after Enter without a prompt confirmation.
+- Gemini CLI has a built-in plan mode.
+
+## 0.12.22
+
+- A new **Plane** tab in the issues browser reads work items from Plane (plane.so), on Plane Cloud or a self-hosted server, and starts an agent on one like on any other tracker's issue. Connect it from the tab: type your workspace (the part after `app.plane.so/`, such as `acme`), then paste an API key from **Profile settings → Personal access tokens**; `PLANE_API_KEY` works too. The list shows the work items that are not done, newest first, and **people** filters them by assignee and creator, with *me* or any member. A work item's description and comments are read as Markdown, and its branch is named after its key, such as `ENG-42-fix-login`.
+- **Settings → Issues → Plane** has the workspace, the URL of a self-hosted server (empty is Plane Cloud), a filter and the API key. The filter takes query parameters, such as `priority=high&label_id=…`, added to what the list asks for. Lists saved before this version get the Plane tab once; hide it in **Sources shown**.
+
+## 0.12.21
+
+- Click a file path in a pane to read it in the files panel even when it is outside the workspace, such as `/tmp/report.md`, a plan in `~/.claude/plans/` or a file in another project or worktree. Paths beginning with `~/` now expand to your home folder. Outside files show their absolute path, which **open**, **ask agent** and **copy** use too; they have no git marks. **`‹`** returns to the tree or your search results, and closing and reopening the panel keeps the file.
+
+## 0.12.20
+
+- `cornercase read --last-message` reads several agents in one call: repeat `--pane` or `--tab` to get each message under a header with its pane, agent, whether its turn is over and when it was written. `--json` puts their answers in a `panes` list. A pane without a message gets its own error, the others are still read, and the command exits 1 once it has read them all. Reading one agent keeps the same output as before.
+
 ## 0.12.19
 
 - The files panel shows images. A click on a PNG, JPEG, GIF, WebP, BMP or ICO file shows the picture itself, drawn by your terminal, with its format, size in pixels and file size above it; ` ask agent ` and ` copy ` take its path. Ghostty and kitty show it with kitty graphics, iTerm2, WezTerm and Warp with iTerm2's inline images, and foot, Konsole and xterm (started as a VT340) with sixel; inside tmux, Ghostty and kitty need `set -g allow-passthrough on`, and a tmux built with sixel draws sixel pictures itself, with no setting. A terminal that cannot show images gets, where the picture would be, a line saying why and what to do about it. Every window attached to the server gets what its own terminal can show, in its own size, and an image an agent rewrites shows again as it changes. `CORNERCASE_IMAGES=kitty`, `iterm`, `sixel` or `off`, set where you start cornercase, picks for a terminal cornercase does not recognise.

@@ -11,10 +11,11 @@ use serde_json::Value;
 use super::{App, AppEvent, Target, Toast};
 use crate::activity::{self, Status};
 use crate::agents;
+use crate::awake;
 use crate::context;
 use crate::control::{
-    self, Command, Done, GroupInfo, Ids, Item, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo, TodoItem,
-    TodoList, Until, WorkspaceInfo,
+    self, Command, Done, GroupInfo, Ids, Item, KeepAwake, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo,
+    TodoItem, TodoList, Until, WorkspaceInfo,
 };
 use crate::error;
 use crate::git;
@@ -38,7 +39,7 @@ const SHELL_UNSEEN: Duration = Duration::from_secs(1);
 const INPUT_HOLDS: Duration = Duration::from_secs(2);
 const TEXT_EVERY: Duration = Duration::from_millis(100);
 const SOONEST: Duration = Duration::from_millis(10);
-const WATCHED: [&str; 3] = [agents::CLAUDE, agents::CODEX, agents::OPENCODE];
+const WATCHED: [&str; 4] = [agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE];
 const NO_SIZE: &str = "this cornercase server has not opened a window yet, so a new terminal would have no size; \
     run `cornercase` once first";
 const NO_PROJECT: &str = "no project is open; open one with `cornercase open PATH`";
@@ -245,7 +246,7 @@ fn not_confirmed(pane: u64) -> String {
 }
 
 fn holds_prompts(agent: Option<&str>, status: Option<Status>) -> bool {
-    agent == Some(agents::CODEX) && matches!(status, Some(Status::Working | Status::Waiting))
+    matches!(agent, Some(agents::CODEX | agents::GEMINI)) && matches!(status, Some(Status::Working | Status::Waiting))
 }
 
 fn not_reading(pane: u64) -> String {
@@ -266,6 +267,7 @@ fn unfound(pane: u64, agent: &str) -> String {
     let why = match agent {
         agents::CLAUDE => "Claude Code has not said yet which conversation it is in",
         agents::CODEX => "Codex writes its rollout from its first turn on, and two Codex in one folder hide each other",
+        agents::GEMINI => "Gemini has no conversation in its folder yet, or two Gemini share that home and folder",
         _ => "opencode has no conversation in its folder yet, or two opencode share that folder",
     };
     format!(
@@ -618,7 +620,7 @@ impl App {
 
     fn unrecorded(&self, pane: u64) -> String {
         let holding = self.pane_by(pane).is_some_and(|term| holds_prompts(term.agent.agent(), term.agent.status()));
-        let why = if holding { ": Codex takes a prompt sent while it works after its next step" } else { "" };
+        let why = if holding { ": this agent queues a prompt sent while it works until its next step" } else { "" };
         format!("the agent in pane {pane} has not recorded the prompt yet{why}")
     }
 
@@ -902,6 +904,16 @@ impl App {
             shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
             groups: groups.collect(),
             projects: projects.collect(),
+            keep_awake: self.keep_awake_info(),
+        }
+    }
+
+    fn keep_awake_info(&self) -> Option<KeepAwake> {
+        match self.awake.state() {
+            awake::State::Off => None,
+            awake::State::Released => Some(KeepAwake::default()),
+            awake::State::Held(by) => Some(KeepAwake { held: true, by: Some(by), unavailable: None }),
+            awake::State::Unavailable(why) => Some(KeepAwake { held: false, by: None, unavailable: Some(why) }),
         }
     }
 
@@ -1182,7 +1194,9 @@ impl App {
                  --pane {pane} 0` and send again, or send with --force"
             ));
         }
-        let confirm = (send.enter && self.watched_agent(term).is_ok()).then(SystemTime::now);
+        let local = agents::detect(&self.config, &term.foreground_args()).as_deref() == Some(agents::GEMINI)
+            && send.text.as_deref().is_some_and(|text| text.trim_start().starts_with(['/', '?', '!']));
+        let confirm = (send.enter && !local && self.watched_agent(term).is_ok()).then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(caller, pane, until)?;
@@ -1212,7 +1226,10 @@ impl App {
             let runs = agent.map_or_else(
                 || "runs no agent".to_string(),
                 |agent| {
-                    format!("runs {agent}, and cornercase only knows what Claude Code, Codex and opencode are doing")
+                    format!(
+                        "runs {agent}, and cornercase only knows what Claude Code, Codex, Gemini CLI and opencode \
+                         are doing"
+                    )
                 },
             );
             return Err(format!(
@@ -1269,7 +1286,8 @@ impl App {
             other => {
                 let runs = other.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
                 return Err(format!(
-                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex and opencode; \
+                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex, Gemini CLI \
+                     and opencode; \
                      `cornercase read --pane {pane}` prints its screen"
                 ));
             }
@@ -1545,15 +1563,18 @@ mod tests {
 
         use super::super::holds_prompts;
         use crate::activity::Status;
-        use crate::agents::{CLAUDE, CODEX, OPENCODE};
+        use crate::agents::{CLAUDE, CODEX, GEMINI, OPENCODE};
 
         #[rstest]
         #[case::codex_at_work(Some(CODEX), Some(Status::Working), true)]
         #[case::codex_asking(Some(CODEX), Some(Status::Waiting), true)]
+        #[case::gemini_at_work(Some(GEMINI), Some(Status::Working), true)]
+        #[case::gemini_asking(Some(GEMINI), Some(Status::Waiting), true)]
+        #[case::gemini_idle(Some(GEMINI), Some(Status::Idle), false)]
         #[case::codex_idle(Some(CODEX), Some(Status::Idle), false)]
         #[case::claude_at_work(Some(CLAUDE), Some(Status::Working), false)]
         #[case::opencode_at_work(Some(OPENCODE), Some(Status::Working), false)]
-        fn only_a_working_codex_records_a_prompt_late(
+        fn agents_that_queue_prompts_record_them_late(
             #[case] agent: Option<&str>,
             #[case] status: Option<Status>,
             #[case] holds: bool,

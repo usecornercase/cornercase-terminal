@@ -14,6 +14,8 @@ use crate::log;
 use crate::remote::{self, Remote};
 use crate::{client, restart, server, ui};
 
+mod read;
+
 const FOLLOW_EVERY: Duration = Duration::from_millis(200);
 pub const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
 
@@ -99,10 +101,12 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force.
 
-With --enter, the command returns once Claude Code, Codex or opencode has recorded the prompt in
-its own history, and fails with `not confirmed: the prompt may not have been submitted` when it
-records none: read the pane before sending it again. A working Codex holds a prompt until its next
-step, so the command returns then. In other programs it returns once Enter is pressed.
+With --enter, the command returns once Claude Code, Codex, Gemini CLI or opencode has recorded
+the prompt in its own history, and fails with `not confirmed: the prompt may not have been
+submitted` when it records none: read the pane before sending it again. A working Codex or
+Gemini holds a prompt until it takes it, so the command returns then. Gemini local slash
+commands, ? help and ! shell input return after Enter without confirming a prompt record. In
+other programs it returns once Enter is pressed.
 
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
 and otherwise prints how the wait ended; with --until it waits for that state instead, as
@@ -122,11 +126,18 @@ const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, righ
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
 const READ_HELP: &str = "Lines the terminal wrapped come back joined, and empty lines at the end are left out.
 
-With --last-message it prints the last message the agent in the pane wrote, as plain text, from its
-own record (Claude Code's transcript, Codex's rollout, opencode's database) instead of the screen, so
-it comes whole even once it scrolled off, without the input box or status lines. While the agent
-works it is the newest one so far. --json adds when it was written and whether the agent's turn is
-over. It fails on a pane without Claude Code, Codex or opencode, and before the agent wrote anything.
+With --last-message it prints the last message the agent in the pane wrote, as plain text, from
+its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
+database) instead of the screen, so it comes whole even once it scrolled off, without the input
+box or status lines. While the agent works it is the newest one so far. --json adds when it was
+written and whether the agent's turn is over. It fails on a pane without Claude Code, Codex,
+Gemini CLI or opencode, and before the agent wrote anything.
+
+With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
+header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
+first, then tabs, in the order given, and a repeated id is read once. Errors stay with their target,
+and it exits 1 after reading them all if any failed. One target keeps the output above. Reading
+the screen takes only one target.
 
 Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
 `1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
@@ -136,12 +147,14 @@ Examples:
   cornercase read --pane 12
   cornercase read --pane 7 --lines 200 > build.log
   cornercase read --pane 12 --last-message
-  cornercase read --tab 4 --last-message --json";
+  cornercase read --tab 4 --last-message --json
+  cornercase read --last-message --pane 12 --pane 15 --json";
 const WAIT_HELP: &str = "By default it waits until the agent stops working: idle, done or waiting. A Claude Code agent
 whose turn is over while a background shell it started still runs counts as working, since it
-wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then prints
-how it ended (idle, done, waiting, working, shell or quiet), or the line that matched. Waiting for
-an agent fails on a pane without one. A timeout exits with 1 and does not prove that the agent missed
+wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then
+prints how it ended (idle, done, waiting, working, shell or quiet), or the line that matched.
+Waiting for an agent needs Claude Code, Codex, Gemini CLI or opencode in the pane. Gemini status
+needs its dynamic window title. A timeout exits with 1 and does not prove that the agent missed
 what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
@@ -491,8 +504,18 @@ pub struct KeysArgs {
 
 #[derive(Debug, Args)]
 pub struct ReadArgs {
-    #[command(flatten)]
-    pub target: Target,
+    #[arg(
+        long = "pane",
+        value_name = "ID",
+        help = "The pane; with --last-message, repeat it to read several [default: the one this runs in, else the shown one]"
+    )]
+    pub panes: Vec<u64>,
+    #[arg(
+        long = "tab",
+        value_name = "ID",
+        help = "A tab: its agent's pane, else its active one; with --last-message, repeat it"
+    )]
+    pub tabs: Vec<u64>,
     #[arg(
         long,
         value_name = "N",
@@ -762,7 +785,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         return Ok(true);
     };
     match command {
-        Command::Control(control) => run_control(control)?,
+        Command::Control(control) => return run_control(control),
         Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return client::update(update.check, update.yes, update.when.when()),
@@ -818,7 +841,7 @@ fn quietly(written: io::Result<()>) -> Result<bool> {
     }
 }
 
-fn run_control(command: Control) -> Result<()> {
+fn run_control(command: Control) -> Result<bool> {
     match command {
         Control::Status(status) => run_status(&status),
         Control::Open(open) => {
@@ -870,7 +893,7 @@ fn run_control(command: Control) -> Result<()> {
             let Target { pane, tab } = keys.target;
             ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
         }
-        Control::Read(read) => run_read(&read),
+        Control::Read(read) => return read::run(&read),
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
@@ -897,7 +920,8 @@ fn run_control(command: Control) -> Result<()> {
         }
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
-    }
+    }?;
+    Ok(true)
 }
 
 fn run_status(status: &StatusArgs) -> Result<()> {
@@ -972,17 +996,6 @@ fn run_start(start: StartArgs) -> Result<()> {
     say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
-}
-
-fn run_read(read: &ReadArgs) -> Result<()> {
-    let Target { pane, tab } = read.target;
-    let value = if read.last_message {
-        ask("read --last-message", control::Command::LastMessage(control::LastMessage { pane, tab }))?
-    } else {
-        let lines = read.lines.and_then(|n| usize::try_from(n).ok());
-        ask("read", control::Command::Read(control::Read { pane, tab, lines }))?
-    };
-    say(value, read.print.json, |done| done.text.clone().into_iter().collect())
 }
 
 fn run_wait(wait: WaitArgs) -> Result<()> {
@@ -1257,7 +1270,7 @@ mod tests {
         #[case::sending_until_without_waiting(&["send", "--enter", "--until", "turn-over", "hi"])]
         #[case::starting_until_without_waiting(&["start", "--until", "turn-over"])]
         #[case::nothing_to_send(&["send", "--pane", "1"])]
-        #[case::a_pane_and_a_tab(&["read", "--pane", "1", "--tab", "2"])]
+        #[case::a_pane_and_a_tab(&["send", "--pane", "1", "--tab", "2", "hi"])]
         #[case::nothing_to_close(&["close"])]
         #[case::two_things_to_close(&["close", "--pane", "1", "--tab", "2"])]
         #[case::removing_the_worktree_of_a_tab(&["close", "--tab", "1", "--remove-worktree"])]
@@ -1350,7 +1363,7 @@ mod tests {
             let cli = parse(&["read", "--tab", "4", "--last-message", "--json"]).expect("parse");
 
             let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
-            assert_eq!((read.target.tab, read.last_message, read.print.json), (Some(4), true, true));
+            assert_eq!((read.tabs, read.last_message, read.print.json), (vec![4], true, true));
         }
 
         #[test]
@@ -1413,6 +1426,7 @@ mod tests {
                     ProjectInfo { workspaces: vec![workspace], ..project(1, "shop", None) },
                     project(9, "api", Some(8)),
                 ],
+                keep_awake: None,
             }
         }
 

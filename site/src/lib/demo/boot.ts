@@ -52,6 +52,7 @@ const reveal: Step = {
 
 const show = (text: string): Step => ({
   run: (app) => {
+    app.render();
     for (let i = 0; i < 12 && !app.textAt(text); i++) {
       app.workspacesScroll += 1;
       app.dirty();
@@ -119,6 +120,7 @@ export const CHAPTERS: Step[][] = [
   [
     reveal,
     { say: 'Curious what it’s doing? Every change, right next to the agent. Live.' },
+    open('workspaces'),
     show('#482'),
     { click: '#482' },
     close,

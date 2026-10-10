@@ -260,7 +260,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   ],
 };
 
-export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira';
+export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira' | 'plane';
 
 export interface Issue {
   source: SourceId;
@@ -398,6 +398,32 @@ export const ISSUES: Issue[] = [
     body: 'Every string of the returns flow goes through `t()`; the **es** catalogue is missing.',
     mine: false,
   },
+  {
+    source: 'plane',
+    number: 14,
+    key: 'WEB-14',
+    title: 'Add a sitemap to the storefront',
+    labels: ['seo'],
+    state: 'In Progress',
+    author: 'ana',
+    age: '3d',
+    url: 'https://app.plane.so/acme/browse/WEB-14/',
+    body: 'Search engines should find every product page.\n\n- [ ] Generate `sitemap.xml` at build time\n- [ ] Link it from `robots.txt`',
+    mine: true,
+  },
+  {
+    source: 'plane',
+    number: 19,
+    key: 'WEB-19',
+    title: 'Show stock levels on the product page',
+    labels: ['feature'],
+    state: 'Backlog',
+    author: 'luis',
+    age: '1w',
+    url: 'https://app.plane.so/acme/browse/WEB-19/',
+    body: 'Say *Only 3 left* when the stock is low.',
+    mine: false,
+  },
 ];
 
 export const AGENTS: [string, string][] = [
@@ -431,6 +457,7 @@ export const MODES: Record<string, [string, string][]> = {
   ],
   gemini: [
     ['auto edit', '--approval-mode auto_edit'],
+    ['plan', '--approval-mode plan'],
     ['yolo (dangerous)', '--yolo'],
   ],
 };

@@ -362,9 +362,15 @@ function normalize(parts: string[]): string {
 }
 
 export function resolveLink(path: string, cwd: string[], root: string, files: Map<string, string>): string | null {
-  const absolute = path.startsWith('/') || path.startsWith('~');
-  const candidates = absolute ? (path.startsWith(`${root}/`) ? [path.slice(root.length + 1)] : []) : [normalize([...cwd, path]), normalize([path])];
-  return candidates.find((c) => files.has(c)) ?? null;
+  const folder = absolutePath(root);
+  const given = path.startsWith('~/') ? absolutePath(path) : path;
+  const candidates = given.startsWith('/') ? [absolutePath(given)] : [absolutePath([folder, ...cwd, given].join('/')), absolutePath(`${folder}/${given}`)];
+  const found = candidates.find((c) => files.has(c));
+  return found?.startsWith(`${folder}/`) ? found.slice(folder.length + 1) : found ?? null;
+}
+
+export function absolutePath(path: string): string {
+  return `/${normalize([path.replace(/^~(?=\/|$)/, '/home/you')])}`;
 }
 
 function languageName(path: string): string | null {
@@ -485,7 +491,7 @@ function drawTree(p: Painter, f: Panel): void {
     p.span(body.x + 2, body.y, 'no files here', DARK, Math.max(0, body.w - 2));
     return;
   }
-  const marks = statuses(app.changesDiff());
+  const marks = statuses(app.activeChangesDiff());
   const max = Math.max(0, rows.length - body.h);
   const first = Math.min(place.treeScroll, max);
   p.region({ r: body, wheel: (dy) => app.scrollFiles(dy, max) });
@@ -618,7 +624,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
     return;
   }
   const g = gutter(
-    app.changesDiff().find((d) => d.change.path === viewer.path),
+    app.activeChangesDiff().find((d) => d.change.path === viewer.path),
     text.length,
   );
   const rows = codeRows(text.length, g, viewer.unfolded);
@@ -661,7 +667,7 @@ export function lineNear(app: App, y: number): number | null {
   if (picture(content)) return null;
   const text = textLines(content ?? '');
   const g = gutter(
-    app.changesDiff().find((d) => d.change.path === viewer.path),
+    app.activeChangesDiff().find((d) => d.change.path === viewer.path),
     text.length,
   );
   const rows = codeRows(text.length, g, viewer.unfolded);

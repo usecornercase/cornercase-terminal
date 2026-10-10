@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-claude-modes settings-default-agent settings-issues settings-ui usage keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage keys-menu remote-reconnecting"
 
 pane_in() {
   cc status --json | node -e '
@@ -480,6 +480,14 @@ screen_changes_filter() {
   cc_shot changes-filter
 }
 
+screen_changes_every() {
+  changes_open
+  cc_click 'Every project' 0 1 95
+  cc_wait 'unfold all'
+  cc_hover 'Workspaces'
+  cc_shot changes-every
+}
+
 files_open() {
   cc_s2_shell
   cc_click 'Files' 0 -1
@@ -617,6 +625,14 @@ screen_settings_claude_modes() {
   cc_wait 'How should claude start?'
   cc_hover '╭─ Settings'
   cc_shot settings-claude-modes
+}
+
+screen_settings_gemini_modes() {
+  settings_agents
+  cc_click 'gemini                    default'
+  cc_wait 'How should gemini start?'
+  cc_hover '╭─ Settings'
+  cc_shot settings-gemini-modes
 }
 
 screen_settings_issues() {

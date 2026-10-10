@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{ASSISTANT, SYNTHETIC, opencode};
+use super::{ASSISTANT, SYNTHETIC, gemini, opencode};
 use crate::error::{Error, Result};
 
 const CHUNK: u64 = 256 * 1024;
@@ -22,6 +22,7 @@ pub struct Said {
 pub enum Record {
     Claude(PathBuf),
     Codex(PathBuf),
+    Gemini(PathBuf),
     Opencode { database: PathBuf, session: String },
 }
 
@@ -30,6 +31,7 @@ impl Record {
         match self {
             Self::Claude(path) => claude(path),
             Self::Codex(path) => codex(path),
+            Self::Gemini(path) => gemini::last_message(path),
             Self::Opencode { database, session } => opencode::last_message(database, session),
         }
     }

@@ -10,6 +10,7 @@ use ratatui::text::Line;
 
 use crate::activity::{self, Claude, Session};
 use crate::agents;
+use crate::awake::{self, Awake};
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, BranchPicker, Checkout, Tints};
 use crate::clipboard;
@@ -23,7 +24,7 @@ use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self, Job, Level};
@@ -286,6 +287,8 @@ const CREATE_SUBMIT: &str = "create";
 const RENAME_SUBMIT: &str = "rename";
 const REMOVE_SUBMIT: &str = "remove";
 const DELETE_SUBMIT: &str = "delete";
+const KEEP_PROJECTS_SUBMIT: &str = "keep projects";
+const CLOSE_PROJECTS_SUBMIT: &str = "close projects";
 const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
@@ -539,6 +542,11 @@ fn agent_in(
             remember(config, term, Some((&agent, &args)), now);
             Some((agent, activity::codex(&term.emulator.title(), term.context.codex_turn())))
         }
+        (Some(pid), Some(agent)) if agent == agents::GEMINI => {
+            term.context.update_gemini(pid, &term.emulator.screen_text().unwrap_or_default());
+            remember(config, term, Some((&agent, &args)), now);
+            activity::gemini(&term.emulator.title()).map(|state| (agent, state))
+        }
         (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
             term.context.update_opencode(pid);
             remember(config, term, Some((&agent, &args)), now);
@@ -556,7 +564,7 @@ fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, 
     let found = agent.zip(term.context.conversation()).map(|((agent, args), conversation)| AgentState {
         kind: agent.to_string(),
         conversation: conversation.to_string(),
-        mode: agents::mode_of(args, &agents::modes(config, agent)),
+        mode: agents::mode_of(agent, args, &agents::modes(config, agent)),
     });
     if found.is_some() {
         term.resuming = None;
@@ -617,6 +625,7 @@ fn wheel(kind: MouseEventKind) -> Option<isize> {
 
 pub struct App {
     groups: Vec<Group>,
+    deleting_groups: Vec<u64>,
     projects: Vec<Project>,
     active: usize,
     projects_scroll: usize,
@@ -674,6 +683,7 @@ pub struct App {
     editor_env: Vec<(String, String)>,
     claude_dir: Option<PathBuf>,
     watched: Option<Instant>,
+    awake: Awake,
     usage: usage::State,
     usage_timeout: Duration,
     confirm_within: Duration,
@@ -690,6 +700,7 @@ struct Apis {
     shortcut: String,
     linear: String,
     jira: Option<String>,
+    plane: Option<String>,
 }
 
 impl Apis {
@@ -699,6 +710,7 @@ impl Apis {
             shortcut: var(shortcut::API_ENV, shortcut::DEFAULT_API),
             linear: var(linear::API_ENV, linear::DEFAULT_API),
             jira: std::env::var(jira::API_ENV).ok(),
+            plane: std::env::var(plane::API_ENV).ok(),
         }
     }
 }
@@ -730,6 +742,7 @@ impl App {
             followed: Focus::default(),
             drawn: ui::Areas::default(),
             nav: None,
+            deleting_groups: Vec::new(),
             next_id: 1,
             detach: false,
             hover: None,
@@ -778,6 +791,7 @@ impl App {
             editor_env: Vec::new(),
             claude_dir,
             watched: None,
+            awake: Awake::new(awake::tools()),
             usage: usage::State::default(),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
@@ -845,13 +859,13 @@ impl App {
     }
 
     fn changes_target(&self) -> Option<Checkout> {
-        let workspace = self.project()?.workspace()?;
+        let workspace = self.project().filter(|p| !p.closing)?.workspace().filter(|w| w.open())?;
         git::branch(&workspace.path)?;
         Some(Checkout { workspace: workspace.id, dir: workspace.path.clone(), base: workspace.base.clone() })
     }
 
     fn changes_shown(&self) -> bool {
-        self.changes.open && self.changes_target().is_some()
+        self.changes.open && (self.changes.scope == changes::Scope::Every || self.changes_target().is_some())
     }
 
     fn pane_size(&self, area: Rect) -> (u16, u16) {
@@ -899,6 +913,7 @@ impl App {
         }
         self.drive_launches(now);
         self.watch_agents(now);
+        self.keep_awake(now);
         self.check_requests(now);
         self.check_updates(now);
         self.refresh_files(now);
@@ -972,6 +987,16 @@ impl App {
         }
     }
 
+    fn keep_awake(&mut self, now: Instant) {
+        let terms = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms);
+        let working =
+            |term: &&Term| term.agent.status() == Some(activity::Status::Working) && !term.agent.background_shell();
+        self.awake.update(self.config.keep_awake, terms.filter(working).count(), now);
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.awake = self.awake.state().note();
+        }
+    }
+
     fn notify(&mut self, agent: &str, status: activity::Status, project: u64, workspace: u64) {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return };
         let what = if status == activity::Status::Waiting { "needs you" } else { "finished" };
@@ -1026,14 +1051,22 @@ impl App {
     }
 
     fn refresh_changes(&mut self, now: Instant) {
-        let Some(target) = self.changes_target() else { return };
-        if self.changes.workspace != Some(target.workspace) {
-            self.changes.workspace = Some(target.workspace);
-            self.changes.scroll = 0;
-        }
-        let Some((generation, request)) = self.changes.request(&target, now) else { return };
-        let (tx, workspace) = (self.tx.clone(), target.workspace);
-        let job = Job::new(Level::Debug, "changes", "diff").with("workspace", workspace).begin();
+        let request = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            let targets = self.every_targets();
+            self.changes.request_every(&targets, now)
+        } else {
+            self.changes_target().and_then(|target| {
+                if self.changes.workspace != Some(target.workspace) {
+                    self.changes.workspace = Some(target.workspace);
+                    self.changes.scroll = 0;
+                }
+                self.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
+            })
+        };
+        let Some((workspace, generation, request)) = request else { return };
+        let tx = self.tx.clone();
+        let kind = if request.expanded.is_some() { "summary" } else { "diff" };
+        let job = Job::new(Level::Debug, "changes", kind).with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| changes::git::load(&request));
             job.finish(&result);
@@ -1137,6 +1170,7 @@ impl App {
                 })
                 .collect();
             for w in gone {
+                self.changes.forget(project.workspaces[w].id);
                 project.remove_workspace(w);
             }
             let missing: Vec<PathBuf> =
@@ -1466,8 +1500,14 @@ impl App {
             people: self.issue_people.clone(),
         });
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
-        let changes = (self.changes.open || self.changes.mode != changes::Mode::default())
-            .then_some(ChangesState { open: self.changes.open, mode: self.changes.mode });
+        let changes = (self.changes.open
+            || self.changes.mode != changes::Mode::default()
+            || self.changes.scope != changes::Scope::default())
+        .then_some(ChangesState {
+            open: self.changes.open,
+            mode: self.changes.mode,
+            scope: (self.changes.scope != changes::Scope::default()).then_some(self.changes.scope),
+        });
         State {
             version: state::VERSION,
             groups,
@@ -1486,6 +1526,7 @@ impl App {
         if let Some(changes) = saved.changes {
             self.changes.open = changes.open && !saved.todo && !saved.files;
             self.changes.mode = changes.mode;
+            self.changes.scope = changes.scope.unwrap_or_default();
         }
         self.todo.open = saved.todo && !saved.files;
         self.files.open = saved.files;
@@ -1611,8 +1652,23 @@ impl App {
     }
 
     fn remove_project(&mut self, p: usize) {
+        self.forget_project_changes(p);
         self.projects.remove(p);
         shift_active(&mut self.active, p);
+        let projects = &self.projects;
+        let empty = |id: &u64| !projects.iter().any(|p| p.group == Some(*id));
+        let gone: Vec<u64> = self.deleting_groups.iter().copied().filter(empty).collect();
+        for id in gone {
+            self.delete_group(id);
+        }
+    }
+
+    fn forget_project_changes(&mut self, p: usize) {
+        let project = &self.projects[p];
+        for workspace in &project.workspaces {
+            self.changes.forget(workspace.id);
+        }
+        self.changes.headers.remove(&project.id);
     }
 
     pub fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
@@ -1668,6 +1724,9 @@ impl App {
             AppEvent::Behind { project, behind } => self.behind_counted(project, &behind),
             AppEvent::Changes { workspace, generation, request, result } => {
                 self.changes.loaded(workspace, generation, &request, result);
+                if self.changes_shown() && self.changes.scope == changes::Scope::Every {
+                    self.refresh_changes(Instant::now());
+                }
             }
             AppEvent::Branches { workspace, branches, default } => self.branches_listed(workspace, branches, default),
             AppEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
@@ -2196,6 +2255,7 @@ impl App {
 
     fn close_project(&mut self, id: u64) {
         let Some(p) = self.project_index(id) else { return };
+        self.forget_project_changes(p);
         let project = &mut self.projects[p];
         project.closing = true;
         project.kill();
@@ -2468,6 +2528,7 @@ impl App {
         let Some(p) = self.project_index(id) else { return };
         let mut project = self.projects.remove(p);
         project.group = group;
+        self.cancel_pending_group_deletion(group, project.closing);
         let at = before.and_then(|q| self.project_index(q)).unwrap_or_else(|| {
             self.projects.iter().rposition(|p| p.group == group).map_or(self.projects.len(), |i| i + 1)
         });
@@ -2715,6 +2776,8 @@ impl App {
         }
         if let Some(g) = group {
             project.group = Some(g);
+            let closing = project.closing;
+            self.cancel_pending_group_deletion(group, closing);
             if let Some(entry) = self.group_mut(g) {
                 entry.collapsed = false;
             }
@@ -2829,9 +2892,23 @@ impl App {
         })
     }
 
+    fn plane(&self, token: String) -> Option<plane::Api> {
+        let config = &self.config;
+        if config.plane_workspace.is_empty() {
+            return None;
+        }
+        let (base, app) = plane::endpoints(&config.plane_url, self.apis.plane.as_deref());
+        Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
+    }
+
     fn connected(&self, source: Source) -> Option<bool> {
         let (token, from_env) = self.token(source)?;
-        (source != Source::Jira || self.jira(token).is_some()).then_some(from_env)
+        let configured = match source {
+            Source::Jira => self.jira(token).is_some(),
+            Source::Plane => self.plane(token).is_some(),
+            _ => true,
+        };
+        configured.then_some(from_env)
     }
 
     fn client(&self, source: Source, project: u64) -> Option<Client> {
@@ -2845,6 +2922,7 @@ impl App {
             }
             Source::Linear => Some(Client::Linear { url: self.apis.linear.clone(), token: self.token(source)?.0 }),
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
+            Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
         }
     }
 
@@ -2896,6 +2974,7 @@ impl App {
             forms: HashMap::new(),
             jira_site: self.config.jira_site.clone(),
             jira_email: self.config.jira_email.clone(),
+            plane_workspace: self.config.plane_workspace.clone(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -2929,7 +3008,7 @@ impl App {
         let starts = kinds
             .iter()
             .map(|kind| {
-                let mode = agents::mode_of(&agents::args(config, kind), &agents::modes(config, kind));
+                let mode = agents::mode_of(kind, &agents::args(config, kind), &agents::modes(config, kind));
                 (kind.clone(), browser::AgentStart { command: agents::command_line(config, kind), mode })
             })
             .collect();
@@ -2978,7 +3057,14 @@ impl App {
                 }
             }
             Action::CheckToken(source, token) => self.check_token(source, token),
-            Action::SaveJira { site, email } => return self.save_jira(site, email, area),
+            Action::SaveJira { site, email } => {
+                let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
+                return self.save_connection(Source::Jira, config, area);
+            }
+            Action::SavePlane { workspace } => {
+                let config = Config { plane_workspace: workspace, ..self.config.clone() };
+                return self.save_connection(Source::Plane, config, area);
+            }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
                 self.host_writes.push(clipboard::osc52(&url));
@@ -3117,18 +3203,17 @@ impl App {
         });
     }
 
-    fn save_jira(&mut self, site: String, email: String, area: Rect) -> Result<()> {
-        let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
+    fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
         let saved = config::save(&self.config_path, &config);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         if let Err(e) = saved {
-            b.token_rejected(Source::Jira, format!("failed to save the settings: {e}"));
+            b.token_rejected(source, format!("failed to save the settings: {e}"));
             return Ok(());
         }
         self.set_config(config);
-        let Some(from_env) = self.connected(Source::Jira) else { return Ok(()) };
+        let Some(from_env) = self.connected(source) else { return Ok(()) };
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        b.connected(Source::Jira, Connection { from_env, account: None });
+        b.connected(source, Connection { from_env, account: None });
         let action = b.needs_load();
         self.act(action, area)
     }
@@ -3143,6 +3228,10 @@ impl App {
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
         if jira(&config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
+        }
+        let plane = |c: &Config| (c.plane_url.clone(), c.plane_workspace.clone(), c.plane_filter.clone());
+        if plane(&config) != plane(&self.config) {
+            self.forget_issues(Source::Plane);
         }
         self.config = config;
     }
@@ -3161,16 +3250,22 @@ impl App {
     fn check_token(&mut self, source: Source, token: Secret) {
         let client = match source {
             Source::Github => return,
-            Source::Shortcut => Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() },
-            Source::Linear => Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() },
-            Source::Jira => {
-                let Some(api) = self.jira(token.0.clone()) else {
-                    let error = Err(Error::Api("set the Jira site and email first".into()));
-                    let epoch = self.epoch(source);
-                    let _ = self.tx.send(AppEvent::TokenChecked { source, epoch, token, result: error });
-                    return;
-                };
-                Client::Jira(api)
+            Source::Shortcut => Ok(Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() }),
+            Source::Linear => Ok(Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() }),
+            Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
+            Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
+        };
+        let client = match client {
+            Ok(client) => client,
+            Err(message) => {
+                let epoch = self.epoch(source);
+                let _ = self.tx.send(AppEvent::TokenChecked {
+                    source,
+                    epoch,
+                    token,
+                    result: Err(Error::Api(message.into())),
+                });
+                return;
             }
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
@@ -3605,8 +3700,10 @@ impl App {
         if button != MouseButton::Left {
             return Ok(());
         }
-        match ui::form_hit(area, overlay.submit_label(), pos) {
+        let (submit, extra) = self.dialog_labels(overlay);
+        match ui::form_hit(area, submit, extra, pos) {
             Some(FormHit::Submit) => self.submit_form(area)?,
+            Some(FormHit::Extra) => self.submit_extra(),
             Some(FormHit::Cancel) => self.cancel_form(),
             Some(FormHit::Toggle) => self.toggle_worktree(),
             None => {}
@@ -3661,6 +3758,7 @@ impl App {
             MenuAction::SetGroup(project, group) => {
                 if let Some(p) = self.project_index(project) {
                     self.projects[p].group = group;
+                    self.cancel_pending_group_deletion(group, self.projects[p].closing);
                 }
             }
             MenuAction::GroupStyle(group) => self.overlay = Some(Overlay::GroupStyle { group }),
@@ -3684,8 +3782,47 @@ impl App {
 
     fn delete_group(&mut self, id: u64) {
         self.groups.retain(|g| g.id != id);
+        self.deleting_groups.retain(|&g| g != id);
         for p in self.projects.iter_mut().filter(|p| p.group == Some(id)) {
             p.group = None;
+        }
+    }
+
+    fn cancel_pending_group_deletion(&mut self, group: Option<u64>, closing: bool) {
+        if !closing {
+            self.deleting_groups.retain(|&id| Some(id) != group);
+        }
+    }
+
+    fn delete_group_and_projects(&mut self, id: u64) {
+        let projects: Vec<u64> = self.group_projects(id).map(|p| p.id).collect();
+        for project in projects {
+            self.close_project(project);
+        }
+        if self.projects.iter().any(|p| p.group == Some(id)) {
+            self.deleting_groups.push(id);
+        } else {
+            self.delete_group(id);
+        }
+    }
+
+    fn group_projects(&self, id: u64) -> impl Iterator<Item = &Project> {
+        self.projects.iter().filter(move |p| p.group == Some(id) && !p.closing)
+    }
+
+    fn dialog_labels(&self, overlay: &Overlay) -> (&'static str, Option<&'static str>) {
+        match overlay {
+            Overlay::DeleteGroup { group } if self.group_projects(*group).next().is_some() => {
+                (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT))
+            }
+            _ => (overlay.submit_label(), None),
+        }
+    }
+
+    fn submit_extra(&mut self) {
+        if let Some(Overlay::DeleteGroup { group }) = self.overlay {
+            self.overlay = None;
+            self.delete_group_and_projects(group);
         }
     }
 
@@ -4057,7 +4194,8 @@ impl App {
                 (source, status)
             })
             .collect();
-        let settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
+        let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
+        settings.awake = self.awake.state().note();
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
@@ -4302,6 +4440,7 @@ impl App {
         }
         target.start_removing();
         target.kill();
+        self.changes.forget(workspace);
         self.projects[p].step_off(w);
         let (repo, path, tx) =
             (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
@@ -4337,6 +4476,7 @@ impl App {
 
     fn drop_workspace(&mut self, project: u64, workspace: u64) {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return };
+        self.changes.forget(workspace);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.phase = Phase::Closing;
         workspace.kill();
@@ -4435,20 +4575,16 @@ impl App {
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
         let landing = self.pane_landing(pane_area);
-        let still = self.overlay.is_none()
-            && self.row_drag.is_none()
-            && self.pane_drag.is_none()
-            && self.selecting.is_none()
-            && dragging.is_none();
-        let pointer = self.hover.filter(|_| still);
+        let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
+        let home = self.home.clone();
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout.map(&|id| tab.panes.iter().position(|t| t.id == id))?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             let link = pointer
                 .zip(root.as_deref())
-                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root));
+                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
             Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
@@ -4592,35 +4728,43 @@ impl App {
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())
             }
-            Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
-                title: "Delete group",
-                message: self.delete_group_message(*group)?,
-                note: None,
-                submit: overlay.submit_label(),
-            }),
+            Overlay::DeleteGroup { group } => {
+                let (submit, extra) = self.dialog_labels(overlay);
+                ui::Overlay::Confirm(ui::Confirm {
+                    title: "Delete group",
+                    message: self.delete_group_message(*group)?,
+                    note: None,
+                    submit,
+                    extra,
+                })
+            }
             Overlay::CloseProject { project } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close project",
                 message: self.close_project_message(*project)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::CloseWorkspace { project, workspace } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close workspace",
                 message: self.close_workspace_message(*project, *workspace)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::CloseTab { project, workspace, tab } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close tab",
                 message: self.close_tab_message(*project, *workspace, *tab)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::ClosePane { pane } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close pane",
                 message: self.close_pane_message(*pane)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
@@ -4659,16 +4803,27 @@ impl App {
                 },
             ),
         };
-        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit })
+        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
     }
 
     fn delete_group_message(&self, id: u64) -> Option<String> {
         let message = format!("Delete the group {}?", self.group(id)?.name);
-        Some(match self.projects.iter().filter(|p| p.group == Some(id)).count() {
-            0 => message,
-            1 => format!("{message} Its project stays open, ungrouped."),
-            n => format!("{message} Its {n} projects stay open, ungrouped."),
-        })
+        let (projects, tabs) = self
+            .group_projects(id)
+            .fold((0, 0), |(n, tabs), p| (n + 1, tabs + p.workspaces.iter().map(|w| w.tabs.len()).sum::<usize>()));
+        let (which, them) = match projects {
+            0 => return Some(message),
+            1 => ("its project".to_string(), "it"),
+            n => (format!("its {n} projects"), "them"),
+        };
+        let stops = match tabs {
+            0 => String::new(),
+            1 => ", which stops 1 tab and the programs running in it".into(),
+            n => format!(", which stops {n} tabs and the programs running in them"),
+        };
+        Some(format!(
+            "{message} Keep {which} open, ungrouped, or close {them} too{stops}. Folders and worktrees stay on disk."
+        ))
     }
 
     fn close_project_message(&self, id: u64) -> Option<String> {
@@ -4744,8 +4899,12 @@ impl App {
 
     fn changes_label(&self) -> Option<String> {
         let target = self.changes_target()?;
-        let files =
-            self.changes.model(target.workspace, target.base.as_deref()).and_then(|m| m.diff()).map(|d| d.files.len());
+        let model = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            self.changes.summary(target.workspace)
+        } else {
+            self.changes.model(target.workspace, target.base.as_deref())
+        };
+        let files = model.and_then(changes::Model::diff).map(|d| d.files.len());
         Some(match files {
             Some(n) if n > 0 => format!("{CHANGES_LABEL} {n}"),
             _ => CHANGES_LABEL.to_string(),
@@ -4783,18 +4942,128 @@ impl App {
         self.changes.model(target.workspace, target.base.as_deref()).and_then(|m| m.diff()).cloned()
     }
 
+    fn changes_project_order(&self) -> Vec<usize> {
+        ui::sidebar_rows(&self.project_groups(), &vec![false; self.groups.len()])
+            .into_iter()
+            .filter_map(|row| if let SidebarRow::Project(p) = row { Some(p) } else { None })
+            .collect()
+    }
+
+    fn every_targets(&self) -> Vec<(Checkout, bool)> {
+        self.changes_project_order()
+            .into_iter()
+            .flat_map(|p| {
+                let project = &self.projects[p];
+                let workspaces: Vec<_> = project
+                    .workspaces
+                    .iter()
+                    .filter(|w| !project.closing && w.open() && git::branch(&w.path).is_some())
+                    .collect();
+                let several = workspaces
+                    .iter()
+                    .filter(|w| {
+                        self.changes.summary(w.id).and_then(changes::Model::diff).is_some_and(|d| !d.files.is_empty())
+                    })
+                    .count()
+                    > 1;
+                workspaces
+                    .into_iter()
+                    .map(|w| {
+                        let hidden = self.changes.headers.contains(&project.id)
+                            || (several && self.changes.headers.contains(&w.id));
+                        (Checkout { workspace: w.id, dir: w.path.clone(), base: None }, hidden)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn every_body(&self, targets: &[(Checkout, bool)]) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
+        let mut diff = changes::diff::Diff::default();
+        let mut owners = Vec::new();
+        let mut headers = Vec::new();
+        let mut error = None;
+        let workspaces: HashSet<_> = targets.iter().map(|(t, _)| t.workspace).collect();
+        for p in self.changes_project_order() {
+            let project = &self.projects[p];
+            if error.is_none() {
+                error = project.workspaces.iter().filter(|w| workspaces.contains(&w.id)).find_map(|w| {
+                    let failure = self.changes.summary(w.id)?.result.as_ref().err()?;
+                    Some(format!("{}: {failure}", self.project_label(project)))
+                });
+            }
+            let workspaces: Vec<_> = project
+                .workspaces
+                .iter()
+                .filter(|w| workspaces.contains(&w.id))
+                .filter_map(|w| {
+                    let diff = self.changes.summary(w.id)?.diff()?;
+                    (!diff.files.is_empty()).then_some((w, diff))
+                })
+                .collect();
+            if workspaces.is_empty() {
+                continue;
+            }
+            let start = diff.files.len();
+            let count = workspaces.iter().map(|(_, d)| d.files.len()).sum::<usize>();
+            headers.push(panel::Header {
+                id: project.id,
+                label: self.project_label(project),
+                files: start..start + count,
+                workspace: false,
+                folded: self.changes.headers.contains(&project.id),
+            });
+            let several = workspaces.len() > 1;
+            for (workspace, changes) in workspaces {
+                let start = diff.files.len();
+                if several {
+                    headers.push(panel::Header {
+                        id: workspace.id,
+                        label: workspace.label(),
+                        files: start..start + changes.files.len(),
+                        workspace: true,
+                        folded: self.changes.headers.contains(&workspace.id),
+                    });
+                }
+                owners.extend(std::iter::repeat_n(workspace.id, changes.files.len()));
+                diff.files.extend(changes.files.iter().cloned());
+            }
+        }
+        let body = if diff.files.is_empty() && targets.iter().any(|(t, _)| self.changes.summary(t.workspace).is_none())
+        {
+            panel::Body::Loading
+        } else if diff.files.is_empty() && error.is_some() {
+            panel::Body::Failed(error.unwrap_or_default())
+        } else {
+            panel::Body::Ready(std::sync::Arc::new(diff))
+        };
+        (body, owners, headers)
+    }
+
     fn panel_view(&self) -> Option<panel::View> {
-        let target = self.changes_target()?;
-        let ws = target.workspace;
-        let model = self.changes.model(ws, target.base.as_deref());
-        let body = match model.map(|m| &m.result) {
-            None => panel::Body::Loading,
-            Some(Ok(diff)) => panel::Body::Ready(std::sync::Arc::clone(diff)),
-            Some(Err(e)) => panel::Body::Failed(e.clone()),
+        let every = self.changes.scope == changes::Scope::Every;
+        let target = if every { None } else { self.changes_target() };
+        let model = target.as_ref().and_then(|t| self.changes.model(t.workspace, t.base.as_deref()));
+        let targets = if every { self.every_targets() } else { Vec::new() };
+        let (body, owners, headers) = if every {
+            self.every_body(&targets)
+        } else {
+            let target = target.as_ref()?;
+            let body = match model.map(|m| &m.result) {
+                None => panel::Body::Loading,
+                Some(Ok(diff)) => panel::Body::Ready(std::sync::Arc::clone(diff)),
+                Some(Err(e)) => panel::Body::Failed(e.clone()),
+            };
+            let owners = match &body {
+                panel::Body::Ready(d) => vec![target.workspace; d.files.len()],
+                _ => Vec::new(),
+            };
+            (body, owners, Vec::new())
         };
         let (mut folded, mut viewed, mut gaps) = (Vec::new(), Vec::new(), HashMap::new());
         if let panel::Body::Ready(diff) = &body {
             for (i, file) in diff.files.iter().enumerate() {
+                let ws = owners[i];
                 folded.push(self.changes.folded(ws, diff, file));
                 viewed.push(self.changes.viewed(ws, file));
                 for h in 1..file.hunks.len() {
@@ -4812,15 +5081,34 @@ impl App {
                 _ => Vec::new(),
             },
         });
+        let project = self.project().map_or_else(
+            || "Project".into(),
+            |p| {
+                let name = self.project_label(p);
+                if p.workspaces.len() > 1 {
+                    p.workspace().map_or(name.clone(), |w| format!("{name} › {}", w.label()))
+                } else {
+                    name
+                }
+            },
+        );
         Some(panel::View {
-            mode: self.changes.mode,
-            base: self.changes.label(ws).or(target.base),
+            scope: self.changes.scope,
+            project,
+            owners,
+            headers,
+            mode: if every { changes::Mode::Uncommitted } else { self.changes.mode },
+            base: target.and_then(|t| self.changes.label(t.workspace).or(t.base)).filter(|_| !every),
             body,
             folded,
             viewed,
             gaps,
             scroll: self.changes.scroll,
-            live: model.is_some_and(|m| m.live(Instant::now())),
+            live: if every {
+                targets.iter().all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
+            } else {
+                model.is_some_and(|m| m.live(Instant::now()))
+            },
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
             tints: Tints::of(&self.theme),
@@ -4829,7 +5117,7 @@ impl App {
     }
 
     fn changes_mouse(&mut self, ev: MouseEvent, pos: Position, panel_area: Rect, area: Rect) -> Result<()> {
-        let (Some(target), Some(view)) = (self.changes_target(), self.panel_view()) else { return Ok(()) };
+        let Some(view) = self.panel_view() else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
             let max = panel::max_scroll(panel_area, &view);
             self.changes.scroll = self.changes.scroll.min(max).saturating_add_signed(delta).min(max);
@@ -4838,32 +5126,63 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
-        let diff = self.changed_diff(&target);
-        let file = |i: usize| diff.as_ref().and_then(|d| d.files.get(i).cloned());
-        match panel::hit(panel_area, &view, pos) {
+        let diff = match &view.body {
+            panel::Body::Ready(d) => Some(d.clone()),
+            _ => None,
+        };
+        let file = |i: usize| {
+            let file = diff.as_ref()?.files.get(i)?.clone();
+            let workspace = *view.owners.get(i)?;
+            let (p, w) = self.workspace_position(workspace)?;
+            let ws = &self.projects[p].workspaces[w];
+            Some((Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, file))
+        };
+        let hit = panel::hit(panel_area, &view, pos);
+        let selected = match hit {
+            Some(PanelHit::File(i) | PanelHit::Viewed(i) | PanelHit::Gap(i, _) | PanelHit::Action(i, _, _)) => file(i),
+            _ => None,
+        };
+        match hit {
+            Some(PanelHit::Scope(scope)) => self.changes.set_scope(scope),
+            Some(PanelHit::Header(i)) => {
+                self.changes.toggle_header(view.headers[i].id);
+                for workspace in &view.owners[view.headers[i].files.clone()] {
+                    self.changes.invalidate_summary(*workspace);
+                }
+            }
             Some(PanelHit::Mode(mode)) => self.changes.set_mode(mode),
             Some(PanelHit::Close) => self.changes.close(),
             Some(PanelHit::Filter | PanelHit::Query) => self.changes.filter.get_or_insert_default().focused = true,
             Some(PanelHit::ClearFilter) => self.changes.filter = None,
-            Some(PanelHit::Base) => self.open_branches(&target),
-            Some(PanelHit::FoldAll) => {
-                if let Some(diff) = &diff {
-                    self.changes.fold_all(target.workspace, diff);
+            Some(PanelHit::Base) => {
+                if let Some(target) = self.changes_target() {
+                    self.open_branches(&target);
                 }
             }
-            Some(PanelHit::File(i)) => {
-                if let (Some(diff), Some(f)) = (&diff, file(i)) {
+            Some(PanelHit::FoldAll) => {
+                if let Some(diff) = &diff {
+                    let fold = view.folded.iter().any(|f| !f);
+                    if !fold {
+                        self.changes.headers.clear();
+                    }
+                    for (file, workspace) in diff.files.iter().zip(&view.owners) {
+                        self.changes.set_fold(*workspace, file, fold);
+                    }
+                }
+            }
+            Some(PanelHit::File(_)) => {
+                if let (Some(diff), Some((target, f))) = (&diff, selected) {
                     self.changes.toggle_fold(target.workspace, diff, &f);
                 }
             }
-            Some(PanelHit::Viewed(i)) => {
-                if let Some(f) = file(i) {
+            Some(PanelHit::Viewed(_)) => {
+                if let Some((target, f)) = selected {
                     self.changes.toggle_viewed(target.workspace, &f);
                 }
             }
-            Some(PanelHit::Gap(i, h)) => {
-                if let Some(f) = file(i) {
-                    let (tx, mode, workspace, dir) = (self.tx.clone(), self.changes.mode, target.workspace, target.dir);
+            Some(PanelHit::Gap(_, h)) => {
+                if let Some((target, f)) = selected {
+                    let (tx, mode, workspace, dir) = (self.tx.clone(), view.mode, target.workspace, target.dir);
                     let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace).begin();
                     std::thread::spawn(move || {
                         let new_side = changes::git::new_side(&dir, mode, &f.path);
@@ -4874,12 +5193,15 @@ impl App {
                     });
                 }
             }
-            Some(PanelHit::Action(i, h, action)) => {
-                if let Some(f) = file(i) {
+            Some(PanelHit::Action(_, h, action)) => {
+                if let Some((target, f)) = selected {
                     return self.hunk_action(&target, &f, h, action, area);
                 }
             }
             None => {}
+        }
+        if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            self.refresh_changes(Instant::now());
         }
         Ok(())
     }
@@ -4930,10 +5252,11 @@ impl App {
         };
         let term = Term::spawn(opts, self.tx.clone())?;
         let tab = Tab::new(self.take_id(), None, term);
+        let place = Goto::Place { project: self.projects[p].id, workspace: Some(target.workspace), tab: Some(tab.id) };
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);
         workspace.active = workspace.tabs.len() - 1;
-        self.projects[p].active = w;
+        self.goto(place);
         Ok(())
     }
 
@@ -4954,11 +5277,9 @@ impl App {
             self.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Check));
             return;
         };
-        let ws = &mut self.projects[p].workspaces[w];
-        ws.active = t;
-        let tab = &mut ws.tabs[t];
-        tab.focus(id);
+        let tab = &mut self.projects[p].workspaces[w].tabs[t];
         let sent = tab.panes.iter_mut().find(|term| term.id == id).is_some_and(|term| term.paste(text));
+        self.jump_to_pane(id);
         self.toast = Some(if sent {
             Toast::new(SENT_TO_AGENT, ui::ToastIcon::Check)
         } else {
@@ -4979,7 +5300,11 @@ impl App {
 
     fn branches_listed(&mut self, workspace: u64, branches: Vec<String>, default: Option<String>) {
         let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
-        if self.overlay.is_some() || !self.changes.open || self.changes.mode == changes::Mode::Uncommitted {
+        if self.overlay.is_some()
+            || !self.changes.open
+            || self.changes.scope == changes::Scope::Every
+            || self.changes.mode == changes::Mode::Uncommitted
+        {
             return;
         }
         let current = self.changes.label(workspace).or(target.base);
@@ -4987,8 +5312,17 @@ impl App {
     }
 
     fn gap_loaded(&mut self, workspace: u64, file: &ChangedFile, hunk: usize, lines: Vec<changes::GapLine>) {
-        let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
-        let current = self.changed_diff(&target).is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest));
+        let current = if self.changes.scope == changes::Scope::Every {
+            self.changes
+                .summary(workspace)
+                .and_then(changes::Model::diff)
+                .is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest))
+        } else {
+            self.changes_target()
+                .filter(|t| t.workspace == workspace)
+                .and_then(|t| self.changed_diff(&t))
+                .is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest))
+        };
         if current {
             self.changes.set_gap(workspace, file, hunk, lines);
         }
@@ -6041,30 +6375,167 @@ mod tests {
             assert_eq!((confirmation(&app).is_some(), names(&app)), (true, vec!["work"]));
         }
 
-        #[rstest]
-        #[case::empty(0, "Delete the group work?")]
-        #[case::one_project(1, "Delete the group work? Its project stays open, ungrouped.")]
-        #[case::two_projects(2, "Delete the group work? Its 2 projects stay open, ungrouped.")]
-        fn the_confirmation_says_what_happens_to_its_projects(#[case] grouped: usize, #[case] expected: &str) {
-            let (mut app, _rx, _dirs) = app_with(2);
+        fn asked_to_delete(grouped: usize, projects: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(projects);
             new_group(&mut app, "work");
             let work = group_label(&app, 0);
             for p in 0..grouped {
                 move_to(&mut app, p, &work);
             }
+            ask_from_the_close_button(&mut app);
+            (app, rx, dirs)
+        }
+
+        fn buttons(app: &App) -> Option<(&'static str, Option<&'static str>)> {
+            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+                ui::Overlay::Confirm(confirm) => Some((confirm.submit, confirm.extra)),
+                _ => None,
+            }
+        }
+
+        fn extra_button() -> Position {
+            ui::form_extra_button(ui::form_area(AREA), KEEP_PROJECTS_SUBMIT, CLOSE_PROJECTS_SUBMIT).as_position()
+        }
+
+        #[rstest]
+        #[case::empty(0, "Delete the group work?")]
+        #[case::one_project(
+            1,
+            "Delete the group work? Keep its project open, ungrouped, or close it too, which stops 1 tab and the \
+             programs running in it. Folders and worktrees stay on disk."
+        )]
+        #[case::two_projects(
+            2,
+            "Delete the group work? Keep its 2 projects open, ungrouped, or close them too, which stops 2 tabs and \
+             the programs running in them. Folders and worktrees stay on disk."
+        )]
+        fn the_confirmation_says_what_happens_to_its_projects(#[case] grouped: usize, #[case] expected: &str) {
+            let (app, _rx, _dirs) = asked_to_delete(grouped, 2);
+
+            assert_eq!(confirmation(&app).as_deref(), Some(expected));
+        }
+
+        #[test]
+        fn without_tabs_the_confirmation_stops_nothing() {
+            let (mut app, rx, _dirs) = app_with(1);
+            click_close(&mut app, WorkspaceRow::Tab(0, 0));
+            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            new_group(&mut app, "work");
+            let work = group_label(&app, 0);
+            move_to(&mut app, 0, &work);
 
             ask_from_the_close_button(&mut app);
 
+            let expected = "Delete the group work? Keep its project open, ungrouped, or close it too. \
+                Folders and worktrees stay on disk.";
             assert_eq!(confirmation(&app).as_deref(), Some(expected));
+        }
+
+        #[rstest]
+        #[case::empty(0, (DELETE_SUBMIT, None))]
+        #[case::with_projects(1, (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT)))]
+        fn only_a_group_with_projects_asks_what_to_do_with_them(
+            #[case] grouped: usize,
+            #[case] expected: (&'static str, Option<&'static str>),
+        ) {
+            let (app, _rx, _dirs) = asked_to_delete(grouped, 1);
+
+            assert_eq!(buttons(&app), Some(expected));
         }
 
         #[test]
         fn confirming_deletes_the_group_and_keeps_its_projects_open_and_ungrouped() {
             let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
 
-            click(&mut app, form_button(DELETE_SUBMIT, 0));
+            click(&mut app, form_button(KEEP_PROJECTS_SUBMIT, 0));
 
             assert_eq!((app.groups.len(), app.projects.len(), app.projects[0].group), (0, 1, None));
+        }
+
+        #[test]
+        fn enter_keeps_the_projects() {
+            let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
+
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+            assert_eq!((app.groups.len(), app.projects.len(), app.projects[0].closing), (0, 1, false));
+        }
+
+        #[test]
+        fn closing_its_projects_deletes_the_group_and_closes_only_them() {
+            let (mut app, rx, _dirs) = asked_to_delete(2, 3);
+            let loose = app.projects[2].id;
+
+            click(&mut app, extra_button());
+
+            pump_until(&mut app, &rx, "the grouped projects close", |a| a.projects.len() == 1);
+            assert_eq!(
+                (app.overlay.is_none(), app.groups.len(), app.projects[0].id, app.projects[0].group),
+                (true, 0, loose, None)
+            );
+        }
+
+        #[test]
+        fn the_projects_being_closed_stay_in_the_group_until_they_are_gone() {
+            let (mut app, rx, _dirs) = asked_to_delete(2, 2);
+            let work = app.groups[0].id;
+
+            click(&mut app, extra_button());
+
+            let meanwhile = (app.groups.len(), app.projects.iter().map(|p| (p.closing, p.group)).collect::<Vec<_>>());
+            assert_eq!(meanwhile, (1, vec![(true, Some(work)), (true, Some(work))]));
+            pump_until(&mut app, &rx, "the group goes with its projects", |a| a.groups.is_empty());
+            assert!(app.projects.is_empty());
+        }
+
+        #[test]
+        fn a_project_moved_into_the_group_meanwhile_keeps_it_after_the_others_close() {
+            let (mut app, rx, _dirs) = asked_to_delete(1, 2);
+            let work = group_label(&app, 0);
+            let moved = app.projects[1].id;
+            click(&mut app, extra_button());
+            move_to(&mut app, 1, &work);
+
+            pump_until(&mut app, &rx, "the old project closes", |a| a.projects.len() == 1);
+            app.close_project(moved);
+            pump_until(&mut app, &rx, "the moved project closes", App::is_empty);
+
+            assert_eq!(app.groups.len(), 1);
+        }
+
+        #[test]
+        fn a_project_moved_into_the_group_and_closed_before_the_others_still_keeps_it() {
+            let (mut app, rx, _dirs) = asked_to_delete(1, 2);
+            let work = group_label(&app, 0);
+            let moved = app.projects[1].id;
+            click(&mut app, extra_button());
+            move_to(&mut app, 1, &work);
+            app.projects[1].workspaces[0].tabs.clear();
+
+            app.close_project(moved);
+            let closed_first = app.projects.len() == 1 && app.projects[0].closing;
+            pump_until(&mut app, &rx, "the old project closes", App::is_empty);
+
+            assert_eq!((closed_first, app.groups.len()), (true, 1));
+        }
+
+        #[test]
+        fn a_project_already_closing_does_not_count_for_the_dialog() {
+            let (mut app, _rx, _dirs) = asked_to_delete(1, 1);
+            app.projects[0].closing = true;
+
+            assert_eq!(buttons(&app), Some((DELETE_SUBMIT, None)));
+            assert_eq!(confirmation(&app).as_deref(), Some("Delete the group work?"));
+        }
+
+        #[test]
+        fn closing_every_project_leaves_the_app_open_and_empty() {
+            let (mut app, rx, _dirs) = asked_to_delete(1, 1);
+
+            click(&mut app, extra_button());
+
+            pump_until(&mut app, &rx, "the project closes", App::is_empty);
+            assert!(app.groups.is_empty());
         }
 
         #[test]
@@ -7878,7 +8349,7 @@ mod tests {
 
         use super::*;
         use crate::activity::Status;
-        use crate::test_util::{FakeCodex, FakeOpencode, write_executable};
+        use crate::test_util::{FakeCodex, FakeGemini, FakeOpencode, write_executable};
 
         const FAKE_CLAUDE: &str = r#"#!/bin/sh
 s="$1/sessions/$$.json"
@@ -8220,6 +8691,7 @@ rm -f "$1/sessions/$$.json"
         enum Fake {
             Claude(Claude, i32),
             Codex(FakeCodex, usize),
+            Gemini(FakeGemini, usize),
             Opencode(FakeOpencode, usize),
         }
 
@@ -8266,6 +8738,11 @@ rm -f "$1/sessions/$$.json"
                     type_line(app, &codex.command_line());
                     watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
                     Fake::Codex(codex, app.projects[0].workspaces[0].active)
+                } else if agent == agents::GEMINI {
+                    let gemini = FakeGemini::new(&app.projects[0].path);
+                    type_line(app, &gemini.command_line());
+                    pump_until(app, rx, "Gemini runs", |a| runs(a, agents::GEMINI));
+                    Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
                 } else if agent == agents::OPENCODE {
                     Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active)
                 } else {
@@ -8294,6 +8771,17 @@ rm -f "$1/sessions/$$.json"
                                 tab_term(a, 0, *tab).emulator.title() == title
                             });
                         }
+                        Fake::Gemini(gemini, tab) => {
+                            let title = match status {
+                                "busy" => "✦  Working… (project)",
+                                "waiting" => "✋  Action Required (project)",
+                                _ => "◇  Ready (project)",
+                            };
+                            gemini.signal(title);
+                            pump_until(&mut self.app, &self.rx, "Gemini sets its title", |a| {
+                                tab_term(a, 0, *tab).emulator.title() == title
+                            });
+                        }
                         Fake::Opencode(opencode, tab) => {
                             let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
                             opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
@@ -8314,9 +8802,11 @@ rm -f "$1/sessions/$$.json"
             }
         }
 
-        #[test]
-        fn a_restart_names_the_agent_at_work_and_the_other_program() {
-            let mut w = Watched::start(agents::CLAUDE, true);
+        #[rstest]
+        fn a_restart_names_the_agent_at_work_and_the_other_program(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+        ) {
+            let mut w = Watched::start(agent, true);
             type_line(&mut w.app, "sleep 30");
             pump_until(&mut w.app, &w.rx, "sleep runs", |a| {
                 a.term().and_then(|t| t.program(&a.config)).as_deref() == Some("sleep")
@@ -8333,9 +8823,9 @@ rm -f "$1/sessions/$$.json"
                 .is_some_and(|pid| agents::detect(&app.config, &process::args(pid)).as_deref() == Some(agent))
         }
 
-        #[test]
-        fn a_codex_tab_follows_its_turns_and_approvals() {
-            let mut w = Watched::start(agents::CODEX, false);
+        #[rstest]
+        fn a_tab_follows_turns_and_approvals(#[values(agents::CODEX, agents::GEMINI)] agent: &str) {
+            let mut w = Watched::start(agent, false);
             let mut seen = vec![status(&w.app, 0, 0)];
 
             for step in ["waiting", "busy", "idle"] {
@@ -8349,7 +8839,7 @@ rm -f "$1/sessions/$$.json"
 
         #[rstest]
         fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
-            #[values(agents::CLAUDE, agents::CODEX)] agent: &str,
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
         ) {
             let mut w = Watched::start(agent, true);
 
@@ -8372,6 +8862,33 @@ rm -f "$1/sessions/$$.json"
 
             assert_eq!(seen, [Status::Working, Status::Idle, Status::Working].map(Some));
             assert_eq!(second_row(&mut w.app), (2, "▌ │   DeepSeek V4… · 12%".to_string()));
+        }
+
+        #[test]
+        fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_data() {
+            let mut w = Watched::start(agents::GEMINI, false);
+            let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
+            fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+            watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| {
+                a.tab().is_some_and(|t| t.context().is_some())
+            });
+            assert!(second_row(&mut w.app).1.contains("1%"));
+            w.app.nav = Some(ui::Nav::Workspaces);
+            let compact = rendered(&mut w.app, Rect::new(0, 0, 80, 30));
+            let contents: String =
+                compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
+            assert!(contents.contains("gemini-"));
+            assert!(contents.contains("1%"));
+            let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
+            let other = fake.start(&w.app.projects[0].path);
+            watch_until(&mut w.app, &w.rx, "the ambiguous context goes", |a| {
+                a.tab().is_some_and(|t| t.context().is_none())
+            });
+            assert_eq!(status(&w.app, 0, 0), Some(Status::Working));
+            drop(other);
+            watch_until(&mut w.app, &w.rx, "the unambiguous context returns", |a| {
+                a.tab().is_some_and(|t| t.context().is_some())
+            });
         }
 
         #[test]
@@ -8407,7 +8924,9 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_hidden_tab_that_finishes_says_so(#[values(agents::CLAUDE, agents::CODEX, agents::OPENCODE)] agent: &str) {
+        fn a_hidden_tab_that_finishes_says_so(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+        ) {
             let mut w = Watched::start(agent, true);
 
             w.report("idle", 6);
@@ -8417,7 +8936,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
             let mut w = Watched::start(agent, true);
             w.report("waiting", 6);
             w.told();
@@ -8428,7 +8947,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
             let mut w = Watched::start(agent, false);
 
             w.report("waiting", 6);
@@ -8437,7 +8956,9 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_question_answered_at_once_stays_quiet(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn a_question_answered_at_once_stays_quiet(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
+        ) {
             let mut w = Watched::start(agent, true);
             w.report("waiting", 1);
 
@@ -8546,6 +9067,19 @@ rm -f "$1/sessions/$$.json"
                 let (mut back, rx, _bin) = restored(&saved, agents::CODEX, true);
 
                 wait_resumed(&mut back, &rx, &format!("resume {CODEX_ID}"));
+            }
+
+            #[test]
+            fn gemini_comes_back_in_its_conversation_and_plan_mode() {
+                let (mut app, rx, _dirs) = app_with(1);
+                let gemini = FakeGemini::new(&app.projects[0].path);
+                type_line(&mut app, &format!("{} --approval-mode plan", gemini.command_line()));
+                watch_until(&mut app, &rx, "Gemini is ready", |a| status(a, 0, 0) == Some(Status::Idle));
+                gemini.append(include_str!("../tests/fixtures/gemini/0.63.0/prompt.jsonl"));
+                let saved = remembered(&mut app, &rx);
+                let (mut back, rx, _bin) = restored(&saved, agents::GEMINI, true);
+                wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
+                assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
             }
 
             #[test]
@@ -11541,6 +12075,94 @@ rm -f "$1/sessions/$$.json"
                 assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
             }
         }
+
+        mod plane {
+            use super::*;
+
+            const ME: &str = r#"{"id":"me-1","display_name":"Ana"}"#;
+            const MEMBERS: &str = r#"[{"id":"me-1","display_name":"Ana","email":"ana@acme.dev"}]"#;
+            const ITEMS: &str = r#"{"data":[{"identifier":"ENG-42","sequence_id":42,"name":"Login redirect loops",
+                "updated_at":"2026-09-30T00:00:00Z","state":{"name":"Todo","group":"unstarted"}}],
+                "pagination":{"style":"cursor"},"has_more":false,"next_cursor":null}"#;
+
+            fn plane(s: &mut Setup) -> FakeHttp {
+                let server = FakeHttp::start(vec![
+                    ("GET /api/v1/users/me/", 200, ME),
+                    ("GET /api/v1/workspaces/acme/members/", 200, MEMBERS),
+                    ("GET /api/v2/workspaces/acme/work-items/", 200, ITEMS),
+                ]);
+                s.app.apis.plane = Some(server.url());
+                server
+            }
+
+            fn type_workspace(s: &mut Setup) {
+                open_list(s);
+                to_tab(s, IssueTab::One(Source::Plane));
+                type_text(&mut s.app, "acme");
+                enter(s);
+            }
+
+            #[test]
+            fn connecting_saves_the_workspace_then_the_key_and_lists() {
+                let mut s = setup(false, "echo '[]'");
+                let server = plane(&mut s);
+
+                type_workspace(&mut s);
+                let config = config::load(&s.config.path().join("config.json"));
+                type_text(&mut s.app, "k3y");
+                enter(&mut s);
+
+                pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Plane));
+                assert_eq!(shown(&s.app), ["ENG-42"]);
+                assert_eq!(config.plane_workspace, "acme");
+                assert_eq!(secrets::read(&secrets_file(&s), "plane_api_key").as_deref(), Some("k3y"));
+                assert!(server.request(0).to_lowercase().contains("x-api-key: k3y"), "{}", server.request(0));
+            }
+
+            #[test]
+            fn a_key_from_the_environment_connects_once_the_workspace_is_typed() {
+                let mut s = setup(false, "echo '[]'");
+                let _server = plane(&mut s);
+                s.app.env_tokens.insert(Source::Plane, "env-key".into());
+
+                type_workspace(&mut s);
+
+                pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Plane));
+                assert_eq!(shown(&s.app), ["ENG-42"]);
+            }
+
+            #[test]
+            fn a_key_without_a_workspace_is_not_connected() {
+                let mut s = setup(false, "echo '[]'");
+                secrets::write(&secrets_file(&s), "plane_api_key", "k3y").expect("save key");
+
+                open_list(&mut s);
+
+                assert!(!browser(&s.app).connections.contains_key(&Source::Plane));
+            }
+
+            #[test]
+            fn another_workspace_forgets_the_account_of_the_old_one() {
+                let mut s = setup(false, "echo '[]'");
+                s.app.accounts.insert(Source::Plane, Account { handle: "Ana".into(), workspace: "acme".into() });
+                s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+
+                s.app.set_config(Config { plane_workspace: "other".into(), ..s.app.config.clone() });
+
+                assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+            }
+
+            #[test]
+            fn a_key_checked_without_a_workspace_says_to_set_it() {
+                let mut s = setup(false, "echo '[]'");
+
+                s.app.check_token(Source::Plane, Secret("k3y".into()));
+
+                let event = s.rx.recv_timeout(Duration::from_secs(10)).expect("the answer arrives");
+                let AppEvent::TokenChecked { result, .. } = event else { panic!("not a token check") };
+                assert_eq!(result.err().map(|e| e.to_string()).as_deref(), Some("set the Plane workspace first"));
+            }
+        }
     }
 
     mod restarting {
@@ -12012,6 +12634,304 @@ rm -f "$1/sessions/$$.json"
     mod changes_panel {
         use super::*;
         use crate::test_util::{git, write_executable};
+
+        mod every_project {
+            use super::*;
+
+            fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
+                app.changes.open = true;
+                app.changes.set_scope(changes::Scope::Every);
+                app.refresh_changes(Instant::now());
+                pump_until(app, rx, "every workspace has a summary", |a| {
+                    a.every_targets().iter().all(|(t, _)| a.changes.summary(t.workspace).is_some())
+                });
+            }
+
+            fn row(app: &App, wanted: panel::Row) -> Position {
+                let view = app.panel_view().expect("panel");
+                let index = panel::rows(&view).iter().position(|r| *r == wanted).expect("row");
+                let body = panel::parts(panel_area(app), &view).body;
+                Position::new(body.x + 8, body.y + u16::try_from(index).expect("row index"))
+            }
+
+            fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
+                let view = app.panel_view().expect("panel");
+                let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+                let file = diff.files.iter().position(|f| f.path == path).expect("file");
+                click(app, row(app, panel::Row::File(file)));
+                pump_until(app, rx, "the file patch loads", |a| {
+                    let Some(panel::View { body: panel::Body::Ready(d), .. }) = a.panel_view() else { return false };
+                    !d.files[file].hunks.is_empty()
+                });
+                file
+            }
+
+            #[test]
+            fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
+                let shop = repo_with_edit();
+                let worktree = TempDir::new();
+                let checkout = worktree.path().join("topic");
+                git(shop.path(), &["worktree", "add", "--quiet", "-b", "topic", checkout.to_str().expect("path")]);
+                std::fs::write(checkout.join("new.txt"), "new\n").expect("edit worktree");
+                let api = repo_with_edit();
+                let clean = git_repo(&[]);
+                let plain = TempDir::new();
+                let (mut app, rx) = app_in(shop.path(), no_config());
+                for (path, name) in [(api.path(), "api"), (clean.path(), "clean"), (plain.path(), "notes")] {
+                    let p = app.add_project(path.to_path_buf(), AREA).expect("project");
+                    app.projects[p].name = Some(name.into());
+                }
+                app.projects[0].name = Some("shop".into());
+                loaded_every(&mut app, &rx);
+                let view = app.panel_view().expect("panel");
+                assert_eq!(
+                    view.headers.iter().map(|h| (h.label.as_str(), h.workspace)).collect::<Vec<_>>(),
+                    [("shop", false), ("main", true), ("topic", true), ("api", false)]
+                );
+                assert_eq!(view.folded, [true; 3]);
+                let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+                assert!(diff.files.iter().all(|f| f.hunks.is_empty()));
+                let before = app.active;
+                let header = row(&app, panel::Row::Header(0));
+                click(&mut app, header);
+                assert_eq!(app.active, before);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]
+                );
+                let header = row(&app, panel::Row::Header(0));
+                click(&mut app, header);
+                let sub = row(&app, panel::Row::Header(2));
+                click(&mut app, sub);
+                assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
+                let mut filter = changes::filter::Filter::default();
+                "new.txt".chars().for_each(|c| filter.push(c));
+                app.changes.filter = Some(filter);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [panel::Row::Header(0), panel::Row::Header(2)]
+                );
+                let mut filter = changes::filter::Filter::default();
+                "a.txt".chars().for_each(|c| filter.push(c));
+                app.changes.filter = Some(filter);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [
+                        panel::Row::Header(0),
+                        panel::Row::Header(1),
+                        panel::Row::File(0),
+                        panel::Row::Header(3),
+                        panel::Row::File(2)
+                    ]
+                );
+                git(shop.path(), &["checkout", "--", "a.txt"]);
+                let main = app.projects[0].workspaces[0].id;
+                let topic = app.projects[0].workspaces[1].id;
+                app.changes.invalidate_summary(main);
+                app.refresh_changes(Instant::now());
+                pump_until(&mut app, &rx, "the clean workspace loses its sub-header", |a| {
+                    a.changes.summary(main).and_then(changes::Model::diff).is_some_and(|d| d.files.is_empty())
+                });
+                assert!(app.every_targets().iter().any(|(t, hidden)| t.workspace == topic && !hidden));
+            }
+
+            #[test]
+            fn scope_and_mode_survive_a_restore_without_changing_the_session_version() {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                app.changes.mode = changes::Mode::Commits;
+                let saved = app.state();
+                let (mut restored, _) = new_app(no_config());
+                restored.restore(&saved, AREA);
+                assert_eq!(
+                    (saved.version, restored.changes.scope, restored.changes.mode),
+                    (5, changes::Scope::Every, changes::Mode::Commits)
+                );
+                let mut old = serde_json::to_value(saved).expect("json");
+                old["changes"].as_object_mut().expect("changes").remove("scope");
+                let old: State = serde_json::from_value(old).expect("older session");
+                restored.restore(&old, AREA);
+                assert_eq!(restored.changes.scope, changes::Scope::Project);
+            }
+
+            #[test]
+            fn a_clean_collection_has_no_headers_or_files() {
+                let repo = git_repo(&[]);
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let view = app.panel_view().expect("panel");
+                assert_eq!(view.headers, Vec::new());
+                assert_eq!(panel::rows(&view), Vec::new());
+            }
+
+            #[test]
+            fn a_failed_scan_does_not_claim_the_collection_is_clean() {
+                let repo = git_repo(&[]);
+                let (mut app, _) = app_in(repo.path(), no_config());
+                app.projects[0].name = Some("shop".into());
+                app.changes.scope = changes::Scope::Every;
+                let targets = app.every_targets();
+                let (workspace, generation, request) =
+                    app.changes.request_every(&targets, Instant::now()).expect("summary");
+                app.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
+                assert_eq!(
+                    app.panel_view().expect("panel").body,
+                    panel::Body::Failed("shop: cannot read status".into())
+                );
+            }
+
+            #[rstest::rstest]
+            #[case::removing(Phase::Removing("main".into()))]
+            #[case::closing(Phase::Closing)]
+            fn only_open_workspaces_are_scanned_and_shown(#[case] phase: Phase) {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                app.projects[0].workspaces[0].phase = phase;
+                assert!(app.every_targets().is_empty());
+                assert!(app.changes_target().is_none());
+                let view = app.panel_view().expect("panel");
+                assert!(view.owners.is_empty() && view.headers.is_empty());
+                assert!(matches!(view.body, panel::Body::Ready(d) if d.files.is_empty()));
+            }
+
+            #[rstest::rstest]
+            #[case::closed("closed")]
+            #[case::removed("removed")]
+            #[case::removed_outside_the_app("external")]
+            fn a_departing_workspace_is_forgotten(#[case] action: &str) {
+                let repo = repo_with_edit();
+                let tree = TempDir::new();
+                let path = tree.path().join("topic");
+                git(repo.path(), &["worktree", "add", "--quiet", "-b", "topic", path.to_str().expect("path")]);
+                std::fs::write(path.join("new.txt"), "new\n").expect("edit worktree");
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[1].id);
+                app.changes.headers.insert(workspace);
+                match action {
+                    "closed" => app.drop_workspace(project, workspace),
+                    "removed" => {
+                        assert!(app.start_removal(project, workspace, true, false, None));
+                        pump_until(&mut app, &rx, "the worktree is removed", |a| {
+                            a.workspace_position(workspace).is_none()
+                        });
+                    }
+                    _ => {
+                        git(repo.path(), &["worktree", "remove", "--force", path.to_str().expect("path")]);
+                        app.sync_worktrees();
+                    }
+                }
+                assert!(app.changes.summary(workspace).is_none());
+                assert!(!app.changes.headers.contains(&workspace));
+                assert!(!app.panel_view().expect("panel").owners.contains(&workspace));
+            }
+
+            #[rstest::rstest]
+            #[case::closed(true)]
+            #[case::removed(false)]
+            fn a_departing_project_and_its_workspaces_are_forgotten(#[case] close: bool) {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+                app.changes.headers.extend([project, workspace]);
+                if close {
+                    app.close_project(project);
+                } else {
+                    app.remove_project(0);
+                }
+                assert!(app.changes.summary(workspace).is_none());
+                assert!(app.changes.headers.is_empty());
+                assert!(app.every_targets().is_empty());
+            }
+
+            #[test]
+            fn a_view_uses_the_targets_it_already_resolved() {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let targets = app.every_targets();
+                std::fs::remove_file(repo.path().join(".git/HEAD")).expect("head disappears after resolving targets");
+                let (body, owners, headers) = app.every_body(&targets);
+                assert!(matches!(body, panel::Body::Ready(d) if d.files.len() == 1));
+                assert_eq!(owners, [targets[0].0.workspace]);
+                assert_eq!(headers.len(), 1);
+            }
+
+            #[test]
+            fn file_actions_reach_the_workspace_that_owns_the_file() {
+                let first = repo_with_edit();
+                let second = git_repo(&[("b.txt", "one\n")]);
+                std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
+                let scripts = TempDir::new();
+                let agent = scripts.path().join("agent");
+                let editor = scripts.path().join("editor");
+                write_executable(
+                    &agent,
+                    "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n",
+                );
+                write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
+                let config_path = scripts.path().join("config.json");
+                config::save(
+                    &config_path,
+                    &Config {
+                        agent_commands: [("fake".into(), agent.display().to_string())].into(),
+                        ..Config::default()
+                    },
+                )
+                .expect("config");
+                let (mut app, rx) = app_in(second.path(), config_path);
+                app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
+                wait_until("the agent runs", || {
+                    agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
+                });
+                let owner = app.projects[0].workspaces[0].id;
+                let agent_pane = app.term().expect("agent pane").id;
+                app.open_project(first.path().to_path_buf(), AREA).expect("other project");
+                let active = app.active;
+                app.projects[0].collapsed = true;
+                app.projects[0].workspaces[0].collapsed = true;
+                loaded_every(&mut app, &rx);
+                let file = open_file(&mut app, &rx, "b.txt");
+                let position = row(&app, panel::Row::Hunk(file, 0));
+                let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
+                let ask = panel::actions(hunk)[1].1.as_position();
+                click(&mut app, ask);
+                assert_eq!(app.active, 0);
+                assert_eq!(app.term().expect("visible agent").id, agent_pane);
+                assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+                assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
+                app.term_mut().expect("visible agent").write(b"\r");
+                wait_until("the owning agent receives the reference", || {
+                    std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
+                });
+                assert!(!first.path().join("got").exists());
+                assert_eq!(app.panel_view().expect("panel").owners[file], owner);
+                app.goto(Goto::Place { project: app.projects[active].id, workspace: None, tab: None });
+                app.projects[0].collapsed = true;
+                app.projects[0].workspaces[0].collapsed = true;
+                app.editor_env = vec![("VISUAL".into(), editor.display().to_string())];
+                let open = panel::actions(hunk)[0].1.as_position();
+                click(&mut app, open);
+                wait_until("the editor runs in the owning workspace", || second.path().join("editor-got").exists());
+                let got = std::fs::read_to_string(second.path().join("editor-got")).expect("editor arguments");
+                assert_eq!(
+                    got,
+                    format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display())
+                );
+                assert_eq!(
+                    (app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()),
+                    (2, 1)
+                );
+                assert_eq!(app.active, 0);
+                assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
+                assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
+                assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+                assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
+            }
+        }
 
         fn repo_with_edit() -> TempDir {
             let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
@@ -12541,6 +13461,41 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
+            let (repo, other) = (repo(), TempDir::new());
+            let path = other.path().join("note.md").display().to_string();
+            std::fs::write(&path, "# Note\nRead this.\n").expect("write");
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "shop");
+            app.open_link(&files::link::Target { path: path.clone(), lines: Some((1, 2)) });
+            settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
+            assert!(file(&app).gutter.is_none());
+            let ask = action_pos(&app, Action::Ask);
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+            let copy = action_pos(&app, Action::Copy);
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
+            let workspace = app.project().expect("project").workspace().expect("workspace").id;
+            app.files.viewer_mut(workspace).expect("viewer").selection = None;
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            open(&mut app);
+            open(&mut app);
+            assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");
+            let back = panel::back(panel_area(&app)).as_position();
+            click(&mut app, back);
+            assert!(!results(&view(&app)).is_empty(), "back returns to the previous search");
+            assert_eq!(app.files.last(workspace), Some(path.as_str()));
+            let field = panel::field(panel_area(&app)).as_position();
+            click(&mut app, field);
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            assert!(matches!(view(&app).screen, Screen::Tree(t) if t.rows.iter().all(|r| r.path != path)));
+        }
+
+        #[test]
         fn the_viewer_follows_edits() {
             let repo = repo();
             let (mut app, rx) = opened(&repo);
@@ -12830,6 +13785,7 @@ rm -f "$1/sessions/$$.json"
         use ratatui::Terminal;
         use ratatui::backend::TestBackend;
         use ratatui::style::Modifier;
+        use rstest::rstest;
 
         use super::*;
 
@@ -12863,6 +13819,71 @@ rm -f "$1/sessions/$$.json"
             click(&mut app, cell(12, 0));
             assert!(app.files.open);
             assert_eq!(shown(&app), Some(("src/main.rs".to_string(), Some((2, 3)))));
+        }
+
+        #[rstest]
+        #[case::absolute_path(false, false, false)]
+        #[case::home_path(true, false, false)]
+        #[case::absolute_path_with_mouse_reporting(false, true, false)]
+        #[case::home_path_with_mouse_reporting(true, true, false)]
+        #[case::absolute_image(false, false, true)]
+        #[case::home_image(true, false, true)]
+        #[case::absolute_image_with_mouse_reporting(false, true, true)]
+        #[case::home_image_with_mouse_reporting(true, true, true)]
+        fn an_outside_path_is_underlined_and_opens_in_the_viewer(
+            #[case] home_path: bool,
+            #[case] reads_mouse: bool,
+            #[case] picture_file: bool,
+        ) {
+            let (repo, other) = (repo(), TempDir::new());
+            let name = if picture_file { "preview.dat" } else { "plan.md" };
+            let path = other.path().join(name).display().to_string();
+            if picture_file {
+                image::RgbaImage::new(16, 8).save_with_format(&path, image::ImageFormat::Png).expect("write a png");
+            } else {
+                std::fs::write(&path, "# Plan\n\nFix the return label.\n").expect("write");
+            }
+            let printed = if home_path { format!("~/{name}") } else { path.clone() };
+            let mode = if reads_mouse { "\x1b[?1000h\x1b[?1006h" } else { "" };
+            let area = Rect { width: 200, ..AREA };
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            app.resize(area);
+            app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{mode}{printed}:2-3").as_bytes());
+            app.home = Some(other.path().to_path_buf());
+            app.term_mut().expect("a pane").input_at = None;
+            let pane = app.layout(area).pane;
+            let pos = Position::new(pane.x + 2, pane.y);
+            mouse_in(&mut app, MouseEventKind::Moved, pos, area);
+            let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
+            terminal.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
+            click_in(&mut app, pos, area);
+            assert_eq!(shown(&app), Some((path.clone(), Some((2, 3)))));
+            assert!(app.files.open);
+            assert!(!written(&app), "the program never gets the click");
+            wait_until("the outside file is read", || {
+                app.refresh(Instant::now());
+                while let Ok(event) = rx.try_recv() {
+                    app.handle_event(event, area).expect("handle event");
+                }
+                matches!(app.files_view().expect("files view").screen, ui::files::Screen::File(f)
+                    if f.content.as_ref().is_some_and(|c| if picture_file {
+                        matches!(&c.body, files::disk::Body::Image(p) if (p.format, p.width, p.height) == ("PNG", 16, 8))
+                    } else {
+                        c.lines() == ["# Plan", "", "Fix the return label."]
+                    }) && f.gutter.is_none())
+            });
+            if picture_file {
+                let ui::files::Screen::File(file) = app.files_view().expect("files view").screen else {
+                    panic!("a file shows")
+                };
+                let panel = app.layout(area).changes;
+                assert_eq!(ui::files::action(panel, &file, ui::changes::Action::Open), Rect::default());
+                for action in [ui::changes::Action::Ask, ui::changes::Action::Copy] {
+                    click_in(&mut app, ui::files::action(panel, &file, action).as_position(), area);
+                }
+                assert_eq!(app.take_host_writes(), [clipboard::osc52(&path), clipboard::osc52(&path)]);
+            }
         }
 
         #[test]
@@ -13670,17 +14691,17 @@ rm -f "$s"
             fn waiting_for_an_agent_cornercase_cannot_follow_says_so() {
                 let (mut app, rx) = app();
                 let bin = TempDir::new();
-                let gemini = bin.path().join("gemini");
-                write_executable(&gemini, "#!/bin/sh\nsleep 30\n");
+                let aider = bin.path().join("aider");
+                write_executable(&aider, "#!/bin/sh\nsleep 30\n");
                 let id = first(&app);
-                type_line(&mut app, &gemini.display().to_string());
-                pump_until(&mut app, &rx, "gemini runs", |a| {
+                type_line(&mut app, &aider.display().to_string());
+                pump_until(&mut app, &rx, "aider runs", |a| {
                     crate::agents::detect(&a.config, &pane(a, id).foreground_args()).is_some()
                 });
 
                 let message = error(now(&mut app, None, wait_for(id, Until::Stops, None)));
 
-                assert!(message.contains(&format!("pane {id} runs gemini")), "{message}");
+                assert!(message.contains(&format!("pane {id} runs aider")), "{message}");
             }
 
             #[test]
@@ -13816,6 +14837,139 @@ rm -f "$s"
             }
         }
 
+        fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
+            wait_until(what, || {
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                app.refresh(Instant::now());
+                cond(app)
+            });
+        }
+
+        mod gemini {
+            use super::*;
+            use crate::test_util::FakeGemini;
+
+            struct Running {
+                app: App,
+                rx: Receiver<AppEvent>,
+                fake: FakeGemini,
+                _dirs: Vec<TempDir>,
+            }
+
+            impl Running {
+                fn new() -> Self {
+                    let (mut app, rx, dirs) = app_with(1);
+                    let fake = FakeGemini::new(&app.projects[0].path);
+                    type_line(&mut app, &fake.command_line());
+                    refreshing(&mut app, &rx, "Gemini is idle", |a| {
+                        a.term().and_then(|t| t.agent.status()) == Some(activity::Status::Idle)
+                    });
+                    Self { app, rx, fake, _dirs: dirs }
+                }
+
+                fn send(&mut self, text: &str) {
+                    let command = Command::Send(wire::SendText {
+                        pane: Some(first(&self.app)),
+                        text: Some(text.into()),
+                        enter: true,
+                        ..wire::SendText::default()
+                    });
+                    ask(&mut self.app, None, command);
+                }
+
+                fn title(&mut self, title: &str) {
+                    self.fake.signal(title);
+                    pump_until(&mut self.app, &self.rx, "Gemini sets its title", |a| {
+                        a.term().is_some_and(|t| t.emulator.title() == title)
+                    });
+                }
+            }
+
+            #[test]
+            fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() {
+                let mut running = Running::new();
+                let id = first(&running.app);
+                running.send("fix the login");
+                assert_eq!(
+                    done(answered(&mut running.app, &running.rx, "Gemini records the prompt")).ids.pane,
+                    Some(id)
+                );
+                ask(&mut running.app, None, wait_for(id, Until::TurnOver, Some(5.0)));
+                running.app.refresh(Instant::now());
+                assert_eq!(answers(&mut running.app).len(), 0);
+                running.fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+                running.title("◇  Ready (project)");
+                let ended = done(answered(&mut running.app, &running.rx, "the Gemini turn ends"));
+                assert_eq!(ended.ended.as_deref(), Some("idle"));
+                ask(
+                    &mut running.app,
+                    None,
+                    Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
+                );
+                let Response::Ok(message) = answered(&mut running.app, &running.rx, "Gemini's last message is read")
+                else {
+                    panic!("last message failed")
+                };
+                assert_eq!(message["agent"], "gemini");
+                assert_eq!(message["text"], "OK");
+                assert_eq!(message["turn_over"], true);
+                assert!(message["written"].as_str().is_some());
+            }
+
+            #[rstest::rstest]
+            #[case::slash("/clear")]
+            #[case::help("?help")]
+            #[case::shell("!printf OK")]
+            fn local_commands_return_after_enter_without_a_prompt_record(#[case] text: &str) {
+                let mut running = Running::new();
+                running.send(text);
+                done(answered(&mut running.app, &running.rx, "the local command is submitted"));
+                assert_eq!(running.app.term().and_then(|t| t.context.prompted()), None);
+            }
+
+            #[test]
+            fn send_refuses_a_gemini_tool_confirmation() {
+                let mut running = Running::new();
+                running.title("✋  Action Required (project)");
+                refreshing(&mut running.app, &running.rx, "Gemini waits", |a| {
+                    a.term().and_then(|t| t.agent.status()) == Some(activity::Status::Waiting)
+                });
+                running.send("continue");
+                assert!(error(answers(&mut running.app).remove(0)).contains("waiting for an answer"));
+            }
+
+            #[test]
+            fn status_events_and_a_pending_restart_follow_geminis_turn() {
+                let mut running = Running::new();
+                let id = first(&running.app);
+                follow(&mut running.app, &[id]);
+                running.send("fix the login");
+                done(answered(&mut running.app, &running.rx, "Gemini records the prompt"));
+                let events = until_told(&mut running.app, &running.rx, "Gemini works", |events| {
+                    statuses(events, id) == [change(Some("idle"), Some("working"))]
+                });
+                assert!(
+                    told(&events)
+                        .iter()
+                        .any(|(what, _)| { matches!(what, wire::What::Status { agent, .. } if agent == "gemini") })
+                );
+                let status = value(&mut running.app, None, Command::Status(wire::Status {}));
+                assert_eq!(status["projects"][0]["workspaces"][0]["tabs"][0]["panes"][0]["status"], "working");
+                ask(&mut running.app, None, Command::RestartWhenIdle(wire::RestartWhenIdle { timeout: Some(5.0) }));
+                running.app.refresh(Instant::now());
+                assert_eq!(answers(&mut running.app), Vec::<Response>::new());
+                assert!(running.app.take_restart().is_none());
+                running.title("◇  Ready (project)");
+                assert!(matches!(
+                    answered(&mut running.app, &running.rx, "Gemini releases the restart"),
+                    Response::Ok(_)
+                ));
+                assert!(running.app.take_restart().is_some());
+            }
+        }
+
         mod agents {
             use super::*;
 
@@ -13873,16 +15027,6 @@ rm -f "$s"
                 fn answered(&mut self, what: &str) -> Response {
                     answered(&mut self.app, &self.rx, what)
                 }
-            }
-
-            fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
-                wait_until(what, || {
-                    while let Ok(ev) = rx.try_recv() {
-                        app.handle_event(ev, AREA).expect("handle event");
-                    }
-                    app.refresh(Instant::now());
-                    cond(app)
-                });
             }
 
             #[test]
@@ -14210,7 +15354,7 @@ rm -f "$s"
                     Command::RestartWhenIdle(wire::RestartWhenIdle { timeout })
                 }
 
-                fn working(agent: &mut Agent, prompt: &str) -> u64 {
+                pub(super) fn working(agent: &mut Agent, prompt: &str) -> u64 {
                     let id = agent.start(None);
                     ask(&mut agent.app, None, send_text(id, prompt, true, false));
                     done(agent.answered("the enter is pressed"));
@@ -14356,6 +15500,71 @@ rm -f "$s"
 
                     let answered = answers(&mut agent.app);
                     assert_eq!((agent.app.take_restart(), toast(&agent.app), answered), (None, None, Vec::new()));
+                }
+            }
+
+            mod keeping_awake {
+                use super::restarting_when_idle::working;
+                use super::*;
+                use crate::awake::{KEEP_FOR, State, Tool};
+                use crate::control::KeepAwake;
+
+                fn holding(agent: &mut Agent) -> TempDir {
+                    let fakes = TempDir::new();
+                    let script = fakes.path().join("holds");
+                    write_executable(&script, "#!/bin/sh\nexec cat\n");
+                    agent.app.awake = Awake::new(vec![Tool::new("holds", script, &[])]);
+                    agent.app.config.keep_awake = true;
+                    fakes
+                }
+
+                fn later(agent: &mut Agent, by: Duration) -> State {
+                    agent.app.watched = None;
+                    agent.app.refresh(Instant::now() + by);
+                    agent.app.awake.state()
+                }
+
+                #[test]
+                fn holds_while_an_agent_works_and_lets_go_after_the_grace() {
+                    let mut agent = Agent::new();
+                    let _fakes = holding(&mut agent);
+                    let id = working(&mut agent, "next step");
+                    let held = (agent.app.awake.state(), agent.app.report(None).keep_awake);
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn ends", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+
+                    let kept = later(&mut agent, Duration::ZERO);
+                    let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
+
+                    let report = KeepAwake { held: true, by: Some("holds".into()), unavailable: None };
+                    assert_eq!(held, (State::Held("holds".into()), Some(report)));
+                    assert_eq!((kept, released), (State::Held("holds".into()), State::Released));
+                }
+
+                #[test]
+                fn a_turn_left_with_a_background_shell_does_not_hold_it() {
+                    let mut agent = Agent::new();
+                    let _fakes = holding(&mut agent);
+                    let id = working(&mut agent, "watch in the background");
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+
+                    later(&mut agent, Duration::ZERO);
+                    let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
+
+                    assert_eq!(released, State::Released);
+                    agent.finish();
+                }
+
+                #[test]
+                fn is_left_out_of_the_report_while_the_setting_is_off() {
+                    let agent = Agent::new();
+
+                    assert_eq!(agent.app.report(None).keep_awake, None);
                 }
             }
         }

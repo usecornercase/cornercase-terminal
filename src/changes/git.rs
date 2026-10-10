@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Read;
 use std::os::unix::ffi::OsStringExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -34,6 +35,7 @@ pub struct Request {
     pub base: Option<String>,
     pub last: Option<u64>,
     pub previous: Vec<Arc<File>>,
+    pub expanded: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -43,7 +45,7 @@ pub struct Loaded {
     pub diff: Option<Diff>,
 }
 
-fn run(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
+pub(super) fn run(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
     worktree::check(worktree::git(dir, GLOBAL.iter().chain(args))?)
 }
 
@@ -74,7 +76,7 @@ pub fn branches(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-fn head(dir: &Path) -> Result<String> {
+pub(super) fn head(dir: &Path) -> Result<String> {
     text(dir, &["rev-parse", "--verify", "--quiet", "HEAD"])
         .or_else(|| text(dir, &["hash-object", "-t", "tree", "/dev/null"]))
         .ok_or_else(|| Error::Git("not a git repository".into()))
@@ -85,19 +87,23 @@ fn merge_base(dir: &Path, base: &str) -> Result<String> {
 }
 
 #[derive(Hash)]
-struct Untracked {
-    path: String,
-    size: u64,
-    bytes: Option<Vec<u8>>,
+pub(super) struct Untracked {
+    pub path: String,
+    pub size: u64,
+    pub bytes: Option<Vec<u8>>,
     modified: Option<SystemTime>,
 }
 
-fn untracked(dir: &Path) -> Result<Vec<Untracked>> {
+pub(super) fn untracked(dir: &Path) -> Result<Vec<Untracked>> {
     let out = run(dir, &["ls-files", "--others", "--exclude-standard", "-z"])?;
+    let paths = out.split(|b| *b == 0).filter(|p| !p.is_empty()).map(|raw| String::from_utf8_lossy(raw).into_owned());
+    Ok(read_untracked(dir, paths))
+}
+
+pub(super) fn read_untracked(dir: &Path, paths: impl IntoIterator<Item = String>) -> Vec<Untracked> {
     let mut files = Vec::new();
     let mut budget = UNTRACKED_READ_BYTES;
-    for raw in out.split(|b| *b == 0).filter(|p| !p.is_empty()) {
-        let path = String::from_utf8_lossy(raw).into_owned();
+    for path in paths {
         let Ok(meta) = std::fs::symlink_metadata(dir.join(&path)) else { continue };
         if meta.is_symlink() {
             let target = std::fs::read_link(dir.join(&path)).map(|t| t.into_os_string().into_vec()).unwrap_or_default();
@@ -113,7 +119,7 @@ fn untracked(dir: &Path) -> Result<Vec<Untracked>> {
         budget = budget.saturating_sub(bytes.as_ref().map_or(0, |b| b.len() as u64));
         files.push(Untracked { path, size: meta.len(), bytes, modified: meta.modified().ok() });
     }
-    Ok(files)
+    files
 }
 
 fn read(path: &Path) -> Option<Vec<u8>> {
@@ -123,6 +129,9 @@ fn read(path: &Path) -> Option<Vec<u8>> {
 }
 
 pub fn load(request: &Request) -> Result<Loaded> {
+    if let Some(expanded) = &request.expanded {
+        return super::summary::load(request, expanded);
+    }
     let dir = request.dir.as_path();
     let base = match request.mode {
         Mode::Uncommitted => None,
@@ -151,17 +160,52 @@ pub fn load(request: &Request) -> Result<Loaded> {
     if request.last == Some(digest) {
         return Ok(Loaded { base, digest, diff: None });
     }
-    let previous: HashMap<u64, Arc<File>> = request.previous.iter().map(|f| (f.digest, Arc::clone(f))).collect();
-    let reuse = |mut file: File| {
-        previous.get(&file.digest).cloned().unwrap_or_else(|| {
-            diff::finish(&mut file);
-            Arc::new(file)
-        })
+    let previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
+    let reviewed = |mut file: File| {
+        if request.mode == Mode::Uncommitted {
+            file.viewed_digest = fingerprint(dir, &from, &file);
+        }
+        reuse(file, &previous)
     };
-    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reuse).collect();
-    files.extend(untracked.iter().map(|u| reuse(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
+    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reviewed).collect();
+    files.extend(untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc<File> {
+    if let Some(old) = previous
+        .get(file.path.as_str())
+        .filter(|old| old.digest == file.digest && old.hunks.is_empty() == file.hunks.is_empty())
+    {
+        if old.viewed_digest == file.viewed_digest {
+            return Arc::clone(old);
+        }
+        let mut reused = File::clone(old);
+        reused.viewed_digest = file.viewed_digest;
+        return Arc::new(reused);
+    }
+    diff::finish(&mut file);
+    Arc::new(file)
+}
+
+pub(super) fn stamp(path: &Path) -> Option<(u64, i64, i64, i64, i64)> {
+    std::fs::symlink_metadata(path).ok().map(|m| (m.len(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec()))
+}
+
+pub(super) fn fingerprint(dir: &Path, from: &str, file: &File) -> u64 {
+    let stamp = stamp(&dir.join(&file.path));
+    let mut hasher = DefaultHasher::new();
+    (from, &file.path, &file.old_path, file.status, file.added, file.removed, stamp).hash(&mut hasher);
+    hasher.finish()
+}
+
+pub(super) fn patch(dir: &Path, from: &str, paths: &[&str]) -> Result<Vec<u8>> {
+    let mut args = vec!["diff", from];
+    args.extend(DIFF);
+    args.push("--");
+    args.extend(paths);
+    run(dir, &args)
 }
 
 pub fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>> {
@@ -182,7 +226,7 @@ mod tests {
     use crate::test_util::{TempDir, git, git_repo};
 
     fn request(dir: &Path, mode: Mode) -> Request {
-        Request { dir: dir.to_path_buf(), mode, base: None, last: None, previous: Vec::new() }
+        Request { dir: dir.to_path_buf(), mode, base: None, last: None, previous: Vec::new(), expanded: None }
     }
 
     fn files(dir: &Path, mode: Mode) -> Vec<(String, Status, usize, usize)> {
@@ -312,6 +356,49 @@ mod tests {
         let again = load(&Request { previous, ..request(repo.path(), Mode::Uncommitted) }).expect("load");
         let again = again.diff.expect("diff");
         assert!(Arc::ptr_eq(&first.files[0], &again.files[0]));
+    }
+
+    #[rstest::rstest]
+    #[case::project(false)]
+    #[case::every_project(true)]
+    fn an_equal_count_edit_between_the_patch_and_metadata_read_does_not_reuse_the_old_patch(#[case] every: bool) {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        write(repo.path(), "a.txt", "two\n");
+        let from = head(repo.path()).expect("head");
+        let bytes = patch(repo.path(), &from, &["a.txt"]).expect("old patch");
+        let mut old = diff::parse(&String::from_utf8_lossy(&bytes)).remove(0);
+        write(repo.path(), "a.txt", "six\n");
+        old.viewed_digest = fingerprint(repo.path(), &from, &old);
+        diff::finish(&mut old);
+        let old = Arc::new(old);
+        let request = Request {
+            previous: vec![Arc::clone(&old)],
+            expanded: every.then(|| vec!["a.txt".into()]),
+            ..request(repo.path(), Mode::Uncommitted)
+        };
+        let loaded = load(&request).expect("new patch").diff.expect("diff");
+        let new = &loaded.files[0];
+        assert_eq!(new.viewed_digest, old.viewed_digest);
+        assert_ne!(new.digest, old.digest);
+        assert!(!Arc::ptr_eq(&old, new));
+        assert_eq!(new.hunks[0].lines[1].text, "six");
+        let mut panel = crate::changes::Panel::default();
+        panel.set_gap(1, &old, 1, Vec::new());
+        assert!(panel.gap(1, new, 1).is_none());
+    }
+
+    #[test]
+    fn viewed_marks_survive_a_scope_switch_without_reading_the_folded_patch() {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        write(repo.path(), "a.txt", "two\n");
+        let request = request(repo.path(), Mode::Uncommitted);
+        let project = load(&request).expect("project").diff.expect("diff");
+        let every = load(&Request { expanded: Some(Vec::new()), ..request }).expect("summary").diff.expect("diff");
+        assert_eq!(every.files[0].hunks, Vec::new());
+        assert_ne!(every.files[0].digest, project.files[0].digest);
+        let mut panel = crate::changes::Panel::default();
+        panel.toggle_viewed(1, &project.files[0]);
+        assert!(panel.viewed(1, &every.files[0]));
     }
 
     #[test]

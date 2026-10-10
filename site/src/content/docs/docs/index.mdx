@@ -33,9 +33,9 @@ web-shop                   project     a folder
 
 - **Projects** are folders. The sidebar on the left lists them, with the number of workspaces each one has, optionally in groups with an icon and a colour.
 - **Workspaces** are lines of work inside a project. The first one is the project folder itself; you can add more, and in a git repository each one can get its own [worktree](guides/worktrees/).
-- **Tabs** are shells inside a workspace. A tab is named after whatever runs in it: `bash`, `nvim`, `claude`. A tab running Claude Code, Codex or opencode also shows whether it is [working, needs you or finished](guides/projects-workspaces-tabs/#what-your-agents-are-doing), and [how full its context is](guides/projects-workspaces-tabs/#how-full-the-context-is). The optional [agents section](guides/projects-workspaces-tabs/#the-agents-section) lists every agent in every project, one click from each.
+- **Tabs** are shells inside a workspace. A tab is named after whatever runs in it: `bash`, `nvim`, `claude`. A tab running Claude Code, Codex, Gemini CLI or opencode also shows whether it is [working, needs you or finished](guides/projects-workspaces-tabs/#what-your-agents-are-doing), and [how full its context is](guides/projects-workspaces-tabs/#how-full-the-context-is). The optional [agents section](guides/projects-workspaces-tabs/#the-agents-section) lists every agent in every project, one click from each.
 
-Claude Code, Codex and opencode tabs show their model and [context use](guides/projects-workspaces-tabs/#how-full-the-context-is), with a percentage when it is available.
+Claude Code, Codex, Gemini CLI and opencode tabs show their model and [context use](guides/projects-workspaces-tabs/#how-full-the-context-is), with a percentage when it is available.
 - **Panes** split a tab, right or down, like in Ghostty. Each pane is a real terminal.
 
 ## What you can do with it
@@ -54,7 +54,7 @@ Claude Code, Codex and opencode tabs show their model and [context use](guides/p
     [More about worktrees →](guides/worktrees/)
   </Card>
   <Card title="See what changed" icon="document">
-    In a git workspace, open the changes panel next to your panes: uncommitted edits, the branch's commits, or both, live.
+    In a git workspace, open the changes panel next to your panes: uncommitted edits, the branch's commits, or both, live. Choose Every project to review uncommitted changes across your projects.
     [More about the changes panel →](guides/changes/)
   </Card>
   <Card title="Read the code" icon="open-book">
@@ -66,7 +66,7 @@ Claude Code, Codex and opencode tabs show their model and [context use](guides/p
     [More about the TODO list →](guides/todo/)
   </Card>
   <Card title="Issue in, agent out" icon="rocket">
-    Read a GitHub issue, Shortcut story, Linear issue or Jira issue, press **start**, and an agent picks it up in its own worktree.
+    Read a GitHub issue, Shortcut story, Linear issue, Jira issue or Plane work item, press **start**, and an agent picks it up in its own worktree.
     [More about issues →](guides/issues-and-agents/)
   </Card>
   <Card title="Scripts and agents" icon="puzzle">

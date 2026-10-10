@@ -1,9 +1,9 @@
 ---
 source: src/ui/changes.rs
-assertion_line: 840
 expression: "render(&filtered(&sample(), \"returns.rs\"), None).backend()"
 ---
-"  Uncommitted   Commits   All                         ⌕  ×  "
+"  shop › issue-482   Every project                    ⌕  ×  "
+"  Uncommitted   Commits   All                               "
 "  ⌕ returns.rs                                           ×  "
 " 2 of 3 files                                        ● live "
 "                                                            "
@@ -24,6 +24,5 @@ expression: "render(&filtered(&sample(), \"returns.rs\"), None).backend()"
 "  45  48   }                                                "
 "                                                            "
 "  ▸ A tests/returns.rs                            new +1    "
-"                                                            "
 " ────────────────────────────────────────────────────────── "
 "  fold all                                    0 of 3 viewed "

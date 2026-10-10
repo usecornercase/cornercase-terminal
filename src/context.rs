@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::SystemTime;
 
 use serde::Deserialize;
@@ -14,10 +13,15 @@ use crate::log::Stamp;
 use crate::process;
 
 mod codex;
+mod discovery;
+mod gemini;
+mod jsonl;
 mod message;
 mod opencode;
 
 pub use message::{Record, Said};
+
+use discovery::Job;
 
 const TAIL: u64 = 1024 * 1024;
 const DIR_NAME_MAX: usize = 200;
@@ -50,10 +54,13 @@ pub struct Pane {
     shown: Option<Context>,
     codex: Option<codex::Rollout>,
     agent: Option<(i32, SystemTime)>,
-    finding: Option<Receiver<Option<PathBuf>>>,
+    finding: Job<Option<PathBuf>>,
     opencode: Option<opencode::Session>,
-    looking: Option<Receiver<(Option<opencode::Session>, opencode::Models)>>,
+    looking: Job<(Option<opencode::Session>, opencode::Models)>,
     models: opencode::Models,
+    gemini: Option<gemini::Session>,
+    reading: Job<Option<gemini::Session>>,
+    gemini_record: Option<(PathBuf, Option<String>)>,
     prompted: Option<SystemTime>,
 }
 
@@ -62,23 +69,14 @@ impl Pane {
         if self.agent.is_none_or(|(seen, _)| seen != pid) {
             *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
         }
-        match self.finding.as_ref().map(Receiver::try_recv) {
-            Some(Ok(found)) => {
-                self.finding = None;
-                if found.as_ref() != self.codex.as_ref().map(|r| &r.path) {
-                    self.codex = found.map(codex::Rollout::new);
-                    self.shown = None;
-                }
-            }
-            Some(Err(TryRecvError::Disconnected)) => self.finding = None,
-            Some(Err(TryRecvError::Empty)) | None => {}
-        }
-        if self.finding.is_none()
-            && let Some((pid, since)) = self.agent
+        if let Some(found) = self.finding.take()
+            && found.as_ref() != self.codex.as_ref().map(|r| &r.path)
         {
-            let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || tx.send(codex::rollout_path(pid, since)));
-            self.finding = Some(rx);
+            self.codex = found.map(codex::Rollout::new);
+            self.shown = None;
+        }
+        if let Some((pid, since)) = self.agent {
+            self.finding.start(move || codex::rollout_path(pid, since));
         }
         if let Some(rollout) = &mut self.codex {
             rollout.update();
@@ -91,27 +89,36 @@ impl Pane {
         if self.agent.is_none_or(|(seen, _)| seen != pid) {
             *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
         }
-        match self.looking.as_ref().map(Receiver::try_recv) {
-            Some(Ok((found, models))) => {
-                self.looking = None;
-                self.models = models;
-                self.shown = found.as_ref().and_then(|session| session.context.clone());
-                self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
-                self.opencode = found;
-            }
-            Some(Err(TryRecvError::Disconnected)) => self.looking = None,
-            Some(Err(TryRecvError::Empty)) | None => {}
+        if let Some((found, models)) = self.looking.take() {
+            self.models = models;
+            self.shown = found.as_ref().and_then(|session| session.context.clone());
+            self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
+            self.opencode = found;
         }
-        if self.looking.is_none()
+        if !self.looking.running()
             && let Some((pid, since)) = self.agent
         {
             let mut models = std::mem::take(&mut self.models);
-            let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || {
-                let found = opencode::look(pid, since, &mut models);
-                tx.send((found, models)).ok();
-            });
-            self.looking = Some(rx);
+            self.looking.start(move || (opencode::look(pid, since, &mut models), models));
+        }
+    }
+
+    pub fn update_gemini(&mut self, pid: i32, screen: &str) {
+        if self.agent.is_none_or(|(seen, _)| seen != pid) {
+            *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
+        }
+        if let Some(found) = self.reading.take() {
+            self.shown = found.as_ref().and_then(|session| session.context.clone());
+            self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
+            self.gemini_record = found.as_ref().map(|s| (s.path.clone(), s.id().map(str::to_string)));
+            self.gemini = found;
+        }
+        if !self.reading.running()
+            && let Some((pid, since)) = self.agent
+        {
+            let previous = self.gemini.take();
+            let footer = gemini::footer_model(screen);
+            self.reading.start(move || gemini::look(pid, since, previous, footer));
         }
     }
 
@@ -157,6 +164,7 @@ impl Pane {
         Some(match agent {
             agents::CLAUDE => Record::Claude(self.transcript.as_ref()?.path.clone()),
             agents::CODEX => Record::Codex(self.codex.as_ref()?.path.clone()),
+            agents::GEMINI => Record::Gemini(self.gemini_record.as_ref()?.0.clone()),
             agents::OPENCODE => {
                 let place = self.opencode.as_ref()?.place.clone()?;
                 Record::Opencode { database: place.database, session: place.id }
@@ -167,7 +175,7 @@ impl Pane {
 
     pub fn conversation(&self) -> Option<&str> {
         let claude = self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str());
-        claude.or_else(|| self.codex.as_ref()?.id())
+        claude.or_else(|| self.codex.as_ref()?.id()).or_else(|| self.gemini_record.as_ref()?.1.as_deref())
     }
 }
 

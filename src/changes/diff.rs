@@ -31,7 +31,7 @@ const LOCKFILES: [&str; 16] = [
     "Podfile.lock",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Status {
     Modified,
     Added,
@@ -60,6 +60,18 @@ pub enum Fold {
 }
 
 impl Fold {
+    pub(super) fn of(path: &str, binary: bool, added: usize, removed: usize) -> Self {
+        if binary {
+            Self::Binary
+        } else if added.saturating_add(removed) > MAX_LINES {
+            Self::Large
+        } else if is_lockfile(path) {
+            Self::Lockfile
+        } else {
+            Self::Open
+        }
+    }
+
     pub fn tag(self) -> Option<&'static str> {
         match self {
             Self::Open => None,
@@ -169,6 +181,7 @@ pub struct File {
     pub fold: Fold,
     pub hunks: Vec<Hunk>,
     pub digest: u64,
+    pub viewed_digest: u64,
 }
 
 impl File {
@@ -277,18 +290,13 @@ fn parse_file(lines: &[&str]) -> Option<File> {
     }
     let count = |kind| hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == kind).count();
     let (added, removed) = (count(Kind::Added), count(Kind::Removed));
-    let fold = if binary {
-        Fold::Binary
-    } else if added + removed > MAX_LINES {
+    let fold = Fold::of(&path, binary, added, removed);
+    if fold == Fold::Large {
         hunks.clear();
-        Fold::Large
-    } else if is_lockfile(&path) {
-        Fold::Lockfile
-    } else {
-        Fold::Open
-    };
+    }
     let old_path = renamed_from.filter(|from| *from != path);
-    Some(File { digest: digest((&path, lines)), path, old_path, status, added, removed, fold, hunks })
+    let digest = digest((&path, lines));
+    Some(File { digest, viewed_digest: digest, path, old_path, status, added, removed, fold, hunks })
 }
 
 fn hunk_header(line: &str) -> Option<(u32, u32, String)> {
@@ -351,6 +359,10 @@ fn is_lockfile(path: &str) -> bool {
 }
 
 pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
+    untracked_file(path, size, bytes, true)
+}
+
+pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materialize: bool) -> File {
     let mut file = File {
         path: path.to_string(),
         old_path: None,
@@ -360,6 +372,7 @@ pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
         fold: Fold::Large,
         hunks: Vec::new(),
         digest: digest((path, size, bytes)),
+        viewed_digest: digest((path, size, bytes)),
     };
     let Some(bytes) = bytes.filter(|_| size <= MAX_UNTRACKED_BYTES) else { return file };
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {
@@ -367,12 +380,12 @@ pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
         return file;
     }
     let text = String::from_utf8_lossy(bytes);
-    let lines: Vec<Line> = text.lines().zip(1..).map(|(line, n)| Line::new(Kind::Added, None, Some(n), line)).collect();
-    file.added = lines.len();
-    if lines.len() > MAX_LINES {
+    file.added = text.lines().count();
+    file.fold = Fold::of(path, false, file.added, 0);
+    if !materialize || !file.fold.shows_lines() {
         return file;
     }
-    file.fold = if is_lockfile(path) { Fold::Lockfile } else { Fold::Open };
+    let lines: Vec<Line> = text.lines().zip(1..).map(|(line, n)| Line::new(Kind::Added, None, Some(n), line)).collect();
     if !lines.is_empty() {
         file.hunks.push(Hunk { old_start: 0, new_start: 1, context: String::new(), lines });
     }

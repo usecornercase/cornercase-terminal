@@ -90,6 +90,16 @@ fn finish(service: &Service, result: std::result::Result<Response<ureq::Body>, u
     Ok(Answer { status, json })
 }
 
+pub fn into_json(answer: Answer, missing: &str, failure: impl Fn(&Answer) -> Error) -> Result<Value> {
+    if answer.status == 404 {
+        return Err(Error::Api(missing.into()));
+    }
+    if !answer.ok() {
+        return Err(failure(&answer));
+    }
+    Ok(answer.json)
+}
+
 pub fn origin(url: &str) -> &str {
     let after_scheme = url.find("://").map_or(0, |i| i + 3);
     url[after_scheme..].find('/').map_or(url, |i| &url[..after_scheme + i])
@@ -97,6 +107,18 @@ pub fn origin(url: &str) -> &str {
 
 pub fn text(value: &Value, pointer: &str) -> String {
     value.pointer(pointer).and_then(Value::as_str).unwrap_or_default().to_string()
+}
+
+pub fn path_segment(key: &str) -> String {
+    key.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
+                char::from(b).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -169,5 +191,10 @@ mod tests {
     fn an_unreachable_server_says_so() {
         let err = get(&SERVICE, "http://127.0.0.1:1/x", &[], &[]).err().map(|e| e.to_string()).unwrap_or_default();
         assert!(err.starts_with("could not reach Tracker"), "{err}");
+    }
+
+    #[test]
+    fn a_key_cannot_leave_its_path_segment() {
+        assert_eq!(path_segment("../x?y"), "..%2Fx%3Fy");
     }
 }

@@ -68,4 +68,5 @@ if [ "${CC_ISSUE_482:-0}" = 1 ]; then
   commit "$issue" 2026-10-08T11:00:00Z 'Add a test for empty addresses'
   cp "$CC_DATA/fixed/address.rs" "$issue/src/returns/address.rs"
   cp "$CC_DATA/fixed/mod.rs" "$issue/src/returns/mod.rs"
+  printf 'export const PAGE_SIZE = 50;\n' >> "$wt/orders-api/fix-pagination/src/orders.ts"
 fi

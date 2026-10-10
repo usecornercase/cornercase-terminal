@@ -1,0 +1,28 @@
+---
+source: src/ui/changes.rs
+expression: terminal.backend()
+---
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"  shop › issue-482   Every project                                        ⌕  ×  "
+"  uncommitted                                                                   "
+" 3 files  +7 −3  ▃▃▃▃▃▃▃▃                                                ● live "
+"                                                                                "
+" ▾ shop                                                           2 files +6 −3 "
+"   ▾ issue-482                                                     1 file +5 −2 "
+"    ▸ M src/returns.rs                                                 +5 −2    "
+"   ▾ feat/dark-mode                                                1 file +1 −1 "
+"    ▸ M Cargo.lock                                            lockfile +1 −1    "
+" ▾ api                                                             1 file +1 −0 "
+"    ▸ A tests/returns.rs                                              new +1    "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+" ────────────────────────────────────────────────────────────────────────────── "
+"  unfold all                                                      0 of 3 viewed "

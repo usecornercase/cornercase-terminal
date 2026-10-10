@@ -31,7 +31,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 
 <Screen
   name="settings-agents"
-  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; and how each agent starts: claude, codex and gemini in their default mode, plus another agent"
+  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; and how each agent starts: claude, codex and gemini in their default mode, plus another agent"
   crop={[2, 4, 106, 15]}
 />
 
@@ -40,7 +40,8 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
-| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code or Codex comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **keep awake** | Off (the default): the computer sleeps when idle, as it always does. On: while an agent is working, the computer does not go to sleep on its own. The note says whether it is being kept awake now, or why it can't be on this machine. See [Keep the computer awake](../agents/#keep-the-computer-awake). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
 
@@ -58,8 +59,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-issues"
-  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; and the sources shown: All, GitHub, Shortcut, Linear and Jira, with move arrows on the hovered GitHub row"
-  crop={[2, 4, 106, 20]}
+  crop={[2, 4, 106, 26]}
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; and the sources shown: All, GitHub, Shortcut, Linear, Jira and Plane, with move arrows on the hovered row"
 />
 
 | Row | What it sets |
@@ -68,6 +69,9 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Jira site**, **Jira email** | Your Jira Cloud site, such as `acme.atlassian.net` (a bare name like `acme` gets `.atlassian.net`), and the email of your Atlassian account. The Jira tab of the issue browser asks for both when they are missing. |
 | **Jira API token** | Like the tokens above; the site and the email must be set first, since the token is checked against that site. |
 | **Jira filter** | A JQL condition the Jira tab always applies, such as `project = SHOP`. Empty lists every issue of the site you can see. |
+| **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
+| **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
+| **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### UI
@@ -82,10 +86,10 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | --- | --- |
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
-| **agents section** | List every Claude Code, Codex and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **agents section** | List every Claude Code, Codex, Gemini CLI and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a folded group holds. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **model** | Show the model of a Claude Code, Codex or opencode tab on a second line under its name, such as `Opus 5.5`. |
+| **model** | Show the model of a Claude Code, Codex, Gemini CLI or opencode tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
@@ -119,10 +123,13 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
-  "issue_tabs": ["all", "github", "shortcut", "linear", "jira"],
+  "issue_tabs": ["all", "github", "shortcut", "linear", "jira", "plane"],
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",
+  "plane_url": "",
+  "plane_workspace": "",
+  "plane_filter": "",
   "agent": "claude",
   "agent_args": {
     "claude": ["--permission-mode", "plan"]
@@ -133,6 +140,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "submit": false,
   "accept_trust_prompts": false,
   "resume_agents": true,
+  "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "sidebar": "projects_on_top",
@@ -155,10 +163,13 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | --- | --- | --- |
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
-| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira"]` |
+| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira", "plane"]` |
 | [`jira_site`](#jira_site) | string | `""` |
 | [`jira_email`](#jira_email) | string | `""` |
 | [`jira_jql`](#jira_jql) | string | `""` |
+| [`plane_url`](#plane_url) | string | `""` |
+| [`plane_workspace`](#plane_workspace) | string | `""` |
+| [`plane_filter`](#plane_filter) | string | `""` |
 | [`agent`](#agent) | string | `"auto"` |
 | [`agent_args`](#agent_args) | object | `{}` |
 | [`agent_modes`](#agent_modes) | object | `{}` |
@@ -167,6 +178,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`submit`](#submit) | boolean | `false` |
 | [`accept_trust_prompts`](#accept_trust_prompts) | boolean | `false` |
 | [`resume_agents`](#resume_agents) | boolean | `true` |
+| [`keep_awake`](#keep_awake) | boolean | `false` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
@@ -191,7 +203,7 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `issue_tabs`
 
-The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear` and `jira`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all five. A list saved before Jira existed gets `jira` added at the end once.
+The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all six. A list saved before Jira existed gets `jira` added at the end once, and one saved before Plane existed gets `plane`.
 
 #### `jira_site`
 
@@ -204,6 +216,18 @@ The email of your Atlassian account, sent with the API token to sign in to Jira.
 #### `jira_jql`
 
 A [JQL](https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-search-in-jira-cloud/) condition added to every Jira list, such as `project = SHOP` or `project in (SHOP, API) AND labels = backend`. The list is always sorted by last update, so an `ORDER BY` in it is dropped.
+
+#### `plane_url`
+
+The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Set from the settings modal.
+
+#### `plane_workspace`
+
+Your Plane workspace, the slug in the address after the server's name: `acme` in `app.plane.so/acme`. Lower case letters, numbers and dashes. Set from the issue browser or the settings modal. The API key is never stored here: it goes in `secrets.json` or comes from `PLANE_API_KEY` (see [Files and environment](../files-and-environment/)).
+
+#### `plane_filter`
+
+Query parameters added to every Plane list, written as in a URL: `priority=high&label_id=…`. The parameters are those of Plane's work item list (`state_group`, `priority`, `project_id`, `label_id`, `cycle_id`, …; lists take comma-separated values). They are not checked: when Plane refuses them, its answer is shown in the list. The list asks for the work items that are not done on its own, so a `state_group__in` here narrows that rather than replacing it: while **closed** is off only its open groups count, and one that names only finished groups lists nothing.
 
 #### `agent`
 
@@ -235,7 +259,11 @@ Whether cornercase answers yes to the agent's "do you trust this folder?" questi
 
 #### `resume_agents`
 
-Whether a pane that ran Claude Code or Codex comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>` or `codex resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+Whether a pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>` or `gemini --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+
+#### `keep_awake`
+
+Whether the computer stays awake while an agent is working. Off by default. See [Keep the computer awake](../agents/#keep-the-computer-awake).
 
 #### `trust_prompt_pattern`
 
@@ -259,7 +287,7 @@ Where a workspace's tabs are listed: `"sidebar"` under their workspace, in the w
 
 #### `agents_section`
 
-Whether the sidebar ends with a list of every Claude Code, Codex and opencode running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI and opencode running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
 
 #### `counts`
 
@@ -275,7 +303,7 @@ The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keybo
 
 #### `model`
 
-Whether a Claude Code, Codex or opencode tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
+Whether a Claude Code, Codex, Gemini CLI or opencode tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
 
 #### `context`
 
