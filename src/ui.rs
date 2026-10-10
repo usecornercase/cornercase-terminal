@@ -1634,18 +1634,29 @@ fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
     [submit, cancel]
 }
 
+pub fn form_extra_button(form: Rect, submit: &str, extra: &str) -> Rect {
+    let row = form_rows(form)[5];
+    let [submit, _] = form_buttons(form, submit);
+    let right = submit.x.saturating_sub(1).max(row.x);
+    let x = right.saturating_sub(button_width(extra)).max(row.x);
+    Rect { x, width: right - x, ..row }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormHit {
     Submit,
+    Extra,
     Cancel,
     Toggle,
 }
 
-pub fn form_hit(area: Rect, submit: &str, pos: Position) -> Option<FormHit> {
+pub fn form_hit(area: Rect, submit: &str, extra: Option<&str>, pos: Position) -> Option<FormHit> {
     let form = form_area(area);
     let [s, c] = form_buttons(form, submit);
     if s.contains(pos) {
         Some(FormHit::Submit)
+    } else if extra.is_some_and(|extra| form_extra_button(form, submit, extra).contains(pos)) {
+        Some(FormHit::Extra)
     } else if c.contains(pos) {
         Some(FormHit::Cancel)
     } else if form_toggle(form).contains(pos) {
@@ -2139,6 +2150,7 @@ pub struct Confirm {
     pub message: String,
     pub note: Option<Note>,
     pub submit: &'static str,
+    pub extra: Option<&'static str>,
 }
 
 pub struct Update {
@@ -3034,6 +3046,9 @@ fn draw_confirm(f: &mut Frame, view: &View, confirm: &Confirm) {
     f.render_widget(Paragraph::new(confirm.message.as_str()).wrap(Wrap { trim: true }), message);
     draw_note(f, view.muted, confirm.note.as_ref(), note);
     draw_dialog_buttons(f, view, form_buttons(r, confirm.submit), confirm.submit, CANCEL_LABEL);
+    if let Some(extra) = confirm.extra {
+        draw_secondary(f, view, form_extra_button(r, confirm.submit, extra), extra);
+    }
 }
 
 fn draw_update(f: &mut Frame, view: &View, update: &Update) {
@@ -3136,10 +3151,14 @@ fn draw_submit(f: &mut Frame, view: &View, r: Rect, label: &str) {
     f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
 }
 
+fn draw_secondary(f: &mut Frame, view: &View, r: Rect, label: &str) {
+    let style = dialog_button_style(view, r, false);
+    f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), r);
+}
+
 fn draw_dialog_buttons(f: &mut Frame, view: &View, [submit, cancel]: [Rect; 2], label: &str, cancel_label: &str) {
     draw_submit(f, view, submit, label);
-    let style = dialog_button_style(view, cancel, false);
-    f.render_widget(Paragraph::new(Span::styled(format!(" {cancel_label} "), style)), cancel);
+    draw_secondary(f, view, cancel, cancel_label);
 }
 
 fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {
@@ -6726,7 +6745,7 @@ mod tests {
         #[test]
         fn the_toggle_row_is_hit() {
             let pos = form_toggle(form_area(AREA)).as_position();
-            assert_eq!(form_hit(AREA, "create", pos), Some(FormHit::Toggle));
+            assert_eq!(form_hit(AREA, "create", None, pos), Some(FormHit::Toggle));
         }
 
         fn usage_window(label: &str, percent: u16, severity: Severity, resets: &str) -> UsageWindow {
@@ -6847,6 +6866,21 @@ mod tests {
                     .into(),
                 note: Some(Note::Error("contains modified or untracked files, use --force to delete it".into())),
                 submit: "remove anyway",
+                extra: None,
+            };
+            insta::assert_snapshot!(render(&with(Overlay::Confirm(confirm))).backend());
+        }
+
+        #[test]
+        fn renders_a_confirmation_with_a_second_choice() {
+            let confirm = Confirm {
+                title: "Delete group",
+                message: "Delete the group work? Keep its 2 projects open, ungrouped, or close them too, which stops \
+                    3 tabs and the programs running in them. Folders and worktrees stay on disk."
+                    .into(),
+                note: None,
+                submit: "keep projects",
+                extra: Some("close projects"),
             };
             insta::assert_snapshot!(render(&with(Overlay::Confirm(confirm))).backend());
         }
@@ -7267,12 +7301,36 @@ mod tests {
         #[case::cancel(1, Some(FormHit::Cancel))]
         fn buttons_are_hit(#[case] which: usize, #[case] expected: Option<FormHit>) {
             let pos = form_buttons(form_area(AREA), "create")[which].as_position();
-            assert_eq!(form_hit(AREA, "create", pos), expected);
+            assert_eq!(form_hit(AREA, "create", None, pos), expected);
+        }
+
+        #[test]
+        fn the_extra_button_sits_left_of_the_submit_one_and_is_hit() {
+            let form = form_area(AREA);
+            let [submit, _] = form_buttons(form, "keep");
+            let extra = form_extra_button(form, "keep", "close all");
+            let hit = form_hit(AREA, "keep", Some("close all"), extra.as_position());
+            assert_eq!((extra.right() + 1, extra.y, hit), (submit.x, submit.y, Some(FormHit::Extra)));
+        }
+
+        #[test]
+        fn a_narrow_form_never_lays_the_extra_button_over_the_submit_one() {
+            let narrow = Rect::new(0, 0, 36, 20);
+            let form = form_area(narrow);
+            let [submit, _] = form_buttons(form, "keep projects");
+            let extra = form_extra_button(form, "keep projects", "close projects");
+            assert!(extra.right() < submit.x || extra.is_empty());
+        }
+
+        #[test]
+        fn without_an_extra_button_its_place_is_not_hit() {
+            let extra = form_extra_button(form_area(AREA), "keep", "close all");
+            assert_eq!(form_hit(AREA, "keep", None, extra.as_position()), None);
         }
 
         #[test]
         fn the_rest_of_the_form_is_not_a_button() {
-            assert_eq!(form_hit(AREA, "create", form_area(AREA).as_position()), None);
+            assert_eq!(form_hit(AREA, "create", None, form_area(AREA).as_position()), None);
         }
     }
 

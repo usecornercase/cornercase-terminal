@@ -815,11 +815,15 @@ export class App {
   }
 
   deleteGroupMessage(id: number): string {
-    const inside = this.groupSize(id);
+    const inside = this.projects.filter((p) => p.group === id);
     const message = `Delete the group ${this.group(id)?.name ?? ''}?`;
-    if (inside === 0) return message;
-    if (inside === 1) return `${message} Its project stays open, ungrouped.`;
-    return `${message} Its ${inside} projects stay open, ungrouped.`;
+    if (inside.length === 0) return message;
+    const which = inside.length === 1 ? 'its project' : `its ${inside.length} projects`;
+    const them = inside.length === 1 ? 'it' : 'them';
+    const tabs = inside.reduce((n, p) => n + p.workspaces.reduce((m, w) => m + w.tabs.length, 0), 0);
+    const stops =
+      tabs === 0 ? '' : tabs === 1 ? ', which stops 1 tab and the programs running in it' : `, which stops ${tabs} tabs and the programs running in them`;
+    return `${message} Keep ${which} open, ungrouped, or close ${them} too${stops}. Folders and worktrees stay on disk.`;
   }
 
   askCloseProject(id: number): void {
@@ -876,7 +880,11 @@ export class App {
   confirmView(): ConfirmView | null {
     const o = this.overlay;
     if (o?.kind === 'remove') return { title: 'Remove workspace', message: this.removeMessage(o), submit: 'remove' };
-    if (o?.kind === 'deleteGroup') return { title: 'Delete group', message: this.deleteGroupMessage(o.group), submit: 'delete' };
+    if (o?.kind === 'deleteGroup') {
+      const message = this.deleteGroupMessage(o.group);
+      if (this.groupSize(o.group) === 0) return { title: 'Delete group', message, submit: 'delete' };
+      return { title: 'Delete group', message, submit: 'keep projects', extra: 'close projects' };
+    }
     if (o?.kind === 'closeProject') return { title: 'Close project', message: this.closeProjectMessage(o.project), submit: 'close' };
     if (o?.kind === 'closeWorkspace') return { title: 'Close workspace', message: this.closeWorkspaceMessage(o.project, o.workspace), submit: 'close' };
     if (o?.kind === 'closeTab') return { title: 'Close tab', message: this.closeTabMessage(o.project, o.workspace, o.tab), submit: 'close' };
@@ -902,6 +910,14 @@ export class App {
   closePaneMessage(id: number): string {
     const pane = this.findPane(id)?.pane;
     return pane ? `Close the pane running ${pane.shell.name || 'bash'}? What runs in it is stopped.` : '';
+  }
+
+  submitExtra(): void {
+    const o = this.overlay;
+    if (o?.kind !== 'deleteGroup') return;
+    this.closeOverlay();
+    for (const p of this.projects.filter((x) => x.group === o.group)) this.closeProject(p.id);
+    this.deleteGroup(o.group);
   }
 
   deleteGroup(id: number): void {

@@ -286,6 +286,8 @@ const CREATE_SUBMIT: &str = "create";
 const RENAME_SUBMIT: &str = "rename";
 const REMOVE_SUBMIT: &str = "remove";
 const DELETE_SUBMIT: &str = "delete";
+const KEEP_PROJECTS_SUBMIT: &str = "keep projects";
+const CLOSE_PROJECTS_SUBMIT: &str = "close projects";
 const CLOSE_SUBMIT: &str = "close";
 const FORCE_REMOVE_SUBMIT: &str = "remove anyway";
 const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
@@ -617,6 +619,7 @@ fn wheel(kind: MouseEventKind) -> Option<isize> {
 
 pub struct App {
     groups: Vec<Group>,
+    deleting_groups: Vec<u64>,
     projects: Vec<Project>,
     active: usize,
     projects_scroll: usize,
@@ -730,6 +733,7 @@ impl App {
             followed: Focus::default(),
             drawn: ui::Areas::default(),
             nav: None,
+            deleting_groups: Vec::new(),
             next_id: 1,
             detach: false,
             hover: None,
@@ -1613,6 +1617,13 @@ impl App {
     fn remove_project(&mut self, p: usize) {
         self.projects.remove(p);
         shift_active(&mut self.active, p);
+        let projects = &self.projects;
+        self.deleting_groups.retain(|id| !projects.iter().any(|p| p.group == Some(*id) && !p.closing));
+        let empty = |id: &u64| !projects.iter().any(|p| p.group == Some(*id));
+        let gone: Vec<u64> = self.deleting_groups.iter().copied().filter(empty).collect();
+        for id in gone {
+            self.delete_group(id);
+        }
     }
 
     pub fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
@@ -3605,8 +3616,10 @@ impl App {
         if button != MouseButton::Left {
             return Ok(());
         }
-        match ui::form_hit(area, overlay.submit_label(), pos) {
+        let (submit, extra) = self.dialog_labels(overlay);
+        match ui::form_hit(area, submit, extra, pos) {
             Some(FormHit::Submit) => self.submit_form(area)?,
+            Some(FormHit::Extra) => self.submit_extra(),
             Some(FormHit::Cancel) => self.cancel_form(),
             Some(FormHit::Toggle) => self.toggle_worktree(),
             None => {}
@@ -3684,8 +3697,41 @@ impl App {
 
     fn delete_group(&mut self, id: u64) {
         self.groups.retain(|g| g.id != id);
+        self.deleting_groups.retain(|&g| g != id);
         for p in self.projects.iter_mut().filter(|p| p.group == Some(id)) {
             p.group = None;
+        }
+    }
+
+    fn delete_group_and_projects(&mut self, id: u64) {
+        let projects: Vec<u64> = self.group_projects(id).map(|p| p.id).collect();
+        for project in projects {
+            self.close_project(project);
+        }
+        if self.projects.iter().any(|p| p.group == Some(id)) {
+            self.deleting_groups.push(id);
+        } else {
+            self.delete_group(id);
+        }
+    }
+
+    fn group_projects(&self, id: u64) -> impl Iterator<Item = &Project> {
+        self.projects.iter().filter(move |p| p.group == Some(id) && !p.closing)
+    }
+
+    fn dialog_labels(&self, overlay: &Overlay) -> (&'static str, Option<&'static str>) {
+        match overlay {
+            Overlay::DeleteGroup { group } if self.group_projects(*group).next().is_some() => {
+                (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT))
+            }
+            _ => (overlay.submit_label(), None),
+        }
+    }
+
+    fn submit_extra(&mut self) {
+        if let Some(Overlay::DeleteGroup { group }) = self.overlay {
+            self.overlay = None;
+            self.delete_group_and_projects(group);
         }
     }
 
@@ -4592,35 +4638,43 @@ impl App {
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())
             }
-            Overlay::DeleteGroup { group } => ui::Overlay::Confirm(ui::Confirm {
-                title: "Delete group",
-                message: self.delete_group_message(*group)?,
-                note: None,
-                submit: overlay.submit_label(),
-            }),
+            Overlay::DeleteGroup { group } => {
+                let (submit, extra) = self.dialog_labels(overlay);
+                ui::Overlay::Confirm(ui::Confirm {
+                    title: "Delete group",
+                    message: self.delete_group_message(*group)?,
+                    note: None,
+                    submit,
+                    extra,
+                })
+            }
             Overlay::CloseProject { project } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close project",
                 message: self.close_project_message(*project)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::CloseWorkspace { project, workspace } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close workspace",
                 message: self.close_workspace_message(*project, *workspace)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::CloseTab { project, workspace, tab } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close tab",
                 message: self.close_tab_message(*project, *workspace, *tab)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::ClosePane { pane } => ui::Overlay::Confirm(ui::Confirm {
                 title: "Close pane",
                 message: self.close_pane_message(*pane)?,
                 note: None,
                 submit: overlay.submit_label(),
+                extra: None,
             }),
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
@@ -4659,16 +4713,27 @@ impl App {
                 },
             ),
         };
-        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit })
+        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
     }
 
     fn delete_group_message(&self, id: u64) -> Option<String> {
         let message = format!("Delete the group {}?", self.group(id)?.name);
-        Some(match self.projects.iter().filter(|p| p.group == Some(id)).count() {
-            0 => message,
-            1 => format!("{message} Its project stays open, ungrouped."),
-            n => format!("{message} Its {n} projects stay open, ungrouped."),
-        })
+        let (projects, tabs) = self
+            .group_projects(id)
+            .fold((0, 0), |(n, tabs), p| (n + 1, tabs + p.workspaces.iter().map(|w| w.tabs.len()).sum::<usize>()));
+        let (which, them) = match projects {
+            0 => return Some(message),
+            1 => ("its project".to_string(), "it"),
+            n => (format!("its {n} projects"), "them"),
+        };
+        let stops = match tabs {
+            0 => String::new(),
+            1 => ", which stops 1 tab and the programs running in it".into(),
+            n => format!(", which stops {n} tabs and the programs running in them"),
+        };
+        Some(format!(
+            "{message} Keep {which} open, ungrouped, or close {them} too{stops}. Folders and worktrees stay on disk."
+        ))
     }
 
     fn close_project_message(&self, id: u64) -> Option<String> {
@@ -6041,30 +6106,151 @@ mod tests {
             assert_eq!((confirmation(&app).is_some(), names(&app)), (true, vec!["work"]));
         }
 
-        #[rstest]
-        #[case::empty(0, "Delete the group work?")]
-        #[case::one_project(1, "Delete the group work? Its project stays open, ungrouped.")]
-        #[case::two_projects(2, "Delete the group work? Its 2 projects stay open, ungrouped.")]
-        fn the_confirmation_says_what_happens_to_its_projects(#[case] grouped: usize, #[case] expected: &str) {
-            let (mut app, _rx, _dirs) = app_with(2);
+        fn asked_to_delete(grouped: usize, projects: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(projects);
             new_group(&mut app, "work");
             let work = group_label(&app, 0);
             for p in 0..grouped {
                 move_to(&mut app, p, &work);
             }
+            ask_from_the_close_button(&mut app);
+            (app, rx, dirs)
+        }
+
+        fn buttons(app: &App) -> Option<(&'static str, Option<&'static str>)> {
+            match app.overlay_view(app.overlay.as_ref()?, AREA)? {
+                ui::Overlay::Confirm(confirm) => Some((confirm.submit, confirm.extra)),
+                _ => None,
+            }
+        }
+
+        fn extra_button() -> Position {
+            ui::form_extra_button(ui::form_area(AREA), KEEP_PROJECTS_SUBMIT, CLOSE_PROJECTS_SUBMIT).as_position()
+        }
+
+        #[rstest]
+        #[case::empty(0, "Delete the group work?")]
+        #[case::one_project(
+            1,
+            "Delete the group work? Keep its project open, ungrouped, or close it too, which stops 1 tab and the \
+             programs running in it. Folders and worktrees stay on disk."
+        )]
+        #[case::two_projects(
+            2,
+            "Delete the group work? Keep its 2 projects open, ungrouped, or close them too, which stops 2 tabs and \
+             the programs running in them. Folders and worktrees stay on disk."
+        )]
+        fn the_confirmation_says_what_happens_to_its_projects(#[case] grouped: usize, #[case] expected: &str) {
+            let (app, _rx, _dirs) = asked_to_delete(grouped, 2);
+
+            assert_eq!(confirmation(&app).as_deref(), Some(expected));
+        }
+
+        #[test]
+        fn without_tabs_the_confirmation_stops_nothing() {
+            let (mut app, rx, _dirs) = app_with(1);
+            click_close(&mut app, WorkspaceRow::Tab(0, 0));
+            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            new_group(&mut app, "work");
+            let work = group_label(&app, 0);
+            move_to(&mut app, 0, &work);
 
             ask_from_the_close_button(&mut app);
 
+            let expected = "Delete the group work? Keep its project open, ungrouped, or close it too. \
+                Folders and worktrees stay on disk.";
             assert_eq!(confirmation(&app).as_deref(), Some(expected));
+        }
+
+        #[rstest]
+        #[case::empty(0, (DELETE_SUBMIT, None))]
+        #[case::with_projects(1, (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT)))]
+        fn only_a_group_with_projects_asks_what_to_do_with_them(
+            #[case] grouped: usize,
+            #[case] expected: (&'static str, Option<&'static str>),
+        ) {
+            let (app, _rx, _dirs) = asked_to_delete(grouped, 1);
+
+            assert_eq!(buttons(&app), Some(expected));
         }
 
         #[test]
         fn confirming_deletes_the_group_and_keeps_its_projects_open_and_ungrouped() {
             let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
 
-            click(&mut app, form_button(DELETE_SUBMIT, 0));
+            click(&mut app, form_button(KEEP_PROJECTS_SUBMIT, 0));
 
             assert_eq!((app.groups.len(), app.projects.len(), app.projects[0].group), (0, 1, None));
+        }
+
+        #[test]
+        fn enter_keeps_the_projects() {
+            let (mut app, _rx) = asked_to_delete_a_group_holding_a_project();
+
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+            assert_eq!((app.groups.len(), app.projects.len(), app.projects[0].closing), (0, 1, false));
+        }
+
+        #[test]
+        fn closing_its_projects_deletes_the_group_and_closes_only_them() {
+            let (mut app, rx, _dirs) = asked_to_delete(2, 3);
+            let loose = app.projects[2].id;
+
+            click(&mut app, extra_button());
+
+            pump_until(&mut app, &rx, "the grouped projects close", |a| a.projects.len() == 1);
+            assert_eq!(
+                (app.overlay.is_none(), app.groups.len(), app.projects[0].id, app.projects[0].group),
+                (true, 0, loose, None)
+            );
+        }
+
+        #[test]
+        fn the_projects_being_closed_stay_in_the_group_until_they_are_gone() {
+            let (mut app, rx, _dirs) = asked_to_delete(2, 2);
+            let work = app.groups[0].id;
+
+            click(&mut app, extra_button());
+
+            let meanwhile = (app.groups.len(), app.projects.iter().map(|p| (p.closing, p.group)).collect::<Vec<_>>());
+            assert_eq!(meanwhile, (1, vec![(true, Some(work)), (true, Some(work))]));
+            pump_until(&mut app, &rx, "the group goes with its projects", |a| a.groups.is_empty());
+            assert!(app.projects.is_empty());
+        }
+
+        #[test]
+        fn a_project_moved_into_the_group_meanwhile_keeps_it_after_the_others_close() {
+            let (mut app, rx, _dirs) = asked_to_delete(1, 2);
+            let work = group_label(&app, 0);
+            let moved = app.projects[1].id;
+            click(&mut app, extra_button());
+            move_to(&mut app, 1, &work);
+
+            pump_until(&mut app, &rx, "the old project closes", |a| a.projects.len() == 1);
+            app.close_project(moved);
+            pump_until(&mut app, &rx, "the moved project closes", App::is_empty);
+
+            assert_eq!(app.groups.len(), 1);
+        }
+
+        #[test]
+        fn a_project_already_closing_does_not_count_for_the_dialog() {
+            let (mut app, _rx, _dirs) = asked_to_delete(1, 1);
+            app.projects[0].closing = true;
+
+            assert_eq!(buttons(&app), Some((DELETE_SUBMIT, None)));
+            assert_eq!(confirmation(&app).as_deref(), Some("Delete the group work?"));
+        }
+
+        #[test]
+        fn closing_every_project_leaves_the_app_open_and_empty() {
+            let (mut app, rx, _dirs) = asked_to_delete(1, 1);
+
+            click(&mut app, extra_button());
+
+            pump_until(&mut app, &rx, "the project closes", App::is_empty);
+            assert!(app.groups.is_empty());
         }
 
         #[test]
