@@ -56,7 +56,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 src/main.rs       hands argv to cli.rs (uses anyhow)
 src/cli.rs        clap definitions of every command; the commands for scripts and agents send a request and print the answer
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
-src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; `kill-server`, `restart` and `update`
+src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste; `kill-server`, `restart` and `update`
 src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
