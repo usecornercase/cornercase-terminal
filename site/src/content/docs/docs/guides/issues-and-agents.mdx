@@ -83,12 +83,12 @@ Jira Server and Data Center are not supported.
 
 Plane needs your workspace and an API key. Plane Cloud (`app.plane.so`) and self-hosted servers both work.
 
+For a self-hosted server, first set **Plane URL** in **settings → Issues → Plane** to its address, such as `https://plane.acme.dev`. Empty means Plane Cloud, and the key is checked against the server set there. The server must be recent enough to serve Plane's `/api/v2` work item list.
+
 1. In Plane, open **Profile settings → Personal access tokens** and create one.
 2. In cornercase, open the **Plane** tab of the issue browser. Type your workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and press `Enter`, then paste the key and press `Enter`. **back** returns to the previous step.
 
 cornercase checks the key against Plane and your workspace and, if it works, saves it. The workspace is saved in your settings (`plane_workspace` in [`config.json`](../../reference/configuration/)), and you can change it in **settings → Issues → Plane**, where the key can also be pasted. You can set `PLANE_API_KEY` in your environment instead of saving the key; the workspace is still asked once.
-
-For a self-hosted server, set **Plane URL** in **settings → Issues → Plane** to its address, such as `https://plane.acme.dev`. Empty means Plane Cloud. The server must be recent enough to serve Plane's `/api/v2` work item list.
 
 The Plane tab lists the work items of every project in the workspace you can see. To narrow it down, set a **Plane filter** in **settings → Issues → Plane**: query parameters of Plane's work item list, such as `priority=high` or `project_id=…&label_id=…`, which are added to the request together with the closed and people filters. cornercase does not check them: if Plane refuses them, its answer is shown in the list. Plane's rate limit is 60 requests a minute per key, and a list takes three.
 

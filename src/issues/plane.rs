@@ -88,7 +88,9 @@ impl Api {
         let mine = text(&me, "/id");
         let assignee = person(&query.people[0], &mine);
         let creator = person(&query.people[1], &mine);
-        let params = params(query.closed, assignee.as_deref(), &self.filter);
+        let Some(params) = params(query.closed, assignee.as_deref(), &self.filter) else {
+            return Ok(Listed { account: Some(account), issues: Vec::new() });
+        };
         let path = format!("/api/v2/workspaces/{}/work-items/", path_segment(&self.slug));
         let mut issues = Vec::new();
         let mut cursor = String::new();
@@ -272,18 +274,27 @@ pub fn extra_params(filter: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-fn params(closed: bool, assignee: Option<&str>, filter: &str) -> Vec<(String, String)> {
+fn params(closed: bool, assignee: Option<&str>, filter: &str) -> Option<Vec<(String, String)>> {
     let fixed = [("per_page", PAGE), ("expand", EXPAND), ("order_by", ORDER), ("paginate", "cursor")];
     let mut params: Vec<(String, String)> =
         fixed.into_iter().map(|(key, value)| (key.to_string(), value.to_string())).collect();
-    if !closed {
-        params.push(("state_group__in".into(), OPEN.into()));
+    let (groups, extra): (Vec<_>, Vec<_>) =
+        extra_params(filter).into_iter().partition(|(key, _)| key == "state_group__in");
+    if closed {
+        params.extend(groups);
+    } else {
+        let wanted: Vec<&str> = groups.iter().flat_map(|(_, value)| value.split(',')).map(str::trim).collect();
+        let open: Vec<&str> = OPEN.split(',').filter(|group| groups.is_empty() || wanted.contains(group)).collect();
+        if open.is_empty() {
+            return None;
+        }
+        params.push(("state_group__in".into(), open.join(",")));
     }
     if let Some(id) = assignee {
         params.push(("assignee_id".into(), id.to_string()));
     }
-    params.extend(extra_params(filter));
-    params
+    params.extend(extra);
+    Some(params)
 }
 
 #[cfg(test)]
@@ -465,6 +476,27 @@ mod tests {
             #[case] present: bool,
         ) {
             assert_eq!(query_sent(&query, "").contains(part), present);
+        }
+
+        #[rstest]
+        #[case::narrows_the_open_groups(false, "state_group__in=started,completed", "started")]
+        #[case::closed_keeps_the_filter(true, "state_group__in=completed", "completed")]
+        fn the_filter_cannot_list_finished_work_items_without_closed(
+            #[case] closed: bool,
+            #[case] filter: &str,
+            #[case] groups: &str,
+        ) {
+            let sent = query_sent(&Query { closed, ..Query::default() }, filter);
+            let found: Vec<&str> =
+                sent.split(['?', '&', ' ']).filter_map(|pair| pair.strip_prefix("state_group__in=")).collect();
+            assert_eq!(found, [groups], "{sent}");
+        }
+
+        #[test]
+        fn a_filter_of_only_finished_groups_lists_nothing_while_closed_is_off() {
+            let (listed, server) = listed(&Query::default(), "state_group__in=completed", work_items(page(NODE, None)));
+            assert_eq!(listed.issues, Vec::<Issue>::new());
+            assert_eq!(server.requests().len(), 2);
         }
 
         #[test]

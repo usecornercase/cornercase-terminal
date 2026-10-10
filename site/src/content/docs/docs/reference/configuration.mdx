@@ -70,7 +70,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Jira filter** | A JQL condition the Jira tab always applies, such as `project = SHOP`. Empty lists every issue of the site you can see. |
 | **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
 | **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
-| **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty lists every work item you can see. |
+| **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### UI
@@ -224,7 +224,7 @@ Your Plane workspace, the slug in the address after the server's name: `acme` in
 
 #### `plane_filter`
 
-Query parameters added to every Plane list, written as in a URL: `priority=high&label_id=…`. The parameters are those of Plane's work item list (`state_group`, `priority`, `project_id`, `label_id`, `cycle_id`, …; lists take comma-separated values). They are not checked: when Plane refuses them, its answer is shown in the list. The list asks for the work items that are not done on its own, so a `state_group` here adds to that rather than replacing it.
+Query parameters added to every Plane list, written as in a URL: `priority=high&label_id=…`. The parameters are those of Plane's work item list (`state_group`, `priority`, `project_id`, `label_id`, `cycle_id`, …; lists take comma-separated values). They are not checked: when Plane refuses them, its answer is shown in the list. The list asks for the work items that are not done on its own, so a `state_group__in` here narrows that rather than replacing it: while **closed** is off only its open groups count, and one that names only finished groups lists nothing.
 
 #### `agent`
 
