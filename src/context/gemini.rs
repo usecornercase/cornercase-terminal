@@ -13,14 +13,22 @@ use crate::log::Stamp;
 use crate::process;
 
 const NAME: &str = "gemini";
-const MESSAGES: usize = 512;
+const REPLIES: usize = 512;
+
+#[derive(Debug)]
+struct Reply {
+    id: String,
+    model: Option<String>,
+    input: Option<u64>,
+    written: Option<SystemTime>,
+}
 
 #[derive(Debug)]
 pub(super) struct Session {
     pub path: PathBuf,
     id: String,
     tail: Tail,
-    messages: Vec<Value>,
+    replies: Vec<Reply>,
     footer: Option<String>,
     picked: Option<(String, SystemTime)>,
     pub context: Option<Context>,
@@ -35,7 +43,7 @@ impl Session {
             path,
             id,
             tail: Tail::default(),
-            messages: Vec::new(),
+            replies: Vec::new(),
             footer: None,
             picked: None,
             context: None,
@@ -52,7 +60,7 @@ impl Session {
     fn update(&mut self, footer: Option<String>) -> Option<()> {
         let batch = self.tail.read(&self.path).ok()?;
         if batch.reset {
-            self.messages.clear();
+            self.replies.clear();
             self.context = None;
             self.prompted = None;
             self.used = false;
@@ -62,15 +70,15 @@ impl Session {
             self.id = metadata(&self.path)?;
         }
         if batch.skipped {
-            self.messages.clear();
+            self.replies.clear();
             self.context = None;
         }
         for line in batch.bytes.split(|b| *b == b'\n').filter(|line| !line.is_empty()) {
             let Ok(entry) = serde_json::from_slice::<Value>(line) else {
-                self.messages.clear();
+                self.replies.clear();
                 continue;
             };
-            self.apply(entry);
+            self.apply(&entry);
         }
         if footer.is_some() && footer != self.footer {
             if self.footer.is_some() || footer.as_deref() != Some("auto") {
@@ -82,12 +90,12 @@ impl Session {
         Some(())
     }
 
-    fn apply(&mut self, entry: Value) {
+    fn apply(&mut self, entry: &Value) {
         if let Some(set) = entry.get("$set") {
             if let Some(messages) = set.get("messages") {
-                self.messages.clear();
+                self.replies.clear();
                 for message in messages.as_array().into_iter().flatten() {
-                    self.message(message.clone());
+                    self.message(message);
                 }
             }
         } else {
@@ -95,17 +103,11 @@ impl Session {
         }
     }
 
-    fn message(&mut self, entry: Value) {
+    fn message(&mut self, entry: &Value) {
         let Some(id) = entry["id"].as_str() else { return };
-        if prompt(&entry) {
+        if prompt(entry) {
             self.prompted = self.prompted.max(entry["timestamp"].as_str().and_then(Stamp::parse));
             self.used = true;
-        }
-        if entry["type"] == "gemini" {
-            self.used = true;
-            if let Some(model) = entry["model"].as_str() {
-                self.model = Some(model.into());
-            }
         }
         if entry["type"] == "info"
             && let Some(model) = entry["content"].as_str().and_then(|t| t.strip_prefix("Model set to "))
@@ -116,24 +118,34 @@ impl Session {
                 entry["timestamp"].as_str().and_then(Stamp::parse).unwrap_or_else(SystemTime::now),
             ));
         }
-        if let Some(at) = self.messages.iter().position(|m| m["id"].as_str() == Some(id)) {
-            self.messages[at] = entry;
+        if entry["type"] != "gemini" {
+            return;
+        }
+        self.used = true;
+        let reply = Reply {
+            id: id.into(),
+            model: entry["model"].as_str().filter(|m| !m.trim().is_empty()).map(str::to_string),
+            input: entry["tokens"]["input"].as_u64(),
+            written: entry["timestamp"].as_str().and_then(Stamp::parse),
+        };
+        if reply.model.is_some() {
+            self.model.clone_from(&reply.model);
+        }
+        if let Some(at) = self.replies.iter().position(|r| r.id == reply.id) {
+            self.replies[at] = reply;
         } else {
-            self.messages.push(entry);
-            if self.messages.len() > MESSAGES {
-                self.messages.remove(0);
+            self.replies.push(reply);
+            if self.replies.len() > REPLIES {
+                self.replies.remove(0);
             }
         }
     }
 
     fn context(&self) -> Option<Context> {
-        let reply = self.messages.iter().rev().find(|m| m["type"] == "gemini" && m["tokens"]["input"].is_u64());
-        let model = reply.and_then(|m| m["model"].as_str()).filter(|m| !m.trim().is_empty());
+        let reply = self.replies.iter().rev().find(|r| r.input.is_some());
+        let model = reply.and_then(|r| r.model.as_deref());
         let changed = self.picked.as_ref().filter(|(picked, at)| {
-            Some(picked.as_str()) != model
-                && reply
-                    .and_then(|m| m["timestamp"].as_str().and_then(Stamp::parse))
-                    .is_none_or(|written| written < *at)
+            Some(picked.as_str()) != model && reply.and_then(|r| r.written).is_none_or(|written| written < *at)
         });
         if let Some((model, _)) = changed {
             return Some(Context { model: model.clone(), percent: None });
@@ -142,10 +154,7 @@ impl Session {
             return self.model.as_ref().map(|model| Context { model: model.clone(), percent: None });
         };
         let window = if model.starts_with("gemma-4") { 256_000 } else { 1_048_576 };
-        Some(Context {
-            model: model.into(),
-            percent: reply.and_then(|m| m["tokens"]["input"].as_u64()).map(|n| percent(n, window)),
-        })
+        Some(Context { model: model.into(), percent: reply.and_then(|r| r.input).map(|n| percent(n, window)) })
     }
 }
 
@@ -341,7 +350,7 @@ mod tests {
         changed["tokens"]["input"] = Value::from(524_288);
         changed["content"] = Value::from("Updated answer");
         append(&mut session, &format!("{changed}\n"));
-        assert_eq!(session.messages.iter().filter(|m| m["type"] == "gemini").count(), 1);
+        assert_eq!(session.replies.len(), 1);
         assert_eq!(session.context.as_ref().and_then(|c| c.percent), Some(50));
         assert_eq!(last_message(&session.path).expect("message").map(|s| s.text), Some("Updated answer".into()));
         changed["content"] = Value::from("");
