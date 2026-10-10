@@ -1,6 +1,6 @@
 ---
 title: Issues and agents
-description: Browse GitHub issues, Shortcut stories, Linear issues and Jira issues, read them as Markdown, and start a coding agent on one in its own worktree.
+description: Browse GitHub issues, Shortcut stories, Linear issues, Jira issues and Plane work items, read them as Markdown, and start a coding agent on one in its own worktree.
 ---
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -25,6 +25,7 @@ Click **`Issues`** at the bottom of the sidebar. The browser opens for the activ
 | **Shortcut** | Stories from your Shortcut workspace. |
 | **Linear** | Issues from your Linear workspace. |
 | **Jira** | Issues from your Jira Cloud site. |
+| **Plane** | Work items from your Plane workspace, on Plane Cloud or a self-hosted server. |
 
 You can hide tabs and change their order in **settings → Issues → Sources shown**. The browser remembers the last tab you used.
 
@@ -78,6 +79,20 @@ The Jira tab lists the issues of the whole site you can see. To narrow it down, 
 Jira Server and Data Center are not supported.
 
 </TabItem>
+<TabItem label="Plane">
+
+Plane needs your workspace and an API key. Plane Cloud (`app.plane.so`) and self-hosted servers both work.
+
+For a self-hosted server, first set **Plane URL** in **settings → Issues → Plane** to its address, such as `https://plane.acme.dev`. Empty means Plane Cloud, and the key is checked against the server set there. The server must be recent enough to serve Plane's `/api/v2` work item list.
+
+1. In Plane, open **Profile settings → Personal access tokens** and create one.
+2. In cornercase, open the **Plane** tab of the issue browser. Type your workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and press `Enter`, then paste the key and press `Enter`. **back** returns to the previous step.
+
+cornercase checks the key against Plane and your workspace and, if it works, saves it. The workspace is saved in your settings (`plane_workspace` in [`config.json`](../../reference/configuration/)), and you can change it in **settings → Issues → Plane**, where the key can also be pasted. You can set `PLANE_API_KEY` in your environment instead of saving the key; the workspace is still asked once.
+
+The Plane tab lists the work items of every project in the workspace you can see. To narrow it down, set a **Plane filter** in **settings → Issues → Plane**: query parameters of Plane's work item list, such as `priority=high` or `project_id=…&label_id=…`, which are added to the request together with the closed and people filters. cornercase does not check them: if Plane refuses them, its answer is shown in the list. Plane's rate limit is 60 requests a minute per key, and a list takes three.
+
+</TabItem>
 </Tabs>
 
 <Screen
@@ -89,7 +104,7 @@ Jira Server and Data Center are not supported.
 Saved tokens go to `secrets.json` next to your `config.json`, readable only by you (mode `0600`). They are never written to logs, to the issue cache or to the screen. The **disconnect** button in a tracker's tab removes its saved token.
 
 <Aside type="caution" title="Environment variables win">
-When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY` or `JIRA_API_TOKEN` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
+When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `PLANE_API_KEY` is set, it takes precedence over a saved token, and cornercase won't let you change it from the app. The server reads these variables when it starts, so after changing them, restart it with `cornercase kill-server`.
 </Aside>
 
 ## Browse and filter
@@ -108,8 +123,8 @@ Each row shows the issue's key, its title and, on the right, its state (for clos
 
 Two toggles at the top right narrow the list down:
 
-- **closed** includes closed (GitHub), done (Shortcut), completed and canceled (Linear) or done (Jira) issues.
-- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear, *assignee* and *reporter* on Jira.
+- **closed** includes closed (GitHub), done (Shortcut), completed and canceled (Linear), done (Jira) or completed and cancelled (Plane) issues.
+- **people** filters by person, with the fields each tracker has: *assignee* and *author* on GitHub, *owner* and *requester* on Shortcut, *assignee* and *creator* on Linear, *assignee* and *reporter* on Jira, *assignee* and *creator* on Plane.
 
 <Screen
   name="issues-people"
@@ -149,7 +164,7 @@ At the top you see the issue's details and its link, then exactly what **start**
 | **agent** | Which agent will be started, in which mode, and its full command line. |
 | **prompt** | What will be pasted into the agent, and whether it is sent for you or left for you to send. |
 
-Below comes the description, rendered from Markdown (Jira descriptions and comments are converted to Markdown first): headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
+Below comes the description, rendered from Markdown (Jira and Plane descriptions and comments are converted to Markdown first): headings, lists and task lists, tables, quotes, links and code blocks with syntax highlighting in your terminal's colours, then the comments.
 
 <Screen
   name="issue-detail-end"
@@ -169,7 +184,7 @@ Press **start** in the issue, or select an issue in the list and press **start**
 ### Where
 
 - **GitHub** issues belong to the project you opened the browser from.
-- **Shortcut**, **Linear** and **Jira** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
+- **Shortcut**, **Linear**, **Jira** and **Plane** issues aren't tied to a repository, so when more than one place is open, cornercase asks **where…**: every project that is a git repository is offered as *a new worktree*, and the workspaces of other projects as *a new tab*. The place you are in is marked *where you are*.
 
 In a repository, the issue gets its own worktree on a branch named after it:
 
@@ -179,6 +194,7 @@ In a repository, the issue gets its own worktree on a branch named after it:
 | Shortcut | sc-48 Dark mode | `sc-48-dark-mode` |
 | Linear | ENG-123 Returns page crashes | `ENG-123-returns-page-crashes` |
 | Jira | SHOP-77 Returns page crashes | `SHOP-77-returns-page-crashes` |
+| Plane | ENG-42 Fix login redirect | `ENG-42-fix-login-redirect` |
 
 The title part is lowercased, accents become plain letters, everything else becomes dashes, and it is cut at a word boundary to at most 40 characters. The workspace is named after the issue's key and title, like `#482 Returns page crashes on empty addr…`.
 

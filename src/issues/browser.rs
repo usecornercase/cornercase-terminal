@@ -5,7 +5,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, sort_by_updated};
+use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, plane, sort_by_updated};
 use crate::markdown;
 use crate::search::Search;
 use crate::ui::{self, IssuesHit};
@@ -70,6 +70,7 @@ pub struct Connection {
 pub enum Step {
     Site,
     Email,
+    Workspace,
     #[default]
     Token,
 }
@@ -159,6 +160,7 @@ pub enum Action {
     Start(Issue, String, Option<Place>),
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
+    SavePlane { workspace: String },
     Disconnect(Source),
     Copy(String),
     SetDefaultAgent(String),
@@ -228,6 +230,7 @@ pub struct Browser {
     pub forms: HashMap<Source, TokenForm>,
     pub jira_site: String,
     pub jira_email: String,
+    pub plane_workspace: String,
     pub screen: Screen,
     pub starting: bool,
     pub error: Option<String>,
@@ -302,9 +305,10 @@ impl Browser {
     }
 
     fn form(&mut self, source: Source) -> &mut TokenForm {
-        let site = self.jira_site.clone();
+        let (site, workspace) = (self.jira_site.clone(), self.plane_workspace.clone());
         self.forms.entry(source).or_insert_with(|| match source {
             Source::Jira => TokenForm { input: site, step: Step::Site, ..TokenForm::default() },
+            Source::Plane => TokenForm { input: workspace, step: Step::Workspace, ..TokenForm::default() },
             _ => TokenForm::default(),
         })
     }
@@ -313,6 +317,7 @@ impl Browser {
         match (self.forms.get(&source), source) {
             (Some(form), _) => form.step,
             (None, Source::Jira) => Step::Site,
+            (None, Source::Plane) => Step::Workspace,
             (None, _) => Step::Token,
         }
     }
@@ -372,9 +377,9 @@ impl Browser {
                 buttons
             }
             Screen::List => match self.token_form().map(|source| self.form_step(source)) {
-                Some(Step::Site) => vec![Button::Next, Button::Cancel],
+                Some(Step::Site | Step::Workspace) => vec![Button::Next, Button::Cancel],
                 Some(Step::Email) => vec![Button::Next, Button::Back, Button::Cancel],
-                Some(Step::Token) if self.token_form() == Some(Source::Jira) => {
+                Some(Step::Token) if matches!(self.token_form(), Some(Source::Jira | Source::Plane)) => {
                     vec![Button::Connect, Button::Back, Button::Cancel]
                 }
                 Some(Step::Token) => vec![Button::Connect, Button::Cancel],
@@ -740,6 +745,14 @@ impl Browser {
                 }
                 Err(e) => form.error = Some(e.into()),
             },
+            Step::Workspace => match plane::check_workspace(&input) {
+                Ok(workspace) => {
+                    *form = TokenForm::default();
+                    self.plane_workspace.clone_from(&workspace);
+                    return Action::SavePlane { workspace };
+                }
+                Err(e) => form.error = Some(e.into()),
+            },
             Step::Token if input.is_empty() => {}
             Step::Token => {
                 form.checking = true;
@@ -752,14 +765,17 @@ impl Browser {
 
     fn step_back(&mut self) {
         let Some(source) = self.token_form() else { return };
-        let (site, email) = (self.jira_site.clone(), self.jira_email.clone());
+        let (site, email, workspace) = (self.jira_site.clone(), self.jira_email.clone(), self.plane_workspace.clone());
         let form = self.form(source);
         if form.checking {
             return;
         }
-        *form = match form.step {
-            Step::Token => TokenForm { input: email, step: Step::Email, ..TokenForm::default() },
-            Step::Email | Step::Site => TokenForm { input: site, step: Step::Site, ..TokenForm::default() },
+        *form = match (form.step, source) {
+            (Step::Token, Source::Plane) | (Step::Workspace, _) => {
+                TokenForm { input: workspace, step: Step::Workspace, ..TokenForm::default() }
+            }
+            (Step::Token, _) => TokenForm { input: email, step: Step::Email, ..TokenForm::default() },
+            (Step::Email | Step::Site, _) => TokenForm { input: site, step: Step::Site, ..TokenForm::default() },
         };
     }
 
@@ -1102,7 +1118,11 @@ impl Browser {
         let form = self.forms.get(&source);
         let step = self.form_step(source);
         let typed = form.map_or_else(
-            || if step == Step::Site { self.jira_site.clone() } else { String::new() },
+            || match step {
+                Step::Site => self.jira_site.clone(),
+                Step::Workspace => self.plane_workspace.clone(),
+                _ => String::new(),
+            },
             |f| f.input.clone(),
         );
         let mut help = vec![format!("Connect {}.", source.name()), String::new()];
@@ -1115,9 +1135,20 @@ impl Browser {
                 help.push("Type the email you sign in to Atlassian with and press Enter.".into());
                 ("email", typed)
             }
+            Step::Workspace => {
+                help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
+                help.push("Then press Enter.".into());
+                ("workspace", typed)
+            }
             Step::Token => {
-                if source == Source::Jira {
-                    help.extend([format!("Signing in to {} as {}.", self.jira_site, self.jira_email), String::new()]);
+                match source {
+                    Source::Jira => help
+                        .extend([format!("Signing in to {} as {}.", self.jira_site, self.jira_email), String::new()]),
+                    Source::Plane => {
+                        let line = format!("Connecting to the Plane workspace {}.", self.plane_workspace);
+                        help.extend([line, String::new()]);
+                    }
+                    _ => {}
                 }
                 help.push(source.token_help().into());
                 (source.token_name(), "•".repeat(typed.chars().count().min(TOKEN_DOTS)))
@@ -1131,6 +1162,9 @@ impl Browser {
                      takes precedence.",
                     self.secrets_path
                 ));
+            }
+            _ if source == Source::Plane => {
+                help.extend([String::new(), "The workspace is saved in your settings.".into()]);
             }
             _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
         }
@@ -1158,7 +1192,7 @@ impl Browser {
         } else if self.current() == Tab::One(Source::Github) && !self.github {
             "this project is not in a git repository".into()
         } else if self.sources().is_empty() {
-            "nothing to list here: connect Shortcut, Linear or Jira in their tabs".into()
+            "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
         } else if self.closed {
             "no issues".into()
         } else {
@@ -1279,6 +1313,7 @@ mod tests {
             forms: HashMap::new(),
             jira_site: String::new(),
             jira_email: String::new(),
+            plane_workspace: String::new(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -1374,7 +1409,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn are_all_five_by_default() {
+        fn are_all_six_by_default() {
             assert_eq!(
                 tabs(&[]),
                 [
@@ -1382,7 +1417,8 @@ mod tests {
                     Tab::One(Source::Github),
                     Tab::One(Source::Shortcut),
                     Tab::One(Source::Linear),
-                    Tab::One(Source::Jira)
+                    Tab::One(Source::Jira),
+                    Tab::One(Source::Plane)
                 ]
             );
         }
@@ -1606,6 +1642,12 @@ mod tests {
             assert_eq!(b.labels(), ["start", "refresh", "cancel"]);
         }
 
+        fn field(b: &Browser) -> (&'static str, String) {
+            let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues view") };
+            let ui::IssuesBody::Token { label, input, .. } = view.body else { panic!("not the form") };
+            (label, input)
+        }
+
         mod jira {
             use super::*;
 
@@ -1615,12 +1657,6 @@ mod tests {
                 b.jira_email = "ana@acme.dev".into();
                 b.tab_to(Tab::One(Source::Jira));
                 b
-            }
-
-            fn field(b: &Browser) -> (&'static str, String) {
-                let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues view") };
-                let ui::IssuesBody::Token { label, input, .. } = view.body else { panic!("not the form") };
-                (label, input)
             }
 
             fn to_the_token(b: &mut Browser) -> Action {
@@ -1680,6 +1716,67 @@ mod tests {
                 let pos = button(&b, "back");
                 click(&mut b, pos);
                 assert_eq!(field(&b), ("email", "ana@acme.dev".into()));
+            }
+        }
+
+        mod plane {
+            use super::*;
+
+            fn on_plane() -> Browser {
+                let mut b = browser();
+                b.plane_workspace = "acme".into();
+                b.tab_to(Tab::One(Source::Plane));
+                b
+            }
+
+            #[test]
+            fn asks_the_workspace_first_with_the_saved_one_typed() {
+                let b = on_plane();
+                assert_eq!((field(&b), b.labels()), (("workspace", "acme".into()), vec!["next", "cancel"]));
+            }
+
+            #[test]
+            fn saves_the_workspace_and_then_asks_for_the_key() {
+                let mut b = on_plane();
+                assert_eq!(press(&mut b, KeyCode::Enter), Action::SavePlane { workspace: "acme".into() });
+                assert_eq!((field(&b), b.labels()), (("API key", String::new()), vec!["connect", "back", "cancel"]));
+            }
+
+            #[test]
+            fn a_workspace_typed_in_capitals_is_saved_as_a_slug() {
+                let mut b = on_plane();
+                b.plane_workspace.clear();
+                type_text(&mut b, " Acme-Team ");
+                press(&mut b, KeyCode::Enter);
+                assert_eq!(b.plane_workspace, "acme-team");
+            }
+
+            #[test]
+            fn a_bad_workspace_stays_with_its_error() {
+                let mut b = on_plane();
+                b.plane_workspace = "acme corp".into();
+                let action = press(&mut b, KeyCode::Enter);
+                let error = b.forms.get(&Source::Plane).and_then(|f| f.error.clone());
+                let expected = "a workspace is lowercase letters, numbers and dashes, such as acme";
+                assert_eq!((action, field(&b).0, error.as_deref()), (Action::None, "workspace", Some(expected)));
+            }
+
+            #[test]
+            fn the_key_is_hidden_and_checked() {
+                let mut b = on_plane();
+                press(&mut b, KeyCode::Enter);
+                type_text(&mut b, "k3y");
+                assert_eq!(field(&b), ("API key", "•••".into()));
+                assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Plane, Secret("k3y".into())));
+            }
+
+            #[test]
+            fn back_returns_to_the_workspace() {
+                let mut b = on_plane();
+                press(&mut b, KeyCode::Enter);
+                let pos = button(&b, "back");
+                click(&mut b, pos);
+                assert_eq!(field(&b), ("workspace", "acme".into()));
             }
         }
 

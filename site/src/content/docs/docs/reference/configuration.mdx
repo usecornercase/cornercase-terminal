@@ -58,8 +58,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-issues"
-  crop={[2, 1, 106, 19]}
-  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; and the sources shown: All, GitHub, Shortcut, Linear and Jira, with move arrows on the hovered row"
+  crop={[2, 1, 106, 26]}
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; and the sources shown: All, GitHub, Shortcut, Linear, Jira and Plane, with move arrows on the hovered row"
 />
 
 | Row | What it sets |
@@ -68,6 +68,9 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Jira site**, **Jira email** | Your Jira Cloud site, such as `acme.atlassian.net` (a bare name like `acme` gets `.atlassian.net`), and the email of your Atlassian account. The Jira tab of the issue browser asks for both when they are missing. |
 | **Jira API token** | Like the tokens above; the site and the email must be set first, since the token is checked against that site. |
 | **Jira filter** | A JQL condition the Jira tab always applies, such as `project = SHOP`. Empty lists every issue of the site you can see. |
+| **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
+| **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
+| **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### UI
@@ -119,10 +122,13 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
-  "issue_tabs": ["all", "github", "shortcut", "linear", "jira"],
+  "issue_tabs": ["all", "github", "shortcut", "linear", "jira", "plane"],
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",
+  "plane_url": "",
+  "plane_workspace": "",
+  "plane_filter": "",
   "agent": "claude",
   "agent_args": {
     "claude": ["--permission-mode", "plan"]
@@ -155,10 +161,13 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | --- | --- | --- |
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
-| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira"]` |
+| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira", "plane"]` |
 | [`jira_site`](#jira_site) | string | `""` |
 | [`jira_email`](#jira_email) | string | `""` |
 | [`jira_jql`](#jira_jql) | string | `""` |
+| [`plane_url`](#plane_url) | string | `""` |
+| [`plane_workspace`](#plane_workspace) | string | `""` |
+| [`plane_filter`](#plane_filter) | string | `""` |
 | [`agent`](#agent) | string | `"auto"` |
 | [`agent_args`](#agent_args) | object | `{}` |
 | [`agent_modes`](#agent_modes) | object | `{}` |
@@ -191,7 +200,7 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `issue_tabs`
 
-The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear` and `jira`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all five. A list saved before Jira existed gets `jira` added at the end once.
+The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all six. A list saved before Jira existed gets `jira` added at the end once, and one saved before Plane existed gets `plane`.
 
 #### `jira_site`
 
@@ -204,6 +213,18 @@ The email of your Atlassian account, sent with the API token to sign in to Jira.
 #### `jira_jql`
 
 A [JQL](https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-search-in-jira-cloud/) condition added to every Jira list, such as `project = SHOP` or `project in (SHOP, API) AND labels = backend`. The list is always sorted by last update, so an `ORDER BY` in it is dropped.
+
+#### `plane_url`
+
+The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Set from the settings modal.
+
+#### `plane_workspace`
+
+Your Plane workspace, the slug in the address after the server's name: `acme` in `app.plane.so/acme`. Lower case letters, numbers and dashes. Set from the issue browser or the settings modal. The API key is never stored here: it goes in `secrets.json` or comes from `PLANE_API_KEY` (see [Files and environment](../files-and-environment/)).
+
+#### `plane_filter`
+
+Query parameters added to every Plane list, written as in a URL: `priority=high&label_id=…`. The parameters are those of Plane's work item list (`state_group`, `priority`, `project_id`, `label_id`, `cycle_id`, …; lists take comma-separated values). They are not checked: when Plane refuses them, its answer is shown in the list. The list asks for the work items that are not done on its own, so a `state_group__in` here narrows that rather than replacing it: while **closed** is off only its open groups count, and one that names only finished groups lists nothing.
 
 #### `agent`
 

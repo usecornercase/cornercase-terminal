@@ -23,7 +23,7 @@ use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self, Job, Level};
@@ -695,6 +695,7 @@ struct Apis {
     shortcut: String,
     linear: String,
     jira: Option<String>,
+    plane: Option<String>,
 }
 
 impl Apis {
@@ -704,6 +705,7 @@ impl Apis {
             shortcut: var(shortcut::API_ENV, shortcut::DEFAULT_API),
             linear: var(linear::API_ENV, linear::DEFAULT_API),
             jira: std::env::var(jira::API_ENV).ok(),
+            plane: std::env::var(plane::API_ENV).ok(),
         }
     }
 }
@@ -2834,9 +2836,23 @@ impl App {
         })
     }
 
+    fn plane(&self, token: String) -> Option<plane::Api> {
+        let config = &self.config;
+        if config.plane_workspace.is_empty() {
+            return None;
+        }
+        let (base, app) = plane::endpoints(&config.plane_url, self.apis.plane.as_deref());
+        Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
+    }
+
     fn connected(&self, source: Source) -> Option<bool> {
         let (token, from_env) = self.token(source)?;
-        (source != Source::Jira || self.jira(token).is_some()).then_some(from_env)
+        let configured = match source {
+            Source::Jira => self.jira(token).is_some(),
+            Source::Plane => self.plane(token).is_some(),
+            _ => true,
+        };
+        configured.then_some(from_env)
     }
 
     fn client(&self, source: Source, project: u64) -> Option<Client> {
@@ -2850,6 +2866,7 @@ impl App {
             }
             Source::Linear => Some(Client::Linear { url: self.apis.linear.clone(), token: self.token(source)?.0 }),
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
+            Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
         }
     }
 
@@ -2901,6 +2918,7 @@ impl App {
             forms: HashMap::new(),
             jira_site: self.config.jira_site.clone(),
             jira_email: self.config.jira_email.clone(),
+            plane_workspace: self.config.plane_workspace.clone(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -2983,7 +3001,14 @@ impl App {
                 }
             }
             Action::CheckToken(source, token) => self.check_token(source, token),
-            Action::SaveJira { site, email } => return self.save_jira(site, email, area),
+            Action::SaveJira { site, email } => {
+                let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
+                return self.save_connection(Source::Jira, config, area);
+            }
+            Action::SavePlane { workspace } => {
+                let config = Config { plane_workspace: workspace, ..self.config.clone() };
+                return self.save_connection(Source::Plane, config, area);
+            }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
                 self.host_writes.push(clipboard::osc52(&url));
@@ -3122,18 +3147,17 @@ impl App {
         });
     }
 
-    fn save_jira(&mut self, site: String, email: String, area: Rect) -> Result<()> {
-        let config = Config { jira_site: site, jira_email: email, ..self.config.clone() };
+    fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
         let saved = config::save(&self.config_path, &config);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         if let Err(e) = saved {
-            b.token_rejected(Source::Jira, format!("failed to save the settings: {e}"));
+            b.token_rejected(source, format!("failed to save the settings: {e}"));
             return Ok(());
         }
         self.set_config(config);
-        let Some(from_env) = self.connected(Source::Jira) else { return Ok(()) };
+        let Some(from_env) = self.connected(source) else { return Ok(()) };
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        b.connected(Source::Jira, Connection { from_env, account: None });
+        b.connected(source, Connection { from_env, account: None });
         let action = b.needs_load();
         self.act(action, area)
     }
@@ -3148,6 +3172,10 @@ impl App {
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
         if jira(&config) != jira(&self.config) {
             self.forget_issues(Source::Jira);
+        }
+        let plane = |c: &Config| (c.plane_url.clone(), c.plane_workspace.clone(), c.plane_filter.clone());
+        if plane(&config) != plane(&self.config) {
+            self.forget_issues(Source::Plane);
         }
         self.config = config;
     }
@@ -3166,16 +3194,22 @@ impl App {
     fn check_token(&mut self, source: Source, token: Secret) {
         let client = match source {
             Source::Github => return,
-            Source::Shortcut => Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() },
-            Source::Linear => Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() },
-            Source::Jira => {
-                let Some(api) = self.jira(token.0.clone()) else {
-                    let error = Err(Error::Api("set the Jira site and email first".into()));
-                    let epoch = self.epoch(source);
-                    let _ = self.tx.send(AppEvent::TokenChecked { source, epoch, token, result: error });
-                    return;
-                };
-                Client::Jira(api)
+            Source::Shortcut => Ok(Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() }),
+            Source::Linear => Ok(Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() }),
+            Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
+            Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
+        };
+        let client = match client {
+            Ok(client) => client,
+            Err(message) => {
+                let epoch = self.epoch(source);
+                let _ = self.tx.send(AppEvent::TokenChecked {
+                    source,
+                    epoch,
+                    token,
+                    result: Err(Error::Api(message.into())),
+                });
+                return;
             }
         };
         let (tx, epoch) = (self.tx.clone(), self.epoch(source));
@@ -11603,6 +11637,94 @@ rm -f "$1/sessions/$$.json"
                 s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
 
                 assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+            }
+        }
+
+        mod plane {
+            use super::*;
+
+            const ME: &str = r#"{"id":"me-1","display_name":"Ana"}"#;
+            const MEMBERS: &str = r#"[{"id":"me-1","display_name":"Ana","email":"ana@acme.dev"}]"#;
+            const ITEMS: &str = r#"{"data":[{"identifier":"ENG-42","sequence_id":42,"name":"Login redirect loops",
+                "updated_at":"2026-09-30T00:00:00Z","state":{"name":"Todo","group":"unstarted"}}],
+                "pagination":{"style":"cursor"},"has_more":false,"next_cursor":null}"#;
+
+            fn plane(s: &mut Setup) -> FakeHttp {
+                let server = FakeHttp::start(vec![
+                    ("GET /api/v1/users/me/", 200, ME),
+                    ("GET /api/v1/workspaces/acme/members/", 200, MEMBERS),
+                    ("GET /api/v2/workspaces/acme/work-items/", 200, ITEMS),
+                ]);
+                s.app.apis.plane = Some(server.url());
+                server
+            }
+
+            fn type_workspace(s: &mut Setup) {
+                open_list(s);
+                to_tab(s, IssueTab::One(Source::Plane));
+                type_text(&mut s.app, "acme");
+                enter(s);
+            }
+
+            #[test]
+            fn connecting_saves_the_workspace_then_the_key_and_lists() {
+                let mut s = setup(false, "echo '[]'");
+                let server = plane(&mut s);
+
+                type_workspace(&mut s);
+                let config = config::load(&s.config.path().join("config.json"));
+                type_text(&mut s.app, "k3y");
+                enter(&mut s);
+
+                pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Plane));
+                assert_eq!(shown(&s.app), ["ENG-42"]);
+                assert_eq!(config.plane_workspace, "acme");
+                assert_eq!(secrets::read(&secrets_file(&s), "plane_api_key").as_deref(), Some("k3y"));
+                assert!(server.request(0).to_lowercase().contains("x-api-key: k3y"), "{}", server.request(0));
+            }
+
+            #[test]
+            fn a_key_from_the_environment_connects_once_the_workspace_is_typed() {
+                let mut s = setup(false, "echo '[]'");
+                let _server = plane(&mut s);
+                s.app.env_tokens.insert(Source::Plane, "env-key".into());
+
+                type_workspace(&mut s);
+
+                pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Plane));
+                assert_eq!(shown(&s.app), ["ENG-42"]);
+            }
+
+            #[test]
+            fn a_key_without_a_workspace_is_not_connected() {
+                let mut s = setup(false, "echo '[]'");
+                secrets::write(&secrets_file(&s), "plane_api_key", "k3y").expect("save key");
+
+                open_list(&mut s);
+
+                assert!(!browser(&s.app).connections.contains_key(&Source::Plane));
+            }
+
+            #[test]
+            fn another_workspace_forgets_the_account_of_the_old_one() {
+                let mut s = setup(false, "echo '[]'");
+                s.app.accounts.insert(Source::Plane, Account { handle: "Ana".into(), workspace: "acme".into() });
+                s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+
+                s.app.set_config(Config { plane_workspace: "other".into(), ..s.app.config.clone() });
+
+                assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+            }
+
+            #[test]
+            fn a_key_checked_without_a_workspace_says_to_set_it() {
+                let mut s = setup(false, "echo '[]'");
+
+                s.app.check_token(Source::Plane, Secret("k3y".into()));
+
+                let event = s.rx.recv_timeout(Duration::from_secs(10)).expect("the answer arrives");
+                let AppEvent::TokenChecked { result, .. } = event else { panic!("not a token check") };
+                assert_eq!(result.err().map(|e| e.to_string()).as_deref(), Some("set the Plane workspace first"));
             }
         }
     }
