@@ -6,11 +6,11 @@ description: See what changed in a git workspace next to its panes, live, and ha
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-The changes panel shows the diff of the active workspace in a column on the right of its panes. It follows the workspace as it changes, so you can watch an agent edit files, review its work as it goes, and point it at a hunk without leaving cornercase.
+The changes panel shows the diff of the active workspace or the uncommitted changes of every project in a column on the right of its panes. It follows the workspace as it changes, so you can watch an agent edit files, review its work as it goes, and point it at a hunk without leaving cornercase.
 
 <Screen
   name="changes"
-  alt="cornercase with the issue-482-returns-page workspace active: git status in the pane, and the changes panel on the right with the uncommitted tab, 2 files +6 −5, src/returns/address.rs open with its hunk hovered (open, ask agent, copy), and src/returns/mod.rs below"
+  alt="cornercase with the issue-482-returns-page workspace active: git status in the pane, and the changes panel on the right with the uncommitted tab, 2 files +3 −3, src/returns/address.rs open with its hunk hovered (open, ask agent, copy), and src/returns/mod.rs below"
   caption="The changes of an issue worktree, next to the shell that made them."
 />
 
@@ -18,13 +18,27 @@ The changes panel shows the diff of the active workspace in a column on the righ
 
 The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel) to close it. It shares its column with the [files panel](../files/) and the [TODO panel](../todo/): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
 
-The panel follows the active workspace: switch workspaces and it shows the other one's changes. Drag its left border to make it wider or narrower; a double click on the border gives it back its automatic width, half of the room right of the columns. Whether it is open, which tab it shows and its width are kept in the [saved session](../sessions/#what-is-saved).
+The first scope tab follows the active workspace: switch workspaces and it shows the other one's changes. Its label is the project's name, with the workspace after `›` when the project has several workspaces. Drag its left border to make it wider or narrower; a double click on the border gives it back its automatic width, half of the room right of the columns. Whether it is open, its scope and mode, and its width are kept in the [saved session](../sessions/#what-is-saved).
 
 In the [compact layout](../small-terminals/), a **`±`** button in the top bar opens the panel over the whole screen.
 
+## Every project
+
+Click **`Every project`** beside the project's tab to see staged and unstaged edits and untracked files across all your projects. Clean projects and folders outside git are left out. A header names each project with its file and line counts; when several of its workspaces have changes, their branch or label appears underneath.
+
+<Screen
+  name="changes-every"
+  alt="The Every project scope with uncommitted files grouped under shop and api, and separate main and issue worktree headers under shop"
+  caption="Review changes across projects without switching your active workspace."
+/>
+
+Files start folded. Click a file to load and unfold its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **fold all**, scrolling and hunk actions work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Your active project stays selected.
+
+This scope shows only uncommitted changes, so it has no mode tabs or base selector. Return to the project's tab to see its commits or choose a base. The `Changes n` button still counts only the active workspace's files, and it and `±` remain available only in git workspaces.
+
 ## What it compares
 
-Three tabs at the top choose what you see:
+In the project's scope, three mode tabs choose what you see:
 
 | Tab | Shows |
 | --- | --- |
@@ -37,7 +51,7 @@ Three tabs at the top choose what you see:
 <Screen
   name="changes-commits"
   crop={[95, 0, 45, 14]}
-  alt="The commits tab: 1 file +7 −0 vs main, with the new file src/returns/tests.rs open"
+  alt="The commits tab: 1 file +5 −0 vs main, with the new file src/returns/tests.rs open"
 />
 
 Click `vs main ▾` to compare with another branch, local or remote. Type to filter the list, and click a branch or press `Enter`:
@@ -98,14 +112,16 @@ Hover a hunk and three buttons appear on its first line:
 | Button | Does |
 | --- | --- |
 | **open** | Opens the file in a new tab, at the hunk's first changed line, with your `$VISUAL` or `$EDITOR` (or `vi`). The tab closes when you quit the editor. |
-| **ask agent** | Types a reference such as `src/returns/address.rs:11-12 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. Without an agent in the workspace, it copies the reference to your clipboard instead. |
+| **ask agent** | Types a reference such as `src/returns/address.rs:9-10 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. Without an agent in the workspace, it copies the reference to your clipboard instead. |
 | **copy** | Copies the hunk, as a patch, to your clipboard. |
 
 The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` and `micro` understand.
 
 ## Live, and light on your repository
 
-While the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. When nothing changed, nothing is redrawn.
+In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. When nothing changed, the diff is reused.
+
+While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Folded files need only status and line counts; patches are read and refreshed for unfolded files. Closing the panel or returning to the project scope stops that sweep.
 
 <Aside type="tip">
 The green and red backgrounds are mixed from your terminal's own background and palette when your terminal supports 24-bit colour and says so in `COLORTERM` (most modern terminals set `COLORTERM=truecolor`). Without it, cornercase uses palette colours: on dark themes the changed lines get only the coloured bar and numbers, with the changed words highlighted.

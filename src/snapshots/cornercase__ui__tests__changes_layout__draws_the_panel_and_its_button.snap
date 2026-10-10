@@ -1,11 +1,10 @@
 ---
 source: src/ui.rs
-assertion_line: 4538
 expression: "render_sized(&with_panel(), 140, 16).backend()"
 ---
-"  ⌕ search projects, workspaces, tabs                    │                                          │  Uncommitted   Commits   All    ⌕  ×  "
-"                                                         │                                          │ reading changes…                      "
-" Projects                      │ Workspaces              │                                          │                                       "
+"  ⌕ search projects, workspaces, tabs                    │                                          │  shop   Every project           ⌕  ×  "
+"                                                         │                                          │  Uncommitted   Commits   All          "
+" Projects                      │ Workspaces              │                                          │ reading changes…                      "
 "                               │                         │                                          │                                       "
 "▌ shop (1)                     │  main                   │                                          │                                       "
 "                               │▌ ├ › zsh                │                                          │                                       "

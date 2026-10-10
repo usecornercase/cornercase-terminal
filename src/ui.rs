@@ -4543,6 +4543,10 @@ mod tests {
         fn with_panel() -> View<'static> {
             let tints = crate::changes::Tints::of(&HostTheme::default());
             let panel = changes::View {
+                scope: crate::changes::Scope::Project,
+                project: "shop".into(),
+                owners: Vec::new(),
+                headers: Vec::new(),
                 mode: crate::changes::Mode::Uncommitted,
                 base: None,
                 body: changes::Body::Loading,

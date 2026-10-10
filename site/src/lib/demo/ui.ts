@@ -912,7 +912,7 @@ export class Painter {
     this.button(areas.issues, ' ', 'Issues', this.buttonStyle(areas.issues, DARK, 6));
     this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
     if (!areas.compact && hasChanges(app.workspace())) {
-      const label = changesLabel(app.changesDiff());
+      const label = changesLabel(app.activeChangesDiff());
       const w = label.length + 2;
       const r = intersect(rect(right(areas.issues) - w - 1, areas.issues.y, w, 1), areas.issues);
       const idle: Style = app.changesOpen ? { fg: 6, add: BOLD } : DARK;

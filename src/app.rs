@@ -858,7 +858,7 @@ impl App {
     }
 
     fn changes_shown(&self) -> bool {
-        self.changes.open && self.changes_target().is_some()
+        self.changes.open && (self.changes.scope == changes::Scope::Every || self.changes_target().is_some())
     }
 
     fn pane_size(&self, area: Rect) -> (u16, u16) {
@@ -1033,14 +1033,22 @@ impl App {
     }
 
     fn refresh_changes(&mut self, now: Instant) {
-        let Some(target) = self.changes_target() else { return };
-        if self.changes.workspace != Some(target.workspace) {
-            self.changes.workspace = Some(target.workspace);
-            self.changes.scroll = 0;
-        }
-        let Some((generation, request)) = self.changes.request(&target, now) else { return };
-        let (tx, workspace) = (self.tx.clone(), target.workspace);
-        let job = Job::new(Level::Debug, "changes", "diff").with("workspace", workspace).begin();
+        let request = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            let targets = self.every_targets();
+            self.changes.request_every(&targets, now)
+        } else {
+            self.changes_target().and_then(|target| {
+                if self.changes.workspace != Some(target.workspace) {
+                    self.changes.workspace = Some(target.workspace);
+                    self.changes.scroll = 0;
+                }
+                self.changes.request(&target, now).map(|(generation, request)| (target.workspace, generation, request))
+            })
+        };
+        let Some((workspace, generation, request)) = request else { return };
+        let tx = self.tx.clone();
+        let kind = if request.expanded.is_some() { "summary" } else { "diff" };
+        let job = Job::new(Level::Debug, "changes", kind).with("workspace", workspace).begin();
         std::thread::spawn(move || {
             let result = panics::job(|| changes::git::load(&request));
             job.finish(&result);
@@ -1473,8 +1481,14 @@ impl App {
             people: self.issue_people.clone(),
         });
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
-        let changes = (self.changes.open || self.changes.mode != changes::Mode::default())
-            .then_some(ChangesState { open: self.changes.open, mode: self.changes.mode });
+        let changes = (self.changes.open
+            || self.changes.mode != changes::Mode::default()
+            || self.changes.scope != changes::Scope::default())
+        .then_some(ChangesState {
+            open: self.changes.open,
+            mode: self.changes.mode,
+            scope: (self.changes.scope != changes::Scope::default()).then_some(self.changes.scope),
+        });
         State {
             version: state::VERSION,
             groups,
@@ -1493,6 +1507,7 @@ impl App {
         if let Some(changes) = saved.changes {
             self.changes.open = changes.open && !saved.todo && !saved.files;
             self.changes.mode = changes.mode;
+            self.changes.scope = changes.scope.unwrap_or_default();
         }
         self.todo.open = saved.todo && !saved.files;
         self.files.open = saved.files;
@@ -1675,6 +1690,9 @@ impl App {
             AppEvent::Behind { project, behind } => self.behind_counted(project, &behind),
             AppEvent::Changes { workspace, generation, request, result } => {
                 self.changes.loaded(workspace, generation, &request, result);
+                if self.changes_shown() && self.changes.scope == changes::Scope::Every {
+                    self.refresh_changes(Instant::now());
+                }
             }
             AppEvent::Branches { workspace, branches, default } => self.branches_listed(workspace, branches, default),
             AppEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
@@ -4779,8 +4797,12 @@ impl App {
 
     fn changes_label(&self) -> Option<String> {
         let target = self.changes_target()?;
-        let files =
-            self.changes.model(target.workspace, target.base.as_deref()).and_then(|m| m.diff()).map(|d| d.files.len());
+        let model = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            self.changes.summary(target.workspace)
+        } else {
+            self.changes.model(target.workspace, target.base.as_deref())
+        };
+        let files = model.and_then(changes::Model::diff).map(|d| d.files.len());
         Some(match files {
             Some(n) if n > 0 => format!("{CHANGES_LABEL} {n}"),
             _ => CHANGES_LABEL.to_string(),
@@ -4818,18 +4840,130 @@ impl App {
         self.changes.model(target.workspace, target.base.as_deref()).and_then(|m| m.diff()).cloned()
     }
 
+    fn changes_project_order(&self) -> Vec<usize> {
+        ui::sidebar_rows(&self.project_groups(), &vec![false; self.groups.len()])
+            .into_iter()
+            .filter_map(|row| if let SidebarRow::Project(p) = row { Some(p) } else { None })
+            .collect()
+    }
+
+    fn every_targets(&self) -> Vec<(Checkout, bool)> {
+        self.changes_project_order()
+            .into_iter()
+            .flat_map(|p| {
+                let project = &self.projects[p];
+                let several = project
+                    .workspaces
+                    .iter()
+                    .filter(|w| {
+                        git::branch(&w.path).is_some()
+                            && self
+                                .changes
+                                .summary(w.id)
+                                .and_then(changes::Model::diff)
+                                .is_some_and(|d| !d.files.is_empty())
+                    })
+                    .count()
+                    > 1;
+                project
+                    .workspaces
+                    .iter()
+                    .filter(|w| git::branch(&w.path).is_some())
+                    .map(|w| {
+                        let hidden = self.changes.headers.contains(&project.id)
+                            || (several && self.changes.headers.contains(&w.id));
+                        (Checkout { workspace: w.id, dir: w.path.clone(), base: None }, hidden)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn every_body(&self) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
+        let mut diff = changes::diff::Diff::default();
+        let mut owners = Vec::new();
+        let mut headers = Vec::new();
+        let mut error = None;
+        for p in self.changes_project_order() {
+            let project = &self.projects[p];
+            if error.is_none() {
+                error = project.workspaces.iter().find_map(|w| {
+                    let failure = self.changes.summary(w.id)?.result.as_ref().err()?;
+                    Some(format!("{}: {failure}", self.project_label(project)))
+                });
+            }
+            let workspaces: Vec<_> = project
+                .workspaces
+                .iter()
+                .filter_map(|w| {
+                    git::branch(&w.path)?;
+                    let diff = self.changes.summary(w.id)?.diff()?;
+                    (!diff.files.is_empty()).then_some((w, diff))
+                })
+                .collect();
+            if workspaces.is_empty() {
+                continue;
+            }
+            let start = diff.files.len();
+            let count = workspaces.iter().map(|(_, d)| d.files.len()).sum::<usize>();
+            headers.push(panel::Header {
+                id: project.id,
+                label: self.project_label(project),
+                files: start..start + count,
+                workspace: false,
+                folded: self.changes.headers.contains(&project.id),
+            });
+            let several = workspaces.len() > 1;
+            for (workspace, changes) in workspaces {
+                let start = diff.files.len();
+                if several {
+                    headers.push(panel::Header {
+                        id: workspace.id,
+                        label: workspace.label(),
+                        files: start..start + changes.files.len(),
+                        workspace: true,
+                        folded: self.changes.headers.contains(&workspace.id),
+                    });
+                }
+                owners.extend(std::iter::repeat_n(workspace.id, changes.files.len()));
+                diff.files.extend(changes.files.iter().cloned());
+            }
+        }
+        let body = if diff.files.is_empty()
+            && self.every_targets().iter().any(|(t, _)| self.changes.summary(t.workspace).is_none())
+        {
+            panel::Body::Loading
+        } else if diff.files.is_empty() && error.is_some() {
+            panel::Body::Failed(error.unwrap_or_default())
+        } else {
+            panel::Body::Ready(std::sync::Arc::new(diff))
+        };
+        (body, owners, headers)
+    }
+
     fn panel_view(&self) -> Option<panel::View> {
-        let target = self.changes_target()?;
-        let ws = target.workspace;
-        let model = self.changes.model(ws, target.base.as_deref());
-        let body = match model.map(|m| &m.result) {
-            None => panel::Body::Loading,
-            Some(Ok(diff)) => panel::Body::Ready(std::sync::Arc::clone(diff)),
-            Some(Err(e)) => panel::Body::Failed(e.clone()),
+        let target = self.changes_target();
+        let model = target.as_ref().and_then(|t| self.changes.model(t.workspace, t.base.as_deref()));
+        let every = self.changes.scope == changes::Scope::Every;
+        let (body, owners, headers) = if every {
+            self.every_body()
+        } else {
+            let target = target.as_ref()?;
+            let body = match model.map(|m| &m.result) {
+                None => panel::Body::Loading,
+                Some(Ok(diff)) => panel::Body::Ready(std::sync::Arc::clone(diff)),
+                Some(Err(e)) => panel::Body::Failed(e.clone()),
+            };
+            let owners = match &body {
+                panel::Body::Ready(d) => vec![target.workspace; d.files.len()],
+                _ => Vec::new(),
+            };
+            (body, owners, Vec::new())
         };
         let (mut folded, mut viewed, mut gaps) = (Vec::new(), Vec::new(), HashMap::new());
         if let panel::Body::Ready(diff) = &body {
             for (i, file) in diff.files.iter().enumerate() {
+                let ws = owners[i];
                 folded.push(self.changes.folded(ws, diff, file));
                 viewed.push(self.changes.viewed(ws, file));
                 for h in 1..file.hunks.len() {
@@ -4847,15 +4981,36 @@ impl App {
                 _ => Vec::new(),
             },
         });
+        let project = self.project().map_or_else(
+            || "Project".into(),
+            |p| {
+                let name = self.project_label(p);
+                if p.workspaces.len() > 1 {
+                    p.workspace().map_or(name.clone(), |w| format!("{name} › {}", w.label()))
+                } else {
+                    name
+                }
+            },
+        );
         Some(panel::View {
-            mode: self.changes.mode,
-            base: self.changes.label(ws).or(target.base),
+            scope: self.changes.scope,
+            project,
+            owners,
+            headers,
+            mode: if every { changes::Mode::Uncommitted } else { self.changes.mode },
+            base: target.and_then(|t| self.changes.label(t.workspace).or(t.base)).filter(|_| !every),
             body,
             folded,
             viewed,
             gaps,
             scroll: self.changes.scroll,
-            live: model.is_some_and(|m| m.live(Instant::now())),
+            live: if every {
+                self.every_targets()
+                    .iter()
+                    .all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
+            } else {
+                model.is_some_and(|m| m.live(Instant::now()))
+            },
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
             tints: Tints::of(&self.theme),
@@ -4864,7 +5019,7 @@ impl App {
     }
 
     fn changes_mouse(&mut self, ev: MouseEvent, pos: Position, panel_area: Rect, area: Rect) -> Result<()> {
-        let (Some(target), Some(view)) = (self.changes_target(), self.panel_view()) else { return Ok(()) };
+        let Some(view) = self.panel_view() else { return Ok(()) };
         if let Some(delta) = wheel(ev.kind) {
             let max = panel::max_scroll(panel_area, &view);
             self.changes.scroll = self.changes.scroll.min(max).saturating_add_signed(delta).min(max);
@@ -4873,32 +5028,63 @@ impl App {
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
-        let diff = self.changed_diff(&target);
-        let file = |i: usize| diff.as_ref().and_then(|d| d.files.get(i).cloned());
-        match panel::hit(panel_area, &view, pos) {
+        let diff = match &view.body {
+            panel::Body::Ready(d) => Some(d.clone()),
+            _ => None,
+        };
+        let file = |i: usize| {
+            let file = diff.as_ref()?.files.get(i)?.clone();
+            let workspace = *view.owners.get(i)?;
+            let (p, w) = self.workspace_position(workspace)?;
+            let ws = &self.projects[p].workspaces[w];
+            Some((Checkout { workspace, dir: ws.path.clone(), base: ws.base.clone() }, file))
+        };
+        let hit = panel::hit(panel_area, &view, pos);
+        let selected = match hit {
+            Some(PanelHit::File(i) | PanelHit::Viewed(i) | PanelHit::Gap(i, _) | PanelHit::Action(i, _, _)) => file(i),
+            _ => None,
+        };
+        match hit {
+            Some(PanelHit::Scope(scope)) => self.changes.set_scope(scope),
+            Some(PanelHit::Header(i)) => {
+                self.changes.toggle_header(view.headers[i].id);
+                for workspace in &view.owners[view.headers[i].files.clone()] {
+                    self.changes.invalidate_summary(*workspace);
+                }
+            }
             Some(PanelHit::Mode(mode)) => self.changes.set_mode(mode),
             Some(PanelHit::Close) => self.changes.close(),
             Some(PanelHit::Filter | PanelHit::Query) => self.changes.filter.get_or_insert_default().focused = true,
             Some(PanelHit::ClearFilter) => self.changes.filter = None,
-            Some(PanelHit::Base) => self.open_branches(&target),
-            Some(PanelHit::FoldAll) => {
-                if let Some(diff) = &diff {
-                    self.changes.fold_all(target.workspace, diff);
+            Some(PanelHit::Base) => {
+                if let Some(target) = self.changes_target() {
+                    self.open_branches(&target);
                 }
             }
-            Some(PanelHit::File(i)) => {
-                if let (Some(diff), Some(f)) = (&diff, file(i)) {
+            Some(PanelHit::FoldAll) => {
+                if let Some(diff) = &diff {
+                    let fold = view.folded.iter().any(|f| !f);
+                    if !fold {
+                        self.changes.headers.clear();
+                    }
+                    for (file, workspace) in diff.files.iter().zip(&view.owners) {
+                        self.changes.set_fold(*workspace, file, fold);
+                    }
+                }
+            }
+            Some(PanelHit::File(_)) => {
+                if let (Some(diff), Some((target, f))) = (&diff, selected) {
                     self.changes.toggle_fold(target.workspace, diff, &f);
                 }
             }
-            Some(PanelHit::Viewed(i)) => {
-                if let Some(f) = file(i) {
+            Some(PanelHit::Viewed(_)) => {
+                if let Some((target, f)) = selected {
                     self.changes.toggle_viewed(target.workspace, &f);
                 }
             }
-            Some(PanelHit::Gap(i, h)) => {
-                if let Some(f) = file(i) {
-                    let (tx, mode, workspace, dir) = (self.tx.clone(), self.changes.mode, target.workspace, target.dir);
+            Some(PanelHit::Gap(_, h)) => {
+                if let Some((target, f)) = selected {
+                    let (tx, mode, workspace, dir) = (self.tx.clone(), view.mode, target.workspace, target.dir);
                     let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace).begin();
                     std::thread::spawn(move || {
                         let new_side = changes::git::new_side(&dir, mode, &f.path);
@@ -4909,12 +5095,15 @@ impl App {
                     });
                 }
             }
-            Some(PanelHit::Action(i, h, action)) => {
-                if let Some(f) = file(i) {
+            Some(PanelHit::Action(_, h, action)) => {
+                if let Some((target, f)) = selected {
                     return self.hunk_action(&target, &f, h, action, area);
                 }
             }
             None => {}
+        }
+        if self.changes.scope == changes::Scope::Every && self.changes_shown() {
+            self.refresh_changes(Instant::now());
         }
         Ok(())
     }
@@ -5014,7 +5203,11 @@ impl App {
 
     fn branches_listed(&mut self, workspace: u64, branches: Vec<String>, default: Option<String>) {
         let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
-        if self.overlay.is_some() || !self.changes.open || self.changes.mode == changes::Mode::Uncommitted {
+        if self.overlay.is_some()
+            || !self.changes.open
+            || self.changes.scope == changes::Scope::Every
+            || self.changes.mode == changes::Mode::Uncommitted
+        {
             return;
         }
         let current = self.changes.label(workspace).or(target.base);
@@ -5022,8 +5215,17 @@ impl App {
     }
 
     fn gap_loaded(&mut self, workspace: u64, file: &ChangedFile, hunk: usize, lines: Vec<changes::GapLine>) {
-        let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
-        let current = self.changed_diff(&target).is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest));
+        let current = if self.changes.scope == changes::Scope::Every {
+            self.changes
+                .summary(workspace)
+                .and_then(changes::Model::diff)
+                .is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest))
+        } else {
+            self.changes_target()
+                .filter(|t| t.workspace == workspace)
+                .and_then(|t| self.changed_diff(&t))
+                .is_some_and(|d| d.files.iter().any(|f| f.digest == file.digest))
+        };
         if current {
             self.changes.set_gap(workspace, file, hunk, lines);
         }
@@ -12198,6 +12400,209 @@ rm -f "$1/sessions/$$.json"
     mod changes_panel {
         use super::*;
         use crate::test_util::{git, write_executable};
+
+        mod every_project {
+            use super::*;
+
+            fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
+                app.changes.open = true;
+                app.changes.set_scope(changes::Scope::Every);
+                app.refresh_changes(Instant::now());
+                pump_until(app, rx, "every workspace has a summary", |a| {
+                    a.every_targets().iter().all(|(t, _)| a.changes.summary(t.workspace).is_some())
+                });
+            }
+
+            fn row(app: &App, wanted: panel::Row) -> Position {
+                let view = app.panel_view().expect("panel");
+                let index = panel::rows(&view).iter().position(|r| *r == wanted).expect("row");
+                let body = panel::parts(panel_area(app), &view).body;
+                Position::new(body.x + 8, body.y + u16::try_from(index).expect("row index"))
+            }
+
+            fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
+                let view = app.panel_view().expect("panel");
+                let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+                let file = diff.files.iter().position(|f| f.path == path).expect("file");
+                click(app, row(app, panel::Row::File(file)));
+                pump_until(app, rx, "the file patch loads", |a| {
+                    let Some(panel::View { body: panel::Body::Ready(d), .. }) = a.panel_view() else { return false };
+                    !d.files[file].hunks.is_empty()
+                });
+                file
+            }
+
+            #[test]
+            fn groups_projects_and_changed_worktrees_and_leaves_out_clean_and_plain_folders() {
+                let shop = repo_with_edit();
+                let worktree = TempDir::new();
+                let checkout = worktree.path().join("topic");
+                git(shop.path(), &["worktree", "add", "--quiet", "-b", "topic", checkout.to_str().expect("path")]);
+                std::fs::write(checkout.join("new.txt"), "new\n").expect("edit worktree");
+                let api = repo_with_edit();
+                let clean = git_repo(&[]);
+                let plain = TempDir::new();
+                let (mut app, rx) = app_in(shop.path(), no_config());
+                for (path, name) in [(api.path(), "api"), (clean.path(), "clean"), (plain.path(), "notes")] {
+                    let p = app.add_project(path.to_path_buf(), AREA).expect("project");
+                    app.projects[p].name = Some(name.into());
+                }
+                app.projects[0].name = Some("shop".into());
+                loaded_every(&mut app, &rx);
+                let view = app.panel_view().expect("panel");
+                assert_eq!(
+                    view.headers.iter().map(|h| (h.label.as_str(), h.workspace)).collect::<Vec<_>>(),
+                    [("shop", false), ("main", true), ("topic", true), ("api", false)]
+                );
+                assert_eq!(view.folded, [true; 3]);
+                let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+                assert!(diff.files.iter().all(|f| f.hunks.is_empty()));
+                let before = app.active;
+                let header = row(&app, panel::Row::Header(0));
+                click(&mut app, header);
+                assert_eq!(app.active, before);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [panel::Row::Header(0), panel::Row::Header(3), panel::Row::File(2)]
+                );
+                let header = row(&app, panel::Row::Header(0));
+                click(&mut app, header);
+                let sub = row(&app, panel::Row::Header(2));
+                click(&mut app, sub);
+                assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
+                let mut filter = changes::filter::Filter::default();
+                "new.txt".chars().for_each(|c| filter.push(c));
+                app.changes.filter = Some(filter);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [panel::Row::Header(0), panel::Row::Header(2)]
+                );
+                let mut filter = changes::filter::Filter::default();
+                "a.txt".chars().for_each(|c| filter.push(c));
+                app.changes.filter = Some(filter);
+                assert_eq!(
+                    panel::rows(&app.panel_view().expect("panel")),
+                    [
+                        panel::Row::Header(0),
+                        panel::Row::Header(1),
+                        panel::Row::File(0),
+                        panel::Row::Header(3),
+                        panel::Row::File(2)
+                    ]
+                );
+                git(shop.path(), &["checkout", "--", "a.txt"]);
+                let main = app.projects[0].workspaces[0].id;
+                let topic = app.projects[0].workspaces[1].id;
+                app.changes.invalidate_summary(main);
+                app.refresh_changes(Instant::now());
+                pump_until(&mut app, &rx, "the clean workspace loses its sub-header", |a| {
+                    a.changes.summary(main).and_then(changes::Model::diff).is_some_and(|d| d.files.is_empty())
+                });
+                assert!(app.every_targets().iter().any(|(t, hidden)| t.workspace == topic && !hidden));
+            }
+
+            #[test]
+            fn scope_and_mode_survive_a_restore_without_changing_the_session_version() {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                app.changes.mode = changes::Mode::Commits;
+                let saved = app.state();
+                let (mut restored, _) = new_app(no_config());
+                restored.restore(&saved, AREA);
+                assert_eq!(
+                    (saved.version, restored.changes.scope, restored.changes.mode),
+                    (5, changes::Scope::Every, changes::Mode::Commits)
+                );
+                let mut old = serde_json::to_value(saved).expect("json");
+                old["changes"].as_object_mut().expect("changes").remove("scope");
+                let old: State = serde_json::from_value(old).expect("older session");
+                restored.restore(&old, AREA);
+                assert_eq!(restored.changes.scope, changes::Scope::Project);
+            }
+
+            #[test]
+            fn a_clean_collection_has_no_headers_or_files() {
+                let repo = git_repo(&[]);
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let view = app.panel_view().expect("panel");
+                assert_eq!(view.headers, Vec::new());
+                assert_eq!(panel::rows(&view), Vec::new());
+            }
+
+            #[test]
+            fn a_failed_scan_does_not_claim_the_collection_is_clean() {
+                let repo = git_repo(&[]);
+                let (mut app, _) = app_in(repo.path(), no_config());
+                app.projects[0].name = Some("shop".into());
+                app.changes.scope = changes::Scope::Every;
+                let targets = app.every_targets();
+                let (workspace, generation, request) =
+                    app.changes.request_every(&targets, Instant::now()).expect("summary");
+                app.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
+                assert_eq!(
+                    app.panel_view().expect("panel").body,
+                    panel::Body::Failed("shop: cannot read status".into())
+                );
+            }
+
+            #[test]
+            fn file_actions_reach_the_workspace_that_owns_the_file() {
+                let first = repo_with_edit();
+                let second = git_repo(&[("b.txt", "one\n")]);
+                std::fs::write(second.path().join("b.txt"), "two\n").expect("edit");
+                let scripts = TempDir::new();
+                let agent = scripts.path().join("agent");
+                let editor = scripts.path().join("editor");
+                write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\n");
+                write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
+                let config_path = scripts.path().join("config.json");
+                config::save(
+                    &config_path,
+                    &Config {
+                        agent_commands: [("fake".into(), agent.display().to_string())].into(),
+                        ..Config::default()
+                    },
+                )
+                .expect("config");
+                let (mut app, rx) = app_in(second.path(), config_path);
+                app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
+                wait_until("the agent runs", || {
+                    agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
+                });
+                let owner = app.projects[0].workspaces[0].id;
+                app.open_project(first.path().to_path_buf(), AREA).expect("other project");
+                let active = app.active;
+                loaded_every(&mut app, &rx);
+                let file = open_file(&mut app, &rx, "b.txt");
+                let position = row(&app, panel::Row::Hunk(file, 0));
+                let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
+                let ask = panel::actions(hunk)[1].1.as_position();
+                click(&mut app, ask);
+                assert_eq!(app.active, active);
+                app.projects[0].workspaces[0].tabs[0].pane_mut().expect("agent pane").write(b"\r");
+                wait_until("the owning agent receives the reference", || {
+                    std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
+                });
+                assert!(!first.path().join("got").exists());
+                assert_eq!(app.panel_view().expect("panel").owners[file], owner);
+                app.editor_env = vec![("VISUAL".into(), editor.display().to_string())];
+                let open = panel::actions(hunk)[0].1.as_position();
+                click(&mut app, open);
+                wait_until("the editor runs in the owning workspace", || second.path().join("editor-got").exists());
+                let got = std::fs::read_to_string(second.path().join("editor-got")).expect("editor arguments");
+                assert_eq!(
+                    got,
+                    format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display())
+                );
+                assert_eq!(
+                    (app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()),
+                    (2, 1)
+                );
+                assert_eq!(app.active, active);
+            }
+        }
 
         fn repo_with_edit() -> TempDir {
             let repo = git_repo(&[("a.txt", "one\ntwo\n")]);

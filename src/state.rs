@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::changes::Mode;
+use crate::changes::{Mode, Scope};
 use crate::issues::People;
 use crate::protocol;
 use crate::split::Node;
@@ -38,6 +38,8 @@ pub struct ChangesState {
     pub open: bool,
     #[serde(default)]
     pub mode: Mode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<Scope>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -295,6 +295,8 @@ export class App {
   widths: Widths = { projects: 32, workspaces: 26 };
   changesOpen = false;
   changesMode: ChangesMode = 'uncommitted';
+  changesScope: 'project' | 'every' = 'project';
+  changesHeaders = new Set<number>();
   changesBase = BASES[0];
   changesScroll = 0;
   changesFilter: { query: string; focused: boolean } | null = null;
@@ -1132,17 +1134,46 @@ export class App {
   }
 
   changesShown(): boolean {
-    return this.changesOpen && hasChanges(this.workspace());
+    return this.changesOpen && (this.changesScope === 'every' || hasChanges(this.workspace()));
   }
 
   changesDiff(): FileDiff[] {
     const p = this.project();
     const w = this.workspace();
+    if (this.changesScope === 'every') {
+      const order = sidebarRows(this.projects.map((p) => this.groupIndex(p.group)), this.groups.map(() => false));
+      return order.flatMap((row) => {
+        if (row.kind !== 'project') return [];
+        const p = this.projects[row.p];
+        return p.workspaces.filter(hasChanges).flatMap((w) => workspaceDiff(p, w, 'uncommitted'));
+      });
+    }
     return p && w ? workspaceDiff(p, w, this.changesMode) : [];
   }
 
+  activeChangesDiff(): FileDiff[] {
+    const p = this.project();
+    const w = this.workspace();
+    return p && w ? workspaceDiff(p, w, this.changesScope === 'every' && this.changesShown() ? 'uncommitted' : this.changesMode) : [];
+  }
+
+  setChangesScope(scope: 'project' | 'every'): void {
+    this.changesScope = scope;
+    this.changesScroll = 0;
+    this.dirty();
+  }
+
+  toggleChangesHeader(id: number): void {
+    if (!this.changesHeaders.delete(id)) this.changesHeaders.add(id);
+    this.dirty();
+  }
+
+  private foldKey(f: FileDiff): string {
+    return `${this.changesScope}:${this.fileKey(f)}`;
+  }
+
   private fileKey(f: FileDiff): string {
-    return `${this.workspace()?.id}:${this.changesMode}:${f.change.path}`;
+    return `${f.owner?.workspace.id ?? this.workspace()?.id}:${f.change.path}`;
   }
 
   changesViewed(f: FileDiff): boolean {
@@ -1150,7 +1181,7 @@ export class App {
   }
 
   changesFolded(f: FileDiff): boolean {
-    return this.folded.get(this.fileKey(f)) ?? (!!f.change.lockfile || this.changesViewed(f));
+    return this.folded.get(this.foldKey(f)) ?? (this.changesScope === 'every' || !!f.change.lockfile || this.changesViewed(f));
   }
 
   toggleChanges(): void {
@@ -1493,21 +1524,23 @@ export class App {
   }
 
   toggleChangesFile(f: FileDiff): void {
-    this.folded.set(this.fileKey(f), !this.changesFolded(f));
+    this.folded.set(this.foldKey(f), !this.changesFolded(f));
     this.dirty();
   }
 
   toggleChangesViewed(f: FileDiff): void {
     const key = this.fileKey(f);
     if (!this.viewed.delete(key)) this.viewed.add(key);
-    this.folded.delete(key);
+    this.folded.delete(`project:${key}`);
+    this.folded.delete(`every:${key}`);
     this.dirty();
   }
 
   foldAllChanges(): void {
     const files = this.changesDiff();
     const fold = files.some((f) => !this.changesFolded(f));
-    for (const f of files) this.folded.set(this.fileKey(f), fold);
+    if (!fold) this.changesHeaders.clear();
+    for (const f of files) this.folded.set(this.foldKey(f), fold);
     this.dirty();
   }
 
@@ -1529,8 +1562,8 @@ export class App {
     const hunk = f.hunks[h];
     const added = hunk.lines.filter((l) => l.kind === '+').map((l) => l.new ?? 0);
     const lines = added.length ? (added.length > 1 ? `${added[0]}-${added[added.length - 1]}` : `${added[0]}`) : `${hunk.newStart}`;
-    const p = this.project();
-    const w = this.workspace();
+    const p = f.owner?.project ?? this.project();
+    const w = f.owner?.workspace ?? this.workspace();
     if (!p || !w) return;
     if (action === 'copy') {
       this.emit('copy', hunk.lines.map((l) => `${l.kind}${l.text}`).join('\n'));

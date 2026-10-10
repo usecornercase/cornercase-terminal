@@ -31,7 +31,7 @@ const LOCKFILES: [&str; 16] = [
     "Podfile.lock",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Status {
     Modified,
     Added,
@@ -346,11 +346,15 @@ fn unquote(raw: &str) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn is_lockfile(path: &str) -> bool {
+pub(super) fn is_lockfile(path: &str) -> bool {
     Path::new(path).file_name().and_then(|n| n.to_str()).is_some_and(|name| LOCKFILES.contains(&name))
 }
 
 pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
+    untracked_file(path, size, bytes, true)
+}
+
+pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materialize: bool) -> File {
     let mut file = File {
         path: path.to_string(),
         old_path: None,
@@ -367,6 +371,17 @@ pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
         return file;
     }
     let text = String::from_utf8_lossy(bytes);
+    file.added = text.lines().count();
+    if !materialize {
+        file.fold = if file.added > MAX_LINES {
+            Fold::Large
+        } else if is_lockfile(path) {
+            Fold::Lockfile
+        } else {
+            Fold::Open
+        };
+        return file;
+    }
     let lines: Vec<Line> = text.lines().zip(1..).map(|(line, n)| Line::new(Kind::Added, None, Some(n), line)).collect();
     file.added = lines.len();
     if lines.len() > MAX_LINES {

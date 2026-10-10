@@ -1,9 +1,9 @@
 ---
 source: src/ui/changes.rs
-assertion_line: 747
 expression: "render(&view, None).backend()"
 ---
-"  Uncommitted   Commits   All                         ⌕  ×  "
+"  shop › issue-482   Every project                    ⌕  ×  "
+"  Uncommitted   Commits   All                               "
 " 3 files  +7 −3  ▃▃▃▃▃▃▃▃                 vs origin/main ▾  "
 "                                                            "
 " ▌▾ M src/returns.rs                               +5 −2    "
@@ -24,6 +24,5 @@ expression: "render(&view, None).backend()"
 "                                                            "
 "  ▸ M Cargo.lock                          lockfile +1 −1    "
 "  ▸ A tests/returns.rs                            new +1    "
-"                                                            "
 " ────────────────────────────────────────────────────────── "
 "  fold all                                    0 of 3 viewed "
