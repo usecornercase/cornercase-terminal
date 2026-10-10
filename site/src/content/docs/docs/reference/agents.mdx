@@ -147,6 +147,25 @@ When a new server restores your session, a pane where Claude Code, Codex or Gemi
 
 The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open, or Gemini's `sessionId` in its main session JSONL. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
+## Keep the computer awake
+
+An agent left working stops when the computer goes to sleep: its process freezes and its request or build times out. Turn on **settings → Agents → keep awake** (`keep_awake`) and, while at least one agent is working, the computer does not go to sleep on its own. Once none is, cornercase waits 30 seconds, so agents that end and start turns back to back don't take and release it every few seconds, then lets the computer sleep as usual.
+
+- **What counts**: an agent whose status is working, the `◐` on its tab. One waiting for you (`!`) does not, nor a Claude Code agent whose turn is over while a shell it started in the background still runs, so a dev server an agent left running doesn't keep the machine up all night. opencode never says it is waiting for you, so one at a permission prompt counts as working until you answer.
+- **Claude Code on a Mac** already keeps the computer awake while it works, by itself. The setting matters most for Codex, opencode and Gemini CLI, and on Linux.
+- **What it blocks**: only sleeping when idle. The display still turns off, the screen still locks, and sleep you ask for (the menu, closing the lid) still happens.
+- **Which machine**: the server's, where the agents run. With `cornercase remote` the other machine stays awake; the laptop showing the window may still sleep, and the window reconnects when it wakes.
+
+cornercase uses the system's own tool, and stops it to let the computer sleep again; if the server stops, even killed, the tool stops with it:
+
+| System | Tool |
+|---|---|
+| macOS | `caffeinate -i`, shown in `pmset -g assertions`. It works on battery too. |
+| Linux in a GNOME session | `gnome-session-inhibit --inhibit suspend`, since GNOME decides when to suspend from its own inhibitors. |
+| Other Linux | `systemd-inhibit --what=sleep:idle`; over SSH, where systemd refuses to block sleep, `--what=idle`, which still holds back a server's own idle action. |
+
+The row's note says whether the computer is being kept awake now, by which tool, or why it can't be on this machine (no tool, or the system refused). `cornercase status --json` has the same as `keep_awake` (`held`, `by`, `unavailable`) while the setting is on, and `server.log` says when it is taken and released.
+
 ## Trust prompts
 
 Many agents ask whether you trust a folder the first time they run in it, and a new worktree is always a new folder. Saying yes lets the agent use the repository's own agent configuration, such as project settings, hooks and MCP servers.

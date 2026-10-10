@@ -161,6 +161,7 @@ export interface Config {
   submit: boolean;
   trust: boolean;
   resume: boolean;
+  awake: boolean;
   sidebar: string;
   tabs: string;
   agentsSection: boolean;
@@ -190,6 +191,7 @@ export const defaultConfig = (): Config => ({
   submit: false,
   trust: false,
   resume: true,
+  awake: false,
   sidebar: 'projects_on_top',
   tabs: 'sidebar',
   agentsSection: false,

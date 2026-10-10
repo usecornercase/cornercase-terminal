@@ -521,6 +521,18 @@ pub struct Report {
     pub shown: Ids,
     pub groups: Vec<GroupInfo>,
     pub projects: Vec<ProjectInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<KeepAwake>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KeepAwake {
+    pub held: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
 }
 
 impl Report {

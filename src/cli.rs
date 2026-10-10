@@ -1426,6 +1426,7 @@ mod tests {
                     ProjectInfo { workspaces: vec![workspace], ..project(1, "shop", None) },
                     project(9, "api", Some(8)),
                 ],
+                keep_awake: None,
             }
         }
 

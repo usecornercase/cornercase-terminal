@@ -2,10 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.24
+## 0.12.25
 
 - Review uncommitted changes across every project in the Changes panel, grouped by project and workspace. Files start folded and load their diff when opened; filters, viewed marks and hunk actions work across the collection.
 - Keep your chosen Changes scope across sessions. Background scans visit one workspace at a time and read patches only for unfolded files.
+
+## 0.12.24
+
+- New setting, **keep awake** (Settings → Agents, off by default): while an agent is working, the computer no longer goes to sleep on its own, so a long refactor or test run started before you walk away is finished when you come back. It lets the computer sleep again 30 seconds after the last agent stops working; an agent waiting for you, or one whose turn is over while a shell it started in the background still runs, does not keep it awake. The display still turns off and the screen still locks, and closing the lid still sleeps. It uses `caffeinate` on macOS and `gnome-session-inhibit` or `systemd-inhibit` on Linux; the row says whether the computer is being kept awake now, or why it can't be on this machine. `cornercase status --json` shows it as `keep_awake`.
 
 ## 0.12.23
 

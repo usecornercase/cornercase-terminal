@@ -175,6 +175,7 @@ function checkEmail(input: string): [string, string?] {
 }
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
+const KEEP_AWAKE_FOR = 30000;
 
 interface Focus {
   project: number | null;
@@ -418,6 +419,7 @@ export class App {
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
     this.watchAgents();
+    this.keepAwake();
     this.grid.reset();
     this.follow();
     this.frame = new Painter(this, this.grid).draw();
@@ -431,6 +433,23 @@ export class App {
 
   private visibleTab(): Tab | undefined {
     return this.nav ? undefined : this.tab();
+  }
+
+  private awakeAt: number | null = null;
+  private awakeCheck: (() => void) | null = null;
+
+  private keepAwake(): void {
+    const now = this.now();
+    const panes = this.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.flatMap((t) => t.panes)));
+    if (!this.config.awake) this.awakeAt = null;
+    else if (panes.some((pane) => paneStatus(pane) === 'working')) this.awakeAt = now;
+    else if (this.awakeAt !== null && now - this.awakeAt >= KEEP_AWAKE_FOR) this.awakeAt = null;
+    else if (this.awakeAt !== null && !this.awakeCheck) {
+      this.awakeCheck = this.after(KEEP_AWAKE_FOR - (now - this.awakeAt), () => {
+        this.awakeCheck = null;
+        this.dirty();
+      });
+    }
   }
 
   private watchAgents(): void {
@@ -2184,6 +2203,7 @@ export class App {
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
         { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code, Codex and Gemini, in their tabs' },
+        { id: 'awake', section: 'Agent', label: 'keep awake', value: c.awake ? '[x] while an agent works' : '[ ] never', note: this.awakeNote() },
       ];
       for (const kind of this.listedKinds()) {
         const mode = this.modeOf(kind);
@@ -2274,6 +2294,9 @@ export class App {
     } else if (row.id === 'resume') {
       c.resume = !c.resume;
       o.notice = c.resume ? 'conversations resume after a restart' : 'agents no longer resume after a restart';
+    } else if (row.id === 'awake') {
+      c.awake = !c.awake;
+      o.notice = c.awake ? 'the computer stays awake while an agent works' : 'the computer sleeps as usual';
     } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
       c[row.id] = !c[row.id];
       o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
@@ -2349,6 +2372,11 @@ export class App {
   openRestart(): void {
     this.overlay = { kind: 'restart', scroll: 0 };
     this.dirty();
+  }
+
+  awakeNote(): string {
+    if (!this.config.awake) return 'no idle sleep while an agent works';
+    return this.awakeAt !== null ? 'held now, by caffeinate' : 'not held: no agent is working';
   }
 
   restartNotes(width: number): Line[] {

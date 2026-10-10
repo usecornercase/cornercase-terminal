@@ -1,6 +1,7 @@
 pub mod activity;
 pub mod agents;
 pub mod app;
+pub mod awake;
 pub mod changes;
 pub mod cli;
 pub mod client;
