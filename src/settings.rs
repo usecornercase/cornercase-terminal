@@ -10,6 +10,7 @@ use crate::search::Search;
 use crate::shortcuts::Prefix;
 use crate::ui;
 
+const RESUME_NOTE: &str = "Claude Code, Codex and Gemini, in their tabs";
 pub const DONE: &str = "done";
 pub const RESTART: &str = "restart";
 const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
@@ -892,7 +893,7 @@ impl Settings {
             }
             Row::Resume => {
                 let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
-                ("resume conversations".into(), value.into(), "Claude Code and Codex, in their tabs".into(), false)
+                ("resume conversations".into(), value.into(), RESUME_NOTE.into(), false)
             }
             Row::Prefix => self.prefix_row(),
             Row::Kind(kind) => kind_row(config, kind),

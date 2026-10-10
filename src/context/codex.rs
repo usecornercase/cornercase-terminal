@@ -1,12 +1,11 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use serde_json::Value;
 
-use super::{Context, TAIL, percent};
+use super::discovery::{self, folder};
+use super::jsonl::{Tail, head};
+use super::{Context, percent};
 use crate::log::Stamp;
 use crate::process;
 
@@ -81,16 +80,8 @@ fn is_codex(arg: &str) -> bool {
     Path::new(arg).file_name().is_some_and(|name| name == "codex")
 }
 
-fn folder(pid: i32) -> Option<PathBuf> {
-    process::cwd(pid)?.canonicalize().ok()
-}
-
 fn home(pid: i32) -> Option<PathBuf> {
-    let env = process::env(pid);
-    let var = |name| env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, v)| PathBuf::from(v));
-    let path = var("CODEX_HOME").or_else(|| var("HOME").map(|p| p.join(".codex")))?;
-    let path = if path.is_absolute() { path } else { process::cwd(pid)?.join(path) };
-    path.canonicalize().ok()
+    discovery::home(pid, "CODEX_HOME", "", ".codex")
 }
 
 fn session_id(path: &Path) -> Option<&str> {
@@ -101,10 +92,7 @@ fn session_id(path: &Path) -> Option<&str> {
 }
 
 fn metadata(path: &Path) -> Option<(String, Option<PathBuf>)> {
-    let mut bytes = Vec::new();
-    BufReader::new(File::open(path).ok()?.take(64 * 1024)).read_until(b'\n', &mut bytes).ok()?;
-    let end = bytes.iter().position(|b| *b == b'\n')?;
-    let entry: Value = serde_json::from_slice(&bytes[..end]).ok()?;
+    let entry = head(path)?;
     let payload = entry.get("payload")?;
     let id = payload.get("id")?.as_str()?;
     (entry.get("type")?.as_str()? == "session_meta"
@@ -116,9 +104,7 @@ fn metadata(path: &Path) -> Option<(String, Option<PathBuf>)> {
 #[derive(Debug)]
 pub(super) struct Rollout {
     pub path: PathBuf,
-    read: u64,
-    skipping: bool,
-    stamp: Option<(u64, u64, SystemTime)>,
+    tail: Tail,
     id: Option<String>,
     model: Option<String>,
     percent: Option<u16>,
@@ -128,17 +114,7 @@ pub(super) struct Rollout {
 
 impl Rollout {
     pub fn new(path: PathBuf) -> Self {
-        Self {
-            path,
-            read: 0,
-            skipping: false,
-            stamp: None,
-            id: None,
-            model: None,
-            percent: None,
-            turn: false,
-            prompted: None,
-        }
+        Self { path, tail: Tail::default(), id: None, model: None, percent: None, turn: false, prompted: None }
     }
 
     pub fn context(&self) -> Option<Context> {
@@ -164,43 +140,22 @@ impl Rollout {
     }
 
     fn read_file(&mut self) -> Option<()> {
-        let info = std::fs::metadata(&self.path).ok()?;
-        let stamp = (info.ino(), info.len(), info.modified().ok()?);
-        if self.stamp == Some(stamp) && self.read == info.len() {
-            return Some(());
-        }
-        if self.stamp.is_some_and(|s| s.0 != stamp.0 || stamp.1 < s.1 || (stamp.1 == s.1 && stamp.2 != s.2)) {
+        let batch = self.tail.read(&self.path).ok()?;
+        if batch.reset {
+            let tail = std::mem::take(&mut self.tail);
             *self = Self::new(self.path.clone());
+            self.tail = tail;
         }
         if self.id.is_none() {
             self.id = Some(metadata(&self.path)?.0);
         }
-        let start = if self.read == 0 { info.len().saturating_sub(TAIL) } else { self.read };
-        let mut file = File::open(&self.path).ok()?;
-        file.seek(SeekFrom::Start(start)).ok()?;
-        let mut bytes = Vec::new();
-        file.take((info.len() - start).min(TAIL)).read_to_end(&mut bytes).ok()?;
-        let Some(end) = bytes.iter().rposition(|b| *b == b'\n').map(|i| i + 1) else {
-            if bytes.len() as u64 == TAIL {
-                self.read = start + TAIL;
-                self.skipping = true;
-                self.model = None;
-                self.percent = None;
-                self.stamp = Some(stamp);
-            }
-            return Some(());
-        };
-        let from = if self.skipping || (self.read == 0 && start > 0) {
-            bytes.iter().position(|b| *b == b'\n').map_or(end, |i| i + 1)
-        } else {
-            0
-        };
-        for line in bytes[from..end].split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
+        if batch.skipped {
+            self.model = None;
+            self.percent = None;
+        }
+        for line in batch.bytes.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
             self.apply(line);
         }
-        self.read = start + end as u64;
-        self.skipping = false;
-        self.stamp = Some(stamp);
         Some(())
     }
 

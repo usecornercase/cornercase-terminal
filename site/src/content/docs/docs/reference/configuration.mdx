@@ -40,7 +40,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
-| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code or Codex comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
 
@@ -82,10 +82,10 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | --- | --- |
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
-| **agents section** | List every Claude Code, Codex and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **agents section** | List every Claude Code, Codex, Gemini CLI and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a folded group holds. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **model** | Show the model of a Claude Code, Codex or opencode tab on a second line under its name, such as `Opus 5.5`. |
+| **model** | Show the model of a Claude Code, Codex, Gemini CLI or opencode tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
@@ -235,7 +235,7 @@ Whether cornercase answers yes to the agent's "do you trust this folder?" questi
 
 #### `resume_agents`
 
-Whether a pane that ran Claude Code or Codex comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>` or `codex resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+Whether a pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>` or `gemini --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 #### `trust_prompt_pattern`
 
@@ -259,7 +259,7 @@ Where a workspace's tabs are listed: `"sidebar"` under their workspace, in the w
 
 #### `agents_section`
 
-Whether the sidebar ends with a list of every Claude Code, Codex and opencode running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI and opencode running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
 
 #### `counts`
 
@@ -275,7 +275,7 @@ The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keybo
 
 #### `model`
 
-Whether a Claude Code, Codex or opencode tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
+Whether a Claude Code, Codex, Gemini CLI or opencode tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
 
 #### `context`
 

@@ -119,12 +119,12 @@ The shell is the one in your `SHELL` environment variable when the server starte
 
 ### What your agents are doing
 
-When Claude Code, Codex or opencode runs in a tab, an icon before the tab's name tells you what it is doing:
+When Claude Code, Codex, Gemini CLI or opencode runs in a tab, an icon before the tab's name tells you what it is doing:
 
 | Icon | Means |
 | --- | --- |
 | `◐` yellow | The agent is working. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
-| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code and Codex only. |
+| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex and Gemini CLI only. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
@@ -134,6 +134,7 @@ cornercase reads what each agent reports about itself. Nothing is installed and 
 
 - **Claude Code**: the small file it keeps for each running session in `~/.claude/sessions` (or in `$CLAUDE_CONFIG_DIR/sessions`), the same one `claude agents --json` reads. Without that file, for example with an older Claude Code, cornercase falls back to the title Claude gives the terminal, which only tells working from idle.
 - **Codex**: the title Codex gives the terminal, which starts with a spinner while it works and with `[ ! ] Action Required` while it waits for an approval, and the session's rollout file (the one behind the [context line](#how-full-the-context-is)), which records when each turn starts and ends. If you take the activity out of Codex's terminal title (its `/title` setting), the tab still shows working and finished, but not `!`. Verified against Codex CLI 0.160.0.
+- **Gemini CLI**: its dynamic terminal title, `✦` or `⏲` while working, `✋` when action is required, `◇` when ready. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled: a fixed or hidden title gives no status or notifications. The session file cannot reliably distinguish working from finished.
 - **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows `◐` and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
 
 A tab without one of these agents shows its shell instead, in grey, so every tab's name starts in the same column:
@@ -147,7 +148,7 @@ They never show on the workspace, project or group rows, and a program that ends
 
 ### How full the context is
 
-Claude Code, Codex and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-a-tab-uses).
+Claude Code, Codex, Gemini CLI and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-a-tab-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -166,6 +167,8 @@ After a model change or compaction, Codex's old percentage disappears until fres
 
 opencode saves every session of every opencode you run in one database, without saying which process each belongs to, so cornercase picks the session by folder: the one in the folder where that opencode runs, used since it started. The line appears after your first message, and follows `/new` once you send something there. With two opencode in the same folder, neither shows an icon or a line until one exits. The database is the one the running opencode has open (also with `OPENCODE_DB` or `XDG_DATA_HOME` set), read without changing it.
 
+Gemini CLI shows its model ID, such as `gemini-3.8-flash`, and the input tokens of its newest reply over the model's window (1,048,576 tokens, or 256,000 for Gemma 4). Its session is found by folder under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp`; two Gemini sharing that home and folder hide the line. `/clear` starts a new session. Model switches show the new ID without an old percentage when Gemini records the change or its labelled model footer is visible. `/compress` replaces the history without recording fresh usage, so the percentage disappears until the next reply. Hidden or truncated model footers cannot reveal an unsaved picker change.
+
 Once Claude has answered, a second line under the tab's name shows its model and how much of its context window the conversation takes up, such as `Opus 5.5 · 23%`: the percentage Claude Code gives its own status line. It turns orange from 75% and red from 90%. After `/compact` or `/clear` the line goes away until Claude's next answer. In the [compact layout](../small-terminals/) it sits at the bottom of the tab's row.
 
 The numbers come from the end of the conversation's transcript, which Claude Code keeps in `~/.claude/projects` (or in `$CLAUDE_CONFIG_DIR/projects`): the model of the last answer and how many tokens it was sent. The size of the window isn't written anywhere, so cornercase works it out the way Claude Code does:
@@ -182,6 +185,8 @@ The variables are read from the running `claude` and from the `env` of its setti
 Turn on **settings → UI → memory** and every tab also shows how much memory it uses: at the end of an agent's line, `Opus 5.5 · 23% · 1.2 GB`, and on a second line of its own in a shell tab, `412 MB`, or just `1.2 GB` with the model and the context off.
 
 It is the memory held by everything running in the tab's panes: each shell and whatever runs in it, such as an agent and what the agent started (MCP servers, language servers, background commands) or a dev server and its workers. In a split tab every pane counts. Each process counts only what it keeps on its own (on macOS, the figure Activity Monitor shows in its Memory column; on Linux, its private memory, including what was swapped out), so code that several processes share, such as the agent's own program, is not counted again for each of them, and the total is close to what the agent costs you. It is measured every 2 seconds, only for the project on screen (in the [tree](#the-tree), for every workspace you have open) and only while the setting is on. In a narrow column the model is shortened first, then left out; the percentage and the memory stay.
+
+Gemini icons need its dynamic window title (`ui.dynamicWindowTitle` on, `ui.hideWindowTitle` off). Its session file has no reliable turn-end marker, so a fixed or hidden title gives no status.
 
 ### Notifications
 
@@ -205,7 +210,7 @@ Some terminals, such as Ghostty on macOS, foot, Konsole and Warp, don't show a n
 
 ### Plan usage
 
-Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`Usage`** at the bottom of the projects column. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
+Claude Code and Codex plans have a five-hour session limit and a weekly limit. To see how close you are without opening `/usage` or `/status` in one of your agents, click **`Usage`** at the bottom of the projects column. Gemini CLI has no section: API keys have no plan limits, and its Google-login quota has no usable CLI probe; use Gemini's `/stats` or `/usage`. opencode has no section: it uses whichever providers you set up, its own Zen and Go subscriptions among them, and cornercase doesn't ask any of them for your usage.
 
 <Screen
   name="usage"
@@ -213,7 +218,7 @@ Claude Code and Codex plans have a five-hour session limit and a weekly limit. T
   caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
 />
 
-Each agent installed on the machine gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
+Each installed Claude Code or Codex gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
 
 The numbers come from the agents themselves: opening the dialog runs `claude` and `codex` in the background, on the machine where cornercase's server runs, and asks each for its usage (Codex through `codex app-server`). That sends no prompt and costs no tokens, and cornercase never reads your login. It takes a second or a few; meanwhile each section shows `loading…`, or the last numbers with how old they are. Nothing is asked while the dialog is closed. An agent that isn't installed has no section, unless neither is: then both show, each saying why it couldn't run. [`agent_commands`](../../reference/agents/#your-own-agents) says where to find one that isn't on the `PATH`. `done` or `Esc` closes the dialog. If a section says `usage unavailable`, see [Usage is unavailable](../../help/troubleshooting/#usage-is-unavailable).
 
@@ -334,7 +339,7 @@ Below 90 columns the [compact layout](../small-terminals/) lists the tabs in its
 
 ### The agents section
 
-Turn on **settings → UI → agents section** to list every Claude Code, Codex and opencode running in any project at the bottom of the sidebar, one row per agent:
+Turn on **settings → UI → agents section** to list every Claude Code, Codex, Gemini CLI and opencode running in any project at the bottom of the sidebar, one row per agent:
 
 <Screen
   name="sidebar-agents"
@@ -350,7 +355,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex 
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.
 - In a narrow sidebar the model goes first, then the workspace; the icon and the project stay.
 
-It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex and opencode are listed, since other agents don't report what they are doing.
+It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex, Gemini CLI and opencode are listed, since other agents don't report what they are doing.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

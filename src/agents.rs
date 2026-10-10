@@ -8,6 +8,7 @@ use crate::state::AgentState;
 pub const AUTO: &str = "auto";
 pub const CLAUDE: &str = "claude";
 pub const CODEX: &str = "codex";
+pub const GEMINI: &str = "gemini";
 pub const OPENCODE: &str = "opencode";
 pub const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
@@ -24,7 +25,7 @@ const SURVEY_QUESTION_LINES: usize = 4;
 const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
-    ("gemini", "gemini"),
+    (GEMINI, "gemini"),
     (OPENCODE, "opencode"),
     ("cursor", "cursor-agent"),
     ("copilot", "copilot"),
@@ -57,7 +58,14 @@ const DEFAULT_MODES: [(&str, ModeTable); 3] = [
             ("no sandbox, no approvals (dangerous)", &["--dangerously-bypass-approvals-and-sandbox"]),
         ],
     ),
-    ("gemini", &[("auto edit", &["--approval-mode", "auto_edit"]), ("yolo (dangerous)", &["--yolo"])]),
+    (
+        GEMINI,
+        &[
+            ("auto edit", &["--approval-mode", "auto_edit"]),
+            ("plan", &["--approval-mode", "plan"]),
+            ("yolo (dangerous)", &["--yolo"]),
+        ],
+    ),
 ];
 
 pub type Mode = (String, Vec<String>);
@@ -128,14 +136,33 @@ fn longest_first(modes: &[Mode]) -> Vec<&Mode> {
 }
 
 pub fn mode_of(args: &[String], modes: &[Mode]) -> Option<String> {
-    longest_first(modes).into_iter().find(|(_, run)| position_of(args, run).is_some()).map(|(name, _)| name.clone())
+    let args = normalized(args, modes);
+    longest_first(modes)
+        .into_iter()
+        .find(|(_, run)| position_of(&args, &normalized(run, modes)).is_some())
+        .map(|(name, _)| name.clone())
+}
+
+fn normalized(args: &[String], modes: &[Mode]) -> Vec<String> {
+    if !modes.iter().any(|(_, run)| run.iter().any(|arg| arg == "--yolo")) {
+        return args.to_vec();
+    }
+    args.iter()
+        .flat_map(|arg| match arg.as_str() {
+            "-y" | "--yolo" => vec!["--approval-mode".into(), "yolo".into()],
+            _ => arg
+                .split_once('=')
+                .filter(|(flag, _)| *flag == "--approval-mode")
+                .map_or_else(|| vec![arg.clone()], |(flag, value)| vec![flag.into(), value.into()]),
+        })
+        .collect()
 }
 
 pub fn extra_args(args: &[String], modes: &[Mode]) -> Vec<String> {
-    let mut out = args.to_vec();
+    let mut out = normalized(args, modes);
     for (_, run) in longest_first(modes) {
-        while let Some(at) = position_of(&out, run) {
-            out.drain(at..at + run.len());
+        while let Some(at) = position_of(&out, &normalized(run, modes)) {
+            out.drain(at..at + normalized(run, modes).len());
         }
     }
     out
@@ -202,7 +229,7 @@ pub fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {
     let args = with_mode(&args(config, kind), &modes(config, kind), agent.mode.as_deref());
     let conversation = agent.conversation.clone();
     let line = match kind {
-        CLAUDE => [args, vec!["--resume".into(), conversation]].concat(),
+        CLAUDE | GEMINI => [args, vec!["--resume".into(), conversation]].concat(),
         CODEX => [vec!["resume".into()], args, vec![conversation]].concat(),
         _ => return None,
     };
@@ -342,6 +369,18 @@ mod tests {
             assert_eq!(names, ["accept edits", "auto", "plan", "skip permissions (dangerous)"]);
         }
 
+        #[rstest]
+        #[case::short(&["gemini", "-y"], "yolo (dangerous)")]
+        #[case::long(&["gemini", "--yolo"], "yolo (dangerous)")]
+        #[case::approval(&["gemini", "--approval-mode", "yolo"], "yolo (dangerous)")]
+        #[case::equals(&["gemini", "--approval-mode=yolo"], "yolo (dangerous)")]
+        #[case::plan(&["gemini", "--approval-mode", "plan"], "plan")]
+        fn gemini_modes_include_plan_and_recognize_yolo_aliases(#[case] args: &[&str], #[case] expected: &str) {
+            let modes = modes(&config(), GEMINI);
+            assert_eq!(mode_of(&strings(args), &modes).as_deref(), Some(expected));
+            assert_eq!(with_mode(&strings(&args[1..]), &modes, Some("plan")), strings(&["--approval-mode", "plan"]));
+        }
+
         #[test]
         fn the_config_adds_replaces_and_hides_modes() {
             let mut c = config();
@@ -451,6 +490,7 @@ mod tests {
         #[case::claude("claude", None, "claude --resume 4f2c-91")]
         #[case::claude_in_its_mode("claude", Some("plan"), "claude --permission-mode plan --resume 4f2c-91")]
         #[case::codex("codex", None, "codex resume 4f2c-91")]
+        #[case::gemini(GEMINI, Some("plan"), "gemini --approval-mode plan --resume 4f2c-91")]
         #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
         fn the_conversation_comes_back_in_the_mode_it_ran_in(
             #[case] kind: &str,
@@ -473,7 +513,7 @@ mod tests {
 
         #[test]
         fn other_agents_have_no_way_to_resume() {
-            assert_eq!(resume_line(&config(), &agent("gemini", None)), None);
+            assert_eq!(resume_line(&config(), &agent("aider", None)), None);
         }
     }
 

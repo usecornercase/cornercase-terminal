@@ -52,7 +52,7 @@ Codex's npm wrapper, `node …/@openai/codex/bin/codex.js`, is recognised too. I
 
 ### What the agent is doing
 
-Tabs where Claude Code, Codex or opencode runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). cornercase recognises these agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so an opencode tab never shows `!`. Other agents don't get an icon yet.
+Tabs where Claude Code, Codex, Gemini CLI or opencode runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). cornercase recognises these agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so an opencode tab never shows `!`. Gemini uses its dynamic window title for status, and its session JSONL under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp/<project>/chats` for prompts, replies and context. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled in Gemini's settings for icons and notifications; a fixed or hidden title gives no status. Two Gemini using the same home in the same folder hide their conversation data. Other agents don't get an icon yet.
 
 ## Modes and arguments
 
@@ -68,7 +68,14 @@ Each agent starts with its command followed by its arguments, `agent_args` in `c
 | | workspace write | `--sandbox workspace-write` |
 | | no sandbox, no approvals (dangerous) | `--dangerously-bypass-approvals-and-sandbox` |
 | `gemini` | auto edit | `--approval-mode auto_edit` |
+| | plan | `--approval-mode plan` |
 | | yolo (dangerous) | `--yolo` |
+
+<Screen
+  name="settings-gemini-modes"
+  crop={[2, 1, 106, 11]}
+  alt="How should gemini start? default, auto edit, plan, yolo (dangerous), extra arguments"
+/>
 
 Every agent also has a **default** mode, which adds no arguments. Modes whose name contains *dangerous* are shown in red, in settings and in the issue browser, so you never pick one by accident.
 
@@ -130,14 +137,15 @@ The prompt is pasted with bracketed paste when the agent supports it. When the p
 
 ## Resuming after a restart
 
-When a new server restores your session, a pane where Claude Code or Codex was running types the agent's resume command into its new shell, once the shell has been quiet for 0.3 s:
+When a new server restores your session, a pane where Claude Code, Codex or Gemini CLI was running types the agent's resume command into its new shell, once the shell has been quiet for 0.3 s:
 
 | Agent | Command typed |
 | --- | --- |
 | Claude Code | `claude <arguments> --resume <session id>` |
 | Codex | `codex resume <arguments> <session id>` |
+| Gemini CLI | `gemini <arguments> --resume <session id>` |
 
-The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open, or Gemini’s `sessionId` in its main session JSONL. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 ## Trust prompts
 

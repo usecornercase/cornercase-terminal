@@ -363,6 +363,17 @@ mod tests {
         assert!(matches!(step(&mut launch, t + AGENT_QUIET, &agent("trust again")), Step::Done(_)));
     }
 
+    #[test]
+    fn gemini_trust_waits_for_the_user_or_accepts_the_highlighted_folder() {
+        let screen = include_str!("../tests/fixtures/gemini/0.63.0/trust.txt");
+        assert_eq!(answer_keys(screen, false), b"\r");
+        let (mut launch, t) = started(false);
+        assert_eq!(step(&mut launch, t + AGENT_QUIET, &asking_you(screen)), Step::Wait);
+        assert!(launch.waits_for_you());
+        let (mut accepted, t) = started(false);
+        assert_eq!(step(&mut accepted, t + AGENT_QUIET, &agent(screen)), Step::Write(b"\r".to_vec()));
+    }
+
     const CLAUDE_TRUST: &str = "│ Quick safety check: Is this a project you created or one you trust?\n\
         │ Claude Code'll be able to read, edit, and execute files here.\n│\n\
         │ ❯ No, exit\n│   Yes, I trust this folder\n│\n│ Enter to confirm · Esc to cancel";

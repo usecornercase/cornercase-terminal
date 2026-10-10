@@ -539,6 +539,11 @@ fn agent_in(
             remember(config, term, Some((&agent, &args)), now);
             Some((agent, activity::codex(&term.emulator.title(), term.context.codex_turn())))
         }
+        (Some(pid), Some(agent)) if agent == agents::GEMINI => {
+            term.context.update_gemini(pid, &term.emulator.screen_text().unwrap_or_default());
+            remember(config, term, Some((&agent, &args)), now);
+            activity::gemini(&term.emulator.title()).map(|state| (agent, state))
+        }
         (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
             term.context.update_opencode(pid);
             remember(config, term, Some((&agent, &args)), now);
@@ -7874,7 +7879,7 @@ mod tests {
 
         use super::*;
         use crate::activity::Status;
-        use crate::test_util::{FakeCodex, FakeOpencode, write_executable};
+        use crate::test_util::{FakeCodex, FakeGemini, FakeOpencode, write_executable};
 
         const FAKE_CLAUDE: &str = r#"#!/bin/sh
 s="$1/sessions/$$.json"
@@ -8216,6 +8221,7 @@ rm -f "$1/sessions/$$.json"
         enum Fake {
             Claude(Claude, i32),
             Codex(FakeCodex, usize),
+            Gemini(FakeGemini, usize),
             Opencode(FakeOpencode, usize),
         }
 
@@ -8262,6 +8268,11 @@ rm -f "$1/sessions/$$.json"
                     type_line(app, &codex.command_line());
                     watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
                     Fake::Codex(codex, app.projects[0].workspaces[0].active)
+                } else if agent == agents::GEMINI {
+                    let gemini = FakeGemini::new(&app.projects[0].path);
+                    type_line(app, &gemini.command_line());
+                    pump_until(app, rx, "Gemini runs", |a| runs(a, agents::GEMINI));
+                    Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
                 } else if agent == agents::OPENCODE {
                     Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active)
                 } else {
@@ -8290,6 +8301,17 @@ rm -f "$1/sessions/$$.json"
                                 tab_term(a, 0, *tab).emulator.title() == title
                             });
                         }
+                        Fake::Gemini(gemini, tab) => {
+                            let title = match status {
+                                "busy" => "✦  Working… (project)",
+                                "waiting" => "✋  Action Required (project)",
+                                _ => "◇  Ready (project)",
+                            };
+                            gemini.signal(title);
+                            pump_until(&mut self.app, &self.rx, "Gemini sets its title", |a| {
+                                tab_term(a, 0, *tab).emulator.title() == title
+                            });
+                        }
                         Fake::Opencode(opencode, tab) => {
                             let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
                             opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
@@ -8310,9 +8332,11 @@ rm -f "$1/sessions/$$.json"
             }
         }
 
-        #[test]
-        fn a_restart_names_the_agent_at_work_and_the_other_program() {
-            let mut w = Watched::start(agents::CLAUDE, true);
+        #[rstest]
+        fn a_restart_names_the_agent_at_work_and_the_other_program(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+        ) {
+            let mut w = Watched::start(agent, true);
             type_line(&mut w.app, "sleep 30");
             pump_until(&mut w.app, &w.rx, "sleep runs", |a| {
                 a.term().and_then(|t| t.program(&a.config)).as_deref() == Some("sleep")
@@ -8329,9 +8353,9 @@ rm -f "$1/sessions/$$.json"
                 .is_some_and(|pid| agents::detect(&app.config, &process::args(pid)).as_deref() == Some(agent))
         }
 
-        #[test]
-        fn a_codex_tab_follows_its_turns_and_approvals() {
-            let mut w = Watched::start(agents::CODEX, false);
+        #[rstest]
+        fn a_tab_follows_turns_and_approvals(#[values(agents::CODEX, agents::GEMINI)] agent: &str) {
+            let mut w = Watched::start(agent, false);
             let mut seen = vec![status(&w.app, 0, 0)];
 
             for step in ["waiting", "busy", "idle"] {
@@ -8345,7 +8369,7 @@ rm -f "$1/sessions/$$.json"
 
         #[rstest]
         fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
-            #[values(agents::CLAUDE, agents::CODEX)] agent: &str,
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
         ) {
             let mut w = Watched::start(agent, true);
 
@@ -8368,6 +8392,33 @@ rm -f "$1/sessions/$$.json"
 
             assert_eq!(seen, [Status::Working, Status::Idle, Status::Working].map(Some));
             assert_eq!(second_row(&mut w.app), (2, "▌ │   DeepSeek V4… · 12%".to_string()));
+        }
+
+        #[test]
+        fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_data() {
+            let mut w = Watched::start(agents::GEMINI, false);
+            let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
+            fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+            watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| {
+                a.tab().is_some_and(|t| t.context().is_some())
+            });
+            assert!(second_row(&mut w.app).1.contains("1%"));
+            w.app.nav = Some(ui::Nav::Workspaces);
+            let compact = rendered(&mut w.app, Rect::new(0, 0, 80, 30));
+            let contents: String =
+                compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
+            assert!(contents.contains("gemini-"));
+            assert!(contents.contains("1%"));
+            let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
+            let other = fake.start(&w.app.projects[0].path);
+            watch_until(&mut w.app, &w.rx, "the ambiguous context goes", |a| {
+                a.tab().is_some_and(|t| t.context().is_none())
+            });
+            assert_eq!(status(&w.app, 0, 0), Some(Status::Working));
+            drop(other);
+            watch_until(&mut w.app, &w.rx, "the unambiguous context returns", |a| {
+                a.tab().is_some_and(|t| t.context().is_some())
+            });
         }
 
         #[test]
@@ -8403,7 +8454,9 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_hidden_tab_that_finishes_says_so(#[values(agents::CLAUDE, agents::CODEX, agents::OPENCODE)] agent: &str) {
+        fn a_hidden_tab_that_finishes_says_so(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+        ) {
             let mut w = Watched::start(agent, true);
 
             w.report("idle", 6);
@@ -8413,7 +8466,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
             let mut w = Watched::start(agent, true);
             w.report("waiting", 6);
             w.told();
@@ -8424,7 +8477,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
             let mut w = Watched::start(agent, false);
 
             w.report("waiting", 6);
@@ -8433,7 +8486,9 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[rstest]
-        fn a_question_answered_at_once_stays_quiet(#[values(agents::CLAUDE, agents::CODEX)] agent: &str) {
+        fn a_question_answered_at_once_stays_quiet(
+            #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
+        ) {
             let mut w = Watched::start(agent, true);
             w.report("waiting", 1);
 
@@ -8542,6 +8597,19 @@ rm -f "$1/sessions/$$.json"
                 let (mut back, rx, _bin) = restored(&saved, agents::CODEX, true);
 
                 wait_resumed(&mut back, &rx, &format!("resume {CODEX_ID}"));
+            }
+
+            #[test]
+            fn gemini_comes_back_in_its_conversation_and_plan_mode() {
+                let (mut app, rx, _dirs) = app_with(1);
+                let gemini = FakeGemini::new(&app.projects[0].path);
+                type_line(&mut app, &format!("{} --approval-mode plan", gemini.command_line()));
+                watch_until(&mut app, &rx, "Gemini is ready", |a| status(a, 0, 0) == Some(Status::Idle));
+                gemini.append(include_str!("../tests/fixtures/gemini/0.63.0/prompt.jsonl"));
+                let saved = remembered(&mut app, &rx);
+                let (mut back, rx, _bin) = restored(&saved, agents::GEMINI, true);
+                wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
+                assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
             }
 
             #[test]
@@ -13767,17 +13835,17 @@ rm -f "$s"
             fn waiting_for_an_agent_cornercase_cannot_follow_says_so() {
                 let (mut app, rx) = app();
                 let bin = TempDir::new();
-                let gemini = bin.path().join("gemini");
-                write_executable(&gemini, "#!/bin/sh\nsleep 30\n");
+                let aider = bin.path().join("aider");
+                write_executable(&aider, "#!/bin/sh\nsleep 30\n");
                 let id = first(&app);
-                type_line(&mut app, &gemini.display().to_string());
-                pump_until(&mut app, &rx, "gemini runs", |a| {
+                type_line(&mut app, &aider.display().to_string());
+                pump_until(&mut app, &rx, "aider runs", |a| {
                     crate::agents::detect(&a.config, &pane(a, id).foreground_args()).is_some()
                 });
 
                 let message = error(now(&mut app, None, wait_for(id, Until::Stops, None)));
 
-                assert!(message.contains(&format!("pane {id} runs gemini")), "{message}");
+                assert!(message.contains(&format!("pane {id} runs aider")), "{message}");
             }
 
             #[test]
@@ -13913,6 +13981,138 @@ rm -f "$s"
             }
         }
 
+        fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
+            wait_until(what, || {
+                while let Ok(ev) = rx.try_recv() {
+                    app.handle_event(ev, AREA).expect("handle event");
+                }
+                app.refresh(Instant::now());
+                cond(app)
+            });
+        }
+
+        mod gemini {
+            use super::*;
+            use crate::test_util::FakeGemini;
+
+            struct Running {
+                app: App,
+                rx: Receiver<AppEvent>,
+                fake: FakeGemini,
+                _dirs: Vec<TempDir>,
+            }
+
+            impl Running {
+                fn new() -> Self {
+                    let (mut app, rx, dirs) = app_with(1);
+                    let fake = FakeGemini::new(&app.projects[0].path);
+                    type_line(&mut app, &fake.command_line());
+                    refreshing(&mut app, &rx, "Gemini is idle", |a| {
+                        a.term().and_then(|t| t.agent.status()) == Some(activity::Status::Idle)
+                    });
+                    Self { app, rx, fake, _dirs: dirs }
+                }
+
+                fn send(&mut self, text: &str) {
+                    let command = Command::Send(wire::SendText {
+                        pane: Some(first(&self.app)),
+                        text: Some(text.into()),
+                        enter: true,
+                        ..wire::SendText::default()
+                    });
+                    ask(&mut self.app, None, command);
+                }
+
+                fn title(&mut self, title: &str) {
+                    self.fake.signal(title);
+                    pump_until(&mut self.app, &self.rx, "Gemini sets its title", |a| {
+                        a.term().is_some_and(|t| t.emulator.title() == title)
+                    });
+                }
+            }
+
+            #[test]
+            fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() {
+                let mut running = Running::new();
+                let id = first(&running.app);
+                running.send("fix the login");
+                assert_eq!(
+                    done(answered(&mut running.app, &running.rx, "Gemini records the prompt")).ids.pane,
+                    Some(id)
+                );
+                ask(&mut running.app, None, wait_for(id, Until::TurnOver, Some(5.0)));
+                running.app.refresh(Instant::now());
+                assert_eq!(answers(&mut running.app).len(), 0);
+                running.fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+                running.title("◇  Ready (project)");
+                let ended = done(answered(&mut running.app, &running.rx, "the Gemini turn ends"));
+                assert_eq!(ended.ended.as_deref(), Some("idle"));
+                ask(
+                    &mut running.app,
+                    None,
+                    Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
+                );
+                let Response::Ok(message) = answered(&mut running.app, &running.rx, "Gemini's last message is read")
+                else {
+                    panic!("last message failed")
+                };
+                assert_eq!(message["agent"], "gemini");
+                assert_eq!(message["text"], "OK");
+                assert_eq!(message["turn_over"], true);
+                assert!(message["written"].as_str().is_some());
+            }
+
+            #[rstest::rstest]
+            #[case::slash("/clear")]
+            #[case::shell("!printf OK")]
+            fn local_commands_return_after_enter_without_a_prompt_record(#[case] text: &str) {
+                let mut running = Running::new();
+                running.send(text);
+                done(answered(&mut running.app, &running.rx, "the local command is submitted"));
+                assert_eq!(running.app.term().and_then(|t| t.context.prompted()), None);
+            }
+
+            #[test]
+            fn send_refuses_a_gemini_tool_confirmation() {
+                let mut running = Running::new();
+                running.title("✋  Action Required (project)");
+                refreshing(&mut running.app, &running.rx, "Gemini waits", |a| {
+                    a.term().and_then(|t| t.agent.status()) == Some(activity::Status::Waiting)
+                });
+                running.send("continue");
+                assert!(error(answers(&mut running.app).remove(0)).contains("waiting for an answer"));
+            }
+
+            #[test]
+            fn status_events_and_a_pending_restart_follow_geminis_turn() {
+                let mut running = Running::new();
+                let id = first(&running.app);
+                follow(&mut running.app, &[id]);
+                running.send("fix the login");
+                done(answered(&mut running.app, &running.rx, "Gemini records the prompt"));
+                let events = until_told(&mut running.app, &running.rx, "Gemini works", |events| {
+                    statuses(events, id) == [change(Some("idle"), Some("working"))]
+                });
+                assert!(
+                    told(&events)
+                        .iter()
+                        .any(|(what, _)| { matches!(what, wire::What::Status { agent, .. } if agent == "gemini") })
+                );
+                let status = value(&mut running.app, None, Command::Status(wire::Status {}));
+                assert_eq!(status["projects"][0]["workspaces"][0]["tabs"][0]["panes"][0]["status"], "working");
+                ask(&mut running.app, None, Command::RestartWhenIdle(wire::RestartWhenIdle { timeout: Some(5.0) }));
+                running.app.refresh(Instant::now());
+                assert_eq!(answers(&mut running.app), Vec::<Response>::new());
+                assert!(running.app.take_restart().is_none());
+                running.title("◇  Ready (project)");
+                assert!(matches!(
+                    answered(&mut running.app, &running.rx, "Gemini releases the restart"),
+                    Response::Ok(_)
+                ));
+                assert!(running.app.take_restart().is_some());
+            }
+        }
+
         mod agents {
             use super::*;
 
@@ -13970,16 +14170,6 @@ rm -f "$s"
                 fn answered(&mut self, what: &str) -> Response {
                     answered(&mut self.app, &self.rx, what)
                 }
-            }
-
-            fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
-                wait_until(what, || {
-                    while let Ok(ev) = rx.try_recv() {
-                        app.handle_event(ev, AREA).expect("handle event");
-                    }
-                    app.refresh(Instant::now());
-                    cond(app)
-                });
             }
 
             #[test]

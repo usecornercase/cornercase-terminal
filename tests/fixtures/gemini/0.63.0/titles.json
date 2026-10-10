@@ -1,0 +1,44 @@
+[
+  {
+    "name": "ready",
+    "title": "◇  Ready (project)                                                              ",
+    "state": "idle",
+    "live": true
+  },
+  {
+    "name": "working",
+    "title": "✦  Working… (project)                                                           ",
+    "state": "working",
+    "live": true
+  },
+  {
+    "name": "confirmation",
+    "title": "✋  Action Required (project)                                                    ",
+    "state": "waiting",
+    "live": true
+  },
+  {
+    "name": "silent-shell",
+    "title": "⏲  Working… (project)                                                           ",
+    "state": "working",
+    "live": true
+  },
+  {
+    "name": "thought",
+    "title": "✦  Formulating Prime Proof (project)                                            ",
+    "state": "working",
+    "live": true
+  },
+  {
+    "name": "fixed",
+    "title": "Gemini CLI (project)                                                            ",
+    "state": null,
+    "live": true
+  },
+  {
+    "name": "hidden",
+    "title": "",
+    "state": null,
+    "live": false
+  }
+]

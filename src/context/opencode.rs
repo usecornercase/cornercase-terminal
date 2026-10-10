@@ -8,6 +8,7 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::discovery::{folder, named};
 use super::message::{self, Said};
 use super::{Context, percent};
 use crate::error::{self, Error};
@@ -135,7 +136,7 @@ fn is_database(path: &Path, named: Option<&str>) -> bool {
 }
 
 fn is_opencode(pid: i32) -> bool {
-    process::args(pid).iter().take(2).any(|arg| Path::new(arg).file_name().is_some_and(|name| name == NAME))
+    named(&process::args(pid), NAME)
 }
 
 fn shared(holder: i32, database: &Path, cwd: &Path) -> bool {
@@ -145,10 +146,6 @@ fn shared(holder: i32, database: &Path, cwd: &Path) -> bool {
             && folder(other).as_deref() == Some(cwd)
             && process::open_files(other).iter().any(|path| path == database)
     })
-}
-
-fn folder(pid: i32) -> Option<PathBuf> {
-    process::cwd(pid)?.canonicalize().ok()
 }
 
 fn models_file(pid: i32) -> Option<PathBuf> {
