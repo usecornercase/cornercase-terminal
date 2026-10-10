@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.24
+
+- Review uncommitted changes across every project in the Changes panel, grouped by project and workspace. Files start folded and load their diff when opened; filters, viewed marks and hunk actions work across the collection.
+- Keep your chosen Changes scope across sessions. Background scans visit one workspace at a time and read patches only for unfolded files.
+
 ## 0.12.23
 
 - Gemini CLI tabs now show working, waiting and finished status, notifications, model and context use, and resume their conversations after a restart in the same mode. The status needs Gemini's dynamic window title (on by default). When two Gemini CLI instances run in the same folder with the same Gemini home, cornercase cannot tell their conversations apart, so neither tab shows its model and context, resumes, or answers `read --last-message`; their status icons still work.
