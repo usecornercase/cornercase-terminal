@@ -41,6 +41,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
 | **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **keep awake** | Off (the default): the computer sleeps when idle, as it always does. On: while an agent is working, the computer does not go to sleep on its own. The note says whether it is being kept awake now, or why it can't be on this machine. See [Keep the computer awake](../agents/#keep-the-computer-awake). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
 
@@ -139,6 +140,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "submit": false,
   "accept_trust_prompts": false,
   "resume_agents": true,
+  "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
   "sidebar": "projects_on_top",
@@ -176,6 +178,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`submit`](#submit) | boolean | `false` |
 | [`accept_trust_prompts`](#accept_trust_prompts) | boolean | `false` |
 | [`resume_agents`](#resume_agents) | boolean | `true` |
+| [`keep_awake`](#keep_awake) | boolean | `false` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
@@ -257,6 +260,10 @@ Whether cornercase answers yes to the agent's "do you trust this folder?" questi
 #### `resume_agents`
 
 Whether a pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>` or `gemini --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+
+#### `keep_awake`
+
+Whether the computer stays awake while an agent is working. Off by default. See [Keep the computer awake](../agents/#keep-the-computer-awake).
 
 #### `trust_prompt_pattern`
 

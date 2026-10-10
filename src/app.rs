@@ -10,6 +10,7 @@ use ratatui::text::Line;
 
 use crate::activity::{self, Claude, Session};
 use crate::agents;
+use crate::awake::{self, Awake};
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, BranchPicker, Checkout, Tints};
 use crate::clipboard;
@@ -679,6 +680,7 @@ pub struct App {
     editor_env: Vec<(String, String)>,
     claude_dir: Option<PathBuf>,
     watched: Option<Instant>,
+    awake: Awake,
     usage: usage::State,
     usage_timeout: Duration,
     confirm_within: Duration,
@@ -785,6 +787,7 @@ impl App {
             editor_env: Vec::new(),
             claude_dir,
             watched: None,
+            awake: Awake::new(awake::tools()),
             usage: usage::State::default(),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
@@ -906,6 +909,7 @@ impl App {
         }
         self.drive_launches(now);
         self.watch_agents(now);
+        self.keep_awake(now);
         self.check_requests(now);
         self.check_updates(now);
         self.refresh_files(now);
@@ -976,6 +980,16 @@ impl App {
         }
         for (agent, status, project, workspace) in notices {
             self.notify(&agent, status, project, workspace);
+        }
+    }
+
+    fn keep_awake(&mut self, now: Instant) {
+        let terms = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms);
+        let working =
+            |term: &&Term| term.agent.status() == Some(activity::Status::Working) && !term.agent.background_shell();
+        self.awake.update(self.config.keep_awake, terms.filter(working).count(), now);
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.awake = self.awake.state().note();
         }
     }
 
@@ -4096,7 +4110,8 @@ impl App {
                 (source, status)
             })
             .collect();
-        let settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
+        let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
+        settings.awake = self.awake.state().note();
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
@@ -14620,7 +14635,7 @@ rm -f "$s"
                     Command::RestartWhenIdle(wire::RestartWhenIdle { timeout })
                 }
 
-                fn working(agent: &mut Agent, prompt: &str) -> u64 {
+                pub(super) fn working(agent: &mut Agent, prompt: &str) -> u64 {
                     let id = agent.start(None);
                     ask(&mut agent.app, None, send_text(id, prompt, true, false));
                     done(agent.answered("the enter is pressed"));
@@ -14766,6 +14781,71 @@ rm -f "$s"
 
                     let answered = answers(&mut agent.app);
                     assert_eq!((agent.app.take_restart(), toast(&agent.app), answered), (None, None, Vec::new()));
+                }
+            }
+
+            mod keeping_awake {
+                use super::restarting_when_idle::working;
+                use super::*;
+                use crate::awake::{KEEP_FOR, State, Tool};
+                use crate::control::KeepAwake;
+
+                fn holding(agent: &mut Agent) -> TempDir {
+                    let fakes = TempDir::new();
+                    let script = fakes.path().join("holds");
+                    write_executable(&script, "#!/bin/sh\nexec cat\n");
+                    agent.app.awake = Awake::new(vec![Tool::new("holds", script, &[])]);
+                    agent.app.config.keep_awake = true;
+                    fakes
+                }
+
+                fn later(agent: &mut Agent, by: Duration) -> State {
+                    agent.app.watched = None;
+                    agent.app.refresh(Instant::now() + by);
+                    agent.app.awake.state()
+                }
+
+                #[test]
+                fn holds_while_an_agent_works_and_lets_go_after_the_grace() {
+                    let mut agent = Agent::new();
+                    let _fakes = holding(&mut agent);
+                    let id = working(&mut agent, "next step");
+                    let held = (agent.app.awake.state(), agent.app.report(None).keep_awake);
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn ends", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+
+                    let kept = later(&mut agent, Duration::ZERO);
+                    let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
+
+                    let report = KeepAwake { held: true, by: Some("holds".into()), unavailable: None };
+                    assert_eq!(held, (State::Held("holds".into()), Some(report)));
+                    assert_eq!((kept, released), (State::Held("holds".into()), State::Released));
+                }
+
+                #[test]
+                fn a_turn_left_with_a_background_shell_does_not_hold_it() {
+                    let mut agent = Agent::new();
+                    let _fakes = holding(&mut agent);
+                    let id = working(&mut agent, "watch in the background");
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+
+                    later(&mut agent, Duration::ZERO);
+                    let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
+
+                    assert_eq!(released, State::Released);
+                    agent.finish();
+                }
+
+                #[test]
+                fn is_left_out_of_the_report_while_the_setting_is_off() {
+                    let agent = Agent::new();
+
+                    assert_eq!(agent.app.report(None).keep_awake, None);
                 }
             }
         }

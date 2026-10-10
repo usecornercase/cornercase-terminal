@@ -49,6 +49,7 @@ pub enum Row {
     Submit,
     Trust,
     Resume,
+    KeepAwake,
     Kind(String),
     AddAgent,
 }
@@ -71,7 +72,7 @@ impl Row {
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
-            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume => "Agent",
+            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
         }
     }
@@ -79,9 +80,13 @@ impl Row {
     pub fn page(&self) -> Page {
         match self {
             Self::Folder | Self::Fetch => Page::Worktrees,
-            Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::Kind(_) | Self::AddAgent => {
-                Page::Agents
-            }
+            Self::DefaultAgent
+            | Self::Submit
+            | Self::Trust
+            | Self::Resume
+            | Self::KeepAwake
+            | Self::Kind(_)
+            | Self::AddAgent => Page::Agents,
             Self::Token(_)
             | Self::JiraSite
             | Self::JiraEmail
@@ -231,6 +236,7 @@ pub struct Settings {
     pub checking: Vec<Source>,
     pub notice: Option<String>,
     pub capturing: bool,
+    pub awake: String,
 }
 
 impl Settings {
@@ -247,6 +253,7 @@ impl Settings {
             checking: Vec::new(),
             notice: None,
             capturing: false,
+            awake: String::new(),
         }
     }
 
@@ -295,7 +302,7 @@ impl Settings {
             }
         }
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
-        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume]);
+        rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
@@ -428,6 +435,10 @@ impl Settings {
             Row::Resume => self.flip(
                 |c| &mut c.resume_agents,
                 ["conversations resume after a restart", "agents no longer resume after a restart"],
+            ),
+            Row::KeepAwake => self.flip(
+                |c| &mut c.keep_awake,
+                ["the computer stays awake while an agent works", "the computer sleeps as usual"],
             ),
             Row::Kind(kind) => self.pick_mode(kind),
             Row::AddAgent => {
@@ -854,6 +865,11 @@ impl Settings {
         }
     }
 
+    fn keep_awake_row(&self) -> (String, String, String, bool) {
+        let value = if self.config.keep_awake { "[x] while an agent works" } else { "[ ] never" };
+        ("keep awake".into(), value.into(), self.awake.clone(), false)
+    }
+
     fn row_view(&self, row: &Row) -> ui::SettingsRow {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
@@ -882,19 +898,7 @@ impl Settings {
             }
             Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
             Row::PlaneWorkspace | Row::PlaneUrl | Row::PlaneFilter => plane_row(config, row),
-            Row::Tab(id) => {
-                let on = self.shown_tabs().contains(id);
-                let name = match *id {
-                    "all" => "All",
-                    "github" => "GitHub",
-                    "shortcut" => "Shortcut",
-                    "linear" => "Linear",
-                    "jira" => "Jira",
-                    _ => "Plane",
-                };
-                let note = if *id == "all" { "every source together".into() } else { String::new() };
-                (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
-            }
+            Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
                     "the agent in your tab, otherwise ask".into()
@@ -942,6 +946,7 @@ impl Settings {
                 let value = if config.resume_agents { "[x] after a restart" } else { "[ ] never" };
                 ("resume conversations".into(), value.into(), RESUME_NOTE.into(), false)
             }
+            Row::KeepAwake => self.keep_awake_row(),
             Row::Prefix => self.prefix_row(),
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
@@ -955,6 +960,20 @@ impl Settings {
             removable: false,
             movable: matches!(row, Row::Tab(_)),
         }
+    }
+
+    fn tab_row(&self, id: &str) -> (String, String, String, bool) {
+        let on = self.shown_tabs().contains(&id);
+        let name = match id {
+            "all" => "All",
+            "github" => "GitHub",
+            "shortcut" => "Shortcut",
+            "linear" => "Linear",
+            "jira" => "Jira",
+            _ => "Plane",
+        };
+        let note = if id == "all" { "every source together".into() } else { String::new() };
+        (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
     }
 
     fn prefix_row(&self) -> (String, String, String, bool) {
@@ -1546,6 +1565,18 @@ mod tests {
             let before = s.config.agents_section;
             go_to(&mut s, &Row::AgentsSection);
             assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).agents_section), (false, true));
+        }
+    }
+
+    mod keep_awake {
+        use super::*;
+
+        #[test]
+        fn is_a_switch_that_starts_off() {
+            let mut s = settings();
+            let before = s.config.keep_awake;
+            go_to(&mut s, &Row::KeepAwake);
+            assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).keep_awake), (false, true));
         }
     }
 

@@ -67,6 +67,7 @@ src/config.rs     user settings (config.json), `~` expansion, validation
 src/settings.rs   the settings modal's state; returns Actions for App
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
 src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt
+src/awake.rs      keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child
 src/activity.rs   what the agent in a pane is doing: Claude Code's session file, its title glyph, Codex's title and turns, opencode's turns, done-but-unseen, rollups
 src/context.rs    model/context lines for Claude Code, Codex, Gemini CLI and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line, its last message), context/message.rs the last message each wrote (`read --last-message`), reading JSONL backwards
 src/memory.rs     how much memory a pane uses (its shell and descendants), measured on a thread

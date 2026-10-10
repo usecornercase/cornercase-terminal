@@ -11,10 +11,11 @@ use serde_json::Value;
 use super::{App, AppEvent, Target, Toast};
 use crate::activity::{self, Status};
 use crate::agents;
+use crate::awake;
 use crate::context;
 use crate::control::{
-    self, Command, Done, GroupInfo, Ids, Item, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo, TodoItem,
-    TodoList, Until, WorkspaceInfo,
+    self, Command, Done, GroupInfo, Ids, Item, KeepAwake, PaneInfo, ProjectInfo, Report, Request, Response, TabInfo,
+    TodoItem, TodoList, Until, WorkspaceInfo,
 };
 use crate::error;
 use crate::git;
@@ -903,6 +904,16 @@ impl App {
             shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
             groups: groups.collect(),
             projects: projects.collect(),
+            keep_awake: self.keep_awake_info(),
+        }
+    }
+
+    fn keep_awake_info(&self) -> Option<KeepAwake> {
+        match self.awake.state() {
+            awake::State::Off => None,
+            awake::State::Released => Some(KeepAwake::default()),
+            awake::State::Held(by) => Some(KeepAwake { held: true, by: Some(by), unavailable: None }),
+            awake::State::Unavailable(why) => Some(KeepAwake { held: false, by: None, unavailable: Some(why) }),
         }
     }
 

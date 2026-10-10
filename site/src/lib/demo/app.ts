@@ -2152,6 +2152,7 @@ export class App {
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
         { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code, Codex and Gemini, in their tabs' },
+        { id: 'awake', section: 'Agent', label: 'keep awake', value: c.awake ? '[x] while an agent works' : '[ ] never', note: this.awakeNote() },
       ];
       for (const kind of this.listedKinds()) {
         const mode = this.modeOf(kind);
@@ -2242,6 +2243,9 @@ export class App {
     } else if (row.id === 'resume') {
       c.resume = !c.resume;
       o.notice = c.resume ? 'conversations resume after a restart' : 'agents no longer resume after a restart';
+    } else if (row.id === 'awake') {
+      c.awake = !c.awake;
+      o.notice = c.awake ? 'the computer stays awake while an agent works' : 'the computer sleeps as usual';
     } else if (row.id === 'model' || row.id === 'context' || row.id === 'memory') {
       c[row.id] = !c[row.id];
       o.notice = DETAIL_NOTICES[row.id][c[row.id] ? 0 : 1];
@@ -2317,6 +2321,12 @@ export class App {
   openRestart(): void {
     this.overlay = { kind: 'restart', scroll: 0 };
     this.dirty();
+  }
+
+  awakeNote(): string {
+    if (!this.config.awake) return 'no idle sleep while an agent works';
+    const panes = this.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.flatMap((t) => t.panes)));
+    return panes.some((pane) => paneStatus(pane) === 'working') ? 'held now, by caffeinate' : 'not held: no agent is working';
   }
 
   restartNotes(width: number): Line[] {
