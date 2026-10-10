@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Account, Secret, Source, jira};
+use crate::issues::{Account, Secret, Source, jira, plane};
 use crate::notify;
 use crate::search::Search;
 use crate::shortcuts::Prefix;
@@ -12,7 +12,7 @@ use crate::ui;
 
 pub const DONE: &str = "done";
 pub const RESTART: &str = "restart";
-const TAB_IDS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
+const TAB_IDS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
 const EXTRA_ARGS: &str = "extra arguments…";
 const PREFIX_OFF: &str = "keyboard shortcuts are off";
 
@@ -40,6 +40,9 @@ pub enum Row {
     JiraSite,
     JiraEmail,
     JiraJql,
+    PlaneWorkspace,
+    PlaneUrl,
+    PlaneFilter,
     Tab(&'static str),
     DefaultAgent,
     Submit,
@@ -64,6 +67,7 @@ impl Row {
             | Self::Updates
             | Self::Prefix => "",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
+            Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume => "Agent",
@@ -77,7 +81,14 @@ impl Row {
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::Kind(_) | Self::AddAgent => {
                 Page::Agents
             }
-            Self::Token(_) | Self::JiraSite | Self::JiraEmail | Self::JiraJql | Self::Tab(_) => Page::Issues,
+            Self::Token(_)
+            | Self::JiraSite
+            | Self::JiraEmail
+            | Self::JiraJql
+            | Self::PlaneWorkspace
+            | Self::PlaneUrl
+            | Self::PlaneFilter
+            | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
             | Self::AgentsSection
@@ -274,10 +285,12 @@ impl Settings {
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch];
         for (source, _) in &self.tokens {
-            if *source == Source::Jira {
-                rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]);
-            } else {
-                rows.push(Row::Token(*source));
+            match source {
+                Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),
+                Source::Plane => {
+                    rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
+                }
+                _ => rows.push(Row::Token(*source)),
             }
         }
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
@@ -361,6 +374,9 @@ impl Settings {
             Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
             Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
             Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),
+            Row::PlaneWorkspace => self.start_edit(row, self.config.plane_workspace.clone()),
+            Row::PlaneUrl => self.start_edit(row, self.config.plane_url.clone()),
+            Row::PlaneFilter => self.start_edit(row, self.config.plane_filter.clone()),
             Row::Tab(id) => self.toggle_tab(id),
             Row::DefaultAgent => {
                 let auto = PickItem {
@@ -412,24 +428,7 @@ impl Settings {
                 |c| &mut c.resume_agents,
                 ["conversations resume after a restart", "agents no longer resume after a restart"],
             ),
-            Row::Kind(kind) => {
-                let modes = agents::modes(&self.config, &kind);
-                if modes.is_empty() {
-                    self.edit_extra(&kind);
-                    return Action::None;
-                }
-                let mut items =
-                    vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
-                items.extend(modes.iter().map(|(name, args)| PickItem {
-                    value: name.clone(),
-                    note: agents::join_args(args),
-                    dangerous: agents::is_dangerous(name),
-                }));
-                let extra = agents::extra_args(&agents::args(&self.config, &kind), &modes);
-                items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
-                self.open_pick(Row::Kind(kind), items);
-                Action::None
-            }
+            Row::Kind(kind) => self.pick_mode(kind),
             Row::AddAgent => {
                 let listed = self.listed_kinds();
                 let items: Vec<PickItem> = agents::kinds(&self.config)
@@ -445,6 +444,24 @@ impl Settings {
                 Action::None
             }
         }
+    }
+
+    fn pick_mode(&mut self, kind: String) -> Action {
+        let modes = agents::modes(&self.config, &kind);
+        if modes.is_empty() {
+            self.edit_extra(&kind);
+            return Action::None;
+        }
+        let mut items = vec![PickItem { value: "default".into(), note: "no mode arguments".into(), dangerous: false }];
+        items.extend(modes.iter().map(|(name, args)| PickItem {
+            value: name.clone(),
+            note: agents::join_args(args),
+            dangerous: agents::is_dangerous(name),
+        }));
+        let extra = agents::extra_args(&agents::args(&self.config, &kind), &modes);
+        items.push(PickItem { value: EXTRA_ARGS.into(), note: agents::join_args(&extra), dangerous: false });
+        self.open_pick(Row::Kind(kind), items);
+        Action::None
     }
 
     fn start_edit(&mut self, row: Row, input: String) -> Action {
@@ -538,6 +555,39 @@ impl Settings {
         }
     }
 
+    fn submit_checked(
+        &mut self,
+        check: fn(&str) -> Result<String, &'static str>,
+        apply: impl FnOnce(&Config, String) -> (Config, String),
+    ) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        let input = edit.input.trim();
+        let checked = if input.is_empty() { Ok(String::new()) } else { check(input) };
+        match checked {
+            Ok(value) => {
+                self.edit = None;
+                let (config, notice) = apply(&self.config, value);
+                self.save(config, notice)
+            }
+            Err(message) => {
+                edit.error = Some(message.into());
+                Action::None
+            }
+        }
+    }
+
+    fn submit_filter(&mut self, tracker: &str, item: &str, apply: impl FnOnce(&Config, String) -> Config) -> Action {
+        let Some(edit) = self.edit.take() else { return Action::None };
+        let filter = edit.input.trim().to_string();
+        let notice = if filter.is_empty() {
+            format!("{tracker} lists every {item} you can see")
+        } else {
+            format!("{tracker} lists only: {filter}")
+        };
+        let config = apply(&self.config, filter);
+        self.save(config, notice)
+    }
+
     fn submit_edit(&mut self) -> Action {
         let Some(edit) = &mut self.edit else { return Action::None };
         match edit.row.clone() {
@@ -571,6 +621,10 @@ impl Settings {
                 edit.error = Some("set the Jira site and email first".into());
                 Action::None
             }
+            Row::Token(Source::Plane) if self.config.plane_workspace.is_empty() => {
+                edit.error = Some("set the Plane workspace first".into());
+                Action::None
+            }
             Row::Token(source) => {
                 let token = edit.input.trim().to_string();
                 if token.is_empty() {
@@ -581,45 +635,36 @@ impl Settings {
                 self.checking.push(source);
                 Action::CheckToken(source, Secret(token))
             }
-            Row::JiraSite | Row::JiraEmail => {
-                let site = edit.row == Row::JiraSite;
-                let input = edit.input.trim();
-                let checked = match (input.is_empty(), site) {
-                    (true, _) => Ok(String::new()),
-                    (false, true) => jira::check_site(input),
-                    (false, false) => jira::check_email(input),
-                };
-                match checked {
-                    Ok(value) => {
-                        self.edit = None;
-                        let name = if site { "site" } else { "email" };
-                        let notice = if value.is_empty() {
-                            format!("the Jira {name} was cleared")
-                        } else {
-                            format!("Jira {name}: {value}")
-                        };
-                        let config = if site {
-                            Config { jira_site: value, ..self.config.clone() }
-                        } else {
-                            Config { jira_email: value, ..self.config.clone() }
-                        };
-                        self.save(config, notice)
-                    }
-                    Err(message) => {
-                        edit.error = Some(message.into());
-                        Action::None
-                    }
-                }
-            }
-            Row::JiraJql => {
-                let jira_jql = edit.input.trim().to_string();
-                self.edit = None;
-                let notice = if jira_jql.is_empty() {
-                    "Jira lists every issue you can see".to_string()
+            Row::JiraSite => self.submit_checked(jira::check_site, |config, value| {
+                let notice =
+                    if value.is_empty() { "the Jira site was cleared".into() } else { format!("Jira site: {value}") };
+                (Config { jira_site: value, ..config.clone() }, notice)
+            }),
+            Row::JiraEmail => self.submit_checked(jira::check_email, |config, value| {
+                let notice =
+                    if value.is_empty() { "the Jira email was cleared".into() } else { format!("Jira email: {value}") };
+                (Config { jira_email: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneWorkspace => self.submit_checked(plane::check_workspace, |config, value| {
+                let notice = if value.is_empty() {
+                    "the Plane workspace was cleared".into()
                 } else {
-                    format!("Jira lists only: {jira_jql}")
+                    format!("Plane workspace: {value}")
                 };
-                self.save(Config { jira_jql, ..self.config.clone() }, notice)
+                (Config { plane_workspace: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneUrl => self.submit_checked(plane::check_url, |config, value| {
+                let notice = if value.is_empty() {
+                    "Plane is the cloud at app.plane.so".into()
+                } else {
+                    format!("Plane server: {value}")
+                };
+                (Config { plane_url: value, ..config.clone() }, notice)
+            }),
+            Row::PlaneFilter => self
+                .submit_filter("Plane", "work item", |config, plane_filter| Config { plane_filter, ..config.clone() }),
+            Row::JiraJql => {
+                self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }
             Row::Kind(kind) => {
                 let extra = agents::split_args(&edit.input);
@@ -835,6 +880,7 @@ impl Settings {
                 (label, value, note, false)
             }
             Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
+            Row::PlaneWorkspace | Row::PlaneUrl | Row::PlaneFilter => plane_row(config, row),
             Row::Tab(id) => {
                 let on = self.shown_tabs().contains(id);
                 let name = match *id {
@@ -842,7 +888,8 @@ impl Settings {
                     "github" => "GitHub",
                     "shortcut" => "Shortcut",
                     "linear" => "Linear",
-                    _ => "Jira",
+                    "jira" => "Jira",
+                    _ => "Plane",
                 };
                 let note = if *id == "all" { "every source together".into() } else { String::new() };
                 (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)
@@ -937,6 +984,9 @@ impl Settings {
                 Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
                 Row::JiraEmail => "Jira email".to_string(),
                 Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
+                Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
+                Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
+                Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 _ => String::new(),
             };
@@ -1019,6 +1069,16 @@ fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
         Row::JiraSite => ("Jira site", &config.jira_site, "not set", "such as acme.atlassian.net"),
         Row::JiraEmail => ("Jira email", &config.jira_email, "not set", "the one you sign in with"),
         _ => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
+    };
+    let value = if value.is_empty() { empty.to_string() } else { value.clone() };
+    (label.into(), value, note.into(), false)
+}
+
+fn plane_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let (label, value, empty, note) = match row {
+        Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
+        Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
+        _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
     };
     let value = if value.is_empty() { empty.to_string() } else { value.clone() };
     (label.into(), value, note.into(), false)
@@ -1324,6 +1384,100 @@ mod tests {
             }
         }
 
+        mod plane {
+            use super::*;
+
+            fn with_plane() -> Settings {
+                let mut s = settings();
+                s.tokens.push((Source::Plane, Status::Missing));
+                s
+            }
+
+            fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
+                go_to(s, row);
+                press(s, KeyCode::Enter);
+                s.edit.iter_mut().for_each(|e| e.input.clear());
+                type_text(s, text);
+                press(s, KeyCode::Enter)
+            }
+
+            #[test]
+            fn has_its_own_section_after_the_accounts() {
+                let mut s = with_plane();
+                s.open_page(Page::Issues);
+                let rows: Vec<(&str, Row)> = s.rows().into_iter().map(|r| (r.section(), r)).take(6).collect();
+                assert_eq!(
+                    rows,
+                    [
+                        ("Accounts", Row::Token(Source::Shortcut)),
+                        ("Accounts", Row::Token(Source::Linear)),
+                        ("Plane", Row::PlaneWorkspace),
+                        ("Plane", Row::PlaneUrl),
+                        ("Plane", Row::Token(Source::Plane)),
+                        ("Plane", Row::PlaneFilter)
+                    ]
+                );
+            }
+
+            #[test]
+            fn the_workspace_is_saved_as_a_slug() {
+                let mut s = with_plane();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneWorkspace, " /Acme/ ")).plane_workspace, "acme");
+            }
+
+            #[test]
+            fn a_bad_workspace_stays_in_the_field() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::PlaneWorkspace, "acme corp"), Action::None);
+                let error = s.edit.and_then(|e| e.error);
+                let expected = "a workspace is lowercase letters, numbers and dashes, such as acme";
+                assert_eq!(error.as_deref(), Some(expected));
+            }
+
+            #[test]
+            fn the_url_is_saved_without_its_trailing_slash() {
+                let mut s = with_plane();
+                let config = saved(edit(&mut s, &Row::PlaneUrl, "https://plane.acme.dev/"));
+                assert_eq!(config.plane_url, "https://plane.acme.dev");
+            }
+
+            #[test]
+            fn a_bad_url_stays_in_the_field() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::PlaneUrl, "plane.acme.dev"), Action::None);
+                let error = s.edit.and_then(|e| e.error);
+                assert_eq!(error.as_deref(), Some("a URL starts with https://, such as https://plane.acme.dev"));
+            }
+
+            #[test]
+            fn an_empty_url_goes_back_to_plane_cloud() {
+                let mut s = with_plane();
+                s.config.plane_url = "https://plane.acme.dev".into();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneUrl, "")).plane_url, "");
+            }
+
+            #[test]
+            fn the_filter_is_saved_as_typed() {
+                let mut s = with_plane();
+                assert_eq!(saved(edit(&mut s, &Row::PlaneFilter, " priority=high ")).plane_filter, "priority=high");
+            }
+
+            #[test]
+            fn the_key_needs_the_workspace_first() {
+                let mut s = with_plane();
+                assert_eq!(edit(&mut s, &Row::Token(Source::Plane), "k3y"), Action::None);
+                assert_eq!(s.edit.and_then(|e| e.error).as_deref(), Some("set the Plane workspace first"));
+            }
+
+            #[test]
+            fn the_key_is_checked_once_the_workspace_is_set() {
+                let mut s = with_plane();
+                s.config.plane_workspace = "acme".into();
+                let action = edit(&mut s, &Row::Token(Source::Plane), "k3y");
+                assert_eq!(action, Action::CheckToken(Source::Plane, Secret("k3y".into())));
+            }
+        }
+
         #[test]
         fn are_never_shown() {
             let mut s = settings();
@@ -1342,7 +1496,7 @@ mod tests {
         fn enter_hides_a_tab() {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("shortcut"));
-            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira"]);
+            assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira", "plane"]);
         }
 
         #[test]
@@ -1366,7 +1520,7 @@ mod tests {
             let mut s = settings();
             go_to(&mut s, &Row::Tab("linear"));
             let config = saved(key(&mut s, KeyCode::Up, KeyModifiers::SHIFT));
-            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira"]);
+            assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira", "plane"]);
             assert_eq!(s.row(), Some(Row::Tab("linear")));
         }
     }

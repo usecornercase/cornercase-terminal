@@ -1,6 +1,6 @@
 # cornercase
 
-A terminal multiplexer TUI in Rust. A sidebar of **projects** (folders, optionally in **groups** with an icon and a colour), a column with the active project's **workspaces** (lines of work, optionally each in its own git worktree) and their **tabs** (one or more shells, split like Ghostty), the active tab's panes, and an optional **changes** panel on the right with the workspace's git diff. Everything is driven by mouse buttons. An issues modal (GitHub, Shortcut, Linear, Jira) reads an issue and starts a coding agent on it in its own worktree. A background server owns the shells, so closing the UI leaves them running and the next `cornercase` reattaches.
+A terminal multiplexer TUI in Rust. A sidebar of **projects** (folders, optionally in **groups** with an icon and a colour), a column with the active project's **workspaces** (lines of work, optionally each in its own git worktree) and their **tabs** (one or more shells, split like Ghostty), the active tab's panes, and an optional **changes** panel on the right with the workspace's git diff. Everything is driven by mouse buttons. An issues modal (GitHub, Shortcut, Linear, Jira, Plane) reads an issue and starts a coding agent on it in its own worktree. A background server owns the shells, so closing the UI leaves them running and the next `cornercase` reattaches.
 
 These rules apply to every contributor and coding agent, in `src/`, `tests/` and `site/`. The design decisions and their reasons, area by area, are in [DESIGN.md](DESIGN.md): read the section for the area you touch before changing it, and update it in the same change when a decision changes. How these files are loaded is under [Instruction files](#instruction-files).
 
@@ -75,10 +75,10 @@ src/notify.rs     desktop notifications through the outer terminal: which escape
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/launch.rs     starting an agent in a new tab (pure state machine)
 src/log.rs        server.log: levels, the line format, the writer thread and its rotation, `Job` timings, `cornercase logs`
-src/secrets.rs    Shortcut / Linear / Jira tokens in secrets.json (0600)
+src/secrets.rs    Shortcut / Linear / Jira / Plane tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
-src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), http.rs, browser.rs (modal state), cache.rs (lists on disk)
+src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), http.rs, browser.rs (modal state), cache.rs (lists on disk)
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
@@ -115,7 +115,7 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 - UI: render a `View` into `TestBackend`; `insta` snapshots for layout, cell styles for hover.
 - App tests `click` with a press and a release (rows act on release); drags start with `press`.
 - `term.rs` / `app.rs` tests spawn real `/bin/sh` PTYs (never the user's shell) and wait with `test_util::wait_until`, never sleeps. `/bin/sh` is `bash` on macOS, so tests check its name with `test_util::is_sh`. `TempDir` paths are canonical, because macOS' temp dir is behind a symlink (`/var` → `/private/var`).
-- Helpers: `test_util::TempDir`, `git_repo`, `fake_gh`, `FakeHttp` (canned HTTP), `write_executable` (through a `/bin/sh` child to avoid `ETXTBSY`), `Family` (`sh` running `sh` running `sleep`, for process trees). Nothing calls real `gh`, Shortcut, Linear or Jira. App tests clear `App::env_tokens` and never use the real config.
+- Helpers: `test_util::TempDir`, `git_repo`, `fake_gh`, `FakeHttp` (canned HTTP), `write_executable` (through a `/bin/sh` child to avoid `ETXTBSY`), `Family` (`sh` running `sh` running `sleep`, for process trees). Nothing calls real `gh`, Shortcut, Linear, Jira or Plane. App tests clear `App::env_tokens` and never use the real config.
 - `cornercase remote` is tested with a fake `ssh` first on the `PATH` (`fake_ssh` in `tests/e2e.rs`): it skips the options and the destination and `exec`s the command locally, so the proxy reaches the test's own socket and keeps the fake's pid (killing it drops the connection; without `exec`, a `sh -c` left between them would keep the pipe open).
 - Agents are faked with a script (`FAKE_AGENT`) that asks a trust question and echoes what it reads.
 - Agent status is faked with a script named `claude` that writes its own `sessions/$$.json` (and, for the context line, a transcript under `projects/`); app tests point `App::claude_dir` at a temp dir, and e2e sets `CLAUDE_CONFIG_DIR` per `Session`, so nothing reads the real `~/.claude`. Codex's is `FakeCodex`: its rollout gets the turn fixtures appended, and its script sets the title it finds in a `title` signal file (OSC 0). opencode's is `FakeOpencode`: a script named `opencode` that holds a database built from the fixture schema, whose rows the test writes. `app::tests::agent_status::Watched` drives any of them with the same steps, so the notification tests run for each (opencode has no waiting). Tests that read a process's environment spawn `/bin/sleep` with a cleared one and wait until its arguments are `sleep`'s (before `exec`, `/proc` shows the parent's).

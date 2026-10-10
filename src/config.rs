@@ -16,7 +16,7 @@ use crate::ui;
 pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub const DEFAULT_PROMPT: &str = "{url}";
 pub const DEFAULT_GH: &str = "gh";
-pub const DEFAULT_ISSUE_TABS: [&str; 5] = ["all", "github", "shortcut", "linear", "jira"];
+pub const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
 pub const DEFAULT_FETCH_MINUTES: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +29,9 @@ pub struct Config {
     pub jira_site: String,
     pub jira_email: String,
     pub jira_jql: String,
+    pub plane_url: String,
+    pub plane_workspace: String,
+    pub plane_filter: String,
     pub agent: String,
     pub agent_args: BTreeMap<String, Vec<String>>,
     pub agent_modes: BTreeMap<String, BTreeMap<String, Vec<String>>>,
@@ -61,6 +64,9 @@ impl Default for Config {
             jira_site: String::new(),
             jira_email: String::new(),
             jira_jql: String::new(),
+            plane_url: String::new(),
+            plane_workspace: String::new(),
+            plane_filter: String::new(),
             agent: agents::AUTO.into(),
             agent_args: BTreeMap::new(),
             agent_modes: BTreeMap::new(),
@@ -137,6 +143,12 @@ fn migrate(keys: &mut Map<String, Value>) {
         && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("jira")))
     {
         tabs.push(Value::String("jira".into()));
+    }
+    if !keys.contains_key("plane_workspace")
+        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
+        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("plane")))
+    {
+        tabs.push(Value::String("plane".into()));
     }
 }
 
@@ -252,7 +264,7 @@ mod tests {
         }
     }
 
-    mod jira_tab {
+    mod added_tabs {
         use super::*;
 
         fn tabs(file: &str) -> Vec<String> {
@@ -263,11 +275,22 @@ mod tests {
         }
 
         #[rstest]
-        #[case::a_list_from_before_jira(r#"{"issue_tabs": ["linear", "all"]}"#, &["linear", "all", "jira"])]
-        #[case::already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all"])]
-        #[case::hidden_since(r#"{"issue_tabs": ["all"], "jira_site": ""}"#, &["all"])]
+        #[case::a_list_from_before_jira(r#"{"issue_tabs": ["linear", "all"]}"#, &["linear", "all", "jira", "plane"])]
+        #[case::a_list_from_before_plane(
+            r#"{"issue_tabs": ["linear", "all"], "jira_site": ""}"#,
+            &["linear", "all", "plane"]
+        )]
+        #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane"])]
+        #[case::plane_already_there(
+            r#"{"issue_tabs": ["Plane", "all"], "jira_site": ""}"#,
+            &["Plane", "all"]
+        )]
+        #[case::hidden_since(
+            r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": ""}"#,
+            &["all"]
+        )]
         #[case::no_list("{}", &DEFAULT_ISSUE_TABS)]
-        fn is_added_to_lists_saved_before_it_existed(#[case] file: &str, #[case] expected: &[&str]) {
+        fn are_added_to_lists_saved_before_they_existed(#[case] file: &str, #[case] expected: &[&str]) {
             assert_eq!(tabs(file), expected);
         }
     }

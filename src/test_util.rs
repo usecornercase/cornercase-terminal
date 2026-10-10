@@ -520,3 +520,24 @@ fn read_request(stream: &mut std::net::TcpStream) -> String {
     }
     String::from_utf8_lossy(&data).into_owned()
 }
+
+pub fn decoded(request: &str) -> String {
+    let line = request.lines().next().unwrap_or_default().replace('+', " ");
+    let mut out = Vec::new();
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match (bytes[i], bytes.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(&String::from_utf8_lossy(h), 16).ok()))
+        {
+            (b'%', Some(byte)) => {
+                out.push(byte);
+                i += 3;
+            }
+            (byte, _) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}

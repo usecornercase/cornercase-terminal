@@ -100,7 +100,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `process.rs` | A process's cwd, name, arguments, environment, children and memory footprint, per platform. |
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
 | `worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
-| `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST), Linear (GraphQL) and Jira Cloud (REST, with an Atlassian Document Format to Markdown converter), the browser state and the on-disk cache. |
+| `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane (REST, with an HTML to Markdown converter), the browser state and the on-disk cache. |
 | `agents.rs` | Known agents, modes and arguments, choosing and detecting an agent, the trust prompt. |
 | `activity.rs` | What the agent in a pane is doing: Claude Code's session file and terminal title, Codex's terminal title and turns, opencode's turns, and the finished-but-unseen mark. |
 | `context.rs`, `context/codex.rs`, `context/opencode.rs` | Model/context lines for Claude Code, Codex and opencode. Claude uses its session transcript and configured window rules; Codex follows the process's open rollout, recorded model and latest usage/window, reading incrementally and clearing obsolete context on session changes and compaction. opencode reads the SQLite database its process holds open, on a thread: the session in its folder, whether a turn is running, and the last answer's tokens over the window in opencode's `models.json`. |
