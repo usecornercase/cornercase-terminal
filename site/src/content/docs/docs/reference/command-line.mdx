@@ -89,6 +89,20 @@ Restarts the server, like **settings → restart** in the app. It first lists wh
 
 You can run it inside one of cornercase's own panes. That pane closes with the server and reopens with the rest of your session.
 
+#### Once no agent is working
+
+An agent in the middle of a turn loses that turn when the server restarts: its conversation [resumes](../../guides/sessions/#agents-resume-their-conversations), but not the tool call or the build it was running. `--when-idle` waits for the agents first, and works with `update` too:
+
+```sh
+cornercase restart --when-idle                        # ask, then restart once no agent is working
+cornercase restart --when-idle --yes --timeout 3600   # without asking; give up after an hour
+cornercase update --when-idle --yes                   # install now, restart on it once the agents are done
+```
+
+It lists what is running and asks `Restart it once no agent is working? [y/N]`, then waits until every Claude Code, Codex and opencode agent has [stopped working](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing): idle, done and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started in the background still runs. The server restarts in the same moment it sees that, so no agent starts a new turn in between; a prompt typed into an agent in the last two seconds, or one cornercase is still typing, holds it a moment longer. Meanwhile every window shows `↻ restart pending until 2 agents end their turn` in its corner, so nobody starts a long task by surprise, and its **cancel** button calls the restart off.
+
+Other programs, such as a dev server, don't hold the restart; they stop as with any restart. Neither does the pane the command runs in, so an agent can run it as its last step. `--timeout SECONDS` gives up after that long with status 1 and leaves the server running, as do **cancel** and `Ctrl+C`. `update --when-idle` installs the release before it waits, so the new version is on disk whatever happens next. A server from a release without `--when-idle` can't wait: the command says so, and the server keeps running.
+
 ### `cornercase kill-server`
 
 Stops the server: every shell and program in every pane ends, and every attached client exits. It waits for the server to be gone before returning, then prints what it stopped when something was running, such as `stopped 1 agent and 2 other programs`. If no server is running on the socket, it prints `no cornercase server is running`.
@@ -132,6 +146,9 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | `the running cornercase server is incompatible with this build. Run cornercase kill-server …` | Same cause, detected while talking to the server. |
 | `failed to start the cornercase server; see <log>` | The server didn't come up within a few seconds. The log next to the socket says why. |
 | `a cornercase server is already running on <socket>` | Printed by `cornercase server` when another server holds the socket's lock. |
+| `the restart was cancelled in the window; the server keeps running` | Someone pressed **cancel** on the window's notice while `restart --when-idle` or `update --when-idle` waited. |
+| `timed out after …: the agent in pane … has not ended its turn, so the server keeps running` | `--when-idle` reached its `--timeout` before every agent stopped working. |
+| ``the running cornercase server is too old to wait for its agents …`` | The server predates `--when-idle`. Run `cornercase restart` once no agent is working. |
 | ``this is a development build; `cornercase update` only updates released builds`` | You ran `update` from a build made with `cargo run`. Pull and build again instead. |
 | ``could not reach cornercase on `<host>`: …`` | `cornercase remote` couldn't connect; the end of the line is what `ssh` said. |
 | ``cornercase was not found on `<host>` …`` | The other machine has no `cornercase` where it looks; install it there, or give its path with `--command`. |

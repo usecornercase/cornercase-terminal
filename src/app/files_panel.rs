@@ -13,7 +13,7 @@ use crate::error::Result;
 use crate::files::link::{self, Target};
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
 use crate::files::{self, Mode, Query, disk};
-use crate::log::{Job, Level};
+use crate::log::{self, Job, Level};
 use crate::mouse::MouseMode;
 use crate::panics;
 use crate::project::Tab;
@@ -70,6 +70,13 @@ impl App {
                 };
                 let read = panics::contain(|| disk::read(&load.file, load.previous));
                 job.done();
+                if let Some(Some(disk::Read {
+                    content: disk::Content { body: disk::Body::Unreadable { reason, .. }, .. },
+                    ..
+                })) = &read
+                {
+                    log::info!("files", "image unreadable", path = &load.path, reason = reason);
+                }
                 let Some(Some(read)) = read else {
                     send(None, true);
                     return;
@@ -141,6 +148,7 @@ impl App {
             scroll: viewer.scroll,
             selection: viewer.selection,
             find: viewer.find.clone(),
+            image: None,
         }
     }
 
@@ -411,7 +419,8 @@ impl App {
     fn file_action(&mut self, workspace: u64, root: PathBuf, action: Action, area: Rect) -> Result<()> {
         let Some(viewer) = self.files.viewer(workspace) else { return Ok(()) };
         let path = viewer.path.clone();
-        let selected = viewer.selected();
+        let image = viewer.content.as_ref().is_some_and(|c| c.is_image());
+        let selected = viewer.selected().filter(|_| !image);
         match action {
             Action::Open => {
                 let line = selected.map_or(1, |(first, _)| first);

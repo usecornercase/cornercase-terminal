@@ -1,12 +1,12 @@
 ---
 title: Files panel
-description: Browse, read and search a workspace's files next to its panes, with git's marks in the tree and beside each line, and open any path a program prints with a click.
+description: Browse, read and search a workspace's files next to its panes, with git's marks in the tree and beside each line, see its images, and open any path a program prints with a click.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-The files panel shows the files of the active workspace in a column on the right of its panes: a tree to browse them, a viewer to read them in your terminal's colours, and a bar to search their names or their text. Git's marks are everywhere, so you see at a glance what an agent touched, and the lines you pick go back to the agent with a click.
+The files panel shows the files of the active workspace in a column on the right of its panes: a tree to browse them, a viewer to read them in your terminal's colours (and to see its images), and a bar to search their names or their text. Git's marks are everywhere, so you see at a glance what an agent touched, and the lines you pick go back to the agent with a click.
 
 <Screen
   name="files"
@@ -43,7 +43,7 @@ The header shows the file's path, its number of lines and its language; **`‹`*
 - Beside the line numbers, git's marks show what changed: a green `▎` on added lines, a blue `▎` on changed ones, and a red `▁` under the line after which lines were deleted (`▔` when they were at the top). A new file is green all the way down.
 - Click the mark of a changed or deleted block to see the lines that were there before, in red, and again to hide them.
 - The viewer follows the file on disk: when an agent edits it, you see the new version within a second, marks included.
-- Binary files, files over 8 MB and files that are gone say so instead of showing their content.
+- [Images](#images) show as pictures. Other binary files, files over 8 MB and files that are gone say so instead of showing their content.
 
 To change a file, use **open**: the panel only reads.
 
@@ -56,6 +56,128 @@ Click a line to select it, or press and drag over several. The header says which
 | **open** | Opens the file in a new tab with your `$VISUAL` or `$EDITOR` (or `vi`), at the first selected line. The tab closes when you quit the editor. |
 | **ask agent** | Types a reference such as `src/returns/address.rs:11-12 ` into the agent running in this workspace and switches to its tab, so you can write your question after it. With nothing selected it types the file's path. Without an agent in the workspace, it copies the reference to your clipboard instead. |
 | **copy** | Copies the selected lines to your clipboard, or the file's path when nothing is selected. |
+
+## Images
+
+Click a PNG, JPEG, GIF, WebP, BMP or ICO file and the viewer shows the picture itself, drawn by your terminal. cornercase knows an image by its content, not by its name; an SVG file is text, and shows as text.
+
+- The header says what the file is: its format, its size in pixels and its size on disk, such as `PNG · 1280×720 · 245 KB`.
+- The picture sits under the header, centred, made smaller to fit the panel and never larger than it is, so an icon stays small. Drag the panel's border to see it bigger.
+- An animated GIF or WebP shows its first frame.
+- The viewer follows the file: when an agent saves a new screenshot over it, you see the new picture within a second.
+- **ask agent** types the image's path, such as `docs/returns-page.png `, into the agent running in the workspace, which can open the image itself; **copy** copies the path. An image has no **open** and no lines to select.
+- While a dialog is open, such as the settings, the picture is hidden: a terminal can't dim a picture the way it dims text. Menus and the search show over it as usual.
+- A file cornercase can't decode says why instead, such as `cannot read this image: …`.
+
+Each window draws pictures with its own terminal. With two windows attached to one server, say Ghostty on your desk and another terminal over SSH, each shows the picture the way its terminal can, and a window whose terminal can't shows [why](#when-a-picture-doesnt-show) in its place. Over SSH and with [`cornercase remote`](../remote/), the picture travels to the terminal in front of you, so a large one can take a moment on a slow link.
+
+### Which terminals show them
+
+Terminals draw pictures with one of three protocols. When it starts, cornercase asks your terminal for its name, which works over SSH too, and picks the one your terminal understands; there is nothing to set.
+
+| Terminal | Protocol | What it needs |
+| --- | --- | --- |
+| **Ghostty** | kitty graphics | Any version. |
+| **kitty** | kitty graphics | 0.28 or later. |
+| **Rio** | kitty graphics | 0.5.27 or later; before that, iTerm2 inline images. |
+| **iTerm2** | iTerm2 inline images | Your OK the first time; see [iTerm2 asks first](#iterm2-asks-first). |
+| **WezTerm** | iTerm2 inline images | Nothing. |
+| **Warp** | iTerm2 inline images | Nothing. |
+| **VS Code**, **Cursor** | iTerm2 inline images | `terminal.integrated.enableImages` turned on in the settings. |
+| **Tabby** | iTerm2 inline images | **Settings › Terminal › Sixel** turned on. |
+| **foot** | sixel | On unless `foot.ini` says `sixel=no`. |
+| **Konsole** | sixel | 22.04 or later. |
+| **xterm** | sixel | Running as a VT340: `xterm -ti vt340`. |
+| **mlterm** | sixel | Built with sixel. |
+| **Contour** | sixel | Nothing. |
+
+With kitty graphics, cornercase draws the picture as the panel's own cells (kitty's Unicode placeholders), so it goes through tmux and anything drawn over it, such as a menu, covers just that part.
+
+Alacritty, Terminal.app, GNOME Terminal and the other terminals built on VTE (Ptyxis, Console, Tilix, Terminator, xfce4-terminal), st, urxvt and the terminal of JetBrains IDEs can't show pictures. The panel says so where the picture would be, and names terminals that can.
+
+### iTerm2 asks first
+
+The first time a program shows a picture, iTerm2 asks **Allow Terminal-Initiated Display?** Allow it, and let iTerm2 remember your answer so it doesn't ask again. Until you answer, the picture doesn't show.
+
+If you once declined and told iTerm2 to remember, it shows no pictures and says nothing about it: allow them again in **iTerm2 › Suppressed Alerts** (iTerm2 3.7 or later). With iTerm2's **Disable potentially insecure escape sequences** turned on, it shows 🚫 instead of the picture.
+
+### Inside tmux
+
+tmux shows pictures in one of two ways, depending on your terminal. Ghostty, kitty and Rio get them passed through, which tmux allows only with `allow-passthrough`; a terminal with sixel gets them drawn by tmux itself, which needs a tmux built with sixel and no setting (both are described below). For passthrough, add this line to `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that is where yours is:
+
+```sh title="~/.tmux.conf"
+set -g allow-passthrough on
+```
+
+Load it into the running tmux, then quit cornercase with **Quit** and start it again, since cornercase checks your terminal when it starts:
+
+```sh
+tmux source-file ~/.tmux.conf
+```
+
+`tmux show -g allow-passthrough` says whether it took: `on` or `all`, or `1` on tmux 3.3. With `on`, tmux drops a picture sent while cornercase's window isn't the one tmux shows. Use `all` instead (tmux 3.4 or later) so pictures arrive even then.
+
+When cornercase runs on another machine, reached with SSH from inside tmux, it asks the terminal through tmux when it starts. If its pane was hidden or wasn't the active one at that moment, no answer comes back: start cornercase again in a pane you are looking at.
+
+- **Ghostty, kitty and Rio** show pictures through tmux, also when cornercase runs on another machine you reach with SSH from inside tmux.
+- **Terminals with sixel**, such as foot, Konsole, WezTerm or iTerm2, show them when tmux itself was built with sixel (tmux 3.4 or later; Ubuntu's and Debian's packages are): tmux then draws the pictures. A tmux without sixel says `this tmux (…) cannot draw sixel images`.
+- **iTerm2 inline images** don't survive tmux's own redraws, so cornercase doesn't send them through tmux. A terminal that only has them, such as Warp, shows no pictures inside tmux: run cornercase outside tmux there.
+- tmux inside tmux doesn't pass pictures through.
+
+### GNU screen and Zellij
+
+GNU screen can't pass pictures through: run cornercase outside screen, or in tmux.
+
+Zellij 0.45 or later draws sixel pictures itself, so in a terminal with sixel, such as foot, Konsole, WezTerm or xterm as a VT340, cornercase shows them inside Zellij. Older versions claim sixel whatever the terminal can do, so cornercase can't tell and shows none: update Zellij. kitty graphics and iTerm2 inline images don't pass through Zellij: in Ghostty, kitty, Rio, iTerm2 or Warp, run cornercase outside it.
+
+Another multiplexer that cornercase only knows by its `TERM`, such as `screen-256color` without GNU screen's variables, doesn't pass pictures either.
+
+### Choose the protocol yourself
+
+Some terminals can show pictures but don't tell who they are, such as Blink Shell and a-Shell on an iPad, which understand iTerm2 inline images. Set `CORNERCASE_IMAGES` when you start cornercase to choose the protocol yourself:
+
+```sh
+CORNERCASE_IMAGES=iterm cornercase
+```
+
+| Value | Pictures are drawn with |
+| --- | --- |
+| `kitty` | kitty graphics, with Unicode placeholders. |
+| `iterm` or `iterm2` | iTerm2 inline images. |
+| `sixel` | sixel. |
+| `off` | Nothing: this window shows no pictures. |
+
+The variable belongs to the window, not to the server: each `cornercase` you start reads its own, so two windows on one server can use different values, and with `cornercase remote` it's the one on your own machine that counts. A protocol your terminal doesn't understand shows nothing, or stray characters, where the picture would be: start cornercase without the variable to go back.
+
+### When a picture doesn't show
+
+The panel says why where the picture would be, and what to do. The messages, with what they mean:
+
+| The panel says | What to do |
+| --- | --- |
+| `images need tmux to pass them through` | Allow passthrough as in [Inside tmux](#inside-tmux), in `~/.tmux.conf` or `~/.config/tmux/tmux.conf`, run `tmux source-file` on that file, then start cornercase again. `all` instead of `on` (tmux 3.4 or later) also lets pictures arrive while the window is hidden. |
+| `inside tmux, images need set -g allow-passthrough on` | No answer came back through tmux. Allow passthrough as in [Inside tmux](#inside-tmux). If it is on already, cornercase's pane was hidden or not the active one when it started: start it again there (`all`, tmux 3.4 or later, also covers a hidden window). Otherwise the terminal running tmux can't show pictures. |
+| `cornercase cannot show images in … through tmux` | Ghostty, kitty and Rio can show pictures through tmux; outside tmux, more terminals can. See [Inside tmux](#inside-tmux). |
+| `this tmux (…) cannot draw sixel images` | Your terminal has sixel, but this tmux wasn't built with it. Use tmux 3.4 or later built with sixel, or run cornercase outside tmux. |
+| `images do not pass through tmux inside tmux` | Run cornercase in the outer tmux, or outside tmux. |
+| `GNU screen cannot pass images through` | Run cornercase outside screen, or in tmux with `set -g allow-passthrough on`. |
+| `this multiplexer (TERM=…) cannot pass images through` | Run cornercase outside it. |
+| `cornercase shows images in Zellij only as sixel, and this terminal has no sixel` | Run cornercase outside Zellij, or in a terminal with sixel, such as foot, WezTerm or Konsole. |
+| `Zellij … claims sixel whatever the terminal can do, so cornercase cannot tell` | Update Zellij to 0.45 or later, or run cornercase outside it. |
+| `Ghostty did not answer the image query: its image-storage-limit is 0` | Remove `image-storage-limit` from Ghostty's config (the default is 320000000), reload it (`ctrl+shift+,`, or `cmd+shift+,` on macOS), then start cornercase again. |
+| `kitty … is too old for images in cornercase` | Update kitty to 0.28 or later. |
+| `Konsole … cannot show images` | Update Konsole to 22.04 or later. |
+| `xterm shows images only when it runs as a VT340` | Start it with `xterm -ti vt340`, or add `XTerm*decTerminalID: vt340` to `~/.Xresources` and run `xrdb -merge ~/.Xresources`. |
+| `sixel images are turned off in foot` | Remove `sixel=no` from the `[tweak]` section of `foot.ini` and restart foot. |
+| `VS Code's terminal shows images only with terminal.integrated.enableImages on` | Turn it on in Settings (it also needs `terminal.integrated.gpuAcceleration`), open a new terminal and start cornercase again. Cursor shows the same message and has the same setting. |
+| `Tabby shows images only with its Sixel setting on` | Turn on **Settings › Terminal › Sixel**, then start cornercase again. |
+| `WezTerm did not report the window's size in pixels, so it shows no images` | Run cornercase in a local WezTerm tab rather than through a WezTerm multiplexer domain. |
+| `the terminal did not report its cell size in pixels, which sixel images need` | Run cornercase directly in the terminal: mosh and some multiplexers hide the window's size in pixels. |
+| `… cannot show images` | This terminal can't draw pictures, such as Alacritty, Terminal.app, GNOME Console or mlterm without sixel. Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can; see [Which terminals show them](#which-terminals-show-them). |
+| `this terminal cannot show images, or cornercase could not tell which terminal it is` | Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can show them. If yours can, start cornercase with `CORNERCASE_IMAGES=kitty`, `iterm` or `sixel`; see [Choose the protocol yourself](#choose-the-protocol-yourself). |
+| `cornercase does not know how to show images in …` | The terminal said its name, but cornercase doesn't know it. If it can show pictures, [choose the protocol yourself](#choose-the-protocol-yourself). |
+| `images are turned off in this window` | `CORNERCASE_IMAGES=off` was set when cornercase started: start it without it to see them. |
+| `cannot read this image: …` | The file isn't an image cornercase can decode, it is damaged, or it is too large (over 16384 pixels on a side). |
 
 ## Search
 

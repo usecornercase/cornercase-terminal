@@ -1,15 +1,18 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const [, , dataModule, out] = process.argv;
 const data = await import(dataModule);
 const now = Date.now();
+const assets = fileURLToPath(new URL('../src/assets/demo/', import.meta.url));
 
 function write(dir, tree) {
   mkdirSync(dir, { recursive: true });
   for (const [name, node] of Object.entries(tree)) {
-    if (typeof node === 'string') writeFileSync(join(dir, name), node);
-    else write(join(dir, name), node);
+    if (typeof node !== 'string') write(join(dir, name), node);
+    else if (data.picture(node)) writeFileSync(join(dir, name), readFileSync(join(assets, name)));
+    else writeFileSync(join(dir, name), node);
   }
 }
 

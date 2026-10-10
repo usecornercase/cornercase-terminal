@@ -12,6 +12,7 @@ pub mod emulator;
 pub mod error;
 pub mod files;
 pub mod git;
+pub mod graphics;
 pub mod highlight;
 pub mod host_theme;
 pub mod issues;

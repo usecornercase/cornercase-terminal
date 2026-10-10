@@ -7,7 +7,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use serde_json::Value;
 
 use crate::client::{answer, ask};
-use crate::control::{self, Done, Event, Item, ProjectInfo, Report, TodoList, Until, What};
+use crate::control::{self, Done, Event, Item, PaneRow, PaneRows, ProjectInfo, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::keys;
 use crate::log;
@@ -43,10 +43,24 @@ is a Claude Code agent whose turn is over while a shell it started in the backgr
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
 `(dialog open)` is a Claude Code agent showing a dialog, a panel or its shell mode instead of its
 input box, which `cornercase send` refuses (`dialog` in the JSON).
+`(survey open)` is Claude Code's feedback survey above its input box, which `cornercase send`
+refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
+
+With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
+line naming the columns, then one row per pane, its columns separated by tabs. The columns are
+pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
+at_prompt, model, context, caller (the pane running the command), shown (the pane the window
+shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
+path and survey (Claude Code's feedback survey shows); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
+number, full paths), with - where there is none and a space for a tab or line break in a name.
+With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
+where there is no value.
 
 Examples:
   cornercase status
-  cornercase status --json";
+  cornercase status --json
+  cornercase status --panes | awk -F'\\t' '$7 == \"waiting\" { print $1 }'
+  cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'";
 const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
@@ -81,7 +95,9 @@ const SEND_HELP: &str = "The text goes in as one paste, bracketed when the progr
 waits for an answer to a question or a permission prompt is refused, since the text would answer
 it; use `cornercase keys` for that. So is a Claude Code agent that shows a dialog, a panel or
 its shell mode instead of its input box (`dialog` in `cornercase status --json`), unless you pass
---force.
+--force. So is its feedback survey above the input box (`1: Bad  2: Fine  3: Good  0: Dismiss`,
+`survey` in the JSON), where a digit sent alone would answer it: dismiss it with
+`cornercase keys --pane N 0`, or pass --force.
 
 With --enter, the command returns once Claude Code, Codex or opencode has recorded the prompt in
 its own history, and fails with `not confirmed: the prompt may not have been submitted` when it
@@ -111,6 +127,10 @@ own record (Claude Code's transcript, Codex's rollout, opencode's database) inst
 it comes whole even once it scrolled off, without the input box or status lines. While the agent
 works it is the newest one so far. --json adds when it was written and whether the agent's turn is
 over. It fails on a pane without Claude Code, Codex or opencode, and before the agent wrote anything.
+
+Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
+`1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
+not the agent's output. `cornercase keys --pane N 0` dismisses it.
 
 Examples:
   cornercase read --pane 12
@@ -199,6 +219,30 @@ Examples:
   cornercase logs -n 50
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
+const RESTART_HELP: &str =
+    "It lists what runs in the terminals and asks first, since every program in them stops; agents
+resume their conversations afterwards. Every attached window reopens on the new server.
+
+With --when-idle, it waits until no agent is working before restarting: idle, done and waiting for
+you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started
+in the background still runs. The server restarts in the same step it sees that, so no agent starts
+a turn in between, and every window shows that a restart is pending meanwhile, with a button that
+cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
+this runs in never holds the restart. --timeout gives up with status 1 and the server keeps running,
+as it does when the command is interrupted.
+
+Examples:
+  cornercase restart
+  cornercase restart --when-idle --yes --timeout 3600";
+const UPDATE_HELP: &str =
+    "With --when-idle, it installs the release at once, then restarts the server on it once no agent
+is working, as `cornercase restart --when-idle` does.
+
+Examples:
+  cornercase update
+  cornercase update --when-idle --yes";
+const WHEN_IDLE: &str = "Wait until no agent is working, then restart";
+const RESTART_TIMEOUT: &str = "With --when-idle, give up after this many seconds and keep the server running";
 const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
     the shown one]";
@@ -224,10 +268,11 @@ pub enum Command {
     Remote(RemoteArgs),
     #[command(about = "Print the instructions that teach coding agents these commands", after_help = SKILL_HELP)]
     Skill,
-    #[command(about = "Install the latest release, then offer to restart the server")]
+    #[command(about = "Install the latest release, then offer to restart the server", after_help = UPDATE_HELP)]
     Update(UpdateArgs),
     #[command(
-        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells"
+        about = "Restart the server: every program in its terminals stops, and the session comes back with new shells",
+        after_help = RESTART_HELP
     )]
     Restart(RestartArgs),
     #[command(about = "Stop the server and every shell in it")]
@@ -243,7 +288,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum Control {
     #[command(about = "List the projects, workspaces, tabs and panes, with their ids", after_help = STATUS_HELP)]
-    Status(Print),
+    Status(StatusArgs),
     #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
     Open(OpenArgs),
     #[command(
@@ -297,6 +342,14 @@ pub enum Control {
 pub struct Print {
     #[arg(long, help = "Print JSON instead of text")]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct StatusArgs {
+    #[arg(long, help = "One line per pane, its columns separated by tabs, for scripts")]
+    pub panes: bool,
+    #[command(flatten)]
+    pub print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -412,7 +465,11 @@ pub struct SendArgs {
         help = "Give up waiting after this long, with status 1"
     )]
     pub timeout: Option<f64>,
-    #[arg(long, help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box")]
+    #[arg(
+        long,
+        help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or its \
+                feedback survey"
+    )]
     pub force: bool,
     #[command(flatten)]
     pub print: Print,
@@ -651,14 +708,32 @@ pub struct LogsArgs {
 pub struct RestartArgs {
     #[arg(short, long, help = "Restart the server without asking")]
     pub yes: bool,
+    #[command(flatten)]
+    pub when: WhenArgs,
 }
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    #[arg(long, help = "Only say whether a newer version is out")]
+    #[arg(long, conflicts_with = "when_idle", help = "Only say whether a newer version is out")]
     pub check: bool,
     #[arg(short, long, help = "Restart the server without asking")]
     pub yes: bool,
+    #[command(flatten)]
+    pub when: WhenArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct WhenArgs {
+    #[arg(long, help = WHEN_IDLE)]
+    pub when_idle: bool,
+    #[arg(long, value_name = "SECONDS", value_parser = seconds, requires = "when_idle", help = RESTART_TIMEOUT)]
+    pub timeout: Option<f64>,
+}
+
+impl WhenArgs {
+    fn when(&self) -> client::When {
+        if self.when_idle { client::When::Idle { timeout: self.timeout } } else { client::When::Now }
+    }
 }
 
 fn seconds(text: &str) -> std::result::Result<f64, String> {
@@ -690,8 +765,8 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Control(control) => run_control(control)?,
         Command::Remote(args) => client::remote(&Remote { destination: args.destination, command: args.command })?,
         Command::Skill => print!("{SKILL}"),
-        Command::Update(update) => return client::update(update.check, update.yes),
-        Command::Restart(restart) => client::restart(restart.yes)?,
+        Command::Update(update) => return client::update(update.check, update.yes, update.when.when()),
+        Command::Restart(restart) => client::restart(restart.yes, restart.when.when())?,
         Command::KillServer => {
             let running = client::running_now();
             if !client::kill_server()? {
@@ -745,7 +820,7 @@ fn quietly(written: io::Result<()>) -> Result<bool> {
 
 fn run_control(command: Control) -> Result<()> {
     match command {
-        Control::Status(print) => run_status(&print),
+        Control::Status(status) => run_status(&status),
         Control::Open(open) => {
             let path = std::path::absolute(&open.path)?;
             let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
@@ -825,14 +900,14 @@ fn run_control(command: Control) -> Result<()> {
     }
 }
 
-fn run_status(print: &Print) -> Result<()> {
+fn run_status(status: &StatusArgs) -> Result<()> {
     let value = ask("status", control::Command::Status(control::Status {}))?;
-    if print.json {
-        return print_json(&value);
+    match (status.panes, status.print.json) {
+        (false, true) => print_json(&value),
+        (false, false) => print_out(&render(&answer(value)?, home().as_deref())),
+        (true, true) => print_json(&PaneRows { panes: answer::<Report>(value)?.panes() }),
+        (true, false) => print_out(&pane_table(&answer::<Report>(value)?.panes())?),
     }
-    let report: Report = answer(value)?;
-    print!("{}", render(&report, home().as_deref()));
-    Ok(())
 }
 
 fn follow_events(args: EventsArgs) -> Result<()> {
@@ -965,10 +1040,14 @@ fn run_todo(action: TodoAction) -> Result<()> {
     }
 }
 
-fn print_json(value: &Value) -> Result<()> {
+fn print_json(value: &impl serde::Serialize) -> Result<()> {
     let text = serde_json::to_string_pretty(value).map_err(|e| Error::Control(e.to_string()))?;
-    println!("{text}");
-    Ok(())
+    print_out(&(text + "\n"))
+}
+
+fn print_out(text: &str) -> Result<()> {
+    let mut out = io::stdout().lock();
+    quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush())).map(drop)
 }
 
 fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result<()> {
@@ -1018,18 +1097,37 @@ fn home() -> Option<PathBuf> {
 
 pub fn render(report: &Report, home: Option<&Path>) -> String {
     let mut lines = Vec::new();
-    let grouped = |p: &&ProjectInfo| p.group.is_some_and(|g| report.groups.iter().any(|group| group.id == g));
-    for project in report.projects.iter().filter(|p| !grouped(p)) {
+    for project in report.loose() {
         project_lines(&mut lines, report, project, 0, home);
     }
     for group in &report.groups {
         let state = if group.collapsed { "collapsed" } else { "" };
         lines.push(line(0, "group", group.id, &[group.name.clone(), state.into()], &[]));
-        for project in report.projects.iter().filter(|p| p.group == Some(group.id)) {
+        for project in report.grouped(group.id) {
             project_lines(&mut lines, report, project, 1, home);
         }
     }
     lines.into_iter().map(|line| line + "\n").collect()
+}
+
+pub fn pane_table(rows: &[PaneRow]) -> Result<String> {
+    let mut text = PaneRow::COLUMNS.join("\t") + "\n";
+    for row in rows {
+        let value = serde_json::to_value(row).map_err(|e| Error::Control(e.to_string()))?;
+        let cells: Vec<String> = PaneRow::COLUMNS.iter().map(|column| cell(&value[*column])).collect();
+        text.push_str(&cells.join("\t"));
+        text.push('\n');
+    }
+    Ok(text)
+}
+
+fn cell(value: &Value) -> String {
+    match value {
+        Value::Null => "-".into(),
+        Value::String(text) if text.is_empty() => "-".into(),
+        Value::String(text) => text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect(),
+        value => value.to_string(),
+    }
 }
 
 fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
@@ -1054,10 +1152,14 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (None, Some(percent)) => format!("{percent}%"),
                     (None, None) => String::new(),
                 };
-                let notes: Vec<&str> = [(pane.background_shell, "background shell"), (pane.dialog, "dialog open")]
-                    .into_iter()
-                    .filter_map(|(on, note)| on.then_some(note))
-                    .collect();
+                let notes: Vec<&str> = [
+                    (pane.background_shell, "background shell"),
+                    (pane.dialog, "dialog open"),
+                    (pane.survey, "survey open"),
+                ]
+                .into_iter()
+                .filter_map(|(on, note)| on.then_some(note))
+                .collect();
                 let status = pane.status.clone().unwrap_or_default();
                 let parts = [
                     pane.program.clone().unwrap_or_else(|| "?".into()),
@@ -1131,9 +1233,22 @@ mod tests {
             let kill = parse(&["kill-server"]).expect("parse");
             let restart = parse(&["restart", "--yes"]).expect("parse");
 
-            assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true }))));
+            assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true, .. }))));
             assert!(matches!(kill.command, Some(Command::KillServer)));
-            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true }))));
+            assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true, .. }))));
+        }
+
+        #[rstest]
+        #[case::now(&["restart"], client::When::Now)]
+        #[case::when_idle(&["restart", "--when-idle"], client::When::Idle { timeout: None })]
+        #[case::with_a_timeout(&["update", "--when-idle", "--timeout", "90"], client::When::Idle { timeout: Some(90.0) })]
+        fn a_restart_can_wait_for_the_agents(#[case] args: &[&str], #[case] expected: client::When) {
+            let when = match parse(args).expect("parse").command {
+                Some(Command::Restart(RestartArgs { when, .. }) | Command::Update(UpdateArgs { when, .. })) => when,
+                other => panic!("not a restart: {other:?}"),
+            };
+
+            assert_eq!(when.when(), expected);
         }
 
         #[rstest]
@@ -1151,6 +1266,8 @@ mod tests {
         #[case::an_unknown_state(&["wait", "--until", "sleeping"])]
         #[case::a_broken_pattern(&["wait", "--text", "("])]
         #[case::a_negative_timeout(&["wait", "--timeout", "-1"])]
+        #[case::a_restart_timeout_without_waiting(&["restart", "--timeout", "60"])]
+        #[case::checking_and_waiting(&["update", "--check", "--when-idle"])]
         #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
         #[case::no_lines(&["read", "--lines", "0"])]
         #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]
@@ -1328,6 +1445,70 @@ mod tests {
             );
         }
 
+        #[test]
+        fn panes_are_one_row_each_under_a_header_with_a_dash_for_what_is_missing() {
+            let mut report = report();
+            report.projects[0].workspaces[0].tabs[0].panes[0].at_prompt = Some(true);
+            report.projects[0].workspaces[0].tabs[0].panes[1].survey = true;
+
+            let text = pane_table(&report.panes()).expect("a table");
+
+            assert_eq!(
+                text,
+                "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
+                 context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
+                 survey\n\
+                 4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\n\
+                 5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\n"
+            );
+        }
+
+        #[test]
+        fn panes_follow_the_sidebar_with_grouped_projects_after_the_loose_ones() {
+            let one_pane = |project: u64, group| {
+                let pane = PaneInfo { id: project * 10, ..PaneInfo::default() };
+                let tab = TabInfo { id: project * 10 - 1, panes: vec![pane], ..TabInfo::default() };
+                let workspace = WorkspaceInfo { id: project * 10 - 2, tabs: vec![tab], ..WorkspaceInfo::default() };
+                ProjectInfo { id: project, group, workspaces: vec![workspace], ..ProjectInfo::default() }
+            };
+            let report = Report {
+                groups: vec![GroupInfo { id: 8, ..GroupInfo::default() }, GroupInfo { id: 7, ..GroupInfo::default() }],
+                projects: vec![one_pane(1, Some(7)), one_pane(2, Some(8)), one_pane(3, None), one_pane(4, Some(6))],
+                ..Report::default()
+            };
+
+            let order: Vec<(u64, u64)> = report.panes().iter().map(|row| (row.project, row.pane)).collect();
+
+            assert_eq!(order, [(3, 30), (4, 40), (2, 20), (1, 10)]);
+        }
+
+        #[rstest]
+        #[case::nothing(Value::Null, "-")]
+        #[case::an_empty_name(serde_json::json!(""), "-")]
+        #[case::a_name_with_a_tab_and_a_line_break(serde_json::json!("a\tb\nc"), "a b c")]
+        #[case::a_name_with_spaces(serde_json::json!("review #42"), "review #42")]
+        #[case::a_flag(serde_json::json!(false), "false")]
+        #[case::a_number(serde_json::json!(23), "23")]
+        fn a_cell_never_breaks_its_row(#[case] value: Value, #[case] expected: &str) {
+            assert_eq!(cell(&value), expected);
+        }
+
+        #[test]
+        fn panes_as_json_are_an_object_holding_the_rows() {
+            let rows = PaneRows { panes: report().panes() };
+
+            let value = serde_json::to_value(&rows).expect("json");
+
+            let panes = value["panes"].as_array().expect("a list");
+            assert_eq!(panes.len(), 2);
+            assert_eq!(
+                (&panes[1]["pane"], &panes[1]["status"], &panes[1]["caller"], &panes[0]["agent"]),
+                (&serde_json::json!(5), &serde_json::json!("working"), &serde_json::json!(true), &Value::Null)
+            );
+        }
+
         fn event(what: What, ids: Ids) -> Value {
             let event = Event { time: "2026-10-08T12:00:00.000Z".into(), what, ids };
             serde_json::to_value(event).expect("json")
@@ -1372,17 +1553,19 @@ mod tests {
         }
 
         #[rstest]
-        #[case::a_dialog(false, true, "idle (dialog open)")]
-        #[case::both(true, true, "working (background shell, dialog open)")]
+        #[case::a_dialog(false, true, false, "idle (dialog open)")]
+        #[case::both(true, true, false, "working (background shell, dialog open)")]
+        #[case::the_survey(true, false, true, "working (background shell, survey open)")]
         fn what_covers_an_agent_is_said_after_its_status(
             #[case] background_shell: bool,
             #[case] dialog: bool,
+            #[case] survey: bool,
             #[case] shown: &str,
         ) {
             let mut report = report();
             let pane = &mut report.projects[0].workspaces[0].tabs[0].panes[1];
             pane.status = Some(if background_shell { "working" } else { "idle" }.into());
-            (pane.background_shell, pane.dialog) = (background_shell, dialog);
+            (pane.background_shell, pane.dialog, pane.survey) = (background_shell, dialog, survey);
 
             let text = render(&report, Some(Path::new("/home/ana")));
 

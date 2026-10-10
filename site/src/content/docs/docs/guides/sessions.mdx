@@ -70,6 +70,8 @@ cornercase restart
 
 Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code and Codex [resume their conversations](#agents-resume-their-conversations).
 
+An agent in the middle of a turn still loses that turn. To restart only once no agent is working, run `cornercase restart --when-idle`: every window says a restart is pending until then (see [Command line](../../reference/command-line/#once-no-agent-is-working)).
+
 ## Stop the server
 
 ```sh

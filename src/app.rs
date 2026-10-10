@@ -18,6 +18,7 @@ use crate::context::{self, Context};
 use crate::error::{Error, Result};
 use crate::files;
 use crate::git;
+use crate::graphics::encode;
 use crate::host_theme::HostTheme;
 use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen, Tab as IssueTab};
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
@@ -55,11 +56,13 @@ use crate::worktree;
 mod control;
 mod events;
 mod files_panel;
+mod images;
 mod shortcuts;
 mod todo_panel;
 mod trace;
 
 pub use events::Streamed;
+pub use images::{Placed, Sight};
 
 #[derive(Debug)]
 pub enum AppEvent {
@@ -166,6 +169,10 @@ pub enum AppEvent {
         request: u64,
         result: Result<Option<context::Said>>,
     },
+    Encoded {
+        key: encode::Key,
+        result: Result<Vec<u8>>,
+    },
 }
 
 impl AppEvent {
@@ -194,6 +201,7 @@ impl AppEvent {
             Self::Updated(_) => "updated",
             Self::Usage(..) => "usage",
             Self::LastMessage { .. } => "last message",
+            Self::Encoded { .. } => "image encoded",
         }
     }
 }
@@ -488,13 +496,21 @@ impl Toast {
     }
 
     fn lasts(&self) -> Duration {
-        if self.undo.is_some() {
-            UNDO_FOR
-        } else if self.icon == ui::ToastIcon::Bug {
-            BUG_FOR
-        } else {
-            TOAST_FOR
+        match self.icon {
+            _ if self.undo.is_some() => UNDO_FOR,
+            ui::ToastIcon::Bug => BUG_FOR,
+            ui::ToastIcon::Restart => Duration::MAX,
+            ui::ToastIcon::Check | ui::ToastIcon::Agent(_) => TOAST_FOR,
         }
+    }
+
+    fn view(&self) -> ui::Toast<'_> {
+        let button = match self.icon {
+            _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
+            ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
+            ui::ToastIcon::Check | ui::ToastIcon::Agent(_) | ui::ToastIcon::Bug => None,
+        };
+        ui::Toast { message: &self.message, icon: self.icon, button }
     }
 }
 
@@ -664,6 +680,7 @@ pub struct App {
     todos: Todos,
     todo: todo::Panel,
     files: files::Panel,
+    images: images::Payloads,
     requests: control::Requests,
     events: events::Events,
     seen: trace::Seen,
@@ -767,6 +784,7 @@ impl App {
             todos: Todos::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
+            images: images::Payloads::default(),
             requests: control::Requests::default(),
             events: events::Events::default(),
             seen: trace::Seen::default(),
@@ -1672,6 +1690,7 @@ impl App {
             AppEvent::Updated(result) => self.updated(result),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
+            AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Output(id, bytes) => {
                 for launch in self.launches.iter_mut().filter(|l| l.term == id) {
                     launch.output(Instant::now());
@@ -1717,6 +1736,19 @@ impl App {
         if !bytes.is_empty() && !term.write(&bytes) {
             self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
         }
+    }
+
+    fn toast_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
+        let Some(toast) = &self.toast else { return false };
+        if ev.kind != MouseEventKind::Down(MouseButton::Left) || !ui::toast_button(area, toast.view()).contains(pos) {
+            return false;
+        }
+        match self.toast.take() {
+            Some(Toast { undo: Some(removed), .. }) => self.todos.restore(removed),
+            Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
+            _ => {}
+        }
+        true
     }
 
     fn handle_mouse(&mut self, ev: MouseEvent, area: Rect) -> Result<()> {
@@ -4365,7 +4397,7 @@ impl App {
         }
     }
 
-    pub fn draw(&mut self, f: &mut Frame) {
+    pub fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
         self.follow(f.area());
         if !self.drawn.compact() {
             self.nav = None;
@@ -4397,6 +4429,8 @@ impl App {
         };
         let area = f.area();
         let overlay = self.overlay.as_ref().and_then(|o| self.overlay_view(o, area));
+        let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
+        let (files, placed) = self.files_seen(sight, area, modal);
         let dim_inactive = self.config.dim_inactive_panes;
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
@@ -4451,18 +4485,19 @@ impl App {
             muted: ui::muted(&self.theme),
             tab,
             overlay,
-            toast: self.toast.as_ref().map(|t| ui::Toast { message: &t.message, icon: t.icon, undo: t.undo.is_some() }),
+            toast: self.toast.as_ref().map(Toast::view),
             nav: self.nav,
             update: self.update_label(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
             todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
-            files: if self.files_shown() { self.files_view() } else { None },
+            files,
             attention,
             drag,
             tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
         };
         ui::draw(f, &view);
+        placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }
 
     fn tab_entry(&self, t: &Tab) -> ui::TabEntry {
@@ -7932,7 +7967,7 @@ rm -f "$1/sessions/$$.json"
 
         fn rendered(app: &mut App, area: Rect) -> Terminal<TestBackend> {
             let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             t
         }
 
@@ -8827,7 +8862,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx) = app();
             open_menu(&mut app);
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             assert_eq!(app.nav, None);
         }
 
@@ -9578,7 +9613,7 @@ rm -f "$1/sessions/$$.json"
                 .map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
 
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
 
             assert_eq!(app.toast, None);
         }
@@ -10267,7 +10302,7 @@ rm -f "$1/sessions/$$.json"
             });
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
 
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
 
             let settings = areas().settings;
             assert_eq!(t.backend().buffer()[(settings.x + 2, settings.y)].fg, Color::Indexed(243));
@@ -10339,7 +10374,7 @@ rm -f "$1/sessions/$$.json"
 
         fn drawn_in(app: &mut App, area: Rect) {
             let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
         }
 
         fn on_top(tabs: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -10479,7 +10514,7 @@ rm -f "$1/sessions/$$.json"
 
         fn drawn(app: &mut App) {
             let mut t = Terminal::new(TestBackend::new(TALL.width, TALL.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
         }
 
         fn tree(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -12368,7 +12403,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         fn action_pos(app: &App, action: Action) -> Position {
-            panel::action(panel_area(app), action).as_position()
+            panel::action(panel_area(app), &file(app), action).as_position()
         }
 
         fn show(app: &mut App, rx: &Receiver<AppEvent>, path: &str) {
@@ -12612,6 +12647,183 @@ rm -f "$1/sessions/$$.json"
             restored.restore(&saved, AREA);
             assert_eq!((restored.files.open, restored.todo.open, restored.changes.open), (true, false, false));
         }
+
+        mod images {
+            use ratatui::Terminal;
+            use ratatui::backend::TestBackend;
+            use ratatui::buffer::{Buffer, CellDiffOption};
+
+            use super::*;
+            use crate::files::disk::Body;
+            use crate::graphics::{CellSize, Missing, Protocol, Support, Tmux};
+            use crate::ui::files::MARKER;
+
+            const PLACEHOLDER: char = '\u{10EEEE}';
+
+            fn png(dir: &Path, name: &str, width: u32, height: u32) {
+                let pixels = image::RgbaImage::from_pixel(width, height, image::Rgba([200, 30, 30, 255]));
+                pixels.save_with_format(dir.join(name), image::ImageFormat::Png).expect("write a png");
+            }
+
+            fn sight(protocol: Option<Protocol>) -> Sight {
+                let support = Support {
+                    protocol,
+                    missing: protocol.is_none().then(|| Missing::Cannot { name: "st".into() }),
+                    cell: Some(CellSize { width: 10, height: 20 }),
+                    tmux: Tmux::None,
+                    id_hi: 42,
+                };
+                Sight { support, lo: 0xF0, ..Sight::default() }
+            }
+
+            fn shown(dir: &TempDir) -> (App, Receiver<AppEvent>) {
+                png(dir.path(), "logo.png", 400, 200);
+                let (mut app, rx) = opened(dir);
+                let pos = row_pos(&app, "logo.png");
+                click(&mut app, pos);
+                settle(
+                    &mut app,
+                    &rx,
+                    "the image is read",
+                    |v| matches!(&v.screen, Screen::File(f) if f.content.as_ref().is_some_and(|c| c.is_image())),
+                );
+                (app, rx)
+            }
+
+            fn draw(app: &mut App, sight: &Sight) -> (Buffer, Option<Placed>) {
+                let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
+                let mut placed = None;
+                let buffer = terminal.draw(|f| placed = app.draw(f, sight)).expect("draw").buffer.clone();
+                (buffer, placed)
+            }
+
+            fn ready(app: &mut App, rx: &Receiver<AppEvent>, sight: &Sight) -> (Buffer, Placed) {
+                let mut last = None;
+                wait_until("the payload is ready", || {
+                    while let Ok(ev) = rx.try_recv() {
+                        app.handle_event(ev, AREA).expect("handle event");
+                    }
+                    last = Some(draw(app, sight));
+                    last.as_ref().is_some_and(|(_, p)| p.as_ref().is_some_and(|p| p.payload.is_some()))
+                });
+                let (buffer, placed) = last.expect("drawn");
+                (buffer, placed.expect("placed"))
+            }
+
+            fn cells(buffer: &Buffer, rect: Rect, what: impl Fn(&str) -> bool) -> usize {
+                rect.positions().filter(|&p| what(buffer[p].symbol())).count()
+            }
+
+            fn text(buffer: &Buffer) -> String {
+                buffer.content().iter().map(ratatui::buffer::Cell::symbol).collect()
+            }
+
+            #[test]
+            fn an_image_says_what_it_is_and_offers_only_its_path() {
+                let dir = repo();
+                let (mut app, _rx) = shown(&dir);
+                let Some(Body::Image(picture)) = file(&app).content.map(|c| c.body.clone()) else { panic!("an image") };
+
+                assert_eq!((picture.width, picture.height), (400, 200));
+                assert_eq!(panel::action(panel_area(&app), &file(&app), Action::Open), Rect::default());
+                let ask = action_pos(&app, Action::Ask);
+                click(&mut app, ask);
+                let copy = action_pos(&app, Action::Copy);
+                click(&mut app, copy);
+                assert_eq!(app.take_host_writes(), [clipboard::osc52("logo.png"), clipboard::osc52("logo.png")]);
+            }
+
+            #[test]
+            fn kitty_gets_placeholder_cells_once_its_payload_is_ready() {
+                let dir = repo();
+                let (mut app, rx) = shown(&dir);
+                let kitty = sight(Some(Protocol::Kitty));
+
+                let (first, placed) = draw(&mut app, &kitty);
+                assert!(placed.is_some_and(|p| !p.drawn), "blank until the payload comes");
+                assert_eq!(cells(&first, panel_area(&app), |s| s.starts_with(PLACEHOLDER)), 0);
+                let (buffer, placed) = ready(&mut app, &rx, &kitty);
+
+                assert_eq!(cells(&buffer, placed.rect, |s| s.starts_with(PLACEHOLDER)), placed.rect.area() as usize);
+                assert_eq!(placed.key.kitty_id, crate::graphics::kitty::id(42, 0xF0));
+            }
+
+            #[test]
+            fn iterm_and_sixel_get_markers_the_diff_skips() {
+                let dir = repo();
+                let (mut app, rx) = shown(&dir);
+
+                let (buffer, placed) = ready(&mut app, &rx, &sight(Some(Protocol::Iterm)));
+
+                assert!(placed.drawn);
+                assert!(placed.rect.positions().all(|p| buffer[p].diff_option == CellDiffOption::Skip));
+                assert_eq!(cells(&buffer, placed.rect, |s| s == MARKER), placed.rect.area() as usize);
+            }
+
+            #[test]
+            fn a_terminal_without_images_says_why() {
+                let dir = repo();
+                let (mut app, _rx) = shown(&dir);
+                let blind = sight(None);
+
+                let (buffer, placed) = draw(&mut app, &blind);
+
+                assert!(placed.is_none());
+                let missing = blind.support.missing.expect("missing");
+                assert!(text(&buffer).contains(&missing.lines()[0][..12]), "{}", text(&buffer));
+            }
+
+            #[test]
+            fn a_dialog_hides_the_picture_until_it_closes() {
+                let dir = repo();
+                let (mut app, rx) = shown(&dir);
+                let kitty = sight(Some(Protocol::Kitty));
+                ready(&mut app, &rx, &kitty);
+                let settings = app.layout(AREA).settings.as_position();
+                click(&mut app, settings);
+
+                let (buffer, placed) = draw(&mut app, &kitty);
+                let placed = placed.expect("placed");
+                assert!(!placed.drawn);
+                assert_eq!(cells(&buffer, placed.rect, |s| s.starts_with(PLACEHOLDER)), 0);
+
+                send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+                assert!(draw(&mut app, &kitty).1.is_some_and(|p| p.drawn));
+            }
+
+            #[test]
+            fn a_menu_over_the_markers_is_drawn_and_the_picture_waits() {
+                let dir = repo();
+                let (mut app, rx) = shown(&dir);
+                let iterm = sight(Some(Protocol::Iterm));
+                let (_, placed) = ready(&mut app, &rx, &iterm);
+                let pane = app.layout(AREA).pane;
+                right_click(&mut app, Position::new(pane.right() - 1, placed.rect.y));
+
+                let (buffer, placed) = draw(&mut app, &iterm);
+                let placed = placed.expect("placed");
+                let covered: Vec<Position> =
+                    placed.rect.positions().filter(|&p| buffer[p].symbol() != MARKER).collect();
+
+                assert!(!covered.is_empty(), "the menu reaches the picture");
+                assert!(!placed.drawn);
+                assert!(covered.iter().all(|&p| buffer[p].diff_option == CellDiffOption::None));
+            }
+
+            #[test]
+            fn a_window_that_sees_less_gets_a_smaller_picture() {
+                let dir = repo();
+                let (mut app, rx) = shown(&dir);
+                let kitty = sight(Some(Protocol::Kitty));
+                let (_, wide) = ready(&mut app, &rx, &kitty);
+                let narrow = Sight { visible: Rect::new(0, 0, wide.rect.x + 6, AREA.height), ..kitty };
+
+                let (_, placed) = draw(&mut app, &narrow);
+
+                let placed = placed.expect("placed");
+                assert!(placed.rect.right() <= narrow.visible.right() && placed.rect.width < wide.rect.width);
+            }
+        }
     }
 
     mod path_links {
@@ -12688,7 +12900,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx) = showing(&repo, "open src/main.rs now");
             mouse(&mut app, MouseEventKind::Moved, cell(7, 0));
             let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| app.draw(f)).expect("draw");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             let lined = |col: u16| t.backend().buffer()[cell(col, 0)].modifier.contains(Modifier::UNDERLINED);
             assert_eq!([lined(4), lined(5), lined(15), lined(16)], [false, true, true, false]);
         }
@@ -12742,7 +12954,11 @@ rm -f "$1/sessions/$$.json"
         fn undo(app: &mut App, message: &str) {
             click(
                 app,
-                ui::toast_undo(AREA, ui::Toast { message, icon: ui::ToastIcon::Check, undo: true }).as_position(),
+                ui::toast_button(
+                    AREA,
+                    ui::Toast { message, icon: ui::ToastIcon::Check, button: Some(ui::ToastButton::Undo) },
+                )
+                .as_position(),
             );
         }
 
@@ -12967,6 +13183,10 @@ state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "
 state idle
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
   case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
+  case "$line" in *survey*)
+    printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
+    printf '────────────\n❯ '; IFS= read -r line; [ "$line" = 0 ] && continue ;;
+  esac
   printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy
   while [ ! -e "$d/finish" ]; do sleep 0.02; done
@@ -13759,11 +13979,11 @@ rm -f "$s"
                 assert_eq!(ended.ended.as_deref(), Some("done"));
             }
 
-            fn dialog_in_status(app: &mut App, id: u64) -> bool {
+            fn in_status(app: &mut App, id: u64) -> wire::PaneInfo {
                 let report: Report =
                     serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
                 let mut tabs = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
-                tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").dialog
+                tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").clone()
             }
 
             #[test]
@@ -13774,7 +13994,7 @@ rm -f "$s"
                 done(now(&mut agent.app, None, press_keys(id, &["p", "a", "n", "e", "l", "enter"])));
                 agent.until("the panel shows", |a| pane_screen(a, id).contains("Shell details"));
 
-                let shown = dialog_in_status(&mut agent.app, id);
+                let shown = in_status(&mut agent.app, id).dialog;
                 let refused = error(now(&mut agent.app, None, send_text(id, "next step", true, false)));
                 agent.app.confirm_within = Duration::from_millis(300);
                 let forced = wire::SendText {
@@ -13788,12 +14008,32 @@ rm -f "$s"
                 let unconfirmed = error(agent.answered("the confirmation gives up"));
                 agent.until("the panel closes", |a| pane_screen(a, id).contains('❯'));
 
-                assert_eq!((shown, dialog_in_status(&mut agent.app, id)), (true, false));
+                assert_eq!((shown, in_status(&mut agent.app, id).dialog), (true, false));
                 assert!(refused.contains("shows a dialog, a panel or its shell mode"), "{refused}");
                 assert!(
                     unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"),
                     "{unconfirmed}"
                 );
+            }
+
+            #[test]
+            fn send_refuses_an_agent_showing_the_survey_until_keys_dismiss_it() {
+                let mut agent = Agent::new();
+                let id = agent.start(None);
+                agent.until("its input box is seen", |a| pane(a, id).input_seen.is_some());
+                done(now(&mut agent.app, None, press_keys(id, &["s", "u", "r", "v", "e", "y", "enter"])));
+                agent.until("the survey shows", |a| pane_screen(a, id).contains("0: Dismiss"));
+
+                let shown = in_status(&mut agent.app, id);
+                let refused = error(now(&mut agent.app, None, send_text(id, "2", true, false)));
+                done(now(&mut agent.app, None, press_keys(id, &["0", "enter"])));
+                agent.until("the survey goes", |a| !pane_screen(a, id).contains("0: Dismiss"));
+                let gone = in_status(&mut agent.app, id);
+                ask(&mut agent.app, None, send_text(id, "2", true, false));
+                done(agent.answered("the agent records the prompt"));
+
+                assert_eq!([(shown.survey, shown.dialog), (gone.survey, gone.dialog)], [(true, false), (false, false)]);
+                assert!(refused.contains(&format!("dismiss it with `cornercase keys --pane {id} 0`")), "{refused}");
             }
 
             #[test]
@@ -13961,6 +14201,162 @@ rm -f "$s"
 
                 let message = error(agent.answered("the transcript is looked for"));
                 assert_eq!(message, format!("the claude agent in pane {id} has not written a message yet"));
+            }
+
+            mod restarting_when_idle {
+                use super::*;
+
+                fn when_idle(timeout: Option<f64>) -> Command {
+                    Command::RestartWhenIdle(wire::RestartWhenIdle { timeout })
+                }
+
+                fn working(agent: &mut Agent, prompt: &str) -> u64 {
+                    let id = agent.start(None);
+                    ask(&mut agent.app, None, send_text(id, prompt, true, false));
+                    done(agent.answered("the enter is pressed"));
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent works", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Working)
+                    });
+                    id
+                }
+
+                fn looked_again(agent: &mut Agent) {
+                    let since = Instant::now();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "another look at the agents", |a| a.watched.is_some_and(|at| at > since));
+                }
+
+                fn report(response: Response) -> Report {
+                    match response {
+                        Response::Ok(value) => serde_json::from_value(value).expect("a report"),
+                        Response::Error(message) => panic!("the restart failed: {message}"),
+                    }
+                }
+
+                #[test]
+                fn waits_until_the_agent_ends_its_turn_then_restarts() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+
+                    ask(&mut agent.app, None, when_idle(None));
+                    looked_again(&mut agent);
+                    let pending = (answers(&mut agent.app), toast(&agent.app).map(str::to_owned));
+                    let early = agent.app.take_restart();
+                    agent.finish();
+                    let stopped = report(agent.answered("the agent ends its turn"));
+
+                    assert_eq!(pending, (Vec::new(), Some("restart pending until 1 agent ends its turn".into())));
+                    let notice = agent.app.toast.as_ref().map(|t| t.icon);
+                    assert_eq!((early, agent.app.take_restart().is_some()), (None, true));
+                    assert_ne!(notice, Some(ui::ToastIcon::Restart));
+                    let panes = stopped.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+                    let info = panes.flat_map(|t| &t.panes).find(|p| p.id == id).expect("the agent's pane");
+                    assert_eq!(info.status.as_deref(), Some("done"));
+                }
+
+                #[test]
+                fn a_turn_left_with_a_background_shell_is_over() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "watch in the background");
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+
+                    ask(&mut agent.app, None, when_idle(None));
+                    report(agent.answered("the restart"));
+
+                    assert!(agent.app.take_restart().is_some());
+                    agent.finish();
+                }
+
+                #[test]
+                fn the_pane_that_asks_never_holds_it() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "update cornercase");
+
+                    ask(&mut agent.app, Some(id), when_idle(None));
+                    report(agent.answered("the restart"));
+
+                    assert!(agent.app.take_restart().is_some());
+                    agent.finish();
+                }
+
+                #[test]
+                fn what_was_just_typed_into_an_agent_holds_it_a_moment() {
+                    let mut agent = Agent::new();
+                    let id = agent.start(None);
+                    done(now(&mut agent.app, None, send_text(id, "half a thought", false, false)));
+                    ask(&mut agent.app, None, when_idle(None));
+                    let typed = Instant::now();
+
+                    agent.app.watched = None;
+                    agent.app.refresh(typed);
+                    let held = (answers(&mut agent.app), agent.app.take_restart());
+                    agent.app.watched = None;
+                    agent.app.refresh(typed + Duration::from_secs(3));
+
+                    assert_eq!(held, (Vec::new(), None));
+                    assert!(agent.app.take_restart().is_some());
+                }
+
+                #[test]
+                fn a_timeout_gives_up_and_keeps_the_server() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+
+                    ask(&mut agent.app, None, when_idle(Some(0.05)));
+                    let message = error(agent.answered("the timeout"));
+
+                    assert_eq!(
+                        message,
+                        format!(
+                            "timed out after 0.05s: the agent in pane {id} has not ended its turn, so the server \
+                             keeps running"
+                        )
+                    );
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app)), (None, None));
+                    agent.finish();
+                }
+
+                #[test]
+                fn the_window_cancels_it() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+                    ask(&mut agent.app, None, when_idle(None));
+
+                    let shown = agent.app.toast.as_ref().expect("the pending restart").view();
+                    let cancel = ui::toast_button(AREA, shown).as_position();
+                    click(&mut agent.app, cancel);
+                    let message = error(answers(&mut agent.app).remove(0));
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent stops", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    looked_again(&mut agent);
+
+                    assert_eq!(message, "the restart was cancelled in the window; the server keeps running");
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app)), (None, None));
+                }
+
+                #[test]
+                fn a_command_that_goes_away_takes_it_along() {
+                    let mut agent = Agent::new();
+                    let id = working(&mut agent, "next step");
+                    ask(&mut agent.app, None, when_idle(None));
+
+                    agent.app.forget(CLIENT);
+                    agent.finish();
+                    let (app, rx) = (&mut agent.app, &agent.rx);
+                    refreshing(app, rx, "the agent stops", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    looked_again(&mut agent);
+
+                    let answered = answers(&mut agent.app);
+                    assert_eq!((agent.app.take_restart(), toast(&agent.app), answered), (None, None, Vec::new()));
+                }
             }
         }
 

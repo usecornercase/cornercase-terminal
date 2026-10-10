@@ -1,7 +1,7 @@
 import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
-import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree } from './data';
+import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
@@ -1308,6 +1308,7 @@ export class App {
     const place = this.filesPlace();
     if (place) viewFile(place, path, lines, find);
     this.files.selecting = null;
+    if (picture(this.filesMap().get(path))) this.emit('narrate', 'An image shows as itself, drawn by your terminal. Ask agent hands its path to the agent.');
     this.dirty();
   }
 

@@ -1,4 +1,4 @@
-import type { Grid } from './grid';
+import { type Grid, imageBox } from './grid';
 import { paint } from './paint';
 import { type Theme, theme as defaultTheme } from './palette';
 
@@ -27,6 +27,8 @@ export class CanvasView {
   theme: Theme;
   cols = 0;
   rows = 0;
+  onImage: (() => void) | null = null;
+  private pictures = new Map<string, HTMLImageElement>();
 
   constructor(canvas: HTMLCanvasElement, t: Theme = defaultTheme) {
     this.canvas = canvas;
@@ -109,7 +111,37 @@ export class CanvasView {
       }
     }
     ctx.globalAlpha = 1;
+    this.drawImages(grid);
     if (cursor && (blinkOn || !focused)) this.drawCursor(grid, cursor, focused, size);
+  }
+
+  private picture(src: string): HTMLImageElement | null {
+    let img = this.pictures.get(src);
+    if (!img) {
+      img = new Image();
+      img.decoding = 'async';
+      img.addEventListener('load', () => this.onImage?.());
+      img.src = src;
+      this.pictures.set(src, img);
+    }
+    return img.complete && img.naturalWidth ? img : null;
+  }
+
+  private drawImages(grid: Grid): void {
+    const { ctx, cwD, chD } = this;
+    for (const image of grid.images) {
+      const runs = grid.imageRuns(image);
+      const img = runs.length ? this.picture(image.src) : null;
+      if (!img) continue;
+      const box = imageBox(image, cwD, chD);
+      ctx.save();
+      ctx.beginPath();
+      for (const r of runs) ctx.rect(r.x * cwD, r.y * chD, r.w * cwD, r.h * chD);
+      ctx.clip();
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, box.x, box.y, box.w, box.h);
+      ctx.restore();
+    }
   }
 
   private drawCursor(grid: Grid, cursor: Cursor, focused: boolean, size: number): void {

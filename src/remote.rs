@@ -3,6 +3,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
 use std::process::{ChildStderr, Command, ExitStatus, Stdio};
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
 use parking_lot::Mutex;
@@ -244,19 +245,34 @@ pub fn proxy() -> Result<()> {
         let _ = io::copy(&mut io::stdin().lock(), &mut to_server);
         let _ = to_server.shutdown(Shutdown::Write);
     });
-    let mut from_server = stream;
-    let mut buf = vec![0; 64 * 1024];
-    loop {
-        match from_server.read(&mut buf) {
-            Ok(0) => return Ok(()),
-            Ok(n) => {
-                out.write_all(&buf[..n])?;
-                out.flush()?;
+    relay(stream, &mut out)
+}
+
+fn relay(mut from: impl Read + Send + 'static, to: &mut impl Write) -> Result<()> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buf = vec![0; 64 * 1024];
+        loop {
+            let read = match from.read(&mut buf) {
+                Ok(0) => return,
+                Ok(n) => Ok(buf[..n].to_vec()),
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => Err(e),
+            };
+            let failed = read.is_err();
+            if tx.send(read).is_err() || failed {
+                return;
             }
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-            Err(e) => return Err(e.into()),
         }
+    });
+    while let Ok(chunk) = rx.recv() {
+        to.write_all(&chunk?)?;
+        for chunk in rx.try_iter() {
+            to.write_all(&chunk?)?;
+        }
+        to.flush()?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -264,6 +280,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::graphics::Support;
     use crate::host_theme::HostTheme;
     use crate::notify::Channel;
     use crate::protocol::Hello;
@@ -484,6 +501,8 @@ mod tests {
                 theme: HostTheme::default(),
                 notify: Channel::Bell,
                 terminal: None,
+                graphics: Support::default(),
+                probe: String::new(),
             };
 
             let message = rebuilt(ClientMessage::Hello(Box::new(hello)), "the server's".into());
@@ -494,6 +513,43 @@ mod tests {
         #[test]
         fn passes_other_messages_as_they_are() {
             assert!(matches!(rebuilt(ClientMessage::KillServer, "b".into()), ClientMessage::KillServer));
+        }
+
+        struct Stalled {
+            gate: mpsc::Receiver<()>,
+            got: Arc<Mutex<Vec<u8>>>,
+        }
+
+        impl Write for Stalled {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                if self.got.lock().is_empty() {
+                    let _ = self.gate.recv();
+                }
+                self.got.lock().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        #[test]
+        fn a_slow_ssh_never_holds_the_server_back() {
+            let (mut server, proxy) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
+            server.set_write_timeout(Some(std::time::Duration::from_secs(1))).expect("a write timeout");
+            let (open, gate) = mpsc::channel();
+            let got = Arc::new(Mutex::new(Vec::new()));
+            let mut ssh = Stalled { gate, got: Arc::clone(&got) };
+            let relayed = thread::spawn(move || relay(proxy, &mut ssh).is_ok());
+            let frame = vec![7; 4 << 20];
+
+            server.write_all(&frame).expect("the server writes a big frame while ssh is stuck");
+            drop(server);
+            open.send(()).expect("ssh moves again");
+
+            assert!(relayed.join().expect("the relay ends"));
+            assert_eq!(got.lock().len(), frame.len());
         }
     }
 }

@@ -39,7 +39,7 @@ group 9  personal  collapsed
 
 | Command | What it does |
 | --- | --- |
-| `status` | Lists groups, projects, workspaces, tabs and panes with their ids. |
+| `status` | Lists groups, projects, workspaces, tabs and panes with their ids, or one line per pane with `--panes`. |
 | `open PATH` | Opens a folder as a project, or finds the open one. Prints the project's id. |
 | `new-workspace NAME` | Adds a workspace to a project, or a git worktree with `--worktree`. Prints its id. |
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
@@ -62,11 +62,56 @@ group 9  personal  collapsed
 ### Look
 
 ```sh
-cornercase status          # the tree above
-cornercase status --json   # the same, as JSON
+cornercase status                  # the tree above
+cornercase status --json           # the same, as JSON
+cornercase status --panes          # one line per pane, for scripts
+cornercase status --panes --json   # the same, as JSON
 ```
 
-Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+Each pane shows its program and folder. A pane running Claude Code, Codex or opencode also shows what the agent is doing (`working`, `waiting` for an answer, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. `(survey open)` is Claude Code's feedback survey above its input box, which `send` refuses too. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+
+#### One line per pane
+
+A script that coordinates agents mostly needs the panes: which agent runs where, what it is doing, in which worktree. `status --panes` lists them flat, so nothing has to walk the tree: one line per pane, in the order of the sidebar, under a header line that names the columns, separated by tabs.
+
+```text
+pane	tab	workspace	project	program	agent	status	background_shell	dialog	at_prompt	model	context	caller	shown	active	tab_name	workspace_name	branch	worktree	project_name	path	survey
+4	3	2	1	claude	claude	working	false	false	false	Opus 5.5	23	false	true	true	claude	default	main	false	shop	/home/ana/src/shop	false
+5	6	2	1	zsh	-	-	false	false	true	-	-	true	false	true	zsh	default	main	false	shop	/home/ana/src/shop	false
+12	11	7	1	codex	codex	waiting	false	false	false	gpt-5.4	41	false	false	true	codex	fix/login	fix/login	true	shop	/home/ana/.cornercase/worktrees/shop/fix-login	false
+```
+
+| Column | What it holds |
+| --- | --- |
+| `pane`, `tab`, `workspace`, `project` | The ids of the pane and of the tab, workspace and project it is in. |
+| `program` | The program in the foreground, as the tab names it. |
+| `agent` | `claude`, `codex` or `opencode` when one runs in the pane. |
+| `status` | What the agent is doing: `working`, `waiting`, `done` or `idle`. |
+| `background_shell`, `dialog`, `at_prompt` | As in the [JSON](#json): the agent's turn is over but a background shell still runs; a Claude Code agent shows a dialog instead of its input box; the shell sits at its prompt with nothing running. |
+| `model`, `context` | The agent's model and how full its context is, in percent. |
+| `caller` | `true` for the pane running the command. |
+| `shown` | `true` for the pane the window shows. |
+| `active` | `true` for its tab's active pane. |
+| `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name` | The tab's and workspace's names, the workspace's branch and whether it has a worktree of its own, and the project's name. |
+| `path` | The folder of the program in the foreground, in full. |
+| `survey` | As in the [JSON](#json): a Claude Code agent shows its feedback survey above its input box, which `send` refuses until `keys --pane … 0` dismisses it. |
+
+- The values are the ones `--panes --json` gives: `true` or `false`, numbers without a unit, full paths. A `-` stands where there is no value (no agent, no branch, a field the server is too old to know), so a column never goes missing and `read` keeps them in place. A tab or a line break in a name shows as a space.
+- The columns keep their order, and new ones only ever go at the end, so `$7` stays the status.
+- `--panes --json` prints `{"panes": [...]}`, one object per pane with the columns as keys, in the same order, and `null` where the text shows `-`.
+
+```sh
+# the agents that wait for an answer
+cornercase status --panes | awk -F'\t' '$7 == "waiting" { print $1 }'
+
+# each pane with its agent and status, skipping the header
+cornercase status --panes | tail -n +2 | while IFS=$'\t' read -r pane tab workspace project program agent status rest; do
+  echo "$pane $agent $status"
+done
+
+# the agents in the worktree of fix/login
+cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" and .agent != null) | .pane'
+```
 
 ### Create
 
@@ -118,8 +163,10 @@ cornercase read --pane 12 --last-message
 - `--wait` then waits until the agent stops working; it fails if the agent does not start working within 10 seconds of the Enter, rather than waiting forever for an agent that never got the text. `--until` waits for another of `wait`'s states, as `start` does.
 - `send` refuses a pane whose agent is `waiting` for an answer to a question or a permission prompt: whatever it typed would answer it. Answer such a prompt with `keys`, after deciding what the answer should be.
 - `send` also refuses a Claude Code agent that shows a dialog, a panel or its shell mode instead of its input box: in the details of a background shell an `x` stops the shell and Enter closes the panel, and in shell mode (`!`) a prompt would run as a command. cornercase tells from the screen, and only once it has seen that agent's input box, so a Claude Code that draws it differently is never refused. Read the pane, close what is open and send again; `--force` sends anyway.
+- `send` also refuses a Claude Code agent that shows its feedback survey above its input box (`How is Claude doing this session? (optional)`, then `1: Bad  2: Fine  3: Good  0: Dismiss`): one digit sent alone answers the survey instead of reaching the agent, so `send --enter 2`, the answer to a numbered question, would be lost. `cornercase keys --pane 12 0` dismisses the survey without answering it; then send again. `--force` sends anyway: a longer text hides the survey and goes to the input box, as when you type over it.
 - `keys` presses keys, encoded the way the program in the pane asked for: `enter`, `esc`, `tab`, `backspace`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `delete`, `insert`, `f1` to `f12`, or one character, each after any of `ctrl+`, `alt+` and `shift+` (`shift+tab`, `ctrl+c`, `alt+x`).
 - `read` prints the screen as text. `--lines N` prints the last `N` lines instead, scrollback included (a pane keeps 5,000). Lines the terminal wrapped come back as one, and empty lines at the end are left out.
+- A Claude Code screen may end with its feedback survey right above the input box, `● How is Claude doing this session? (optional)` and `1: Bad  2: Fine  3: Good  0: Dismiss`: that is Claude Code asking you, not something the agent wrote. `status` marks it `(survey open)`, and `keys --pane 12 0` dismisses it.
 - `read --last-message` prints the last message the agent in the pane wrote, as plain text. It comes from the agent's own record, not the screen: Claude Code's transcript, Codex's rollout or opencode's database, the ones cornercase already reads for the [context line](../projects-workspaces-tabs/#how-full-the-context-is). So the message comes whole even once it scrolled off, without the input box, the status lines or a suggestion Claude Code shows in grey, and nobody has to ask an agent to write its report to a file. While the agent works it is the newest message so far, such as a note on what it is about to do; once its turn is over it is its answer. `--json` adds `written`, when the agent wrote it, and `turn_over`.
 - `read --last-message` fails, with status 1 and a message saying why, on a pane without Claude Code, Codex or opencode, before the agent has written anything, and while cornercase has not found its record: Codex writes its rollout from its first turn on, and two Codex, or two opencode, in the same folder can't be told apart. Read the screen then. A permission prompt or a question the agent is asking is not a message either: it is only on the screen.
 
@@ -229,13 +276,25 @@ cornercase todo rm 3
 
 `notify` shows a toast in the window and sends a [desktop notification](../projects-workspaces-tabs/#notifications) through the terminal of every open window, like the one for an agent that needs you.
 
+### Restart without cutting an agent off
+
+An agent that coordinates others may need a newer cornercase, for a command that was just released. A plain restart would stop every agent in the middle of its turn. `--when-idle` restarts the server only once no agent is working, in the same step it sees that, so none starts a turn in between:
+
+```sh
+cornercase update --when-idle --yes --timeout 3600
+cornercase restart --when-idle --yes
+```
+
+The pane the command runs in doesn't hold the restart, so an agent can run it as its last step: the restart stops it too, and its conversation [resumes](../sessions/#agents-resume-their-conversations). Until then every window says a restart is pending, with a button that cancels it. [`cornercase restart`](../../reference/command-line/#once-no-agent-is-working) has the details.
+
 ## JSON
 
 `--json` prints a command's answer as JSON. These fields are kept stable; new ones may be added.
 
 | Command | Fields |
 | --- | --- |
-| `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. |
+| `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`). `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. |
+| `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
@@ -261,10 +320,12 @@ Some messages you may meet:
 | `this cornercase server has not opened a window yet …` | A server started without a window has no size to give a new terminal, and hasn't restored your session yet. Run `cornercase` once. |
 | `the agent in pane … is waiting for an answer …` | `send` refused to type into an agent's question or permission prompt. |
 | `the agent in pane … shows a dialog, a panel or its shell mode …` | `send` refused to type into a Claude Code dialog, panel or shell mode. Read the pane, close it and send again, or pass `--force`. |
+| `the agent in pane … shows Claude Code's feedback survey …` | `send` refused to type while Claude Code's survey would take a digit as its answer. Dismiss it with `cornercase keys --pane … 0` and send again, or pass `--force`. |
 | `not confirmed: the prompt may not have been submitted …` | `send --enter` pressed Enter, but the agent recorded no new prompt. Read the pane before sending it again. |
 | `the … agent in pane … has not written a message yet` | `read --last-message` found the agent's record, with no message in it. |
 | `the program in pane … is not reading its input …` | Over 16 MiB sent to the pane are still waiting for its program to read them, so `send` and `keys` stop adding more. |
 | `timed out after …` | The `--timeout` passed; the rest of the message says what the pane was doing. |
+| `the restart was cancelled in the window …` | Someone pressed **cancel** on the window's notice while `restart --when-idle` waited; the server keeps running. |
 | `cornercase hit a bug, see server.log` | cornercase hit a bug while it handled the command or waited for it. Your shells keep running; see [this message in troubleshooting](../../help/troubleshooting/#cornercase-hit-a-bug-see-serverlog). |
 
 ## Teach your agents
@@ -277,7 +338,7 @@ npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 
 Only the skill's name and description stay in the agent's context; the rest loads when a task needs it. `cornercase skill` prints the copy that matches your version; for an agent without skills, put that text in your `AGENTS.md` or `CLAUDE.md`. cornercase never installs it by itself, for the same reason it installs no hooks: it doesn't write into your agents' setup.
 
-The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; and to learn what another agent answered with `read --last-message`.
+The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; to find panes with `status --panes` rather than walking the tree; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; to learn what another agent answered with `read --last-message`; and to restart or update cornercase only when you ask, with `--when-idle`.
 
 ## Environment
 

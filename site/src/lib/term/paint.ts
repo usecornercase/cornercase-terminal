@@ -1,5 +1,5 @@
 import { glyph, isGlyph } from './glyphs';
-import { BOLD, DIM, type Grid, INVERSE, ITALIC, STRIKE, UNDERLINE } from './grid';
+import { BOLD, DIM, type Grid, IMAGE_CELL, INVERSE, ITALIC, STRIKE, UNDERLINE } from './grid';
 import { DEFAULT, type Theme, bg as bgColor, fg as fgColor, theme as defaultTheme } from './palette';
 
 export type Op =
@@ -80,7 +80,7 @@ export function paint(grid: Grid, m: Metrics): Op[] {
       }
       if (!ascii(cell.ch)) {
         flushText();
-        if (cell.ch.trim()) {
+        if (cell.ch.trim() && !cell.ch.startsWith(IMAGE_CELL)) {
           texts.push({ k: 'text', x, y, text: cell.ch, fill, bold, italic, alpha, cells: 1, single: true });
         }
         continue;

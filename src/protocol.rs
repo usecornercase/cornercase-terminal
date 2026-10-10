@@ -12,11 +12,12 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
+use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::notify::Channel;
 use crate::process;
 
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
 pub const NESTED_ENV: &str = "CORNERCASE";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
@@ -28,6 +29,7 @@ pub enum ClientMessage {
     Event(Event),
     Restart,
     Request(String),
+    Graphics(Support),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +41,8 @@ pub struct Hello {
     pub theme: HostTheme,
     pub notify: Channel,
     pub terminal: Option<String>,
+    pub graphics: Support,
+    pub probe: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -235,6 +239,16 @@ mod tests {
         }
 
         #[derive(Debug, Deserialize)]
+        #[expect(dead_code, reason = "decoded only, the way a server from before Graphics reads it")]
+        enum BeforeGraphics {
+            KillServer,
+            Hello(Box<Hello>),
+            Event(Event),
+            Restart,
+            Request(String),
+        }
+
+        #[derive(Debug, Deserialize)]
         #[expect(dead_code, reason = "decoded only, the way a client from before Response reads it")]
         enum BeforeResponse {
             Rejected(String),
@@ -265,6 +279,18 @@ mod tests {
             let request = ClientMessage::Request(r#"{"command":"status","args":{}}"#.into());
 
             assert_eq!(read_as::<BeforeRequest>(&request), io::ErrorKind::InvalidData);
+        }
+
+        #[test]
+        fn graphics_come_after_every_older_client_variant() {
+            assert_eq!(postcard::to_stdvec(&ClientMessage::Graphics(Support::default())).expect("encode")[0], 5);
+        }
+
+        #[test]
+        fn a_server_without_graphics_reads_them_as_invalid_data() {
+            let graphics = ClientMessage::Graphics(Support { id_hi: 7, ..Support::default() });
+
+            assert_eq!(read_as::<BeforeGraphics>(&graphics), io::ErrorKind::InvalidData);
         }
 
         #[test]

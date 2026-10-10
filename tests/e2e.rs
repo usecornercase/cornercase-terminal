@@ -9,7 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use cornercase::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
-use cornercase::control::{PANE_ENV, PaneInfo, Report};
+use cornercase::control::{PANE_ENV, PaneInfo, PaneRow, PaneRows, Report};
 use cornercase::protocol::{NESTED_ENV, SOCKET_ENV};
 use cornercase::split::{self, Dir};
 use cornercase::ui::{self, SidebarRow, WorkspaceRow};
@@ -17,6 +17,7 @@ use cornercase::update;
 use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use ratatui::layout::{Position, Rect};
+use rstest::rstest;
 use sha2::{Digest, Sha256};
 
 const ROWS: u16 = 24;
@@ -25,6 +26,27 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(30);
 const AREA: Rect = Rect { x: 0, y: 0, width: COLS, height: ROWS };
 const HOST_THEME_REPLY: &[u8] = b"\x1b]11;rgb:12/56/9a\x1b\\\x1bP>|ghostty 1.2.0\x1b\\\x1b[?62;22c";
+const GHOSTTY_1_3_1: &[u8] = b"\x1b]11;rgb:20/20/20\x1b\\\x1b[6;20;10t\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c";
+const UNKNOWN_TERMINAL: &[u8] = b"\x1b]11;rgb:20/20/20\x1b\\\x1b[?62;22c";
+const TERMINAL_ENV: [&str; 17] = [
+    "TMUX",
+    "STY",
+    "ZELLIJ",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "LC_TERMINAL",
+    "CORNERCASE_IMAGES",
+    "GHOSTTY_RESOURCES_DIR",
+    "KITTY_WINDOW_ID",
+    "ALACRITTY_WINDOW_ID",
+    "KONSOLE_VERSION",
+    "VTE_VERSION",
+    "PTYXIS_VERSION",
+    "WT_SESSION",
+    "TERMINAL_EMULATOR",
+    "INSIDE_EMACS",
+    "XTERM_VERSION",
+];
 
 struct Session {
     dir: PathBuf,
@@ -196,12 +218,31 @@ impl Harness {
         Self::run(bin, &[], session, (rows, cols), env)
     }
 
+    fn answering(reply: &[u8]) -> Self {
+        let bin = std::path::Path::new(env!("CARGO_BIN_EXE_cornercase"));
+        let env = [("TERM", "xterm-256color")];
+        let mut harness = Self::run_answering(bin, &[], Session::new(), (ROWS, COLS), &env, reply);
+        harness.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+        harness
+    }
+
     fn run(
+        bin: &std::path::Path,
+        args: &[&str],
+        session: Arc<Session>,
+        size: (u16, u16),
+        env: &[(&str, &str)],
+    ) -> Self {
+        Self::run_answering(bin, args, session, size, env, HOST_THEME_REPLY)
+    }
+
+    fn run_answering(
         bin: &std::path::Path,
         args: &[&str],
         session: Arc<Session>,
         (rows, cols): (u16, u16),
         env: &[(&str, &str)],
+        reply: &[u8],
     ) -> Self {
         let pair =
             native_pty_system().openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).expect("open pty");
@@ -213,7 +254,7 @@ impl Harness {
         cmd.env(CLAUDE_DIR_ENV, session.claude_dir());
         cmd.env_remove(NESTED_ENV);
         cmd.env_remove(PANE_ENV);
-        for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY", "TMUX", "STY", "ZELLIJ", "TERM_PROGRAM", "LC_TERMINAL"] {
+        for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
         }
         for (key, value) in env {
@@ -238,7 +279,7 @@ impl Harness {
         let writer = pair.master.take_writer().expect("pty writer");
         let mut harness = Self { session, cols, screen, raw, writer, child, _master: pair.master };
         harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
-        harness.send(HOST_THEME_REPLY);
+        harness.send(reply);
         harness
     }
 
@@ -248,6 +289,17 @@ impl Harness {
 
     fn row(&self, y: u16) -> String {
         self.screen.lock().screen().contents_between(y, 0, y, self.cols)
+    }
+
+    fn position_of(&self, text: &str) -> Position {
+        (0..ROWS)
+            .rev()
+            .find_map(|y| {
+                let row = self.row(y);
+                let at = row.find(text)?;
+                Some(Position::new(u16::try_from(row[..at].chars().count()).ok()?, y))
+            })
+            .expect("the text is on screen")
     }
 
     fn wait_for(&mut self, what: &str, cond: impl Fn(&str) -> bool) {
@@ -1051,6 +1103,33 @@ fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
 }
 
 #[test]
+fn restart_when_idle_waits_for_the_agent_to_end_its_turn() {
+    let mut app = Harness::start();
+    std::fs::create_dir(app.session.dir.join("bin")).expect("create bin");
+    let agent = app.session.dir.join("bin").join("claude");
+    write_executable(
+        &agent,
+        r#"#!/bin/sh
+d="$CLAUDE_CONFIG_DIR"; mkdir -p "$d/sessions"; printf '{"pid":%s,"status":"busy"}' $$ > "$d/sessions/$$.json"
+while [ ! -e "$d/finish" ]; do sleep 0.02; done
+printf '{"pid":%s,"status":"idle"}' $$ > "$d/sessions/$$.json"; while :; do sleep 1; done
+"#,
+    );
+    let pane = app.session.says(&["new-tab", "--", &agent.display().to_string()]);
+    app.session.wait_for_working();
+
+    let early = app.session.cli(&["restart", "--when-idle", "--yes", "--timeout", "0.5"]);
+    let restart = app.session.spawn(&["restart", "--when-idle", "--yes", "--timeout", "30"]);
+    app.wait_for("the window says a restart is pending", |s| s.contains("restart pending until 1 agent ends its turn"));
+    std::fs::write(app.session.claude_dir().join("finish"), "").expect("let the agent finish");
+    let out = Session::output(restart);
+
+    assert!(refused(&early, 1, &format!("the agent in pane {pane} has not ended its turn")), "{early:?}");
+    assert!(out.contains("restarted the cornercase server") && out.contains("stopped 1 agent"), "{out}");
+    app.wait_for("the window comes back", |s| s.contains(&first_entry()) && !s.contains("restart pending"));
+}
+
+#[test]
 fn restart_without_a_server_says_so() {
     let session = Session::new();
 
@@ -1060,12 +1139,14 @@ fn restart_without_a_server_says_so() {
     assert!(out.status.success() && stderr.contains("no cornercase server is running"), "{out:?}");
 }
 
-#[test]
-fn update_installs_the_latest_release_and_restarts_the_server() {
-    let bin = installed_copy("update");
+#[rstest]
+#[case::at_once("99.0.0", &[][..])]
+#[case::once_no_agent_works("99.0.1", &["--when-idle"][..])]
+fn update_installs_the_latest_release_and_restarts_the_server(#[case] version: &str, #[case] when: &[&str]) {
+    let bin = installed_copy(&format!("update-{version}"));
     let mut app = Harness::open_from(&bin, Session::new(), ROWS, COLS, &[]);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
-    let name = format!("ccup-{}", std::process::id());
+    let name = format!("ccup-{version}-{}", std::process::id());
     let dir = temp_dir_named(&name);
     app.open_project(1, &dir);
     app.wait_for("project 2 appears", |s| s.contains(&entry(&name)));
@@ -1075,7 +1156,7 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     app.session.wait_for_program("sleep");
     let marker = bin.with_file_name("new-client-ran");
     let new = format!(
-        "#!/bin/sh\n[ \"$1\" = --version ] && exec echo 'cornercase 99.0.0'\n[ $# -eq 0 ] && touch '{}'\nexec '{}' \"$@\"\n",
+        "#!/bin/sh\n[ \"$1\" = --version ] && exec echo 'cornercase {version}'\n[ $# -eq 0 ] && touch '{}'\nexec '{}' \"$@\"\n",
         marker.display(),
         env!("CARGO_BIN_EXE_cornercase")
     );
@@ -1083,15 +1164,16 @@ fn update_installs_the_latest_release_and_restarts_the_server() {
     let out = app
         .session
         .command_of(&bin)
-        .args(["update", "--yes"])
-        .env(update::LATEST_ENV, fake_release("99.0.0", &new))
+        .args([&["update", "--yes"][..], when].concat())
+        .env(update::LATEST_ENV, fake_release(version, &new))
         .output()
         .expect("run update");
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{out:?}");
-    assert!(stdout.contains(&format!("updated cornercase {} → 99.0.0", update::CURRENT)), "{stdout}");
+    assert!(stdout.contains(&format!("updated cornercase {} → {version}", update::CURRENT)), "{stdout}");
     assert!(stdout.contains("restarted the cornercase server"), "{stdout}");
+    assert_eq!(stdout.contains("restarts once no agent is working"), !when.is_empty(), "{stdout}");
     assert!(stdout.contains("1 program (`sleep` in ") && stdout.contains("stopped 1 program"), "{stdout}");
     assert_eq!(std::fs::read_to_string(&bin).expect("the new binary"), new);
     app.wait_for("the client comes back with both projects and new shells", |s| {
@@ -1485,6 +1567,32 @@ fn status_lists_the_window_and_marks_the_pane_it_runs_in() {
 }
 
 #[test]
+fn status_panes_gives_every_pane_a_row_of_its_own() {
+    let mut app = Harness::start();
+    let split = app.session.says(&["split"]);
+    let inside = app.session.dir.join("panes.tsv");
+
+    app.send(format!("{} status --panes > '{}'; echo panes-\"\"saved\r", bin(), inside.display()).as_bytes());
+    app.wait_for("the panes are saved", |s| s.contains("panes-saved"));
+
+    let report = app.session.report();
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("rows");
+    let text = std::fs::read_to_string(&inside).expect("read it");
+    let lines: Vec<Vec<&str>> = text.lines().map(|line| line.split('\t').collect()).collect();
+    let column = |name: &str| PaneRow::COLUMNS.iter().position(|c| *c == name).expect("a column");
+    let marked = |name: &str| lines[1..].iter().filter(|l| l[column(name)] == "true").map(|l| l[0]).collect::<Vec<_>>();
+    let shown = report.shown.pane.expect("a shown pane").to_string();
+    let ids: Vec<u64> = panes(report).map(|p| p.id).collect();
+    assert_eq!(lines[0], PaneRow::COLUMNS);
+    assert!(lines.iter().all(|line| line.len() == PaneRow::COLUMNS.len()), "{text}");
+    assert_eq!(lines[1..].iter().map(|line| line[0].parse().expect("an id")).collect::<Vec<u64>>(), ids);
+    assert!(ids.contains(&split.parse().expect("an id")), "{text}");
+    assert_eq!((marked("caller"), marked("shown")), (vec![shown.as_str()], vec![shown.as_str()]));
+    assert_eq!(rows.panes.iter().map(|row| row.pane).collect::<Vec<_>>(), ids);
+    assert!(rows.panes.iter().all(|row| !row.caller), "{rows:?}");
+}
+
+#[test]
 fn open_adds_a_project_and_leaves_the_window_as_it_is() {
     let mut app = Harness::start();
     let name = format!("ccop-{}", std::process::id());
@@ -1859,4 +1967,37 @@ fn a_remote_without_cornercase_says_how_to_point_at_it() {
     let out = remote_refusal("/nonexistent/cornercase");
 
     assert!(refused(&out, 1, "cornercase was not found on `devbox`"), "{out:?}");
+}
+
+fn showing_an_image(reply: &[u8], name: &str) -> Harness {
+    let name = format!("{name}-{}", std::process::id());
+    let dir = temp_dir_named(&name);
+    let pixels = image::RgbaImage::from_pixel(400, 200, image::Rgba([200, 30, 30, 255]));
+    pixels.save_with_format(dir.join("logo.png"), image::ImageFormat::Png).expect("write a png");
+    let mut app = Harness::answering(reply);
+    app.open_project(1, &dir);
+    app.wait_for("the project opens", |s| s.contains(&entry(&name)) && !s.contains("cancel"));
+    app.send(b"echo lo\"\"go.png\r");
+    app.wait_for("the name is printed", |s| s.contains("logo.png"));
+    let at = app.position_of("logo.png");
+    app.click(at);
+    app.wait_for("the image opens", |s| s.contains("400×200"));
+    app
+}
+
+#[test]
+fn ghostty_gets_placeholder_cells_and_the_image_itself() {
+    let mut app = showing_an_image(GHOSTTY_1_3_1, "ccimg");
+
+    app.wait_for_raw("the image is transmitted", |raw| raw.contains("\x1b_Ga=t,"));
+    app.wait_for_raw("its placeholder cells are drawn", |raw| raw.contains('\u{10EEEE}'));
+}
+
+#[test]
+fn an_unknown_terminal_is_told_why_it_shows_no_image() {
+    let mut app = showing_an_image(UNKNOWN_TERMINAL, "ccnoimg");
+
+    app.wait_for("the window says why", |s| s.contains("this terminal cannot show"));
+    let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
+    assert!(!raw.contains("\x1b_G") && !raw.contains("1337;File"), "no image bytes reach it");
 }

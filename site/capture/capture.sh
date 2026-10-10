@@ -10,7 +10,7 @@ export CC_CAPTURE CC_ROOT CC_BIN CC_TMUX CC_TMP
 trap '[ -z "${CC_HOME:-}" ] || cc_stop' EXIT
 cc_require
 mkdir -p "$CC_TMP"
-"$CC_ROOT/site/node_modules/.bin/esbuild" "$CC_ROOT/site/src/lib/demo/data.ts" --bundle --platform=node --format=esm --log-level=warning --outfile="$CC_TMP/data.mjs"
+"$CC_ROOT/site/node_modules/.bin/esbuild" "$CC_ROOT/site/src/lib/demo/data.ts" --bundle --platform=node --format=esm --loader:.png=empty --log-level=warning --outfile="$CC_TMP/data.mjs"
 . "$CC_CAPTURE/screens.sh"
 if [ $# -eq 0 ]; then
   set -- $CC_SCREENS

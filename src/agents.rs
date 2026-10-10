@@ -15,6 +15,12 @@ const TRUST_LINES: usize = 15;
 const INPUT_MARK: char = '❯';
 const RULE: char = '─';
 const RULE_MIN: usize = 8;
+const SURVEY_OPTIONS: [&str; 2] =
+    ["1: Bad    2: Fine   3: Good   0: Dismiss", "1: Bad    2: Fine   3: Good   4: Unsure 0: Dismiss"];
+const SURVEY_BULLET: &str = "● ";
+const SURVEY_INDENT: &str = "  ";
+const SURVEY_GAP: usize = 3;
+const SURVEY_QUESTION_LINES: usize = 4;
 const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
@@ -244,12 +250,37 @@ pub fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
 }
 
 pub fn input_box(agent: &str, screen: &str) -> Option<bool> {
+    (agent == CLAUDE).then(|| box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
+}
+
+pub fn survey(agent: &str, screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().collect();
+    let Some(rule) = box_rule(&lines).filter(|_| agent == CLAUDE) else { return false };
+    let above = &lines[..rule];
+    let Some(gap) = above.iter().rev().take(SURVEY_GAP).position(|line| survey_options(line)) else { return false };
+    let question = &above[..above.len() - 1 - gap];
+    question
+        .iter()
+        .rev()
+        .take(SURVEY_QUESTION_LINES)
+        .find(|line| !survey_indented(line))
+        .is_some_and(|line| line.starts_with(SURVEY_BULLET))
+}
+
+fn box_rule(lines: &[&str]) -> Option<usize> {
     let rule = |line: &str| {
         let line = line.trim();
         line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
     };
-    let lines: Vec<&str> = screen.lines().collect();
-    (agent == CLAUDE).then(|| lines.windows(2).any(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK)))
+    lines.windows(2).rposition(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK))
+}
+
+fn survey_options(line: &str) -> bool {
+    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| SURVEY_OPTIONS.contains(&rest.trim_end()))
+}
+
+fn survey_indented(line: &str) -> bool {
+    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| rest.starts_with(|c: char| !c.is_whitespace()))
 }
 
 #[cfg(test)]
@@ -552,6 +583,81 @@ mod tests {
         #[test]
         fn other_agents_are_not_known() {
             assert_eq!(input_box(CODEX, &screen(&["› Ask Codex to do anything"])), None);
+        }
+    }
+
+    mod survey {
+        use rstest::rstest;
+
+        use super::super::survey;
+        use super::super::{CLAUDE, CODEX};
+
+        const RULE: &str = "────────────────────────────────────────";
+        const QUESTION: &str = "● How is Claude doing this session? (optional)";
+        const OPTIONS: &str = "  1: Bad    2: Fine   3: Good   0: Dismiss";
+        const EFFORT: &str = "                                                  ◐ medium · /effort";
+        const FOOTER: &str = "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents";
+
+        fn screen(lines: &[&str]) -> String {
+            [lines, &[RULE, "❯\u{a0}", RULE, FOOTER]].concat().join("\n")
+        }
+
+        #[rstest]
+        #[case::with_the_effort_hint_under_it(&["● Done.", "", QUESTION, OPTIONS, EFFORT])]
+        #[case::with_a_blank_line_under_it(&[QUESTION, OPTIONS, ""])]
+        #[case::its_question_wrapped(&["● How is Claude doing this session?", "  (optional)", OPTIONS, ""])]
+        #[case::the_long_context_question(
+            &["● How well is Claude following the instructions you gave earlier in this", "  conversation? (optional)",
+              OPTIONS, ""]
+        )]
+        #[case::a_plugins_survey_with_unsure(
+            &["● How helpful has the github plugin been? (optional)", "  You've used its skills recently",
+              "  1: Bad    2: Fine   3: Good   4: Unsure 0: Dismiss", ""]
+        )]
+        fn is_its_question_and_answers_right_above_the_input_box(#[case] lines: &[&str]) {
+            assert!(survey(CLAUDE, &screen(lines)));
+        }
+
+        #[rstest]
+        #[case::the_input_box_alone(&["● Done.", ""])]
+        #[case::the_words_in_the_conversation_above(
+            &["❯ what does the survey look like", "",
+              "● Claude Code shows a survey, How is Claude doing this session? (optional) with 1: Bad  2: Fine  3:",
+              "  Good  0: Dismiss, above its input box. It looks like this:", "",
+              "  ● How is Claude doing this session? (optional)", "    1: Bad    2: Fine   3: Good   0: Dismiss", "",
+              "✻ Baked for 0s · done 6:18 PM", "", ""]
+        )]
+        #[case::a_quote_right_above_the_input_box(
+            &["● It looks like this:", "", "  ● How is Claude doing this session? (optional)",
+              "    1: Bad    2: Fine   3: Good   0: Dismiss", ""]
+        )]
+        #[case::the_issues_words_ending_a_message(
+            &["● Here is how it reads:", "  How is Claude doing this session? (optional)",
+              "  1: Bad  2: Fine  3: Good  0: Dismiss", ""]
+        )]
+        #[case::a_copy_ending_a_message_and_its_turn(
+            &["● Here is how it reads:", "  How is Claude doing this session? (optional)", OPTIONS, "",
+              "✻ Crunched for 0s · done 6:22 PM", ""]
+        )]
+        #[case::its_lines_higher_up(&[QUESTION, OPTIONS, "", "● Done.", "", "✻ Baked for 0s · done 6:18 PM", ""])]
+        #[case::answers_without_their_question(&["● Done.", "", OPTIONS, ""])]
+        #[case::answers_cut_in_a_very_narrow_pane(
+            &["● How is Claude doing this session?", "  (optional)", "  1: Bad    2: Fine  3: Good   0:",
+              "                               Dismiss", "                    ◐ medium · /effort"]
+        )]
+        fn is_nothing_else(#[case] lines: &[&str]) {
+            assert!(!survey(CLAUDE, &screen(lines)));
+        }
+
+        #[test]
+        fn needs_the_input_box_under_it() {
+            let panel = [QUESTION, OPTIONS, "", RULE, "  Shell details", "  x to stop"].join("\n");
+            assert!(!survey(CLAUDE, &panel));
+        }
+
+        #[test]
+        fn is_only_claudes() {
+            assert!(!survey(CODEX, &screen(&[QUESTION, OPTIONS, ""])));
         }
     }
 }

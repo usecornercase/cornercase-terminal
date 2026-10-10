@@ -1,0 +1,11 @@
+---
+source: src/ui/files.rs
+expression: "picture(&drawn(&imaged(logo(), Some(Image::Message(lines)))))"
+---
+  ‹  docs/logo.png                           ×
+  PNG · 1280×720 · 245 KB    ask agent   copy
+
+  xterm shows images only when it runs as a
+  VT340
+
+  start it with xterm -ti vt340

@@ -6,6 +6,7 @@ export const ITALIC = 4;
 export const UNDERLINE = 8;
 export const INVERSE = 16;
 export const STRIKE = 32;
+export const IMAGE_CELL = '\u{10EEEE}';
 
 export interface Cell {
   ch: string;
@@ -28,7 +29,22 @@ export interface Rect {
   h: number;
 }
 
+export interface GridImage {
+  r: Rect;
+  src: string;
+  width: number;
+  height: number;
+}
+
 export const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w: Math.max(0, w), h: Math.max(0, h) });
+
+export function imageBox(image: GridImage, cw: number, ch: number): { x: number; y: number; w: number; h: number } {
+  const room = { w: image.r.w * cw, h: image.r.h * ch };
+  const scale = Math.min(1, room.w / image.width, room.h / image.height);
+  const w = image.width * scale;
+  const h = image.height * scale;
+  return { x: image.r.x * cw + (room.w - w) / 2, y: image.r.y * ch + (room.h - h) / 2, w, h };
+}
 
 export const contains = (r: Rect, x: number, y: number): boolean => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 
@@ -38,6 +54,7 @@ export class Grid {
   cols: number;
   rows: number;
   cells: Cell[];
+  images: GridImage[] = [];
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -51,6 +68,7 @@ export class Grid {
   }
 
   reset(): void {
+    this.images = [];
     for (const c of this.cells) {
       c.ch = ' ';
       c.fg = DEFAULT;
@@ -143,7 +161,24 @@ export class Grid {
   crop(r: Rect): Grid {
     const out = new Grid(r.w, r.h);
     out.copy(this, rect(0, 0, r.w, r.h), r.x, r.y);
+    out.images = this.images.map((image) => ({ ...image, r: { ...image.r, x: image.r.x - r.x, y: image.r.y - r.y } }));
     return out;
+  }
+
+  imageRuns(image: GridImage): Rect[] {
+    const runs: Rect[] = [];
+    for (let y = image.r.y; y < image.r.y + image.r.h; y++) {
+      let start = -1;
+      for (let x = image.r.x; x <= image.r.x + image.r.w; x++) {
+        const shown = x < image.r.x + image.r.w && this.at(x, y)?.ch.startsWith(IMAGE_CELL);
+        if (shown && start < 0) start = x;
+        if (!shown && start >= 0) {
+          runs.push(rect(start, y, x - start, 1));
+          start = -1;
+        }
+      }
+    }
+    return runs;
   }
 
   line(y: number): string {

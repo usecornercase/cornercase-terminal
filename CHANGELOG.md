@@ -2,6 +2,24 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.19
+
+- The files panel shows images. A click on a PNG, JPEG, GIF, WebP, BMP or ICO file shows the picture itself, drawn by your terminal, with its format, size in pixels and file size above it; ` ask agent ` and ` copy ` take its path. Ghostty and kitty show it with kitty graphics, iTerm2, WezTerm and Warp with iTerm2's inline images, and foot, Konsole and xterm (started as a VT340) with sixel; inside tmux, Ghostty and kitty need `set -g allow-passthrough on`, and a tmux built with sixel draws sixel pictures itself, with no setting. A terminal that cannot show images gets, where the picture would be, a line saying why and what to do about it. Every window attached to the server gets what its own terminal can show, in its own size, and an image an agent rewrites shows again as it changes. `CORNERCASE_IMAGES=kitty`, `iterm`, `sixel` or `off`, set where you start cornercase, picks for a terminal cornercase does not recognise.
+- `cornercase remote` no longer loses its window when the link to the other machine is slow while a large frame, such as an image, is on its way.
+
+## 0.12.18
+
+- `cornercase restart --when-idle` and `cornercase update --when-idle` restart the server only once no agent is working, so none loses a turn in the middle of a tool call or a build. Idle, done and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started in the background still runs. The server restarts in the same moment it sees that, so no agent starts a new turn in between. Meanwhile every window shows `restart pending until 2 agents end their turn` in its corner, with a **cancel** button. `--timeout` gives up after that many seconds and keeps the server running, as does stopping the command. `update --when-idle` installs the release at once and restarts on it once the agents are done.
+
+## 0.12.17
+
+- `cornercase send` no longer answers Claude Code's feedback survey. While Claude Code shows `How is Claude doing this session? (optional)` with `1: Bad  2: Fine  3: Good  0: Dismiss` above its input box, a digit sent alone, such as `send --enter 2` answering an agent's numbered question, rated the session instead and the prompt was lost. `send` now refuses while the survey shows and says how to dismiss it, `cornercase keys --pane N 0`; `--force` sends anyway. `cornercase status` marks such a pane `(survey open)` (`survey` in `--json`, and a new last column of `status --panes`).
+
+## 0.12.16
+
+- `cornercase status --panes` lists every pane on a line of its own, for scripts: the ids of the pane, its tab, workspace and project, what runs in it and what its agent is doing, the workspace's branch and the pane's folder, in columns separated by tabs under a header line. `--panes --json` gives the same rows as JSON, in one flat list. A script or an agent coordinating others no longer has to walk the tree of `status --json` to find a pane by its agent, status or branch. `status` and `status --json` stay as they were.
+- `cornercase status` no longer ends with a panic message when what reads its output stops early, as `head` does.
+
 ## 0.12.15
 
 - A click outside a dialog now closes it, as its cancel button would: settings, issues, usage, the folder picker, the update and restart dialogs, confirmations and forms, like right-click menus and the search already did. A dialog that is busy, such as one creating a worktree or installing an update, stays open until it is done.

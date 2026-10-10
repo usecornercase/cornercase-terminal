@@ -1,0 +1,8 @@
+---
+source: src/ui/files.rs
+expression: "picture(&drawn(&imaged(body, None)))"
+---
+  ‹  docs/logo.png                           ×
+  PNG · 40 bytes             ask agent   copy
+
+  cannot read this image: unexpected end of file
