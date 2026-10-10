@@ -270,24 +270,24 @@ done
         file.write_all(text.as_bytes()).expect("append rollout");
     }
 
-    pub fn serve(&self, cwd: &Path) -> FakeDaemon {
+    pub fn serve(&self, cwd: &Path) -> Running {
         let text = std::fs::read_to_string(&self.rollout).expect("read rollout");
         std::fs::write(&self.rollout, text.replace("/tmp/project", &cwd.to_string_lossy())).expect("session folder");
         let script = self.dir.path().join("daemon/codex");
         std::fs::create_dir_all(script.parent().expect("daemon folder")).expect("create daemon folder");
-        write_executable(&script, "#!/bin/sh\nexec 3>> \"$2\"\nwhile [ ! -e \"$3/quit\" ]; do sleep 0.02; done\n");
-        let child = std::process::Command::new(&script)
-            .arg("app-server")
-            .arg(&self.rollout)
-            .arg(self.dir.path())
-            .spawn()
-            .expect("spawn fake daemon");
-        let pid = i32::try_from(child.id()).expect("pid");
+        write_executable(
+            &script,
+            "#!/bin/sh\nexec 3>> \"$2\"\nwhile [ -d \"$3\" ] && [ ! -e \"$3/quit\" ]; do sleep 0.02; done\n",
+        );
+        let daemon = Running::spawn(
+            std::process::Command::new(&script).arg("app-server").arg(&self.rollout).arg(self.dir.path()),
+        );
+        let pid = daemon.pid();
         let state = self.home.join("app-server-daemon");
         std::fs::create_dir_all(&state).expect("create daemon state");
         std::fs::write(state.join("daemon.pid"), format!("{{\"pid\":{pid}}}")).expect("write daemon pid");
         wait_until("the daemon opens the rollout", || crate::process::open_files(pid).contains(&self.rollout));
-        FakeDaemon(child)
+        daemon
     }
 
     pub fn agent(&self, cwd: &Path) -> Sleeper {
@@ -295,9 +295,19 @@ done
     }
 }
 
-pub struct FakeDaemon(std::process::Child);
+pub struct Running(std::process::Child);
 
-impl Drop for FakeDaemon {
+impl Running {
+    pub fn spawn(command: &mut std::process::Command) -> Self {
+        Self(command.spawn().expect("spawn a fake"))
+    }
+
+    pub fn pid(&self) -> i32 {
+        i32::try_from(self.0.id()).expect("pid fits in i32")
+    }
+}
+
+impl Drop for Running {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();

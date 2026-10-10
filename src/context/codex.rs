@@ -214,7 +214,7 @@ mod tests {
 
     use super::*;
     use crate::context::Pane;
-    use crate::test_util::{FakeCodex, Sleeper, TempDir, wait_until, write_executable};
+    use crate::test_util::{FakeCodex, Running, Sleeper, TempDir, wait_until, write_executable};
 
     const ID: &str = "019a1234-5678-7000-8000-000000000001";
     const CONTEXT: &str = include_str!("../../tests/fixtures/codex/0.160.0/context.jsonl");
@@ -476,12 +476,10 @@ mod tests {
         let fake = FakeCodex::new(ID, "gpt-5.4", wrapper);
         std::fs::write(&fake.rollout, CONTEXT.replace("\"source\":\"cli\"", &format!("\"source\":\"{source}\"")))
             .expect("write the session source");
-        let mut child = std::process::Command::new(&fake.script)
-            .args(fake.args())
-            .env("CODEX_HOME", fake.dir.path())
-            .spawn()
-            .expect("spawn fake codex");
-        let pid = i32::try_from(child.id()).expect("pid");
+        let child = Running::spawn(
+            std::process::Command::new(&fake.script).args(fake.args()).env("CODEX_HOME", fake.dir.path()),
+        );
+        let pid = child.pid();
         let mut pane = Pane::default();
         wait_until("the fake agent opens its rollout", || {
             pane.update_codex(pid);
@@ -489,7 +487,7 @@ mod tests {
         });
         assert_eq!(pane.context().cloned(), Some(shown("gpt-5.4", Some(20))));
         fake.signal("quit", "");
-        child.wait().expect("agent exits");
+        drop(child);
         wait_until("the line clears", || {
             pane.update_codex(pid);
             pane.context().is_none()
@@ -505,21 +503,19 @@ mod tests {
         std::fs::write(&other, &content).expect("other rollout");
         write_executable(
             &fake.script,
-            "#!/bin/sh\nexec 3>> \"$1\"\nexec 4>> \"$2\"\nwhile [ ! -e \"$3/quit\" ]; do sleep 0.02; done\n",
+            "#!/bin/sh\nexec 3>> \"$1\"\nexec 4>> \"$2\"\nwhile [ -d \"$3\" ] && [ ! -e \"$3/quit\" ]; do sleep 0.02; done\n",
         );
-        let mut child = std::process::Command::new(&fake.script)
-            .args([&fake.rollout, &other, &fake.home])
-            .env("CODEX_HOME", &fake.home)
-            .spawn()
-            .expect("spawn fake codex");
-        let pid = i32::try_from(child.id()).expect("pid");
+        let child = Running::spawn(
+            std::process::Command::new(&fake.script)
+                .args([&fake.rollout, &other, &fake.home])
+                .env("CODEX_HOME", &fake.home),
+        );
+        let pid = child.pid();
         wait_until("both rollouts are open", || process::open_files(pid).contains(&other));
         assert_eq!(rollout_path(pid, SystemTime::UNIX_EPOCH), None);
 
         std::fs::write(&other, content.replace("\"cli\"", "{\"subagent\":{}}")).expect("subagent metadata");
         assert_eq!(rollout_path(pid, SystemTime::UNIX_EPOCH), Some(fake.rollout.clone()));
-        fake.signal("quit", "");
-        child.wait().expect("fake agent exits");
     }
 
     #[test]
@@ -532,12 +528,12 @@ mod tests {
             &fake.script,
             "#!/bin/sh\nexec 3>> \"$1\"\n/usr/bin/env -i \"$3\" \"$2\" &\nwhile [ -d \"$2\" ] && [ ! -e \"$2/quit\" ]; do sleep 0.02; done\n",
         );
-        let mut agent = std::process::Command::new(&fake.script)
-            .args([&fake.rollout, &fake.home, &child])
-            .env("CODEX_HOME", &fake.home)
-            .spawn()
-            .expect("spawn fake codex");
-        let pid = i32::try_from(agent.id()).expect("pid");
+        let agent = Running::spawn(
+            std::process::Command::new(&fake.script)
+                .args([&fake.rollout, &fake.home, &child])
+                .env("CODEX_HOME", &fake.home),
+        );
+        let pid = agent.pid();
         wait_until("the Codex child runs without an environment", || {
             process::children(pid)
                 .into_iter()
@@ -545,8 +541,6 @@ mod tests {
         });
 
         assert_eq!(rollout_path(pid, SystemTime::UNIX_EPOCH), Some(fake.rollout.clone()));
-        fake.signal("quit", "");
-        agent.wait().expect("fake agent exits");
     }
 
     #[test]
