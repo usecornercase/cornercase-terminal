@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.21
+
+- Deleting a group that holds projects now asks what to do with them: **keep projects** leaves them open without a group, as before, and **close projects** closes them along with the group, stopping their shells, instead of closing them one by one afterwards. Folders and worktrees stay on disk. `Enter` still keeps the projects.
+
 ## 0.12.20
 
 - `cornercase read --last-message` reads several agents in one call: repeat `--pane` or `--tab` to get each message under a header with its pane, agent, whether its turn is over and when it was written. `--json` puts their answers in a `panes` list. A pane without a message gets its own error, the others are still read, and the command exits 1 once it has read them all. Reading one agent keeps the same output as before.
