@@ -1826,7 +1826,10 @@ impl App {
         }
         match &self.overlay {
             Some(Overlay::Keys(group)) => return self.keys_key(*group, key, area),
-            Some(Overlay::Menu { .. }) | None if self.is_prefix(key) => self.overlay = Some(Overlay::Keys(None)),
+            Some(Overlay::Menu { .. }) | None if self.is_prefix(key) => {
+                dragging(self);
+                self.overlay = Some(Overlay::Keys(None));
+            }
             Some(Overlay::Menu { .. }) if key.code == KeyCode::Esc => self.overlay = None,
             None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
@@ -11095,6 +11098,20 @@ rm -f "$1/sessions/$$.json"
             send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
 
             assert_eq!((app.resizing, app.widths, app.pointer(AREA)), (None, widths, pointer::Shape::Default));
+        }
+
+        #[test]
+        fn the_prefix_key_ends_the_drag_and_brings_back_the_default_pointer() {
+            let (mut app, _rx) = app();
+            app.config.prefix_key = "ctrl+]".into();
+            let from = border(&app, ui::Border::Projects);
+            press(&mut app, from);
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, from.y + 4));
+
+            send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
+
+            assert!(matches!(app.overlay, Some(Overlay::Keys(None))));
+            assert_eq!((app.resizing, app.pointer(AREA)), (None, pointer::Shape::Default));
         }
 
         #[test]

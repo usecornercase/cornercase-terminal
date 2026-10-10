@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::graphics::detect::{in_multiplexer, version as parse_version};
 
+const MIN_GHOSTTY: (u32, u32, u32) = (1, 0, 0);
 const MIN_KITTY: (u32, u32, u32) = (0, 31, 0);
 const MIN_FOOT: (u32, u32, u32) = (1, 12, 0);
 
@@ -50,8 +51,8 @@ pub fn detect(version: Option<&str>, var: impl Fn(&str) -> Option<String>) -> Op
     }
     let lower = version?.to_ascii_lowercase();
     let at_least = |rest: &str, min| parse_version(rest).is_some_and(|v| v >= min);
-    if lower.starts_with("ghostty ") {
-        Some(Terminal::Ghostty)
+    if let Some(rest) = lower.strip_prefix("ghostty ") {
+        at_least(rest, MIN_GHOSTTY).then_some(Terminal::Ghostty)
     } else if let Some(rest) = lower.strip_prefix("kitty(") {
         at_least(rest, MIN_KITTY).then_some(Terminal::Kitty)
     } else if let Some(rest) = lower.strip_prefix("foot(") {
@@ -76,6 +77,8 @@ mod tests {
 
         #[rstest]
         #[case::ghostty("ghostty 1.3.1", Some(Terminal::Ghostty))]
+        #[case::ghostty_first_with_it("ghostty 1.0.0", Some(Terminal::Ghostty))]
+        #[case::ghostty_before_it("ghostty 0.9.0", None)]
         #[case::kitty("kitty(0.45.0)", Some(Terminal::Kitty))]
         #[case::kitty_first_with_it("kitty(0.31.0)", Some(Terminal::Kitty))]
         #[case::kitty_before_it("kitty(0.30.1)", None)]
