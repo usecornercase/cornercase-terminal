@@ -65,19 +65,15 @@ fn counted(raw: &[u8], statuses: &HashMap<String, Status>) -> Vec<File> {
         };
         let status =
             if old_path.is_some() { Status::Renamed } else { statuses.get(&path).copied().unwrap_or(Status::Modified) };
-        let fold = if *added == "-" {
-            Fold::Binary
-        } else if diff::is_lockfile(&path) {
-            Fold::Lockfile
-        } else {
-            Fold::Open
-        };
+        let binary = *added == "-";
+        let (added, removed) = (added.parse().unwrap_or(0), removed.parse().unwrap_or(0));
+        let fold = Fold::of(&path, binary, added, removed);
         files.push(File {
             path,
             old_path,
             status,
-            added: added.parse().unwrap_or(0),
-            removed: removed.parse().unwrap_or(0),
+            added,
+            removed,
             fold,
             hunks: Vec::new(),
             digest: 0,
@@ -174,8 +170,10 @@ pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use super::*;
-    use crate::changes::Mode;
+    use crate::changes::{Checkout, Mode, Panel, Scope};
     use crate::test_util::{TempDir, git, git_repo};
 
     fn request(dir: &std::path::Path, paths: &[&str]) -> Request {
@@ -197,21 +195,42 @@ mod tests {
     #[case::binary("binary")]
     #[case::untracked("untracked")]
     #[case::unborn("unborn")]
+    #[case::lockfile("lockfile")]
+    #[case::large_tracked("large")]
+    #[case::large_lockfile("large-lockfile")]
+    #[case::large_replacement("large-replacement")]
+    #[case::large_untracked("large-untracked")]
+    #[case::at_the_limit("limit")]
     fn folded_counts_match_the_project_diff(#[case] change: &str) {
+        let path = if change.ends_with("lockfile") { "Cargo.lock" } else { "a.txt" };
+        let original = if change == "large-replacement" {
+            "old\n".repeat(diff::MAX_LINES / 2 + 1)
+        } else {
+            "one\ntwo\n".to_string()
+        };
         let repo = if change == "unborn" {
             let repo = TempDir::new();
             git(repo.path(), &["init", "--quiet"]);
             repo
         } else {
-            git_repo(&[("a.txt", "one\ntwo\n")])
+            git_repo(&[(path, &original)])
         };
         match change {
             "rename" => git(repo.path(), &["mv", "a.txt", "a new.txt"]),
             "delete" => std::fs::remove_file(repo.path().join("a.txt")).expect("delete"),
             "binary" => std::fs::write(repo.path().join("a.txt"), b"a\0b").expect("binary"),
             "untracked" | "unborn" => std::fs::write(repo.path().join("new.txt"), "new\nlines\n").expect("new"),
+            "large" | "large-lockfile" | "large-replacement" | "large-untracked" | "limit" => {
+                let lines = match change {
+                    "large-replacement" => diff::MAX_LINES / 2 + 1,
+                    "limit" => diff::MAX_LINES - 2,
+                    _ => diff::MAX_LINES + 1,
+                };
+                let path = if change == "large-untracked" { "new.txt" } else { path };
+                std::fs::write(repo.path().join(path), "new\n".repeat(lines)).expect("many changed lines");
+            }
             _ => {
-                std::fs::write(repo.path().join("a.txt"), "one\nTWO\n").expect("edit");
+                std::fs::write(repo.path().join(path), "one\nTWO\n").expect("edit");
                 if change == "stage" {
                     git(repo.path(), &["add", "a.txt"]);
                 }
@@ -223,11 +242,43 @@ mod tests {
         let counts = |diff: &Diff| {
             diff.files
                 .iter()
-                .map(|f| (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.viewed_digest))
+                .map(|f| (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.fold, f.viewed_digest))
                 .collect::<Vec<_>>()
         };
         assert_eq!(counts(&summary), counts(&full));
         assert!(summary.files.iter().all(|f| f.hunks.is_empty()));
+    }
+
+    #[rstest::rstest]
+    #[case::generated_file("generated.txt")]
+    #[case::lockfile("Cargo.lock")]
+    fn an_unfold_request_keeps_large_tracked_files_folded_without_reading_their_patch(#[case] path: &str) {
+        let repo = git_repo(&[(path, "one\n")]);
+        std::fs::write(repo.path().join(path), "new\n".repeat(diff::MAX_LINES + 1)).expect("large edit");
+        let targets = [(Checkout { workspace: 1, dir: repo.path().to_path_buf(), base: None }, false)];
+        let now = Instant::now();
+        let mut panel = Panel { scope: Scope::Every, open: true, ..Panel::default() };
+        let (workspace, generation, request) = panel.request_every(&targets, now).expect("summary request");
+        let result = git::load(&request).expect("summary");
+        panel.loaded(workspace, generation, &request, Ok(result));
+        let initial = panel.summary(workspace).expect("model").diff().expect("diff").clone();
+        panel.set_fold(workspace, &initial.files[0], false);
+        for visit in 0..3 {
+            let (_, generation, request) = panel
+                .request_every(&targets, now + Duration::from_secs(visit * 3))
+                .expect("refresh after the unfold request");
+            assert_eq!(request.expanded, Some(Vec::new()));
+            let result = git::load(&request).expect("summary refresh");
+            assert!(result.diff.is_none());
+            panel.loaded(workspace, generation, &request, Ok(result));
+            let diff = panel.summary(workspace).expect("model").diff().expect("diff");
+            let file = &diff.files[0];
+            assert_eq!(
+                (file.fold, file.added, file.removed, file.hunks.len()),
+                (Fold::Large, diff::MAX_LINES + 1, 1, 0)
+            );
+            assert!(panel.folded(workspace, diff, file));
+        }
     }
 
     #[test]

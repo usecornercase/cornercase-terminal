@@ -71,7 +71,7 @@ The branch you pick is remembered for that workspace. Picking the default branch
 - Each hunk starts with a thin line naming the function or block it is in. Lines carry their old and new numbers, a green or red bar, and a stronger colour on the words that changed when a line was edited rather than replaced.
 - Code is highlighted with your terminal's palette.
 - Between two hunks, **`↕ 12 unchanged lines`** shows the code in between when you click it.
-- Lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml` and the like) start folded. Binary files and files with thousands of changed lines show their counts but no lines.
+- Lockfiles (`Cargo.lock`, `package-lock.json`, `pnpm-lock.yaml` and the like) start folded. Binary files and files with more than 3,000 added and removed lines show their counts but no lines in either scope. Every project leaves their patches unread.
 - When a diff is long, every file starts folded. **`fold all`** at the bottom folds or unfolds them all.
 
 ## Filter the files

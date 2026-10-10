@@ -60,6 +60,18 @@ pub enum Fold {
 }
 
 impl Fold {
+    pub(super) fn of(path: &str, binary: bool, added: usize, removed: usize) -> Self {
+        if binary {
+            Self::Binary
+        } else if added.saturating_add(removed) > MAX_LINES {
+            Self::Large
+        } else if is_lockfile(path) {
+            Self::Lockfile
+        } else {
+            Self::Open
+        }
+    }
+
     pub fn tag(self) -> Option<&'static str> {
         match self {
             Self::Open => None,
@@ -278,16 +290,10 @@ fn parse_file(lines: &[&str]) -> Option<File> {
     }
     let count = |kind| hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == kind).count();
     let (added, removed) = (count(Kind::Added), count(Kind::Removed));
-    let fold = if binary {
-        Fold::Binary
-    } else if added + removed > MAX_LINES {
+    let fold = Fold::of(&path, binary, added, removed);
+    if fold == Fold::Large {
         hunks.clear();
-        Fold::Large
-    } else if is_lockfile(&path) {
-        Fold::Lockfile
-    } else {
-        Fold::Open
-    };
+    }
     let old_path = renamed_from.filter(|from| *from != path);
     let digest = digest((&path, lines));
     Some(File { digest, viewed_digest: digest, path, old_path, status, added, removed, fold, hunks })
@@ -348,7 +354,7 @@ fn unquote(raw: &str) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-pub(super) fn is_lockfile(path: &str) -> bool {
+fn is_lockfile(path: &str) -> bool {
     Path::new(path).file_name().and_then(|n| n.to_str()).is_some_and(|name| LOCKFILES.contains(&name))
 }
 
@@ -375,22 +381,11 @@ pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materi
     }
     let text = String::from_utf8_lossy(bytes);
     file.added = text.lines().count();
-    if !materialize {
-        file.fold = if file.added > MAX_LINES {
-            Fold::Large
-        } else if is_lockfile(path) {
-            Fold::Lockfile
-        } else {
-            Fold::Open
-        };
+    file.fold = Fold::of(path, false, file.added, 0);
+    if !materialize || !file.fold.shows_lines() {
         return file;
     }
     let lines: Vec<Line> = text.lines().zip(1..).map(|(line, n)| Line::new(Kind::Added, None, Some(n), line)).collect();
-    file.added = lines.len();
-    if lines.len() > MAX_LINES {
-        return file;
-    }
-    file.fold = if is_lockfile(path) { Fold::Lockfile } else { Fold::Open };
     if !lines.is_empty() {
         file.hunks.push(Hunk { old_start: 0, new_start: 1, context: String::new(), lines });
     }
