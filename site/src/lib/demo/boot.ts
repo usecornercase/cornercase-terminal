@@ -217,6 +217,7 @@ async function hero(root: HTMLElement): Promise<void> {
 
   const state = (s: 'poster' | 'tour' | 'free') => {
     root.dataset.state = s;
+    root.querySelector<HTMLTextAreaElement>('.keys')?.setAttribute('tabindex', s === 'poster' ? '-1' : '0');
   };
   const say = (text: string) => {
     if (caption) caption.innerHTML = richText(text);

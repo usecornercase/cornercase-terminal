@@ -76,9 +76,9 @@ A script that coordinates agents mostly needs the panes: which agent runs where,
 
 ```text
 pane	tab	workspace	project	program	agent	status	background_shell	dialog	at_prompt	model	context	caller	shown	active	tab_name	workspace_name	branch	worktree	project_name	path	survey
-4	3	2	1	claude	claude	working	false	false	false	Opus 5.5	23	false	true	true	claude	default	main	false	shop	/home/ana/src/shop	false
-5	6	2	1	zsh	-	-	false	false	true	-	-	true	false	true	zsh	default	main	false	shop	/home/ana/src/shop	false
-12	11	7	1	codex	codex	waiting	false	false	false	gpt-5.4	41	false	false	true	codex	fix/login	fix/login	true	shop	/home/ana/.cornercase/worktrees/shop/fix-login	false
+4	3	2	1	claude	claude	working	false	false	false	Opus 5.5	23	false	true	true	claude	main	main	false	web-shop	/home/ana/code/web-shop	false
+5	6	2	1	zsh	-	-	false	false	true	-	-	true	false	true	zsh	main	main	false	web-shop	/home/ana/code/web-shop	false
+12	11	7	1	codex	codex	waiting	false	false	false	gpt-5.4	41	false	false	true	codex	fix/login	fix/login	true	web-shop	/home/ana/.cornercase/worktrees/web-shop/fix-login	false
 ```
 
 | Column | What it holds |
@@ -116,7 +116,7 @@ cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" 
 ### Create
 
 ```sh
-cornercase open ~/src/api                       # prints the project's id
+cornercase open ~/code/orders-api                # prints the project's id
 cornercase new-workspace experiments             # a workspace in the project's folder
 cornercase new-workspace fix/login --worktree    # a git worktree on branch fix/login
 cornercase new-tab --name server -- npm run dev  # prints the new pane's id
