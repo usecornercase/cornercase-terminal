@@ -14,9 +14,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyCode,
-    KeyEventKind, KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
+    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+    KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use ratatui::DefaultTerminal;
@@ -26,7 +25,7 @@ use ratatui::layout::{Position, Rect};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
 use signal_hook::iterator::{Handle, Signals};
 
 use crate::control::{self, Request, Response};
@@ -41,6 +40,8 @@ use crate::remote::{self, Remote, Stderr};
 use crate::restart;
 use crate::ui::remote::{self as notice, Notice};
 use crate::update::{self, CURRENT, Install, Outcome};
+
+mod input;
 
 const THEME_QUERY_TIMEOUT: Duration = Duration::from_secs(1);
 const TMUX_CHECK_TIMEOUT: Duration = Duration::from_millis(500);
@@ -533,13 +534,17 @@ pub(crate) fn stop(mut child: Child) {
 }
 
 fn install_panic_hook(forget: Vec<u8>) {
+    let main = thread::current().id();
+    let failures = std::sync::atomic::AtomicU64::new(0);
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if thread::current().name() == Some("main") {
+        if thread::current().id() == main {
             write_out(&forget);
+            restore_input_modes();
+            prev_hook(info);
+        } else if (failures.fetch_add(1, Ordering::Relaxed) + 1).is_power_of_two() {
+            input::report(&format!("{info}"));
         }
-        restore_input_modes();
-        prev_hook(info);
     }));
 }
 
@@ -556,6 +561,7 @@ fn restore_input_modes() {
 
 enum Incoming {
     Input(Event),
+    InputEnded,
     Server(u64, Received),
     Linked(u64, Result<Link>),
     Signal,
@@ -692,7 +698,7 @@ impl Window<'_> {
 
     fn handle(&mut self, incoming: Incoming) -> Result<Option<Ending>> {
         match incoming {
-            Incoming::Signal => Ok(Some(Ending::Detached)),
+            Incoming::Signal | Incoming::InputEnded => Ok(Some(Ending::Detached)),
             Incoming::Input(ev) => self.input(ev),
             Incoming::Tmux(outer) => {
                 self.tmux_checked(outer);
@@ -1071,6 +1077,14 @@ fn probe_outer(started: Instant, round_trip: Duration) -> Outer {
     Outer::Probed(query_terminal(detect::TMUX_PROBE.as_bytes(), wait).finish().1)
 }
 
+struct InputEnd(Sender<Incoming>);
+
+impl Drop for InputEnd {
+    fn drop(&mut self) {
+        let _ = self.0.send(Incoming::InputEnded);
+    }
+}
+
 struct Threads {
     stop: Arc<AtomicBool>,
     stopped: Receiver<()>,
@@ -1079,32 +1093,37 @@ struct Threads {
 
 impl Threads {
     fn spawn(tx: Sender<Incoming>) -> Result<Self> {
-        let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT]).map_err(Error::Signals)?;
+        let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT, SIGWINCH]).map_err(Error::Signals)?;
         let handle = signals.handle();
         let signalled = tx.clone();
         thread::spawn(move || {
-            if signals.forever().next().is_some() {
-                let _ = signalled.send(Incoming::Signal);
+            for signal in signals.forever() {
+                let incoming = if signal == SIGWINCH {
+                    let Ok((cols, rows)) = crossterm::terminal::size() else { continue };
+                    Incoming::Input(Event::Resize(cols, rows))
+                } else {
+                    Incoming::Signal
+                };
+                if signalled.send(incoming).is_err() || signal != SIGWINCH {
+                    break;
+                }
             }
         });
         let stop = Arc::new(AtomicBool::new(false));
         let (done, stopped) = mpsc::channel();
         let asked = Arc::clone(&stop);
-        thread::spawn(move || {
+        thread::Builder::new().name("input".into()).spawn(move || {
             let _done = done;
-            while !asked.load(Ordering::Relaxed) {
-                match event::poll(INPUT_POLL) {
-                    Ok(false) => {}
-                    Ok(true) => {
-                        let Ok(ev) = event::read() else { return };
-                        if tx.send(Incoming::Input(ev)).is_err() {
-                            return;
-                        }
-                    }
-                    Err(_) => return,
-                }
-            }
-        });
+            let _ended = InputEnd(tx.clone());
+            let input = stdin();
+            input::run(
+                &asked,
+                || input::readable(&input, INPUT_POLL),
+                |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
+                |event| tx.send(Incoming::Input(event)).is_ok(),
+                thread::sleep,
+            );
+        })?;
         Ok(Self { stop, stopped, signals: handle })
     }
 }
@@ -1130,23 +1149,26 @@ mod tests {
         assert_eq!(too_old_to_wait(refused).to_string(), TOO_OLD_TO_WAIT);
     }
 
+    #[test]
+    fn an_input_thread_that_unwinds_tells_the_window_it_ended() {
+        let (tx, rx) = mpsc::channel();
+        crate::panics::contain(|| {
+            let _ended = InputEnd(tx);
+            panic!("an input thread bug");
+        });
+        assert!(matches!(rx.try_recv(), Ok(Incoming::InputEnded)));
+    }
+
     mod probe {
         use std::os::unix::net::UnixStream;
 
         use super::*;
 
         #[test]
-        fn a_reply_that_comes_after_the_probe_gave_up_is_read_and_dropped() {
+        fn a_reply_queued_when_the_deadline_passes_is_read_and_dropped() {
             let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
-            let slow_terminal = thread::spawn(move || {
-                thread::sleep(Duration::from_millis(50));
-                theirs.write_all(b"\x1b_Gi=31;OK\x1b\\").expect("write the late reply");
-                theirs
-            });
-
-            let probe = listen(&ours, Duration::from_millis(10));
-            let _theirs = slow_terminal.join().expect("the slow terminal");
-
+            theirs.write_all(b"\x1b_Gi=31;OK\x1b\\").expect("write the late reply");
+            let probe = listen(&ours, Duration::ZERO);
             assert!(!probe.is_done());
             assert!(!readable(&ours, Duration::ZERO), "the late reply would reach a pane");
         }

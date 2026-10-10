@@ -123,7 +123,11 @@ impl Session {
 
     fn command_of(&self, bin: &std::path::Path) -> std::process::Command {
         let mut cmd = std::process::Command::new(bin);
-        cmd.env(SOCKET_ENV, self.socket()).env_remove(NESTED_ENV).env_remove(PANE_ENV).env_remove(update::LATEST_ENV);
+        cmd.env(SOCKET_ENV, self.socket())
+            .env_remove(NESTED_ENV)
+            .env_remove(PANE_ENV)
+            .env_remove(update::LATEST_ENV)
+            .env_remove("CORNERCASE_SERVER");
         cmd
     }
 
@@ -254,6 +258,7 @@ impl Harness {
         cmd.env(CLAUDE_DIR_ENV, session.claude_dir());
         cmd.env_remove(NESTED_ENV);
         cmd.env_remove(PANE_ENV);
+        cmd.env_remove("CORNERCASE_SERVER");
         for var in ["SHORTCUT_API_TOKEN", "LINEAR_API_KEY"].into_iter().chain(TERMINAL_ENV) {
             cmd.env_remove(var);
         }
@@ -278,7 +283,7 @@ impl Harness {
 
         let writer = pair.master.take_writer().expect("pty writer");
         let mut harness = Self { session, cols, screen, raw, writer, child, _master: pair.master };
-        harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
+        harness.wait_for_raw("app asks for the host colors", |raw| raw.contains("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
         harness.send(reply);
         harness
     }
@@ -1237,6 +1242,45 @@ fn shells_do_not_inherit_the_claude_code_session_that_started_the_server() {
     app.send(format!("echo \"session-[{vars}]-$CORNERCASE_E2E_KEPT\"\r").as_bytes());
 
     app.wait_for("only the unrelated variable reaches the shell", |s| s.contains("session-[]-kept"));
+}
+
+#[rstest]
+#[case::no_marker(b"".as_slice())]
+#[case::late_sixel(b"\x1b[?1;0;256S")]
+#[case::late_colors(b"\x1b]4;15;rgb:1111/2222/3333\x1b\\\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c")]
+#[case::invalid_coordinates(b"\x1b[<0;0;0M\x1b[0;0R")]
+fn a_probe_without_its_end_marker_keeps_keys_and_clicks(#[case] late: &[u8]) {
+    let mut app = Harness::answering(b"\x1b]11;rgb:20/20/20\x1b\\");
+    app.send(b"printf '\\033[?1000h\\033[?1006h'; echo cat-\"\"starts; cat -v\r");
+    app.wait_for("cat runs after the probe deadline", |s| s.contains("cat-starts"));
+    app.raw.lock().clear();
+    app.send(late);
+    app.click(Position::new(pane().x + 7, pane().y + 4));
+    app.send(b"echo zz-marker\r");
+    app.wait_for("cat receives the click and all keys", |s| s.contains("^[[<0;8;5M^[[<0;8;5mecho zz-marker"));
+    assert!(!app.text().contains("rgb:"), "the probe reply reached the pane");
+    assert!(!app.text().contains("ghostty 1.3.1"), "the terminal name reached the pane");
+    let raw = app.raw.lock();
+    let raw = String::from_utf8_lossy(&raw);
+    assert!(!raw.contains("\x1b[?1000l"), "input recovery disabled mouse capture");
+    assert!(!raw.contains("\x1b[?1049l"), "input recovery left the alternate screen");
+}
+
+#[test]
+fn a_late_palette_batch_is_not_typed_into_the_pane() {
+    let mut app = Harness::answering(b"\x1b]11;rgb:20/20/20\x1b\\");
+    app.send(b"echo cat-\"\"starts; cat -v\r");
+    app.wait_for("cat runs after the probe deadline", |s| s.contains("cat-starts"));
+    app.raw.lock().clear();
+    let mut late = String::new();
+    for i in 0..256 {
+        write!(late, "\x1b]4;{i};rgb:1111/2222/3333\x1b\\").expect("late palette reply");
+    }
+    late.push_str("\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c");
+    app.send(late.as_bytes());
+    app.send(b"zz-marker\r");
+    app.wait_for("cat echoes only the intended text", |s| s.matches("zz-marker").count() >= 2);
+    assert!(!String::from_utf8_lossy(&app.raw.lock()).contains("rgb:"), "the palette was typed into the pane");
 }
 
 #[test]

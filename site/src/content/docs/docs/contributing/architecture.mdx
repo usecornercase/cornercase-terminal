@@ -20,7 +20,7 @@ cornercase is a single Rust binary that plays two roles: a **server** that owns 
 ```
 
 - `src/main.rs` hands the arguments to `cli.rs`, which parses them with `clap`: none for the client, `server`, or `kill-server`; `restart` restarts the server; `update` installs the latest release and restarts the server; `--version` only prints the version; the [commands for scripts and agents](../../guides/scripts-and-agents/) send one request to the running server and print its answer.
-- The **client** (`client.rs`) starts the server if needed, queries the outer terminal's colours and name, sets up raw mode, mouse capture, bracketed paste and the kitty keyboard flags, sends a `Hello`, then has two jobs: write every frame it receives to stdout, and send every crossterm event it reads to the server.
+- The **client** (`client.rs`) starts the server if needed, queries the outer terminal's colours and name, sets up raw mode, mouse capture, bracketed paste and the kitty keyboard flags, sends a `Hello`, then has two jobs: write every frame it receives to stdout, and decode keyboard, mouse and paste input into crossterm events and send them to the server. Its input decoder drops late startup replies and recovers from malformed input; a lost terminal detaches the window.
 - The **server** (`server.rs`) owns the `App`, every PTY and every emulator. It renders a ratatui frame for each client and sends the bytes.
 
 ## The server loop
@@ -62,7 +62,7 @@ Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty),
 
 - It answers the terminal queries programs wait for (DSR, DA, DECRQM, kitty keyboard queries…) and reflows text on resize.
 - Its types are `!Send`, so every emulator lives on the server's main thread; each PTY's reader thread only forwards bytes. Replies go out from `on_pty_write`, in order with the output that asked for them. Everything written to a PTY, keys, pastes and replies alike, goes through a writer thread per pane, so a program that stops reading never blocks the server.
-- Cells keep palette indices. The colours queried from the outer terminal (OSC 10, 11 and 4, with DA1 as an end marker) become every emulator's defaults. The same query asks for the terminal's name (XTVERSION), which decides how desktop notifications are written to it.
+- Cells keep palette indices. The colours queried from the outer terminal (OSC 10 and 11, plus OSC 4 for ANSI colours 0–15, with DA1 as an end marker) become every emulator's defaults. The colour cube and greys at 16–255 keep the emulator's defaults; indexed cells still use the outer terminal's own palette. The small query fits the tty input queue. The same query asks for the terminal's name (XTVERSION), which decides how desktop notifications are written to it.
 - `take_copied` hands over OSC 52 clipboard writes from programs; reads and primary-selection writes are dropped.
 
 Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every key once a program enables the kitty protocol; a legacy encoder for the rest. Mouse events are encoded in `mouse.rs`, in the mode and encoding the program asked for, relative to its pane.

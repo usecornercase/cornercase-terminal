@@ -7,6 +7,7 @@ use crate::graphics::CellSize;
 use crate::graphics::detect::{self, Replies};
 
 pub const PALETTE_LEN: usize = 256;
+const THEMED_COLORS: usize = 16;
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
 const LIGHT_LUMINANCE: u32 = 128_000;
@@ -71,7 +72,7 @@ impl HostTheme {
     pub fn query(kitty: bool) -> String {
         let mut query = String::from(if kitty { detect::KITTY_QUERY } else { "" });
         query.push_str("\x1b[16t\x1b[?1;1;0S\x1b[?2;1;0S\x1b]10;?\x1b\\\x1b]11;?\x1b\\");
-        for i in 0..PALETTE_LEN {
+        for i in 0..THEMED_COLORS {
             let _ = write!(query, "\x1b]4;{i};?\x1b\\");
         }
         query.push_str("\x1b[>q\x1b[c");
@@ -533,7 +534,44 @@ mod tests {
         #[test]
         fn asks_for_colors_and_ends_with_device_attributes() {
             let q = HostTheme::query(false);
-            assert!(q.contains("\x1b]10;?\x1b\\\x1b]11;?\x1b\\") && q.ends_with("\x1b]4;255;?\x1b\\\x1b[>q\x1b[c"));
+            assert!(q.contains("\x1b]10;?\x1b\\\x1b]11;?\x1b\\") && q.ends_with("\x1b]4;15;?\x1b\\\x1b[>q\x1b[c"));
+        }
+
+        #[test]
+        fn asks_only_for_the_sixteen_themed_colors() {
+            let query = HostTheme::query(true);
+            let indices: Vec<usize> = query
+                .split("\x1b]4;")
+                .skip(1)
+                .map(|part| part.split(';').next().expect("palette index").parse().expect("numeric index"))
+                .collect();
+            assert_eq!(indices, (0..16).collect::<Vec<_>>());
+        }
+
+        #[rstest]
+        #[case::ghostty("rgb:ffff/ffff/ffff", 862)]
+        #[case::kitty("rgb:ffff/ffff/ffff", 862)]
+        #[case::iterm2_short_rgb("rgb:ff/ff/ff", 754)]
+        #[case::hash_rgb("#ffffff", 664)]
+        fn the_reply_batch_fits_the_smallest_tty_queue(#[case] color: &str, #[case] size: usize) {
+            let query = HostTheme::query(true);
+            let mut reply = String::from(
+                "\x1b_Gi=31;ENOTSUPPORTED:unicode placeholders\x1b\\\x1b[6;512;256t\x1b[?1;0;65536S\x1b[?2;0;65536;65536S",
+            );
+            for part in query.split("\x1b]").skip(1) {
+                let osc = part.split("\x1b\\").next().expect("OSC body").trim_end_matches('?');
+                write!(reply, "\x1b]{osc}{color}\x1b\\").expect("color reply");
+            }
+            write!(reply, "\x1bP>|{}\x1b\\\x1b[?62;1;2;4;6;9;15;18;21;22;28;29;42;52c", "v".repeat(256))
+                .expect("long terminal version and DA1");
+            assert_eq!(reply.len(), size);
+            assert!(reply.len() <= 1022, "{} bytes would fill the tty queue", reply.len());
+            let mut probe = ThemeProbe::default();
+            probe.feed(reply.as_bytes());
+            assert!(probe.is_done());
+            let (theme, _) = probe.finish();
+            assert!(theme.palette[..16].iter().all(Option::is_some));
+            assert!(theme.palette[16..].iter().all(Option::is_none));
         }
 
         #[test]
