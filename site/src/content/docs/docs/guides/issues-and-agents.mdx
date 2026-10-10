@@ -10,7 +10,7 @@ The issue browser turns "I should look at #482" into a running agent in a few cl
 
 <Screen
   name="issue-started"
-  alt="After starting issue 482: a new workspace called #482 Returns page… with a claude tab marked ○, where the agent has the issue link typed at its prompt"
+  alt="After starting issue 482: a new workspace called #482 Returns page… at the end of web-shop's list, with a claude tab marked ○ and Opus 5.5 · 7% under it, where the agent has the issue link typed at its prompt"
   caption="The result of start: a worktree workspace named after the issue, with the agent and the issue link waiting at its prompt."
 />
 
@@ -82,8 +82,8 @@ Jira Server and Data Center are not supported.
 
 <Screen
   name="issues-token"
-  crop={[2, 1, 106, 15]}
   alt="The Shortcut tab of the issue browser asking for an API token, with instructions to create one and a note that it is saved in ~/.config/cornercase/secrets.json"
+  crop={[2, 4, 106, 15]}
 />
 
 Saved tokens go to `secrets.json` next to your `config.json`, readable only by you (mode `0600`). They are never written to logs, to the issue cache or to the screen. The **disconnect** button in a tracker's tab removes its saved token.
@@ -96,8 +96,8 @@ When `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY` or `JIRA_API_TOKEN` is set, it takes
 
 <Screen
   name="issues-list"
-  crop={[2, 1, 106, 28]}
-  alt="The issue browser listing six GitHub issues of the shop project, each with its number, title, labels, author and age"
+  alt="The issue browser listing six GitHub issues of web-shop, each with its number, title, labels, author and age, with #482 selected and the start, refresh and cancel buttons at the bottom"
+  crop={[2, 4, 106, 30]}
 />
 
 Each row shows the issue's key, its title and, on the right, its state (for closed or tracker states), labels, author and age. Up to 100 issues are listed per source.
@@ -113,22 +113,22 @@ Two toggles at the top right narrow the list down:
 
 <Screen
   name="issues-people"
-  crop={[2, 1, 106, 9]}
   alt="The people filters of the GitHub source: assignee anyone and author anyone"
+  crop={[2, 4, 106, 8]}
 />
 
 <Screen
   name="issues-person-picker"
-  crop={[2, 1, 106, 28]}
-  alt="Choosing the GitHub assignee filter: anyone, me, or one of the people of the repository"
+  alt="Choosing the GitHub assignee filter: anyone, me, or @ana, @luis and @marta, the people of the repository"
+  crop={[2, 4, 106, 13]}
 />
 
 For each field you pick *anyone*, *me*, or a person from the tracker (type to find them). The filter goes into each tracker's own search, and cornercase remembers it, along with the closed toggle, the next time you open the browser:
 
 <Screen
   name="issues-mine"
-  crop={[2, 1, 106, 9]}
-  alt="The issue list filtered to GitHub assignee me, showing two issues"
+  alt="The issue list filtered to GitHub assignee me, showing #482 and #471"
+  crop={[2, 4, 106, 8]}
 />
 
 ## Read an issue
@@ -137,8 +137,8 @@ Click an issue, or select it and press `Enter`, to read it:
 
 <Screen
   name="issue-detail"
-  crop={[2, 1, 106, 28]}
-  alt="Issue 482 open in the browser: its state, labels and people, its link, what start will do, then the description rendered from Markdown with headings and a numbered list"
+  alt="Issue 482 open in the browser: its state, labels and people, its link, what start will do (its own worktree, an agent to choose, the link as the prompt), then the description rendered from Markdown with headings and a numbered list"
+  crop={[2, 4, 106, 30]}
 />
 
 At the top you see the issue's details and its link, then exactly what **start** will do:
@@ -153,8 +153,8 @@ Below comes the description, rendered from Markdown (Jira descriptions and comme
 
 <Screen
   name="issue-detail-end"
-  crop={[2, 1, 106, 28]}
-  alt="The end of issue 482: a Rust code block, a task list with two unchecked items and a comment from luis"
+  alt="The end of issue 482: a Rust code block, a task list with two unchecked items and a comment from @luis, with start, agent…, raw, copy url and back under it"
+  crop={[2, 4, 106, 30]}
 />
 
 - Scroll with the wheel, `↑` `↓`, `PgUp` `PgDn`, `Space`, `Home` and `End`.
@@ -195,8 +195,8 @@ cornercase picks the agent in this order:
 
 <Screen
   name="issue-agent-picker"
-  crop={[2, 1, 106, 28]}
   alt="The agent picker: claude, codex, gemini, opencode, cursor, copilot, amp, droid, pi, qwen, kimi, cline, goose and aider, each with its command"
+  crop={[2, 4, 106, 21]}
 />
 
 When you pick an agent that isn't your default, a **make default** button appears so you can keep that choice. How each agent starts (its permission mode and extra arguments) is set in **settings → Agents**; see [Agents](../../reference/agents/).

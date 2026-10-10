@@ -1,0 +1,12 @@
+#!/bin/sh
+case "${1:-} ${2:-}" in
+  "issue list")
+    case "$*" in
+      *"--assignee @me"*) cat "$CC_DATA/gh/mine.json" ;;
+      *) cat "$CC_DATA/gh/list.json" ;;
+    esac
+    ;;
+  "issue view") cat "$CC_DATA/gh/view-$3.json" ;;
+  "api repos/{owner}/{repo}/assignees") printf 'ana\nluis\nmarta\n' ;;
+  *) echo "gh stand-in: $*" >&2; exit 1 ;;
+esac

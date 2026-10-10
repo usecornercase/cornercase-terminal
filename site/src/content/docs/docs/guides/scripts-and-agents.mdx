@@ -18,15 +18,15 @@ These commands never start a server. Without one, they say `no cornercase server
 `cornercase status` lists every project, workspace, tab and pane with its id:
 
 ```text
-project 1  shop  ~/src/shop  (shown)
-  workspace 2  default  ~/src/shop  branch main  (shown)
+project 1  web-shop  ~/code/web-shop  (shown)
+  workspace 2  main  ~/code/web-shop  branch main  (shown)
     tab 3  claude  working  (shown)
-      pane 4  claude  working  Opus 5.5 · 23%  ~/src/shop  (shown)
+      pane 4  claude  working  Opus 5.5 · 23%  ~/code/web-shop  (shown)
     tab 6  zsh
-      pane 5  zsh  ~/src/shop  (you)
-  workspace 7  fix/login  ~/.cornercase/worktrees/shop/fix-login  branch fix/login  worktree
-group 9  work  collapsed
-  project 10  api  ~/src/api
+      pane 5  zsh  ~/code/web-shop  (you)
+  workspace 7  fix/login  ~/.cornercase/worktrees/web-shop/fix-login  branch fix/login  worktree
+group 9  personal  collapsed
+  project 10  blog  ~/code/blog
 ```
 
 - Ids come from one counter and last as long as the server runs: after a restart, the same tabs get new ids. Take them from `status`, or from what a command printed.

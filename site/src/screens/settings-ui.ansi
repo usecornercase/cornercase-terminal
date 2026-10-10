@@ -1,30 +1,38 @@
-[0;2m [0;2;38;5;8;48;5;236m ⌕ search projects, workspa…[0;2;48;5;236m [0;2m [0;2;38;5;239m│[0;2m                                                                              [0m
-[0;2m  [0;38;5;8m╭─[0;1m Settings [0;38;5;8m─────────────────────────────────────────────────────────────────────────────────────────────╮[0;2m  [0m
-[0;1;2;38;5;8m p[0;38;5;8m│[0m [0;38;5;7m Worktrees [0m [0;38;5;7m Agents [0m [0;38;5;7m Issues [0m [0;1;38;5;6;48;5;236m UI [0m                                                                     [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6m  [0;38;5;8m│[0m [0;38;5;6;48;5;236m▌ [0;1;48;5;236msidebar                   [0;48;5;236mprojects_on_top  [0;38;5;8;48;5;236mhow projects, workspaces and tabs are laid out[0;48;5;236m           [0m [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6;48;5;236m▌ [0;38;5;8m│[0m [0;38;5;6m  [0mtabs                      sidebar  [0;38;5;8mwhere a workspace's tabs are listed[0m                               [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6m  [0;38;5;8m│[0m [0;38;5;6m  [0magents section            [ ] hidden  [0;38;5;8mevery running agent in the sidebar[0m                             [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6m  [0;38;5;8m│[0m [0;38;5;6m  [0mcounts                    [x] shown  [0;38;5;8mwhat a project or folded group holds, such as (3)[0m               [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m [0;38;5;6m  [0minactive panes            [x] dimmed  [0;38;5;8min a split tab[0m                                                 [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;6m [0;38;5;8m│[0m [0;38;5;6m  [0mmodel                     [x] shown  [0;38;5;8munder an agent's tab, such as Opus 5.5[0m                          [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m [0;38;5;6m  [0mcontext                   [x] shown  [0;38;5;8mhow full its context is, such as 23%[0m                            [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m [0;38;5;6m  [0mmemory                    [ ] hidden  [0;38;5;8mthe RAM its processes use, such as 1.2 GB[0m                      [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;239m ─[0;38;5;8m│[0m [0;38;5;6m  [0mdesktop notifications     auto  [0;38;5;8mwhen an agent in another tab needs you or finishes[0m                   [0;38;5;8m│[0;2m  [0m
-[0;1;2;38;5;8m w[0;38;5;8m│[0m [0;38;5;6m  [0mcheck for updates         [x] every hour  [0;38;5;8masks GitHub for the latest release[0m                         [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m [0;38;5;6m  [0mprefix key                off  [0;38;5;8mopens a menu of keyboard shortcuts[0m                                    [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6;48;5;236m▌ [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;6;48;5;236m▌[0;2;48;5;236m [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;6m [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m  [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2;38;5;239m ─[0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;8m [0;38;5;8m│[0m                                                                                                        [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;8m [0;38;5;8m│[0m [0;38;5;8menter changes the selected setting · tab or ←→ switches tabs · every change is saved at once[0m           [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;8m [0;38;5;8m│[0m                                                                                       [0;38;5;7;48;5;236m restart [0m [0;1;38;5;6;48;5;236m done [0m [0;38;5;8m│[0;2m  [0m
-[0;2m [0;2;38;5;8m [0;38;5;8m╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0;2m  [0m
-[0;2m [0;2;38;5;8m Quit [0;2m                        [0;2;38;5;239m│[0;2m                                                                              [0m
+[2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m   1 use serde::Deserialize;                                                  
+                               [38;5;239m│[39m   2                                                                          
+[1m[38;5;8m Projects[0;2m                      [38;5;239m│[39m   3 #[derive(Debug, Deserialize)]                                            
+                               [38;5;239m│[39m   4 pub struct Address {                                                     
+[38;5;6m  [0m[38;5;8m╭─[1m[39m Settings [0m[38;5;8m─────────────────────────────────────────────────────────────────────────────────────────────╮[2m[39m  
+[38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;7m Worktrees [39m [38;5;7m Agents [39m [38;5;7m Issues [39m [1m[38;5;6m[48;5;236m UI [0m                                                                     [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m[48;5;236m▌ [1m[39msidebar                   [0m[48;5;236mprojects_on_top  [38;5;8mhow projects, workspaces and tabs are laid out[39m           [49m [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mtabs                      sidebar  [38;5;8mwhere a workspace's tabs are listed[39m                               [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39magents section            [ ] hidden  [38;5;8mevery running agent in the sidebar[39m                             [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m [38;5;6m  [39mcounts                    [x] shown  [38;5;8mwhat a project or folded group holds, such as (3)[39m               [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39minactive panes            [x] dimmed  [38;5;8min a split tab[39m                                                 [38;5;8m│[2m[39m  
+ [38;5;6m [0m[38;5;8m│[39m [38;5;6m  [39mmodel                     [x] shown  [38;5;8munder an agent's tab, such as Opus 5.5[39m                          [38;5;8m│[2m[39m  
+[38;5;239m ─[0m[38;5;8m│[39m [38;5;6m  [39mcontext                   [x] shown  [38;5;8mhow full its context is, such as 23%[39m                            [38;5;8m│[2m[39m  
+[1m[38;5;8m W[0m[38;5;8m│[39m [38;5;6m  [39mmemory                    [ ] hidden  [38;5;8mthe RAM its processes use, such as 1.2 GB[39m                      [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39mdesktop notifications     auto  [38;5;8mwhen an agent in another tab needs you or finishes[39m                   [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m [38;5;6m  [39mcheck for updates         [x] every hour  [38;5;8masks GitHub for the latest release[39m                         [38;5;8m│[2m[39m  
+[38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [38;5;6m  [39mprefix key                off  [38;5;8mopens a menu of keyboard shortcuts[39m                                    [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+[38;5;6m  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+  [0m[38;5;8m│[39m                                                                                                        [38;5;8m│[2m[39m  
+ [38;5;6m [0m[38;5;8m│[39m [38;5;8menter changes the selected setting · tab or ←→ switches tabs · every change is saved at once[39m           [38;5;8m│[2m[39m  
+[38;5;239m ─[0m[38;5;8m│[39m                                                                                       [38;5;7m[48;5;236m restart [39m[49m [1m[38;5;6m[48;5;236m done [0m [38;5;8m│[2m[39m  
+ [38;5;8m [0m[38;5;8m╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯[2m[39m  
+ [38;5;8m Files [39m                [38;5;8m TODO [39m [38;5;239m│[39m [38;5;4m~[39m                                                                            
+ [38;5;8m Settings [39m                    [38;5;239m│[39m [38;5;4m~[39m                                                                            
+ [38;5;8m Usage [39m                       [38;5;239m│[39m [7m src/returns/address.rs                    11,1          All [0;2m                
+ [38;5;8m Quit [39m                        [38;5;239m│[39m                                                                              

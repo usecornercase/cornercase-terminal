@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$CC_HOME/real/nvim" "$CC_CAPTURE/bin/nvim.sh" "$@"

@@ -40,6 +40,39 @@ export function wrapAll(lines: Line[], w: number): Cell[][] {
   return out;
 }
 
+export function wrapWords(line: Line, w: number, indent = 0): Cell[][] {
+  if (w <= 0) return [[]];
+  const lead = Math.min(Math.max(0, indent), w - 1);
+  const cells: Cell[] = [];
+  for (const s of line) for (const ch of s.t) cells.push({ ch, s: s.s });
+  const rows: Cell[][] = [];
+  let row: Cell[] = [];
+  let start = 0;
+  const flush = () => {
+    rows.push(row);
+    row = Array.from({ length: lead }, () => ({ ch: ' ' }));
+    start = lead;
+  };
+  let i = 0;
+  while (i < cells.length) {
+    let j = i;
+    while (j < cells.length && cells[j].ch !== ' ') j += 1;
+    if (j === i) {
+      if (row.length < w) row.push(cells[i]);
+      i += 1;
+      continue;
+    }
+    if (row.length + (j - i) > w && row.length > start) flush();
+    for (let k = i; k < j; k += 1) {
+      if (row.length >= w) flush();
+      row.push(cells[k]);
+    }
+    i = j;
+  }
+  rows.push(row);
+  return rows;
+}
+
 export function paintRows(g: Grid, r: Rect, rows: Cell[][], top = 0): void {
   for (let i = 0; i < r.h; i++) {
     const row = rows[top + i];

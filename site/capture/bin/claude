@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$CC_HOME/real/claude" "$CC_CAPTURE/bin/claude.sh" "$@"

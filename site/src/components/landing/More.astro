@@ -1,41 +1,66 @@
 ---
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (path: string) => `${base}/docs/${path}`;
-const features: [string, string, string][] = [
-  ['Issues to agents', 'Pick an issue from GitHub, Shortcut, Linear or Jira. Press start. An agent’s on it.', 'guides/issues-and-agents/'],
-  ['Worktrees, sorted', 'Every line of work gets its own branch and folder. No more stashing.', 'guides/worktrees/'],
-  ['Changes, live', 'See exactly what an agent changed, while it’s changing it.', 'guides/changes/'],
-  ['Files, coloured', 'Browse and search the code, with git’s marks on every line, and see its images. Click a path an agent prints to open it.', 'guides/files/'],
-  ['Agents run agents', 'A command line lets an agent start others in their own worktrees, wait for them and read what they wrote.', 'guides/scripts-and-agents/'],
-  ['TODO, at hand', 'Your TODO list, next to the shells it is about. Click to add, edit or tick off.', 'guides/todo/'],
-  ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.', 'guides/projects-workspaces-tabs/#notifications'],
-  ['Context and usage', 'See the model and context use of Claude Code, Codex and opencode, plus Claude’s and Codex’s plan usage.', 'guides/projects-workspaces-tabs/#how-full-the-context-is'],
-  ['Splits', 'Right-click, split. Drag to resize. That’s it.', 'guides/panes-and-splits/'],
-  ['Search', 'Any project, branch or tab, found as you type.', 'guides/search/'],
-  ['Just click', 'Click to switch, drag to reorder. Your keyboard stays yours, unless you pick a prefix key for shortcuts.', 'reference/keyboard-and-mouse/'],
-  ['A real terminal', 'Ghostty’s engine in every pane. nvim, htop and your agents just work.', '#a-few-deliberate-choices'],
-  ['Your colours', 'It wears your terminal’s theme, light or dark.', 'help/faq/#does-it-respect-my-terminals-colour-theme'],
-  ['Phone-sized', 'Shrink the window, or SSH in from your phone. Still fits.', 'guides/small-terminals/'],
-  ['Remote, steady', 'Agents on a big box, the window on your laptop. Wi-Fi drops? It reconnects.', 'guides/remote/'],
-  ['Updates itself', 'New version? One click. Your layout comes right back.', 'installation/#update'],
+const groups: [string, [string, string, string, string][]][] = [
+  [
+    'For your agents',
+    [
+      ['◐', 'Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.', 'guides/projects-workspaces-tabs/#how-full-the-context-is'],
+      ['!', 'Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.', 'guides/projects-workspaces-tabs/#notifications'],
+      ['%', 'Plan usage', 'Your Claude and Codex limits, in one dialog.', 'guides/projects-workspaces-tabs/#plan-usage'],
+      ['⎇', 'Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.', 'guides/worktrees/'],
+    ],
+  ],
+  [
+    'For your code',
+    [
+      ['▤', "Files, with git's marks", 'Browse and search the code, images included. Changed lines are marked. Click a path an agent prints to open it.', 'guides/files/'],
+      ['⌕', 'Search', 'Any project, branch or tab, found as you type.', 'guides/search/'],
+      ['│', 'Splits', "Right-click, split. Drag to resize. That's it.", 'guides/panes-and-splits/'],
+      ['○', 'TODO, at hand', 'Your list, next to the shells it is about.', 'guides/todo/'],
+    ],
+  ],
+  [
+    'For your terminal',
+    [
+      ['▮', 'A real terminal', "Ghostty's engine in every pane. nvim, htop and your agents just work.", '#a-few-deliberate-choices'],
+      ['↖', 'Just click', 'Click to switch, drag to reorder. Your keyboard stays yours, unless you pick a prefix key.', 'reference/keyboard-and-mouse/'],
+      ['◧', 'Your colours', "It wears your terminal's theme, light or dark.", 'help/faq/#does-it-respect-my-terminals-colour-theme'],
+      ['▯', 'Phone-sized', 'Shrink the window, or SSH in from your phone. Still fits.', 'guides/small-terminals/'],
+      ['⇅', 'Remote, steady', 'Agents on a big box, the window on your laptop. Wi-Fi drops? It reconnects.', 'guides/remote/'],
+      ['↑', 'Updates itself', 'New version? One click. Your layout comes right back.', 'installation/#update'],
+    ],
+  ],
 ];
 ---
 
 <section class="section more" id="more" aria-labelledby="more-title">
   <div class="wrap">
     <h2 class="h2" id="more-title">Everything else, a click away.</h2>
-    <ul class="grid">
+    <div class="lists">
       {
-        features.map(([title, text, path]) => (
-          <li class="reveal">
-            <a href={docs(path)}>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </a>
-          </li>
+        groups.map(([name, items]) => (
+          <section class="list" aria-label={name}>
+            <h3>{name}</h3>
+            <ul>
+              {items.map(([glyph, title, text, path]) => (
+                <li class="reveal">
+                  <a href={docs(path)}>
+                    <span class="glyph" aria-hidden="true">
+                      {glyph}
+                    </span>
+                    <span class="body">
+                      <b>{title}</b>
+                      <span>{text}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         ))
       }
-    </ul>
+    </div>
   </div>
 </section>
 
@@ -48,72 +73,80 @@ const features: [string, string, string][] = [
     font-size: clamp(30px, 3.6vw, 48px);
   }
 
-  .grid {
+  .lists {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin: clamp(28px, 4vw, 44px) 0 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(28px, 4vw, 48px);
+    margin-top: clamp(28px, 4vw, 44px);
+  }
+
+  .list {
+    min-width: 0;
+  }
+
+  h3 {
+    margin: 0 0 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-2);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin: 0;
     padding: 0;
     list-style: none;
   }
 
   a {
-    display: block;
-    height: 100%;
-    padding: 18px 18px 20px;
-    border-radius: 14px;
-    border: 1px solid var(--line);
-    background: rgb(255 255 255 / 0.015);
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
     text-decoration: none;
-    transition:
-      border-color 0.2s ease,
-      background-color 0.2s ease;
+    color: var(--text);
   }
 
-  a:hover {
-    border-color: rgb(135 95 255 / 0.45);
-    background: rgb(135 95 255 / 0.06);
+  .glyph {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--cyan);
   }
 
-  h3 {
+  .body {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 6px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .body b {
     font-family: var(--font-display);
-    font-size: 17.5px;
+    font-size: 16.5px;
     font-weight: 700;
     letter-spacing: -0.01em;
   }
 
-  h3::before {
-    content: '▌';
-    color: var(--cyan);
-    font-family: var(--font-mono);
-    font-size: 14px;
+  a:hover .body b {
+    color: var(--purple-3);
   }
 
-  p {
-    margin: 0;
+  .body span {
     color: var(--text-2);
     font-size: 14.5px;
     line-height: 1.55;
   }
 
-  @media (max-width: 1100px) {
-    .grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
   @media (max-width: 820px) {
-    .grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 520px) {
-    .grid {
+    .lists {
       grid-template-columns: minmax(0, 1fr);
     }
   }

@@ -10,7 +10,7 @@ The files panel shows the files of the active workspace in a column on the right
 
 <Screen
   name="files"
-  alt="cornercase with the issue-482-returns-page workspace active: git status in the pane, and the files panel on the right with the search bar and the tree, src and src/returns open, address.rs and mod.rs marked M in yellow, tests.rs marked A in green, and a yellow dot on both folders"
+  alt="cornercase with the #482 Returns page… workspace active: a bash tab at its prompt in the pane after git status, and the files panel on the right with the search bar and the tree, src and src/returns open, address.rs and mod.rs marked M in yellow, tests.rs without a mark since it is committed, and the folders holding changes marked with ●"
   caption="The files of an issue worktree, with what changed marked in the tree."
 />
 
@@ -32,9 +32,9 @@ In a git workspace, a changed file gets its status in its colour: `M` for modifi
 
 <Screen
   name="files-file"
-  crop={[95, 0, 45, 20]}
   alt="The viewer on src/returns/address.rs: lines 11 and 12 selected and marked with a blue bar as changed, the two lines they replaced shown in red above them, and open, ask agent and copy at the top"
   caption="Lines 11 and 12 changed; the lines they replaced are shown above them."
+  crop={[95, 0, 45, 20]}
 />
 
 The header shows the file's path, its number of lines and its language; **`‹`** goes back to the tree.
@@ -185,9 +185,9 @@ The bar at the top of the panel searches the whole workspace, skipping what git 
 
 <Screen
   name="files-search"
-  crop={[95, 0, 45, 10]}
   alt="The search bar holding first_line: 3 matches in 3 files, each file's path followed by its matching line with its number and first_line highlighted in yellow"
   caption="Searching the text: every matching line, grouped by file."
+  crop={[95, 0, 45, 10]}
 />
 
 By default it searches the **text** of the files: each line that holds what you typed, grouped by file, with what matched highlighted. Case is ignored unless you type an uppercase letter. Binary files are skipped, and the search stops at the first 1,000 matches. Opening a match opens the file at that line, selected, with every match highlighted.
@@ -196,8 +196,8 @@ Click **`▤`** at the right of the bar to search file **names** instead, and ag
 
 <Screen
   name="files-names"
-  crop={[95, 0, 45, 5]}
   alt="The search bar in file name mode, with the ▤ button lit and retadd typed: 1 file, src/returns/address.rs, with r, e, t, a, d, d highlighted"
+  crop={[95, 0, 45, 5]}
 />
 
 | Keys | Do |
@@ -215,8 +215,8 @@ When a program prints the path of a file in the workspace, hovering it underline
 
 <Screen
   name="files-link"
-  crop={[47, 0, 93, 7]}
   alt="A pane showing the output of grep -rn first_line src, with src/returns/address.rs:11 underlined in cyan under the pointer"
+  crop={[32, 0, 108, 6]}
 />
 
 - A line number after the path opens the file at that line, selected, so **ask agent** takes it at once: `:12`, `:12:5`, a range like `:12-20`, or GitHub's `#L12-L20`.

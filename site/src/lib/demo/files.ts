@@ -1,7 +1,7 @@
 import { ASPECT } from '../term/canvas';
 import { BOLD, IMAGE_CELL, type Rect, type Style, rect } from '../term/grid';
 import type { App } from './app';
-import { type FileDiff, TINTS, drawPanelBorder } from './changes';
+import { type FileDiff, drawPanelBorder, tintsOf } from './changes';
 import { type Picture, type Tree, picture } from './data';
 import { highlight, language } from './highlight';
 import { type Areas, FILES_LABEL, bottom, right } from './layout';
@@ -627,7 +627,7 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const max = Math.max(0, rows.length - body.h);
   const first = Math.min(viewer.scroll, max);
   const lang = language(viewer.path);
-  const tints = app.light ? TINTS.light : TINTS.dark;
+  const tints = tintsOf(app);
   p.region({ r: body, wheel: (dy) => app.scrollFiles(dy, max) });
   rows.slice(first, first + body.h).forEach((row, k) => {
     const r = rect(body.x, body.y + k, body.w, 1);

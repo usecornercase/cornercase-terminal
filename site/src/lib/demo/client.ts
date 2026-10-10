@@ -1,5 +1,6 @@
 import { CanvasView, type Cursor } from '../term/canvas';
 import type { Grid, Rect } from '../term/grid';
+import type { Theme } from '../term/palette';
 import { App } from './app';
 import type { Key } from './programs';
 
@@ -16,6 +17,7 @@ export interface Mounted {
   pointTo(x: number, y: number): { left: number; top: number };
   box(r: Rect): Box;
   speed(times: number): void;
+  setTheme(t: Theme): void;
   destroy(): void;
 }
 
@@ -234,6 +236,12 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
     },
     speed(times: number) {
       rate = times;
+    },
+    setTheme(t: Theme) {
+      view.theme = t;
+      app.theme = t;
+      last = null;
+      app.dirty();
     },
     destroy() {
       cancelAnimationFrame(raf);

@@ -10,7 +10,7 @@ The changes panel shows the diff of the active workspace in a column on the righ
 
 <Screen
   name="changes"
-  alt="cornercase with the issue-482-returns-page workspace active: git status in the pane, and the changes panel on the right with the uncommitted tab, 2 files +6 −5, src/returns/address.rs open with its hunk hovered (open, ask agent, copy), and src/returns/mod.rs below"
+  alt="cornercase with the #482 Returns page… workspace active: a bash tab at its prompt in the pane after git status, and the changes panel on the right with the Uncommitted tab, 2 files +6 −5, src/returns/address.rs open with its hunk hovered (open, ask agent, copy), and src/returns/mod.rs below it"
   caption="The changes of an issue worktree, next to the shell that made them."
 />
 
@@ -36,16 +36,16 @@ Three tabs at the top choose what you see:
 
 <Screen
   name="changes-commits"
+  alt="The Commits tab: 1 file +7 −0 vs origin/main, with the new file src/returns/tests.rs open"
   crop={[95, 0, 45, 14]}
-  alt="The commits tab: 1 file +7 −0 vs main, with the new file src/returns/tests.rs open"
 />
 
 Click `vs main ▾` to compare with another branch, local or remote. Type to filter the list, and click a branch or press `Enter`:
 
 <Screen
   name="changes-base"
-  crop={[33, 3, 72, 24]}
-  alt="The compare with dialog listing the branches issue-482-returns-page and main, main marked as current"
+  alt="The Compare with dialog listing the branches feat/dark-mode, feat/gift-cards, issue-482-returns-page-crashes-on-empty-address, main and origin/main, with origin/main marked as current"
+  crop={[34, 7, 72, 24]}
 />
 
 The branch you pick is remembered for that workspace. Picking the default branch again goes back to following the default.
@@ -66,8 +66,8 @@ Click **`⌕`** next to the panel's `×` to show only some files. A field opens 
 
 <Screen
   name="changes-filter"
-  crop={[95, 0, 45, 30]}
-  alt="The all tab with !tests.rs in the filter field: 2 of 3 files, src/returns/address.rs and src/returns/mod.rs shown"
+  alt="The All tab with !tests.rs in the filter field: 2 of 3 files, src/returns/address.rs and src/returns/mod.rs shown"
+  crop={[95, 0, 45, 38]}
 />
 
 | Type | Shows |

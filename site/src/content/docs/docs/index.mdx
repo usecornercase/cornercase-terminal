@@ -12,8 +12,8 @@ Everything is a button. There is no prefix key to learn and no shortcut that ste
 
 <Screen
   name="overview"
-  alt="cornercase with four projects in the sidebar, the shop project's workspaces in the second column with ◐ on the agent's working claude tab and Opus 5.5 · 7% under it, and a tab split in two: an agent working on issue 482 above, the failing tests below"
-  caption="Four projects, four lines of work in shop, and an agent fixing issue #482 next to its failing test."
+  alt="cornercase with the work and personal groups in the sidebar, the workspaces of web-shop below with ◐ on the claude tab of #482 Returns page… and Opus 5.5 · 7% under it, and a tab split in two: the agent working on the issue above, the failing test below"
+  caption="Two groups, four projects, four lines of work in web-shop, and an agent fixing issue #482 next to its failing test."
 />
 
 ## How it is organised
@@ -21,12 +21,12 @@ Everything is a button. There is no prefix key to learn and no shortcut that ste
 Each level lives inside the one before it, and each one has its own column or area on screen:
 
 ```text
-shop                       project     a folder
+web-shop                   project     a folder
 ├── main                   workspace   the folder itself
 │   ├── nvim               tab
 │   └── bash               tab
-├── feat/login             workspace   its own worktree
-│   └── bash               tab
+├── feat/dark-mode         workspace   its own worktree
+│   └── claude             tab
 └── #482 Returns page …    workspace   from an issue
     └── claude             tab         split in two panes
 ```

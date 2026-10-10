@@ -10,12 +10,12 @@ interface Props {
   bare?: boolean;
 }
 
-const { scene, label, theme = 'midnight', class: className, bare = false } = Astro.props;
-const { svg, cols } = snapshot(scene, label, themes[theme]);
+const { scene, label, theme = 'tokyo', class: className, bare = false } = Astro.props;
+const { svg, cols, rows } = snapshot(scene, label, themes[theme]);
 const background = themes[theme].background;
 ---
 
-<div class:list={['snapshot', className, { bare }]} style={`--cols: ${cols}; --term-bg: ${background}`} set:html={svg} />
+<div class:list={['snapshot', className, { bare }]} style={`--cols: ${cols}; --rows: ${rows}; --term-bg: ${background}`} set:html={svg} />
 
 <style>
   .snapshot {
