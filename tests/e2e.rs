@@ -1717,7 +1717,92 @@ fn split_opens_a_pane_beside_the_shown_one() {
 }
 
 #[test]
-fn an_agent_started_from_the_command_line_takes_its_prompts_is_waited_for_and_read() {
+fn several_agents_messages_are_read_in_order_and_failures_leave_the_others_visible() {
+    let app = agent_app();
+    let session = &app.session;
+    let mut messages = Vec::new();
+    for prompt in ["first answer", "second answer"] {
+        let start = session.spawn(&["start", "claude", "--prompt", prompt, "--wait", "--timeout", "30"]);
+        session.wait_for_working();
+        std::fs::write(session.claude_dir().join("finish"), "").expect("let the agent finish");
+        let started = Session::output(start);
+        let pane = started.lines().next().expect("pane");
+        let value: serde_json::Value =
+            serde_json::from_str(&session.says(&["read", "--pane", pane, "--last-message", "--json"])).expect("json");
+        messages.push(value);
+    }
+    let first = messages[0]["pane"].to_string();
+    let second = messages[1]["pane"].to_string();
+    let report = session.report();
+    let tab = report.panes().iter().find(|p| p.pane.to_string() == first).expect("agent pane").tab.to_string();
+    let shell = report.projects[0].workspaces[0].tabs[0].panes[0].id.to_string();
+    let args = ["read", "--last-message", "--tab", &tab, "--pane", &second, "--pane", &second, "--tab", &tab];
+    let json: serde_json::Value =
+        serde_json::from_str(&session.says(&[&args[..], &["--json"]].concat())).expect("json");
+    assert_eq!(json, serde_json::json!({ "panes": [messages[1], messages[0]] }));
+    let text = session.says(&args);
+    assert_eq!(
+        text,
+        format!(
+            "pane {second}  claude  turn_over=true  written=2026-10-08T12:00:01.000Z\nsaid: second answer\n\n\
+             pane {first}  claude  turn_over=true  written=2026-10-08T12:00:01.000Z\nsaid: first answer"
+        )
+    );
+    let repeated = session.cli(&["read", "--last-message", "--pane", &first, "--pane", &first]);
+    assert!(repeated.status.success(), "{repeated:?}");
+    assert_eq!(repeated.stdout, b"said: first answer\n");
+    let empty = session.says(&["start", "claude"]);
+    session.wait_for_report("the agent has a record without any messages", |_| {
+        let out = session.cli(&["read", "--last-message", "--pane", &empty]);
+        String::from_utf8_lossy(&out.stderr).contains("has not written a message yet")
+    });
+    let mixed = [
+        "read",
+        "--last-message",
+        "--pane",
+        &shell,
+        "--pane",
+        &first,
+        "--pane",
+        &empty,
+        "--pane",
+        &second,
+        "--tab",
+        "999999",
+    ];
+    let failed = session.cli(&[&mixed[..], &["--json"]].concat());
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    assert!(failed.stderr.is_empty(), "{failed:?}");
+    let json: serde_json::Value = serde_json::from_slice(&failed.stdout).expect("json");
+    let entries = json["panes"].as_array().expect("panes");
+    assert_eq!(entries.len(), 5);
+    assert_eq!(entries[0]["pane"].to_string(), shell);
+    assert!(entries[0]["error"].as_str().expect("error").contains("runs no agent"));
+    assert_eq!(entries[1], messages[0]);
+    assert_eq!(entries[2]["pane"].to_string(), empty);
+    assert!(entries[2]["error"].as_str().expect("error").contains("has not written a message yet"));
+    assert_eq!(entries[3], messages[1]);
+    assert_eq!(entries[4]["tab"], 999_999);
+    assert!(entries[4]["error"].as_str().expect("error").contains("no tab"));
+    let failed = session.cli(&mixed);
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    let text = String::from_utf8(failed.stdout).expect("text");
+    let positions: Vec<usize> = [
+        format!("pane {shell}\nerror:"),
+        format!("pane {first}  claude"),
+        format!("pane {empty}\nerror:"),
+        format!("pane {second}  claude"),
+        "tab 999999\nerror:".into(),
+    ]
+    .iter()
+    .map(|header| text.find(header).expect("header"))
+    .collect();
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+    let screens = session.cli(&["read", "--pane", &first, "--pane", &second]);
+    assert!(refused(&screens, 2, "needs --last-message"), "{screens:?}");
+}
+
+fn agent_app() -> Harness {
     let session = Session::new();
     std::fs::create_dir(session.dir.join("bin")).expect("create bin");
     let agent = session.dir.join("bin").join("claude");
@@ -1729,6 +1814,7 @@ t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"; mkdir -p "$t"; n=0
 state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
 finished() { while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish"; }
 said() { n=$((n+1)); printf '{"type":"assistant","timestamp":"2026-10-08T12:00:0%s.000Z","message":{"id":"m%s","model":"claude-opus-5-5","content":[{"type":"text","text":"said: %s"}]}}\n' "$n" "$n" "$1" >> "$t/s$$.jsonl"; }
+: > "$t/s$$.jsonl"
 state idle
 while printf 'agent> ' && IFS= read -r line; do
   case "$line" in *panel*) printf 'Shell details\n'; read -r line; continue ;; esac
@@ -1743,6 +1829,13 @@ done
     std::fs::write(session.dir.join("config.json"), config).expect("write config");
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+    app
+}
+
+#[test]
+fn an_agent_started_from_the_command_line_takes_its_prompts_is_waited_for_and_read() {
+    let app = agent_app();
+    let session = &app.session;
     let finish = || {
         session.wait_for_working();
         std::fs::write(session.claude_dir().join("finish"), "").expect("let the agent finish");

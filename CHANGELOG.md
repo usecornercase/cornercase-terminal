@@ -5,6 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.12.20
 
 - Click a file path in a pane to read it in the files panel even when it is outside the workspace, such as `/tmp/report.md`, a plan in `~/.claude/plans/` or a file in another project or worktree. Paths beginning with `~/` now expand to your home folder. Outside files show their absolute path, which **open**, **ask agent** and **copy** use too; they have no git marks. **`‹`** returns to the tree or your search results, and closing and reopening the panel keeps the file.
+- `cornercase read --last-message` reads several agents in one call: repeat `--pane` or `--tab` to get each message under a header with its pane, agent, whether its turn is over and when it was written. `--json` puts their answers in a `panes` list. A pane without a message gets its own error, the others are still read, and the command exits 1 once it has read them all. Reading one agent keeps the same output as before.
 
 ## 0.12.19
 
