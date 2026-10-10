@@ -29,16 +29,34 @@ pub(super) enum Decoded {
 pub(super) struct Parser {
     pending: Vec<u8>,
     since: Option<Instant>,
+    replies_until: Option<Instant>,
     failures: u64,
 }
 
 impl Parser {
-    pub(super) fn feed(&mut self, bytes: &[u8], emit: &mut impl FnMut(Event) -> bool) -> bool {
-        self.feed_with(bytes, emit, &mut parse::parse_event)
+    fn new(probe_timed_out: bool) -> Self {
+        Self { replies_until: probe_timed_out.then(|| Instant::now() + REPLY_WAIT), ..Self::default() }
     }
 
-    fn feed_with(&mut self, bytes: &[u8], emit: &mut impl FnMut(Event) -> bool, decode: &mut Decode<'_>) -> bool {
+    pub(super) fn feed(&mut self, bytes: &[u8], full: bool, emit: &mut impl FnMut(Event) -> bool) -> bool {
+        self.feed_with(bytes, full, emit, &mut parse::parse_event)
+    }
+
+    fn feed_with(
+        &mut self,
+        bytes: &[u8],
+        full: bool,
+        emit: &mut impl FnMut(Event) -> bool,
+        decode: &mut Decode<'_>,
+    ) -> bool {
+        if bytes.first() == Some(&0x1b) && self.pending == b"\x1b" {
+            self.reset();
+            if !emit(Event::Key(crossterm::event::KeyCode::Esc.into())) {
+                return false;
+            }
+        }
         for (at, &byte) in bytes.iter().enumerate() {
+            let more = at + 1 < bytes.len() || full;
             self.pending.push(byte);
             self.since = Some(Instant::now());
             if REPLY_PREFIXES.iter().any(|prefix| self.pending.starts_with(prefix))
@@ -54,13 +72,15 @@ impl Parser {
             }
             if !self.pending.starts_with(b"\x1b[200~")
                 && let Some(end) = reply(&self.pending)
+                && (end || !reply_prefix(&self.pending) || more || self.expects_replies())
             {
                 if end {
+                    self.replies_until = Some(Instant::now() + REPLY_WAIT);
                     self.reset();
                 }
                 continue;
             }
-            if byte == 0x1b && self.pending.len() > 1 && !self.pending.starts_with(b"\x1b[200~") {
+            if byte == 0x1b && self.pending.len() > 2 && !self.pending.starts_with(b"\x1b[200~") {
                 self.pending.clear();
                 self.pending.push(byte);
             }
@@ -69,7 +89,7 @@ impl Parser {
             } else {
                 Vec::new()
             };
-            let more = at + 1 < bytes.len() || self.pending == b"\x1b";
+            let more = more || (self.pending == b"\x1b" && self.expects_replies());
             let result = panics::contain(|| decode(&self.pending, more));
             match result {
                 Some(Ok(Some(Decoded::Event(event)))) => {
@@ -78,7 +98,11 @@ impl Parser {
                         return false;
                     }
                 }
-                Some(Ok(Some(Decoded::Reply)) | Err(_)) => self.reset(),
+                Some(Ok(Some(Decoded::Reply))) => {
+                    self.replies_until = Some(Instant::now() + REPLY_WAIT);
+                    self.reset();
+                }
+                Some(Err(_)) => self.reset(),
                 Some(Ok(None)) => {
                     if self.pending.len() > SEQUENCE_LIMIT && !self.pending.starts_with(b"\x1b[200~") {
                         self.reset();
@@ -92,7 +116,7 @@ impl Parser {
                     }
                 }
             }
-            if !remainder.is_empty() && !self.feed_with(&remainder, emit, decode) {
+            if !remainder.is_empty() && !self.feed_with(&remainder, full, emit, decode) {
                 return false;
             }
         }
@@ -104,12 +128,7 @@ impl Parser {
             self.reset();
             return emit(Event::Key(crossterm::event::KeyCode::Esc.into()));
         }
-        if self.since.is_some_and(|since| since.elapsed() >= ESC_WAIT)
-            && self.pending.len() > 1
-            && REPLY_PREFIXES
-                .iter()
-                .any(|prefix| prefix.starts_with(&self.pending) && prefix.len() > self.pending.len())
-        {
+        if self.since.is_some_and(|since| since.elapsed() >= ESC_WAIT) && reply_prefix(&self.pending) {
             let bytes = std::mem::take(&mut self.pending);
             self.since = None;
             if let Some(Ok(Some(Decoded::Event(event)))) = panics::contain(|| parse::parse_event(&bytes[..2], false))
@@ -117,7 +136,7 @@ impl Parser {
             {
                 return false;
             }
-            return self.feed(&bytes[2..], emit);
+            return self.feed(&bytes[2..], false, emit);
         }
         if self.since.is_some_and(|since| since.elapsed() >= REPLY_WAIT) && reply(&self.pending).is_some() {
             self.reset();
@@ -125,10 +144,29 @@ impl Parser {
         true
     }
 
+    fn expects_replies(&self) -> bool {
+        self.replies_until.is_some_and(|until| Instant::now() < until)
+    }
+
+    fn wait(&self) -> Duration {
+        let hold = if self.pending == b"\x1b" || reply_prefix(&self.pending) {
+            ESC_WAIT
+        } else if reply(&self.pending).is_some() {
+            REPLY_WAIT
+        } else {
+            return super::INPUT_POLL;
+        };
+        self.since.map_or(super::INPUT_POLL, |since| hold.saturating_sub(since.elapsed()).min(super::INPUT_POLL))
+    }
+
     pub(super) fn reset(&mut self) {
         self.pending.clear();
         self.since = None;
     }
+}
+
+fn reply_prefix(bytes: &[u8]) -> bool {
+    bytes.len() > 1 && REPLY_PREFIXES.iter().any(|prefix| prefix.starts_with(bytes) && prefix.len() > bytes.len())
 }
 
 fn reply(bytes: &[u8]) -> Option<bool> {
@@ -166,21 +204,23 @@ pub(super) fn readable(input: &impl AsFd, wait: Duration) -> io::Result<bool> {
 
 pub(super) fn run(
     stop: &AtomicBool,
-    mut poll: impl FnMut() -> io::Result<bool>,
+    probe_timed_out: bool,
+    mut poll: impl FnMut(Duration) -> io::Result<bool>,
     mut read: impl FnMut(&mut [u8]) -> io::Result<usize>,
     mut emit: impl FnMut(Event) -> bool,
     mut pause: impl FnMut(Duration),
 ) {
-    let mut parser = Parser::default();
+    let mut parser = Parser::new(probe_timed_out);
     let mut bytes = [0; 1024];
     let mut failures = 0_u64;
     while !stop.load(Ordering::Relaxed) {
-        let result = panics::contain(|| if poll()? { read(&mut bytes).map(Some) } else { Ok(None) });
+        let result = panics::contain(|| if poll(parser.wait())? { read(&mut bytes).map(Some) } else { Ok(None) });
         match result {
             Some(Ok(Some(0))) => return,
+            Some(Err(error)) if error.kind() == io::ErrorKind::Interrupted => {}
             Some(Err(error)) if ended(&error) => return,
             Some(Ok(Some(n))) => {
-                if !parser.feed(&bytes[..n], &mut emit) {
+                if !parser.feed(&bytes[..n], n == bytes.len(), &mut emit) {
                     return;
                 }
             }
@@ -233,7 +273,7 @@ mod tests {
 
     fn events(bytes: &[u8]) -> Vec<Event> {
         let mut events = Vec::new();
-        Parser::default().feed(bytes, &mut |event| {
+        Parser::default().feed(bytes, false, &mut |event| {
             events.push(event);
             true
         });
@@ -268,14 +308,14 @@ mod tests {
         ];
         assert_eq!(events(&stream), expected);
         for at in 1..stream.len() {
-            let mut parser = Parser::default();
+            let mut parser = Parser::new(true);
             let mut received = Vec::new();
             let mut emit = |event| {
                 received.push(event);
                 true
             };
-            parser.feed(&stream[..at], &mut emit);
-            parser.feed(&stream[at..], &mut emit);
+            parser.feed(&stream[..at], false, &mut emit);
+            parser.feed(&stream[at..], false, &mut emit);
             assert_eq!(received, expected, "split at {at}");
         }
     }
@@ -303,10 +343,10 @@ mod tests {
     #[case::delete(b"\x1b[3~", KeyCode::Delete.into())]
     fn key_encodings_survive_split_reads(#[case] bytes: &[u8], #[case] expected: KeyEvent) {
         for size in 1..=bytes.len() {
-            let mut parser = Parser::default();
+            let mut parser = Parser::new(true);
             let mut received = Vec::new();
             for chunk in bytes.chunks(size) {
-                parser.feed(chunk, &mut |event| {
+                parser.feed(chunk, false, &mut |event| {
                     received.push(event);
                     true
                 });
@@ -321,6 +361,7 @@ mod tests {
         let mut received = Vec::new();
         parser.feed_with(
             b"xz",
+            false,
             &mut |event| {
                 received.push(event);
                 true
@@ -352,6 +393,120 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[case::escape(b"\x1b", KeyCode::Esc.into())]
+    #[case::alt_bracket(b"\x1b]", KeyEvent::new(KeyCode::Char(']'), KeyModifiers::ALT))]
+    #[case::alt_p(b"\x1bP", KeyEvent::new(KeyCode::Char('P'), KeyModifiers::ALT))]
+    #[case::alt_underscore(b"\x1b_", KeyEvent::new(KeyCode::Char('_'), KeyModifiers::ALT))]
+    fn escape_keys_arrive_immediately_when_no_reply_is_expected(#[case] bytes: &[u8], #[case] expected: KeyEvent) {
+        assert_eq!(events(bytes), [Event::Key(expected)]);
+        let mut parser = Parser::new(true);
+        parser.replies_until = Some(Instant::now());
+        let mut received = Vec::new();
+        parser.feed(bytes, false, &mut |event| {
+            received.push(event);
+            true
+        });
+        assert_eq!(received, [Event::Key(expected)]);
+    }
+
+    #[rstest]
+    #[case::separate_reads(false, false, 2)]
+    #[case::one_read(false, true, 1)]
+    #[case::separate_reads_with_late_replies(true, false, 2)]
+    #[case::one_read_with_late_replies(true, true, 1)]
+    fn consecutive_escapes_keep_the_original_read_boundaries(
+        #[case] late: bool,
+        #[case] together: bool,
+        #[case] count: usize,
+    ) {
+        let mut parser = Parser::new(late);
+        let mut received = Vec::new();
+        let mut emit = |event| {
+            received.push(event);
+            true
+        };
+        if together {
+            parser.feed(b"\x1b\x1b", false, &mut emit);
+        } else {
+            parser.feed(b"\x1b", false, &mut emit);
+            parser.feed(b"\x1b", false, &mut emit);
+        }
+        parser.since = Instant::now().checked_sub(ESC_WAIT);
+        parser.idle(&mut emit);
+        assert_eq!(received, vec![Event::Key(KeyCode::Esc.into()); count]);
+    }
+
+    #[rstest]
+    #[case::escape(b"\x1b")]
+    #[case::alt_bracket(b"\x1b]")]
+    #[case::alt_p(b"\x1bP")]
+    #[case::alt_underscore(b"\x1b_")]
+    fn a_held_key_bounds_the_next_poll_by_its_remaining_wait(#[case] bytes: &[u8]) {
+        let mut parser = Parser::new(true);
+        parser.feed(bytes, false, &mut |_| panic!("key is still held"));
+        let elapsed = ESC_WAIT * 3 / 4;
+        parser.since = Instant::now().checked_sub(elapsed);
+        assert!(parser.wait() <= ESC_WAIT.saturating_sub(elapsed));
+        parser.since = Instant::now().checked_sub(ESC_WAIT);
+        assert_eq!(parser.wait(), Duration::ZERO);
+    }
+
+    #[test]
+    fn the_input_loop_uses_the_held_keys_remaining_wait() {
+        let stop = AtomicBool::new(false);
+        let mut polls = 0;
+        run(
+            &stop,
+            true,
+            |wait| {
+                polls += 1;
+                if polls == 1 {
+                    assert_eq!(wait, super::super::INPUT_POLL);
+                    Ok(true)
+                } else {
+                    assert!(wait < ESC_WAIT);
+                    stop.store(true, Ordering::Relaxed);
+                    Ok(false)
+                }
+            },
+            |bytes| {
+                bytes[0] = 0x1b;
+                Ok(1)
+            },
+            |_| true,
+            |_| panic!("poll must use the remaining hold time"),
+        );
+        assert_eq!(polls, 2);
+    }
+
+    #[test]
+    fn a_full_read_can_keep_a_trailing_escape_for_the_next_read() {
+        let mut parser = Parser::default();
+        let mut received = Vec::new();
+        let mut emit = |event| {
+            received.push(event);
+            true
+        };
+        parser.feed(b"\x1b", true, &mut emit);
+        parser.feed(b"[A", false, &mut emit);
+        assert_eq!(received, [Event::Key(KeyCode::Up.into())]);
+    }
+
+    #[test]
+    fn dropping_a_reply_opens_a_brief_window_for_the_next_reply() {
+        let mut parser = Parser::default();
+        let mut received = Vec::new();
+        let mut emit = |event| {
+            received.push(event);
+            true
+        };
+        parser.feed(b"\x1b[?1;0;256S", false, &mut emit);
+        parser.feed(b"\x1b", false, &mut emit);
+        parser.feed(b"]4;1;rgb:00/00/00\x07z", false, &mut emit);
+        assert_eq!(received, [key('z')]);
+    }
+
     #[test]
     fn an_interrupted_reply_keeps_the_new_escape_sequence() {
         assert_eq!(events(b"\x1b]4;1;rgb:ff\x1b[A"), [Event::Key(KeyCode::Up.into())]);
@@ -360,13 +515,13 @@ mod tests {
     #[test]
     fn escape_and_alt_string_keys_are_released_after_a_short_wait() {
         for bytes in [b"\x1b".as_slice(), b"\x1b]", b"\x1bP", b"\x1b_"] {
-            let mut parser = Parser::default();
+            let mut parser = Parser::new(true);
             let mut received = Vec::new();
             let mut emit = |event| {
                 received.push(event);
                 true
             };
-            parser.feed(bytes, &mut emit);
+            parser.feed(bytes, false, &mut emit);
             parser.since = Instant::now().checked_sub(ESC_WAIT);
             parser.idle(&mut emit);
             assert_eq!(received.len(), 1);
@@ -382,10 +537,10 @@ mod tests {
             received.push(event);
             true
         };
-        parser.feed(b"\x1b]4;1;rgb:ff", &mut emit);
+        parser.feed(b"\x1b]4;1;rgb:ff", false, &mut emit);
         parser.since = Instant::now().checked_sub(REPLY_WAIT);
         parser.idle(&mut emit);
-        parser.feed(b"z", &mut emit);
+        parser.feed(b"z", false, &mut emit);
         assert_eq!(received, [key('z')]);
     }
 
@@ -401,11 +556,12 @@ mod tests {
         let mut pauses = Vec::new();
         let fail = || -> io::Result<bool> {
             assert!(!panic, "input bug");
-            Err(io::ErrorKind::Interrupted.into())
+            Err(io::Error::other("input failure"))
         };
         run(
             &stop,
-            || if !in_read && !failed.replace(true) { fail() } else { Ok(true) },
+            false,
+            |_| if !in_read && !failed.replace(true) { fail() } else { Ok(true) },
             |bytes| {
                 if in_read && !failed.replace(true) {
                     return fail().map(|_| 1);
@@ -431,7 +587,8 @@ mod tests {
         let mut error = error;
         run(
             &AtomicBool::new(false),
-            || Ok(true),
+            false,
+            |_| Ok(true),
             |_| error.take().map_or(Ok(0), Err),
             |_| panic!("no event after input ended"),
             |_| panic!("no retry after input ended"),
@@ -444,7 +601,8 @@ mod tests {
         let mut received = Vec::new();
         run(
             &AtomicBool::new(false),
-            || Ok(true),
+            false,
+            |_| Ok(true),
             |bytes| {
                 reads += 1;
                 match reads {
@@ -452,7 +610,7 @@ mod tests {
                         bytes[..2].copy_from_slice(b"\x1b[");
                         Ok(2)
                     }
-                    2 => Err(io::ErrorKind::Interrupted.into()),
+                    2 => Err(io::Error::other("input failure")),
                     _ => {
                         bytes[0] = b'z';
                         Ok(1)
@@ -468,13 +626,54 @@ mod tests {
         assert_eq!(received, [key('z')]);
     }
 
+    #[rstest]
+    #[case::poll(false)]
+    #[case::read(true)]
+    fn an_interrupted_system_call_keeps_a_partial_mouse_sequence(#[case] in_read: bool) {
+        let polls = Cell::new(0);
+        let mut reads = 0;
+        let mut received = Vec::new();
+        run(
+            &AtomicBool::new(false),
+            false,
+            |_| {
+                polls.set(polls.get() + 1);
+                if !in_read && polls.get() == 2 { Err(io::ErrorKind::Interrupted.into()) } else { Ok(true) }
+            },
+            |bytes| {
+                reads += 1;
+                if in_read && reads == 2 {
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                let chunk = if reads == 1 { b"\x1b[<0;8;".as_slice() } else { b"5M" };
+                bytes[..chunk.len()].copy_from_slice(chunk);
+                Ok(chunk.len())
+            },
+            |event| {
+                received.push(event);
+                false
+            },
+            |_| panic!("an interrupted call must retry without pausing"),
+        );
+        assert_eq!(
+            received,
+            [Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 7,
+                row: 4,
+                modifiers: KeyModifiers::NONE,
+            })]
+        );
+    }
+
     #[test]
     fn repeated_errors_back_off_until_stopped() {
         let stop = AtomicBool::new(false);
         let mut pauses = 0;
         run(
             &stop,
-            || Err(io::Error::other("not ready")),
+            false,
+            |_| Err(io::Error::other("not ready")),
             |_| panic!("no read"),
             |_| panic!("no event"),
             |wait| {
@@ -501,6 +700,7 @@ mod tests {
         let mut received = Vec::new();
         parser.feed_with(
             b"xz",
+            false,
             &mut |event| {
                 received.push(event);
                 true

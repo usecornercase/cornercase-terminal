@@ -868,6 +868,7 @@ struct Host {
     graphics: Support,
     probe: String,
     tty: Option<String>,
+    probe_timed_out: bool,
 }
 
 #[derive(Debug, Default)]
@@ -877,7 +878,7 @@ struct TmuxCheck {
 }
 
 fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Host) -> Result<Ending> {
-    let Host { theme, facts, graphics, probe, tty } = host;
+    let Host { theme, facts, graphics, probe, tty, probe_timed_out } = host;
     let name = facts.replies.terminal.clone();
     let notify = notify::detect(name.as_deref(), env);
     let (tx, rx) = mpsc::channel();
@@ -900,7 +901,7 @@ fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Hos
         retries: Retries::default(),
     };
     window.link(link)?;
-    let _threads = Threads::spawn(tx)?;
+    let _threads = Threads::spawn(tx, probe_timed_out)?;
     loop {
         let ending = match rx.recv_timeout(window.wait(Instant::now())) {
             Ok(incoming) => window.handle(incoming)?,
@@ -960,6 +961,7 @@ fn probe_host() -> Host {
     let tmux_check = if forced { None } else { start_tmux_check() };
     let probe = query_terminal(HostTheme::query(asked_kitty).as_bytes(), THEME_QUERY_TIMEOUT);
     let round_trip = started.elapsed();
+    let mut probe_timed_out = !probe.is_done();
     let (theme, replies) = probe.finish();
     let theme = HostTheme { truecolor: truecolor(), ..theme };
     let mut facts = Facts { replies, asked_kitty, window: window_cell(), tmux: None };
@@ -971,7 +973,7 @@ fn probe_host() -> Host {
         facts.tmux = Some(match local {
             Some(Outer::Stale) if facts.replies.terminal.is_none() => Outer::Stale,
             Some(local @ Outer::Local { .. }) => local,
-            _ => probe_outer(started, round_trip),
+            _ => probe_outer(started, round_trip, &mut probe_timed_out),
         });
     } else if let Some(child) = tmux_check {
         stop(child);
@@ -981,7 +983,7 @@ fn probe_host() -> Host {
     if let Some(value) = detect::ignored_override(env) {
         probe = format!("{probe} ignored-{}={value}", detect::OVERRIDE_ENV);
     }
-    Host { theme, facts, graphics, probe, tty }
+    Host { theme, facts, graphics, probe, tty, probe_timed_out }
 }
 
 fn query_terminal(query: &[u8], timeout: Duration) -> ThemeProbe {
@@ -1071,10 +1073,12 @@ fn finish_tmux_check(mut child: Child, tty: Option<&str>) -> Option<Outer> {
     }
 }
 
-fn probe_outer(started: Instant, round_trip: Duration) -> Outer {
+fn probe_outer(started: Instant, round_trip: Duration, timed_out: &mut bool) -> Outer {
     thread::sleep(TMUX_SETTLE.saturating_sub(started.elapsed()));
     let wait = (round_trip * 2 + OUTER_WAIT).min(THEME_QUERY_TIMEOUT);
-    Outer::Probed(query_terminal(detect::TMUX_PROBE.as_bytes(), wait).finish().1)
+    let probe = query_terminal(detect::TMUX_PROBE.as_bytes(), wait);
+    *timed_out |= !probe.is_done();
+    Outer::Probed(probe.finish().1)
 }
 
 struct InputEnd(Sender<Incoming>);
@@ -1092,7 +1096,7 @@ struct Threads {
 }
 
 impl Threads {
-    fn spawn(tx: Sender<Incoming>) -> Result<Self> {
+    fn spawn(tx: Sender<Incoming>, probe_timed_out: bool) -> Result<Self> {
         let mut signals = Signals::new([SIGTERM, SIGHUP, SIGINT, SIGWINCH]).map_err(Error::Signals)?;
         let handle = signals.handle();
         let signalled = tx.clone();
@@ -1118,7 +1122,8 @@ impl Threads {
             let input = stdin();
             input::run(
                 &asked,
-                || input::readable(&input, INPUT_POLL),
+                probe_timed_out,
+                |wait| input::readable(&input, wait),
                 |bytes| rustix::io::read(&input, bytes).map_err(Into::into),
                 |event| tx.send(Incoming::Input(event)).is_ok(),
                 thread::sleep,
