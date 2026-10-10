@@ -4435,12 +4435,7 @@ impl App {
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
         let landing = self.pane_landing(pane_area);
-        let still = self.overlay.is_none()
-            && self.row_drag.is_none()
-            && self.pane_drag.is_none()
-            && self.selecting.is_none()
-            && dragging.is_none();
-        let pointer = self.hover.filter(|_| still);
+        let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
         let home = self.home.clone();
         let tab = self.tab_mut().and_then(|tab| {

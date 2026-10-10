@@ -517,6 +517,16 @@ impl App {
         }
     }
 
+    pub(super) fn link_hover(&self) -> Option<Position> {
+        self.hover.filter(|_| {
+            self.overlay.is_none()
+                && self.row_drag.is_none()
+                && self.pane_drag.is_none()
+                && self.selecting.is_none()
+                && self.divider_drag.is_none()
+        })
+    }
+
     pub(super) fn hovered_link(
         tab: &Tab,
         screens: &[Snapshot],
