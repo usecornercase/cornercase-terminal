@@ -10,9 +10,9 @@ Every tab holds one or more **panes**. Each pane is a real terminal running its 
 
 <Screen
   name="splits"
-  crop={[48, 0, 62, 30]}
   alt="A tab split in three: the test output on the left, git log at the top right and git status at the bottom right, with the inactive panes dimmed"
   caption="A tab split right, then down. The active pane is on the left; the others are dimmed."
+  crop={[32, 0, 78, 30]}
 />
 
 ## Split a pane
@@ -21,8 +21,8 @@ Every tab holds one or more **panes**. Each pane is a real terminal running its 
 
 <Screen
   name="pane-menu"
-  crop={[48, 6, 62, 12]}
   alt="The pane menu: split right, split down, send right-clicks to the pane, close pane"
+  crop={[37, 15, 33, 6]}
 />
 
 | Item | What it does |
@@ -85,8 +85,8 @@ When the program doesn't use the mouse, press, drag and release over text to sel
 
 <Screen
   name="toast"
-  crop={[47, 20, 63, 10]}
-  alt="The bottom right of the screen with a green toast that says copied to clipboard over the test output"
+  alt="The bottom right of the screen with a green toast that says copied to clipboard, under the git status pane and next to the end of the test output"
+  crop={[47, 20, 63, 18]}
 />
 
 The copy goes through your terminal with the OSC 52 escape sequence, so it reaches your local clipboard even when cornercase runs on another machine over SSH.

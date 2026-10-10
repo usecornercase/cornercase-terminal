@@ -1,0 +1,23 @@
+#!/bin/sh
+calls="$CC_DATA/ssh.calls"
+n=$(( $(cat "$calls" 2>/dev/null || echo 0) + 1 ))
+printf '%s\n' "$n" > "$calls"
+if [ "$n" -eq 2 ]; then
+  echo 'ssh: connect to host devbox port 22: Connection refused' >&2
+  exit 255
+fi
+if [ "$n" -gt 2 ]; then
+  while [ -f "$calls" ]; do sleep 0.5; done
+  exit 255
+fi
+echo $$ > "$CC_DATA/ssh.pid"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) shift 2 ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+shift
+exec /bin/sh -c "exec $*"

@@ -1,0 +1,32 @@
+{
+  "version": 5,
+  "groups": [
+    { "name": "work", "icon": "●", "colour": 12 },
+    { "name": "personal", "icon": "◆", "colour": 2 }
+  ],
+  "projects": [
+    {
+      "path": "__HOME__/code/web-shop",
+      "group": 0,
+      "active": 0,
+      "workspaces": [
+        { "path": "__HOME__/code/web-shop", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/web-shop" }] }, { "panes": [{ "cwd": "__HOME__/code/web-shop" }] }] },
+        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode" }] }] },
+        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards" }] }] }
+      ]
+    },
+    {
+      "path": "__HOME__/code/orders-api",
+      "group": 0,
+      "active": 0,
+      "workspaces": [
+        { "path": "__HOME__/code/orders-api", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/orders-api" }] }] },
+        { "path": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination" }] }] }
+      ]
+    },
+    { "path": "__HOME__/code/blog", "group": 1, "workspaces": [{ "path": "__HOME__/code/blog", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/blog" }] }] }] },
+    { "path": "__HOME__/code/dotfiles", "group": 1, "workspaces": [{ "path": "__HOME__/code/dotfiles", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/dotfiles" }] }] }] }
+  ],
+  "active": 0,
+  "widths": { "projects": 32, "workspaces": 26, "changes": 45, "stack": 11 }
+}

@@ -13,7 +13,7 @@ This tour takes you through a normal session: opening projects, starting a line 
 Open your terminal in a project and run `cornercase`:
 
 ```sh
-cd ~/code/shop
+cd ~/code/web-shop
 cornercase
 ```
 
@@ -21,8 +21,8 @@ The first time, cornercase starts its background server and opens the folder you
 
 <Screen
   name="first-run"
-  alt="cornercase right after starting in the shop folder: the shop project in the sidebar, its main workspace with a bash tab, an existing worktree called feat/dark-mode, and the shell on the right"
-  caption="A fresh start in ~/code/shop. The feat/dark-mode worktree already existed, so it shows up on its own."
+  alt="cornercase right after starting in the web-shop folder: the web-shop project in the sidebar, its main workspace with a bash tab, an existing worktree called feat/dark-mode below it, and the shell on the right"
+  caption="A fresh start in ~/code/web-shop. The feat/dark-mode worktree already existed, so it shows up on its own."
 />
 
 On the left are your projects and the workspaces of the active one, in one column with the projects on top (you can also [put them side by side or in one tree](../guides/projects-workspaces-tabs/#arrange-the-columns)); the rest is the pane:
@@ -46,9 +46,9 @@ The active project and tab are marked with a cyan bar `▌` on the left edge and
 
    <Screen
      name="picker-filter"
-     crop={[19, 3, 72, 24]}
-     alt="The open project folder picker in ~/code with the filter a: api, infra and playground match, api is selected"
+     alt="The Open project folder picker in ~/code with the filter ap: mobile-app and orders-api match, mobile-app is selected"
      caption="Typing filters the folders; the best match is selected."
+     crop={[19, 7, 72, 24]}
    />
 
 3. Press `Enter` to go into the selected folder, then `Enter` again — or click **open** — to open the folder you are in.
@@ -69,8 +69,8 @@ A **workspace** is a line of work in a project: a feature, a bug, an experiment.
 
    <Screen
      name="new-workspace"
-     crop={[23, 10, 64, 10]}
-     alt="The new workspace dialog: name feat/login, in ~/.cornercase/worktrees/shop/feat-login, with its own worktree ticked, create and cancel buttons"
+     alt="The New workspace dialog: name feat/login, in ~/.cornercase/worktrees/web-shop/feat-login, with its own worktree ticked, create and cancel buttons"
+     crop={[23, 14, 64, 10]}
    />
 
 3. Click **create** or press `Enter`. cornercase runs `git worktree add` and opens a shell in the new checkout.
@@ -87,8 +87,8 @@ To split a tab, **right-click** inside a pane:
 
 <Screen
   name="pane-menu"
-  crop={[48, 6, 62, 12]}
   alt="The pane menu opened with a right-click on a pane: split right, split down, send right-clicks to the pane, close pane"
+  crop={[37, 15, 33, 6]}
 />
 
 - **split right** and **split down** open a new shell next to the pane, in the same folder.

@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$CC_HOME/real/codex" "$CC_CAPTURE/bin/codex.sh" "$@"

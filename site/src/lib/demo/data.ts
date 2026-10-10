@@ -32,6 +32,31 @@ impl Address {
 }
 `;
 
+export const RETURNS_FIXED_RS = `mod address;
+
+use axum::{Json, Router, http::StatusCode, routing::post};
+
+pub use address::Address;
+
+pub fn routes() -> Router {
+    Router::new().route("/returns", post(create))
+}
+
+async fn create(Json(address): Json<Address>) -> Result<String, StatusCode> {
+    let line = address.first_line().ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
+    Ok(format!("label for {line}"))
+}
+`;
+
+export const RETURNS_TESTS_RS = `use super::Address;
+
+#[test]
+fn empty_address_is_rejected() {
+    let address = Address { lines: vec![], city: "Lyon".into(), postcode: "69001".into() };
+    assert_eq!(address.first_line(), None);
+}
+`;
+
 export const THEME_RS = `pub enum Theme {
     Light,
     Dark,
@@ -62,9 +87,9 @@ async fn create(Json(address): Json<Address>) -> String {
 }
 `;
 
-const SHOP: Tree = {
+const WEB_SHOP: Tree = {
   'Cargo.toml': `[package]
-name = "shop"
+name = "web-shop"
 version = "0.5.0"
 edition = "2024"
 
@@ -73,7 +98,7 @@ axum = "0.8"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 `,
-  'README.md': `# shop
+  'README.md': `# web-shop
 
 The storefront and returns service.
 
@@ -82,7 +107,8 @@ The storefront and returns service.
     cargo run
 `,
   '.worktreeinclude': '.env\n',
-  '.env': 'DATABASE_URL=postgres://localhost/shop\n',
+  '.gitignore': '.env\ntarget/\n',
+  '.env': 'DATABASE_URL=postgres://localhost/web_shop\n',
   src: {
     'main.rs': `mod checkout;
 mod returns;
@@ -109,9 +135,9 @@ pub fn routes() -> Router {
   },
 };
 
-export const API: Tree = {
-  'package.json': '{ "name": "api", "version": "2.1.0", "type": "module" }\n',
-  'README.md': '# api\n\nPublic API for orders and returns.\n',
+const ORDERS_API: Tree = {
+  'package.json': '{ "name": "orders-api", "version": "2.1.0", "type": "module" }\n',
+  'README.md': '# orders-api\n\nPublic API for orders and returns.\n',
   src: {
     'server.ts': `import { createServer } from 'node:http';
 
@@ -126,40 +152,92 @@ createServer((req, res) => {
   },
 };
 
-const INFRA: Tree = {
-  'main.tf': 'terraform {\n  required_version = ">= 1.9"\n}\n',
-  'variables.tf': 'variable "region" {\n  default = "eu-west-1"\n}\n',
-  modules: { network: { 'main.tf': '# network\n' } },
+const BLOG: Tree = {
+  'package.json': '{ "name": "blog", "version": "1.0.0", "type": "module" }\n',
+  'astro.config.mjs': "import { defineConfig } from 'astro/config';\n\nexport default defineConfig({ site: 'https://ana.dev' });\n",
+  src: {
+    pages: { 'index.astro': "---\nconst posts = await Astro.glob('../content/posts/*.md');\n---\n<ul>{posts.map((p) => <li>{p.frontmatter.title}</li>)}</ul>\n" },
+    content: { posts: { 'worktrees.md': '---\ntitle: One worktree per task\n---\n\nHow I keep one agent per branch.\n' } },
+  },
 };
 
-const NOTES: Tree = {
-  'todo.md': '# Notes\n\n- ship the returns fix\n- review dark mode\n- try three agents on the same issue\n',
-  'ideas.md': '# Ideas\n\n- gift cards\n- faster checkout\n',
+const DOTFILES: Tree = {
+  '.zshrc': 'export EDITOR=nvim\nalias g=git\n',
+  '.gitconfig': '[user]\n\tname = Ana\n[init]\n\tdefaultBranch = main\n',
+  nvim: { 'init.lua': 'vim.o.number = true\nvim.o.relativenumber = true\n' },
 };
 
-export const TREES: Record<string, Tree> = { shop: SHOP, api: API, infra: INFRA, notes: NOTES };
+const MOBILE_APP: Tree = {
+  'package.json': '{ "name": "mobile-app", "version": "0.3.0" }\n',
+  'App.tsx': 'export default function App() {\n  return null;\n}\n',
+};
+
+const PAYMENTS: Tree = {
+  'package.json': '{ "name": "payments", "version": "1.4.0", "type": "module" }\n',
+  'README.md': '# payments\n\nCharges, refunds and the Stripe webhooks.\n',
+  src: {
+    'charge.ts': `export interface Charge {
+  id: string;
+  amount: number;
+  currency: string;
+}
+
+export const charges = new Map<string, Charge>();
+`,
+    'webhooks.ts': `import { charges } from './charge';
+
+export function onEvent(type: string, id: string): void {
+  if (type === 'charge.refunded') charges.delete(id);
+}
+`,
+  },
+};
+
+const PLAYGROUND: Tree = { 'scratch.txt': 'hello\n' };
+
+export const TREES: Record<string, Tree> = {
+  'web-shop': WEB_SHOP,
+  'orders-api': ORDERS_API,
+  blog: BLOG,
+  dotfiles: DOTFILES,
+  'mobile-app': MOBILE_APP,
+  payments: PAYMENTS,
+  playground: PLAYGROUND,
+};
 
 export const FOLDERS: Record<string, { repo: boolean; tree: Tree }> = {
-  shop: { repo: true, tree: SHOP },
-  api: { repo: true, tree: API },
-  infra: { repo: true, tree: INFRA },
-  notes: { repo: false, tree: NOTES },
-  web: { repo: true, tree: { 'index.html': '<!doctype html>\n<title>web</title>\n', 'package.json': '{ "name": "web" }\n' } },
-  dotfiles: { repo: false, tree: { '.zshrc': 'export EDITOR=nvim\n' } },
-  playground: { repo: false, tree: { 'scratch.txt': 'hello\n' } },
+  'web-shop': { repo: true, tree: WEB_SHOP },
+  'orders-api': { repo: true, tree: ORDERS_API },
+  blog: { repo: true, tree: BLOG },
+  dotfiles: { repo: true, tree: DOTFILES },
+  'mobile-app': { repo: true, tree: MOBILE_APP },
+  payments: { repo: true, tree: PAYMENTS },
+  playground: { repo: false, tree: PLAYGROUND },
 };
 
 export const COMMITS: Record<string, [string, string, string][]> = {
-  shop: [
+  'web-shop': [
     ['b1b91ec', 'Release 0.5.0', '3 days ago'],
     ['d12e736', 'Explain how to run it', '12 days ago'],
     ['6b14f1e', 'Start the returns service', '3 weeks ago'],
   ],
-  api: [
+  'orders-api': [
     ['4f2a9c1', 'Paginate orders', '2 days ago'],
     ['91c03de', 'Initial API', '6 weeks ago'],
   ],
-  infra: [['7a7d2b0', 'Add terraform skeleton', '2 months ago']],
+  blog: [
+    ['a91f0c2', 'Publish the post on worktrees', '5 days ago'],
+    ['3c0e7d1', 'Set up Astro', '2 months ago'],
+  ],
+  dotfiles: [
+    ['e4b2a90', 'Move to nvim', '1 month ago'],
+    ['0f1d3c8', 'Initial dotfiles', '1 year ago'],
+  ],
+  'mobile-app': [['5d8c1aa', 'Initial app', '3 weeks ago']],
+  payments: [
+    ['c7d21f3', 'Retry failed webhooks', '4 days ago'],
+    ['2a90b4e', 'Start the payments service', '2 months ago'],
+  ],
 };
 
 export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira';
@@ -210,7 +288,7 @@ const gh = (number: number, title: string, labels: string[], author: string, age
   state: 'open',
   author,
   age,
-  url: `https://github.com/acme/shop/issues/${number}`,
+  url: `https://github.com/acme/web-shop/issues/${number}`,
   body,
   mine,
 });

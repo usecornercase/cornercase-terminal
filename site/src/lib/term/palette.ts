@@ -9,7 +9,7 @@ export interface Theme {
   overrides: Record<number, string>;
 }
 
-export const theme: Theme = {
+export const midnight: Theme = {
   foreground: '#dcdaea',
   background: '#0e0d14',
   ansi: [
@@ -33,17 +33,73 @@ export const theme: Theme = {
   overrides: { 99: '#875fff', 235: '#191723', 236: '#23212f', 239: '#454357', 254: '#e6e4ee' },
 };
 
-const hex = (n: number): string => n.toString(16).padStart(2, '0');
+const hexByte = (n: number): string => n.toString(16).padStart(2, '0');
+
+function mix(a: string, b: string, t: number): string {
+  const part = (hex: string, i: number) => Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2].map((i) => hexByte(Math.round(part(a, i) + (part(b, i) - part(a, i)) * t))).join('')}`;
+}
+
+const make = (background: string, foreground: string, ansi: string[], purple: string): Theme => ({
+  foreground,
+  background,
+  ansi,
+  overrides: { 99: purple, 235: mix(background, foreground, 0.05), 236: mix(background, foreground, 0.09), 239: mix(background, foreground, 0.22), 254: mix(background, foreground, 0.85) },
+});
+
+export const tokyo = make(
+  '#1a1b26',
+  '#c0caf5',
+  ['#15161e', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#a9b1d6', '#565f89', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#c0caf5'],
+  '#bb9af7',
+);
+
+export const catppuccin = make(
+  '#1e1e2e',
+  '#cdd6f4',
+  ['#45475a', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#bac2de', '#6c7086', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#a6adc8'],
+  '#cba6f7',
+);
+
+export const dracula = make(
+  '#282a36',
+  '#f8f8f2',
+  ['#21222c', '#ff5555', '#50fa7b', '#f1fa8c', '#bd93f9', '#ff79c6', '#8be9fd', '#f8f8f2', '#6272a4', '#ff6e6e', '#69ff94', '#ffffa5', '#d6acff', '#ff92df', '#a4ffff', '#ffffff'],
+  '#bd93f9',
+);
+
+export const onedark = make(
+  '#282c34',
+  '#abb2bf',
+  ['#3f4451', '#e06c75', '#98c379', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#d7dae0', '#5c6370', '#e06c75', '#98c379', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#ffffff'],
+  '#c678dd',
+);
+
+export const github = make(
+  '#0d1117',
+  '#e6edf3',
+  ['#484f58', '#ff7b72', '#3fb950', '#d29922', '#58a6ff', '#bc8cff', '#39c5cf', '#b1bac4', '#6e7681', '#ffa198', '#56d364', '#e3b341', '#79c0ff', '#d2a8ff', '#56d4dd', '#ffffff'],
+  '#bc8cff',
+);
+
+export const gruvbox = make(
+  '#282828',
+  '#ebdbb2',
+  ['#3c3836', '#cc241d', '#98971a', '#d79921', '#458588', '#b16286', '#689d6a', '#a89984', '#928374', '#fb4934', '#b8bb26', '#fabd2f', '#83a598', '#d3869b', '#8ec07c', '#ebdbb2'],
+  '#d3869b',
+);
+
+export const theme: Theme = tokyo;
 
 const cube = [0, 95, 135, 175, 215, 255];
 
 function xterm(index: number): string {
   if (index < 232) {
     const i = index - 16;
-    return `#${hex(cube[Math.floor(i / 36)])}${hex(cube[Math.floor(i / 6) % 6])}${hex(cube[i % 6])}`;
+    return `#${hexByte(cube[Math.floor(i / 36)])}${hexByte(cube[Math.floor(i / 6) % 6])}${hexByte(cube[i % 6])}`;
   }
   const level = 8 + (index - 232) * 10;
-  return `#${hex(level)}${hex(level)}${hex(level)}`;
+  return `#${hexByte(level)}${hexByte(level)}${hexByte(level)}`;
 }
 
 const cache = new Map<number, string>();
@@ -112,4 +168,14 @@ export const ember: Theme = {
   overrides: {},
 };
 
-export const themes = { midnight: theme, paper, ember };
+export const themes = { tokyo, catppuccin, dracula, onedark, github, gruvbox, midnight, paper, ember };
+
+export const PICKER: [keyof typeof themes, string][] = [
+  ['tokyo', 'Tokyo Night'],
+  ['catppuccin', 'Catppuccin Mocha'],
+  ['dracula', 'Dracula'],
+  ['onedark', 'One Dark Pro'],
+  ['github', 'GitHub Dark'],
+  ['gruvbox', 'Gruvbox Dark'],
+  ['midnight', 'Midnight'],
+];

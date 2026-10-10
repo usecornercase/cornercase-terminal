@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$CC_HOME/real/cargo" "$CC_CAPTURE/bin/cargo.sh" "$@"

@@ -1,5 +1,6 @@
 import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains } from '../term/grid';
+import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
@@ -279,9 +280,14 @@ export class App {
   changesScroll = 0;
   changesFilter: { query: string; focused: boolean } | null = null;
   todo = new TodoPanel([
-    ['fix the 500 on /returns when the address has no second line', false],
-    ['reply to the design review', false],
-    ['bump the returns API client', true],
+    ['Review the gift cards branch before Friday', false],
+    ['Answer Codex about src/orders.ts', false],
+    ['Rotate the test keys in payments', false],
+    ['Draft the post on parallel agents', false],
+    ['Look at the flaky returns test (#468)', false],
+    ['Triage this week’s returns bugs', true],
+    ['Move the dotfiles to nvim', true],
+    ['Connect Linear for the team', true],
   ]);
   files = new FilesPanel();
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
@@ -338,6 +344,7 @@ export class App {
 
   virtual = false;
   light = false;
+  theme: Theme = defaultTheme;
   private clockNow = 0;
   private queue: { at: number; fn: () => void; seq: number }[] = [];
   private seq = 0;

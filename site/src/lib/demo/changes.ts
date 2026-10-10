@@ -1,7 +1,7 @@
 import { BOLD, ITALIC, type Rect, type Style, rect } from '../term/grid';
 import { rgb } from '../term/palette';
 import type { App } from './app';
-import { ADDRESS_FIXED_RS, ADDRESS_RS, API, RETURNS_RS, THEME_RS, type Tree } from './data';
+import { ADDRESS_FIXED_RS, ADDRESS_RS, RETURNS_FIXED_RS, RETURNS_RS, RETURNS_TESTS_RS, THEME_RS, TREES, type Tree } from './data';
 import { highlight, language } from './highlight';
 import { type Areas, bottom, isEmpty, right } from './layout';
 import type { Project, Workspace } from './model';
@@ -47,37 +47,12 @@ export interface FileDiff {
   removed: number;
 }
 
-const RETURNS_FIXED_RS = `mod address;
-
-use axum::{Json, Router, http::StatusCode, routing::post};
-
-pub use address::Address;
-
-pub fn routes() -> Router {
-    Router::new().route("/returns", post(create))
-}
-
-async fn create(Json(address): Json<Address>) -> Result<String, StatusCode> {
-    let line = address.first_line().ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
-    Ok(format!("label for {line}"))
-}
-`;
-
-const RETURNS_TESTS_RS = `use super::Address;
-
-#[test]
-fn empty_address_is_rejected() {
-    let address = Address { lines: vec![], city: "Lyon".into(), postcode: "69001".into() };
-    assert_eq!(address.first_line(), None);
-}
-`;
-
 const THEME_DARK_RS = THEME_RS.replace(
-  'impl Theme {\n',
-  'impl Theme {\n    pub fn from_system(prefers_dark: bool) -> Self {\n        if prefers_dark { Theme::Dark } else { Theme::Light }\n    }\n\n',
+  '    }\n}\n',
+  '    }\n\n    pub fn from_system(prefers_dark: bool) -> Self {\n        if prefers_dark { Theme::Dark } else { Theme::Light }\n    }\n}\n',
 ).replace('"#0e0d14"', '"#121018"');
 
-const README_RS = `# shop
+const README_RS = `# web-shop
 
 The storefront and returns service.
 
@@ -92,7 +67,7 @@ const README_DARK = `${README_RS}
 The checkout follows \`prefers-color-scheme\`.
 `;
 
-const LOCK = 'version = 4\n\n[[package]]\nname = "shop"\nversion = "0.5.0"\n';
+const LOCK = 'version = 4\n\n[[package]]\nname = "web-shop"\nversion = "0.5.0"\n';
 
 const ORDERS_TS = 'export const orders = new Map<string, number>();\n';
 const PAGE_TS = `${ORDERS_TS}
@@ -107,7 +82,7 @@ function file(tree: Tree, path: string): string {
   return typeof node === 'string' ? node : '';
 }
 
-const SERVER_TS = file(API, 'src/server.ts');
+const SERVER_TS = file(TREES['orders-api'], 'src/server.ts');
 
 function demoChanges(p: Project, w: Workspace, mode: ChangesMode): Change[] {
   const uncommitted: Change[] = [];
@@ -126,7 +101,7 @@ function demoChanges(p: Project, w: Workspace, mode: ChangesMode): Change[] {
     );
     commits.push({ path: 'README.md', status: 'M', before: README_RS, after: README_DARK });
   }
-  if (p.folder === 'api' && w.branch === 'fix/pagination') {
+  if (p.folder === 'orders-api' && w.branch === 'fix/pagination') {
     uncommitted.push({ path: 'src/orders.ts', status: 'M', before: ORDERS_TS, after: PAGE_TS });
     commits.push({ path: 'src/server.ts', status: 'M', before: SERVER_TS, after: SERVER_TS.replace('8080', 'Number(process.env.PORT ?? 8080)') });
   }
@@ -259,10 +234,13 @@ function mix(a: string, b: string, t: number): number {
   return rgb(ch(0), ch(1), ch(2));
 }
 
-export const TINTS = {
-  dark: { removed: mix('#0e0d14', '#ff6b8b', 0.16), added: mix('#0e0d14', '#58e6a0', 0.14), removedWord: mix('#0e0d14', '#ff6b8b', 0.38), addedWord: mix('#0e0d14', '#58e6a0', 0.34) },
-  light: { removed: mix('#fbfaf6', '#d6336c', 0.12), added: mix('#fbfaf6', '#2b8a3e', 0.13), removedWord: mix('#fbfaf6', '#d6336c', 0.28), addedWord: mix('#fbfaf6', '#2b8a3e', 0.3) },
-};
+const LIGHT_TINTS = { removed: mix('#fbfaf6', '#d6336c', 0.12), added: mix('#fbfaf6', '#2b8a3e', 0.13), removedWord: mix('#fbfaf6', '#d6336c', 0.28), addedWord: mix('#fbfaf6', '#2b8a3e', 0.3) };
+
+export function tintsOf(app: App): typeof LIGHT_TINTS {
+  if (app.light) return LIGHT_TINTS;
+  const { background, ansi } = app.theme;
+  return { removed: mix(background, ansi[1], 0.16), added: mix(background, ansi[2], 0.14), removedWord: mix(background, ansi[1], 0.38), addedWord: mix(background, ansi[2], 0.34) };
+}
 
 type Row =
   | { kind: 'file'; i: number }
@@ -354,7 +332,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
   g.clear(area);
   const inner = rect(area.x + 1, area.y, Math.max(0, area.w - 2), area.h);
   const files = app.changesDiff();
-  const tints = app.light ? TINTS.light : TINTS.dark;
+  const tints = tintsOf(app);
   const surface = app.light ? 254 : 236;
 
   const filter = app.changesFilter;
@@ -514,7 +492,7 @@ function hunkRow(p: Painter, f: FileDiff, h: number, r: Rect, hot: boolean): voi
   });
 }
 
-function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: (typeof TINTS)['dark']): void {
+function codeRow(p: Painter, f: FileDiff, line: DiffLine, r: Rect, tints: ReturnType<typeof tintsOf>): void {
   const tint = line.kind === '-' ? tints.removed : line.kind === '+' ? tints.added : undefined;
   const word = line.kind === '-' ? tints.removedWord : tints.addedWord;
   if (tint !== undefined) p.g.fill(r, { bg: tint });

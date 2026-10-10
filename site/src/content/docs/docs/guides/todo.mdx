@@ -10,7 +10,7 @@ Every programmer keeps a TODO list somewhere: a notebook, a `TODO.md`, a text fi
 
 <Screen
   name="todo"
-  alt="cornercase with the shop project active: git log in the pane, and the todo panel on the right with 4 items left (fix the 500 on /returns when the address has no second line; add a test for Address::first_line, hovered with its delete button; reply to the design review; update the release notes) and two done ones struck through below, with clear done in the header"
+  alt="cornercase with the web-shop project active: nvim on src/returns/address.rs in the pane, and the TODO panel on the right with 4 items left (fix the 500 on /returns when the address has no second line; add a test for Address::first_line, hovered with its × button; reply to the design review; update the release notes) and two done ones (book the dentist, renew the domain), then clear done and + New TODO"
   caption="The list, with the items left to do on top and the done ones below."
 />
 
@@ -31,9 +31,9 @@ There is one list, the same whichever project or workspace is active. The header
 
 <Screen
   name="todo-add"
-  crop={[95, 0, 45, 14]}
-  alt="The todo panel with a field at the bottom of the list holding the text ask legal about the new return window, wrapped onto two lines"
+  alt="The TODO panel with a field at the bottom of the list holding the text ask legal about the new return window, wrapped onto two lines"
   caption="A new item being typed. Long items wrap onto more lines."
+  crop={[95, 0, 45, 14]}
 />
 
 While a field is open, the keys go to it instead of your program: type, paste, move with `←` `→`, `↑` `↓` across the lines of a long item, `Home` and `End`, and delete with `Backspace` and `Delete`. A pasted text with several lines becomes one item. A click anywhere outside the field saves it and gives the keys back to the program in the active pane.

@@ -22,8 +22,8 @@ Worktrees are offered when the **project folder is the root of a git repository*
 
    <Screen
      name="new-workspace"
-     crop={[23, 10, 64, 10]}
-     alt="The new workspace dialog with name feat/login, the hint in ~/.cornercase/worktrees/shop/feat-login and the box with its own worktree ticked"
+     alt="The New workspace dialog with name feat/login, the hint in ~/.cornercase/worktrees/web-shop/feat-login and the box with its own worktree ticked"
+     crop={[23, 14, 64, 10]}
    />
 
 3. Keep **with its own worktree** ticked (click it or press `Tab` to toggle) and click **create**.
@@ -45,16 +45,16 @@ By default, checkouts live in `~/.cornercase/worktrees`, grouped by repository. 
 
 | Repository | Branch | Checkout |
 | --- | --- | --- |
-| `~/code/shop` | `feat/login` | `~/.cornercase/worktrees/shop/feat-login` |
-| `~/code/shop` | `fix//The  Bug!` | `~/.cornercase/worktrees/shop/fix-the-bug` |
-| `~/code/api` | `issue-482-returns-page` | `~/.cornercase/worktrees/api/issue-482-returns-page` |
+| `~/code/web-shop` | `feat/login` | `~/.cornercase/worktrees/web-shop/feat-login` |
+| `~/code/web-shop` | `fix//The  Bug!` | `~/.cornercase/worktrees/web-shop/fix-the-bug` |
+| `~/code/orders-api` | `issue-482-returns-page` | `~/.cornercase/worktrees/orders-api/issue-482-returns-page` |
 
 To keep them somewhere else, change **settings → Worktrees → worktrees folder**. Use an absolute path or one starting with `~/`. The change applies to new worktrees; existing ones stay where they are.
 
 <Screen
   name="settings-worktrees"
-  crop={[2, 1, 106, 7]}
   alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n"
+  crop={[2, 4, 106, 6]}
 />
 
 ## Commits to pull
@@ -105,8 +105,8 @@ Hover the workspace and click its `×`. Because removing the workspace also dele
 
 <Screen
   name="remove-workspace"
-  crop={[23, 10, 64, 10]}
-  alt="The remove workspace dialog: Remove the workspace feat/login and delete its worktree folder ~/.cornercase/worktrees/shop/feat-login? The branch is kept."
+  alt="The Remove workspace dialog: Remove the workspace feat/dark-mode and delete its worktree folder ~/.cornercase/worktrees/web-shop/feat-dark-mode? The branch is kept. It has changes that are not committed; removing it deletes them. Then remove anyway and cancel buttons"
+  crop={[23, 14, 64, 10]}
 />
 
 While the dialog is open, cornercase checks the checkout for modified or untracked files, which git would refuse to delete. If it finds some, the dialog says so and the button becomes **remove anyway**, which runs `git worktree remove --force` and throws those changes away. Click **cancel** to keep the worktree and save your work first.

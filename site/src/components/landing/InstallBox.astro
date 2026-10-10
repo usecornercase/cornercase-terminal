@@ -55,7 +55,7 @@ const ways: [string, string][] = [
 <style>
   .install {
     width: 100%;
-    max-width: 560px;
+    max-width: 600px;
   }
 
   .ways {
@@ -117,7 +117,8 @@ const ways: [string, string][] = [
     color: var(--text);
     font-size: 14px;
     line-height: 1.5;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow-x: auto;
   }
 
   .copy {
@@ -170,8 +171,7 @@ const ways: [string, string][] = [
 
     .line code {
       flex-basis: calc(100% - 24px);
-      font-size: 12.5px;
-      overflow-wrap: normal;
+      font-size: min(12.5px, calc((100vw - 84px) / 31.5));
     }
 
     .copy {

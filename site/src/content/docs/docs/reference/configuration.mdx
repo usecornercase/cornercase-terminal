@@ -18,8 +18,8 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 
 <Screen
   name="settings-worktrees"
-  crop={[2, 1, 106, 7]}
   alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n"
+  crop={[2, 4, 106, 6]}
 />
 
 | Row | What it sets |
@@ -31,8 +31,8 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 
 <Screen
   name="settings-agents"
-  crop={[2, 1, 106, 28]}
-  alt="The Agents tab: default agent claude, send the prompt unticked, trust prompts left to you, conversations resumed after a restart, and how each agent starts: claude in plan mode, codex and gemini in their default mode, plus another agent"
+  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; and how each agent starts: claude, codex and gemini in their default mode, plus another agent"
+  crop={[2, 4, 106, 15]}
 />
 
 | Row | What it sets |
@@ -48,8 +48,8 @@ Choosing how an agent starts opens a list of its modes, each with the arguments 
 
 <Screen
   name="settings-claude-modes"
-  crop={[2, 1, 106, 12]}
   alt="How should claude start? default, accept edits, auto, plan, skip permissions (dangerous), extra arguments"
+  crop={[2, 4, 106, 12]}
 />
 
 Modes whose name says *dangerous* are shown in red. Extra arguments are split like a shell would: use quotes for arguments with spaces.
@@ -58,8 +58,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-issues"
-  crop={[2, 1, 106, 19]}
-  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; and the sources shown: All, GitHub, Shortcut, Linear and Jira, with move arrows on the hovered row"
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; and the sources shown: All, GitHub, Shortcut, Linear and Jira, with move arrows on the hovered GitHub row"
+  crop={[2, 4, 106, 20]}
 />
 
 | Row | What it sets |
@@ -74,8 +74,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-ui"
-  crop={[2, 1, 106, 14]}
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden, every running agent in the sidebar; counts shown, what a project or folded group holds, such as (3); inactive panes dimmed, in a split tab; model shown, under an agent's tab, such as Opus 5.5; context shown, how full its context is, such as 23%; memory hidden, the RAM its processes use, such as 1.2 GB; desktop notifications auto, when an agent in another tab needs you or finishes; check for updates every hour, asks GitHub for the latest release; prefix key off, opens a menu of keyboard shortcuts"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; prefix key off"
+  crop={[2, 4, 106, 15]}
 />
 
 | Row | What it sets |

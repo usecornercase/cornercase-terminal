@@ -2,7 +2,7 @@ import type { Cursor } from '../term/canvas';
 import { BOLD, type Grid, type Rect, type Style } from '../term/grid';
 import { ADDRESS_FIXED_RS, COMMITS, type Tree } from './data';
 import { highlight, language } from './highlight';
-import { type Line, drawLine, paintRows, pad, plain, seg, truncateRight, wrapAll } from './text';
+import { type Line, drawLine, paintRows, pad, plain, seg, truncateRight, width, wrapAll, wrapWords } from './text';
 
 export interface Context {
   model: string;
@@ -68,7 +68,6 @@ const RED: Style = { fg: 1 };
 const YELLOW: Style = { fg: 3 };
 const MAGENTA: Style = { fg: 5 };
 const BLUE_BOLD: Style = { fg: 4, add: BOLD };
-const SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
 
 function lookup(tree: Tree, path: string[]): string | Tree | undefined {
   let node: string | Tree | undefined = tree;
@@ -387,7 +386,7 @@ export class Shell implements Program {
         this.print([seg('\tmodified:   src/returns/mod.rs', RED)]);
       } else this.print('nothing to commit, working tree clean');
     } else if (sub === 'log') {
-      const commits = COMMITS[place.project] ?? COMMITS.shop;
+      const commits = COMMITS[place.project] ?? COMMITS['web-shop'];
       commits.forEach(([hash, msg], i) => {
         const deco: Line = i === 0 ? [seg(' ('), seg('HEAD -> ', { fg: 6, add: BOLD }), seg(branch, { fg: 2, add: BOLD }), seg(')', YELLOW)] : [];
         this.print([seg('* ', RED), seg(hash, YELLOW), ...deco, seg(` ${msg}`)]);
@@ -426,9 +425,9 @@ export class Shell implements Program {
       this.forever(
         'cargo',
         [
-          [head('Compiling'), seg(` shop v0.5.0 (${place.root})`)],
-          [head('Finished'), seg(' `dev` profile [unoptimized + debuginfo] target(s) in 3.02s')],
-          [head('Running'), seg(' `target/debug/shop`')],
+          [head('Compiling'), seg(' web-shop v0.5.0')],
+          [head('Finished'), seg(' `dev` profile in 3.02s')],
+          [head('Running'), seg(' `target/debug/web-shop`')],
           [seg('listening on 0.0.0.0:3000')],
         ],
         () => request(['/returns', '/checkout', '/orders/1042']),
@@ -437,27 +436,27 @@ export class Shell implements Program {
       return;
     }
     const fixed = place.flags.fixed;
-    const tests = ['checkout::tests::totals_include_tax', 'checkout::tests::coupons_stack', 'returns::tests::label_is_printed', 'returns::address::tests::first_line_is_the_first', 'returns::tests::refund_uses_the_order_currency', 'returns::address::tests::postcode_is_trimmed'];
+    const tests = ['checkout::totals_include_tax', 'checkout::coupons_stack', 'returns::label_is_printed', 'theme::dark_background_is_dark', 'theme::light_is_the_default', 'returns::postcode_is_trimmed'];
     const steps: Step[] = [
-      [120, [head('Compiling'), seg(` shop v0.5.0 (${place.root})`)]],
-      [900, [head('Finished'), seg(' `test` profile [unoptimized + debuginfo] target(s) in 2.41s')]],
+      [120, [head('Compiling'), seg(' web-shop v0.5.0')]],
+      [900, [head('Finished'), seg(' test profile in 2.41s')]],
       [80, [head('Running'), seg(' unittests src/main.rs')]],
       [60, []],
       [60, [seg('running 7 tests')]],
       ...tests.map((t): Step => [90, [seg(`test ${t} ... `), seg('ok', GREEN)]]),
-      [140, [seg('test returns::address::tests::empty_address_is_rejected ... '), fixed ? seg('ok', GREEN) : seg('FAILED', RED)]],
+      [140, [seg('test returns::empty_address ... '), fixed ? seg('ok', GREEN) : seg('FAILED', RED)]],
       [60, []],
     ];
-    if (fixed) steps.push([60, [seg('test result: '), seg('ok', GREEN), seg('. 7 passed; 0 failed; 0 ignored; finished in 0.02s')]]);
+    if (fixed) steps.push([60, [seg('test result: '), seg('ok', GREEN), seg('. 7 passed; 0 failed')]]);
     else {
       steps.push(
         [40, [seg('failures:')]],
         [40, []],
-        [40, [seg('---- returns::address::tests::empty_address_is_rejected stdout ----')]],
-        [40, [seg("thread 'returns::address::tests::empty_address_is_rejected' panicked at src/returns/address.rs:12:33:")]],
+        [40, [seg('---- returns::empty_address stdout ----')]],
+        [40, [seg('panicked at src/returns/address.rs:12:33:')]],
         [40, [seg('called `Option::unwrap()` on a `None` value')]],
         [40, []],
-        [60, [seg('test result: '), seg('FAILED', RED), seg('. 6 passed; 1 failed; 0 ignored; finished in 0.02s')]],
+        [60, [seg('test result: '), seg('FAILED', RED), seg('. 6 passed; 1 failed')]],
       );
     }
     this.stream('cargo', steps);
@@ -468,7 +467,7 @@ export class Shell implements Program {
     if (!('package.json' in place.tree)) return this.print("npm error code ENOENT\nnpm error path package.json");
     this.forever(
       'node',
-      [plain(`> ${place.project}@2.1.0 dev`), plain('> node src/server.ts'), [], [seg('listening on '), seg(':8080', CYAN)]],
+      [plain(`> ${place.project}@2.1.0 dev`), plain('> node src/server.ts'), [], [seg(`${place.project} listening on `), seg(':8080', CYAN)]],
       () => request(['/v1/orders?page=2', '/v1/returns', '/v1/orders/9f2c', '/v1/health', '/v1/customers/88/orders']),
       () => 900 + Math.random() * 2400,
     );
@@ -490,8 +489,8 @@ function request(paths: string[]): Line {
   const status = post ? (roll < 0.9 ? 201 : 422) : roll < 0.85 ? 200 : roll < 0.95 ? 404 : 500;
   const color = status < 300 ? GREEN : status < 500 ? YELLOW : RED;
   const ms = Math.round(2 + Math.random() * (post ? 60 : 30));
-  const clock = new Date().toTimeString().slice(0, 8);
-  return [seg(`${clock} `, DIMMED), seg(pad(post ? 'POST' : 'GET', 5), post ? MAGENTA : CYAN), seg(pad(path, 26)), seg(String(status), color), seg(`${String(ms).padStart(5)} ms`, DIMMED)];
+  const clock = new Date().toTimeString().slice(0, 5);
+  return [seg(`${clock} `, DIMMED), seg(pad(post ? 'POST' : 'GET', 5), post ? MAGENTA : CYAN), seg(pad(path, 24)), seg(String(status), color), seg(`${String(ms).padStart(4)}ms`, DIMMED)];
 }
 
 export class Editor implements Program {
@@ -659,9 +658,17 @@ export class Editor implements Program {
   }
 }
 
+export interface Tool {
+  name: string;
+  arg: string;
+  note: string;
+}
+
 export interface Task {
-  steps: string[];
-  result: string;
+  tools: Tool[];
+  reply: string[];
+  took: string;
+  onStep?: (i: number) => void;
   onDone?: () => void;
 }
 
@@ -671,18 +678,47 @@ interface Run {
   pace: number;
 }
 
+interface Entry {
+  line: Line;
+  indent: number;
+}
+
+interface Look {
+  bullet: string;
+  result: string;
+  spinner: string;
+  mark: string;
+  working: string;
+  worked: string;
+}
+
+const LOOKS: Record<string, Look> = {
+  claude: { bullet: '●', result: '⎿', spinner: '·✢✳✶✻✽', mark: '✻', working: 'Churning', worked: 'Churned' },
+  other: { bullet: '•', result: '└', spinner: '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏', mark: '•', working: 'Working', worked: 'Worked' },
+};
+
+const tool = (name: string, arg: string, note: string): Tool => ({ name, arg, note });
+
 export function taskFor(prompt: string, place: Place): Task {
   const p = prompt.toLowerCase();
   if (p.includes('482') || p.includes('address')) {
     return {
-      steps: [
-        'Reading src/returns/address.rs',
-        'first_line() unwraps lines.first(): an empty list panics',
-        'Returning Option<&str> and answering 422 from create()',
-        'Adding empty_address_is_rejected to the tests',
-        'Running cargo test: 7 passed',
+      tools: [
+        tool('Read', 'src/returns/address.rs', 'Read 14 lines'),
+        tool('Read', 'src/returns/mod.rs', 'Read 12 lines'),
+        tool('Update', 'src/returns/address.rs', 'Updated src/returns/address.rs with 2 additions and 2 removals'),
+        tool('Update', 'src/returns/mod.rs', 'Updated src/returns/mod.rs with 4 additions and 3 removals'),
+        tool('Write', 'src/returns/tests.rs', 'Wrote 7 lines to src/returns/tests.rs'),
+        tool('Bash', 'cargo test', '7 passed, 0 failed'),
       ],
-      result: `Done. The fix is in this worktree${place.branch ? `, on ${place.branch}` : ''}. Review it with git diff.`,
+      reply: [
+        '**Fixed.** `first_line()` returns `Option<&str>` now, and `create()` answers 422 instead of panicking when the address has no lines. The new test `empty_address_is_rejected` passes with the other seven.',
+        'Review the diff in the changes panel, or run `git diff` in this worktree.',
+      ],
+      took: '1m 12s',
+      onStep: (i) => {
+        if (i >= 2) place.flags.fixed = true;
+      },
       onDone: () => {
         place.flags.fixed = true;
       },
@@ -690,46 +726,109 @@ export function taskFor(prompt: string, place: Place): Task {
   }
   if (p.includes('gift')) {
     return {
-      steps: [
-        'Reading src/checkout.rs',
-        'Adding a GiftCard type with a balance',
-        'Applying gift cards after discounts, before tax',
-        'Running cargo test: 9 passed',
+      tools: [
+        tool('Read', 'src/checkout.rs', 'Read 5 lines'),
+        tool('Write', 'src/gift_cards.rs', 'Wrote 24 lines to src/gift_cards.rs'),
+        tool('Update', 'src/checkout.rs', 'Updated src/checkout.rs with 18 additions and 2 removals'),
+        tool('Bash', 'cargo test', '9 passed, 0 failed'),
       ],
-      result: 'Done. Gift cards work in the checkout, with tests.',
+      reply: ['**Done.** Gift cards work in the checkout: a `GiftCard` with a balance is applied after coupons and before tax, and a card that runs out keeps its remainder for the next order.'],
+      took: '58s',
     };
   }
   if (p.includes('pagina') || p.includes('cursor')) {
     return {
-      steps: [
-        'Reading src/orders.ts and the routes',
-        'GET /orders returns every order at once',
-        'Adding a cursor and a limit of 50',
-        'Updating the API docs',
-        'Running npm test: 31 passed',
+      tools: [
+        tool('Read', 'src/orders.ts', 'Read 1 line'),
+        tool('Read', 'src/server.ts', 'Read 9 lines'),
+        tool('Update', 'src/orders.ts', 'Updated src/orders.ts with 21 additions'),
+        tool('Update', 'README.md', 'Updated README.md with 6 additions'),
+        tool('Bash', 'npm test', '31 passed'),
       ],
-      result: 'Done. /orders is paginated with a cursor.',
+      reply: ['**Done.** `GET /orders` takes a `cursor` and a `limit` of at most 50, and answers the next cursor with the page. The README documents both.'],
+      took: '44s',
     };
   }
-  if (p.includes('dark') || p.includes('479') || p.includes('sc-48')) {
+  if (p.includes('colour')) {
     return {
-      steps: [
-        'Reading src/theme.rs and the checkout templates',
-        'The checkout hardcodes #ffffff in three places',
-        'Using Theme::background() and prefers-color-scheme',
-        'Keeping the brand purple on both themes',
-        'Running cargo test: 7 passed',
+      tools: [tool('Read', 'src/checkout.rs', 'Read 5 lines'), tool('Read', 'src/theme.rs', 'Read 14 lines')],
+      reply: [
+        'Nothing reads `Theme` yet. `src/theme.rs:7` defines `background()` with both colours, but `src/checkout.rs` builds the page without it: the templates hardcode `#ffffff` three times.',
+        'To use it everywhere I would:',
+        '- call `Theme::background()` from the checkout',
+        '- keep the brand purple on both themes',
+        '- add a test for the dark background',
       ],
-      result: 'Done. Dark mode works on the checkout. Screenshots are in the PR description.',
+      took: '31s',
+    };
+  }
+  if (p.includes('dark') || p.includes('479') || p.includes('sc-48') || p.includes('theme')) {
+    return {
+      tools: [
+        tool('Update', 'src/checkout.rs', 'Updated src/checkout.rs with 3 additions and 3 removals'),
+        tool('Update', 'src/theme.rs', 'Updated src/theme.rs with 4 additions'),
+        tool('Bash', 'cargo test', '7 passed, 0 failed'),
+        tool('Bash', 'cargo clippy --all-targets', '0 warnings'),
+      ],
+      reply: ['**Done.** The checkout reads `Theme::background()` on every page, the brand purple stays the same on both themes, and `from_system()` picks the theme from `prefers-color-scheme`.'],
+      took: '1m 4s',
       onDone: () => {
         place.flags.dark = true;
       },
     };
   }
+  if (p.includes('typo')) {
+    return {
+      tools: [
+        tool('Read', 'src/content/posts/worktrees.md', 'Read 6 lines'),
+        tool('Update', 'src/content/posts/worktrees.md', 'Updated worktrees.md with 2 additions and 2 removals'),
+        tool('Bash', 'npm run build', 'Built 1 page in 1.2s'),
+      ],
+      reply: ['**Done.** Two typos fixed in the post on worktrees, and the site still builds.'],
+      took: '19s',
+    };
+  }
   return {
-    steps: ['Reading the issue and the project layout', 'Planning the change in three steps', 'Editing 2 files', 'Running the tests'],
-    result: 'Done. Review the diff in this workspace.',
+    tools: [
+      tool('Read', 'README.md', 'Read 7 lines'),
+      tool('Grep', '"TODO"', 'Found 3 matches'),
+      tool('Update', 'README.md', 'Updated README.md with 2 additions and 2 removals'),
+      tool('Bash', 'git status --short', '1 file changed'),
+    ],
+    reply: ['**Done.** The change is in this workspace; review it in the changes panel.'],
+    took: '52s',
   };
+}
+
+const INLINE = /\*\*[^*]+\*\*|`[^`]+`/g;
+
+export function inline(text: string, base: Style = {}): Line {
+  const line: Line = [];
+  let last = 0;
+  for (const m of text.matchAll(INLINE)) {
+    const at = m.index ?? 0;
+    if (at > last) line.push(seg(text.slice(last, at), base));
+    const t = m[0];
+    line.push(t.startsWith('**') ? seg(t.slice(2, -2), { ...base, add: (base.add ?? 0) | BOLD }) : seg(t.slice(1, -1), { ...base, fg: 4 }));
+    last = at + t.length;
+  }
+  if (last < text.length) line.push(seg(text.slice(last), base));
+  return line;
+}
+
+function seconds(took: string): number {
+  let n = 0;
+  for (const [, v, unit] of took.matchAll(/(\d+)([ms])/g)) n += Number(v) * (unit === 'm' ? 60 : 1);
+  return n;
+}
+
+function elapsedText(s: number): string {
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function clockText(minutes: number): string {
+  const h = Math.floor(minutes / 60) % 24;
+  return `${((h + 11) % 12) + 1}:${String(minutes % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 const AGENT_MODEL = 'Opus 5.5';
@@ -742,28 +841,36 @@ const PROGRAM_MEMORY = 184 * MB;
 const MEMORY_PER_TOKEN = 4_000;
 const PROMPT_TOKENS = 38_000;
 const REPLY_TOKENS = 9_000;
+const TICK = 110;
+const CLOCK_START = 9 * 60 + 38;
 
 export class Agent implements Program {
   readonly mouse = false;
   private phase: 'boot' | 'trust' | 'ready' | 'working' | 'asking' = 'boot';
   private choice = 0;
   private input = '';
-  private log: Line[] = [];
+  private log: Entry[] = [];
   private frame = 0;
+  private ticks = 0;
   private timers: (() => void)[] = [];
   private spinner: (() => void) | null = null;
   private tokens = 0;
   private run: Run | null = null;
   private step: (() => void) | null = null;
+  private running: { entry: Entry; note: string } | null = null;
   private question = '';
+  private clock = CLOCK_START;
+  private readonly look: Look;
 
   constructor(
     private host: Host,
     private done: () => void,
     readonly name: string,
     private args: string[],
-    opts: { trusted?: boolean; working?: string; shown?: number; pace?: number } = {},
+    opts: { trusted?: boolean; working?: string; shown?: number; pace?: number; history?: string[] } = {},
   ) {
+    this.look = LOOKS[name] ?? LOOKS.other;
+    for (const prompt of opts.history ?? []) this.recall(prompt);
     if (opts.working) {
       this.phase = 'ready';
       this.submit(opts.working, opts.pace ?? 2600, opts.shown ?? 0);
@@ -829,42 +936,124 @@ export class Agent implements Program {
     options.forEach((o, i) => lines.push(this.choice === i ? [seg(`❯ ${i + 1}. ${o}`, CYAN)] : plain(`  ${i + 1}. ${o}`)));
   }
 
-  draw(g: Grid, r: Rect): Cursor | null {
-    const w = Math.min(r.w, 62);
-    const inner = Math.max(0, w - 2);
-    const command = [this.name, ...this.args].join(' ');
-    const lines: Line[] = [
+  private add(line: Line, indent = 0): Entry {
+    const entry = { line, indent };
+    this.log.push(entry);
+    return entry;
+  }
+
+  private note(text: string, style: Style = DIMMED): Line {
+    return [seg(`  ${this.look.result}  `, style), seg(text, style)];
+  }
+
+  private settle(): void {
+    if (this.running) this.running.entry.line = this.note(this.running.note);
+    this.running = null;
+  }
+
+  private asked(prompt: string): Task {
+    this.add([seg('> ', DIMMED), seg(prompt)], 2);
+    this.add([]);
+    return taskFor(prompt, this.host.place());
+  }
+
+  private call(name: string, arg: string, note: string): void {
+    this.settle();
+    this.add([seg(`${this.look.bullet} `), seg(name, { add: BOLD }), seg(`(${arg})`)], 2);
+    this.running = { entry: this.add(this.note('Running…'), 5), note };
+    this.add([]);
+    this.reply();
+  }
+
+  private said(task: Task): void {
+    this.settle();
+    let after: 'text' | 'bullet' | null = null;
+    task.reply.forEach((p, i) => {
+      const bullet = p.startsWith('- ');
+      if (after && !(after === 'bullet' && bullet)) this.add([]);
+      if (bullet) this.add([seg('  - '), ...inline(p.slice(2))], 4);
+      else this.add([seg(i === 0 ? `${this.look.bullet} ` : '  '), ...inline(p)], 2);
+      after = bullet ? 'bullet' : 'text';
+    });
+    this.add([]);
+    this.clock += Math.max(1, Math.ceil(seconds(task.took) / 60));
+    this.add([seg(`${this.look.mark} ${this.look.worked} for ${task.took} · done ${clockText(this.clock)}`, DIMMED)], 2);
+    this.add([]);
+    this.reply();
+  }
+
+  private recall(prompt: string): void {
+    const task = this.asked(prompt);
+    for (const t of task.tools) this.call(t.name, t.arg, t.note);
+    this.said(task);
+  }
+
+  private welcome(inner: number): Line[] {
+    const place = this.host.place();
+    const boxed = (line: Line): Line => [seg('│', MAGENTA), ...line, seg(' '.repeat(Math.max(0, inner - width(line)))), seg('│', MAGENTA)];
+    return [
       [seg(`╭${'─'.repeat(inner)}╮`, MAGENTA)],
-      [seg('│', MAGENTA), seg(' agent session', { add: BOLD }), seg(truncateRight(` · ${command}`, Math.max(0, inner - 14)).padEnd(Math.max(0, inner - 14)), DIMMED), seg('│', MAGENTA)],
+      boxed([seg(' ✻ ', MAGENTA), seg(truncateRight('Welcome to Claude Code!', Math.max(0, inner - 3)), { add: BOLD })]),
+      boxed([]),
+      boxed([seg(truncateRight('   /help for help, /status for your status', inner), DIMMED)]),
+      boxed([seg(truncateRight(`   cwd: ${place.root}`, inner), DIMMED)]),
       [seg(`╰${'─'.repeat(inner)}╯`, MAGENTA)],
-      [],
     ];
+  }
+
+  private banner(inner: number): Line[] {
+    const command = [this.name, ...this.args].join(' ');
+    const suffix = [` · ${command}`, ` · ${this.name}`, ''].find((s) => s.length <= inner - 14) ?? '';
+    return [
+      [seg(`╭${'─'.repeat(inner)}╮`, MAGENTA)],
+      [seg('│', MAGENTA), seg(' agent session', { add: BOLD }), seg(suffix.padEnd(Math.max(0, inner - 14)), DIMMED), seg('│', MAGENTA)],
+      [seg(`╰${'─'.repeat(inner)}╯`, MAGENTA)],
+    ];
+  }
+
+  private modeLine(): string {
+    if (this.name !== 'claude') return '  ? for shortcuts';
+    if (this.args.includes('acceptEdits')) return '  ⏵⏵ accept edits on (shift+tab to cycle)';
+    if (this.args.includes('plan')) return '  ⏸ plan mode on (shift+tab to cycle)';
+    return '  ? for shortcuts';
+  }
+
+  draw(g: Grid, r: Rect): Cursor | null {
+    const inner = Math.max(0, Math.min(r.w, 62) - 2);
+    const lines: Line[] = this.name === 'claude' ? this.welcome(inner) : this.banner(inner);
+    lines.push([]);
     if (this.phase === 'boot') lines.push([seg('starting…', DIMMED)]);
     if (this.phase === 'trust') {
       const place = this.host.place();
       lines.push(plain('Do you trust the files in this folder?'), [seg(place.root, DIMMED)], []);
       this.choices(lines, ['Yes, proceed', 'No, exit']);
     }
+    const rows = wrapAll(lines, r.w);
     if (this.phase === 'ready' || this.phase === 'working' || this.phase === 'asking') {
-      if (!this.log.length) lines.push([seg('tip: describe the change, or paste an issue link', DIMMED)], []);
-      lines.push(...this.log);
+      if (!this.log.length) rows.push(...wrapAll([[seg('Tip: describe a change or paste a link', DIMMED)], []], r.w));
+      for (const e of this.log) rows.push(...wrapWords(e.line, r.w, e.indent));
     }
-    if (this.phase === 'working') lines.push([], [seg(`${SPINNER[this.frame % SPINNER.length]} working…`, { fg: 5 }), seg('  esc to interrupt', DIMMED)]);
+    if (this.phase === 'working') {
+      const spin = this.look.spinner[this.frame % this.look.spinner.length];
+      rows.push(...wrapWords([seg(`${spin} ${this.look.working}… `, MAGENTA), seg(`(esc to interrupt · ${elapsedText(Math.floor((this.ticks * TICK) / 1000))})`, DIMMED)], r.w, 2), []);
+    }
     if (this.phase === 'asking') {
-      lines.push([], [seg('● ', YELLOW), seg('Edit ', { add: BOLD }), seg(this.question)], [seg('  Do you want to make this edit?', { add: BOLD })]);
-      this.choices(lines, ['Yes', 'Yes, and don’t ask again this session', 'No, and tell Claude what to do differently']);
+      const asking: Line[] = [[], [seg('● ', YELLOW), seg('Edit ', { add: BOLD }), seg(this.question)], [seg('  Do you want to make this edit?', { add: BOLD })]];
+      this.choices(asking, ['Yes', 'Yes, and don’t ask again this session', 'No, and tell Claude what to do']);
+      rows.push(...wrapAll(asking, r.w));
     }
     let cursor: Cursor | null = null;
-    const rows = wrapAll(lines, r.w);
-    if (this.phase === 'ready') {
-      rows.push(...wrapAll([[], [seg('> ', { fg: 6, add: BOLD }), seg(this.input)]], r.w));
+    let prompt: [number, number] | null = null;
+    if (this.phase === 'ready' || this.phase === 'working') {
+      rows.push(...wrapAll([[seg('─'.repeat(r.w), DIMMED)]], r.w));
+      const text = this.phase === 'ready' ? this.input : '';
+      prompt = [rows.length, Math.min(2 + [...text].length, r.w - 1)];
+      rows.push(...wrapAll([[seg('› '), seg(text)]], r.w));
+      rows.push(...wrapAll([[seg(this.modeLine(), DIMMED)]], r.w));
     }
     const top = Math.max(0, rows.length - r.h);
     paintRows(g, r, rows, top);
-    if (this.phase === 'ready') {
-      const last = rows[rows.length - 1];
-      cursor = { x: r.x + Math.min(last.length, r.w - 1), y: r.y + rows.length - 1 - top, shape: 'block' };
-    }
+    if (this.phase === 'ready' && prompt && prompt[0] >= top) cursor = { x: r.x + prompt[1], y: r.y + prompt[0] - top, shape: 'block' };
     return cursor;
   }
 
@@ -930,13 +1119,14 @@ export class Agent implements Program {
 
   private answer(yes: boolean): void {
     if (!yes) {
-      this.log.push([seg('└ ', RED), seg(`You declined the edit to ${this.question}`, RED)]);
+      this.settle();
+      this.add(this.note(`You declined the edit to ${this.question}`, RED), 5);
+      this.add([]);
       this.run = null;
       this.phase = 'ready';
       return;
     }
-    this.log.push([seg('● ', MAGENTA), seg(`Edited ${this.question}`)]);
-    this.reply();
+    this.call('Update', this.question, `Updated ${this.question}`);
     this.phase = 'working';
     this.spin();
     this.schedule();
@@ -947,20 +1137,20 @@ export class Agent implements Program {
     this.step = null;
     this.run = null;
     this.stopSpin();
-    this.log.push([seg('└ interrupted', RED)]);
+    const text = this.note(`Interrupted · What should ${this.name === 'claude' ? 'Claude' : this.name} do instead?`, RED);
+    if (this.running) this.running.entry.line = text;
+    else this.add(text, 5);
+    this.running = null;
     this.phase = 'ready';
     this.host.dirty();
   }
 
   submit(prompt: string, pace: number, shown = 0): void {
-    const task = taskFor(prompt, this.host.place());
-    this.log.push([seg('> ', { fg: 6, add: BOLD }), seg(prompt, { add: BOLD })], []);
+    const task = this.asked(prompt);
     this.phase = 'working';
+    this.ticks = 0;
     this.spin();
-    for (const step of task.steps.slice(0, shown)) {
-      this.log.push([seg('● ', MAGENTA), seg(step)]);
-      this.reply();
-    }
+    for (const t of task.tools.slice(0, shown)) this.call(t.name, t.arg, t.note);
     this.run = { task, next: shown, pace: pace || this.host.pace() };
     this.schedule();
   }
@@ -969,11 +1159,12 @@ export class Agent implements Program {
     const run = this.run;
     if (!run) return;
     const { task } = run;
-    if (run.next < task.steps.length) {
+    if (run.next < task.tools.length) {
       this.step = this.host.after(run.pace + Math.random() * 700, () => {
         const i = run.next++;
-        this.log.push([seg('● ', MAGENTA), seg(task.steps[i], i === task.steps.length - 1 ? GREEN : {})]);
-        this.reply();
+        const t = task.tools[i];
+        this.call(t.name, t.arg, t.note);
+        task.onStep?.(i);
         this.host.dirty();
         this.schedule();
       });
@@ -982,8 +1173,7 @@ export class Agent implements Program {
     this.step = this.host.after(900, () => {
       this.step = null;
       this.run = null;
-      this.log.push([], [seg('✓ ', GREEN), seg(task.result, { add: BOLD })], []);
-      this.reply();
+      this.said(task);
       this.phase = 'ready';
       this.stopSpin();
       task.onDone?.();
@@ -995,8 +1185,9 @@ export class Agent implements Program {
     if (this.spinner) return;
     const tick = () => {
       this.frame += 1;
+      this.ticks += 1;
       this.host.dirty();
-      this.spinner = this.host.after(110, tick);
+      this.spinner = this.host.after(TICK, tick);
     };
     tick();
   }

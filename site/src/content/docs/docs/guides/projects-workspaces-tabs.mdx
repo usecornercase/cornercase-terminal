@@ -10,9 +10,9 @@ cornercase organises your shells in three levels, each in its own column: **proj
 
 <Screen
   name="hover-close"
-  crop={[0, 2, 48, 21]}
-  alt="The projects column with shop, api, infra and notes, and the workspaces column of shop: main with nvim and bash, feat/dark-mode, feat/login hovered, with a lighter background, a menu button and a close button, and an issue workspace whose claude tab shows ◐ while the agent works, with Opus 5.5 · 7% under it"
-  caption="The two columns, with feat/login hovered: a lighter background and its × button."
+  alt="The workspaces of web-shop in the sidebar: main with its nvim and bash tabs, feat/dark-mode with a claude tab working, and feat/gift-cards hovered, with a lighter background and its ⋯ and × buttons"
+  caption="feat/gift-cards hovered: a lighter background, and its ⋯ and × buttons."
+  crop={[0, 14, 32, 18]}
 />
 
 ## Projects
@@ -27,8 +27,8 @@ Click **`+ New`** at the end of the list, then **open project**. A folder picker
 
 <Screen
   name="picker"
-  crop={[19, 3, 72, 24]}
-  alt="The open project folder picker showing the folders in ~/code, with the branch of each git repository on the right"
+  alt="The Open project folder picker showing the folders in ~/code (blog, dotfiles, mobile-app, orders-api, payments, playground and web-shop), with the branch of each git repository on the right"
+  crop={[19, 7, 72, 24]}
 />
 
 | To | Do |
@@ -49,9 +49,9 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 
 <Screen
   name="groups"
-  crop={[0, 2, 24, 12]}
-  alt="The projects column with dotfiles loose at the top, an expanded work group holding shop and api with shop active, and a collapsed oss group showing (2)"
-  caption="dotfiles has no group, work is open and oss is collapsed."
+  alt="The projects section with the work group open, holding web-shop and orders-api, and the personal group folded, showing (2)"
+  caption="work is open and personal is folded."
+  crop={[0, 2, 32, 12]}
 />
 
 | To | Do |
@@ -82,8 +82,8 @@ Open it from the group's menu (its `⋯`, or a right-click on its header), **ico
 
 <Screen
   name="group-style"
-  crop={[23, 10, 64, 10]}
-  alt="The icon and colour dialog of the oss group: twelve icons in two rows with the star selected, sixteen colour swatches in two rows with purple selected, and a preview of the header"
+  alt="The icon and colour dialog of the personal group: twelve icons in two rows with the diamond marked, sixteen colour swatches in two rows with green selected, and a preview of the header"
+  crop={[23, 14, 64, 10]}
 />
 
 The icons are plain symbols that every font has at one cell wide, so they line up in any terminal. The colours are the terminal's palette colours, so they follow your theme.
@@ -99,8 +99,8 @@ Click **`+ New workspace`** to start another one. You give it a name and, when t
 
 <Screen
   name="new-workspace-plain"
-  crop={[23, 10, 64, 10]}
-  alt="The new workspace dialog with the worktree box unticked: the workspace will live in ~/code/shop"
+  alt="The New workspace dialog with the worktree box unticked: the workspace feat/login will live in ~/code/web-shop"
+  crop={[23, 14, 64, 10]}
 />
 
 A workspace is called after its custom name, otherwise its branch, otherwise `default`. When the checkout is on a detached `HEAD`, the short commit hash takes the place of the branch.
@@ -153,9 +153,9 @@ Claude Code, Codex and opencode tabs show their model and the share of the conte
 
 <Screen
   name="codex-context"
-  crop={[0, 2, 57, 12]}
-  alt="The shop project with a Codex tab showing gpt-5.4 · 20% under its name"
+  alt="The workspaces of web-shop with the codex tab of feat/gift-cards active, showing gpt-5.4 · 20% under its name"
   caption="Codex's model and current context use, from that pane's own session."
+  crop={[0, 20, 32, 12]}
 />
 
 cornercase follows the rollout file held open by the Codex process in each pane, including the native child of an npm wrapper. Sessions in the same folder keep their own numbers. Recent Codex versions hand sessions to a background `codex app-server` that writes every rollout; then cornercase picks the session by folder, and only when one Codex runs in that folder: with two, neither shows a line, and after one exits the other's line comes back within about a minute. The line appears after your first message, when Codex creates the session. The files are under `$CODEX_HOME/sessions` or `~/.codex/sessions`, using the running agent's environment. No hooks or changes to Codex's settings are needed. This format was verified against **Codex CLI 0.160.0**.
@@ -187,7 +187,7 @@ It is the memory held by everything running in the tab's panes: each shell and w
 
 When an agent asks you something or finishes in a tab you aren't looking at, cornercase also tells you (opencode only when it finishes):
 
-- a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in shop › main` or `✓ codex finished in shop › main`;
+- a **toast** in the bottom right corner says which agent and where, such as `! claude needs you in web-shop › main` or `✓ codex finished in web-shop › main`;
 - your terminal shows a **desktop notification**, so you find out while you are in another window.
 
 cornercase waits a second before telling you, so a question answered at once stays quiet, and it tells you once each time. The tab on screen doesn't notify you, even while cornercase's window is in the background.
@@ -209,8 +209,9 @@ Claude Code and Codex plans have a five-hour session limit and a weekly limit. T
 
 <Screen
   name="usage"
-  alt="The usage dialog over the columns: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h and the week for Opus at 12%; below it Codex on a plus plan, the five-hour session at 22% resetting in 3h 41m and the week at 9%"
+  alt="The Usage dialog: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h and the week for Opus at 12%; Codex on a plus plan, the session at 22% resetting in 3h 41m and the week at 9% resetting in 4d 10h; both updated just now, and a done button"
   caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
+  crop={[23, 8, 64, 22]}
 />
 
 Each agent installed on the machine gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
@@ -223,9 +224,9 @@ To move a project, group, workspace or tab, press on its row and drag it. A cyan
 
 <Screen
   name="reorder"
-  crop={[0, 2, 32, 13]}
-  alt="Dragging dotfiles into the work group: dotfiles keeps a highlighted background at the top of the projects column, and an indented cyan line between shop and api shows where it will land"
-  caption="dotfiles on its way into work, between shop and api."
+  alt="Dragging dotfiles into the work group: dotfiles keeps a highlighted background where it was, at the end of the personal group, and an indented cyan line between web-shop and orders-api shows where it will land"
+  caption="dotfiles on its way into work, between web-shop and orders-api."
+  crop={[0, 2, 32, 12]}
 />
 
 - **Groups** move among the groups, with their projects.
@@ -242,16 +243,16 @@ Click the `⋯` at the end of a project, group, workspace or tab row (it shows w
 
 <Screen
   name="rename-menu"
-  crop={[0, 3, 48, 8]}
-  alt="Right-clicking the api project opens a small menu with a single item: rename project. When there are groups it also offers move to group"
+  alt="Right-clicking the orders-api project opens a small menu with two items: rename project and move to group"
+  crop={[0, 3, 32, 10]}
 />
 
 Type the new name and press `Enter`. Leave the name empty to go back to the automatic one: the folder name for a project, the branch for a workspace, the program for a tab. A group always has a name, so an empty one keeps the current name.
 
 <Screen
   name="rename-form"
-  crop={[23, 10, 64, 10]}
-  alt="The rename project dialog with the current name api and the hint leave it empty to use the folder name"
+  alt="The Rename project dialog with the current name orders-api and the hint leave it empty to use the folder name"
+  crop={[23, 14, 64, 10]}
 />
 
 ## Close
@@ -287,9 +288,9 @@ Column widths, the line between stacked lists, the height of the [agents section
 
 <Screen
   name="sidebar-stacked"
-  crop={[0, 0, 60, 30]}
-  alt="One column with the projects on top, shop active above api, infra and notes, and the workspaces of shop below a line, main with two bash tabs and feat/login, then issues, changes, files, todo, settings, usage and quit at the bottom; the pane takes the rest of the width"
+  alt="One column with the projects on top, the work group with web-shop active and orders-api, the personal group with blog and dotfiles, and the workspaces of web-shop below a line: main with nvim and bash, feat/dark-mode with claude, feat/gift-cards with codex, then Issues, Changes, Files, TODO, Settings, Usage and Quit at the bottom"
   caption="Projects on top: both lists in one column, and the panes get the room of the second one."
+  crop={[0, 0, 60, 38]}
 />
 
 ### The tree
@@ -298,9 +299,9 @@ With **settings → UI → sidebar** set to *tree*, one list holds your groups, 
 
 <Screen
   name="sidebar-tree"
-  crop={[0, 0, 44, 30]}
-  alt="One list: the work group with web-shop open, its main workspace with the server tab marked active and a bash tab, + tab, feat/dark-mode folded and + new workspace, then orders-api folded with one workspace; the personal group with blog folded and dotfiles open with its default workspace; + new project, then issues, changes, files, todo, settings, usage and quit at the bottom"
+  alt="One list: the work group with web-shop open, its main workspace with the nvim tab marked active and a bash tab, + Tab, feat/dark-mode and feat/gift-cards folded and + New workspace, then orders-api folded with (2) and !, and the personal group with blog folded and dotfiles open on its main workspace"
   caption="The tree: open what you work on, fold the rest."
+  crop={[0, 0, 44, 38]}
 />
 
 - Click **`▾`** to fold a project or a workspace and **`▸`** to open it again. A click on the rest of its row opens it and unfolds it. Group headers fold as everywhere else.
@@ -318,9 +319,9 @@ With **settings → UI → tabs** set to *top*, a workspace's tabs leave the sid
 
 <Screen
   name="tab-bar"
-  crop={[0, 0, 100, 8]}
-  alt="The tabs of the shop workspace in a bar above the pane: claude working and marked as the tab on screen, zsh and vim, then +; under them Opus 5.5 at 23%, the model and context of the pane in focus. The sidebar on the left lists the shop project and its workspaces without their tabs"
+  alt="The tabs of the feat/dark-mode workspace in a bar above the pane: claude working and marked as the tab on screen, a bash tab at its prompt, then +; under them Opus 5.5 · 7%, the model and context of the pane"
   caption="Tabs on top: the sidebar keeps projects and workspaces, and the bar shows the active workspace's tabs."
+  crop={[0, 0, 100, 8]}
 />
 
 - Each tab shows its status and its name, and a split tab how many other panes it has (`+2`); the one on screen sits on a highlighted background. Click a tab to show it, hover it and click **`⋯`** for its menu or **`×`** to close it, and click **`+`** to open a shell.
@@ -338,9 +339,9 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex 
 
 <Screen
   name="sidebar-agents"
-  crop={[0, 0, 32, 34]}
-  alt="The stacked sidebar with an agents section at the bottom, above the footer: shop › feat/login waiting for you, claude, Opus 5.5 at 23%; api working, codex, gpt-5.5 at 41%, marked as the agent on screen; notes idle, claude, Sonnet 5.5 at 2%"
+  alt="The stacked sidebar with an agents section at the bottom, above the footer: web-shop › feat/dark-mode waiting for you, claude, Opus 5.5 at 23%; web-shop › feat/gift-cards working, codex, gpt-5.4 at 20%, marked as the agent on screen; orders-api › fix/pagination waiting, claude, Opus 5.5 at 7%; blog idle, claude, Sonnet 5.5 at 2%"
   caption="Every agent in one list: click one to jump to it."
+  crop={[0, 13, 32, 31]}
 />
 
 - Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude`, `codex` or `opencode`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
