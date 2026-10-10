@@ -26,6 +26,7 @@ pub mod mouse;
 pub mod notify;
 pub mod panics;
 pub mod picker;
+pub mod pointer;
 pub mod process;
 pub mod project;
 pub mod protocol;

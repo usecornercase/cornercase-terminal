@@ -1027,6 +1027,23 @@ fn kill_server_says_what_it_stopped() {
 }
 
 #[test]
+fn a_window_that_closes_puts_the_pointer_back() {
+    let mut app = Harness::start();
+    let border = areas().border(ui::Border::Projects);
+    let (x, y) = (border.x + 1, border.y + 3);
+    app.send(format!("\x1b[<35;{x};{y}M").as_bytes());
+    app.wait_for_raw("the pointer turns sideways", |raw| raw.contains("\x1b]22;ew-resize\x1b\\"));
+
+    let out = app.session.run("kill-server");
+    assert!(out.status.success(), "kill-server failed: {out:?}");
+    app.wait_exit("the window closes");
+
+    app.wait_for_raw("the window puts the pointer back", |raw| {
+        raw.rsplit_once("ew-resize").is_some_and(|(_, after)| after.contains("\x1b]22;text\x1b\\"))
+    });
+}
+
+#[test]
 fn kill_server_closes_every_client() {
     let mut first = Harness::start();
     let mut second = first.attach(ROWS, COLS);

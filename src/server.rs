@@ -26,6 +26,7 @@ use crate::host_theme::HostTheme;
 use crate::log::{self, Level};
 use crate::notify::Channel;
 use crate::panics;
+use crate::pointer;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state::{self, Saver};
 use crate::todo;
@@ -201,6 +202,8 @@ struct Client {
     size: Option<(u16, u16)>,
     used: u64,
     notify: Channel,
+    pointer: Option<pointer::Terminal>,
+    shape: Option<pointer::Shape>,
     graphics: Graphics,
     screen: Option<Screen>,
     out: Outbox,
@@ -556,7 +559,20 @@ impl Server {
     }
 
     fn flush(&mut self) {
-        let Self { app, clients, .. } = self;
+        let Self { app, clients, area, .. } = self;
+        if let Some(area) = *area
+            && clients.iter().any(|c| c.pointer.is_some())
+        {
+            let shape = app.pointer(area);
+            for client in clients.iter_mut().filter(|c| c.screen.is_some()) {
+                if let Some(terminal) = client.pointer
+                    && client.shape != Some(shape)
+                {
+                    client.shape = Some(shape);
+                    client.send(ServerMessage::Frame(terminal.encode(shape)));
+                }
+            }
+        }
         for bytes in app.take_host_writes() {
             for client in clients.iter().filter(|c| c.screen.is_some()) {
                 client.send(ServerMessage::Frame(bytes.clone()));
@@ -669,7 +685,19 @@ impl Server {
         let writer = spawn_client_writer(stream, out_rx, Arc::clone(&out.queued));
         spawn_client_reader(id, reader, self.tx.clone());
         let (notify, graphics) = (Channel::Bell, Graphics::default());
-        self.clients.push(Client { id, size: None, used: 0, notify, graphics, screen: None, out, writer, dropped: 0 });
+        self.clients.push(Client {
+            id,
+            size: None,
+            used: 0,
+            notify,
+            pointer: None,
+            shape: None,
+            graphics,
+            screen: None,
+            out,
+            writer,
+            dropped: 0,
+        });
     }
 
     fn client_mut(&mut self, id: u64) -> Option<&mut Client> {
@@ -690,6 +718,7 @@ impl Server {
             rows = hello.rows,
             terminal = hello.terminal.as_deref().unwrap_or("unknown"),
             notify = hello.notify.id(),
+            pointer = hello.pointer.map_or("none", pointer::Terminal::id),
             background = if hello.theme.background.is_some() { "known" } else { "unknown" },
             truecolor = hello.theme.truecolor,
             images = hello.graphics.images(),
@@ -702,6 +731,7 @@ impl Server {
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        client.pointer = hello.pointer;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
         client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
@@ -920,8 +950,8 @@ mod tests {
         use crate::state::{PaneState, ProjectState, State, TabState, WorkspaceState};
         use crate::test_util::wait_until;
 
-        const COLS: u16 = 100;
-        const ROWS: u16 = 20;
+        pub(super) const COLS: u16 = 100;
+        pub(super) const ROWS: u16 = 20;
         const BUG: &str = "cornercase hit a bug, see server.log";
         const PANE_MENU: &str = "split right";
         const NOBODY: u64 = u64::MAX;
@@ -985,13 +1015,29 @@ mod tests {
             clears: usize,
         }
 
-        fn connect(server: &mut Server, tx: Sender<ServerEvent>, id: u64, graphics: Support) -> Client {
+        fn connect(
+            server: &mut Server,
+            tx: Sender<ServerEvent>,
+            id: u64,
+            graphics: Support,
+            pointer: Option<pointer::Terminal>,
+        ) -> Client {
             let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
             let _ = server.handle(ServerEvent::Accepted(ours));
             let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
             let (notify, probe) = (Channel::Bell, String::new());
-            let hello =
-                Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, graphics, probe };
+            let hello = Hello {
+                version,
+                build,
+                cols: COLS,
+                rows: ROWS,
+                theme,
+                notify,
+                terminal: None,
+                pointer,
+                graphics,
+                probe,
+            };
             let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
             let (frames_tx, frames) = mpsc::channel();
             thread::spawn(move || {
@@ -1028,7 +1074,7 @@ mod tests {
                 let app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
                 let todo_saver = Saver::new(dir.path().join("todos.json"), None);
                 let mut server = Server::new(app, session, todo_saver, tx.clone());
-                let client = connect(&mut server, tx, 1, graphics);
+                let client = connect(&mut server, tx, 1, graphics, None);
                 Self { server, rx, client, dir }
             }
 
@@ -1037,8 +1083,12 @@ mod tests {
             }
 
             pub(super) fn join(&mut self, graphics: Support) -> Client {
+                self.join_with(graphics, None)
+            }
+
+            pub(super) fn join_with(&mut self, graphics: Support, pointer: Option<pointer::Terminal>) -> Client {
                 let id = self.server.next_client;
-                connect(&mut self.server, self.client.tx.clone(), id, graphics)
+                connect(&mut self.server, self.client.tx.clone(), id, graphics, pointer)
             }
 
             pub(super) fn shows_frame(&self, bytes: &[u8]) {
@@ -1196,6 +1246,8 @@ mod tests {
                     size: None,
                     used: 0,
                     notify: Channel::Bell,
+                    pointer: None,
+                    shape: None,
                     graphics,
                     screen: None,
                     out,
@@ -1403,6 +1455,43 @@ mod tests {
                 blind.until("the window says why", |c| !c.text().contains("reading"));
                 assert_eq!((blind.count(KITTY), blind.count(ITERM)), (0, 0));
             });
+        }
+    }
+
+    mod pointing {
+        use crossterm::event::{KeyModifiers, MouseEvent};
+
+        use super::a_bug::{Attached, COLS, ROWS};
+        use super::*;
+        use crate::graphics::Support;
+        use crate::ui;
+
+        const RESET: &[u8] = b"\x1b]22;\x1b\\";
+        const SIDEWAYS: &[u8] = b"\x1b]22;ew-resize\x1b\\";
+
+        fn hover(server: &mut Server, client: u64, column: u16, row: u16) {
+            let ev = MouseEvent { kind: MouseEventKind::Moved, column, row, modifiers: KeyModifiers::NONE };
+            let _ = server.handle(ServerEvent::Message(client, ClientMessage::Event(Event::Mouse(ev))));
+            server.flush();
+        }
+
+        #[test]
+        fn a_window_is_told_the_pointer_shape_only_when_it_changes() {
+            let mut attached = Attached::new();
+            let mut window = attached.join_with(Support::default(), Some(pointer::Terminal::Kitty));
+            let area = Rect::new(0, 0, COLS, ROWS);
+            let layout = ui::full_layout(area, ui::Widths::default(), false, ui::Sidebar::default(), false);
+            let border = layout.border(ui::Border::Projects);
+            let server = &mut attached.server;
+            server.draw();
+            server.flush();
+
+            for (column, row) in [(border.x, 1), (border.x, 2), (border.x, 3), (border.x + 3, 3), (border.x + 4, 3)] {
+                hover(server, 2, column, row);
+            }
+
+            window.until("the pointer is back to the default", |c| c.count(RESET) == 2);
+            assert_eq!(window.count(SIDEWAYS), 1);
         }
     }
 

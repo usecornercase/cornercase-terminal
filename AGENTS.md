@@ -72,6 +72,7 @@ src/activity.rs   what the agent in a pane is doing: Claude Code's session file,
 src/context.rs    model/context lines for Claude Code, Codex, Gemini CLI and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line, its last message), context/message.rs the last message each wrote (`read --last-message`), reading JSONL backwards
 src/memory.rs     how much memory a pane uses (its shell and descendants), measured on a thread
 src/usage/        plan usage: claude.rs (the `get_usage` control request), codex.rs (`codex app-server`, `account/rateLimits/read`), mod.rs (running a probe, the modal's state per agent)
+src/pointer.rs    the resize pointer: which terminals take OSC 22, the shape names and the reset
 src/notify.rs     desktop notifications through the outer terminal: which escape sequence a terminal understands, encoding
 src/panics.rs     containing panics: `catch_unwind` wrappers for the server loop and background jobs, the hook that logs them
 src/launch.rs     starting an agent in a new tab (pure state machine)

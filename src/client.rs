@@ -35,6 +35,7 @@ use crate::graphics::{self, Support};
 use crate::host_theme::{HostTheme, ThemeProbe};
 use crate::log;
 use crate::notify::{self, Channel};
+use crate::pointer;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::remote::{self, Remote, Stderr};
 use crate::restart;
@@ -220,7 +221,8 @@ fn open(target: &Target, restarted: bool) -> Result<()> {
         ratatui::init()
     };
     let host = probe_host();
-    let forget = host.graphics.forget();
+    let mut forget = host.graphics.forget();
+    forget.extend(host.pointer.map(pointer::Terminal::reset).unwrap_or_default());
     let _ = execute!(
         stdout(),
         EnableBracketedPaste,
@@ -681,6 +683,7 @@ struct Window<'a> {
     tx: Sender<Incoming>,
     theme: HostTheme,
     notify: Channel,
+    pointer: Option<pointer::Terminal>,
     name: Option<String>,
     facts: Facts,
     graphics: Support,
@@ -702,9 +705,9 @@ impl Window<'_> {
         let out = spawn_writer(writer);
         let (version, build) = (protocol::VERSION, protocol::build_id());
         let (theme, notify, terminal) = (self.theme.clone(), self.notify, self.name.clone());
-        let (graphics, probe) = (self.graphics.clone(), self.probe.clone());
-        let hello =
-            Hello { version, build, cols: size.width, rows: size.height, theme, notify, terminal, graphics, probe };
+        let (pointer, graphics, probe) = (self.pointer, self.graphics.clone(), self.probe.clone());
+        let (cols, rows) = (size.width, size.height);
+        let hello = Hello { version, build, cols, rows, theme, notify, terminal, pointer, graphics, probe };
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));
         spawn_reader(self.generation, reader, self.tx.clone());
         self.out = Some(out);
@@ -894,6 +897,7 @@ struct Host {
     probe: String,
     tty: Option<String>,
     probe_timed_out: bool,
+    pointer: Option<pointer::Terminal>,
 }
 
 #[derive(Debug, Default)]
@@ -903,7 +907,7 @@ struct TmuxCheck {
 }
 
 fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Host) -> Result<Ending> {
-    let Host { theme, facts, graphics, probe, tty, probe_timed_out } = host;
+    let Host { theme, facts, graphics, probe, tty, probe_timed_out, pointer } = host;
     let name = facts.replies.terminal.clone();
     let notify = notify::detect(name.as_deref(), env);
     let (tx, rx) = mpsc::channel();
@@ -913,6 +917,7 @@ fn attach(link: Link, target: &Target, terminal: &mut DefaultTerminal, host: Hos
         tx: tx.clone(),
         theme,
         notify,
+        pointer,
         name,
         facts,
         graphics,
@@ -1008,7 +1013,8 @@ fn probe_host() -> Host {
     if let Some(value) = detect::ignored_override(env) {
         probe = format!("{probe} ignored-{}={value}", detect::OVERRIDE_ENV);
     }
-    Host { theme, facts, graphics, probe, tty, probe_timed_out }
+    let pointer = pointer::detect(facts.replies.terminal.as_deref(), env);
+    Host { theme, facts, graphics, probe, tty, probe_timed_out, pointer }
 }
 
 fn query_terminal(query: &[u8], timeout: Duration) -> ThemeProbe {

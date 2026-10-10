@@ -501,6 +501,7 @@ mod tests {
                 theme: HostTheme::default(),
                 notify: Channel::Bell,
                 terminal: None,
+                pointer: None,
                 graphics: Support::default(),
                 probe: String::new(),
             };

@@ -15,9 +15,9 @@ use crate::error::Error;
 use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::notify::Channel;
-use crate::process;
+use crate::{pointer, process};
 
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -42,6 +42,7 @@ pub struct Hello {
     pub theme: HostTheme,
     pub notify: Channel,
     pub terminal: Option<String>,
+    pub pointer: Option<pointer::Terminal>,
     pub graphics: Support,
     pub probe: String,
 }

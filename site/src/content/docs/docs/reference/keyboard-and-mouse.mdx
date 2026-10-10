@@ -27,7 +27,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Collapses or expands a project or workspace. A click on the rest of its row opens it and expands it. |
 | Wheel | The projects, workspaces or tree list | Scrolls the list. |
-| Drag | The border at the right of a column | Resizes the column. |
+| Drag | The border at the right of a column | Resizes the column. `Esc` ends the drag where it is. |
 | Double-click | A column border | Resets that column's width. |
 | Drag | The line between projects and workspaces, in a stacked sidebar | Shares the height between the two lists. |
 | Double-click | That line | Splits the height in half again. |
@@ -54,7 +54,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Click | An inactive pane | Makes it active. The click isn't passed to the program. |
 | Right-click | Any pane | Opens the pane menu on release: split right, split down, right-clicks, close. |
 | Right-button drag | From a pane onto another pane | Near an edge, moves the pane to that side of the other one; in the middle, swaps them. See [Move and swap panes](../../guides/panes-and-splits/#move-and-swap-panes). |
-| Drag | A divider between panes | Resizes the panes. |
+| Drag | A divider between panes | Resizes the panes. `Esc` ends the drag where it is. |
 | Double-click | A divider | Splits the space in half again. |
 | Press, drag, release | Text, when the program doesn't use the mouse | Selects the text and copies it to your clipboard. |
 | Wheel | Any pane, when its program doesn't use the mouse | Scrolls back through what it printed, without making it active; in `less`, `man` and other full-screen programs, sends the arrows. See [Scroll back](../../guides/panes-and-splits/#scroll-back). |
@@ -121,6 +121,12 @@ See [TODO list](../../guides/todo/).
 ### Dialogs and lists
 
 Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done.
+
+### The resize pointer
+
+Every border that drags (the borders between columns, the line between stacked lists, the line above the agents section, the panel's left border and the dividers between panes) lights up cyan under the mouse. Where the terminal can change the mouse pointer, cornercase also asks for a resize arrow there: ↔ on a border between columns or a divider between panes side by side, ↕ on a line between rows. The arrow stays while you drag, even when the mouse leaves the border, and the usual pointer comes back once the mouse leaves it, when you release the button, when you press `Esc` (which ends the drag where it is), when a dialog opens and when the window quits or detaches.
+
+It works in Ghostty, kitty 0.31 or later and foot 1.12 or later, which cornercase recognises from their answer to its startup question. Other terminals keep their usual pointer: WezTerm, Konsole, Alacritty and GNOME Terminal (VTE) have no way to change it, and iTerm2 and xterm understand other names for the shapes. Inside tmux, screen or Zellij the pointer is never changed: the multiplexer shares the window between panes and would leave the arrow in them.
 
 ## Keyboard shortcuts
 

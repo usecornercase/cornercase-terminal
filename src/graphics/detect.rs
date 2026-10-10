@@ -593,7 +593,7 @@ fn vte_label(version: Option<u32>, name: Option<&str>) -> String {
     }
 }
 
-fn version(text: &str) -> Option<Version> {
+pub fn version(text: &str) -> Option<Version> {
     let digits: String = text.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
     let mut parts = digits.split('.').map(|part| part.parse::<u32>().ok());
     let major = parts.next().flatten()?;
