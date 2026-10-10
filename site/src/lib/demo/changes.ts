@@ -408,11 +408,12 @@ export function drawChanges(p: Painter, areas: Areas): void {
   const workspace = app.workspace();
   let label = project?.name ?? project?.folder ?? 'Project';
   if (project && project.workspaces.length > 1) label += ` › ${workspace?.name ?? workspace?.branch ?? 'default'}`;
-  const room = Math.max(0, button.x - inner.x - 15);
+  const everyLabel = ' Every project ';
+  const room = Math.max(0, button.x - inner.x - everyLabel.length - 1);
   const projectLabel = ` ${truncateRight(label, Math.max(0, room - 2))} `;
   const scopes = [
     { scope: 'project' as const, label: projectLabel, r: rect(inner.x, inner.y, Math.min(room, [...projectLabel].length), 1) },
-    { scope: 'every' as const, label: ' Every project ', r: rect(inner.x + Math.min(room, [...projectLabel].length) + 1, inner.y, 14, 1) },
+    { scope: 'every' as const, label: everyLabel, r: rect(inner.x + Math.min(room, [...projectLabel].length) + 1, inner.y, everyLabel.length, 1) },
   ];
   for (const { scope, label, r } of scopes) {
     const style: Style = scope === app.changesScope ? { fg: 6, bg: surface, add: BOLD } : p.hovered(r) ? { fg: 6 } : { fg: 7 };
@@ -534,6 +535,7 @@ function numberWidth(f: FileDiff): number {
 
 function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   const app = p.app;
+  const indent = app.changesScope === 'every' ? 2 : 0;
   const open = !app.changesFolded(f);
   const viewed = app.changesViewed(f);
   const muted = viewed || !!f.change.lockfile;
@@ -541,9 +543,9 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
     p.g.fill(r, { bg: surface });
     p.span(r.x + 1, r.y, '▌', { fg: 6 });
   }
-  p.span(r.x + 2, r.y, open ? '▾' : '▸', DARK);
+  p.span(r.x + 2 + indent, r.y, open ? '▾' : '▸', DARK);
   const colour = f.change.status === 'M' ? 3 : f.change.status === 'A' ? 2 : 1;
-  p.span(r.x + 4, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
+  p.span(r.x + 4 + indent, r.y, f.change.status, muted ? DARK : { fg: colour, add: BOLD });
   const check = rect(right(r) - 3, r.y, 3, 1);
   if (viewed || p.hovered(r)) p.span(check.x + 1, r.y, '✓', viewed || p.hovered(check) ? { fg: 2 } : DARK);
   const tag = f.change.lockfile ? 'lockfile' : f.change.untracked ? 'new' : '';
@@ -554,9 +556,9 @@ function fileRow(p: Painter, f: FileDiff, r: Rect, surface: number): void {
   let x = check.x - parts.reduce((n, [t]) => n + [...t].length + 1, 0);
   const pathEnd = x - 1;
   for (const [t, s] of parts) x = p.span(x, r.y, t, s) + 1;
-  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6)));
+  const path = truncateLeft(f.change.path, Math.max(0, pathEnd - (r.x + 6 + indent)));
   const cut = path.lastIndexOf('/') + 1;
-  const px = p.span(r.x + 6, r.y, path.slice(0, cut), DARK);
+  const px = p.span(r.x + 6 + indent, r.y, path.slice(0, cut), DARK);
   p.span(px, r.y, path.slice(cut), muted ? DARK : { fg: 15, add: BOLD });
   p.region({ r: rect(r.x, r.y, r.w - 3, 1), click: () => app.toggleChangesFile(f), cursor: 'pointer' });
   p.region({ r: check, click: () => app.toggleChangesViewed(f), cursor: 'pointer' });

@@ -160,20 +160,33 @@ pub fn load(request: &Request) -> Result<Loaded> {
     if request.last == Some(digest) {
         return Ok(Loaded { base, digest, diff: None });
     }
-    let previous: HashMap<u64, Arc<File>> = request.previous.iter().map(|f| (f.digest, Arc::clone(f))).collect();
-    let reuse = |mut file: File| {
+    let previous = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
+    let reviewed = |mut file: File| {
         if request.mode == Mode::Uncommitted {
-            file.digest = fingerprint(dir, &from, &file);
+            file.viewed_digest = fingerprint(dir, &from, &file);
         }
-        previous.get(&file.digest).cloned().unwrap_or_else(|| {
-            diff::finish(&mut file);
-            Arc::new(file)
-        })
+        reuse(file, &previous)
     };
-    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reuse).collect();
-    files.extend(untracked.iter().map(|u| reuse(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
+    let mut files: Vec<Arc<File>> = diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(reviewed).collect();
+    files.extend(untracked.iter().map(|u| reviewed(diff::untracked(&u.path, u.size, u.bytes.as_deref()))));
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Loaded { base, digest, diff: Some(Diff { files }) })
+}
+
+pub(super) fn reuse(mut file: File, previous: &HashMap<&str, &Arc<File>>) -> Arc<File> {
+    if let Some(old) = previous
+        .get(file.path.as_str())
+        .filter(|old| old.digest == file.digest && old.hunks.is_empty() == file.hunks.is_empty())
+    {
+        if old.viewed_digest == file.viewed_digest {
+            return Arc::clone(old);
+        }
+        let mut reused = File::clone(old);
+        reused.viewed_digest = file.viewed_digest;
+        return Arc::new(reused);
+    }
+    diff::finish(&mut file);
+    Arc::new(file)
 }
 
 pub(super) fn stamp(path: &Path) -> Option<(u64, i64, i64, i64, i64)> {
@@ -343,6 +356,49 @@ mod tests {
         let again = load(&Request { previous, ..request(repo.path(), Mode::Uncommitted) }).expect("load");
         let again = again.diff.expect("diff");
         assert!(Arc::ptr_eq(&first.files[0], &again.files[0]));
+    }
+
+    #[rstest::rstest]
+    #[case::project(false)]
+    #[case::every_project(true)]
+    fn an_equal_count_edit_between_the_patch_and_metadata_read_does_not_reuse_the_old_patch(#[case] every: bool) {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        write(repo.path(), "a.txt", "two\n");
+        let from = head(repo.path()).expect("head");
+        let bytes = patch(repo.path(), &from, &["a.txt"]).expect("old patch");
+        let mut old = diff::parse(&String::from_utf8_lossy(&bytes)).remove(0);
+        write(repo.path(), "a.txt", "six\n");
+        old.viewed_digest = fingerprint(repo.path(), &from, &old);
+        diff::finish(&mut old);
+        let old = Arc::new(old);
+        let request = Request {
+            previous: vec![Arc::clone(&old)],
+            expanded: every.then(|| vec!["a.txt".into()]),
+            ..request(repo.path(), Mode::Uncommitted)
+        };
+        let loaded = load(&request).expect("new patch").diff.expect("diff");
+        let new = &loaded.files[0];
+        assert_eq!(new.viewed_digest, old.viewed_digest);
+        assert_ne!(new.digest, old.digest);
+        assert!(!Arc::ptr_eq(&old, new));
+        assert_eq!(new.hunks[0].lines[1].text, "six");
+        let mut panel = crate::changes::Panel::default();
+        panel.set_gap(1, &old, 1, Vec::new());
+        assert!(panel.gap(1, new, 1).is_none());
+    }
+
+    #[test]
+    fn viewed_marks_survive_a_scope_switch_without_reading_the_folded_patch() {
+        let repo = git_repo(&[("a.txt", "one\n")]);
+        write(repo.path(), "a.txt", "two\n");
+        let request = request(repo.path(), Mode::Uncommitted);
+        let project = load(&request).expect("project").diff.expect("diff");
+        let every = load(&Request { expanded: Some(Vec::new()), ..request }).expect("summary").diff.expect("diff");
+        assert_eq!(every.files[0].hunks, Vec::new());
+        assert_ne!(every.files[0].digest, project.files[0].digest);
+        let mut panel = crate::changes::Panel::default();
+        panel.toggle_viewed(1, &project.files[0]);
+        assert!(panel.viewed(1, &every.files[0]));
     }
 
     #[test]

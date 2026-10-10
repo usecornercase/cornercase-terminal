@@ -24,7 +24,7 @@ In the [compact layout](../small-terminals/), a **`±`** button in the top bar o
 
 ## Every project
 
-Click **`Every project`** beside the project's tab to see staged and unstaged edits and untracked files across all your projects. Clean projects and folders outside git are left out. A header names each project with its file and line counts; when several of its workspaces have changes, their branch or label appears underneath.
+Click **`Every project`** beside the project's tab to see staged and unstaged edits and untracked files across your open workspaces. Workspaces being removed, clean projects and folders outside git are left out. A header names each project with its file and line counts; when several of its workspaces have changes, their branch or label appears underneath.
 
 <Screen
   name="changes-every"
@@ -32,7 +32,7 @@ Click **`Every project`** beside the project's tab to see staged and unstaged ed
   caption="Review changes across projects without switching your active workspace."
 />
 
-Files start folded. Click a file to load and unfold its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **fold all**, scrolling and hunk actions work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Your active project stays selected.
+Files start folded. Click a file to load and unfold its diff in place; click a project or workspace header to hide or reveal its files. The path filter, viewed marks, **fold all**, scrolling and hunk actions work across the collection. **open** creates a tab in the file's workspace, and **ask agent** sends its reference to that workspace's agent. Both actions show the owning project, workspace and destination tab, so you can use the editor or type your question immediately; the panel stays on Every project.
 
 This scope shows only uncommitted changes, so it has no mode tabs or base selector. Return to the project's tab to see its commits or choose a base. The `Changes n` button still counts only the active workspace's files, and it and `±` remain available only in git workspaces.
 
@@ -121,7 +121,7 @@ The editor gets the line as `+11`, which `vi`, `vim`, `nvim`, `nano`, `emacs` an
 
 In the project scope, while the panel is open it asks git for changes every second, so edits show up shortly after they are saved; while it is closed it checks every three seconds, for the count on the button. It runs git in the background with options that never take git's index lock, so it doesn't get in the way of an agent running `git add` or `git commit` at the same time. When nothing changed, the diff is reused.
 
-While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Folded files need only status and line counts; patches are read and refreshed for unfolded files. Closing the panel or returning to the project scope stops that sweep.
+While **Every project** is shown, one background job visits the workspaces in turn, no more often than every three seconds per workspace. Folded files need only status and line counts; patches are read and refreshed for unfolded files. Closing the panel or returning to the project scope stops that sweep. If a git job takes more than 30 seconds, refreshing can continue with another job.
 
 <Aside type="tip">
 The green and red backgrounds are mixed from your terminal's own background and palette when your terminal supports 24-bit colour and says so in `COLORTERM` (most modern terminals set `COLORTERM=truecolor`). Without it, cornercase uses palette colours: on dark themes the changed lines get only the coloured bar and numbers, with the changed words highlighted.

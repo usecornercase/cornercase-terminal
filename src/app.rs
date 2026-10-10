@@ -852,7 +852,7 @@ impl App {
     }
 
     fn changes_target(&self) -> Option<Checkout> {
-        let workspace = self.project()?.workspace()?;
+        let workspace = self.project().filter(|p| !p.closing)?.workspace().filter(|w| w.open())?;
         git::branch(&workspace.path)?;
         Some(Checkout { workspace: workspace.id, dir: workspace.path.clone(), base: workspace.base.clone() })
     }
@@ -1152,6 +1152,7 @@ impl App {
                 })
                 .collect();
             for w in gone {
+                self.changes.forget(project.workspaces[w].id);
                 project.remove_workspace(w);
             }
             let missing: Vec<PathBuf> =
@@ -1633,8 +1634,17 @@ impl App {
     }
 
     fn remove_project(&mut self, p: usize) {
+        self.forget_project_changes(p);
         self.projects.remove(p);
         shift_active(&mut self.active, p);
+    }
+
+    fn forget_project_changes(&mut self, p: usize) {
+        let project = &self.projects[p];
+        for workspace in &project.workspaces {
+            self.changes.forget(workspace.id);
+        }
+        self.changes.headers.remove(&project.id);
     }
 
     pub fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
@@ -2221,6 +2231,7 @@ impl App {
 
     fn close_project(&mut self, id: u64) {
         let Some(p) = self.project_index(id) else { return };
+        self.forget_project_changes(p);
         let project = &mut self.projects[p];
         project.closing = true;
         project.kill();
@@ -4359,6 +4370,7 @@ impl App {
         }
         target.start_removing();
         target.kill();
+        self.changes.forget(workspace);
         self.projects[p].step_off(w);
         let (repo, path, tx) =
             (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
@@ -4394,6 +4406,7 @@ impl App {
 
     fn drop_workspace(&mut self, project: u64, workspace: u64) {
         let Some((p, w)) = self.workspace_index(project, workspace) else { return };
+        self.changes.forget(workspace);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.phase = Phase::Closing;
         workspace.kill();
@@ -4852,23 +4865,20 @@ impl App {
             .into_iter()
             .flat_map(|p| {
                 let project = &self.projects[p];
-                let several = project
+                let workspaces: Vec<_> = project
                     .workspaces
                     .iter()
+                    .filter(|w| !project.closing && w.open() && git::branch(&w.path).is_some())
+                    .collect();
+                let several = workspaces
+                    .iter()
                     .filter(|w| {
-                        git::branch(&w.path).is_some()
-                            && self
-                                .changes
-                                .summary(w.id)
-                                .and_then(changes::Model::diff)
-                                .is_some_and(|d| !d.files.is_empty())
+                        self.changes.summary(w.id).and_then(changes::Model::diff).is_some_and(|d| !d.files.is_empty())
                     })
                     .count()
                     > 1;
-                project
-                    .workspaces
-                    .iter()
-                    .filter(|w| git::branch(&w.path).is_some())
+                workspaces
+                    .into_iter()
                     .map(|w| {
                         let hidden = self.changes.headers.contains(&project.id)
                             || (several && self.changes.headers.contains(&w.id));
@@ -4879,15 +4889,16 @@ impl App {
             .collect()
     }
 
-    fn every_body(&self) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
+    fn every_body(&self, targets: &[(Checkout, bool)]) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
         let mut diff = changes::diff::Diff::default();
         let mut owners = Vec::new();
         let mut headers = Vec::new();
         let mut error = None;
+        let workspaces: HashSet<_> = targets.iter().map(|(t, _)| t.workspace).collect();
         for p in self.changes_project_order() {
             let project = &self.projects[p];
             if error.is_none() {
-                error = project.workspaces.iter().find_map(|w| {
+                error = project.workspaces.iter().filter(|w| workspaces.contains(&w.id)).find_map(|w| {
                     let failure = self.changes.summary(w.id)?.result.as_ref().err()?;
                     Some(format!("{}: {failure}", self.project_label(project)))
                 });
@@ -4895,8 +4906,8 @@ impl App {
             let workspaces: Vec<_> = project
                 .workspaces
                 .iter()
+                .filter(|w| workspaces.contains(&w.id))
                 .filter_map(|w| {
-                    git::branch(&w.path)?;
                     let diff = self.changes.summary(w.id)?.diff()?;
                     (!diff.files.is_empty()).then_some((w, diff))
                 })
@@ -4929,8 +4940,7 @@ impl App {
                 diff.files.extend(changes.files.iter().cloned());
             }
         }
-        let body = if diff.files.is_empty()
-            && self.every_targets().iter().any(|(t, _)| self.changes.summary(t.workspace).is_none())
+        let body = if diff.files.is_empty() && targets.iter().any(|(t, _)| self.changes.summary(t.workspace).is_none())
         {
             panel::Body::Loading
         } else if diff.files.is_empty() && error.is_some() {
@@ -4942,11 +4952,12 @@ impl App {
     }
 
     fn panel_view(&self) -> Option<panel::View> {
-        let target = self.changes_target();
-        let model = target.as_ref().and_then(|t| self.changes.model(t.workspace, t.base.as_deref()));
         let every = self.changes.scope == changes::Scope::Every;
+        let target = if every { None } else { self.changes_target() };
+        let model = target.as_ref().and_then(|t| self.changes.model(t.workspace, t.base.as_deref()));
+        let targets = if every { self.every_targets() } else { Vec::new() };
         let (body, owners, headers) = if every {
-            self.every_body()
+            self.every_body(&targets)
         } else {
             let target = target.as_ref()?;
             let body = match model.map(|m| &m.result) {
@@ -5005,9 +5016,7 @@ impl App {
             gaps,
             scroll: self.changes.scroll,
             live: if every {
-                self.every_targets()
-                    .iter()
-                    .all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
+                targets.iter().all(|(t, _)| self.changes.summary(t.workspace).is_some_and(|m| m.live(Instant::now())))
             } else {
                 model.is_some_and(|m| m.live(Instant::now()))
             },
@@ -5154,10 +5163,11 @@ impl App {
         };
         let term = Term::spawn(opts, self.tx.clone())?;
         let tab = Tab::new(self.take_id(), None, term);
+        let place = Goto::Place { project: self.projects[p].id, workspace: Some(target.workspace), tab: Some(tab.id) };
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);
         workspace.active = workspace.tabs.len() - 1;
-        self.projects[p].active = w;
+        self.goto(place);
         Ok(())
     }
 
@@ -5178,11 +5188,9 @@ impl App {
             self.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Check));
             return;
         };
-        let ws = &mut self.projects[p].workspaces[w];
-        ws.active = t;
-        let tab = &mut ws.tabs[t];
-        tab.focus(id);
+        let tab = &mut self.projects[p].workspaces[w].tabs[t];
         let sent = tab.panes.iter_mut().find(|term| term.id == id).is_some_and(|term| term.paste(text));
+        self.jump_to_pane(id);
         self.toast = Some(if sent {
             Toast::new(SENT_TO_AGENT, ui::ToastIcon::Check)
         } else {
@@ -12547,6 +12555,85 @@ rm -f "$1/sessions/$$.json"
                 );
             }
 
+            #[rstest::rstest]
+            #[case::removing(Phase::Removing("main".into()))]
+            #[case::closing(Phase::Closing)]
+            fn only_open_workspaces_are_scanned_and_shown(#[case] phase: Phase) {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                app.projects[0].workspaces[0].phase = phase;
+                assert!(app.every_targets().is_empty());
+                assert!(app.changes_target().is_none());
+                let view = app.panel_view().expect("panel");
+                assert!(view.owners.is_empty() && view.headers.is_empty());
+                assert!(matches!(view.body, panel::Body::Ready(d) if d.files.is_empty()));
+            }
+
+            #[rstest::rstest]
+            #[case::closed("closed")]
+            #[case::removed("removed")]
+            #[case::removed_outside_the_app("external")]
+            fn a_departing_workspace_is_forgotten(#[case] action: &str) {
+                let repo = repo_with_edit();
+                let tree = TempDir::new();
+                let path = tree.path().join("topic");
+                git(repo.path(), &["worktree", "add", "--quiet", "-b", "topic", path.to_str().expect("path")]);
+                std::fs::write(path.join("new.txt"), "new\n").expect("edit worktree");
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[1].id);
+                app.changes.headers.insert(workspace);
+                match action {
+                    "closed" => app.drop_workspace(project, workspace),
+                    "removed" => {
+                        assert!(app.start_removal(project, workspace, true, false, None));
+                        pump_until(&mut app, &rx, "the worktree is removed", |a| {
+                            a.workspace_position(workspace).is_none()
+                        });
+                    }
+                    _ => {
+                        git(repo.path(), &["worktree", "remove", "--force", path.to_str().expect("path")]);
+                        app.sync_worktrees();
+                    }
+                }
+                assert!(app.changes.summary(workspace).is_none());
+                assert!(!app.changes.headers.contains(&workspace));
+                assert!(!app.panel_view().expect("panel").owners.contains(&workspace));
+            }
+
+            #[rstest::rstest]
+            #[case::closed(true)]
+            #[case::removed(false)]
+            fn a_departing_project_and_its_workspaces_are_forgotten(#[case] close: bool) {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let (project, workspace) = (app.projects[0].id, app.projects[0].workspaces[0].id);
+                app.changes.headers.extend([project, workspace]);
+                if close {
+                    app.close_project(project);
+                } else {
+                    app.remove_project(0);
+                }
+                assert!(app.changes.summary(workspace).is_none());
+                assert!(app.changes.headers.is_empty());
+                assert!(app.every_targets().is_empty());
+            }
+
+            #[test]
+            fn a_view_uses_the_targets_it_already_resolved() {
+                let repo = repo_with_edit();
+                let (mut app, rx) = app_in(repo.path(), no_config());
+                loaded_every(&mut app, &rx);
+                let targets = app.every_targets();
+                std::fs::remove_file(repo.path().join(".git/HEAD")).expect("head disappears after resolving targets");
+                let (body, owners, headers) = app.every_body(&targets);
+                assert!(matches!(body, panel::Body::Ready(d) if d.files.len() == 1));
+                assert_eq!(owners, [targets[0].0.workspace]);
+                assert_eq!(headers.len(), 1);
+            }
+
             #[test]
             fn file_actions_reach_the_workspace_that_owns_the_file() {
                 let first = repo_with_edit();
@@ -12555,7 +12642,10 @@ rm -f "$1/sessions/$$.json"
                 let scripts = TempDir::new();
                 let agent = scripts.path().join("agent");
                 let editor = scripts.path().join("editor");
-                write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\n");
+                write_executable(
+                    &agent,
+                    "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n",
+                );
                 write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
                 let config_path = scripts.path().join("config.json");
                 config::save(
@@ -12572,21 +12662,30 @@ rm -f "$1/sessions/$$.json"
                     agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
                 });
                 let owner = app.projects[0].workspaces[0].id;
+                let agent_pane = app.term().expect("agent pane").id;
                 app.open_project(first.path().to_path_buf(), AREA).expect("other project");
                 let active = app.active;
+                app.projects[0].collapsed = true;
+                app.projects[0].workspaces[0].collapsed = true;
                 loaded_every(&mut app, &rx);
                 let file = open_file(&mut app, &rx, "b.txt");
                 let position = row(&app, panel::Row::Hunk(file, 0));
                 let hunk = Rect::new(panel_area(&app).x, position.y, panel_area(&app).width, 1);
                 let ask = panel::actions(hunk)[1].1.as_position();
                 click(&mut app, ask);
-                assert_eq!(app.active, active);
-                app.projects[0].workspaces[0].tabs[0].pane_mut().expect("agent pane").write(b"\r");
+                assert_eq!(app.active, 0);
+                assert_eq!(app.term().expect("visible agent").id, agent_pane);
+                assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+                assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
+                app.term_mut().expect("visible agent").write(b"\r");
                 wait_until("the owning agent receives the reference", || {
                     std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
                 });
                 assert!(!first.path().join("got").exists());
                 assert_eq!(app.panel_view().expect("panel").owners[file], owner);
+                app.goto(Goto::Place { project: app.projects[active].id, workspace: None, tab: None });
+                app.projects[0].collapsed = true;
+                app.projects[0].workspaces[0].collapsed = true;
                 app.editor_env = vec![("VISUAL".into(), editor.display().to_string())];
                 let open = panel::actions(hunk)[0].1.as_position();
                 click(&mut app, open);
@@ -12600,7 +12699,11 @@ rm -f "$1/sessions/$$.json"
                     (app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()),
                     (2, 1)
                 );
-                assert_eq!(app.active, active);
+                assert_eq!(app.active, 0);
+                assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
+                assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
+                assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
+                assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
             }
         }
 

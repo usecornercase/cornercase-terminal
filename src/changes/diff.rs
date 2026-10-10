@@ -169,6 +169,7 @@ pub struct File {
     pub fold: Fold,
     pub hunks: Vec<Hunk>,
     pub digest: u64,
+    pub viewed_digest: u64,
 }
 
 impl File {
@@ -288,7 +289,8 @@ fn parse_file(lines: &[&str]) -> Option<File> {
         Fold::Open
     };
     let old_path = renamed_from.filter(|from| *from != path);
-    Some(File { digest: digest((&path, lines)), path, old_path, status, added, removed, fold, hunks })
+    let digest = digest((&path, lines));
+    Some(File { digest, viewed_digest: digest, path, old_path, status, added, removed, fold, hunks })
 }
 
 fn hunk_header(line: &str) -> Option<(u32, u32, String)> {
@@ -364,6 +366,7 @@ pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materi
         fold: Fold::Large,
         hunks: Vec::new(),
         digest: digest((path, size, bytes)),
+        viewed_digest: digest((path, size, bytes)),
     };
     let Some(bytes) = bytes.filter(|_| size <= MAX_UNTRACKED_BYTES) else { return file };
     if bytes[..bytes.len().min(BINARY_PROBE)].contains(&0) {

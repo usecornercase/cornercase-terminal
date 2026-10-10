@@ -1581,8 +1581,7 @@ export class App {
       this.notify('no agent here, so the reference is copied');
       return;
     }
-    w.active = w.tabs.indexOf(tab);
-    tab.active = pane.id;
+    this.jumpToPane(pane.id);
     pane.shell.paste(`${reference} `);
     this.notify('sent to the agent');
   }
@@ -1591,7 +1590,7 @@ export class App {
     const pane = this.newPane(p, w);
     pane.shell.start(new Editor(this.host(p, w, () => pane.id), () => pane.shell.finish(), path, text, line - 1));
     w.tabs.push(this.newTab([pane]));
-    w.active = w.tabs.length - 1;
+    this.goto(this.projects.indexOf(p), p.workspaces.indexOf(w), w.tabs.length - 1);
   }
 
   navTo(nav: Exclude<Nav, null>): void {

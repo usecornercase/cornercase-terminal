@@ -6,18 +6,21 @@ use super::diff::{self, Diff, File, Fold, Status};
 use super::git::{self, Loaded, Request};
 use crate::error::Result;
 
-fn statuses(raw: &[u8], prefix: &str) -> (HashMap<String, Status>, Vec<String>) {
+fn statuses(raw: &[u8], prefix: &str) -> (HashMap<String, Status>, Vec<String>, HashMap<String, String>) {
     let mut records = raw.split(|b| *b == 0);
     let mut statuses = HashMap::new();
     let mut untracked = Vec::new();
+    let mut renames = HashMap::new();
     while let Some(record) = records.next() {
         let text = String::from_utf8_lossy(record);
+        let old_path = if record.first() == Some(&b'2') {
+            records.next().map(|old| String::from_utf8_lossy(old).into_owned())
+        } else {
+            None
+        };
         let fields: Vec<&str> = match record.first() {
             Some(b'1') => text.splitn(9, ' ').collect(),
-            Some(b'2') => {
-                records.next();
-                text.splitn(10, ' ').collect()
-            }
+            Some(b'2') => text.splitn(10, ' ').collect(),
             Some(b'?') => {
                 if let Some(path) = text.strip_prefix("? ").and_then(|p| p.strip_prefix(prefix)) {
                     untracked.push(path.to_string());
@@ -29,6 +32,9 @@ fn statuses(raw: &[u8], prefix: &str) -> (HashMap<String, Status>, Vec<String>) 
         };
         let (Some(xy), Some(path)) = (fields.get(1), fields.last()) else { continue };
         let Some(path) = path.strip_prefix(prefix) else { continue };
+        if let Some(old) = old_path.and_then(|old| old.strip_prefix(prefix).map(str::to_string)) {
+            renames.insert(path.to_string(), old);
+        }
         let status = if xy.contains('R') {
             Status::Renamed
         } else if xy.contains('D') {
@@ -40,7 +46,7 @@ fn statuses(raw: &[u8], prefix: &str) -> (HashMap<String, Status>, Vec<String>) 
         };
         statuses.insert(path.to_string(), status);
     }
-    (statuses, untracked)
+    (statuses, untracked, renames)
 }
 
 fn counted(raw: &[u8], statuses: &HashMap<String, Status>) -> Vec<File> {
@@ -75,6 +81,7 @@ fn counted(raw: &[u8], statuses: &HashMap<String, Status>) -> Vec<File> {
             fold,
             hunks: Vec::new(),
             digest: 0,
+            viewed_digest: 0,
         });
     }
     files
@@ -99,12 +106,26 @@ pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
             ".",
         ],
     )?;
-    let prefix = git::run(dir, &["rev-parse", "--show-prefix"])?;
-    let prefix = String::from_utf8_lossy(&prefix);
-    let (statuses, paths) = statuses(&status, prefix.trim_end_matches('\n'));
+    let prefix = dir
+        .ancestors()
+        .find(|root| root.join(".git").exists())
+        .and_then(|root| dir.strip_prefix(root).ok())
+        .filter(|prefix| !prefix.as_os_str().is_empty())
+        .map_or_else(String::new, |prefix| format!("{}/", prefix.display()));
+    let (statuses, paths, renames) = statuses(&status, &prefix);
     let untracked = git::read_untracked(dir, paths);
-    let paths: Vec<&str> =
-        expanded.iter().filter(|path| !untracked.iter().any(|u| u.path == **path)).map(String::as_str).collect();
+    let previous: HashMap<&str, &Arc<File>> = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
+    let paths: Vec<&str> = expanded
+        .iter()
+        .filter(|path| !untracked.iter().any(|u| u.path == **path))
+        .flat_map(|path| {
+            let old = renames
+                .get(path)
+                .map(String::as_str)
+                .or_else(|| previous.get(path.as_str()).and_then(|file| file.old_path.as_deref()));
+            std::iter::once(path.as_str()).chain(old)
+        })
+        .collect();
     let patch = if paths.is_empty() { Vec::new() } else { git::patch(dir, &from, &paths)? };
     let mut hasher = DefaultHasher::new();
     (&from, &status, &numstat, &untracked, expanded, &patch).hash(&mut hasher);
@@ -120,22 +141,15 @@ pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
     let mut files = counted(&numstat, &statuses);
     files.extend(untracked.iter().map(|u| diff::untracked_file(&u.path, u.size, u.bytes.as_deref(), false)));
     for file in &mut files {
-        file.digest = git::fingerprint(dir, &from, file);
+        file.viewed_digest = git::fingerprint(dir, &from, file);
+        file.digest = file.viewed_digest;
     }
     let mut patches: HashMap<String, File> =
         diff::parse(&String::from_utf8_lossy(&patch)).into_iter().map(|f| (f.path.clone(), f)).collect();
-    let previous: HashMap<&str, &Arc<File>> = request.previous.iter().map(|f| (f.path.as_str(), f)).collect();
     let files = files
         .into_iter()
         .map(|mut file| {
             let open = expanded.contains(&file.path);
-            if let Some(old) = previous.get(file.path.as_str()).filter(|old| {
-                old.digest == file.digest
-                    && (!open || !old.hunks.is_empty() || !old.fold.shows_lines())
-                    && (open || old.hunks.is_empty())
-            }) {
-                return Arc::clone(old);
-            }
             if open {
                 let loaded = if file.status == Status::Untracked {
                     untracked
@@ -146,12 +160,11 @@ pub(super) fn load(request: &Request, expanded: &[String]) -> Result<Loaded> {
                     patches.remove(&file.path)
                 };
                 if let Some(mut loaded) = loaded {
-                    loaded.digest = file.digest;
-                    diff::finish(&mut loaded);
+                    loaded.viewed_digest = file.viewed_digest;
                     file = loaded;
                 }
             }
-            Arc::new(file)
+            git::reuse(file, &previous)
         })
         .collect::<Vec<_>>();
     let mut files = files;
@@ -210,7 +223,7 @@ mod tests {
         let counts = |diff: &Diff| {
             diff.files
                 .iter()
-                .map(|f| (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.digest))
+                .map(|f| (f.path.clone(), f.old_path.clone(), f.status, f.added, f.removed, f.viewed_digest))
                 .collect::<Vec<_>>()
         };
         assert_eq!(counts(&summary), counts(&full));
@@ -242,12 +255,46 @@ mod tests {
     }
 
     #[test]
-    fn a_subfolder_excludes_changes_outside_it() {
+    fn unfolding_a_rename_preserves_its_old_path_status_and_line_counts() {
+        let repo = git_repo(&[("old.txt", "one\ntwo\nthree\nfour\n")]);
+        git(repo.path(), &["mv", "old.txt", "new.txt"]);
+        std::fs::write(repo.path().join("new.txt"), "one\nTWO\nthree\nfour\n").expect("edit");
+        let mut request = request(repo.path(), &[]);
+        let folded = git::load(&request).expect("folded").diff.expect("diff");
+        request.previous = folded.files.clone();
+        request.expanded = Some(vec!["new.txt".into()]);
+        let open = git::load(&request).expect("open").diff.expect("diff");
+        let file = &open.files[0];
+        assert_eq!(
+            (file.status, file.old_path.as_deref(), file.added, file.removed),
+            (Status::Renamed, Some("old.txt"), 1, 1)
+        );
+        assert_eq!(file.viewed_digest, folded.files[0].viewed_digest);
+        assert_eq!(file.hunks.len(), 1);
+        assert!(file.hunks[0].lines.iter().any(|l| l.text == "TWO"));
+        request.expanded = Some(Vec::new());
+        request.previous = open.files;
+        let again = git::load(&request).expect("fold again").diff.expect("diff");
+        assert_eq!(again.files, folded.files);
+    }
+
+    #[rstest::rstest]
+    #[case::main_worktree(false)]
+    #[case::linked_worktree(true)]
+    fn a_subfolder_excludes_changes_outside_it_without_resolving_its_prefix_with_git(#[case] linked: bool) {
         let repo = git_repo(&[("app/a.txt", "one\n"), ("b.txt", "one\n")]);
-        std::fs::write(repo.path().join("app/a.txt"), "two\n").expect("inside");
-        std::fs::write(repo.path().join("b.txt"), "two\n").expect("outside");
-        std::fs::write(repo.path().join("app/new.txt"), "new\n").expect("new");
-        let loaded = git::load(&request(&repo.path().join("app"), &[])).expect("summary").diff.expect("diff");
+        let checkout = TempDir::new();
+        let path = checkout.path().join("topic");
+        let root = if linked {
+            git(repo.path(), &["worktree", "add", "--quiet", "-b", "topic", path.to_str().expect("path")]);
+            path.as_path()
+        } else {
+            repo.path()
+        };
+        std::fs::write(root.join("app/a.txt"), "two\n").expect("inside");
+        std::fs::write(root.join("b.txt"), "two\n").expect("outside");
+        std::fs::write(root.join("app/new.txt"), "new\n").expect("new");
+        let loaded = git::load(&request(&root.join("app"), &[])).expect("summary").diff.expect("diff");
         assert_eq!(
             loaded.files.iter().map(|f| (f.path.as_str(), f.status)).collect::<Vec<_>>(),
             [("a.txt", Status::Modified), ("new.txt", Status::Untracked)]

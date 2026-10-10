@@ -614,6 +614,7 @@ fn draw_header(buf: &mut Buffer, view: &View, diff: &Diff, header: &Header, r: R
 }
 
 fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hover: Option<Position>) {
+    let indent = if view.scope == Scope::Every { 2 } else { 0 };
     let open = !view.folded.get(i).copied().unwrap_or(true);
     let viewed = view.viewed.get(i).copied().unwrap_or(false);
     if open {
@@ -622,10 +623,10 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     }
     let muted = viewed || !matches!(file.fold, crate::changes::diff::Fold::Open);
     if file.fold.shows_lines() {
-        put(buf, r.x + 2, r.y, if open { "▾" } else { "▸" }, dim(view.muted), r.right());
+        put(buf, r.x + 2 + indent, r.y, if open { "▾" } else { "▸" }, dim(view.muted), r.right());
     }
     let status = if muted { dim(view.muted) } else { status_style(file.status) };
-    put(buf, r.x + 4, r.y, file.status.letter(), status, r.right());
+    put(buf, r.x + 4 + indent, r.y, file.status.letter(), status, r.right());
 
     let check = viewed_cell(r);
     if viewed {
@@ -659,7 +660,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     }
 
     let path = file.label();
-    let start = r.x + 6;
+    let start = r.x + 6 + indent;
     let room = usize::from(path_end.saturating_sub(start));
     let shown = crate::ui::truncate_left(&path, room);
     let split = shown.rfind('/').map_or(0, |i| i + 1);
@@ -867,6 +868,19 @@ diff --git a/Cargo.lock b/Cargo.lock
         assert!(rows(&view).contains(&Row::File(1)));
         view.headers[0].folded = true;
         assert_eq!(rows(&view), [Row::Header(0), Row::Header(3), Row::File(2)]);
+    }
+
+    #[test]
+    fn files_are_indented_beyond_the_project_and_workspace_headers() {
+        let view = every();
+        let terminal = render(&view, None);
+        let buffer = terminal.backend().buffer();
+        for (row, indent, symbol) in
+            [(Row::Header(0), 1, "▾"), (Row::Header(1), 3, "▾"), (Row::File(0), 4, "▸"), (Row::File(2), 4, "▸")]
+        {
+            let r = row_of(&view, row);
+            assert_eq!(buffer[(r.x + indent, r.y)].symbol(), symbol);
+        }
     }
 
     #[test]
