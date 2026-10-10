@@ -211,7 +211,7 @@ Click **`▤`** at the right of the bar to search file **names** instead, and ag
 
 ## Paths in your panes are links
 
-When a program prints the path of a file in the workspace, hovering it underlines it, and clicking it opens the file in the files panel, opening the panel if it was closed. Claude Code's `Update(src/app.rs)`, a compiler's `src/main.rs:12:5`, `git status` and `grep -n` all work.
+When a program prints the path of a file, hovering it underlines it, and clicking it opens the file in the files panel, opening the panel if it was closed. Claude Code's `Update(src/app.rs)`, a compiler's `src/main.rs:12:5`, `git status` and `grep -n` all work, as do files outside the workspace such as `/tmp/report.md`, `~/.claude/plans/fix.md` or a file in another project or worktree.
 
 <Screen
   name="files-link"
@@ -220,7 +220,8 @@ When a program prints the path of a file in the workspace, hovering it underline
 />
 
 - A line number after the path opens the file at that line, selected, so **ask agent** takes it at once: `:12`, `:12:5`, a range like `:12-20`, or GitHub's `#L12-L20`.
-- A path is looked up from the folder of the program that printed it, then from the workspace's root. Folders, and files outside the workspace, aren't links.
+- A relative path is looked up from the folder of the program that printed it, then from the workspace's root. A leading `~/` expands to your home folder. Only regular files are links: folders, devices such as `/dev/zero` and FIFOs aren't opened.
+- Files inside the workspace keep their relative path. An outside file shows its absolute path, which **open**, **ask agent** and **copy** use too (with selected lines, **copy** still copies their text). It has no git marks. **`‹`** returns to the tree or your previous search results; the panel remembers the outside file when you close and reopen it, until the server stops.
 - In a program that doesn't use the mouse, pressing and dragging over a path still selects text, as anywhere else.
 - In a program that uses the mouse, such as Claude Code in its full-screen mode, a click on a path that releases on the same spot opens the file, and the program doesn't see it; if you drag, the program gets the press and the drag as usual.
 

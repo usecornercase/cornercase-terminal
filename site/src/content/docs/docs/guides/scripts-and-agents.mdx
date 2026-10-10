@@ -47,7 +47,7 @@ group 9  work  collapsed
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt. Prints the pane's id. |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
-| `read` | Prints a pane's screen, its last lines, or the last message of the agent in it. |
+| `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
 | `close` | Closes a pane, tab, workspace or project. |
@@ -156,6 +156,8 @@ cornercase keys --pane 12 down enter
 cornercase read --pane 12
 cornercase read --pane 7 --lines 200
 cornercase read --pane 12 --last-message
+cornercase read --last-message --pane 12 --pane 15
+cornercase read --last-message --pane 12 --pane 15 --json
 ```
 
 - `send` pastes the text in one go, bracketed when the program asked for it, as a paste from your terminal would be. `-` reads it from standard input. `--enter` then presses Enter once the screen settles.
@@ -168,6 +170,7 @@ cornercase read --pane 12 --last-message
 - `read` prints the screen as text. `--lines N` prints the last `N` lines instead, scrollback included (a pane keeps 5,000). Lines the terminal wrapped come back as one, and empty lines at the end are left out.
 - A Claude Code screen may end with its feedback survey right above the input box, `● How is Claude doing this session? (optional)` and `1: Bad  2: Fine  3: Good  0: Dismiss`: that is Claude Code asking you, not something the agent wrote. `status` marks it `(survey open)`, and `keys --pane 12 0` dismisses it.
 - `read --last-message` prints the last message the agent in the pane wrote, as plain text. It comes from the agent's own record, not the screen: Claude Code's transcript, Codex's rollout or opencode's database, the ones cornercase already reads for the [context line](../projects-workspaces-tabs/#how-full-the-context-is). So the message comes whole even once it scrolled off, without the input box, the status lines or a suggestion Claude Code shows in grey, and nobody has to ask an agent to write its report to a file. While the agent works it is the newest message so far, such as a note on what it is about to do; once its turn is over it is its answer. `--json` adds `written`, when the agent wrote it, and `turn_over`.
+- With `--last-message`, repeat `--pane` or `--tab` to read several agents in one call, using the ids from [`status --panes`](#one-line-per-pane). Each message appears under a header with its pane id, agent, `turn_over` and `written`; unknown metadata is `unknown`. `--json` gives `{"panes": [...]}`, with the usual individual answer in each entry. Panes come first, then tabs, each in the order given, and a repeated id is read once. A failed target gets its own error block or JSON entry with `error` and the requested `pane` (or `tab`, when its pane could not be resolved). The command reads every target before exiting 1 if any failed. One distinct target keeps the usual output exactly. Reading screens takes only one target.
 - `read --last-message` fails, with status 1 and a message saying why, on a pane without Claude Code, Codex or opencode, before the agent has written anything, and while cornercase has not found its record: Codex writes its rollout from its first turn on, and two Codex, or two opencode, in the same folder can't be told apart. Read the screen then. A permission prompt or a question the agent is asking is not a message either: it is only on the screen.
 
 ### Wait
@@ -299,6 +302,7 @@ The pane the command runs in doesn't hold the restart, so an agent can run it as
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
+| `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 
@@ -338,7 +342,7 @@ npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 
 Only the skill's name and description stay in the agent's context; the rest loads when a task needs it. `cornercase skill` prints the copy that matches your version; for an agent without skills, put that text in your `AGENTS.md` or `CLAUDE.md`. cornercase never installs it by itself, for the same reason it installs no hooks: it doesn't write into your agents' setup.
 
-The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; to find panes with `status --panes` rather than walking the tree; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; to learn what another agent answered with `read --last-message`; and to restart or update cornercase only when you ask, with `--when-idle`.
+The instructions tell agents to use the commands only when you ask them to open tabs, run something in another pane, or start and coordinate agents; to learn the syntax from `cornercase --help`; to find panes with `status --panes` rather than walking the tree; never to steal focus, run `kill-server` or close what they didn't open; not to answer another agent's permission prompt without asking you; to read a pane before sending again after a timeout or a prompt that was not confirmed; to keep their `--timeout` under their own command timeout; to read several agents' answers in one `read --last-message` call; and to restart or update cornercase only when you ask, with `--when-idle`.
 
 ## Environment
 

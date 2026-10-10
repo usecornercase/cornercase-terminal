@@ -4469,20 +4469,16 @@ impl App {
         let dragging = self.divider_drag.clone();
         let pane_area = self.layout(area).shown(self.nav).pane;
         let landing = self.pane_landing(pane_area);
-        let still = self.overlay.is_none()
-            && self.row_drag.is_none()
-            && self.pane_drag.is_none()
-            && self.selecting.is_none()
-            && dragging.is_none();
-        let pointer = self.hover.filter(|_| still);
+        let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
+        let home = self.home.clone();
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout.map(&|id| tab.panes.iter().position(|t| t.id == id))?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             let link = pointer
                 .zip(root.as_deref())
-                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root));
+                .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
             Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
@@ -12663,6 +12659,41 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search() {
+            let (repo, other) = (repo(), TempDir::new());
+            let path = other.path().join("note.md").display().to_string();
+            std::fs::write(&path, "# Note\nRead this.\n").expect("write");
+            let (mut app, rx) = opened(&repo);
+            search(&mut app, &rx, files::Mode::Text, "shop");
+            app.open_link(&files::link::Target { path: path.clone(), lines: Some((1, 2)) });
+            settle(&mut app, &rx, "the outside file is read", |v| lines(v) == ["# Note", "Read this."]);
+            assert!(file(&app).gutter.is_none());
+            let ask = action_pos(&app, Action::Ask);
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+            let copy = action_pos(&app, Action::Copy);
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
+            let workspace = app.project().expect("project").workspace().expect("workspace").id;
+            app.files.viewer_mut(workspace).expect("viewer").selection = None;
+            click(&mut app, copy);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            click(&mut app, ask);
+            assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+            open(&mut app);
+            open(&mut app);
+            assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");
+            let back = panel::back(panel_area(&app)).as_position();
+            click(&mut app, back);
+            assert!(!results(&view(&app)).is_empty(), "back returns to the previous search");
+            assert_eq!(app.files.last(workspace), Some(path.as_str()));
+            let field = panel::field(panel_area(&app)).as_position();
+            click(&mut app, field);
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            assert!(matches!(view(&app).screen, Screen::Tree(t) if t.rows.iter().all(|r| r.path != path)));
+        }
+
+        #[test]
         fn the_viewer_follows_edits() {
             let repo = repo();
             let (mut app, rx) = opened(&repo);
@@ -12952,6 +12983,7 @@ rm -f "$1/sessions/$$.json"
         use ratatui::Terminal;
         use ratatui::backend::TestBackend;
         use ratatui::style::Modifier;
+        use rstest::rstest;
 
         use super::*;
 
@@ -12985,6 +13017,71 @@ rm -f "$1/sessions/$$.json"
             click(&mut app, cell(12, 0));
             assert!(app.files.open);
             assert_eq!(shown(&app), Some(("src/main.rs".to_string(), Some((2, 3)))));
+        }
+
+        #[rstest]
+        #[case::absolute_path(false, false, false)]
+        #[case::home_path(true, false, false)]
+        #[case::absolute_path_with_mouse_reporting(false, true, false)]
+        #[case::home_path_with_mouse_reporting(true, true, false)]
+        #[case::absolute_image(false, false, true)]
+        #[case::home_image(true, false, true)]
+        #[case::absolute_image_with_mouse_reporting(false, true, true)]
+        #[case::home_image_with_mouse_reporting(true, true, true)]
+        fn an_outside_path_is_underlined_and_opens_in_the_viewer(
+            #[case] home_path: bool,
+            #[case] reads_mouse: bool,
+            #[case] picture_file: bool,
+        ) {
+            let (repo, other) = (repo(), TempDir::new());
+            let name = if picture_file { "preview.dat" } else { "plan.md" };
+            let path = other.path().join(name).display().to_string();
+            if picture_file {
+                image::RgbaImage::new(16, 8).save_with_format(&path, image::ImageFormat::Png).expect("write a png");
+            } else {
+                std::fs::write(&path, "# Plan\n\nFix the return label.\n").expect("write");
+            }
+            let printed = if home_path { format!("~/{name}") } else { path.clone() };
+            let mode = if reads_mouse { "\x1b[?1000h\x1b[?1006h" } else { "" };
+            let area = Rect { width: 200, ..AREA };
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            app.resize(area);
+            app.term_mut().expect("a pane").feed(format!("\x1b[2J\x1b[H{mode}{printed}:2-3").as_bytes());
+            app.home = Some(other.path().to_path_buf());
+            app.term_mut().expect("a pane").input_at = None;
+            let pane = app.layout(area).pane;
+            let pos = Position::new(pane.x + 2, pane.y);
+            mouse_in(&mut app, MouseEventKind::Moved, pos, area);
+            let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
+            terminal.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
+            click_in(&mut app, pos, area);
+            assert_eq!(shown(&app), Some((path.clone(), Some((2, 3)))));
+            assert!(app.files.open);
+            assert!(!written(&app), "the program never gets the click");
+            wait_until("the outside file is read", || {
+                app.refresh(Instant::now());
+                while let Ok(event) = rx.try_recv() {
+                    app.handle_event(event, area).expect("handle event");
+                }
+                matches!(app.files_view().expect("files view").screen, ui::files::Screen::File(f)
+                    if f.content.as_ref().is_some_and(|c| if picture_file {
+                        matches!(&c.body, files::disk::Body::Image(p) if (p.format, p.width, p.height) == ("PNG", 16, 8))
+                    } else {
+                        c.lines() == ["# Plan", "", "Fix the return label."]
+                    }) && f.gutter.is_none())
+            });
+            if picture_file {
+                let ui::files::Screen::File(file) = app.files_view().expect("files view").screen else {
+                    panic!("a file shows")
+                };
+                let panel = app.layout(area).changes;
+                assert_eq!(ui::files::action(panel, &file, ui::changes::Action::Open), Rect::default());
+                for action in [ui::changes::Action::Ask, ui::changes::Action::Copy] {
+                    click_in(&mut app, ui::files::action(panel, &file, action).as_position(), area);
+                }
+                assert_eq!(app.take_host_writes(), [clipboard::osc52(&path), clipboard::osc52(&path)]);
+            }
         }
 
         #[test]

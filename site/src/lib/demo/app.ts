@@ -3,7 +3,7 @@ import { BOLD, Grid, type Rect, contains } from '../term/grid';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -1230,7 +1230,25 @@ export class App {
   filesMap(): Map<string, string> {
     const p = this.project();
     const w = this.workspace();
-    return workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const files = workspaceFiles(p, w, p && w ? workspaceDiff(p, w, 'all') : []);
+    const path = this.filesPlace()?.viewer?.path;
+    if (path?.startsWith('/')) {
+      const text = this.linkedFiles().get(path);
+      if (text !== undefined) files.set(path, text);
+    }
+    return files;
+  }
+
+  private linkedFiles(): Map<string, string> {
+    const files = new Map([
+      ['/tmp/report.md', '# Research report\n\nReturn labels should accept an empty address.\n'],
+      ['/home/you/.claude/plans/fix.md', '# Plan\n\nCheck the address before creating a return label.\n'],
+    ]);
+    for (const p of this.projects)
+      for (const w of p.workspaces)
+        for (const [path, text] of workspaceFiles(p, w, workspaceDiff(p, w, 'all')))
+          files.set(absolutePath(`${w.root}/${path}`), text);
+    return files;
   }
 
   private filesPlace(): FilesPlace | null {
@@ -1395,7 +1413,7 @@ export class App {
     if (!w || !contains(r, x, y)) return null;
     const row = Array.from({ length: r.w }, (_, i) => grid.at(r.x + i, y)?.ch ?? ' ');
     const link = linkAt(row, x - r.x);
-    const path = link && resolveLink(link.path, pane.shell.cwd, w.root, this.filesMap());
+    const path = link && resolveLink(link.path, pane.shell.cwd, w.root, this.linkedFiles());
     return link && path ? { start: r.x + link.start, end: r.x + link.end, path, lines: link.lines } : null;
   }
 

@@ -362,9 +362,15 @@ function normalize(parts: string[]): string {
 }
 
 export function resolveLink(path: string, cwd: string[], root: string, files: Map<string, string>): string | null {
-  const absolute = path.startsWith('/') || path.startsWith('~');
-  const candidates = absolute ? (path.startsWith(`${root}/`) ? [path.slice(root.length + 1)] : []) : [normalize([...cwd, path]), normalize([path])];
-  return candidates.find((c) => files.has(c)) ?? null;
+  const folder = absolutePath(root);
+  const given = path.startsWith('~/') ? absolutePath(path) : path;
+  const candidates = given.startsWith('/') ? [absolutePath(given)] : [absolutePath([folder, ...cwd, given].join('/')), absolutePath(`${folder}/${given}`)];
+  const found = candidates.find((c) => files.has(c));
+  return found?.startsWith(`${folder}/`) ? found.slice(folder.length + 1) : found ?? null;
+}
+
+export function absolutePath(path: string): string {
+  return `/${normalize([path.replace(/^~(?=\/|$)/, '/home/you')])}`;
 }
 
 function languageName(path: string): string | null {

@@ -453,10 +453,11 @@ impl App {
 
     fn link_at(&mut self, at: Position) -> Option<Target> {
         let root = self.project()?.workspace()?.path.clone();
+        let home = self.home.clone();
         let term = self.term_mut()?;
         let screen = term.emulator.snapshot().ok()?;
         let found = link::at(screen.rows.get(usize::from(at.y))?, at.x)?;
-        link::resolve(&found, term.cwd().as_deref(), &root)
+        link::resolve(&found, term.cwd().as_deref(), &root, home.as_deref())
     }
 
     pub(super) fn link_click(&mut self, ev: MouseEvent, at: Position) -> bool {
@@ -516,12 +517,23 @@ impl App {
         }
     }
 
+    pub(super) fn link_hover(&self) -> Option<Position> {
+        self.hover.filter(|_| {
+            self.overlay.is_none()
+                && self.row_drag.is_none()
+                && self.pane_drag.is_none()
+                && self.selecting.is_none()
+                && self.divider_drag.is_none()
+        })
+    }
+
     pub(super) fn hovered_link(
         tab: &Tab,
         screens: &[Snapshot],
         pane_area: Rect,
         hover: Position,
         root: &Path,
+        home: Option<&Path>,
     ) -> Option<(u16, Range<u16>)> {
         let term = tab.pane()?;
         let pane = tab.rect(pane_area, term.id)?;
@@ -530,7 +542,7 @@ impl App {
         }
         let (row, col) = (hover.y - pane.y, hover.x - pane.x);
         let found = link::at(screens.get(tab.active)?.rows.get(usize::from(row))?, col)?;
-        link::resolve(&found, term.cwd().as_deref(), root)?;
+        link::resolve(&found, term.cwd().as_deref(), root, home)?;
         Some((row, found.start..found.end))
     }
 }
