@@ -175,6 +175,7 @@ function checkEmail(input: string): [string, string?] {
 }
 const DOUBLE_CLICK = 400;
 const AUTO_SCROLL_EVERY = 150;
+const KEEP_AWAKE_FOR = 30000;
 
 interface Focus {
   project: number | null;
@@ -416,6 +417,7 @@ export class App {
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
     this.watchAgents();
+    this.keepAwake();
     this.grid.reset();
     this.follow();
     this.frame = new Painter(this, this.grid).draw();
@@ -429,6 +431,23 @@ export class App {
 
   private visibleTab(): Tab | undefined {
     return this.nav ? undefined : this.tab();
+  }
+
+  private awakeAt: number | null = null;
+  private awakeCheck: (() => void) | null = null;
+
+  private keepAwake(): void {
+    const now = this.now();
+    const panes = this.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.flatMap((t) => t.panes)));
+    if (!this.config.awake) this.awakeAt = null;
+    else if (panes.some((pane) => paneStatus(pane) === 'working')) this.awakeAt = now;
+    else if (this.awakeAt !== null && now - this.awakeAt >= KEEP_AWAKE_FOR) this.awakeAt = null;
+    else if (this.awakeAt !== null && !this.awakeCheck) {
+      this.awakeCheck = this.after(KEEP_AWAKE_FOR - (now - this.awakeAt), () => {
+        this.awakeCheck = null;
+        this.dirty();
+      });
+    }
   }
 
   private watchAgents(): void {
@@ -2325,8 +2344,7 @@ export class App {
 
   awakeNote(): string {
     if (!this.config.awake) return 'no idle sleep while an agent works';
-    const panes = this.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.flatMap((t) => t.panes)));
-    return panes.some((pane) => paneStatus(pane) === 'working') ? 'held now, by caffeinate' : 'not held: no agent is working';
+    return this.awakeAt !== null ? 'held now, by caffeinate' : 'not held: no agent is working';
   }
 
   restartNotes(width: number): Line[] {
