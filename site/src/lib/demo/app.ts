@@ -1257,6 +1257,16 @@ export class App {
     this.todo.open = false;
   }
 
+  private closePanel(): boolean {
+    this.todo.field = null;
+    this.closeTodo();
+    this.changesOpen = false;
+    if (this.changesFilter) this.changesFilter.focused = false;
+    this.files.close();
+    this.dirty();
+    return true;
+  }
+
   todoTyping(): boolean {
     return !this.overlay && this.todo.open && !!this.todo.field;
   }
@@ -1448,6 +1458,7 @@ export class App {
     const place = this.filesPlace();
     if (!place) return false;
     const ch = this.typed(k);
+    if (k.key === 'Escape' && !place.query) return this.closePanel();
     if (k.key === 'Escape') Object.assign(place, { query: '', focused: false, selected: 0, scroll: 0 });
     else if (k.key === 'Enter') {
       const i = selectable(foundRows(this.filesMap(), place))[place.selected];
@@ -1547,6 +1558,10 @@ export class App {
     const filter = this.changesFilter;
     if (!filter) return false;
     const ch = this.typed(k);
+    if (k.key === 'Escape' && !filter.query) {
+      this.changesFilter = null;
+      return this.closePanel();
+    }
     if (k.key === 'Escape') this.changesFilter = null;
     else if (k.key === 'Enter') filter.focused = false;
     else if (k.key === 'Backspace') filter.query = filter.query.slice(0, -1);
@@ -3349,12 +3364,14 @@ export class App {
     }
     if (o) return this.overlayKey(o, k);
     if (this.todoTyping()) {
+      if (k.key === 'Escape' && !this.todo.field?.chars.length) return this.closePanel();
       this.todo.key(k, todoWidth(this));
       this.dirty();
       return true;
     }
     if (this.filesTyping()) return this.filesKey(k);
     if (this.filteringChanges()) return this.changesFilterKey(k);
+    if (k.key === 'Escape' && this.panelShown()) return this.closePanel();
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;
     if (!pane) return false;

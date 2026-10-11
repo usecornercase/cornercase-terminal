@@ -16,7 +16,7 @@ The changes panel shows the diff of the active workspace or the uncommitted chan
 
 ## Open and close it
 
-The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel) to close it. It shares its column with the [files panel](../files/) and the [TODO panel](../todo/): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
+The panel is there for workspaces inside a git repository. Click **`Changes`** at the bottom of the sidebar, next to `Issues`, to open it, and again (or **`×`** in the panel, or `Esc`) to close it. It shares its column with the [files panel](../files/) and the [TODO panel](../todo/): opening one closes the others. The button shows how many files changed, such as `Changes 3`, even while the panel is closed.
 
 The first scope tab follows the active workspace: switch workspaces and it shows the other one's changes. Its label is the project's name, with the workspace after `›` when the project has several workspaces. Drag its left border to make it wider or narrower; a double click on the border gives it back its automatic width, half of the room right of the columns. Whether it is open, its scope and mode, and its width are kept in the [saved session](../sessions/#what-is-saved).
 
@@ -97,7 +97,7 @@ Click **`⌕`** next to the panel's `×` to show only some files. A field opens 
 - A word that starts with `!` leaves the files it matches out.
 - Case is ignored unless the word has an uppercase letter. A renamed file matches by its old path too.
 - The summary counts what is left, such as `3 of 31 files`.
-- **`Enter`** keeps the filter and gives the keys back to your pane. **`Esc`** or the field's **`×`** closes it and shows every file again.
+- **`Enter`** keeps the filter and gives the keys back to your pane. **`Esc`** or the field's **`×`** closes it and shows every file again; `Esc` on an empty field closes the panel.
 
 Clicking in a pane also gives it the keys back and keeps the filter; a click on the field takes them again. The filter stays when you switch tabs or workspaces, and isn't saved with the session.
 

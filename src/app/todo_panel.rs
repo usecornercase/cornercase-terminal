@@ -92,6 +92,7 @@ impl App {
         let Some(field) = &mut self.todo.field else { return };
         let editor = &mut field.editor;
         match key.code {
+            KeyCode::Esc if editor.is_empty() => self.close_panel(),
             KeyCode::Esc => self.todo.field = None,
             KeyCode::Enter => self.submit_todo(area),
             KeyCode::Backspace => editor.backspace(),

@@ -325,6 +325,7 @@ impl App {
     pub(super) fn files_key(&mut self, key: KeyEvent, area: Rect) {
         let Some((workspace, _)) = self.files_target() else { return };
         match key.code {
+            KeyCode::Esc if self.files.query(workspace).is_none_or(|q| q.text.is_empty()) => self.close_panel(),
             KeyCode::Esc => *self.files.query_mut(workspace) = Query::default(),
             KeyCode::Enter if !self.answers_query(workspace) => self.files.query_mut(workspace).enter = true,
             KeyCode::Enter => self.open_selected(workspace),

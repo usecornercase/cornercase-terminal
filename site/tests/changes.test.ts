@@ -75,6 +75,36 @@ for (const columns of [140, 80]) {
     });
   }
 
+  for (const panel of ['changes', 'files', 'todo'] as const) {
+    test(`Escape closes the ${panel} panel before it reaches the pane at ${columns} columns`, () => {
+      const app = demo(columns);
+      app.changesOpen = false;
+      if (panel === 'changes') app.toggleChanges();
+      else if (panel === 'files') app.toggleFiles();
+      else app.toggleTodo();
+      const tab = app.tab();
+      const shell = tab && activePane(tab)?.shell;
+      assert.ok(shell);
+      const reached: string[] = [];
+      const key = shell.key.bind(shell);
+      shell.key = (k) => {
+        reached.push(k.key);
+        key(k);
+      };
+      if (panel === 'todo') {
+        app.todo.field = { item: null, chars: ['x'], cursor: 1 };
+        app.key({ key: 'Escape' });
+        assert.ok(app.panelShown() && !app.todo.field);
+      }
+      app.key({ key: 'Escape' });
+      assert.ok(!app.panelShown());
+      assert.deepEqual(reached, []);
+      app.key({ key: 'Escape' });
+      assert.deepEqual(reached, ['Escape']);
+      app.destroy();
+    });
+  }
+
   test(`the hero tour reaches its end at ${columns} columns`, async () => {
     const app = demo(columns);
     app.changesOpen = false;

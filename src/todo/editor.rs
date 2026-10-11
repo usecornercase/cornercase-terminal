@@ -16,6 +16,10 @@ impl Editor {
         self.chars.iter().collect()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.chars.is_empty()
+    }
+
     pub fn cursor(&self) -> usize {
         self.cursor
     }

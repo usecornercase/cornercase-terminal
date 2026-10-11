@@ -858,6 +858,13 @@ impl App {
         self.changes_shown() || self.todo.open || self.files_shown()
     }
 
+    fn close_panel(&mut self) {
+        self.todo.field = None;
+        self.close_todo();
+        self.changes.close();
+        self.files.close();
+    }
+
     fn changes_target(&self) -> Option<Checkout> {
         let workspace = self.project().filter(|p| !p.closing)?.workspace().filter(|w| w.open())?;
         git::branch(&workspace.path)?;
@@ -1783,6 +1790,7 @@ impl App {
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
             None if self.filtering() => self.filter_key(key),
+            None if key.code == KeyCode::Esc && self.panel_shown() => self.close_panel(),
             Some(Overlay::Menu { .. }) | None => self.forward_key(key),
             Some(_) => return self.form_key(key, area),
         }
@@ -4928,7 +4936,12 @@ impl App {
 
     fn filter_key(&mut self, key: KeyEvent) {
         let Some(filter) = &mut self.changes.filter else { return };
+        let empty = filter.query().is_empty();
         match key.code {
+            KeyCode::Esc if empty => {
+                self.changes.filter = None;
+                self.close_panel();
+            }
             KeyCode::Esc => self.changes.filter = None,
             KeyCode::Enter => filter.focused = false,
             KeyCode::Backspace => filter.pop(),
@@ -5497,6 +5510,15 @@ mod tests {
         app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
     }
 
+    fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
+        wait_until(text, || {
+            while let Ok(ev) = rx.try_recv() {
+                app.handle_event(ev, AREA).expect("handle event");
+            }
+            screen(app).contains(text)
+        });
+    }
+
     fn type_in_pane(app: &mut App, rx: &Receiver<AppEvent>, word: &str) {
         type_text(app, &format!("echo {word}-\"\"typed"));
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
@@ -5754,15 +5776,6 @@ mod tests {
 
         fn active_pane(app: &App) -> u64 {
             app.term().map(|t| t.id).expect("a pane")
-        }
-
-        fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
-            wait_until(text, || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
-                screen(app).contains(text)
-            });
         }
 
         #[test]
@@ -13965,7 +13978,7 @@ rm -f "$1/sessions/$$.json"
             for text in texts {
                 submit_text(app, text);
             }
-            send_key(app, KeyCode::Esc, KeyModifiers::NONE);
+            send_key(app, KeyCode::Enter, KeyModifiers::NONE);
         }
 
         fn texts(app: &App) -> Vec<String> {
@@ -14186,6 +14199,173 @@ rm -f "$1/sessions/$$.json"
             back.set_todos(Todos::from(saved));
             back.restore(&state, AREA);
             assert_eq!((state.todo, back.todo.open, texts(&back)), (true, true, vec!["a".into()]));
+        }
+    }
+
+    mod esc_closes_the_side_panel {
+        use rstest::rstest;
+
+        use super::*;
+
+        #[derive(Clone, Copy, Debug)]
+        enum Side {
+            Changes,
+            Files,
+            Todo,
+        }
+
+        fn with_cat() -> (App, Receiver<AppEvent>, TempDir) {
+            let repo = git_repo(&[("a.txt", "one\n")]);
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            type_line(&mut app, "echo cat-\"\"starts; cat -v");
+            shows(&mut app, &rx, "cat-starts");
+            (app, rx, repo)
+        }
+
+        fn open(app: &mut App, side: Side) {
+            match side {
+                Side::Changes => app.toggle_changes(),
+                Side::Files => app.toggle_files(),
+                Side::Todo => app.toggle_todo(),
+            }
+            assert!(app.panel_shown());
+        }
+
+        fn focus_field(app: &mut App, side: Side) {
+            let area = app.layout(AREA).changes;
+            let field = match side {
+                Side::Changes => ui::changes::filter_button(area),
+                Side::Files => ui::files::field(area),
+                Side::Todo => ui::todo::rows(area, &app.todo_view(area)).button(),
+            };
+            click(app, field.as_position());
+            assert!(typing(app));
+        }
+
+        fn typing(app: &App) -> bool {
+            app.todo_typing() || app.files_typing() || app.filtering()
+        }
+
+        fn esc(app: &mut App) {
+            send_key(app, KeyCode::Esc, KeyModifiers::NONE);
+        }
+
+        fn only_the_next_esc_reaches_the_pane(app: &mut App, rx: &Receiver<AppEvent>) {
+            type_text(app, "a");
+            esc(app);
+            type_text(app, "b");
+            send_key(app, KeyCode::Enter, KeyModifiers::NONE);
+            shows(app, rx, "a^[b");
+            assert!(!screen(app).contains("^[a"), "{}", screen(app));
+        }
+
+        #[rstest]
+        #[case::changes(Side::Changes)]
+        #[case::files(Side::Files)]
+        #[case::todo(Side::Todo)]
+        fn closes_the_panel_without_reaching_the_pane(#[case] side: Side) {
+            let (mut app, rx, _repo) = with_cat();
+            open(&mut app, side);
+            esc(&mut app);
+            assert!(!app.panel_shown());
+            only_the_next_esc_reaches_the_pane(&mut app, &rx);
+        }
+
+        #[rstest]
+        #[case::changes(Side::Changes)]
+        #[case::files(Side::Files)]
+        #[case::todo(Side::Todo)]
+        fn a_field_with_text_clears_first_and_closes_on_the_next(#[case] side: Side) {
+            let (mut app, rx, _repo) = with_cat();
+            open(&mut app, side);
+            focus_field(&mut app, side);
+            type_text(&mut app, "x");
+            esc(&mut app);
+            assert_eq!((app.panel_shown(), typing(&app)), (true, false));
+            esc(&mut app);
+            assert!(!app.panel_shown());
+            only_the_next_esc_reaches_the_pane(&mut app, &rx);
+        }
+
+        #[rstest]
+        #[case::changes(Side::Changes)]
+        #[case::files(Side::Files)]
+        #[case::todo(Side::Todo)]
+        fn an_empty_field_closes_at_once(#[case] side: Side) {
+            let (mut app, rx, _repo) = with_cat();
+            open(&mut app, side);
+            focus_field(&mut app, side);
+            esc(&mut app);
+            assert_eq!((app.panel_shown(), typing(&app)), (false, false));
+            only_the_next_esc_reaches_the_pane(&mut app, &rx);
+        }
+
+        #[test]
+        fn the_changes_panel_keeps_its_filter() {
+            let (mut app, _rx, _repo) = with_cat();
+            open(&mut app, Side::Changes);
+            focus_field(&mut app, Side::Changes);
+            submit_text(&mut app, "*.txt");
+            esc(&mut app);
+            open(&mut app, Side::Changes);
+            assert_eq!(app.changes.filter.as_ref().map(changes::filter::Filter::query), Some("*.txt"));
+        }
+
+        #[test]
+        fn without_a_panel_esc_reaches_the_pane() {
+            let (mut app, rx, _repo) = with_cat();
+            esc(&mut app);
+            type_text(&mut app, "b");
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            shows(&mut app, &rx, "^[b");
+        }
+
+        #[test]
+        fn a_changes_panel_that_is_not_shown_leaves_esc_to_the_pane() {
+            let plain = TempDir::new();
+            let (mut app, rx) = app_in(plain.path(), no_config());
+            app.changes.open = true;
+            type_line(&mut app, "echo cat-\"\"starts; cat -v");
+            shows(&mut app, &rx, "cat-starts");
+            esc(&mut app);
+            type_text(&mut app, "b");
+            send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+            shows(&mut app, &rx, "^[b");
+            assert!(app.changes.open);
+        }
+
+        #[test]
+        fn in_compact_mode_too() {
+            const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 40 };
+            let (mut app, rx, _repo) = with_cat();
+            open(&mut app, Side::Files);
+            app.handle_event(AppEvent::Input(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))), SMALL)
+                .expect("handle key");
+            assert!(!app.panel_shown());
+            only_the_next_esc_reaches_the_pane(&mut app, &rx);
+        }
+
+        #[test]
+        fn a_drag_takes_esc_first() {
+            let (mut app, _rx, _repo) = with_cat();
+            open(&mut app, Side::Todo);
+            press(&mut app, entry_pos());
+            esc(&mut app);
+            assert_eq!((app.row_drag.is_none(), app.panel_shown()), (true, true));
+            esc(&mut app);
+            assert!(!app.panel_shown());
+        }
+
+        #[test]
+        fn a_menu_takes_esc_first() {
+            let (mut app, _rx, _repo) = with_cat();
+            open(&mut app, Side::Todo);
+            right_click(&mut app, entry_pos());
+            assert!(matches!(app.overlay, Some(Overlay::Menu { .. })));
+            esc(&mut app);
+            assert_eq!((app.overlay.is_none(), app.panel_shown()), (true, true));
+            esc(&mut app);
+            assert!(!app.panel_shown());
         }
     }
 
