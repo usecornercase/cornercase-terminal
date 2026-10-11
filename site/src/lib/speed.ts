@@ -9,8 +9,7 @@ export interface Measure {
 }
 
 export interface Weight extends Measure {
-  less: string;
-  next: string;
+  verdict: (app: string) => [string, string];
 }
 
 export const slowest = (values: Value[]): number => Math.max(...values.map(([v]) => v));

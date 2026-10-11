@@ -1,27 +1,46 @@
 ---
+import { LOCALES, home, localeOf, locales, words } from '../../i18n';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const locale = localeOf(Astro.url);
+const t = words(Astro.url);
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
 ---
 
 <header class="nav">
   <div class="wrap inner">
-    <a class="brand" href={`${base}/`} aria-label="cornercase, home">
+    <a class="brand" href={home(locale)} aria-label={t.home}>
       <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
       <span>cornercase</span>
     </a>
-    <nav class="links" aria-label="Sections">
-      <a href="#demo">Live simulation</a>
-      <a href="#speed">Speed</a>
-      <a href="#why">Why cornercase</a>
-      <a href="#more">Features</a>
-      <a href={`${base}/docs/`}>Docs</a>
+    <nav class="links" aria-label={t.nav.label}>
+      <a href="#demo">{t.nav.demo}</a>
+      <a href="#speed">{t.nav.speed}</a>
+      <a href="#why">{t.nav.why}</a>
+      <a href="#more">{t.nav.more}</a>
+      <a href={`${base}/docs/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.docs}</a>
     </nav>
     <div class="actions">
-      <a class="gh" href={repo} aria-label="cornercase on GitHub">
+      <nav class="langs" aria-label={t.nav.language}>
+        {
+          locales.map((l) => (
+            <a
+              href={home(l)}
+              hreflang={LOCALES[l].lang}
+              lang={LOCALES[l].lang}
+              title={LOCALES[l].name}
+              aria-label={LOCALES[l].name}
+              aria-current={l === locale ? 'page' : undefined}>
+              {LOCALES[l].short}
+            </a>
+          ))
+        }
+      </nav>
+      <a class="gh" href={repo} aria-label={t.nav.github} data-label={t.nav.stars}>
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
         <span class="stars" data-stars>GitHub</span>
       </a>
-      <a class="btn btn-primary install" href="#install">Install</a>
+      <a class="btn btn-primary install" href="#install">{t.nav.install}</a>
     </div>
   </div>
 </header>
@@ -32,7 +51,8 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
   const show = (n: number) => {
     if (!el || !Number.isFinite(n) || n < 25) return;
     el.textContent = n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
-    el.parentElement?.setAttribute('aria-label', `cornercase on GitHub, ${n} stars`);
+    const label = el.parentElement?.dataset.label;
+    if (label) el.parentElement?.setAttribute('aria-label', label.replace('{n}', String(n)));
   };
   let cached: string | null = null;
   try {
@@ -108,6 +128,7 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
 
   .links a {
     padding: 7px 12px;
+    white-space: nowrap;
     border-radius: 8px;
     color: var(--text-2);
     font-size: 14.5px;
@@ -127,6 +148,36 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  .langs {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    border: 1px solid var(--line-2);
+  }
+
+  .langs a {
+    padding: 4px 7px;
+    border-radius: 6px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .langs a:hover {
+    color: var(--text);
+  }
+
+  .langs a[aria-current] {
+    color: var(--text);
+    background: rgb(255 255 255 / 0.08);
   }
 
   .gh {
@@ -163,11 +214,13 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
     border-radius: 9px;
   }
 
-  @media (max-width: 860px) {
+  @media (max-width: 1040px) {
     .links a:not(:last-child) {
       display: none;
     }
+  }
 
+  @media (max-width: 860px) {
     .nav {
       background: rgb(7 6 11 / 0.82);
       border-bottom-color: var(--line);
@@ -176,9 +229,21 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
     }
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 600px) {
     .inner {
       gap: 12px;
+    }
+
+    .links {
+      display: none;
+    }
+
+    .actions {
+      margin-left: auto;
+    }
+
+    .langs a {
+      padding: 4px 5px;
     }
 
     .actions .install {

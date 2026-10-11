@@ -1,123 +1,90 @@
 ---
+import { localeOf, words } from '../../i18n';
+import Rich from './Rich.astro';
 import Snapshot from './Snapshot.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (path: string) => `${base}/docs/${path}`;
+const docsLang = localeOf(Astro.url) === 'en' ? undefined : 'en';
 const procs = ['claude', 'codex', 'claude', 'npm run dev'];
+const t = words(Astro.url).why;
+const [start, parallel, review, leave] = t.steps;
 ---
 
 <section class="section why" id="why" aria-labelledby="why-title">
   <div class="wrap">
-    <p class="eyebrow">Why cornercase</p>
-    <h2 class="h2" id="why-title">Starting ten agents is easy. Keeping up with them isn't.</h2>
-    <p class="lead">
-      cornercase gives each one its own corner, shows all of them at a glance, puts the review next to the work, and keeps
-      everything running after you close the window.
-    </p>
+    <p class="eyebrow">{t.eyebrow}</p>
+    <h2 class="h2" id="why-title">{t.title}</h2>
+    <p class="lead">{t.lead}</p>
 
     <ol class="steps">
       <li class="step reveal">
         <div class="text">
-          <span class="num">1 · Start</span>
-          <h3>From an issue to an agent at work, in one click.</h3>
-          <p>
-            Pick an issue from GitHub, Linear, Jira, Plane or Shortcut and press start. cornercase creates a worktree on a branch
-            named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to
-            name, no folder to make, nothing to paste.
-          </p>
-          <a class="more" href={docs('guides/issues-and-agents/')}>Issues to agents →</a>
+          <span class="num">{start.num}</span>
+          <h3>{start.title}</h3>
+          <p><Rich text={start.text} /></p>
+          <a class="more" href={docs('guides/issues-and-agents/')} hreflang={docsLang}>{start.more}</a>
         </div>
-        <Snapshot
-          scene="issue"
-          label="The issues dialog of web-shop with #482, Returns page crashes on empty address, selected: start opens it in its own worktree."
-          class="shot"
-        />
+        <Snapshot scene="issue" label={start.label} class="shot" />
       </li>
 
       <li class="step reveal flip">
         <div class="text">
-          <span class="num">2 · In parallel</span>
-          <h3>Ten agents, one glance.</h3>
-          <p>
-            Each agent gets its own branch, folder and tab, so two of them never touch the same file. The sidebar tells you
-            who is working <b class="s working">◐</b>, who is waiting for you <b class="s waiting">!</b> and who is done
-            <b class="s done">✓</b>, with the model and how full its context is. When one needs you, your terminal taps you
-            on the shoulder. Even through SSH.
-          </p>
-          <a class="more" href={docs('reference/agents/')}>Works with Claude Code, Codex, Gemini and 11 more →</a>
+          <span class="num">{parallel.num}</span>
+          <h3>{parallel.title}</h3>
+          <p><Rich text={parallel.text} /></p>
+          <a class="more" href={docs('reference/agents/')} hreflang={docsLang}>{parallel.more}</a>
         </div>
-        <Snapshot
-          scene="status"
-          label="A narrow cornercase window: the seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, each with a Claude working; and the conversation on dark mode in the pane, with the path it names underlined."
-          class="shot"
-        />
+        <Snapshot scene="status" label={parallel.label} class="shot" />
       </li>
 
       <li class="step reveal">
         <div class="text">
-          <span class="num">3 · Review</span>
-          <h3>Read the diff while it's still being written.</h3>
-          <p>
-            The workspace's changes sit next to the agent and refresh as it types: uncommitted, its commits, or everything
-            since the base branch, or what is uncommitted in every project at once. Hover a hunk to open it in your editor, copy it, or send it back to the agent with a
-            note. No browser, no pull request, no waiting.
-          </p>
-          <a class="more" href={docs('guides/changes/')}>The changes panel →</a>
+          <span class="num">{review.num}</span>
+          <h3>{review.title}</h3>
+          <p><Rich text={review.text} /></p>
+          <a class="more" href={docs('guides/changes/')} hreflang={docsLang}>{review.more}</a>
         </div>
-        <Snapshot
-          scene="changes"
-          label="The changes panel of the #482 worktree: src/returns/address.rs and src/returns/mod.rs, with first_line() now returning an Option."
-          class="shot"
-        />
+        <Snapshot scene="changes" label={review.label} class="shot" />
       </li>
 
       <li class="step reveal flip">
         <div class="text">
-          <span class="num">4 · Leave, come back</span>
-          <h3>Close the window. Nothing stops.</h3>
-          <p>
-            A small server owns the shells, not the window. Quit, close the laptop, lose the Wi-Fi: agents, tests and dev
-            servers keep running. Open cornercase again from any terminal, or from your phone over SSH, and it's where
-            you left it, with a <b class="s done">✓</b> on everyone who finished while you were away.
-          </p>
-          <a class="more" href={docs('guides/sessions/')}>How sessions work →</a>
+          <span class="num">{leave.num}</span>
+          <h3>{leave.title}</h3>
+          <p><Rich text={leave.text} /></p>
+          <a class="more" href={docs('guides/sessions/')} hreflang={docsLang}>{leave.more}</a>
         </div>
         <figure class="diagram" aria-labelledby="diagram-caption">
           <div class="client">
-            <span class="title">your terminal</span>
-            <span class="state on">attached</span>
-            <span class="state off">closed</span>
+            <span class="title">{t.diagram.terminal}</span>
+            <span class="state on">{t.diagram.attached}</span>
+            <span class="state off">{t.diagram.closed}</span>
           </div>
           <svg class="wire" viewBox="0 0 20 48" preserveAspectRatio="none" aria-hidden="true"><path d="M10 0V48"></path></svg>
           <div class="server">
             <span class="title">
               <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
-              cornercase server
+              {t.diagram.server}
             </span>
             <ul>
               {procs.map((p) => <li><i />{p}</li>)}
             </ul>
           </div>
-          <figcaption id="diagram-caption" class="sr-only">
-            Your terminal attaches to the cornercase server, which runs two Claude Code agents, a Codex agent and npm run dev.
-            When the terminal closes, those programs keep running.
-          </figcaption>
+          <figcaption id="diagram-caption" class="sr-only">{t.diagram.caption}</figcaption>
         </figure>
       </li>
     </ol>
 
     <div class="band reveal">
       <div class="text">
-        <span class="num">Agents that run agents</span>
-        <h3>Or hand all of it to an agent.</h3>
-        <p>
-          Everything above is one command away. <code>cornercase</code> opens worktrees, starts agents, waits for them and
-          reads what they wrote, so an agent can run the others: one fixes the bug, one reviews, one writes the tests.
-        </p>
-        <a class="more" href={docs('guides/scripts-and-agents/')}>Scripts and agents →</a>
+        <span class="num">{t.band.num}</span>
+        <h3>{t.band.title}</h3>
+        <p><Rich text={t.band.text} /></p>
+        <a class="more" href={docs('guides/scripts-and-agents/')} hreflang={docsLang}>{t.band.more}</a>
       </div>
       <figure class="transcript">
-        <figcaption>a Claude Code session</figcaption>
+        <figcaption>{t.band.session}</figcaption>
         <pre><span class="d">$</span> cornercase start codex --worktree feat/gift-cards \
     --prompt 'Add gift cards to the checkout'
 <span class="d">12</span>
@@ -207,11 +174,6 @@ balance is applied after coupons and before tax.</pre>
     line-height: 1.6;
   }
 
-  .text code {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-  }
-
   .more {
     color: var(--text);
     font-weight: 600;
@@ -225,23 +187,6 @@ balance is applied after coupons and before tax.</pre>
 
   .shot {
     box-shadow: 0 20px 50px -30px rgb(0 0 0 / 0.9);
-  }
-
-  .s {
-    font-family: var(--font-mono);
-    font-weight: 700;
-  }
-
-  .working {
-    color: var(--yellow);
-  }
-
-  .waiting {
-    color: #ff8700;
-  }
-
-  .done {
-    color: var(--green);
   }
 
   .diagram {

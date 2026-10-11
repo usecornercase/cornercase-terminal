@@ -1,21 +1,22 @@
 ---
+import { localeOf, words } from '../../i18n';
 import Demo from './Demo.astro';
 import InstallBox from './InstallBox.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
+const t = words(Astro.url);
+const docsLang = localeOf(Astro.url) === 'en' ? undefined : 'en';
 ---
 
 <section class="hero" aria-labelledby="hero-title">
   <div class="backdrop" aria-hidden="true"></div>
   <div class="wrap top">
     <h1 id="hero-title">
-      <span class="line">The fastest way to run</span>
-      <span class="line accent">agents in parallel.<span class="caret" aria-hidden="true"></span></span>
+      <span class="line">{t.hero.title[0]}</span>
+      <span class="line accent">{t.hero.title[1]}<span class="caret" aria-hidden="true"></span></span>
     </h1>
-    <p class="pitch">
-      Every agent in its own corner. Everything a click away. And when you close the terminal, they keep working.
-    </p>
+    <p class="pitch">{t.hero.pitch}</p>
   </div>
 
   <div class="stage" id="demo">
@@ -25,7 +26,7 @@ const repo = 'https://github.com/usecornercase/cornercase-terminal';
   <div class="wrap get">
     <InstallBox id="install" />
     <p class="meta">
-      Linux &amp; macOS · <a href={repo}>free and open source</a> · <a href={`${base}/docs/`}>docs</a>
+      {t.hero.platforms} · <a href={repo}>{t.hero.open}</a> · <a href={`${base}/docs/`} hreflang={docsLang}>{t.hero.docs}</a>
     </p>
   </div>
 </section>

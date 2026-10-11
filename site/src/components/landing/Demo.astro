@@ -1,41 +1,42 @@
 ---
+import { localeOf, words } from '../../i18n';
+import { DEMO } from '../../i18n/demo';
 import Snapshot from './Snapshot.astro';
 import { PICKER, themes } from '../../lib/term/palette';
 
-const label =
-  "A live simulation of cornercase: the work and personal groups with their seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, feat/dark-mode, feat/gift-cards and fix/empty-address, each with a Claude working; the conversation on dark mode in the middle, with the paths it names as links, and the TODO list on the right.";
-const compactLabel =
-  "A live simulation of cornercase in its compact layout: the bar with web-shop, feat/dark-mode and the agent's tab, and the conversation on dark mode in the pane.";
+const locale = localeOf(Astro.url);
+const t = words(Astro.url).demo;
+const tour = DEMO[locale].tour;
 ---
 
-<div class="demo" data-demo data-state="poster">
+<div class="demo" data-demo data-state="poster" data-locale={locale}>
   <div class="frame">
     <div class="marks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="window">
       <div class="window-bar">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="window-title">cornercase — ~/code/web-shop</span>
-        <span class="themes" role="group" aria-label="Terminal theme">
+        <span class="themes" role="group" aria-label={t.themes}>
           {
             PICKER.map(([id, name]) => (
               <button type="button" class="swatch" data-palette={id} title={name} aria-label={name} aria-pressed={id === 'tokyo' ? 'true' : 'false'} style={`--sw: ${themes[id].background}; --sw-2: ${themes[id].overrides[99] ?? themes[id].ansi[5]}`} />
             ))
           }
         </span>
-        <span class="live" aria-hidden="true"><i></i>Live simulation</span>
+        <span class="live" aria-hidden="true"><i></i>{t.live}</span>
       </div>
       <div class="screen">
-        <Snapshot scene="poster" label={label} bare class="poster poster-wide poster-177" />
-        <Snapshot scene="poster-190" label={label} bare class="poster poster-wide poster-190" />
-        <Snapshot scene="poster-202" label={label} bare class="poster poster-wide poster-202" />
-        <Snapshot scene="poster-220" label={label} bare class="poster poster-wide poster-220" />
-        <Snapshot scene="poster-102" label={label} bare class="poster poster-wide poster-102" />
-        <Snapshot scene="poster-compact" label={compactLabel} bare class="poster poster-compact" />
-        <canvas role="img" aria-label={label}></canvas>
+        <Snapshot scene="poster" label={t.label} bare class="poster poster-wide poster-177" />
+        <Snapshot scene="poster-190" label={t.label} bare class="poster poster-wide poster-190" />
+        <Snapshot scene="poster-202" label={t.label} bare class="poster poster-wide poster-202" />
+        <Snapshot scene="poster-220" label={t.label} bare class="poster poster-wide poster-220" />
+        <Snapshot scene="poster-102" label={t.label} bare class="poster poster-wide poster-102" />
+        <Snapshot scene="poster-compact" label={t.compactLabel} bare class="poster poster-compact" />
+        <canvas role="img" aria-label={t.label}></canvas>
         <textarea
           class="keys"
           tabindex="-1"
-          aria-label="Keyboard input for the demo: what you type goes to the active pane"
+          aria-label={t.keys}
           autocapitalize="off"
           autocomplete="off"
           autocorrect="off"
@@ -43,9 +44,9 @@ const compactLabel =
         <div class="play">
           <button type="button" class="play-button" data-play>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v11.6l3.1-2.9 2 4.5 2-.9-2-4.4h4.3z" fill="currentColor" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"></path></svg>
-            Try cornercase live
+            {t.play}
           </button>
-          <p class="play-hint">A real simulation, not a video: click around, type in a shell, start an agent.</p>
+          <p class="play-hint">{t.hint}</p>
         </div>
         <div class="spot" hidden aria-hidden="true"></div>
         <div class="lapse" hidden aria-hidden="true">
@@ -60,7 +61,7 @@ const compactLabel =
         <p class="caption" data-caption aria-live="polite"></p>
         <button class="replay" type="button" data-replay hidden>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-          <span data-replay-label>watch again</span>
+          <span data-replay-label>{tour.again}</span>
         </button>
       </div>
     </div>

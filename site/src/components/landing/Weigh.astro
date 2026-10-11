@@ -1,4 +1,5 @@
 ---
+import { words } from '../../i18n';
 import { APPS, type Weight, lead, slowest, times } from '../../lib/speed';
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
 }
 
 const { measures } = Astro.props;
+const t = words(Astro.url);
 const side = (k: number, j: number) => Math.sqrt(measures[k].values[j][0] / slowest(measures[k].values));
 const sides = (j: number) => measures.map((_, k) => `--s${k}: ${side(k, j).toFixed(4)}`).join('; ');
 ---
@@ -27,9 +29,9 @@ const sides = (j: number) => measures.map((_, k) => `--s${k}: ${side(k, j).toFix
       }
       <i class="halo" style={sides(0)}></i>
     </div>
-    <span class="scale">areas to scale</span>
+    <span class="scale">{t.weigh.scale}</span>
   </div>
-  <div class="kinds" role="tablist" aria-label="What we weighed">
+  <div class="kinds" role="tablist" aria-label={t.weigh.label}>
     {
       measures.map(({ title }, k) => (
         <button
@@ -45,8 +47,9 @@ const sides = (j: number) => measures.map((_, k) => `--s${k}: ${side(k, j).toFix
     }
   </div>
   {
-    measures.map(({ title, what, less, next, values }, k) => {
+    measures.map(({ title, what, verdict, values }, k) => {
       const { x, app } = lead(values);
+      const [less, next] = verdict(app);
       return (
         <div
           class="panel"
@@ -58,8 +61,8 @@ const sides = (j: number) => measures.map((_, k) => `--s${k}: ${side(k, j).toFix
           <p class="verdict">
             <b data-lead={x}>{times(x)}</b>{' '}
             <span>
-              {less} than {app}, <br />
-              the next {next}
+              {less} <br />
+              {next}
             </span>
           </p>
           <ul class="sr-only">

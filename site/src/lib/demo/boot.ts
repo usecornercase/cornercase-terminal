@@ -1,3 +1,5 @@
+import { type Demo, demo as english } from '../../i18n/en';
+import { demoWords } from '../../i18n/demo';
 import { type Rect, rect } from '../term/grid';
 import { type Theme, theme as defaultPalette, themes } from '../term/palette';
 import { App } from './app';
@@ -70,10 +72,10 @@ const changesWidth: Step = {
   },
 };
 
-export const CHAPTERS: Step[][] = [
+export const chapters = (say: Demo['tour']): Step[][] => [
   [
     reveal,
-    { say: 'Pick an issue and press start. It gets its own branch and gets to work.' },
+    { say: say.start },
     open('workspaces'),
     { click: 'Issues', nth: -1 },
     { wait: 1200 },
@@ -91,12 +93,12 @@ export const CHAPTERS: Step[][] = [
   [
     reveal,
     { spot: 'columns' },
-    { say: 'Meet the team: Claude Code and Codex, each in its own corner. Their model and context use sit under the tab name.' },
+    { say: say.team },
     { wait: 3800 },
     { spot: null },
     { run: (app) => void agentIn(app, 'orders-api', 'fix/pagination')?.ask('src/orders.ts') },
     { wait: 1150 },
-    { say: 'Someone needs you. `!` shows who, and your terminal taps you on the shoulder.' },
+    { say: say.needs },
     { wait: 1900 },
     open('projects'),
     { spot: 'sidebar' },
@@ -106,7 +108,7 @@ export const CHAPTERS: Step[][] = [
     { click: 'orders-api (' },
     close,
     { wait: 900 },
-    { say: 'One answer and it’s back to work. So are you.' },
+    { say: say.answer },
     { wait: 1400 },
     { key: 'Enter' },
     { wait: 1600 },
@@ -119,7 +121,7 @@ export const CHAPTERS: Step[][] = [
   ],
   [
     reveal,
-    { say: 'Curious what it’s doing? Every change, right next to the agent. Live.' },
+    { say: say.review },
     open('workspaces'),
     show('#482'),
     { click: '#482' },
@@ -131,36 +133,35 @@ export const CHAPTERS: Step[][] = [
     { wait: 500 },
     { spot: 'changes' },
     { wait: 2800 },
-    { say: 'Like it? Open it in your editor. Don’t? Send it back to the agent.' },
+    { say: say.hunk },
     { point: 'impl Address', nth: -1 },
     { wait: 3600 },
     { spot: null },
   ],
   [
     open('projects'),
-    { say: 'Now quit. Seriously. Everything keeps running without you.' },
+    { say: say.quit },
     { until: quiet, timeout: 7000 },
     { click: 'Quit', nth: -1 },
     { run: (app) => void (app.hover = null) },
     { wait: 1500 },
-    { say: 'Go grab a coffee. Your agents don’t need you watching.' },
-    { lapse: 3600, speed: 16, label: '25 minutes later' },
-    { say: 'Back already? Type `cornercase`, here, in another terminal, or from your phone.' },
+    { say: say.coffee },
+    { lapse: 3600, speed: 16, label: say.later },
+    { say: say.back },
     { type: 'cornercase' },
     { wait: 400 },
     { key: 'Enter' },
     { wait: 900 },
     reveal,
     { spot: 'columns' },
-    { say: 'Right where you left it. And `✓` shows who finished while you were out.' },
+    { say: say.left },
     { wait: 4200 },
     { spot: null },
     close,
   ],
 ];
 
-const TURN = 'Your turn. It’s all live: click around, right-click a pane, open settings, or type in a shell.';
-const STILL = 'This isn’t a video. Click anything, or watch the tour.';
+export const CHAPTERS = chapters(english.tour);
 
 function spotArea(app: App, spot: Spot): Rect {
   const a = app.areas();
@@ -200,6 +201,8 @@ function mapCell(from: Areas, to: Areas, x: number, y: number): Pos | null {
 }
 
 async function hero(root: HTMLElement): Promise<void> {
+  const words = demoWords(root.dataset.locale);
+  const steps = chapters(words.tour);
   const pointer = root.querySelector<HTMLElement>('.pointer');
   const caption = root.querySelector<HTMLElement>('[data-caption]');
   const spotlight = root.querySelector<HTMLElement>('.spot');
@@ -257,6 +260,7 @@ async function hero(root: HTMLElement): Promise<void> {
       cell: () => (viewport() < 560 ? 7.4 : viewport() < 900 ? 7.8 : 6.6),
       clock: true,
       build: (app) => {
+        app.narration = words.narrate;
         app.scripted = scripted;
         build(app);
       },
@@ -290,7 +294,7 @@ async function hero(root: HTMLElement): Promise<void> {
     player?.stop();
     player = null;
   };
-  const free = (text = TURN, label = 'watch again') => {
+  const free = (text = words.tour.turn, label = words.tour.again) => {
     stop();
     touring = false;
     spot(null);
@@ -314,10 +318,10 @@ async function hero(root: HTMLElement): Promise<void> {
       if (!touring) loosen();
       return;
     }
-    for (let i = 0; i < from && mine === token; i++) await play(mounted, null, CHAPTERS[i], { instant: true }).done;
-    for (let i = from; i < CHAPTERS.length; i++) {
+    for (let i = 0; i < from && mine === token; i++) await play(mounted, null, steps[i], { instant: true }).done;
+    for (let i = from; i < steps.length; i++) {
       if (mine !== token) return;
-      player = play(mounted, pointer, CHAPTERS[i], { say, spot, lapse });
+      player = play(mounted, pointer, steps[i], { say, spot, lapse });
       await player.done;
     }
     if (mine === token) free();
@@ -328,7 +332,7 @@ async function hero(root: HTMLElement): Promise<void> {
     touring = false;
     await remount(false, posterState);
     if (mine !== token || !m) return null;
-    free(STILL, 'watch the tour');
+    free(words.tour.still, words.tour.watch);
     return m;
   };
   const focusKeys = () => root.querySelector<HTMLTextAreaElement>('.keys')?.focus({ preventScroll: true });

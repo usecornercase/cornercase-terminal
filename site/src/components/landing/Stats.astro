@@ -1,85 +1,63 @@
 ---
-import type { Measure, Weight } from '../../lib/speed';
+import { localeOf, words } from '../../i18n';
+import type { Measure, Value, Weight } from '../../lib/speed';
 import Race from './Race.astro';
 import Weigh from './Weigh.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const times: Measure[] = [
-  {
-    title: 'Opening the app',
-    what: 'From launching it until the workspace is usable.',
-    values: [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']],
-  },
-  {
-    title: 'First look at the changes',
-    what: 'From the click until the changes are on screen: 20 files, +794 −76.',
-    values: [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']],
-  },
-  {
-    title: 'Every look after that',
-    what: 'The same changes, shown again.',
-    values: [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']],
-  },
-  {
-    title: 'Opening a file',
-    what: 'From the click until a file of 3,472 lines is on screen, coloured.',
-    values: [[0.14, '140 ms'], [0.65, '650 ms'], [1.33, '1.3 s'], [0.47, '470 ms']],
-  },
-  {
-    title: 'Finding a file by name',
-    what: 'From the query until the file shows up, among 32,255 files.',
-    values: [[0.019, '19 ms'], [0.3, '300 ms'], [0.19, '190 ms'], [0, 'no quick open']],
-  },
-  {
-    title: 'Searching the files',
-    what: 'From the query until the matches show, across 32,255 files.',
-    values: [[0.069, '69 ms'], [0.43, '430 ms'], [0.49, '490 ms'], [0.1, '100 ms']],
-  },
+const t = words(Astro.url);
+const timed: Value[][] = [
+  [[0.034, '34 ms'], [0.45, '450 ms'], [3.2, '3.2 s'], [8.5, '8.5 s']],
+  [[0.002, '2 ms'], [0.41, '410 ms'], [1.1, '1.1 s'], [0.43, '430 ms']],
+  [[0.002, '2 ms'], [0.09, '90 ms'], [0.33, '330 ms'], [0.14, '140 ms']],
+  [[0.14, '140 ms'], [0.65, '650 ms'], [1.33, '1.3 s'], [0.47, '470 ms']],
+  [[0.019, '19 ms'], [0.3, '300 ms'], [0.19, '190 ms'], [0, t.stats.noQuickOpen]],
+  [[0.069, '69 ms'], [0.43, '430 ms'], [0.49, '490 ms'], [0.1, '100 ms']],
 ];
-const sizes: Weight[] = [
-  {
-    title: 'Memory',
-    what: 'What each app’s own processes use, without the shells.',
-    less: 'less memory',
-    next: 'lightest',
-    values: [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']],
-  },
-  {
-    title: 'Download',
-    what: 'What you download to install it.',
-    less: 'smaller download',
-    next: 'smallest',
-    values: [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']],
-  },
-  {
-    title: 'On disk',
-    what: 'The space it takes once installed.',
-    less: 'less disk space',
-    next: 'smallest',
-    values: [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']],
-  },
+const weighed: Value[][] = [
+  [[53, '53 MB'], [432, '432 MB'], [793, '793 MB'], [1900, '1.9 GB']],
+  [[4.8, '4.8 MB'], [148, '148 MB'], [219, '219 MB'], [229, '229 MB']],
+  [[12, '12 MB'], [353, '353 MB'], [642, '642 MB'], [807, '807 MB']],
 ];
+const times: Measure[] = t.stats.times.map((m, i) => ({ ...m, values: timed[i] }));
+const sizes: Weight[] = t.stats.sizes.map((m, i) => ({ ...m, values: weighed[i] }));
 ---
 
 <section class="section stats" id="speed" aria-labelledby="speed-title">
   <div class="wrap">
     <div class="head reveal">
-      <p class="eyebrow">Speed</p>
-      <h2 class="h2 stretch" id="speed-title" aria-label="Faaast. Really faaast.">
+      <p class="eyebrow">{t.stats.eyebrow}</p>
+      <h2 class="h2 stretch" id="speed-title" aria-label={t.stats.label}>
         <span aria-hidden="true">
-          <span class="word">F<span class="a">a</span><span class="x" style="--k: 1">a</span><span class="x" style="--k: 2">a</span><span class="tail">st.</span></span>{' '}
-          <em><span class="word">Really</span>{' '}<span class="word">f<span class="a">a</span><span class="x" style="--k: 1">a</span><span class="x" style="--k: 2">a</span><span class="tail">st.</span></span></em>
+          {
+            t.stats.title.map((line, i) => {
+              const parts = line.map((w, j) => (
+                <Fragment>
+                  {j > 0 && ' '}
+                  {typeof w === 'string' ? (
+                    <span class="word">{w}</span>
+                  ) : (
+                    <span class="word">
+                      {w.pre}
+                      <span class="a">{w.a}</span>
+                      <span class="x" style="--k: 1">{w.a}</span>
+                      <span class="x" style="--k: 2">{w.a}</span>
+                      <span class="tail">{w.tail}</span>
+                    </span>
+                  )}
+                </Fragment>
+              ));
+              return i === 0 ? parts : <Fragment>{' '}<em>{parts}</em></Fragment>;
+            })
+          }
         </span>
       </h2>
-      <p class="lead">
-        It opens before you can blink, and shows what your agents changed, opens a file or finds one before you can click
-        again. The other apps we tried? Up to 8.5 seconds, and nearly 2 GB.
-      </p>
+      <p class="lead">{t.stats.lead}</p>
     </div>
     <Race measures={times} />
     <Weigh measures={sizes} />
     <p class="note reveal">
-      <a href={`${base}/docs/help/faq/#is-it-fast`}>How we measured →</a>
+      <a href={`${base}/docs/help/faq/#is-it-fast`} hreflang={localeOf(Astro.url) === 'en' ? undefined : 'en'}>{t.stats.how}</a>
     </p>
   </div>
 </section>

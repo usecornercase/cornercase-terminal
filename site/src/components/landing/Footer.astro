@@ -1,35 +1,39 @@
 ---
+import { home, localeOf, words } from '../../i18n';
 import InstallBox from './InstallBox.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
-const columns: [string, [string, string][]][] = [
+const locale = localeOf(Astro.url);
+const t = words(Astro.url);
+const docsLang = locale === 'en' ? undefined : 'en';
+const columns: [string, [string, string, string?][]][] = [
   [
-    'Product',
+    t.footer.product,
     [
-      ['Live simulation', '#demo'],
-      ['Speed', '#speed'],
-      ['Why cornercase', '#why'],
-      ['Features', '#more'],
-      ['Install', '#install'],
+      [t.nav.demo, '#demo'],
+      [t.nav.speed, '#speed'],
+      [t.nav.why, '#why'],
+      [t.nav.more, '#more'],
+      [t.nav.install, '#install'],
     ],
   ],
   [
-    'Docs',
+    t.footer.docs,
     [
-      ['Introduction', `${base}/docs/`],
-      ['First steps', `${base}/docs/first-steps/`],
-      ['Configuration', `${base}/docs/reference/configuration/`],
-      ['Troubleshooting', `${base}/docs/help/troubleshooting/`],
+      [t.footer.introduction, `${base}/docs/`, docsLang],
+      [t.footer.first, `${base}/docs/first-steps/`, docsLang],
+      [t.footer.configuration, `${base}/docs/reference/configuration/`, docsLang],
+      [t.footer.troubleshooting, `${base}/docs/help/troubleshooting/`, docsLang],
     ],
   ],
   [
-    'Project',
+    t.footer.project,
     [
       ['GitHub', repo],
-      ['Issues', `${repo}/issues`],
-      ['Contributing', `${repo}/blob/main/CONTRIBUTING.md`],
-      ['Security', `${repo}/security/advisories/new`],
+      [t.footer.issues, `${repo}/issues`],
+      [t.footer.contributing, `${repo}/blob/main/CONTRIBUTING.md`],
+      [t.footer.security, `${repo}/security/advisories/new`],
     ],
   ],
 ];
@@ -38,31 +42,31 @@ const columns: [string, [string, string][]][] = [
 <footer class="footer">
   <div class="wrap">
     <div class="cta reveal">
-      <h2>Give every case<br />its own <span>corner</span>.</h2>
+      <h2>{t.footer.cta[0]}<br />{t.footer.cta[1]}<span>{t.footer.cta[2]}</span>{t.footer.cta[3]}</h2>
       <div class="get">
         <InstallBox />
       </div>
       <div class="actions">
-        <a class="btn btn-ghost" href={`${base}/docs/first-steps/`}>First steps</a>
-        <a class="btn btn-ghost" href={repo}>Star on GitHub</a>
+        <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
+        <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
       </div>
     </div>
     <div class="grid">
       <div class="brand">
-        <a class="logo" href={`${base}/`} aria-label="cornercase, home">
+        <a class="logo" href={home(locale)} aria-label={t.home}>
           <svg viewBox="0 0 4 4" aria-hidden="true" shape-rendering="crispEdges"><path d="M1 0h3v1H1zM0 1h1v3H0z"></path></svg>
           cornercase
         </a>
-        <p>Every agent in its own corner. In your terminal, a click away.</p>
+        <p>{t.footer.tagline}</p>
       </div>
       {
         columns.map(([title, links]) => (
           <nav aria-label={title}>
             <h3>{title}</h3>
             <ul>
-              {links.map(([label, href]) => (
+              {links.map(([label, href, lang]) => (
                 <li>
-                  <a href={href}>{label}</a>
+                  <a href={href} hreflang={lang}>{label}</a>
                 </li>
               ))}
             </ul>
@@ -71,8 +75,8 @@ const columns: [string, [string, string][]][] = [
       }
     </div>
     <div class="legal">
-      <span>© 2026 The cornercase authors · <a href={`${repo}/blob/main/LICENSE-MIT`}>MIT</a> or <a href={`${repo}/blob/main/LICENSE-APACHE`}>Apache-2.0</a></span>
-      <span>Built with Rust, ratatui and libghostty-vt</span>
+      <span>© 2026 {t.footer.authors} · <a href={`${repo}/blob/main/LICENSE-MIT`}>MIT</a> {t.footer.or} <a href={`${repo}/blob/main/LICENSE-APACHE`}>Apache-2.0</a></span>
+      <span>{t.footer.built}</span>
     </div>
   </div>
 </footer>

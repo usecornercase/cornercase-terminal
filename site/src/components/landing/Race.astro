@@ -1,4 +1,5 @@
 ---
+import { words } from '../../i18n';
 import { APPS, type Measure, clock, lead, slowest, ticks, times } from '../../lib/speed';
 
 interface Props {
@@ -6,10 +7,11 @@ interface Props {
 }
 
 const { measures } = Astro.props;
+const t = words(Astro.url);
 ---
 
-<div class="race reveal" data-race>
-  <div class="tasks" role="tablist" aria-label="What we timed">
+<div class="race reveal" data-race data-and={t.race.and}>
+  <div class="tasks" role="tablist" aria-label={t.race.label}>
     {
       measures.map(({ title, values }, i) => (
         <button
@@ -31,6 +33,7 @@ const { measures } = Astro.props;
     measures.map(({ title, what, values }, i) => {
       const max = slowest(values);
       const { x, app } = lead(values);
+      const [faster, next] = t.race.verdict(app);
       return (
         <div
           class="panel"
@@ -48,14 +51,14 @@ const { measures } = Astro.props;
                 <p class="verdict">
                   <b data-lead={x}>{times(x)}</b>{' '}
                   <span>
-                    faster than {app}, <br />
-                    the next fastest
+                    {faster} <br />
+                    {next}
                   </span>
                 </p>
                 <p class="wait" aria-hidden="true">
                   <i class="spin" />
                   <span>
-                    Still waiting for <b data-wait /><span class="ellipsis"><i>.</i><i>.</i><i>.</i></span>
+                    {t.race.waiting} <b data-wait /><span class="ellipsis"><i>.</i><i>.</i><i>.</i></span>
                   </span>
                 </p>
               </div>
@@ -64,7 +67,7 @@ const { measures } = Astro.props;
               <div class="row">
                 <span class="live" aria-hidden="true">
                   <i />
-                  real time
+                  {t.race.live}
                 </span>
                 <button type="button" class="again" data-again>
                   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -77,7 +80,7 @@ const { measures } = Astro.props;
                       stroke-linejoin="round"
                     />
                   </svg>
-                  race again
+                  {t.race.again}
                 </button>
               </div>
               <span class="digits" aria-hidden="true">
@@ -136,7 +139,7 @@ const { measures } = Astro.props;
     const digits = panels.map((panel) => panel.querySelector<HTMLElement>('[data-clock]'));
     const waits = panels.map((panel) => panel.querySelector<HTMLElement>('[data-wait]'));
     const list = (names: string[]) =>
-      names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} ${root.dataset.and} ${names[names.length - 1]}`;
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let current = 0;
     let start = 0;

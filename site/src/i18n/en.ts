@@ -1,0 +1,254 @@
+export const page = {
+  title: 'cornercase · the fastest way to run agents in parallel',
+  description:
+    'A fast terminal multiplexer for coding agents. Each agent gets its own git worktree and tab, and they keep working when you close the terminal. Everything works with clicks. Linux and macOS.',
+  skip: 'Skip to content',
+  home: 'cornercase, home',
+  nav: {
+    label: 'Sections',
+    demo: 'Live simulation',
+    speed: 'Speed',
+    why: 'Why cornercase',
+    more: 'Features',
+    docs: 'Docs',
+    github: 'cornercase on GitHub',
+    stars: 'cornercase on GitHub, {n} stars',
+    install: 'Install',
+    language: 'Language',
+  },
+  hero: {
+    title: ['The fastest way to run', 'agents in parallel.'],
+    pitch: 'Every agent in its own corner. Everything a click away. And when you close the terminal, they keep working.',
+    platforms: 'Linux & macOS',
+    open: 'free and open source',
+    docs: 'docs',
+  },
+  demo: {
+    label:
+      "A live simulation of cornercase: the work and personal groups with their seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, feat/dark-mode, feat/gift-cards and fix/empty-address, each with a Claude working; the conversation on dark mode in the middle, with the paths it names as links, and the TODO list on the right.",
+    compactLabel:
+      "A live simulation of cornercase in its compact layout: the bar with web-shop, feat/dark-mode and the agent's tab, and the conversation on dark mode in the pane.",
+    themes: 'Terminal theme',
+    live: 'Live simulation',
+    keys: 'Keyboard input for the demo: what you type goes to the active pane',
+    play: 'Try cornercase live',
+    hint: 'A real simulation, not a video: click around, type in a shell, start an agent.',
+  },
+  install: {
+    label: 'How to install',
+    script: 'Install script',
+    copy: 'copy',
+    copied: 'copied',
+  },
+  stats: {
+    eyebrow: 'Speed',
+    title: [
+      [{ pre: 'F', a: 'a', tail: 'st.' }],
+      ['Really', { pre: 'f', a: 'a', tail: 'st.' }],
+    ] as Stretch[][],
+    label: 'Faaast. Really faaast.',
+    lead: 'It opens before you can blink, and shows what your agents changed, opens a file or finds one before you can click again. The other apps we tried? Up to 8.5 seconds, and nearly 2 GB.',
+    how: 'How we measured →',
+    times: [
+      { title: 'Opening the app', what: 'From launching it until the workspace is usable.' },
+      { title: 'First look at the changes', what: 'From the click until the changes are on screen: 20 files, +794 −76.' },
+      { title: 'Every look after that', what: 'The same changes, shown again.' },
+      { title: 'Opening a file', what: 'From the click until a file of 3,472 lines is on screen, coloured.' },
+      { title: 'Finding a file by name', what: 'From the query until the file shows up, among 32,255 files.' },
+      { title: 'Searching the files', what: 'From the query until the matches show, across 32,255 files.' },
+    ],
+    noQuickOpen: 'no quick open',
+    sizes: [
+      {
+        title: 'Memory',
+        what: 'What each app’s own processes use, without the shells.',
+        verdict: (app: string): [string, string] => [`less memory than ${app},`, 'the next lightest'],
+      },
+      {
+        title: 'Download',
+        what: 'What you download to install it.',
+        verdict: (app: string): [string, string] => [`smaller download than ${app},`, 'the next smallest'],
+      },
+      {
+        title: 'On disk',
+        what: 'The space it takes once installed.',
+        verdict: (app: string): [string, string] => [`less disk space than ${app},`, 'the next smallest'],
+      },
+    ],
+  },
+  race: {
+    label: 'What we timed',
+    verdict: (app: string): [string, string] => [`faster than ${app},`, 'the next fastest'],
+    waiting: 'Still waiting for',
+    and: 'and',
+    live: 'real time',
+    again: 'race again',
+  },
+  weigh: {
+    label: 'What we weighed',
+    scale: 'areas to scale',
+  },
+  why: {
+    eyebrow: 'Why cornercase',
+    title: "Starting ten agents is easy. Keeping up with them isn't.",
+    lead: 'cornercase gives each one its own corner, shows all of them at a glance, puts the review next to the work, and keeps everything running after you close the window.',
+    steps: [
+      {
+        num: '1 · Start',
+        title: 'From an issue to an agent at work, in one click.',
+        text: 'Pick an issue from GitHub, Linear, Jira, Plane or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
+        more: 'Issues to agents →',
+        label:
+          'The issues dialog of web-shop with #482, Returns page crashes on empty address, selected: start opens it in its own worktree.',
+      },
+      {
+        num: '2 · In parallel',
+        title: 'Ten agents, one glance.',
+        text: 'Each agent gets its own branch, folder and tab, so two of them never touch the same file. The sidebar tells you who is working {working}, who is waiting for you {waiting} and who is done {done}, with the model and how full its context is. When one needs you, your terminal taps you on the shoulder. Even through SSH.',
+        more: 'Works with Claude Code, Codex, Gemini and 11 more →',
+        label:
+          "A narrow cornercase window: the seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, each with a Claude working; and the conversation on dark mode in the pane, with the path it names underlined.",
+      },
+      {
+        num: '3 · Review',
+        title: "Read the diff while it's still being written.",
+        text: "The workspace's changes sit next to the agent and refresh as it types: uncommitted, its commits, or everything since the base branch, or what is uncommitted in every project at once. Hover a hunk to open it in your editor, copy it, or send it back to the agent with a note. No browser, no pull request, no waiting.",
+        more: 'The changes panel →',
+        label:
+          'The changes panel of the #482 worktree: src/returns/address.rs and src/returns/mod.rs, with first_line() now returning an Option.',
+      },
+      {
+        num: '4 · Leave, come back',
+        title: 'Close the window. Nothing stops.',
+        text: "A small server owns the shells, not the window. Quit, close the laptop, lose the Wi-Fi: agents, tests and dev servers keep running. Open cornercase again from any terminal, or from your phone over SSH, and it's where you left it, with a {done} on everyone who finished while you were away.",
+        more: 'How sessions work →',
+        label: '',
+      },
+    ],
+    diagram: {
+      terminal: 'your terminal',
+      attached: 'attached',
+      closed: 'closed',
+      server: 'cornercase server',
+      caption:
+        'Your terminal attaches to the cornercase server, which runs two Claude Code agents, a Codex agent and npm run dev. When the terminal closes, those programs keep running.',
+    },
+    band: {
+      num: 'Agents that run agents',
+      title: 'Or hand all of it to an agent.',
+      text: 'Everything above is one command away. `cornercase` opens worktrees, starts agents, waits for them and reads what they wrote, so an agent can run the others: one fixes the bug, one reviews, one writes the tests.',
+      more: 'Scripts and agents →',
+      session: 'a Claude Code session',
+    },
+  },
+  more: {
+    title: 'Everything else, a click away.',
+    groups: [
+      {
+        name: 'For your agents',
+        items: [
+          ['Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.'],
+          ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.'],
+          ['Plan usage', 'Your Claude and Codex limits, in one dialog.'],
+          ['Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.'],
+        ],
+      },
+      {
+        name: 'For your code',
+        items: [
+          ["Files, with git's marks", 'Browse and search the code, images included. Changed lines are marked. Click a path an agent prints to open it.'],
+          ['Search', 'Any project, branch or tab, found as you type.'],
+          ['Splits', "Right-click, split. Drag to resize. That's it."],
+          ['TODO, at hand', 'Your list, next to the shells it is about.'],
+        ],
+      },
+      {
+        name: 'For your terminal',
+        items: [
+          ['A real terminal', "Ghostty's engine in every pane. nvim, htop and your agents just work."],
+          ['Just click', 'Click to switch, drag to reorder. Your keyboard stays yours, unless you pick a prefix key.'],
+          ['Your colours', "It wears your terminal's theme, light or dark."],
+          ['Phone-sized', 'Shrink the window, or SSH in from your phone. Still fits.'],
+          ['Remote, steady', 'Agents on a big box, the window on your laptop. Wi-Fi drops? It reconnects.'],
+          ['Updates itself', 'New version? One click. Your layout comes right back.'],
+        ],
+      },
+    ] as { name: string; items: [string, string][] }[],
+  },
+  footer: {
+    cta: ['Give every case', 'its own ', 'corner', '.'],
+    first: 'First steps',
+    star: 'Star on GitHub',
+    tagline: 'Every agent in its own corner. In your terminal, a click away.',
+    product: 'Product',
+    docs: 'Docs',
+    project: 'Project',
+    introduction: 'Introduction',
+    configuration: 'Configuration',
+    troubleshooting: 'Troubleshooting',
+    issues: 'Issues',
+    contributing: 'Contributing',
+    security: 'Security',
+    authors: 'The cornercase authors',
+    or: 'or',
+    built: 'Built with Rust, ratatui and libghostty-vt',
+  },
+};
+
+export type Stretch = string | { pre: string; a: string; tail: string };
+
+export const demo = {
+  tour: {
+    start: 'Pick an issue and press start. It gets its own branch and gets to work.',
+    team: 'Meet the team: Claude Code and Codex, each in its own corner. Their model and context use sit under the tab name.',
+    needs: 'Someone needs you. `!` shows who, and your terminal taps you on the shoulder.',
+    answer: 'One answer and it’s back to work. So are you.',
+    review: 'Curious what it’s doing? Every change, right next to the agent. Live.',
+    hunk: 'Like it? Open it in your editor. Don’t? Send it back to the agent.',
+    quit: 'Now quit. Seriously. Everything keeps running without you.',
+    coffee: 'Go grab a coffee. Your agents don’t need you watching.',
+    later: '25 minutes later',
+    back: 'Back already? Type `cornercase`, here, in another terminal, or from your phone.',
+    left: 'Right where you left it. And `✓` shows who finished while you were out.',
+    turn: 'Your turn. It’s all live: click around, right-click a pane, open settings, or type in a shell.',
+    still: 'This isn’t a video. Click anything, or watch the tour.',
+    again: 'watch again',
+    watch: 'watch the tour',
+  },
+  narrate: {
+    closed: (project: string) => `Closed ${project}. Its shells were stopped.`,
+    tab: 'A fresh tab. Type `help` to see what this little demo shell can do.',
+    removed: (branch: string) => `Workspace removed. Don’t worry, the branch ${branch} is still there.`,
+    changes: 'Everything this workspace changed, right next to its agent. Hover a hunk to open it, copy it or send it back.',
+    todo: 'Your TODO list, next to the shells it is about. Click a line to edit it, ○ to tick it off.',
+    files: 'Every file of the workspace in your terminal’s colours, with git’s marks in the tree and beside each line. Type to search the text, ▤ for names.',
+    image: 'An image shows as itself, drawn by your terminal. Ask agent hands its path to the agent.',
+    link: 'A path printed in a pane is a link: it opens here, at its line.',
+    group: 'Name the group. Right-click a project or its ⋯ to move it in.',
+    split: 'Split! Drag the divider to resize.',
+    workspace: 'Name it. In a repository it gets its own branch and folder, so nothing collides.',
+    worktree: (branch: string) => `A fresh copy of the repo on ${branch}, .env included.`,
+    folder: 'A new workspace in the project folder.',
+    picker: 'Pick a folder. Type to filter, Enter to go in, open to add it.',
+    opened: (folder: string) => `Opened ${folder}. Each project keeps its own workspaces and tabs.`,
+    search: 'Type anything: projects, branches, tabs. Enter takes you there.',
+    usage: 'How much of your Claude and Codex plans is left, at a glance. No tokens spent.',
+    settings: 'Change anything, it’s saved at once. Try Agents → default agent.',
+    restart: (resume: boolean) =>
+      `For real, the server starts again and every tab comes back with a new shell${resume ? ', agents back in their conversations' : ''}. The demo keeps yours running.`,
+    issues: 'Your issues from GitHub, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.',
+    issue: (key: string) => `${key}. Press start and an agent takes it, on its own branch.`,
+    branch: (branch: string) => `A fresh branch for it: ${branch}.`,
+    agentTab: 'A new tab for the agent.',
+    starting: (command: string) => `Starting ${command}…`,
+    trusted: '“Do you trust this folder?” Yes, answered for you.',
+    trust: 'The agent asks if you trust this folder. Your call: answer it, and the issue follows.',
+    sent: 'Issue sent. The agent’s on it, in its own corner.',
+    prompt: 'The issue is in the prompt. Click the pane and press Enter to send it.',
+    detached: (shells: number) => `Gone, but not stopped: your ${shells} shells keep running, agents included.`,
+    attached: 'And we’re back. Same projects, same tabs, everything still running.',
+  },
+};
+
+export type Page = typeof page;
+export type Demo = typeof demo;

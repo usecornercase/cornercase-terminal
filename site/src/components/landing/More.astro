@@ -1,51 +1,50 @@
 ---
+import { localeOf, words } from '../../i18n';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (path: string) => `${base}/docs/${path}`;
-const groups: [string, [string, string, string, string][]][] = [
+const docsLang = localeOf(Astro.url) === 'en' ? undefined : 'en';
+const t = words(Astro.url).more;
+const links: [string, string][][] = [
   [
-    'For your agents',
-    [
-      ['◐', 'Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.', 'guides/projects-workspaces-tabs/#how-full-the-context-is'],
-      ['!', 'Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.', 'guides/projects-workspaces-tabs/#notifications'],
-      ['%', 'Plan usage', 'Your Claude and Codex limits, in one dialog.', 'guides/projects-workspaces-tabs/#plan-usage'],
-      ['⎇', 'Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.', 'guides/worktrees/'],
-    ],
+    ['◐', 'guides/projects-workspaces-tabs/#how-full-the-context-is'],
+    ['!', 'guides/projects-workspaces-tabs/#notifications'],
+    ['%', 'guides/projects-workspaces-tabs/#plan-usage'],
+    ['⎇', 'guides/worktrees/'],
   ],
   [
-    'For your code',
-    [
-      ['▤', "Files, with git's marks", 'Browse and search the code, images included. Changed lines are marked. Click a path an agent prints to open it.', 'guides/files/'],
-      ['⌕', 'Search', 'Any project, branch or tab, found as you type.', 'guides/search/'],
-      ['│', 'Splits', "Right-click, split. Drag to resize. That's it.", 'guides/panes-and-splits/'],
-      ['○', 'TODO, at hand', 'Your list, next to the shells it is about.', 'guides/todo/'],
-    ],
+    ['▤', 'guides/files/'],
+    ['⌕', 'guides/search/'],
+    ['│', 'guides/panes-and-splits/'],
+    ['○', 'guides/todo/'],
   ],
   [
-    'For your terminal',
-    [
-      ['▮', 'A real terminal', "Ghostty's engine in every pane. nvim, htop and your agents just work.", '#a-few-deliberate-choices'],
-      ['↖', 'Just click', 'Click to switch, drag to reorder. Your keyboard stays yours, unless you pick a prefix key.', 'reference/keyboard-and-mouse/'],
-      ['◧', 'Your colours', "It wears your terminal's theme, light or dark.", 'help/faq/#does-it-respect-my-terminals-colour-theme'],
-      ['▯', 'Phone-sized', 'Shrink the window, or SSH in from your phone. Still fits.', 'guides/small-terminals/'],
-      ['⇅', 'Remote, steady', 'Agents on a big box, the window on your laptop. Wi-Fi drops? It reconnects.', 'guides/remote/'],
-      ['↑', 'Updates itself', 'New version? One click. Your layout comes right back.', 'installation/#update'],
-    ],
+    ['▮', '#a-few-deliberate-choices'],
+    ['↖', 'reference/keyboard-and-mouse/'],
+    ['◧', 'help/faq/#does-it-respect-my-terminals-colour-theme'],
+    ['▯', 'guides/small-terminals/'],
+    ['⇅', 'guides/remote/'],
+    ['↑', 'installation/#update'],
   ],
 ];
+const groups = t.groups.map(({ name, items }, i) => ({
+  name,
+  items: items.map(([title, text], j) => ({ title, text, glyph: links[i][j][0], path: links[i][j][1] })),
+}));
 ---
 
 <section class="section more" id="more" aria-labelledby="more-title">
   <div class="wrap">
-    <h2 class="h2" id="more-title">Everything else, a click away.</h2>
+    <h2 class="h2" id="more-title">{t.title}</h2>
     <div class="lists">
       {
-        groups.map(([name, items]) => (
+        groups.map(({ name, items }) => (
           <section class="list" aria-label={name}>
             <h3>{name}</h3>
             <ul>
-              {items.map(([glyph, title, text, path]) => (
+              {items.map(({ glyph, title, text, path }) => (
                 <li class="reveal">
-                  <a href={docs(path)}>
+                  <a href={docs(path)} hreflang={docsLang}>
                     <span class="glyph" aria-hidden="true">
                       {glyph}
                     </span>

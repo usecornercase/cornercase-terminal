@@ -1,0 +1,39 @@
+---
+import { GLYPHS, rich } from '../../i18n';
+
+interface Props {
+  text: string;
+}
+
+const parts = rich(Astro.props.text);
+---
+
+{
+  parts.map((part) =>
+    typeof part === 'string' ? part : 'code' in part ? <code>{part.code}</code> : <b class={`s ${part.status}`}>{GLYPHS[part.status]}</b>,
+  )
+}
+
+<style>
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .s {
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+
+  .working {
+    color: var(--yellow);
+  }
+
+  .waiting {
+    color: #ff8700;
+  }
+
+  .done {
+    color: var(--green);
+  }
+</style>
