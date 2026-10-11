@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.30
+
+- Restarting cornercase (after an update, from Settings, or with `cornercase restart` or `cornercase update --yes`) no longer flashes the shell you started it from and a blank screen: the window keeps showing your session until it comes back. The first restart into this version still flashes once, since the old version does it.
+
 ## 0.12.29
 
 - The Changes panel's button now reads **expand all** and **collapse all** (it said **unfold all** and **fold all**), the words other review tools use for it. The settings note on counts says *collapsed group* too.
