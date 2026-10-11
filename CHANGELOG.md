@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.28
+
+- `Esc` now closes the changes, files and TODO panels, as their `×` does. A panel field with text clears first, so `Esc` `Esc` clears the search, filter or TODO text and then closes the panel. While a panel is open, that `Esc` no longer reaches your pane; in the compact layout it used to reach a pane hidden behind the panel, where it could interrupt an agent unseen. Press `Esc` again once the panel is closed to reach your program.
+
 ## 0.12.27
 
 - Fix windows that stop accepting keys and clicks after startup, including over SSH. The smaller terminal query avoids dropped replies, late replies stay out of your shell or agent prompt, and malformed input no longer disables the window's terminal modes. A lost terminal now detaches cleanly while its shells keep running.
