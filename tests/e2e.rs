@@ -1142,9 +1142,9 @@ fn a_restart_that_cannot_reach_the_new_server_restores_the_terminal_and_says_why
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("close the socket folder");
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     assert!(raw.contains("\x1b[?1000l") && raw.contains("\x1b[?2004l"), "mouse or paste left on: {raw:?}");
-    let parser = app.screen.lock();
-    assert!(!parser.screen().alternate_screen(), "the terminal stayed on the alternate screen");
-    assert!(parser.screen().contents().contains("can be written by other users"), "{}", parser.screen().contents());
+    assert!(!app.screen.lock().screen().alternate_screen(), "the terminal stayed on the alternate screen");
+    let printed = raw.split_once("\x1b[?1049l").map(|(_, after)| after);
+    assert!(printed.is_some_and(|after| after.contains("can be written by other users")), "{raw:?}");
 }
 
 #[test]
