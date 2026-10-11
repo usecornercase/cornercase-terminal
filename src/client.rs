@@ -5,7 +5,7 @@ use std::os::fd::AsFd;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,10 +18,10 @@ use crossterm::event::{
     KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
-use ratatui::DefaultTerminal;
 use ratatui::backend::Backend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
+use ratatui::{DefaultTerminal, TerminalOptions, Viewport};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -76,7 +76,7 @@ pub fn run() -> Result<()> {
     if std::env::var_os(protocol::NESTED_ENV).is_some() {
         return Err(Error::Nested);
     }
-    match open(&Target::Local) {
+    match open(&Target::Local, std::env::var_os(protocol::RESTARTED_ENV).is_some()) {
         Err(Error::Rejected(_))
             if stdin().is_terminal()
                 && confirm(&format!(
@@ -85,7 +85,7 @@ pub fn run() -> Result<()> {
                 )) =>
         {
             kill_server()?;
-            open(&Target::Local)
+            open(&Target::Local, false)
         }
         result => result,
     }
@@ -95,7 +95,7 @@ pub fn remote(remote: &Remote) -> Result<()> {
     let target = Target::Remote(remote.clone());
     let host = remote.host();
     let asks = stdin().is_terminal();
-    match open(&target) {
+    match open(&target, false) {
         Err(Error::Rejected(_))
             if asks
                 && confirm(&format!(
@@ -104,7 +104,7 @@ pub fn remote(remote: &Remote) -> Result<()> {
                 )) =>
         {
             remote.kill_server()?;
-            open(&target)
+            open(&target, false)
         }
         Err(Error::Rejected(_)) => Err(Error::Rejected(format!(
             "the cornercase server on `{host}` comes from another build. \
@@ -114,7 +114,7 @@ pub fn remote(remote: &Remote) -> Result<()> {
             if asks && confirm(&format!("{e}.\n{UPDATE_THERE}")) =>
         {
             remote.update()?;
-            open(&target)
+            open(&target, false)
         }
         result => result,
     }
@@ -206,11 +206,19 @@ impl Link {
     }
 }
 
-fn open(target: &Target) -> Result<()> {
-    let link = target.connect(false)?;
+fn open(target: &Target, restarted: bool) -> Result<()> {
+    let link = target.connect(false).inspect_err(|_| {
+        if restarted {
+            release_screen();
+        }
+    })?;
     let exe = std::env::current_exe();
 
-    let mut terminal = ratatui::init();
+    let mut terminal = if restarted {
+        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Fullscreen })
+    } else {
+        ratatui::init()
+    };
     let host = probe_host();
     let forget = host.graphics.forget();
     let _ = execute!(
@@ -222,13 +230,12 @@ fn open(target: &Target) -> Result<()> {
     install_panic_hook(forget.clone());
     let result = attach(link, target, &mut terminal, host);
     write_out(&forget);
-    restore_input_modes();
-    ratatui::restore();
+    if !matches!(result, Ok(Ending::Restart)) {
+        restore_input_modes();
+        ratatui::restore();
+    }
     match result? {
-        Ending::Restart => {
-            wait_for_exit(&protocol::socket_path());
-            Err(Command::new(exe?).exec().into())
-        }
+        Ending::Restart => come_back(exe),
         Ending::Detached => Ok(()),
         Ending::GaveUp => {
             println!("stopped reconnecting to {}; its shells keep running there", target.host());
@@ -479,6 +486,17 @@ fn too_old_to_wait(error: Error) -> Error {
     }
 }
 
+fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
+    let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+    wait_for_exit(&protocol::socket_path());
+    let error = match exe {
+        Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").exec(),
+        Err(e) => e,
+    };
+    release_screen();
+    Err(error.into())
+}
+
 fn wait_for_exit(path: &Path) {
     let deadline = Instant::now() + SERVER_EXIT_TIMEOUT;
     while matches!(protocol::try_lock(path), Ok(None)) && Instant::now() < deadline {
@@ -518,6 +536,7 @@ fn start_server(log: &Path) -> io::Result<Child> {
     log.set_permissions(fs::Permissions::from_mode(log::PRIVATE))?;
     Command::new(std::env::current_exe()?)
         .arg("server")
+        .env_remove(protocol::RESTARTED_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log)
@@ -557,6 +576,11 @@ fn write_out(bytes: &[u8]) {
 
 fn restore_input_modes() {
     let _ = execute!(stdout(), PopKeyboardEnhancementFlags, DisableBracketedPaste, DisableMouseCapture);
+}
+
+fn release_screen() {
+    let _ = execute!(stdout(), DisableBracketedPaste, DisableMouseCapture);
+    ratatui::restore();
 }
 
 enum Incoming {

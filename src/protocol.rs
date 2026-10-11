@@ -20,6 +20,7 @@ use crate::process;
 pub const VERSION: u32 = 2;
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
 pub const NESTED_ENV: &str = "CORNERCASE";
+pub const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -1108,6 +1108,46 @@ fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
 }
 
 #[test]
+fn a_restart_keeps_the_window_on_the_alternate_screen() {
+    let mut app = Harness::start();
+    app.send(b"echo old-\"\"shell\r");
+    app.wait_for("the old shell answers", |s| s.contains("old-shell"));
+    app.raw.lock().clear();
+
+    app.session.says(&["restart", "--yes"]);
+
+    app.wait_for("the client comes back with a new shell", |s| !s.contains("old-shell") && s.contains(&first_entry()));
+    let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
+    assert!(!raw.contains("\x1b[?1049l"), "the restart left the alternate screen: {raw:?}");
+    assert!(!raw.contains("\x1b[?1049h"), "the restart entered the alternate screen again: {raw:?}");
+    assert_eq!(raw.matches("\x1b[<1u").count(), 1, "the keyboard flags are not popped once: {raw:?}");
+    assert_eq!(raw.matches("\x1b[>1u").count(), 1, "the keyboard flags are not pushed once: {raw:?}");
+    app.send(b"echo restarted=[$CORNERCASE_RESTARTED]\r");
+    app.wait_for("the new shell does not inherit the restart mark", |s| s.contains("restarted=[]"));
+}
+
+#[test]
+fn a_restart_that_cannot_reach_the_new_server_restores_the_terminal_and_says_why() {
+    let mut app = Harness::start();
+    app.click(app.position_of(" Settings "));
+    app.wait_for("settings open", |s| s.contains(" restart "));
+    app.click(app.position_of(" restart "));
+    app.wait_for("the restart dialog opens", |s| s.contains("restart now"));
+    let dir = app.session.dir.clone();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).expect("open the socket folder");
+
+    app.click(app.position_of("restart now"));
+
+    app.wait_exit("the client gives up");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("close the socket folder");
+    let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
+    assert!(raw.contains("\x1b[?1000l") && raw.contains("\x1b[?2004l"), "mouse or paste left on: {raw:?}");
+    let parser = app.screen.lock();
+    assert!(!parser.screen().alternate_screen(), "the terminal stayed on the alternate screen");
+    assert!(parser.screen().contents().contains("can be written by other users"), "{}", parser.screen().contents());
+}
+
+#[test]
 fn restart_when_idle_waits_for_the_agent_to_end_its_turn() {
     let mut app = Harness::start();
     std::fs::create_dir(app.session.dir.join("bin")).expect("create bin");
