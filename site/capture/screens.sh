@@ -483,7 +483,7 @@ screen_changes_filter() {
 screen_changes_every() {
   changes_open
   cc_click 'Every project' 0 1 95
-  cc_wait 'unfold all'
+  cc_wait 'expand all'
   cc_hover 'Workspaces'
   cc_shot changes-every
 }

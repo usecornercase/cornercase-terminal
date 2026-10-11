@@ -49,8 +49,8 @@ When the projects column gets long, put projects in **groups**: work, personal, 
 
 <Screen
   name="groups"
-  alt="The projects section with the work group open, holding web-shop and orders-api, and the personal group folded, showing (2)"
-  caption="work is open and personal is folded."
+  alt="The projects section with the work group open, holding web-shop and orders-api, and the personal group collapsed, showing (2)"
+  caption="work is open and personal is collapsed."
   crop={[0, 2, 32, 12]}
 />
 
@@ -289,7 +289,7 @@ When a program ends by itself, for example when you type `exit`, its pane closes
 - **Move the tabs above the pane** with **settings → UI → tabs** set to *top*: see [Tabs above the pane](#tabs-above-the-pane).
 - The active project and tab are marked with a cyan bar `▌` on the left edge and a highlighted background; the active workspace's name is brighter than the others. Each workspace's tabs hang from it on thin tree lines.
 
-Column widths, the line between stacked lists, the height of the [agents section](#the-agents-section) and what is folded in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
+Column widths, the line between stacked lists, the height of the [agents section](#the-agents-section) and what is collapsed in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
 
 <Screen
   name="sidebar-stacked"
@@ -304,17 +304,17 @@ With **settings → UI → sidebar** set to *tree*, one list holds your groups, 
 
 <Screen
   name="sidebar-tree"
-  alt="One list: the work group with web-shop open, its main workspace with the nvim tab marked active and a bash tab, + Tab, feat/dark-mode and feat/gift-cards folded and + New workspace, then orders-api folded with (2) and !, and the personal group with blog folded and dotfiles open on its main workspace"
-  caption="The tree: open what you work on, fold the rest."
+  alt="One list: the work group with web-shop open, its main workspace with the nvim tab marked active and a bash tab, + Tab, feat/dark-mode and feat/gift-cards collapsed and + New workspace, then orders-api collapsed with (2) and !, and the personal group with blog collapsed and dotfiles open on its main workspace"
+  caption="The tree: expand what you work on, collapse the rest."
   crop={[0, 0, 44, 38]}
 />
 
-- Click **`▾`** to fold a project or a workspace and **`▸`** to open it again. A click on the rest of its row opens it and unfolds it. Group headers fold as everywhere else.
-- A folded project shows how many workspaces it has, and a folded project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
-- The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while folded. Tabs hang from their workspace's arrow on thin tree lines.
+- Click **`▾`** to collapse a project or a workspace and **`▸`** to expand it again. A click on the rest of its row opens it and expands it. Group headers collapse as everywhere else.
+- A collapsed project shows how many workspaces it has, and a collapsed project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
+- The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while collapsed. Tabs hang from their workspace's arrow on thin tree lines.
 - Each project ends with **`+ New workspace`** and each workspace with **`+ Tab`**: adding a tab under another project switches to it.
 - Drag rows to reorder them: projects among projects and groups, workspaces within their project, tabs within their workspace, as in the other layouts.
-- What you fold is saved with your session. Opening a project or a tab from search, or switching to it, unfolds the way to it.
+- What you collapse is saved with your session. Opening a project or a tab from search, or switching to it, expands the way to it.
 
 Below 90 columns the [compact layout](../small-terminals/) shows its usual menu, projects then workspaces.
 
@@ -350,7 +350,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 />
 
 - Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude`, `codex`, `gemini` or `opencode`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
-- **Click a row** to jump to that agent: its project, workspace and tab open and its pane gets the focus, even in a split tab, whatever project you were in. In the [tree](#the-tree) the way to it unfolds.
+- **Click a row** to jump to that agent: its project, workspace and tab open and its pane gets the focus, even in a split tab, whatever project you were in. In the [tree](#the-tree) the way to it expands.
 - The agent on screen is marked with the cyan bar `▌`.
 - Rows keep the order of the sidebar, so they don't move under your pointer; the icon tells you which one waits. When no agent runs, the section says *no agents running* instead of disappearing.
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.

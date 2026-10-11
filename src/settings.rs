@@ -917,7 +917,7 @@ impl Settings {
             }
             Row::Counts => {
                 let value = if config.counts { "[x] shown" } else { "[ ] hidden" };
-                ("counts".into(), value.into(), "what a project or folded group holds, such as (3)".into(), false)
+                ("counts".into(), value.into(), "what a project or collapsed group holds, such as (3)".into(), false)
             }
             Row::DimPanes => {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };

@@ -25,4 +25,4 @@ expression: terminal.backend()
 "      47 ▎     fn empty_address_is_rejected() {}                                "
 "  45  48   }                                                                    "
 " ────────────────────────────────────────────────────────────────────────────── "
-"  fold all                                                        0 of 3 viewed "
+"  collapse all                                                    0 of 3 viewed "

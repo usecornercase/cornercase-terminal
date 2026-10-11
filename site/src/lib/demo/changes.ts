@@ -481,7 +481,7 @@ export function drawChanges(p: Painter, areas: Areas): void {
   p.span(sep.x, sep.y, '─'.repeat(sep.w), { fg: p.lineColour });
   const foot = bottom(area) - 1;
   if (files.length) {
-    const label = files.every((f) => app.changesFolded(f)) ? 'unfold all' : 'fold all';
+    const label = files.every((f) => app.changesFolded(f)) ? 'expand all' : 'collapse all';
     const r = rect(inner.x, foot, label.length + 2, 1);
     p.span(r.x, foot, ` ${label} `, p.hovered(r) ? { fg: 0, bg: 6 } : DARK);
     p.region({ r, click: () => app.foldAllChanges(), cursor: 'pointer' });

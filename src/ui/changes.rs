@@ -18,8 +18,8 @@ const FOOTER_ROWS: u16 = 2;
 const BAR_CELLS: usize = 8;
 const VIEWED_WIDTH: u16 = 3;
 const LOADING: &str = "reading changes…";
-const FOLD_ALL: &str = "fold all";
-const UNFOLD_ALL: &str = "unfold all";
+const COLLAPSE_ALL: &str = "collapse all";
+const EXPAND_ALL: &str = "expand all";
 const FILTER_ICON: &str = "⌕";
 const FILTER_PLACEHOLDER: &str = "path, *.test.js, !*.snap";
 const NO_FILE_MATCHES: &str = "no file matches";
@@ -262,7 +262,7 @@ pub fn base(area: Rect, view: &View) -> Rect {
 }
 
 fn fold_label(view: &View) -> &'static str {
-    if view.all_folded() { UNFOLD_ALL } else { FOLD_ALL }
+    if view.all_folded() { EXPAND_ALL } else { COLLAPSE_ALL }
 }
 
 pub fn fold_all(area: Rect, view: &View) -> Rect {
