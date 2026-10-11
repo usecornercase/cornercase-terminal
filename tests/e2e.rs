@@ -1111,7 +1111,8 @@ fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
 fn a_restart_keeps_the_window_on_the_alternate_screen() {
     let bin = env!("CARGO_BIN_EXE_cornercase");
     let shell = std::path::Path::new("/bin/sh");
-    let mut app = Harness::run(shell, &["-c", "\"$0\"; stty -a", bin], Session::new(), (ROWS, COLS), &[]);
+    let mut app =
+        Harness::run(shell, &["-c", "\"$0\"; stty -a; echo stty-\"\"done", bin], Session::new(), (ROWS, COLS), &[]);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     app.send(b"echo old-\"\"shell\r");
     app.wait_for("the old shell answers", |s| s.contains("old-shell"));
@@ -1129,7 +1130,7 @@ fn a_restart_keeps_the_window_on_the_alternate_screen() {
     app.wait_for("the new shell does not inherit the restart mark", |s| s.contains("restarted=[]"));
 
     app.click(areas().quit.as_position());
-    app.wait_exit("the shell reads the terminal's modes after the client");
+    app.wait_for_raw("the shell reads the terminal's modes after the client", |raw| raw.contains("stty-done"));
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     let modes = raw.rsplit_once("\x1b[?1049l").map_or("", |(_, after)| after);
     let modes: Vec<&str> = modes.split_whitespace().collect();
@@ -1153,11 +1154,12 @@ fn a_restart_that_cannot_reach_the_new_server_restores_the_terminal_and_says_why
 
     app.wait_exit("the client gives up");
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("close the socket folder");
+    app.wait_for_raw("the error after the alternate screen", |raw| {
+        raw.split_once("\x1b[?1049l").is_some_and(|(_, after)| after.contains("can be written by other users"))
+    });
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     assert!(raw.contains("\x1b[?1000l") && raw.contains("\x1b[?2004l"), "mouse or paste left on: {raw:?}");
     assert!(!app.screen.lock().screen().alternate_screen(), "the terminal stayed on the alternate screen");
-    let printed = raw.split_once("\x1b[?1049l").map(|(_, after)| after);
-    assert!(printed.is_some_and(|after| after.contains("can be written by other users")), "{raw:?}");
 }
 
 #[test]
