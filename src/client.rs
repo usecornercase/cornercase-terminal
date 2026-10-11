@@ -487,7 +487,8 @@ fn too_old_to_wait(error: Error) -> Error {
 }
 
 fn come_back(exe: io::Result<PathBuf>) -> Result<()> {
-    let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+    restore_input_modes();
+    let _ = crossterm::terminal::disable_raw_mode();
     wait_for_exit(&protocol::socket_path());
     let error = match exe {
         Ok(exe) => Command::new(exe).env(protocol::RESTARTED_ENV, "1").exec(),

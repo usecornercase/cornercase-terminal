@@ -1109,7 +1109,10 @@ fn restart_says_what_stops_and_brings_the_client_back_with_new_shells() {
 
 #[test]
 fn a_restart_keeps_the_window_on_the_alternate_screen() {
-    let mut app = Harness::start();
+    let bin = env!("CARGO_BIN_EXE_cornercase");
+    let shell = std::path::Path::new("/bin/sh");
+    let mut app = Harness::run(shell, &["-c", "\"$0\"; stty -a", bin], Session::new(), (ROWS, COLS), &[]);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
     app.send(b"echo old-\"\"shell\r");
     app.wait_for("the old shell answers", |s| s.contains("old-shell"));
     app.raw.lock().clear();
@@ -1124,6 +1127,16 @@ fn a_restart_keeps_the_window_on_the_alternate_screen() {
     assert_eq!(raw.matches("\x1b[>1u").count(), 1, "the keyboard flags are not pushed once: {raw:?}");
     app.send(b"echo restarted=[$CORNERCASE_RESTARTED]\r");
     app.wait_for("the new shell does not inherit the restart mark", |s| s.contains("restarted=[]"));
+
+    app.click(areas().quit.as_position());
+    app.wait_exit("the shell reads the terminal's modes after the client");
+    let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
+    let modes = raw.rsplit_once("\x1b[?1049l").map_or("", |(_, after)| after);
+    let modes: Vec<&str> = modes.split_whitespace().collect();
+    assert!(
+        modes.contains(&"icanon") && modes.contains(&"echo"),
+        "the restarted client left the terminal raw: {modes:?}"
+    );
 }
 
 #[test]
