@@ -15,7 +15,7 @@ struct Remote {
 
 fn free_port() -> u16 {
     static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
-    let base = 20_000 + u16::try_from(std::process::id() % 5_000).expect("fits") * 2;
+    let base = 30_000 + u16::try_from(std::process::id() % 80).expect("fits") * 32;
     loop {
         let port = base + NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if TcpListener::bind(("127.0.0.1", port)).is_ok() {
@@ -128,7 +128,7 @@ fn switching_it_off_stops_serving() {
 
     wait_until("tailscale stops serving", || calls(&r).ends_with("serve --https=8443 off\n"));
     assert_eq!((r.app.remote_button(), r.app.remote.web.listening()), (None, None));
-    assert!(TcpStream::connect(("127.0.0.1", r.port)).is_err());
+    wait_until("the port stops accepting", || TcpStream::connect(("127.0.0.1", r.port)).is_err());
 }
 
 #[test]
