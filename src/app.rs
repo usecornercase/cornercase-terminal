@@ -11824,6 +11824,13 @@ mod tests {
         use super::*;
         use crate::test_util::{FakeHttp, fake_gh};
 
+        fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
+            let server = shortcut(s, Vec::new());
+            secrets::write(&secrets_file(s), "shortcut_token", "t0k").expect("save token");
+            open_loaded(s, Source::Shortcut);
+            server
+        }
+
         const LIST: &str = r#"[
             {"number":7,"title":"Fix the login","state":"OPEN","labels":[{"name":"bug"}],"author":{"login":"ana"},
              "updatedAt":"2026-09-19T12:00:00Z","url":"https://github.com/acme/shop/issues/7"},
@@ -12063,9 +12070,7 @@ mod tests {
                 let notes = TempDir::new();
                 s.app.open_project(notes.path().to_path_buf(), AREA).expect("open notes");
                 s.app.active = 0;
-                let _server = shortcut(&mut s, Vec::new());
-                secrets::write(&secrets_file(&s), "shortcut_token", "t0k").expect("save token");
-                open_loaded(&mut s, Source::Shortcut);
+                let _server = shortcut_with_token(&mut s);
                 enter(&mut s);
                 enter(&mut s);
                 let folder = notes.path().file_name().and_then(|n| n.to_str()).expect("name").to_string();
@@ -12316,9 +12321,7 @@ mod tests {
             #[test]
             fn without_git_a_story_starts_in_a_new_tab() {
                 let mut s = setup(false, "echo '[]'");
-                let _server = shortcut(&mut s, Vec::new());
-                secrets::write(&secrets_file(&s), "shortcut_token", "t0k").expect("save token");
-                open_loaded(&mut s, Source::Shortcut);
+                let _server = shortcut_with_token(&mut s);
 
                 enter(&mut s);
                 enter(&mut s);
