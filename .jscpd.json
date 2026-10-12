@@ -2,6 +2,8 @@
   "path": ["src", "tests"],
   "format": ["rust"],
   "minTokens": 50,
+  "maxLines": 100000,
+  "maxSize": "10mb",
   "threshold": 1,
   "reporters": ["console"],
   "gitignore": true

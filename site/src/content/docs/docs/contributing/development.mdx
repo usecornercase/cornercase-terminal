@@ -57,7 +57,8 @@ npx -y jscpd@4.3.0         # copy-paste detector
 ```
 
 - **Clippy** runs with `all` denied and `pedantic` warned, configured in `Cargo.toml`. Silence a lint only locally, with `#[expect(clippy::…, reason = "…")]`.
-- **jscpd** fails above 1 % duplication (clones of 50 tokens or more) in `src/` and `tests/`. It's a ratchet: extract the shared code rather than raising the threshold.
+- **jscpd** fails above 1 % duplication (clones of 50 tokens or more) in every file of `src/` and `tests/`. It's a ratchet: extract the shared code rather than raising the threshold.
+- **tests/layers.rs**, part of `cargo test`, checks which modules production code uses and keeps every Rust file in `src/` and `tests/` at most 1,000 lines. The exceptions are existing violations; the lists only shrink, and an entry that no longer applies fails until it is removed.
 - **cargo-machete** is a text search; a false positive goes in `[package.metadata.cargo-machete] ignored`.
 
 ## Tests
@@ -87,6 +88,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 - Mutexes are `parking_lot::Mutex`.
 - Imports in three groups: `std`, external crates, then `super` and `crate`.
 - `rustfmt.toml` sets `max_width = 120`.
+- **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
 
 <Aside type="caution" title="Two rules that are easy to break">
 **Mouse first**: keys go to the program in the pane, and `e2e::ctrl_b_reaches_the_shell` guards it. The only shortcuts live in the menu behind the optional prefix key (`src/shortcuts.rs`), off by default. Please don't add others, or a default prefix, without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.

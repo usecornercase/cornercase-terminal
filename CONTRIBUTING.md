@@ -47,6 +47,8 @@ UI changes usually change a snapshot. `cargo test` then writes `src/snapshots/*.
 - No `unwrap()` outside tests. Errors use `crate::error::Error`.
 - Tests are named as sentences (`close_button_closes_its_entry`) and test one behaviour each. A test added as a safety net must fail without the code it protects.
 
+- **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
+
 ## Pull requests
 
 Keep them focused: one change per pull request. Describe what changed and why, how you tested it, and add a screenshot or a recording for anything visible.
