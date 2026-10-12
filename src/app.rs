@@ -10037,8 +10037,6 @@ rm -f "$1/sessions/$$.json"
         use crate::settings::{Detail, Row};
         use crate::test_util::FakeHttp;
 
-        const MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
-
         struct Setup {
             app: App,
             rx: Receiver<AppEvent>,
@@ -10089,7 +10087,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         fn shortcut(s: &mut Setup, status: u16) -> FakeHttp {
-            let server = FakeHttp::start(vec![("GET /api/v3/member", status, MEMBER)]);
+            let server = FakeHttp::start(vec![("GET /api/v3/member", status, crate::test_util::SHORTCUT_MEMBER)]);
             s.app.apis.shortcut = format!("{}/api/v3", server.url());
             server
         }
@@ -11882,7 +11880,6 @@ rm -f "$1/sessions/$$.json"
         const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],
             "author":{"login":"ana"},"updatedAt":"","url":"u","body":"It **breaks**.",
             "comments":[{"author":{"login":"bo"},"body":"Same here","createdAt":""}]}"#;
-        const MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
         const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
             "updated_at":"2026-09-30T00:00:00Z"}],"next":null}"#;
 
@@ -11927,7 +11924,7 @@ rm -f "$1/sessions/$$.json"
 
         fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> FakeHttp {
             let mut all = vec![
-                ("GET /api/v3/member", 200, MEMBER),
+                ("GET /api/v3/member", 200, crate::test_util::SHORTCUT_MEMBER),
                 ("GET /api/v3/members", 200, "[]"),
                 ("GET /api/v3/workflows", 200, "[]"),
                 ("GET /api/v3/search/stories", 200, STORIES),

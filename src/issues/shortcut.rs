@@ -220,7 +220,6 @@ mod tests {
     use super::*;
     use crate::test_util::FakeHttp;
 
-    const MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
     const MEMBERS: &str = r#"[{"id":"u1","profile":{"mention_name":"ana","name":"Ana"}},
         {"id":"u2","profile":{"mention_name":"","name":"Luis"}}]"#;
     const WORKFLOWS: &str = r#"[{"states":[{"id":500,"name":"In Review","type":"started"}]}]"#;
@@ -245,7 +244,7 @@ mod tests {
 
     #[test]
     fn whoami_reads_the_mention_and_the_workspace() {
-        let server = FakeHttp::start(vec![("GET /api/v3/member", 200, MEMBER)]);
+        let server = FakeHttp::start(vec![("GET /api/v3/member", 200, crate::test_util::SHORTCUT_MEMBER)]);
         let base = api_url(&server);
 
         let account = Api { base: &base, token: "t0k" }.whoami().expect("whoami");
@@ -266,7 +265,7 @@ mod tests {
         use super::*;
 
         fn listed(query: &Query, pages: Vec<Route>) -> (Listed, FakeHttp) {
-            let mut routes = vec![("GET /api/v3/member", 200, MEMBER.to_string())];
+            let mut routes = vec![("GET /api/v3/member", 200, crate::test_util::SHORTCUT_MEMBER.to_string())];
             routes.extend(lookup_routes());
             routes.extend(pages);
             let server = FakeHttp::start(routes);
