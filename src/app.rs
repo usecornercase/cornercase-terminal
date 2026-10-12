@@ -15939,6 +15939,13 @@ mod tests {
         mod agents {
             use super::*;
 
+            fn finish_working(agent: &mut Agent, id: u64) -> Vec<Response> {
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
+                let early = answers(&mut agent.app);
+                agent.finish();
+                early
+            }
+
             struct Agent {
                 app: App,
                 rx: Receiver<AppEvent>,
@@ -16088,9 +16095,7 @@ mod tests {
                 let id = agent.start(None);
 
                 ask(&mut agent.app, None, send_text(id, "next step", true, true));
-                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
-                let early = answers(&mut agent.app);
-                agent.finish();
+                let early = finish_working(&mut agent, id);
 
                 let ended = done(agent.answered("the agent stops"));
                 assert_eq!((early, ended.ended.as_deref()), (Vec::new(), Some("done")));
@@ -16104,9 +16109,7 @@ mod tests {
                 done(agent.answered("the enter is pressed"));
 
                 ask(&mut agent.app, None, wait_for(id, Until::Stops, None));
-                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
-                let early = answers(&mut agent.app);
-                agent.finish();
+                let early = finish_working(&mut agent, id);
 
                 let ended = done(agent.answered("the agent stops"));
                 assert_eq!((early, ended.ended.is_some()), (Vec::new(), true));
