@@ -1637,7 +1637,7 @@ mod tests {
             s.open_page(Page::Ui);
             let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
             let rows: Vec<(&str, &str)> =
-                view.rows[5..8].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+                view.rows[6..9].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
             assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
         }
     }

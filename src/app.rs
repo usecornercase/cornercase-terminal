@@ -10023,6 +10023,7 @@ rm -f "$1/sessions/$$.json"
                     Row::Tabs,
                     Row::AgentsSection,
                     Row::Counts,
+                    Row::TodoDot,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),
