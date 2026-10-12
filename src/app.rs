@@ -14051,6 +14051,15 @@ mod tests {
         use crate::ui::changes::Action;
         use crate::ui::files::{self as panel, Screen};
 
+        fn pressed_lines() -> (TempDir, App, Receiver<AppEvent>, Position) {
+            let repo = repo();
+            let (mut app, rx) = opened(&repo);
+            show(&mut app, &rx, "src/main.rs");
+            let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
+            press(&mut app, first);
+            (repo, app, rx, last)
+        }
+
         fn repo() -> TempDir {
             git_repo(&[("README.md", "# shop\n"), ("src/main.rs", "fn main() {\n    run();\n}\n")])
         }
@@ -14215,11 +14224,7 @@ mod tests {
 
         #[test]
         fn dragging_over_the_numbers_selects_lines_for_the_agent() {
-            let repo = repo();
-            let (mut app, rx) = opened(&repo);
-            show(&mut app, &rx, "src/main.rs");
-            let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
-            press(&mut app, first);
+            let (_repo, mut app, _rx, last) = pressed_lines();
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), last);
             mouse(&mut app, MouseEventKind::Up(MouseButton::Left), last);
             assert_eq!(file(&app).selection, Some((1, 3)));
@@ -14231,11 +14236,7 @@ mod tests {
 
         #[test]
         fn a_selection_whose_release_was_lost_ends_at_the_next_event() {
-            let repo = repo();
-            let (mut app, rx) = opened(&repo);
-            show(&mut app, &rx, "src/main.rs");
-            let (first, last) = (line_pos(&app, 1), line_pos(&app, 3));
-            press(&mut app, first);
+            let (_repo, mut app, _rx, last) = pressed_lines();
             mouse(&mut app, MouseEventKind::Moved, last);
             click(&mut app, last);
             assert_eq!(file(&app).selection, Some((3, 3)));
