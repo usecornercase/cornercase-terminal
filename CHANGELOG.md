@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.45
+
+- No changes in the app. Its largest source file, app.rs, is now one file per concern.
+
 ## 0.12.43
 
 - No changes in the app. The tests of the app, ui, server, client and cli trees moved into files of their own.
