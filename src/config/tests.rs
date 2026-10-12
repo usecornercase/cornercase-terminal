@@ -34,11 +34,8 @@ mod file {
             plane_filter: "state:todo".into(),
             agent: "codex".into(),
             agent_args: [("codex".into(), vec!["--sandbox".into(), "workspace-write".into()])].into(),
-            agent_modes: [(
-                "claude".into(),
-                [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into(),
-            )]
-            .into(),
+            agent_modes: [("claude".into(), [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into())]
+                .into(),
             agent_commands: [("codex".into(), "fake-codex".into())].into(),
             prompt: "Fix {url}".into(),
             submit: true,

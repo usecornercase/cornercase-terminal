@@ -534,8 +534,7 @@ mod agent_tabs {
         s.config.context = false;
         s.open_page(Page::Ui);
         let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        let rows: Vec<(&str, &str)> =
-            view.rows[6..9].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+        let rows: Vec<(&str, &str)> = view.rows[6..9].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
 }
@@ -671,18 +670,14 @@ mod prefix {
     fn a_key_that_cannot_be_one_keeps_waiting() {
         let mut s = capturing();
         assert_eq!(press(&mut s, KeyCode::Char('k')), Action::None);
-        assert_eq!(
-            (s.capturing, s.notice.as_deref()),
-            (true, Some("use ctrl or alt with a key, or a function key"))
-        );
+        assert_eq!((s.capturing, s.notice.as_deref()), (true, Some("use ctrl or alt with a key, or a function key")));
     }
 
     #[test]
     fn a_known_clash_is_named() {
         let mut s = capturing();
         key(&mut s, KeyCode::Char('b'), KeyModifiers::CONTROL);
-        let notice =
-            "ctrl+b opens the keys menu; it is also tmux's prefix, so it never reaches a tmux inside a pane";
+        let notice = "ctrl+b opens the keys menu; it is also tmux's prefix, so it never reaches a tmux inside a pane";
         assert_eq!(s.notice.as_deref(), Some(notice));
     }
 

@@ -56,10 +56,7 @@ mod commands {
         let status = status_json("Running", r#"["mac.tail1234.ts.net"]"#);
         let program = fake(
             &dir,
-            &format!(
-                "echo \"$@\" >> '{}'\nif [ \"$1\" = status ]; then cat <<'EOF'\n{status}\nEOF\nfi",
-                log.display()
-            ),
+            &format!("echo \"$@\" >> '{}'\nif [ \"$1\" = status ]; then cat <<'EOF'\n{status}\nEOF\nfi", log.display()),
         );
 
         let node = start(&program, 4321).expect("started");

@@ -67,10 +67,7 @@ mod banner {
 
     #[test]
     fn round_trips() {
-        assert_eq!(
-            parse_banner(&banner()),
-            Some(Banner { protocol: protocol::VERSION, release: CURRENT.to_string() })
-        );
+        assert_eq!(parse_banner(&banner()), Some(Banner { protocol: protocol::VERSION, release: CURRENT.to_string() }));
     }
 
     #[rstest]
@@ -182,8 +179,7 @@ mod failures {
 
     #[test]
     fn ssh_errors_show_its_last_line_and_are_retried() {
-        let error =
-            devbox().failure(Some(exited(255)), &with(&["ssh: connect to host devbox: Connection refused"]));
+        let error = devbox().failure(Some(exited(255)), &with(&["ssh: connect to host devbox: Connection refused"]));
 
         assert_eq!(reason(&error), "ssh: connect to host devbox: Connection refused");
         assert!(!fatal(&error));

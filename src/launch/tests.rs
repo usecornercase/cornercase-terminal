@@ -46,10 +46,7 @@ fn started(submit: bool) -> (Launch, Instant) {
     let t0 = Instant::now();
     let mut launch = Launch::new(1, spec(submit), t0);
     launch.output(t0);
-    assert_eq!(
-        step(&mut launch, t0 + 300 * MS, &shell()),
-        Step::Write(b"claude --permission-mode plan\r".to_vec())
-    );
+    assert_eq!(step(&mut launch, t0 + 300 * MS, &shell()), Step::Write(b"claude --permission-mode plan\r".to_vec()));
     (launch, t0 + 300 * MS)
 }
 

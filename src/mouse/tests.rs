@@ -36,11 +36,7 @@ mod filtering {
     #[case::drag_in_button_motion(K::Drag(LEFT), M::ButtonMotion, true)]
     #[case::move_in_button_motion(K::Moved, M::ButtonMotion, false)]
     #[case::move_in_any_motion(K::Moved, M::AnyMotion, true)]
-    fn mode_decides_which_events_are_sent(
-        #[case] kind: MouseEventKind,
-        #[case] mode: MouseMode,
-        #[case] sent: bool,
-    ) {
+    fn mode_decides_which_events_are_sent(#[case] kind: MouseEventKind, #[case] mode: MouseMode, #[case] sent: bool) {
         assert_eq!(encode_sgr(kind, mode).is_some(), sent);
     }
 }

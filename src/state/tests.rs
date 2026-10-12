@@ -117,13 +117,7 @@ mod file {
                 },
             ],
             active: 1,
-            widths: Some(Widths {
-                projects: 35,
-                workspaces: 24,
-                changes: Some(42),
-                stack: Some(11),
-                agents: Some(7),
-            }),
+            widths: Some(Widths { projects: 35, workspaces: 24, changes: Some(42), stack: Some(11), agents: Some(7) }),
             issues: Some(IssuesState {
                 tab: Some("shortcut".into()),
                 closed: true,

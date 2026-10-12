@@ -81,10 +81,7 @@ mod modes {
         assert_eq!(mode_of(kind, &args, &modes), None);
         assert_eq!(extra_args(kind, &args, &modes), args);
         assert_eq!(with_mode(kind, &args, &modes, None), args);
-        assert_eq!(
-            with_mode(kind, &args, &modes, Some("yolo")),
-            strings(&["--yolo", "-y", "--approval-mode=custom"])
-        );
+        assert_eq!(with_mode(kind, &args, &modes, Some("yolo")), strings(&["--yolo", "-y", "--approval-mode=custom"]));
     }
 
     #[test]
@@ -178,10 +175,7 @@ mod arguments {
     fn agent_commands_rename_a_binary_and_add_kinds() {
         let mut c = config();
         c.agent_commands.insert("mine".into(), "/opt/bin/my-agent".into());
-        assert_eq!(
-            (command(&c, "mine"), kinds(&c).contains(&"mine".to_string())),
-            ("/opt/bin/my-agent".into(), true)
-        );
+        assert_eq!((command(&c, "mine"), kinds(&c).contains(&"mine".to_string())), ("/opt/bin/my-agent".into(), true));
     }
 }
 

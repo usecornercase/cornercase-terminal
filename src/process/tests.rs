@@ -53,9 +53,8 @@ mod footprint {
 
     #[test]
     fn counts_memory_the_process_writes() {
-        let map =
-            unsafe { mmap_anonymous(null_mut(), SIZE, ProtFlags::READ | ProtFlags::WRITE, MapFlags::PRIVATE) }
-                .expect("map");
+        let map = unsafe { mmap_anonymous(null_mut(), SIZE, ProtFlags::READ | ProtFlags::WRITE, MapFlags::PRIVATE) }
+            .expect("map");
         let before = footprint(this_pid()).expect("before");
 
         for at in (0..SIZE).step_by(4096) {
@@ -76,10 +75,8 @@ mod footprint {
         let before = footprint(this_pid()).expect("before");
 
         let map = unsafe { mmap(null_mut(), SIZE, ProtFlags::READ, MapFlags::SHARED, &file, 0) }.expect("map");
-        let read: usize = (0..SIZE)
-            .step_by(4096)
-            .map(|at| usize::from(unsafe { map.cast::<u8>().add(at).read_volatile() }))
-            .sum();
+        let read: usize =
+            (0..SIZE).step_by(4096).map(|at| usize::from(unsafe { map.cast::<u8>().add(at).read_volatile() })).sum();
         let after = footprint(this_pid()).expect("after");
         unsafe { munmap(map, SIZE) }.expect("unmap");
 

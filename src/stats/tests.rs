@@ -25,22 +25,14 @@ fn prompts(stats: &mut Stats, hours: u64, number: usize) {
 #[rstest]
 #[case::current_hour(1_000, 3, 7)]
 #[case::next_hour(1_001, 1, 3)]
-fn windows_include_the_current_hour_and_their_previous_buckets(
-    #[case] now: u64,
-    #[case] day: u64,
-    #[case] week: u64,
-) {
+fn windows_include_the_current_hour_and_their_previous_buckets(#[case] now: u64, #[case] day: u64, #[case] week: u64) {
     let mut stats = Stats::new(at(800));
     for (hour, n) in [(832, 8), (833, 4), (977, 2), (1_000, 1)] {
         prompts(&mut stats, hour, n);
     }
     let view = stats.view(at(now));
     assert_eq!(
-        (
-            view.windows["24h"].counts.prompts,
-            view.windows["7d"].counts.prompts,
-            view.windows["total"].counts.prompts
-        ),
+        (view.windows["24h"].counts.prompts, view.windows["7d"].counts.prompts, view.windows["total"].counts.prompts),
         (day, week, 15)
     );
 }

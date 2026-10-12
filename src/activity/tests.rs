@@ -170,12 +170,7 @@ mod pane {
     #[case::its_question_was_answered(Some(Activity::Waiting), Some(Activity::Waiting), Some(Activity::Idle), true)]
     #[case::it_stayed_idle(Some(Activity::Idle), Some(Activity::Idle), Some(Activity::Idle), false)]
     #[case::it_only_lost_and_found_its_agent(Some(Activity::Idle), None, Some(Activity::Idle), false)]
-    #[case::its_background_shell_still_runs(
-        Some(Activity::Shell),
-        Some(Activity::Shell),
-        Some(Activity::Shell),
-        false
-    )]
+    #[case::its_background_shell_still_runs(Some(Activity::Shell), Some(Activity::Shell), Some(Activity::Shell), false)]
     #[case::it_took_the_prompt(Some(Activity::Shell), Some(Activity::Shell), Some(Activity::Working), true)]
     #[case::it_left_a_background_shell(Some(Activity::Idle), Some(Activity::Idle), Some(Activity::Shell), true)]
     fn reacting_is_working_or_changing_after_the_moment(
@@ -245,10 +240,7 @@ mod notice {
     #[case::asks_then_finishes(&[WORKING, WAITING, WAITING, WAITING, IDLE, IDLE, IDLE], &[(3, Status::Waiting), (6, Status::Done)])]
     #[case::finishes_twice(&[WORKING, IDLE, IDLE, IDLE, WORKING, IDLE, IDLE, IDLE], &[(3, Status::Done), (7, Status::Done)])]
     #[case::only_works(&[WORKING, WORKING, WORKING, IDLE], &[])]
-    fn comes_once_the_change_settles(
-        #[case] steps: &[(Option<Activity>, bool)],
-        #[case] expected: &[(usize, Status)],
-    ) {
+    fn comes_once_the_change_settles(#[case] steps: &[(Option<Activity>, bool)], #[case] expected: &[(usize, Status)]) {
         assert_eq!(notices(steps), expected);
     }
 

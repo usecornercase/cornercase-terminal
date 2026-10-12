@@ -60,10 +60,7 @@ mod rank {
     #[test]
     fn keeps_the_given_order_otherwise() {
         let found = rank(
-            vec![
-                candidate(Kind::Tab, "zsh", &["zsh", "feat/b"]),
-                candidate(Kind::Tab, "nvim", &["nvim", "feat/a"]),
-            ],
+            vec![candidate(Kind::Tab, "zsh", &["zsh", "feat/b"]), candidate(Kind::Tab, "nvim", &["nvim", "feat/a"])],
             "feat",
         );
         assert_eq!(names(&found), ["zsh", "nvim"]);

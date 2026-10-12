@@ -48,13 +48,8 @@ mod snapshot {
     #[test]
     fn never_holds_control_characters() {
         let snap = snapshot_of(b"x\x7fy");
-        let controls: Vec<&str> = snap
-            .rows
-            .iter()
-            .flatten()
-            .map(|c| c.symbol.as_str())
-            .filter(|s| s.contains(char::is_control))
-            .collect();
+        let controls: Vec<&str> =
+            snap.rows.iter().flatten().map(|c| c.symbol.as_str()).filter(|s| s.contains(char::is_control)).collect();
         assert_eq!(controls, Vec::<&str>::new());
     }
 

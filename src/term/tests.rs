@@ -15,16 +15,8 @@ fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
 
 fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
-    let opts = SpawnOptions {
-        id: 1,
-        shell: "/bin/sh",
-        args,
-        env: &[],
-        rows: 24,
-        cols: 80,
-        cwd,
-        theme: &HostTheme::default(),
-    };
+    let opts =
+        SpawnOptions { id: 1, shell: "/bin/sh", args, env: &[], rows: 24, cols: 80, cwd, theme: &HostTheme::default() };
     (Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
 }
 
@@ -55,12 +47,7 @@ mod scrollback {
 
         let kept = emu.last_lines(20_000).expect("text");
 
-        assert!(
-            kept.lines().count() >= at_least,
-            "kept {} lines from {:?}",
-            kept.lines().count(),
-            kept.lines().next()
-        );
+        assert!(kept.lines().count() >= at_least, "kept {} lines from {:?}", kept.lines().count(), kept.lines().next());
     }
 }
 

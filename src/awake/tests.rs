@@ -2,8 +2,7 @@ use super::*;
 use crate::test_util::{TempDir, wait_until, write_executable};
 
 const HOLDS: &str = "#!/bin/sh\necho \"$@\" >> \"$0.args\"\necho $$ > \"$0.pid\"\nexec cat\n";
-const REFUSES: &str =
-    "#!/bin/sh\necho \"$@\" >> \"$0.args\"\necho 'Failed to inhibit: Access denied' >&2\nexit 1\n";
+const REFUSES: &str = "#!/bin/sh\necho \"$@\" >> \"$0.args\"\necho 'Failed to inhibit: Access denied' >&2\nexit 1\n";
 
 struct Fakes {
     dir: TempDir,

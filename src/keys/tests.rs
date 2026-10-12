@@ -149,11 +149,7 @@ fn kitty_disambiguate_follows_the_spec(#[case] code: KeyCode, #[case] mods: KeyM
 #[rstest]
 #[case::shift_enter(KeyCode::Enter, SHIFT, b"\r")]
 #[case::ctrl_tab(KeyCode::Tab, CTRL, b"\t")]
-fn without_kitty_extended_keys_stay_legacy(
-    #[case] code: KeyCode,
-    #[case] mods: KeyModifiers,
-    #[case] expected: &[u8],
-) {
+fn without_kitty_extended_keys_stay_legacy(#[case] code: KeyCode, #[case] mods: KeyModifiers, #[case] expected: &[u8]) {
     assert_eq!(encode_normal(code, mods), expected);
 }
 

@@ -115,10 +115,7 @@ mod changelog {
             "0.1.0",
         );
 
-        assert_eq!(
-            release.notes,
-            notes(&[("9.0.0", "- Newest."), ("8.0.0", "- Middle.\n\n### Fixes\n\n- A crash.")])
-        );
+        assert_eq!(release.notes, notes(&[("9.0.0", "- Newest."), ("8.0.0", "- Middle.\n\n### Fixes\n\n- A crash.")]));
     }
 
     #[test]
