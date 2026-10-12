@@ -11050,6 +11050,12 @@ mod tests {
 
         use super::*;
 
+        fn grab_projects_border(app: &mut App) -> Position {
+            let from = border(app, ui::Border::Projects);
+            press(app, from);
+            from
+        }
+
         fn border(app: &App, border: ui::Border) -> Position {
             let r = app.layout(AREA).border(border);
             Position::new(r.x, r.y + 1)
@@ -11160,8 +11166,7 @@ mod tests {
         #[test]
         fn the_pointer_stays_while_dragging_away_from_the_border_and_goes_on_release() {
             let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            press(&mut app, from);
+            let from = grab_projects_border(&mut app);
             let away = Position::new(AREA.width - 1, from.y + 4);
             let dragging = pointer_after_drag(&mut app, away);
 
@@ -11171,8 +11176,7 @@ mod tests {
         #[test]
         fn esc_ends_the_drag_where_it_is() {
             let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            press(&mut app, from);
+            let from = grab_projects_border(&mut app);
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, from.y + 4));
             let widths = app.widths;
 
@@ -11185,8 +11189,7 @@ mod tests {
         fn the_prefix_key_ends_the_drag_and_brings_back_the_default_pointer() {
             let (mut app, _rx) = app();
             app.config.prefix_key = "ctrl+]".into();
-            let from = border(&app, ui::Border::Projects);
-            press(&mut app, from);
+            let from = grab_projects_border(&mut app);
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, from.y + 4));
 
             send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
@@ -11209,8 +11212,7 @@ mod tests {
         #[test]
         fn a_drag_away_from_the_border_keeps_resizing() {
             let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            press(&mut app, from);
+            let from = grab_projects_border(&mut app);
 
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(39, from.y + 4));
 
