@@ -10507,6 +10507,13 @@ mod tests {
     mod splits {
         use super::*;
 
+        fn two_pane_positions() -> (App, Receiver<AppEvent>, u64, u64, Vec<Rect>) {
+            let (app, rx) = split_right();
+            let [left, right] = ids(&app)[..] else { panic!("two panes") };
+            let r = rects(&app);
+            (app, rx, left, right, r)
+        }
+
         fn pane() -> Rect {
             areas().pane
         }
@@ -10756,9 +10763,7 @@ mod tests {
 
         #[test]
         fn a_pane_dragged_with_the_right_button_onto_the_bottom_of_another_goes_below_it() {
-            let (mut app, _rx) = split_right();
-            let [left, right] = ids(&app)[..] else { panic!("two panes") };
-            let r = rects(&app);
+            let (mut app, _rx, left, right, r) = two_pane_positions();
 
             drag_pane(&mut app, inside(r[0]), bottom(r[1]));
 
@@ -10785,9 +10790,7 @@ mod tests {
 
         #[test]
         fn a_pane_dropped_in_the_middle_of_another_swaps_with_it() {
-            let (mut app, _rx) = split_right();
-            let [left, right] = ids(&app)[..] else { panic!("two panes") };
-            let r = rects(&app);
+            let (mut app, _rx, left, right, r) = two_pane_positions();
 
             drag_pane(&mut app, inside(r[0]), middle(r[1]));
 
