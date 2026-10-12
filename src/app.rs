@@ -5696,6 +5696,10 @@ mod tests {
         mouse(app, MouseEventKind::Up(MouseButton::Left), to);
     }
 
+    fn panel_area(app: &App) -> Rect {
+        app.layout(AREA).changes
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -13776,10 +13780,6 @@ rm -f "$1/sessions/$$.json"
             ui::changes_button(areas().issues, &label).as_position()
         }
 
-        fn panel_area(app: &App) -> Rect {
-            app.layout(AREA).changes
-        }
-
         #[test]
         fn a_git_workspace_shows_the_button_with_its_count() {
             let repo = repo_with_edit();
@@ -14093,10 +14093,6 @@ rm -f "$1/sessions/$$.json"
 
         fn repo() -> TempDir {
             git_repo(&[("README.md", "# shop\n"), ("src/main.rs", "fn main() {\n    run();\n}\n")])
-        }
-
-        fn panel_area(app: &App) -> Rect {
-            app.layout(AREA).changes
         }
 
         fn view(app: &App) -> panel::View {
@@ -14758,10 +14754,6 @@ rm -f "$1/sessions/$$.json"
 
         fn open(app: &mut App) {
             tap(app, |a| a.layout(AREA).todo_button);
-        }
-
-        fn panel_area(app: &App) -> Rect {
-            app.layout(AREA).changes
         }
 
         fn view(app: &App) -> panel::View {
