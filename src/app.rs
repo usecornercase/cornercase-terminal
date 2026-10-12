@@ -7281,6 +7281,13 @@ mod tests {
     mod tabs {
         use super::*;
 
+        fn exited_last_tab() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = app_with(1);
+            type_line(&mut app, "exit");
+            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            (app, rx, dirs)
+        }
+
         #[test]
         fn plus_tab_opens_one_in_the_workspace_folder() {
             let (mut app, _rx, dirs) = app_with(1);
@@ -7356,19 +7363,13 @@ mod tests {
 
         #[test]
         fn the_last_one_exiting_keeps_the_workspace() {
-            let (mut app, rx, _dirs) = app_with(1);
-
-            type_line(&mut app, "exit");
-
-            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            let (app, _rx, _dirs) = exited_last_tab();
             assert_eq!((app.projects.len(), app.projects[0].workspaces.len()), (1, 1));
         }
 
         #[test]
         fn plus_tab_works_in_an_empty_workspace() {
-            let (mut app, rx, _dirs) = app_with(1);
-            type_line(&mut app, "exit");
-            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            let (mut app, _rx, _dirs) = exited_last_tab();
 
             click_row(&mut app, WorkspaceRow::NewTab(0));
 
