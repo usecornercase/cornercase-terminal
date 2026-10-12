@@ -55,8 +55,9 @@ fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() 
         None,
         Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
     );
-    let Response::Ok(message) = answered(&mut running.app, &running.rx, "Gemini's last message is read") else {
-        panic!("last message failed")
+    let message = match answered(&mut running.app, &running.rx, "Gemini's last message is read") {
+        Response::Ok(message) => message,
+        Response::Error(error) => panic!("last message failed: {error}"),
     };
     assert_eq!(message["agent"], "gemini");
     assert_eq!(message["text"], "OK");
