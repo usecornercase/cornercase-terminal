@@ -11050,6 +11050,14 @@ mod tests {
 
         use super::*;
 
+        fn moved_projects_border() -> (App, Receiver<AppEvent>, Position) {
+            let (mut app, rx) = app();
+            let from = border(&app, ui::Border::Projects);
+            drag(&mut app, from, 39);
+            let moved = border(&app, ui::Border::Projects);
+            (app, rx, moved)
+        }
+
         fn grab_projects_border(app: &mut App) -> Position {
             let from = border(app, ui::Border::Projects);
             press(app, from);
@@ -11221,10 +11229,7 @@ mod tests {
 
         #[test]
         fn a_double_click_brings_back_the_default_width() {
-            let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            drag(&mut app, from, 39);
-            let moved = border(&app, ui::Border::Projects);
+            let (mut app, _rx, moved) = moved_projects_border();
 
             click(&mut app, moved);
             click(&mut app, moved);
@@ -11234,10 +11239,7 @@ mod tests {
 
         #[test]
         fn two_slow_clicks_are_not_a_double_click() {
-            let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            drag(&mut app, from, 39);
-            let moved = border(&app, ui::Border::Projects);
+            let (mut app, _rx, moved) = moved_projects_border();
             click(&mut app, moved);
             app.border_click =
                 app.border_click.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
@@ -11249,10 +11251,7 @@ mod tests {
 
         #[test]
         fn a_click_right_after_a_drag_is_not_a_double_click() {
-            let (mut app, _rx) = app();
-            let from = border(&app, ui::Border::Projects);
-            drag(&mut app, from, 39);
-            let moved = border(&app, ui::Border::Projects);
+            let (mut app, _rx, moved) = moved_projects_border();
 
             press(&mut app, moved);
 
