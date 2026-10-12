@@ -13,7 +13,7 @@ Yes. Pick a prefix key in **Settings → UI → prefix key**; pressing it opens 
 
 ### Does it replace tmux?
 
-It overlaps: both keep shells running after you detach and split them into panes, and both can be driven from scripts ([Scripts and agents](../../guides/scripts-and-agents/)). cornercase is organised around **projects, workspaces and git worktrees**, can start **coding agents** on issues, and is driven by the mouse. If you rely on tmux's scrollback or its many commands, keep using it; you can even run cornercase inside a tmux window.
+It overlaps: both keep shells running after you detach and split them into panes, and both can be driven from scripts ([Scripts and agents](../../guides/scripts-and-agents/)). cornercase is organised around **projects, workspaces and git worktrees**, can start **coding agents** on issues, and is driven by the mouse. If you rely on tmux's copy mode (searching the scrollback, selecting with the keyboard) or its many commands, keep using it; you can even run cornercase inside a tmux window.
 
 ### Can an agent drive cornercase?
 
@@ -115,7 +115,7 @@ Yes, with `CORNERCASE_SOCKET`: each socket gets its own server, with its own set
 
 ### Can I scroll back through a pane's output?
 
-Not yet. See [Known limitations](../limitations/).
+Yes, with the mouse wheel: each pane keeps its last 10 MB of output, about 14,000 lines at 80 columns. See [Scroll back](../../guides/panes-and-splits/#scroll-back). There is no search in it yet; see [Known limitations](../limitations/).
 
 ### What license is it under?
 

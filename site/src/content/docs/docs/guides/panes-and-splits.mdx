@@ -71,7 +71,15 @@ Keys are encoded the way a modern terminal does it: when a program turns on the 
 
 When the program in a pane asks for the mouse (htop, lazygit, nvim with `mouse=a`), cornercase sends it clicks, drags and the scroll wheel, in the encoding the program asked for and relative to the pane.
 
-When the program doesn't ask for the mouse, dragging selects text instead; see below. There is no scrollback navigation in cornercase yet, so the wheel does nothing over a plain shell.
+When the program doesn't ask for the mouse, dragging selects text instead; see below.
+
+## Scroll back
+
+Over a shell, or any program that doesn't use the mouse, the wheel scrolls back through what the pane printed: each pane keeps its last 10 MB of output, as Ghostty does, which is about 14,000 lines in an 80-column pane and fewer in a wider one. It scrolls the pane under the pointer, even one that isn't active, without moving the focus. While you are up in the history, ` ↓ n more ` at the bottom right of the pane says how many lines are below; new output doesn't move what you are reading, the number just grows. Click ` ↓ n more `, or type or paste in the pane, to get back to the bottom. Commands sent by scripts and agents (`cornercase send`, `cornercase keys`) leave the view where it is.
+
+You can select and copy text up in the history, and click paths there, as on the live screen.
+
+In full-screen programs that don't use the mouse, such as `less`, `man` or git's pager, the wheel sends the up and down arrows instead, so they scroll as in any terminal.
 
 ### Right-clicks inside programs
 

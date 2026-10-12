@@ -2718,6 +2718,32 @@ pub fn toast_button(area: Rect, toast: Toast) -> Rect {
     Rect { x: r.right().saturating_sub(width + 1), width, ..r }
 }
 
+pub fn scrollback_label(below: usize) -> String {
+    format!(" ↓ {below} more ")
+}
+
+pub fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
+    if below == 0 || pane.height == 0 {
+        return None;
+    }
+    let width = u16::try_from(scrollback_label(below).chars().count()).unwrap_or(u16::MAX);
+    if width.saturating_add(1) > pane.width {
+        return None;
+    }
+    Some(Rect::new(pane.right() - width - 1, pane.bottom() - 1, width, 1))
+}
+
+fn draw_scrollback_badge(f: &mut Frame, view: &View, pane: Rect, below: usize) {
+    let Some(badge) = scrollback_badge(pane, below) else { return };
+    let lit = view.overlay.is_none() && view.hover.is_some_and(|p| badge.contains(p));
+    let style = if lit {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(view.muted).bg(view.surface())
+    };
+    f.render_widget(Paragraph::new(Span::styled(scrollback_label(below), style)), badge);
+}
+
 fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
     let r = toast_area(f.area(), toast);
     let icon = match toast.icon {
@@ -2756,6 +2782,7 @@ fn draw_tab(f: &mut Frame, view: &View, tab: &TabView, area: Rect) {
             let r = Rect::new(pane.x + cols.start, pane.y + row, cols.end - cols.start, 1).intersection(pane);
             f.buffer_mut().set_style(r, Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
         }
+        draw_scrollback_badge(f, view, pane, screen.below);
     }
     if let Some((r, place)) = tab.landing {
         draw_pane_landing(f, view, r, place);
@@ -7005,6 +7032,50 @@ mod tests {
             let v = View { tab: Some(single(snap)), ..view(&["~"]) };
             let mut t = render(&v);
             assert_eq!(t.get_cursor_position().expect("cursor"), Position::new(areas().pane.x + 2, 2));
+        }
+    }
+
+    mod scrollback {
+        use super::*;
+
+        fn scrolled_view() -> View<'static> {
+            let screen = Snapshot { below: 42, ..screen(b"$ cargo build\r\n   Compiling foo v0.1.0") };
+            View { tab: Some(single(screen)), ..view(&["~"]) }
+        }
+
+        #[test]
+        fn a_scrolled_pane_says_how_far_up_it_is() {
+            insta::assert_snapshot!(render(&scrolled_view()).backend());
+        }
+
+        #[test]
+        fn the_badge_sits_at_the_bottom_right_of_the_pane() {
+            let pane = areas().pane;
+
+            let badge = scrollback_badge(pane, 42).expect("a badge");
+
+            assert_eq!((badge.y, badge.right()), (pane.bottom() - 1, pane.right() - 1));
+            assert_eq!(row_text(&render(&scrolled_view()), badge), " ↓ 42 more ");
+        }
+
+        #[test]
+        fn a_pane_at_the_bottom_has_no_badge() {
+            assert_eq!(scrollback_badge(areas().pane, 0), None);
+        }
+
+        #[test]
+        fn a_pane_too_narrow_for_the_badge_has_none() {
+            assert_eq!(scrollback_badge(Rect::new(0, 0, 11, 5), 42), None);
+        }
+
+        #[test]
+        fn the_hovered_badge_is_lit() {
+            let badge = scrollback_badge(areas().pane, 42).expect("a badge");
+            let v = View { hover: Some(badge.as_position()), ..scrolled_view() };
+
+            let style = render(&v).backend().buffer()[(badge.x + 1, badge.y)].style();
+
+            assert_eq!(style.bg, Some(Color::Cyan));
         }
     }
 

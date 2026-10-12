@@ -1111,7 +1111,7 @@ impl App {
             let bracketed_paste = term.emulator.bracketed_paste();
             let application_cursor = term.emulator.application_cursor();
             let emulator = &mut term.emulator;
-            let mut screen = || emulator.snapshot().map(|s| s.contents()).unwrap_or_default();
+            let mut screen = || emulator.active_contents().unwrap_or_default();
             let mut seen = launch::Seen {
                 shell_in_foreground,
                 bracketed_paste,
@@ -1799,6 +1799,7 @@ impl App {
 
     fn forward_key(&mut self, key: KeyEvent) {
         let Some(term) = self.term_mut() else { return };
+        term.emulator.scroll_to_bottom();
         let bytes = term.emulator.encode_key(key);
         if !bytes.is_empty() && !term.write(&bytes) {
             self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
@@ -2020,6 +2021,14 @@ impl App {
     }
 
     fn pane_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        if let Some(delta) = wheel(ev.kind)
+            && self.wheel_pane(area, pos, delta)
+        {
+            return;
+        }
+        if ev.kind == MouseEventKind::Down(MouseButton::Left) && self.press_scrollback_badge(area, pos) {
+            return;
+        }
         let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
         let right = ev.kind == MouseEventKind::Down(MouseButton::Right);
         let Some(tab) = self.tab() else { return };
@@ -2076,6 +2085,34 @@ impl App {
         if let Some(bytes) = bytes {
             term.write(&bytes);
         }
+    }
+
+    fn wheel_pane(&mut self, area: Rect, pos: Position, delta: isize) -> bool {
+        let Some(tab) = self.tab_mut() else { return true };
+        let Some(id) = tab.pane_at(area, pos) else { return true };
+        let Some(term) = tab.panes.iter_mut().find(|t| t.id == id) else { return true };
+        if term.emulator.mouse_mode() != mouse::MouseMode::None {
+            return false;
+        }
+        if !term.emulator.alternate_screen() {
+            term.emulator.scroll(delta);
+        } else if term.emulator.alt_scroll() {
+            let code = if delta < 0 { KeyCode::Up } else { KeyCode::Down };
+            let key = term.emulator.encode_key(KeyEvent::new(code, KeyModifiers::NONE));
+            term.write(&key.repeat(delta.unsigned_abs()));
+        }
+        true
+    }
+
+    fn press_scrollback_badge(&mut self, area: Rect, pos: Position) -> bool {
+        let Some(tab) = self.tab_mut() else { return false };
+        let Some((id, rect)) = tab.shown(area).into_iter().find(|(_, r)| r.contains(pos)) else { return false };
+        let Some(term) = tab.panes.iter_mut().find(|t| t.id == id) else { return false };
+        if !ui::scrollback_badge(rect, term.emulator.below()).is_some_and(|badge| badge.contains(pos)) {
+            return false;
+        }
+        term.emulator.scroll_to_bottom();
+        true
     }
 
     fn drag_selection(&mut self, id: u64, ev: MouseEvent, pane: Rect) {
@@ -4538,10 +4575,11 @@ impl App {
             self.changes.scroll = 0;
             return;
         }
-        if let Some(term) = self.term_mut()
-            && !term.paste(text)
-        {
-            self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
+        if let Some(term) = self.term_mut() {
+            term.emulator.scroll_to_bottom();
+            if !term.paste(text) {
+                self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
+            }
         }
     }
 
@@ -5291,7 +5329,10 @@ impl App {
             return;
         };
         let tab = &mut self.projects[p].workspaces[w].tabs[t];
-        let sent = tab.panes.iter_mut().find(|term| term.id == id).is_some_and(|term| term.paste(text));
+        let sent = tab.panes.iter_mut().find(|term| term.id == id).is_some_and(|term| {
+            term.emulator.scroll_to_bottom();
+            term.paste(text)
+        });
         self.jump_to_pane(id);
         self.toast = Some(if sent {
             Toast::new(SENT_TO_AGENT, ui::ToastIcon::Check)
@@ -5508,6 +5549,11 @@ mod tests {
 
     fn screen(app: &mut App) -> String {
         app.term_mut().and_then(|t| t.emulator.snapshot().ok()).map(|s| s.contents()).unwrap_or_default()
+    }
+
+    fn numbered(term: &mut Term, lines: usize) {
+        let text: Vec<String> = (1..=lines).map(|i| format!("line-{i}")).collect();
+        term.feed(format!("\x1b[2J\x1b[H{}", text.join("\r\n")).as_bytes());
     }
 
     fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
@@ -10166,6 +10212,129 @@ rm -f "$1/sessions/$$.json"
         }
     }
 
+    mod scrollback {
+        use super::*;
+
+        fn in_pane() -> Position {
+            Position::new(areas().pane.x + 2, areas().pane.y + 2)
+        }
+
+        fn below(app: &App) -> usize {
+            app.tab().and_then(Tab::pane).expect("a pane").emulator.below()
+        }
+
+        fn scrolled_up() -> (App, Receiver<AppEvent>) {
+            let (mut app, rx) = app();
+            numbered(app.term_mut().expect("a pane"), 100);
+            mouse(&mut app, MouseEventKind::ScrollUp, in_pane());
+            assert_eq!(below(&app), 3, "the wheel scrolled the pane up");
+            (app, rx)
+        }
+
+        #[test]
+        fn the_wheel_scrolls_a_shell_back_through_its_history() {
+            let (mut app, _rx) = scrolled_up();
+
+            let first = 100 - usize::from(areas().pane.height) + 1 - 3;
+            assert_eq!(below(&app), 3);
+            assert_eq!(screen(&mut app).lines().next(), Some(format!("line-{first}").as_str()));
+        }
+
+        #[test]
+        fn the_wheel_down_returns_to_the_bottom() {
+            let (mut app, _rx) = scrolled_up();
+
+            mouse(&mut app, MouseEventKind::ScrollDown, in_pane());
+
+            assert_eq!(below(&app), 0);
+        }
+
+        #[test]
+        fn a_key_returns_to_the_bottom() {
+            let (mut app, _rx) = scrolled_up();
+
+            send_key(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
+
+            assert_eq!(below(&app), 0);
+        }
+
+        #[test]
+        fn a_paste_returns_to_the_bottom() {
+            let (mut app, _rx) = scrolled_up();
+
+            app.handle_event(AppEvent::Input(Event::Paste("x".into())), AREA).expect("handle paste");
+
+            assert_eq!(below(&app), 0);
+        }
+
+        #[test]
+        fn a_click_on_the_badge_returns_to_the_bottom() {
+            let (mut app, _rx) = scrolled_up();
+            let badge = ui::scrollback_badge(areas().pane, below(&app)).expect("a badge");
+
+            click(&mut app, badge.as_position());
+
+            assert_eq!((below(&app), app.take_host_writes(), toast(&app)), (0, Vec::<Vec<u8>>::new(), None));
+        }
+
+        #[test]
+        fn a_drag_on_the_scrolled_view_copies_what_is_shown() {
+            let (mut app, _rx) = scrolled_up();
+            let first = format!("line-{}", 100 - usize::from(areas().pane.height) + 1 - 3);
+            let start = areas().pane.as_position();
+            let end = Position::new(start.x + u16::try_from(first.len()).expect("short") - 1, start.y);
+
+            press(&mut app, start);
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), end);
+            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), end);
+
+            assert_eq!(app.take_host_writes(), [clipboard::osc52(&first)]);
+        }
+
+        #[test]
+        fn a_program_that_reads_the_mouse_keeps_the_wheel() {
+            let (mut app, rx) = app();
+            type_line(&mut app, "printf '\\033[?1000h\\033[?1006h'; cat -v");
+            pump_until(&mut app, &rx, "the program reads the mouse", |a| {
+                a.tab().and_then(Tab::pane).is_some_and(|t| t.emulator.mouse_mode() != mouse::MouseMode::None)
+            });
+
+            mouse(&mut app, MouseEventKind::ScrollUp, in_pane());
+
+            shows(&mut app, &rx, "^[[<64;");
+        }
+
+        #[test]
+        fn a_wheel_over_an_inactive_pane_scrolls_it_without_focusing_it() {
+            let (mut app, _rx) = app();
+            right_click(&mut app, in_pane());
+            pick(&mut app, "split right");
+            let tab = app.tab().expect("a tab");
+            let (active, (left, rect)) = (tab.active, tab.shown(areas().pane)[0]);
+            let tab = app.tab_mut().expect("a tab");
+            numbered(tab.panes.iter_mut().find(|t| t.id == left).expect("the left pane"), 100);
+
+            mouse(&mut app, MouseEventKind::ScrollUp, Position::new(rect.x + 1, rect.y + 1));
+
+            let tab = app.tab().expect("a tab");
+            let left_below = tab.panes.iter().find(|t| t.id == left).expect("the left pane").emulator.below();
+            assert_eq!((left_below, tab.active), (3, active));
+        }
+
+        #[test]
+        fn on_the_alternate_screen_the_wheel_sends_arrows() {
+            let (mut app, rx) = app();
+            type_line(&mut app, "printf '\\033[?1049h'; cat -v");
+            pump_until(&mut app, &rx, "the alternate screen", |a| {
+                a.tab().and_then(Tab::pane).is_some_and(|t| t.emulator.alternate_screen())
+            });
+
+            mouse(&mut app, MouseEventKind::ScrollUp, in_pane());
+
+            shows(&mut app, &rx, "^[[A^[[A^[[A");
+        }
+    }
+
     mod splits {
         use super::*;
 
@@ -13120,8 +13289,7 @@ rm -f "$1/sessions/$$.json"
             assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52(&patch)], Some(COPIED)));
         }
 
-        #[test]
-        fn ask_agent_types_the_lines_into_the_agent() {
+        fn with_an_agent() -> (TempDir, TempDir, App) {
             let repo = repo_with_edit();
             let config = TempDir::new();
             let agent = config.path().join("agent");
@@ -13138,9 +13306,30 @@ rm -f "$1/sessions/$$.json"
                 agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
             });
             refresh_until_loaded(&mut app, &rx);
+            (repo, config, app)
+        }
+
+        fn ask_about_the_first_hunk(app: &mut App) {
             let target = app.changes_target().expect("target");
             let file = app.changed_diff(&target).expect("diff").files[0].clone();
             app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
+        }
+
+        #[test]
+        fn ask_agent_brings_a_scrolled_agent_back_to_the_bottom() {
+            let (_repo, _config, mut app) = with_an_agent();
+            numbered(app.term_mut().expect("pane"), 100);
+            app.term_mut().expect("pane").emulator.scroll(-3);
+
+            ask_about_the_first_hunk(&mut app);
+
+            assert_eq!(app.term().expect("pane").emulator.below(), 0);
+        }
+
+        #[test]
+        fn ask_agent_types_the_lines_into_the_agent() {
+            let (repo, _config, mut app) = with_an_agent();
+            ask_about_the_first_hunk(&mut app);
             app.term_mut().expect("pane").write(b"\r");
             let got = repo.path().join("got");
             wait_until("the agent reads the reference", || std::fs::read_to_string(&got).is_ok_and(|t| !t.is_empty()));
@@ -14467,6 +14656,23 @@ rm -f "$s"
                 .flat_map(Workspace::terms)
                 .find(|t| t.id == id)
                 .expect("the pane")
+        }
+
+        #[test]
+        fn a_send_leaves_a_scrolled_pane_where_it_is() {
+            let (mut app, rx) = app();
+            let id = app.term_mut().expect("a pane").id;
+            numbered(app.term_mut().expect("a pane"), 100);
+            app.term_mut().expect("a pane").emulator.scroll(-3);
+
+            ask(
+                &mut app,
+                None,
+                Command::Send(wire::SendText { pane: Some(id), text: Some("x".into()), ..wire::SendText::default() }),
+            );
+            done(answered(&mut app, &rx, "the send is answered"));
+
+            assert!(pane(&app, id).emulator.below() >= 3, "the view moved: {}", pane(&app, id).emulator.below());
         }
 
         fn pane_screen(app: &App, id: u64) -> String {

@@ -575,6 +575,22 @@ fn shell_output_shows_in_the_pane() {
 }
 
 #[test]
+fn the_wheel_scrolls_back_through_a_shells_output() {
+    let mut app = Harness::start();
+    app.send(b"i=1; while [ $i -le 200 ]; do echo row-$i; i=$((i+1)); done\r");
+    app.wait_for("the output ends", |s| s.contains("row-200"));
+    let (x, y) = (pane().x + 3, pane().y + 3);
+
+    for _ in 0..80 {
+        app.send(format!("\x1b[<64;{x};{y}M").as_bytes());
+    }
+    app.wait_for("the first rows show with the badge", |s| s.contains("row-1 ") && s.contains(" more "));
+
+    app.send(b"x");
+    app.wait_for("a key brings the last rows back", |s| s.contains("row-200") && !s.contains(" more "));
+}
+
+#[test]
 fn the_server_log_tells_what_happened_but_never_what_was_typed() {
     let session = Session::new();
     let mut app = Harness::open_with(Arc::clone(&session), ROWS, COLS, &[("CORNERCASE_LOG", "debug")]);

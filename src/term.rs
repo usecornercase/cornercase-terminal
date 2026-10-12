@@ -22,7 +22,7 @@ use crate::process;
 use crate::protocol;
 use crate::state::AgentState;
 
-const SCROLLBACK: usize = 5_000;
+const SCROLLBACK_BYTES: usize = 10_000_000;
 const READ_BUFFER: usize = 16 * 1024;
 const INTERPRETERS: [&str; 6] = ["node", "bun", "deno", "python", "python3", "ruby"];
 const NODE_MAIN_THREAD: &str = "node-MainThread";
@@ -113,7 +113,7 @@ impl Term {
         let writer = spawn_writer(pair.master.take_writer().map_err(|e| Error::AttachPty(e.into()))?);
         let replies = writer.clone();
         let emulator =
-            Emulator::new(rows, cols, SCROLLBACK, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
+            Emulator::new(rows, cols, SCROLLBACK_BYTES, theme, Box::new(move |bytes| _ = write_to(&replies, bytes)))
                 .map_err(|e| Error::Emulator(e.into()))?;
         spawn_reader(id, reader, tx);
 
@@ -349,6 +349,29 @@ mod tests {
             }
         }
         term.emulator.snapshot().expect("snapshot").contents()
+    }
+
+    mod scrollback {
+        use super::*;
+
+        #[rstest]
+        #[case::narrow(80, 13_000)]
+        #[case::wide(250, 4_000)]
+        fn a_pane_keeps_thousands_of_lines(#[case] cols: u16, #[case] at_least: usize) {
+            let mut emu =
+                Emulator::new(50, cols, SCROLLBACK_BYTES, &HostTheme::default(), Box::new(|_| {})).expect("emulator");
+            let text: Vec<String> = (1..=20_000).map(|i| format!("line-{i}")).collect();
+            emu.feed(text.join("\r\n").as_bytes());
+
+            let kept = emu.last_lines(20_000).expect("text");
+
+            assert!(
+                kept.lines().count() >= at_least,
+                "kept {} lines from {:?}",
+                kept.lines().count(),
+                kept.lines().next()
+            );
+        }
     }
 
     mod shell_in_foreground {

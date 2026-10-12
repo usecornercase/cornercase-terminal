@@ -520,7 +520,7 @@ pub struct ReadArgs {
         long,
         value_name = "N",
         value_parser = clap::value_parser!(u64).range(1..),
-        help = "The last N lines, scrollback included (a pane keeps 5,000)"
+        help = "The last N lines, scrollback included (a pane keeps its last 10 MB of output)"
     )]
     pub lines: Option<u64>,
     #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
