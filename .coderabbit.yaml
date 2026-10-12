@@ -44,7 +44,7 @@ reviews:
     - path: "site/**"
       instructions: |
         The site must match the app. Internal doc links are relative with a trailing slash.
-        The landing simulation in site/src/lib/demo/ mirrors src/ui.rs.
+        The landing simulation in site/src/lib/demo/ mirrors src/ui.rs and src/ui/.
 
   pre_merge_checks:
     docstrings:
