@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.33
+
+- No changes in the app. A test that fails no longer leaves a fake agent running, which kept piped test runs from ending.
+
 ## 0.12.31
 
 - Scroll back through a pane's output with the mouse wheel, over a shell or any program that doesn't use the mouse. The wheel scrolls the pane under the pointer without making it active, and ` ↓ n more ` at the bottom right says how far up you are; new output doesn't move what you are reading. Click it, type or paste to get back to the bottom. You can select and copy text up there too. In `less`, `man` and git's pager, the wheel scrolls the page.
