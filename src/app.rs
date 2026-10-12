@@ -16370,6 +16370,14 @@ mod tests {
             mod restarting_when_idle {
                 use super::*;
 
+                fn finish_and_recheck(agent: &mut Agent, id: u64) {
+                    agent.finish();
+                    agent.refreshing("the agent stops", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    looked_again(agent);
+                }
+
                 fn when_idle(timeout: Option<f64>) -> Command {
                     Command::RestartWhenIdle(wire::RestartWhenIdle { timeout })
                 }
@@ -16490,11 +16498,7 @@ mod tests {
                     let cancel = ui::toast_button(AREA, shown).as_position();
                     click(&mut agent.app, cancel);
                     let message = error(answers(&mut agent.app).remove(0));
-                    agent.finish();
-                    agent.refreshing("the agent stops", |a| {
-                        pane(a, id).agent.status() != Some(activity::Status::Working)
-                    });
-                    looked_again(&mut agent);
+                    finish_and_recheck(&mut agent, id);
 
                     assert_eq!(message, "the restart was cancelled in the window; the server keeps running");
                     assert_eq!((agent.app.take_restart(), toast(&agent.app)), (None, None));
@@ -16507,11 +16511,7 @@ mod tests {
                     ask(&mut agent.app, None, when_idle(None));
 
                     agent.app.forget(CLIENT);
-                    agent.finish();
-                    agent.refreshing("the agent stops", |a| {
-                        pane(a, id).agent.status() != Some(activity::Status::Working)
-                    });
-                    looked_again(&mut agent);
+                    finish_and_recheck(&mut agent, id);
 
                     let answered = answers(&mut agent.app);
                     assert_eq!((agent.app.take_restart(), toast(&agent.app), answered), (None, None, Vec::new()));
