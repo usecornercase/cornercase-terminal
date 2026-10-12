@@ -1,0 +1,4 @@
+{"id":"old","role":"assistant","time":{"created":1791633600000,"completed":1791633600000},"tokens":{"input":20,"output":50,"reasoning":15,"cache":{"read":200,"write":10}}}
+{"id":"p1","role":"user","time":{"created":1791633602000}}
+{"id":"unfinished","role":"assistant","time":{"created":1791633603000},"tokens":{"input":99,"output":99}}
+{"id":"m1","role":"assistant","time":{"created":1791633604000,"completed":1791633605000},"tokens":{"input":20,"output":50,"reasoning":15,"cache":{"read":200,"write":10}}}

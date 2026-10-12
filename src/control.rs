@@ -61,6 +61,7 @@ pub enum Command {
     Events(Events),
     LastMessage(LastMessage),
     RestartWhenIdle(RestartWhenIdle),
+    Stats(Stats),
 }
 
 impl Command {
@@ -85,13 +86,14 @@ impl Command {
             Self::Events(_) => 16,
             Self::LastMessage(_) => 17,
             Self::RestartWhenIdle(_) => 18,
+            Self::Stats(_) => 19,
         }]
     }
 
     pub fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
-            Self::Status(_) => {}
+            Self::Status(_) | Self::Stats(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -167,7 +169,7 @@ impl Command {
         fields.0
     }
 
-    pub const NAMES: [&str; 19] = [
+    pub const NAMES: [&str; 20] = [
         "status",
         "open",
         "new-workspace",
@@ -187,6 +189,7 @@ impl Command {
         "events",
         "last-message",
         "restart-when-idle",
+        "stats",
     ];
 }
 
@@ -833,6 +836,7 @@ mod tests {
             Command::Events(Events::default()),
             Command::LastMessage(LastMessage::default()),
             Command::RestartWhenIdle(RestartWhenIdle::default()),
+            Command::Stats(Stats::default()),
         ];
 
         let names: Vec<String> = commands
@@ -1036,3 +1040,6 @@ mod tests {
         assert_eq!(serde_json::to_value(done).expect("json"), json!({"pane": 4, "ended": "idle"}));
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stats {}

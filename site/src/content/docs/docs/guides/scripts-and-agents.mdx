@@ -291,6 +291,21 @@ cornercase restart --when-idle --yes
 
 The pane the command runs in doesn't hold the restart, so an agent can run it as its last step: the restart stops it too, and its conversation [resumes](../sessions/#agents-resume-their-conversations). Until then every window says a restart is pending, with a button that cancels it. [`cornercase restart`](../../reference/command-line/#once-no-agent-is-working) has the details.
 
+
+### Stats
+
+```sh
+cornercase stats
+cornercase stats --json
+cornercase stats --share
+```
+
+`stats` prints the parallel-work headline, the 24 h / 7 days / total table and a text heatmap (`·░▒▓█`). With a server it includes numbers still in memory; without one it reads `stats.json`. An older server that has no stats command says to update cornercase and restart it.
+
+`--json` prints an object with `since` (UTC), `windows` (`24h`, `7d`, `total`) and `blocks` (newest first). Each window has `agents`, `prompts`, `turns`, `agent_seconds`, `busy_seconds`, `most_at_once`, `waited_seconds`, `tokens` (`in`, `out`, `cache_read`, `cache_write`) and `by_agent` (`claude`, `codex`, `gemini`, `opencode`). Durations preserve milliseconds as fractional seconds. Busy time and most-at-once span all kinds; the per-agent counters contain starts, prompts, turns, working/waiting durations and token kinds. Every key is present, even when zero. Each block gives `agent_seconds`.
+
+`--share` prints the same private share link as Usage → Stats → share. Copy and post it yourself; anyone with the link sees the numbers on the card. See [Usage and stats](../projects-workspaces-tabs/#usage-and-stats) for the counting rules and privacy.
+
 ## JSON
 
 `--json` prints a command's answer as JSON. These fields are kept stable; new ones may be added.

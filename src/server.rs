@@ -275,6 +275,7 @@ struct Server {
     session: PathBuf,
     saver: Saver,
     todo_saver: Saver<todo::Saved>,
+    stats_saver: Saver<crate::stats::Saved>,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
     drawn: Option<Instant>,
@@ -318,6 +319,14 @@ pub fn run() -> Result<()> {
     let todos = todo::load(&todo::path(&session));
     let todo_saver = Saver::new(todo::path(&session), Some(todos.saved()));
     app.set_todos(todos);
+    let stats = crate::stats::load(&crate::stats::path(&session), SystemTime::now());
+    log::info!(
+        "stats",
+        "loaded",
+        since = stats.view(SystemTime::now()).since,
+        hours = stats.saved(SystemTime::now()).hours.len()
+    );
+    app.set_stats(stats);
     let mut server = Server::new(app, session, todo_saver, tx);
     server.serve(&rx);
     let _ = std::fs::remove_file(&path);
@@ -406,6 +415,12 @@ fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>)
 
 impl Server {
     fn new(app: App, session: PathBuf, todo_saver: Saver<todo::Saved>, tx: Sender<ServerEvent>) -> Self {
+        let stats_saver = Saver::periodic(
+            crate::stats::path(&session),
+            Some(app.stats_saved(SystemTime::now())),
+            Duration::from_secs(60),
+            crate::stats::save,
+        );
         Self {
             app,
             clients: Vec::new(),
@@ -417,6 +432,7 @@ impl Server {
             saver: Saver::new(session.clone(), None),
             session,
             todo_saver,
+            stats_saver,
             restart: None,
             tx,
             drawn: None,
@@ -550,6 +566,11 @@ impl Server {
                 Ok(false) => {}
                 Err(e) => log::error!("server", "failed to save the session", error = e),
             }
+        }
+        match self.stats_saver.observe(self.app.stats_saved(SystemTime::now()), now) {
+            Ok(true) => log::debug!("stats", "saved"),
+            Ok(false) => {}
+            Err(e) => log::error!("stats", "failed to save", error = e),
         }
         match self.todo_saver.observe(self.app.todos_saved(), now) {
             Ok(true) => log::debug!("server", "todo list saved"),
@@ -845,6 +866,13 @@ impl Server {
 
     fn shutdown(&mut self) {
         self.answer();
+        if let Err(e) = self
+            .stats_saver
+            .observe(self.app.stats_saved(SystemTime::now()), Instant::now())
+            .and_then(|_| self.stats_saver.flush())
+        {
+            log::error!("stats", "failed to save", error = e);
+        }
         if let Err(e) =
             self.todo_saver.observe(self.app.todos_saved(), Instant::now()).and_then(|_| self.todo_saver.flush())
         {

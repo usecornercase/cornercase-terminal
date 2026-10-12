@@ -151,7 +151,7 @@ export const page: Page = {
         items: [
           ['Estado, modelo y contexto', 'Trabajando, te necesita o terminado, bajo cada pestaña. Y el modelo y cuánto contexto lleva usado.'],
           ['Notificaciones', '¿Claude te necesita? Tu terminal te toca el hombro. Incluso por SSH.'],
-          ['Uso del plan', 'Tus límites de Claude y Codex, en un solo diálogo.'],
+          ['Uso y estadísticas', 'Los límites de tus planes y el trabajo que tus agentes hicieron en paralelo.'],
           ['Worktrees, en orden', 'Cada línea de trabajo tiene su propia rama y carpeta. Las que creas en otro sitio también aparecen.'],
         ],
       },
@@ -232,7 +232,7 @@ export const demo: Demo = {
     picker: 'Elige una carpeta. Escribe para filtrar, Enter para entrar, open para añadirla.',
     opened: (folder) => `${folder} abierto. Cada proyecto guarda sus propios espacios de trabajo y pestañas.`,
     search: 'Escribe lo que sea: proyectos, ramas, pestañas. Enter te lleva allí.',
-    usage: 'Cuánto te queda de tus planes de Claude y Codex, de un vistazo. Sin gastar tokens.',
+    usage: 'El trabajo de tus agentes en paralelo y los límites de tus planes de Claude y Codex. Todo en Usage.',
     settings: 'Cambia lo que quieras, se guarda al momento. Prueba Agents → default agent.',
     restart: (resume) =>
       `De verdad, el servidor arranca de nuevo y cada pestaña vuelve con una shell nueva${resume ? ', y los agentes, en sus conversaciones' : ''}. La demo mantiene las tuyas en marcha.`,

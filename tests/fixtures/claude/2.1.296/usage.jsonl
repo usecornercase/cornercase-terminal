@@ -1,0 +1,8 @@
+{"type":"user","uuid":"p0","origin":{"kind":"human"},"timestamp":"2026-10-10T12:00:00.000Z","message":{"content":"synthetic prompt"}}
+{"type":"user","uuid":"p1","origin":{"kind":"human"},"timestamp":"2026-10-10T12:00:02.000Z","message":{"content":"synthetic prompt"}}
+{"type":"user","uuid":"shell","timestamp":"2026-10-10T12:00:03.000Z","message":{"content":"<bash-input>synthetic"}}
+{"type":"user","uuid":"slash","timestamp":"2026-10-10T12:00:04.000Z","message":{"content":"<command-name>/synthetic</command-name>"}}
+{"type":"queue-operation","id":"queue","operation":"enqueue","timestamp":"2026-10-10T12:00:05.000Z","content":"synthetic queued prompt"}
+{"type":"assistant","timestamp":"2026-10-10T12:00:00.000Z","message":{"id":"old","model":"synthetic-model","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10,"output_tokens_details":{"thinking_tokens":15}}}}
+{"type":"assistant","timestamp":"2026-10-10T12:00:06.000Z","message":{"id":"m1","model":"synthetic-model","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10,"output_tokens_details":{"thinking_tokens":15}}}}
+{"type":"assistant","timestamp":"2026-10-10T12:00:06.000Z","message":{"id":"m1","model":"synthetic-model","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10,"output_tokens_details":{"thinking_tokens":15}}}}

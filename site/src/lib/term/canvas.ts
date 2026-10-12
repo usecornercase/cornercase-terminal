@@ -38,8 +38,8 @@ export class CanvasView {
     this.theme = t;
   }
 
-  measure(cssWidth: number, cols: number, rows: number): Size {
-    this.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  measure(cssWidth: number, cols: number, rows: number, scale?: number): Size {
+    this.dpr = Math.max(1, Math.min(3, scale ?? (window.devicePixelRatio || 1)));
     this.cols = cols;
     this.rows = rows;
     this.cwD = Math.max(4, (cssWidth / cols) * this.dpr);

@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -13,6 +11,7 @@ use crate::log::Stamp;
 use crate::process;
 
 mod codex;
+mod counting;
 mod discovery;
 mod gemini;
 mod jsonl;
@@ -21,7 +20,9 @@ mod opencode;
 
 pub use message::{Record, Said};
 
+use counting::{Ledger, Record as CountRecord, Usage as CountUsage};
 use discovery::Job;
+use jsonl::Tail;
 
 const TAIL: u64 = 1024 * 1024;
 const DIR_NAME_MAX: usize = 200;
@@ -54,6 +55,7 @@ pub struct Pane {
     shown: Option<Context>,
     codex: Option<codex::Rollout>,
     agent: Option<(i32, SystemTime)>,
+    kind: Option<&'static str>,
     finding: Job<Option<PathBuf>>,
     opencode: Option<opencode::Session>,
     looking: Job<(Option<opencode::Session>, opencode::Models)>,
@@ -62,13 +64,32 @@ pub struct Pane {
     reading: Job<Option<gemini::Session>>,
     gemini_record: Option<(PathBuf, Option<String>)>,
     prompted: Option<SystemTime>,
+    ledger: Ledger,
+    subagents: Subagents,
+    following: Job<Subagents>,
 }
 
 impl Pane {
-    pub fn update_codex(&mut self, pid: i32) {
-        if self.agent.is_none_or(|(seen, _)| seen != pid) {
-            *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
+    fn follow(&mut self, pid: i32, kind: &'static str) {
+        if self.agent.is_none_or(|(seen, _)| seen != pid) || self.kind != Some(kind) {
+            *self = Self { agent: Some((pid, SystemTime::now())), kind: Some(kind), ..Self::default() };
         }
+    }
+
+    pub fn kind(&self) -> Option<&'static str> {
+        self.kind
+    }
+
+    pub fn agent(&self) -> Option<(i32, SystemTime)> {
+        self.agent
+    }
+
+    pub fn take_counted(&mut self) -> crate::stats::Counted {
+        self.ledger.take()
+    }
+
+    pub fn update_codex(&mut self, pid: i32) {
+        self.follow(pid, agents::CODEX);
         if let Some(found) = self.finding.take()
             && found.as_ref() != self.codex.as_ref().map(|r| &r.path)
         {
@@ -82,14 +103,21 @@ impl Pane {
             rollout.update();
             self.shown = rollout.context();
             self.prompted = self.prompted.max(rollout.prompted());
+            if let Some((_, since)) = self.agent {
+                self.ledger.apply(&rollout.path.to_string_lossy(), since, std::mem::take(&mut rollout.counted));
+            }
         }
     }
 
     pub fn update_opencode(&mut self, pid: i32) {
-        if self.agent.is_none_or(|(seen, _)| seen != pid) {
-            *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
-        }
-        if let Some((found, models)) = self.looking.take() {
+        self.follow(pid, agents::OPENCODE);
+        if let Some((mut found, models)) = self.looking.take() {
+            if let Some(session) = &mut found
+                && let Some((_, since)) = self.agent
+                && let Some(place) = &session.place
+            {
+                self.ledger.apply(&place.id, since, std::mem::take(&mut session.counted));
+            }
             self.models = models;
             self.shown = found.as_ref().and_then(|session| session.context.clone());
             self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
@@ -104,10 +132,13 @@ impl Pane {
     }
 
     pub fn update_gemini(&mut self, pid: i32, screen: &str) {
-        if self.agent.is_none_or(|(seen, _)| seen != pid) {
-            *self = Self { agent: Some((pid, SystemTime::now())), ..Self::default() };
-        }
-        if let Some(found) = self.reading.take() {
+        self.follow(pid, agents::GEMINI);
+        if let Some(mut found) = self.reading.take() {
+            if let Some(session) = &mut found
+                && let Some((_, since)) = self.agent
+            {
+                self.ledger.apply(&session.path.to_string_lossy(), since, std::mem::take(&mut session.counted));
+            }
             self.shown = found.as_ref().and_then(|session| session.context.clone());
             self.prompted = self.prompted.max(found.as_ref().and_then(|session| session.prompted));
             self.gemini_record = found.as_ref().map(|s| (s.path.clone(), s.id().map(str::to_string)));
@@ -123,24 +154,49 @@ impl Pane {
     }
 
     pub fn update(&mut self, dir: Option<&Path>, claude: Option<&Claude>) {
+        if let Some(claude) = claude {
+            self.follow(claude.pid, agents::CLAUDE);
+        }
         let found = dir.zip(claude).and_then(|(dir, claude)| {
             let session = claude.session.as_ref()?;
             let cwd = session.cwd.as_deref()?;
             Some((dir, claude, cwd, transcript_path(dir, cwd, session.id.as_deref()?)?))
         });
         let Some((dir, claude, cwd, path)) = found else {
-            *self = Self::default();
+            if claude.is_none() {
+                *self = Self::default();
+            } else {
+                self.transcript = None;
+                self.shown = None;
+            }
             return;
         };
         if self.transcript.as_ref().is_none_or(|t| t.path != path) {
-            *self = Self { prompted: self.prompted, ..Self::default() };
+            self.transcript = None;
+            self.shown = None;
         }
         let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
         let before = transcript.reply.clone();
         transcript.update();
         self.prompted = self.prompted.max(transcript.prompted);
+        if let Some((_, since)) = self.agent {
+            self.ledger.apply(&transcript.path.to_string_lossy(), since, std::mem::take(&mut transcript.counted));
+        }
         if transcript.reply != before {
             self.shown = transcript.reply.as_ref().map(|reply| reply.context(&Limits::read(dir, cwd, claude)));
+        }
+        let parent = transcript.path.with_extension("").join("subagents");
+        if let Some(mut found) = self.following.take() {
+            if let Some((_, since)) = self.agent {
+                for (path, records) in std::mem::take(&mut found.records) {
+                    self.ledger.apply(&path.to_string_lossy(), since, records);
+                }
+            }
+            self.subagents = found;
+        }
+        if !self.following.running() {
+            let state = std::mem::take(&mut self.subagents);
+            self.following.start(move || state.read(&parent));
         }
     }
 
@@ -176,6 +232,35 @@ impl Pane {
     pub fn conversation(&self) -> Option<&str> {
         let claude = self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str());
         claude.or_else(|| self.codex.as_ref()?.id()).or_else(|| self.gemini_record.as_ref()?.1.as_deref())
+    }
+}
+
+#[derive(Debug, Default)]
+struct Subagents {
+    tails: HashMap<PathBuf, Tail>,
+    records: Vec<(PathBuf, Vec<CountRecord>)>,
+}
+
+impl Subagents {
+    fn read(mut self, parent: &Path) -> Self {
+        self.tails.retain(|path, _| path.parent() == Some(parent));
+        if let Ok(entries) = std::fs::read_dir(parent) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("agent-"))
+                    || !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
+                {
+                    continue;
+                }
+                let tail = self.tails.entry(path.clone()).or_default();
+                if let Ok(batch) = tail.read(&path) {
+                    let records =
+                        batch.bytes.split(|b| *b == b'\n').filter_map(|line| counted_claude(line, false)).collect();
+                    self.records.push((path, records));
+                }
+            }
+        }
+        self
     }
 }
 
@@ -217,7 +302,8 @@ fn base36(mut n: u32) -> String {
 struct Transcript {
     path: PathBuf,
     len: u64,
-    read: u64,
+    tail: Tail,
+    counted: Vec<CountRecord>,
     reply: Option<Reply>,
     prompted: Option<SystemTime>,
 }
@@ -272,40 +358,34 @@ impl Message {
 
 impl Transcript {
     fn new(path: PathBuf) -> Self {
-        Self { path, len: 0, read: 0, reply: None, prompted: None }
+        Self { path, len: 0, tail: Tail::default(), counted: Vec::new(), reply: None, prompted: None }
     }
 
     fn update(&mut self) {
-        let Ok(len) = std::fs::metadata(&self.path).map(|m| m.len()) else {
-            *self = Self::new(std::mem::take(&mut self.path));
+        let Ok(batch) = self.tail.read(&self.path) else {
+            self.reply = None;
+            self.len = 0;
+            self.tail = Tail::default();
             return;
         };
-        if len == self.len {
-            return;
+        if batch.reset {
+            self.reply = None;
+            self.prompted = None;
         }
-        if len < self.len {
-            *self = Self::new(std::mem::take(&mut self.path));
-        }
-        let Ok(mut file) = File::open(&self.path) else { return };
-        self.len = len;
-        let jump = self.reply.is_none() && (self.read == 0 || len - self.read > TAIL);
-        let start = if jump { len.saturating_sub(TAIL) } else { self.read };
-        let mut bytes = Vec::new();
-        if file.seek(SeekFrom::Start(start)).is_err() || file.take(len - start).read_to_end(&mut bytes).is_err() {
-            return;
-        }
-        let Some(end) = bytes.iter().rposition(|b| *b == b'\n').map(|i| i + 1) else { return };
-        let from = if jump && start > 0 { bytes.iter().position(|b| *b == b'\n').map_or(end, |i| i + 1) } else { 0 };
-        if let Some(mark) = bytes[from..end].rsplit(|b| *b == b'\n').find_map(mark) {
+        self.len = std::fs::metadata(&self.path).map_or(0, |m| m.len());
+        if let Some(mark) = batch.bytes.rsplit(|b| *b == b'\n').find_map(mark) {
             self.reply = match mark {
                 Mark::Reply(reply) => Some(reply),
                 Mark::Compacted => None,
             };
         }
         let read_at = SystemTime::now();
-        let prompts = bytes[from..end].split(|b| *b == b'\n').filter_map(|line| prompt(line, read_at));
-        self.prompted = self.prompted.max(prompts.max());
-        self.read = start + end as u64;
+        for line in batch.bytes.split(|b| *b == b'\n') {
+            self.prompted = self.prompted.max(prompt(line, read_at));
+            if let Some(record) = counted_claude(line, true) {
+                self.counted.push(record);
+            }
+        }
     }
 }
 
@@ -354,6 +434,34 @@ fn prompt(line: &[u8], read_at: SystemTime) -> Option<SystemTime> {
         _ => false,
     };
     typed.then(|| record.timestamp.as_deref().and_then(Stamp::parse).unwrap_or(read_at))
+}
+
+fn counted_claude(line: &[u8], prompts: bool) -> Option<CountRecord> {
+    let entry: Value = serde_json::from_slice(line).ok()?;
+    let at = counting::timestamp(&entry)?;
+    let usage = &entry["message"]["usage"];
+    if entry["type"] == "assistant" && usage.is_object() && entry["message"]["model"] != SYNTHETIC {
+        return Some(CountRecord {
+            at,
+            id: entry["message"]["id"].as_str()?.into(),
+            usage: CountUsage::Tokens(counting::tokens(
+                usage,
+                "input_tokens",
+                "output_tokens",
+                "cache_read_input_tokens",
+                "cache_creation_input_tokens",
+            )),
+        });
+    }
+    let text = entry["message"]["content"].as_str().or_else(|| entry["content"].as_str()).unwrap_or_default();
+    if prompts && !text.starts_with(SHELL_INPUT) && prompt(line, at).is_some() {
+        let id = entry["uuid"]
+            .as_str()
+            .or_else(|| entry["id"].as_str())
+            .map_or_else(|| format!("{:?}:{}", at, entry["type"]), str::to_string);
+        return Some(CountRecord { at, id, usage: CountUsage::Prompt });
+    }
+    None
 }
 
 enum Mark {
@@ -1131,5 +1239,71 @@ mod tests {
 
             assert_eq!(pane.prompted(), Stamp::parse("2026-10-08T20:23:15.694Z"));
         }
+    }
+}
+
+#[cfg(test)]
+mod counting_records {
+    use super::*;
+    use crate::context::counting::tests::{since, sum};
+    use crate::test_util::{TempDir, wait_until};
+
+    const FIXTURE: &str = include_str!("../tests/fixtures/claude/2.1.296/usage.jsonl");
+
+    #[test]
+    fn repeated_message_usage_and_conversation_resets_count_once() {
+        let mut ledger = Ledger::default();
+        let records: Vec<_> = FIXTURE.lines().filter_map(|line| counted_claude(line.as_bytes(), true)).collect();
+        ledger.apply("a", since(), records.clone());
+        assert_eq!(
+            sum(ledger.take()),
+            (3, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
+        );
+        ledger.apply("clear", since(), Vec::new());
+        ledger.apply("a", since(), records);
+        assert_eq!(sum(ledger.take()), (0, crate::stats::Tokens::default()));
+        assert!(
+            counted_claude(
+                br#"{"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}"#,
+                true
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_subagent_adds_tokens_through_its_own_incremental_tail() {
+        let dir = TempDir::new();
+        let cwd = dir.path().join("synthetic");
+        let transcript = transcript_path(dir.path(), &cwd, "session").expect("path");
+        let sub = transcript.with_extension("").join("subagents/agent-synthetic.jsonl");
+        std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
+        std::fs::write(&transcript, FIXTURE).expect("transcript");
+        std::fs::write(&sub, include_str!("../tests/fixtures/claude/2.1.296/subagent.jsonl")).expect("subagent");
+        let session = crate::activity::Session::parse(
+            &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
+            1,
+        )
+        .expect("session");
+        let claude = Claude { pid: 1, args: Vec::new(), session: Some(session) };
+        let mut pane = Pane { agent: Some((1, since())), kind: Some(agents::CLAUDE), ..Pane::default() };
+        let mut output = 0;
+        wait_until("subagent usage", || {
+            pane.update(Some(dir.path()), Some(&claude));
+            output += sum(pane.take_counted()).1.out;
+            output == 100
+        });
+        pane.update(Some(dir.path()), Some(&claude));
+        assert_eq!(sum(pane.take_counted()).1.out, 0);
+        let cleared = transcript_path(dir.path(), &cwd, "clear-session").expect("path");
+        std::fs::write(cleared, "").expect("clear transcript");
+        let session = crate::activity::Session::parse(
+            &serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
+            1,
+        )
+        .expect("clear session");
+        pane.update(Some(dir.path()), Some(&Claude { pid: 1, args: Vec::new(), session: Some(session) }));
+        pane.update(Some(dir.path()), Some(&claude));
+        assert_eq!(sum(pane.take_counted()).1.out, 0);
     }
 }

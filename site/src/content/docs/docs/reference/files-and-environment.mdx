@@ -15,6 +15,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
 | `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
+| `stats.json` | Local counts of agent work, hourly buckets for 26 weeks and a day, and lifetime totals per agent. Compact versioned JSON, readable only by its owner (`0600`). | Next to `session.json`. |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
 | `server.log` | What the server did, one line per event: windows attaching, commands run and their answers, tabs opened and closed, agents starting and changing status, background jobs and how long they took, errors and the bugs it hit. Never what you type, paste or see in a pane, nor tokens. Readable only by you (mode `0600`). `cornercase logs` prints it; see [Troubleshooting](../../help/troubleshooting/#the-server-log). | Next to `session.json` |
 | `server.log.1` | The previous log: past 8 MiB, `server.log` is moved here and starts over, so the two never take more than 16 MiB. | Next to `session.json` |
@@ -60,9 +61,9 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `JIRA_API_TOKEN` | Jira API token, sent with the email of your Jira settings. Takes precedence over a saved one. |
 | `PLANE_API_KEY` | Plane API key, used with the workspace of your Plane settings. Takes precedence over a saved one. |
 | `HOME` | Expands `~` in paths, and is the base of the default folders. |
-| `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets it too. |
+| `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#usage-and-stats) runs gets it too. |
 | `GEMINI_CLI_HOME` | Gemini CLI's home override; cornercase reads `.gemini/projects.json` and main session JSONL under `.gemini/tmp` in it. Without it, the running agent's `HOME/.gemini`. |
-| `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. The `codex` that the [usage dialog](../../guides/projects-workspaces-tabs/#plan-usage) runs gets the server's. |
+| `CODEX_HOME` | Where each running Codex keeps its files; cornercase reads that process's open rollout in `sessions/` to show its model and context use. Without it, the agent's `HOME/.codex`. The `codex` that the [usage dialog](../../guides/projects-workspaces-tabs/#usage-and-stats) runs gets the server's. |
 | `XDG_CACHE_HOME`, `OPENCODE_MODELS_PATH`, `OPENCODE_DB` | Read from each running opencode: where its list of models is (`$XDG_CACHE_HOME/opencode/models.json`, or `OPENCODE_MODELS_PATH`), and the name of its database when `OPENCODE_DB` sets one. Without them, `~/.cache` and the database it has open whose name starts with `opencode`. |
 | `TERM_PROGRAM`, `LC_TERMINAL`, `TERM`, `KITTY_WINDOW_ID`, `KONSOLE_VERSION` | Recognising your terminal when it doesn't say its name, to send it [desktop notifications](../../guides/projects-workspaces-tabs/#notifications) and [images](../../guides/files/#which-terminals-show-them) it understands. |
 | `TERM_PROGRAM_VERSION`, `GHOSTTY_RESOURCES_DIR`, `VTE_VERSION`, `PTYXIS_VERSION`, `ALACRITTY_WINDOW_ID`, `XTERM_VERSION`, `TERMINAL_EMULATOR`, `INSIDE_EMACS` | More hints about your terminal, for [images](../../guides/files/#which-terminals-show-them), when it doesn't say its name: its version, a terminal built on VTE, JetBrains' terminal, Emacs' vterm. |
@@ -107,3 +108,5 @@ Only these are removed. Claude Code settings such as `CLAUDE_CONFIG_DIR`, `CLAUD
 ### GitHub CLI
 
 cornercase runs `gh` with `GH_PROMPT_DISABLED=1`, `GH_NO_UPDATE_NOTIFIER=1`, `NO_COLOR=1` and `GH_PAGER=cat`, so that it never waits for input or prints colours. Your own `gh` configuration and login are used as they are.
+
+Stats contains only numbers and counting times: no prompts, replies, models, projects, paths or conversation ids. It is saved at most once a minute while changed, and flushed on shutdown and before a restart. Deleting `stats.json` with the server stopped starts counting again; a running server keeps its copy in memory.

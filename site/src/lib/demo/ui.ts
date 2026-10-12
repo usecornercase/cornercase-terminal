@@ -1,3 +1,4 @@
+import { factor, duration, ramp } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
 import type { AgentRow, App } from './app';
@@ -55,12 +56,14 @@ import {
   updateNotes,
   usageArea,
   usageDone,
+  usageShare,
+  usageInner,
   workspaceLayout,
   workspaceRows,
   TODO_LABEL,
   FILES_LABEL,
 } from './layout';
-import { USAGE, type UsageWindow } from './data';
+import { USAGE, STATS, STATS_COLUMNS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
@@ -1091,7 +1094,7 @@ export class Painter {
     const app = this.app;
     const { loading, at } = app.usage;
     const r0 = usageArea(app.cols, app.rows, 0);
-    const width = inner(r0).w;
+    const width = usageInner(r0).w;
     const status = loading ? 'loading…' : at === null ? '' : updated(app.now() - at);
     const lines: Line[] = [];
     for (const section of USAGE) {
@@ -1112,9 +1115,36 @@ export class Painter {
     const r = usageArea(app.cols, app.rows, lines.length);
     this.dialogBackdrop(r);
     this.box(r, 'Usage');
-    const c = inner(r);
-    lines.slice(0, Math.max(0, c.h - 1)).forEach((line, i) => this.line(rect(c.x, c.y + i, c.w, 1), line));
+    const c = usageInner(r);
+    this.tabs(rect(c.x, c.y, c.w, 1), ['Limits', 'Stats'], app.usage.page, (i) => app.usagePage(i));
+    const body = app.usage.page === 1 ? this.statsLines(c.w) : lines;
+    body.slice(0, Math.max(0, c.h - 3)).forEach((line, i) => this.line(rect(c.x, c.y + 2 + i, c.w, 1), line));
+    if (app.usage.page === 1) { const share = usageShare(r); this.span(share.x, share.y, ' share ', this.pill(share, false)); this.region({ r: share, click: () => app.shareStats(), cursor: 'pointer' }); }
     this.submitButton(usageDone(r), DONE, () => app.closeOverlay());
+  }
+
+  private statsLines(width: number): Line[] {
+    const n = STATS.windows['24h'];
+    const headline = `${factor(n)} in the last 24 h · ${duration(n[2])} of work in ${duration(n[3])}`;
+    const lines: Line[] = wrapAll([[seg(headline)]], width).map((row) => row.map((c) => seg(c.ch)));
+    lines.push([]);
+    const col = Math.floor((width - 20) / 3);
+    lines.push([seg(' '.repeat(18) + ['24 h', '7 days', 'total'].map((s) => s.padStart(col)).join(' '), DARK)]);
+    ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache'].forEach((label, i) => {
+      lines.push([seg(label.padEnd(18) + STATS_COLUMNS.map((c) => c[i].padStart(col)).join(' '))]);
+    });
+    lines.push([]);
+    const weeks = Math.min(26, Math.floor(width / 2));
+    for (let row = 0; row < 7; row++) {
+      const line: Line = [seg(' '.repeat(Math.max(0, width - weeks * 2)))];
+      for (let week = weeks - 1; week >= 0; week--) { const level = STATS.levels[week * 7 + 6 - row]; line.push(seg(level === undefined ? '  ' : '■ ', { fg: level === 0 ? this.lineColour : ramp[level] })); }
+      lines.push(line);
+    }
+    const left = `${weeks} weeks · counting for ${STATS.days} days`;
+    const legend: Line = [seg('less · ', DARK), ...[1,2,3,4].map((level) => seg('■ ', { fg: ramp[level] })), seg('more', DARK)];
+    if (left.length + 19 > width) lines.push([seg(left, DARK)], legend);
+    else lines.push([seg(left + ' '.repeat(width - left.length - 19), DARK), ...legend]);
+    return lines;
   }
 
   private confirm({ title, message, submit, extra, note }: ConfirmView): void {

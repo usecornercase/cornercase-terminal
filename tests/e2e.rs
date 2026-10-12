@@ -2226,3 +2226,38 @@ fn an_unknown_terminal_is_told_why_it_shows_no_image() {
     let raw = String::from_utf8_lossy(&app.raw.lock()).into_owned();
     assert!(!raw.contains("\x1b_G") && !raw.contains("1337;File"), "no image bytes reach it");
 }
+
+#[test]
+fn stats_reads_the_local_file_without_starting_a_server() {
+    let session = Session::new();
+    let now = std::time::SystemTime::now();
+    let mut stats = cornercase::stats::Stats::new(now);
+    stats.counted(
+        cornercase::stats::Kind::Claude,
+        cornercase::stats::Counted {
+            prompts: vec![now],
+            tokens: vec![(now, cornercase::stats::Tokens { out: 321, ..cornercase::stats::Tokens::default() })],
+        },
+    );
+    cornercase::stats::save(&session.dir.join("stats.json"), &stats.saved(now)).expect("save stats");
+    let text = session.says(&["stats"]);
+    assert!(text.contains("prompts") && text.contains("321"), "{text}");
+    let json: serde_json::Value = serde_json::from_str(&session.says(&["stats", "--json"])).expect("stats JSON");
+    assert_eq!(json["windows"]["total"]["prompts"], 1);
+    assert_eq!(json["windows"]["total"]["tokens"]["out"], 321);
+    assert_eq!(session.says(&["stats", "--share"]), cornercase::stats::share_link(&stats, now));
+    assert!(!session.socket().exists());
+}
+
+#[test]
+fn stats_asks_the_running_server_for_all_three_output_formats() {
+    let mut app = Harness::start();
+    app.wait_for("a shell prompt", |s| s.contains('$'));
+    let text = app.session.says(&["stats"]);
+    assert!(text.contains("no agent worked") && text.contains("most at once"), "{text}");
+    let json: serde_json::Value = serde_json::from_str(&app.session.says(&["stats", "--json"])).expect("stats JSON");
+    assert_eq!(json["windows"]["total"]["agents"], 0);
+    assert_eq!(json["blocks"].as_array().expect("blocks").len(), 182);
+    assert!(app.session.says(&["stats", "--share"]).starts_with("https://usecornercase.dev/stats/#v1&24h="));
+    assert!(!app.session.dir.join("stats.json").exists());
+}

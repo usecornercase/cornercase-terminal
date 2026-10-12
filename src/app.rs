@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
@@ -686,6 +686,8 @@ pub struct App {
     watched: Option<Instant>,
     awake: Awake,
     usage: usage::State,
+    usage_page: usage::Page,
+    stats: crate::stats::Stats,
     usage_timeout: Duration,
     confirm_within: Duration,
     todos: Todos,
@@ -794,6 +796,8 @@ impl App {
             watched: None,
             awake: Awake::new(awake::tools()),
             usage: usage::State::default(),
+            usage_page: usage::Page::default(),
+            stats: crate::stats::Stats::new(SystemTime::now()),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
             todos: Todos::default(),
@@ -979,6 +983,9 @@ impl App {
     fn watch_agents(&mut self, now: Instant) {
         let visible = self.visible_tab();
         let read = self.watched.is_none_or(|at| now.duration_since(at) >= WATCH_AGENTS_EVERY);
+        let elapsed = self.watched.map_or(Duration::ZERO, |at| now.saturating_duration_since(at));
+        let clock = SystemTime::now();
+        let mut samples = Vec::new();
         if read {
             self.watched = Some(now);
         }
@@ -995,12 +1002,26 @@ impl App {
                     let seen = visible == Some(tab.id);
                     for term in &mut tab.panes {
                         if read {
+                            let resuming = term.resuming.is_some();
                             let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
                             let notice = term.agent.update(activity, seen, now);
                             let state = term.agent.state();
+                            if let Some(kind) = term.context.kind().and_then(crate::stats::Kind::of)
+                                && let Some((pid, _)) = term.context.agent()
+                            {
+                                self.stats.counted(kind, term.context.take_counted());
+                                samples.push(crate::stats::Sample {
+                                    pane: term.id,
+                                    kind,
+                                    pid,
+                                    status: term.agent.status(),
+                                    background: term.agent.background_shell(),
+                                    resuming,
+                                });
+                            }
                             if state != before {
                                 log::info!(
                                     "activity",
@@ -1029,6 +1050,10 @@ impl App {
                     }
                 }
             }
+        }
+        if read {
+            self.stats.sample(clock, elapsed, &samples);
+            self.stats.prune(clock);
         }
         for (agent, status, project, workspace) in notices {
             self.notify(&agent, status, project, workspace);
@@ -1836,6 +1861,9 @@ impl App {
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
+            Some(Overlay::Usage) => {
+                self.usage_key(key);
+            }
             Some(Overlay::Search(_)) => self.search_key(key, area),
             None if self.todo_typing() => self.todo_key(key, area),
             None if self.files_typing() => self.files_key(key, area),
@@ -3773,9 +3801,19 @@ impl App {
             return self.update_mouse(ev, pos, area);
         }
         if matches!(self.overlay, Some(Overlay::Usage)) {
-            let done = ui::usage_done(area, &self.usage_view());
-            if ev.kind == MouseEventKind::Down(MouseButton::Left) && done.contains(pos) {
-                self.overlay = None;
+            if ev.kind == MouseEventKind::Down(MouseButton::Left) {
+                let view = self.usage_view();
+                if ui::usage_done(area, &view).contains(pos) {
+                    self.overlay = None;
+                } else if let Some(i) = ui::usage_tabs(area, &view).iter().position(|r| r.contains(pos)) {
+                    self.switch_usage(if i == 0 { usage::Page::Limits } else { usage::Page::Stats });
+                } else if view.page == usage::Page::Stats
+                    && !view.stats.empty
+                    && ui::usage_share(area, &view).contains(pos)
+                {
+                    self.host_writes.push(clipboard::osc52(&crate::stats::share_link(&self.stats, SystemTime::now())));
+                    self.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
+                }
             }
             return Ok(());
         }
@@ -4262,6 +4300,12 @@ impl App {
 
     fn open_usage(&mut self) {
         self.overlay = Some(Overlay::Usage);
+        if self.usage_page == usage::Page::Limits {
+            self.probe_usage();
+        }
+    }
+
+    fn probe_usage(&mut self) {
         let installed: Vec<usage::Agent> = usage::Agent::ALL
             .into_iter()
             .filter(|agent| agents::installed(&agents::command(&self.config, agent.kind())))
@@ -4280,7 +4324,37 @@ impl App {
     }
 
     fn usage_view(&self) -> ui::Usage {
-        self.usage.view(Instant::now(), issues::now())
+        let mut view = self.usage.view(Instant::now(), issues::now());
+        view.page = self.usage_page;
+        view.stats = self.stats_view(SystemTime::now());
+        view
+    }
+    fn switch_usage(&mut self, page: usage::Page) {
+        if self.usage_page == page {
+            return;
+        }
+        self.usage_page = page;
+        if page == usage::Page::Limits {
+            self.probe_usage();
+        }
+    }
+    fn usage_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Tab | KeyCode::BackTab | KeyCode::Left | KeyCode::Right => {
+                self.switch_usage(self.usage_page.switched());
+            }
+            KeyCode::Enter | KeyCode::Esc => self.overlay = None,
+            _ => {}
+        }
+    }
+    pub fn stats_view(&self, now: SystemTime) -> crate::stats::View {
+        self.stats.view(now)
+    }
+    pub fn set_stats(&mut self, stats: crate::stats::Stats) {
+        self.stats = stats;
+    }
+    pub fn stats_saved(&self, now: SystemTime) -> crate::stats::Saved {
+        self.stats.saved(now)
     }
 
     fn open_settings(&mut self) {
@@ -5629,6 +5703,16 @@ mod tests {
                 app.handle_event(ev, AREA).expect("handle event");
             }
             screen(app).contains(&format!("{word}-typed"))
+        });
+    }
+
+    fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
+        wait_until(what, || {
+            while let Ok(ev) = rx.try_recv() {
+                app.handle_event(ev, AREA).expect("handle event");
+            }
+            app.refresh(Instant::now());
+            cond(app)
         });
     }
 
@@ -9154,6 +9238,28 @@ rm -f "$1/sessions/$$.json"
                     app.refresh(Instant::now());
                     squeezed(&screen(app)).contains(&squeezed(&format!("resumed: {line}")))
                 });
+            }
+
+            #[test]
+            fn an_agent_restored_in_its_conversation_is_not_a_new_start() {
+                let (mut app, rx, _dirs) = app_with(1);
+                let claude = Claude::running(ANSWERING_CLAUDE);
+                claude.start(&mut app);
+                let saved = remembered(&mut app, &rx);
+                assert_eq!(app.stats_view(SystemTime::now()).windows["total"].counts.agents, 1);
+                claude.signal("quit");
+                watch_until(&mut app, &rx, "old agent exits", |a| !runs(a, agents::CLAUDE));
+                std::fs::remove_file(claude.dir.path().join("quit")).expect("clear quit");
+                let (mut back, rx, _dirs) = app_with(0);
+                back.config.agent_commands.insert(agents::CLAUDE.into(), claude.script.display().to_string());
+                back.config.agent_args.insert(agents::CLAUDE.into(), vec![claude.dir.path().display().to_string()]);
+                back.claude_dir = Some(claude.dir.path().to_path_buf());
+                assert!(back.restore(&saved, AREA));
+                refreshing(&mut back, &rx, "resumed conversation", |a| {
+                    a.term().and_then(|t| t.context.conversation()).is_some()
+                });
+                assert_eq!(back.stats_view(SystemTime::now()).windows["total"].counts.agents, 0);
+                claude.signal("quit");
             }
 
             #[test]
@@ -12950,9 +13056,47 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn stats_opens_without_a_probe_and_tab_hits_switch_to_limits() {
+            let (mut app, _rx, dir) = with_claude("echo run > \"$(dirname \"$0\")/runs\"\nexit 1");
+            click(&mut app, areas().usage.as_position());
+            assert_eq!(shown(&app).expect("dialog").page, usage::Page::Stats);
+            assert!(sections(&app).is_empty());
+            assert!(!dir.path().join("runs").exists());
+            let view = shown(&app).expect("dialog");
+            click(&mut app, ui::usage_tabs(AREA, &view)[0].as_position());
+            assert_eq!(shown(&app).expect("dialog").page, usage::Page::Limits);
+            assert_eq!(sections(&app).len(), 1);
+            send_key(&mut app, KeyCode::Right, KeyModifiers::NONE);
+            assert_eq!(shown(&app).expect("dialog").page, usage::Page::Stats);
+            send_key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
+            assert_eq!(shown(&app).expect("dialog").page, usage::Page::Limits);
+            send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+            app.open_usage();
+            assert_eq!(shown(&app).expect("dialog").page, usage::Page::Limits);
+        }
+
+        #[test]
+        fn sharing_copies_only_after_something_was_counted() {
+            let (mut app, _rx, _dir) = with_agents(&[]);
+            app.open_usage();
+            let view = shown(&app).expect("dialog");
+            click(&mut app, ui::usage_share(AREA, &view).as_position());
+            assert_eq!(app.take_host_writes(), Vec::<Vec<u8>>::new());
+            let now = SystemTime::now();
+            app.stats
+                .counted(crate::stats::Kind::Claude, crate::stats::Counted { prompts: vec![now], tokens: Vec::new() });
+            let expected = crate::stats::share_link(&app.stats, now);
+            let view = shown(&app).expect("dialog");
+            click(&mut app, ui::usage_share(AREA, &view).as_position());
+            assert_eq!(app.take_host_writes(), [clipboard::osc52(&expected)]);
+            assert_eq!(toast(&app), Some("copied a link to your stats"));
+        }
+
+        #[test]
         fn the_button_shows_loading_then_the_windows() {
             let (mut app, rx, _dir) = with_claude(&format!("read -r a\nread -r b\necho '{ANSWER}'"));
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             let loading: Vec<(String, String)> = sections(&app).into_iter().map(|s| (s.title, s.status)).collect();
             assert_eq!((loading, windows(&app)), (vec![("Claude Code".into(), "loading…".into())], Vec::new()));
 
@@ -12967,6 +13111,7 @@ rm -f "$1/sessions/$$.json"
                 (agents::CODEX, &format!("read -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'")),
             ]);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             pump_until(&mut app, &rx, "both answers arrive", |a| windows(a).len() == 2);
             assert_eq!(
                 (titles(&app), windows(&app)),
@@ -12982,6 +13127,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx, _dir) = with_agents(&[(agents::CODEX, "exec sleep 30")]);
             app.usage_timeout = Duration::from_millis(200);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             assert_eq!(titles(&app), ["Codex"]);
         }
 
@@ -12989,6 +13135,7 @@ rm -f "$1/sessions/$$.json"
         fn without_any_agent_installed_each_one_says_why() {
             let (mut app, rx, _dir) = with_agents(&[]);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             pump_until(&mut app, &rx, "both probes fail", |a| errors(a).len() == 2);
             let errors = errors(&app);
             assert!(errors[0].starts_with("usage unavailable: could not run /nonexistent/claude"), "{errors:?}");
@@ -13000,6 +13147,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, rx, _dir) = with_claude("exec sleep 30");
             app.usage_timeout = Duration::from_millis(200);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
             assert_eq!(errors(&app), ["usage unavailable: claude did not answer in time"]);
         }
@@ -13009,8 +13157,10 @@ rm -f "$1/sessions/$$.json"
             let (mut app, rx, dir) = with_claude("echo run >> \"$(dirname \"$0\")/runs\"\nexec sleep 30");
             app.usage_timeout = Duration::from_millis(300);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             pump_until(&mut app, &rx, "the probe times out", |a| !errors(a).is_empty());
             let runs = std::fs::read_to_string(dir.path().join("runs")).expect("the probe ran");
             assert_eq!(runs.lines().count(), 1);
@@ -13022,6 +13172,7 @@ rm -f "$1/sessions/$$.json"
         fn done_and_escape_close_it(#[case] button: bool) {
             let (mut app, _rx, _dir) = with_claude("exit 1");
             click(&mut app, areas().usage.as_position());
+            app.switch_usage(usage::Page::Limits);
             if button {
                 let usage = shown(&app).expect("the modal is open");
                 click(&mut app, ui::usage_done(AREA, &usage).as_position());
@@ -14802,16 +14953,19 @@ d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za
 mkdir -p "$t"
 state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
 state idle
+n=0
 while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
   case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
   case "$line" in *survey*)
     printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
     printf '────────────\n❯ '; IFS= read -r line; [ "$line" = 0 ] && continue ;;
   esac
-  printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
+  n=$((n + 1))
+  printf '{"type":"user","uuid":"p%s","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy
   while [ ! -e "$d/finish" ]; do sleep 0.02; done
   rm -f "$d/finish"
+  printf '{"type":"assistant","timestamp":"%s.999Z","message":{"id":"m%s","model":"synthetic","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
   case "$line" in
     *ask*) state waiting; read answer ;;
     *background*) state shell
@@ -15454,16 +15608,6 @@ rm -f "$s"
             }
         }
 
-        fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
-            wait_until(what, || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
-                app.refresh(Instant::now());
-                cond(app)
-            });
-        }
-
         mod gemini {
             use super::*;
             use crate::test_util::FakeGemini;
@@ -15643,6 +15787,87 @@ rm -f "$s"
 
                 fn answered(&mut self, what: &str) -> Response {
                     answered(&mut self.app, &self.rx, what)
+                }
+            }
+
+            mod work_stats {
+                use super::*;
+
+                fn sample(agent: &mut Agent) {
+                    let now = Instant::now();
+                    agent.app.watched = Some(now.checked_sub(Duration::from_secs(1)).expect("previous read"));
+                    agent.app.watch_agents(now);
+                }
+                fn total(agent: &Agent) -> crate::stats::Window {
+                    agent.app.stats_view(SystemTime::now()).windows["total"].clone()
+                }
+
+                #[test]
+                fn working_grows_time_and_finishing_counts_a_turn_and_the_recorded_tokens() {
+                    let mut agent = Agent::new();
+                    let id = agent.start(Some("synthetic work"));
+                    refreshing(&mut agent.app, &agent.rx, "agent working", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Working)
+                    });
+                    let before = total(&agent);
+                    sample(&mut agent);
+                    let working = total(&agent);
+                    assert!(working.counts.agent_seconds >= before.counts.agent_seconds + 0.9);
+                    agent.finish();
+                    refreshing(&mut agent.app, &agent.rx, "agent idle", |a| {
+                        pane(a, id).agent.status() != Some(activity::Status::Working)
+                    });
+                    let after = total(&agent);
+                    assert_eq!(
+                        (after.counts.agents, after.counts.prompts, after.counts.turns, after.counts.tokens.out),
+                        (1, 1, 1, 50)
+                    );
+                    assert_eq!(after.counts.tokens.input, 20);
+                    assert_eq!(after.counts.tokens.cache_write, 10);
+                    let value = value(&mut agent.app, None, Command::Stats(wire::Stats {}));
+                    assert_eq!(value["windows"]["total"]["tokens"]["cache_read"], 200);
+                }
+
+                #[test]
+                fn background_shells_stop_agent_time() {
+                    let mut agent = Agent::new();
+                    let id = agent.start(Some("background"));
+                    refreshing(&mut agent.app, &agent.rx, "agent working", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Working)
+                    });
+                    agent.finish();
+                    refreshing(&mut agent.app, &agent.rx, "background shell", |a| pane(a, id).agent.background_shell());
+                    sample(&mut agent);
+                    let before = total(&agent);
+                    sample(&mut agent);
+                    assert_eq!(total(&agent).counts.agent_seconds, before.counts.agent_seconds);
+                    assert_eq!(total(&agent).counts.turns, 1);
+                    agent.finish();
+                }
+
+                #[test]
+                fn waiting_and_done_in_an_unseen_tab_add_waited_time() {
+                    let mut agent = Agent::new();
+                    let id = agent.start(Some("please ask"));
+                    agent.finish();
+                    refreshing(&mut agent.app, &agent.rx, "waiting", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Waiting)
+                    });
+                    let before = total(&agent).counts.waited_seconds;
+                    sample(&mut agent);
+                    assert!(total(&agent).counts.waited_seconds >= before + 0.9);
+                    done(now(
+                        &mut agent.app,
+                        None,
+                        Command::Keys(wire::Keys { pane: Some(id), tab: None, keys: vec!["y".into(), "enter".into()] }),
+                    ));
+                    refreshing(&mut agent.app, &agent.rx, "unseen done", |a| {
+                        pane(a, id).agent.status() == Some(activity::Status::Done)
+                    });
+                    sample(&mut agent);
+                    let before = total(&agent).counts.waited_seconds;
+                    sample(&mut agent);
+                    assert!(total(&agent).counts.waited_seconds >= before + 0.9);
                 }
             }
 

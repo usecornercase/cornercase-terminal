@@ -40,7 +40,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | The line above the agents section | Makes it taller or shorter. |
 | Double-click | That line | Gives it a third of the room again. |
 | Click | `Agents ›` in the [compact](../../guides/small-terminals/#the-menu) projects menu | Shows the agents. |
-| Click | `Settings`, `Usage`, `Quit`, `Issues` | Opens the settings, shows your [Claude Code and Codex plan usage](../../guides/projects-workspaces-tabs/#plan-usage), detaches, opens the issue browser. |
+| Click | `Settings`, `Usage`, `Quit`, `Issues` | Opens the settings, shows your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats), detaches, opens the issue browser. |
 | Click | `Changes` (or `±` in the compact bar) | Opens or closes the [changes panel](../../guides/changes/). Only in git workspaces. |
 | Click | `Files` (or `▤` in the compact bar) | Opens or closes the [files panel](../../guides/files/). |
 | Click | `TODO` (or `☐` in the compact bar) | Opens or closes the [TODO panel](../../guides/todo/). |
@@ -159,7 +159,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `g` `d` | Opens or closes the [changes panel](../../guides/changes/), with its filter ready to type. |
 | `g` `b` | Opens the changes panel and the list of branches to compare with. |
 | `w` `n` / `w` `r` / `w` `x` | New workspace / renames the workspace / closes it, after asking (a worktree asks to remove it). |
-| `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, the plan usage. |
+| `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `q` | Quits the window. Everything keeps running, as with **Quit**. |
 
 `Esc`, or a key the menu doesn't list, closes it without doing anything, and that key doesn't reach your program. Press the prefix twice to send the prefix itself to the program in the pane. The prefix works while the pane, the files search, the changes filter or a TODO field has the keys, but not inside a dialog, which has its own keys below.
@@ -202,3 +202,5 @@ Everything else goes to the program in the active pane, encoded like a modern te
 <Aside type="note">
 Programs inside cornercase never receive key releases, even with the kitty protocol. That matters only for the rare program that reacts to them, such as some games.
 </Aside>
+
+In Usage, **Limits** and **Stats** switch by click, `Tab`, `Shift+Tab`, `←` or `→`. It opens on Stats and remembers the last tab for the server run. `Enter`, `Esc`, `done` or a click outside closes it.

@@ -39,6 +39,7 @@ pub mod settings;
 pub mod shortcuts;
 pub mod split;
 pub mod state;
+pub mod stats;
 pub mod syntax;
 pub mod term;
 pub mod todo;

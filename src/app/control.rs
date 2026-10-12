@@ -406,6 +406,7 @@ impl App {
         let caller = request.caller.filter(|_| request.server.as_deref() == Some(control::server_token()));
         match request.command {
             Command::Status(_) => Ok(Some(json(&self.report(caller)))),
+            Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Open(open) => self.open_request(&open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),

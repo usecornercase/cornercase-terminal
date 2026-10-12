@@ -151,7 +151,7 @@ export const page: Page = {
         items: [
           ['Status, modelo e contexto', 'Trabalhando, precisa de você ou pronto, embaixo de cada aba. E o modelo e quanto do contexto já foi usado.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
-          ['Uso do plano', 'Seus limites do Claude e do Codex, em um só diálogo.'],
+          ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
           ['Worktrees, organizados', 'Cada frente de trabalho ganha seu próprio branch e pasta. Os criados em outro lugar aparecem também.'],
         ],
       },
@@ -232,7 +232,7 @@ export const demo: Demo = {
     picker: 'Escolha uma pasta. Digite para filtrar, Enter para entrar, open para adicioná-la.',
     opened: (folder) => `${folder} aberto. Cada projeto guarda seus próprios workspaces e abas.`,
     search: 'Digite qualquer coisa: projetos, branches, abas. Enter leva você até lá.',
-    usage: 'Quanto resta dos seus planos do Claude e do Codex, de relance. Sem gastar tokens.',
+    usage: 'O trabalho dos seus agentes em paralelo e os limites dos seus planos do Claude e do Codex. Tudo em Usage.',
     settings: 'Mude o que quiser, é salvo na hora. Experimente Agents → default agent.',
     restart: (resume) =>
       `De verdade, o servidor reinicia e cada aba volta com um shell novo${resume ? ', com os agentes de volta às suas conversas' : ''}. A demo mantém os seus rodando.`,

@@ -292,6 +292,16 @@ pub enum Command {
     KillServer,
     #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
     Logs(LogsArgs),
+    #[command(
+        about = "Show work by agents running in cornercase",
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json.
+
+Examples:
+  cornercase stats
+  cornercase stats --json
+  cornercase stats --share"
+    )]
+    Stats(StatsArgs),
     #[command(hide = true)]
     Server,
     #[command(hide = true)]
@@ -799,6 +809,7 @@ pub fn run(cli: Cli) -> Result<bool> {
             }
         }
         Command::Logs(args) => return print_logs(&args),
+        Command::Stats(args) => return print_stats(&args),
         Command::Server => server::run()?,
         Command::Proxy => remote::proxy()?,
     }
@@ -1620,4 +1631,33 @@ mod tests {
             assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
         }
     }
+}
+
+#[derive(Debug, Args)]
+pub struct StatsArgs {
+    #[arg(long, conflicts_with = "share", help = "Print every counter and the heatmap blocks as JSON")]
+    json: bool,
+    #[arg(long, help = "Print a link to a card made locally in the browser")]
+    share: bool,
+}
+
+fn print_stats(args: &StatsArgs) -> Result<bool> {
+    let now = std::time::SystemTime::now();
+    let path = crate::stats::path(&crate::state::path());
+    let view = match ask("stats", control::Command::Stats(control::Stats {})) {
+        Ok(value) => {
+            let mut view: crate::stats::View = answer(value)?;
+            view.days = log::Stamp::parse(&view.since)
+                .map_or(0, |since| now.duration_since(since).unwrap_or_default().as_secs() / 86_400);
+            view
+        }
+        Err(Error::NoServer) => crate::stats::load(&path, now).view(now),
+        Err(e) => return Err(e),
+    };
+    if args.json {
+        print_json(&view)?;
+    } else {
+        print_out(&(if args.share { view.share_link() } else { view.text() } + "\n"))?;
+    }
+    Ok(true)
 }

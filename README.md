@@ -79,7 +79,7 @@ cornercase read --pane "$pane" --last-message   # what it said, from its own tra
 - **Splits.** Right-click a pane to split it right or down, drag the dividers to resize, right-drag a pane onto another to move it. [Panes and splits](https://usecornercase.dev/docs/guides/panes-and-splits/)
 - **Search.** Any group, project, workspace or tab by name, as you type. [Search](https://usecornercase.dev/docs/guides/search/)
 - **TODO list.** One list beside the pane for what comes next. [TODO list](https://usecornercase.dev/docs/guides/todo/)
-- **Plan usage.** ` Usage ` shows how much of your Claude Code and Codex limits is left. [Plan usage](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#plan-usage)
+- **Usage and stats.** ` Usage ` shows your agents’ work in parallel, a heatmap and Claude Code/Codex plan limits. Copy a link to a shareable stats card. [Usage and stats](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/#usage-and-stats)
 - **Remote machines.** `cornercase remote <host>` keeps the window on your laptop and the shells and agents on another machine, over your own `ssh`, and reconnects by itself when the connection drops. [Remote machines](https://usecornercase.dev/docs/guides/remote/)
 - **A real terminal inside.** Panes run on [libghostty-vt](https://github.com/ghostty-org/ghostty), Ghostty's terminal core, so nvim, fzf, htop and full-screen agents work as expected, in your terminal's own colours.
 - **Settings.** ` Settings ` in the sidebar; every change is saved at once to `~/.config/cornercase/config.json`. [Settings and config.json](https://usecornercase.dev/docs/reference/configuration/) · [Files and environment](https://usecornercase.dev/docs/reference/files-and-environment/)

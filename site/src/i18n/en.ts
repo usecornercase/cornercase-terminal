@@ -149,7 +149,7 @@ export const page = {
         items: [
           ['Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.'],
           ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.'],
-          ['Plan usage', 'Your Claude and Codex limits, in one dialog.'],
+          ['Usage and stats', 'Your plan limits and the work your agents did in parallel.'],
           ['Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.'],
         ],
       },
@@ -232,7 +232,7 @@ export const demo = {
     picker: 'Pick a folder. Type to filter, Enter to go in, open to add it.',
     opened: (folder: string) => `Opened ${folder}. Each project keeps its own workspaces and tabs.`,
     search: 'Type anything: projects, branches, tabs. Enter takes you there.',
-    usage: 'How much of your Claude and Codex plans is left, at a glance. No tokens spent.',
+    usage: 'Your agents’ work in parallel, plus your Claude and Codex plan limits. All in Usage.',
     settings: 'Change anything, it’s saved at once. Try Agents → default agent.',
     restart: (resume: boolean) =>
       `For real, the server starts again and every tab comes back with a new shell${resume ? ', agents back in their conversations' : ''}. The demo keeps yours running.`,

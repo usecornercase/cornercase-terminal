@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
 
 pane_in() {
   cc status --json | node -e '
@@ -21,7 +21,7 @@ ws_in() {
 }
 
 toasts_gone() {
-  log="$CC_HOME/.local/state/cornercase/server.log"
+  log="$CC_RUN/server.log"
   i=0
   while [ "$(grep -c 'activity: notify' "$log")" -lt "$1" ]; do
     i=$((i + 1))
@@ -655,6 +655,7 @@ screen_settings_ui() {
 screen_usage() {
   cc_s1
   cc_click 'Usage'
+  cc_click 'Limits'
   cc_wait 'resets in' 15
   cc_wait 'max plan'
   cc_wait 'plus plan'
@@ -679,4 +680,21 @@ screen_remote_reconnecting() {
   cc_wait 'Connection refused' 30
   cc_wait 'connecting…'
   cc_shot remote-reconnecting
+}
+
+
+screen_usage_stats() {
+  node --input-type=module <<'JS'
+import fs from 'node:fs';
+import path from 'node:path';
+const now = Math.floor(Date.now() / 1000), hour = Math.floor(now / 3600);
+const total = { by_agent: [{ agents: 212, prompts: 3118, turns: 2904, agent_ms: 1116000000, waited_ms: 100800000, tokens: { in: 90000000, out: 24000000, cache_read: 2400000000, cache_write: 0 } }, ...Array.from({ length: 3 }, () => ({ agents: 0, prompts: 0, turns: 0, agent_ms: 0, waited_ms: 0, tokens: { in: 0, out: 0, cache_read: 0, cache_write: 0 } }))], busy_ms: 300000000, most_at_once: 9 };
+const hours = Array.from({ length: 182 }, (_, i) => [hour - i*24, [[i === 0 ? 4 : 4, i === 0 ? 38 : 61, i === 0 ? 35 : 57, i === 0 ? 22320000 : 20910000 + (i%4)*1000000, i === 0 ? 1320000 : 1980000, i === 0 ? 1200000 : 1630000, i === 0 ? 410000 : 448000, i === 0 ? 38000000 : 45000000, 0], ...Array.from({ length: 3 }, () => Array(9).fill(0))], i === 0 ? 6600000 : 6200000, i === 0 ? 5 : 7]);
+const file = path.join(process.env.CC_RUN, 'stats.json');
+fs.writeFileSync(file, JSON.stringify({ version: 1, since: now - 182 * 86400, total, hours }), { mode: 0o600 });
+JS
+  cc_s1
+  cc_click 'Usage'
+  cc_wait 'in parallel'
+  cc_shot usage-stats
 }

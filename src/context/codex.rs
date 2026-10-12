@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
+use super::counting::{self, Record, Usage};
 use super::discovery::{self, folder};
 use super::jsonl::{Tail, head};
 use super::{Context, percent};
@@ -110,11 +111,21 @@ pub(super) struct Rollout {
     percent: Option<u16>,
     turn: bool,
     prompted: Option<SystemTime>,
+    pub counted: Vec<Record>,
 }
 
 impl Rollout {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, tail: Tail::default(), id: None, model: None, percent: None, turn: false, prompted: None }
+        Self {
+            path,
+            tail: Tail::default(),
+            id: None,
+            model: None,
+            percent: None,
+            turn: false,
+            prompted: None,
+            counted: Vec::new(),
+        }
     }
 
     pub fn context(&self) -> Option<Context> {
@@ -172,6 +183,9 @@ impl Rollout {
             self.percent = None;
             return;
         };
+        if let Some(record) = counted(&entry) {
+            self.counted.push(record);
+        }
         let payload = &entry["payload"];
         match entry["type"].as_str() {
             Some("turn_context") => self.set_model(payload.get("model")),
@@ -204,6 +218,31 @@ impl Rollout {
             _ => {}
         }
     }
+}
+
+fn counted(entry: &Value) -> Option<Record> {
+    if entry["type"] != "event_msg" {
+        return None;
+    }
+    let at = counting::timestamp(entry)?;
+    let payload = &entry["payload"];
+    let usage = match payload["type"].as_str()? {
+        "item_completed" if payload["item"]["type"] == "UserMessage" => Usage::Prompt,
+        "token_count" => {
+            let info = payload.get("info")?.as_object()?;
+            let convert = |v: &Value| {
+                let mut tokens = counting::tokens(v, "input_tokens", "output_tokens", "cached_input_tokens", "unused");
+                tokens.input = tokens.input.saturating_sub(tokens.cache_read);
+                tokens
+            };
+            Usage::Cumulative {
+                total: convert(info.get("total_token_usage")?),
+                last: convert(info.get("last_token_usage")?),
+            }
+        }
+        _ => return None,
+    };
+    Some(Record { at, id: payload["item"]["id"].as_str().map_or_else(|| format!("{at:?}"), str::to_string), usage })
 }
 
 #[cfg(test)]
@@ -586,5 +625,30 @@ mod tests {
         assert_eq!(rollout_path(agent.pid(), since), None);
         drop(second);
         assert_eq!(rollout_path(agent.pid(), since), Some(fake.rollout.clone()));
+    }
+}
+
+#[cfg(test)]
+mod counting_records {
+    use super::*;
+    use crate::context::counting::{
+        Ledger,
+        tests::{since, sum},
+    };
+
+    #[test]
+    fn cumulative_usage_adds_deltas_and_smaller_totals_start_a_new_baseline() {
+        let records: Vec<_> = include_str!("../../tests/fixtures/codex/0.160.0/usage.jsonl")
+            .lines()
+            .filter_map(|s| counted(&serde_json::from_str(s).expect("record")))
+            .collect();
+        let mut ledger = Ledger::default();
+        ledger.apply("thread", since(), records.clone());
+        assert_eq!(sum(ledger.take()).1, crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 });
+        ledger.apply("thread", since(), records.clone());
+        assert_eq!(sum(ledger.take()).1.out, 0);
+        let mut first = Ledger::default();
+        first.apply("thread", since(), records.into_iter().skip(1).take(1));
+        assert_eq!(sum(first.take()).1.out, 50);
     }
 }

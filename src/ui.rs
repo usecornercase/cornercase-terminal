@@ -15,6 +15,7 @@ pub mod changes;
 pub mod files;
 pub mod keys;
 pub mod remote;
+mod stats;
 pub mod tab_bar;
 pub mod todo;
 
@@ -1757,19 +1758,38 @@ pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
 }
 
 pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
-    let width = area.width.saturating_sub(4).min(FORM_WIDTH);
-    let body = form_inner(Rect::new(0, 0, width, 3)).width;
-    let lines = u16::try_from(usage_lines((Color::Reset, Color::Reset), usage, body).len()).unwrap_or(u16::MAX);
-    let height = lines.saturating_add(3).min(area.height);
+    let width = area.width.saturating_sub(2).min(FORM_WIDTH);
+    let body = usage_inner(Rect::new(0, 0, width, 3)).width;
+    let lines = u16::try_from(usage_lines((Color::Reset, Color::Reset), usage, body).len().max(stats::HEIGHT))
+        .unwrap_or(u16::MAX);
+    let height = lines.saturating_add(5).min(area.height);
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
 
-fn usage_rows(usage: Rect) -> [Rect; 2] {
-    Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(form_inner(usage))
+fn usage_inner(usage: Rect) -> Rect {
+    if usage.width < 49 {
+        Rect::new(usage.x + 1, usage.y + 1, usage.width.saturating_sub(2), usage.height.saturating_sub(2))
+    } else {
+        form_inner(usage)
+    }
+}
+
+fn usage_rows(usage: Rect) -> [Rect; 3] {
+    let [tabs, _, body, buttons] =
+        Layout::vertical([Constraint::Length(1), Constraint::Length(1), Constraint::Min(0), Constraint::Length(1)])
+            .areas(usage_inner(usage));
+    [tabs, body, buttons]
+}
+
+pub fn usage_tabs(area: Rect, usage: &Usage) -> Vec<Rect> {
+    tabs_in(usage_rows(usage_area(area, usage))[0], &crate::usage::Page::NAMES)
+}
+pub fn usage_share(area: Rect, usage: &Usage) -> Rect {
+    buttons_in(usage_rows(usage_area(area, usage))[2], "share", crate::settings::DONE)[0]
 }
 
 pub fn usage_done(area: Rect, usage: &Usage) -> Rect {
-    update_button(usage_rows(usage_area(area, usage))[1], crate::settings::DONE)
+    update_button(usage_rows(usage_area(area, usage))[2], crate::settings::DONE)
 }
 
 pub fn picker_list(picker: Rect) -> Rect {
@@ -2180,6 +2200,8 @@ pub struct UsageSection {
 }
 
 pub struct Usage {
+    pub page: crate::usage::Page,
+    pub stats: crate::stats::View,
     pub sections: Vec<UsageSection>,
 }
 
@@ -3159,8 +3181,17 @@ fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     let r = usage_area(f.area(), usage);
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, USAGE_LABEL), r);
-    let [body, _] = usage_rows(r);
-    f.render_widget(Paragraph::new(usage_lines((view.muted, view.line()), usage, body.width)), body);
+    let [_, body, _] = usage_rows(r);
+    draw_tabs(f, view, &usage_tabs(f.area(), usage), &crate::usage::Page::NAMES, usage.page.index());
+    let lines = if usage.page == crate::usage::Page::Stats {
+        stats::lines(view, &usage.stats, body.width)
+    } else {
+        usage_lines((view.muted, view.line()), usage, body.width)
+    };
+    f.render_widget(Paragraph::new(lines), body);
+    if usage.page == crate::usage::Page::Stats && !usage.stats.empty {
+        draw_secondary(f, view, usage_share(f.area(), usage), "share");
+    }
     draw_submit(f, view, usage_done(f.area(), usage), crate::settings::DONE);
 }
 
@@ -6813,7 +6844,53 @@ mod tests {
         }
 
         fn usage() -> Usage {
-            Usage { sections: vec![claude_usage()] }
+            Usage {
+                page: crate::usage::Page::Limits,
+                stats: crate::stats::View::default(),
+                sections: vec![claude_usage()],
+            }
+        }
+
+        fn stats_usage(empty: bool) -> Usage {
+            let now = std::time::UNIX_EPOCH + std::time::Duration::from_hours(10_000);
+            let stats = if empty { crate::stats::Stats::new(now) } else { crate::stats::tests::example(now) };
+            Usage { page: crate::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
+        }
+
+        #[test]
+        fn renders_work_stats_in_the_wide_dialog() {
+            insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(false))), W, 38).backend());
+        }
+        #[test]
+        fn renders_work_stats_at_phone_width() {
+            insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(false))), 46, 38).backend());
+        }
+        #[test]
+        fn renders_stats_before_any_work_was_counted() {
+            insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(true))), W, 38).backend());
+        }
+        #[rstest]
+        #[case::dark(false, [60, 97, 141, 99])]
+        #[case::light(true, [189, 141, 99, 55])]
+        fn the_heatmap_has_a_purple_ramp_for_each_theme(#[case] light: bool, #[case] palette: [u8; 4]) {
+            let mut view = with(Overlay::Usage(stats_usage(false)));
+            view.light = light;
+            for (i, expected) in palette.iter().enumerate() {
+                assert_eq!(stats::colour(&view, u8::try_from(i + 1).expect("level")), Color::Indexed(*expected));
+            }
+            assert_eq!(stats::colour(&view, 0), view.line());
+            insta::assert_snapshot!(
+                format!("stats_palette_{}", if light { "light" } else { "dark" }),
+                render_sized(&view, W, 38).backend()
+            );
+        }
+        #[test]
+        fn usage_tabs_and_border_share_the_drawn_geometry() {
+            let usage = stats_usage(false);
+            let area = usage_area(AREA, &usage);
+            assert_eq!(usage_tabs(AREA, &usage), tabs_in(usage_rows(area)[0], &crate::usage::Page::NAMES));
+            let corners = corners_of_its_area(&with(Overlay::Usage(usage)));
+            assert_eq!(corners, ("╭".into(), "╯".into()));
         }
 
         const TALL: u16 = 34;
@@ -6825,7 +6902,11 @@ mod tests {
 
         #[test]
         fn renders_one_section_per_agent() {
-            let usage = Usage { sections: vec![claude_usage(), codex_usage()] };
+            let usage = Usage {
+                page: crate::usage::Page::Limits,
+                stats: crate::stats::View::default(),
+                sections: vec![claude_usage(), codex_usage()],
+            };
             insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, TALL).backend());
         }
 
@@ -6843,7 +6924,11 @@ mod tests {
                 windows: Vec::new(),
                 ..codex_usage()
             };
-            let usage = Usage { sections: vec![loading, failed] };
+            let usage = Usage {
+                page: crate::usage::Page::Limits,
+                stats: crate::stats::View::default(),
+                sections: vec![loading, failed],
+            };
             insta::assert_snapshot!(render(&with(Overlay::Usage(usage))).backend());
         }
 
@@ -6853,7 +6938,7 @@ mod tests {
         #[case::critical(2, Color::Red)]
         fn usage_bars_take_the_severity_colour(#[case] window: u16, #[case] expected: Color) {
             let t = render(&with(Overlay::Usage(usage())));
-            let body = usage_rows(usage_area(AREA, &usage()))[0];
+            let body = usage_rows(usage_area(AREA, &usage()))[1];
             let bar = Position::new(body.x, body.y + 3 + window * 3);
             assert_eq!(t.backend().buffer()[bar].fg, expected);
         }
@@ -6861,7 +6946,7 @@ mod tests {
         #[test]
         fn the_rest_of_a_usage_bar_takes_the_line_colour() {
             let t = render(&with(Overlay::Usage(usage())));
-            let body = usage_rows(usage_area(AREA, &usage()))[0];
+            let body = usage_rows(usage_area(AREA, &usage()))[1];
             let bar = Position::new(body.right() - 1, body.y + 3);
             assert_eq!(t.backend().buffer()[bar].fg, DARK_LINE);
         }
@@ -6884,7 +6969,11 @@ mod tests {
 
         #[test]
         fn a_usage_too_tall_for_the_screen_keeps_its_done_button() {
-            let usage = Usage { sections: vec![claude_usage(), codex_usage()] };
+            let usage = Usage {
+                page: crate::usage::Page::Limits,
+                stats: crate::stats::View::default(),
+                sections: vec![claude_usage(), codex_usage()],
+            };
             let r = usage_area(AREA, &usage);
             assert_eq!((r.height, usage_done(AREA, &usage).y), (AREA.height, r.bottom() - 2));
         }

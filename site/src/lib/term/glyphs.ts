@@ -55,7 +55,7 @@ const BLOCKS: Record<string, Box[]> = {
 
 const ROUND = new Set(['╭', '╮', '╯', '╰']);
 
-const SYMBOLS = new Set(['❯', '⌕', '✓', '●', '≡', '→', '←']);
+const SYMBOLS = new Set(['❯', '⌕', '✓', '●', '■', '≡', '→', '←']);
 
 const BRAILLE_DOTS: [number, number, number][] = [
   [0x01, 0, 0], [0x02, 0, 1], [0x04, 0, 2], [0x08, 1, 0],
@@ -138,6 +138,7 @@ function symbol(ch: string, x: number, y: number, cw: number, h: number, lw: num
   const stroke = Math.max(lw * 1.5, cw * 0.13);
   if (ch === '❯') return [{ k: 'path', d: `M${px(0.28)} ${py(0.33)}L${px(0.72)} ${py(0.5)}L${px(0.28)} ${py(0.67)}`, lw: stroke * 1.15 }];
   if (ch === '✓') return [{ k: 'path', d: `M${px(0.14)} ${py(0.52)}L${px(0.4)} ${py(0.66)}L${px(0.88)} ${py(0.34)}`, lw: stroke }];
+  if (ch === '■') { const size = Math.round(cw * 0.75); return [{ k: 'rect', x: Math.round(x + (cw - size) / 2), y: Math.round(y + (h - size) / 2), w: size, h: size, alpha: 1 }]; }
   if (ch === '●') return [{ k: 'circle', cx: x + cw / 2, cy: y + h / 2, r: cw * 0.33 }];
   if (ch === '≡') {
     return [0.38, 0.5, 0.62].map((fy) => ({ k: 'rect' as const, x: x + cw * 0.12, y: y + h * fy - lw / 2, w: cw * 0.76, h: lw, alpha: 1 }));

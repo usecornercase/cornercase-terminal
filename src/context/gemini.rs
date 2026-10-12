@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
+use super::counting::{self, Record, Usage};
 use super::discovery::{folder, home, named};
 use super::jsonl::{Tail, head};
 use super::message::{self, Backwards, Said};
@@ -35,6 +36,7 @@ pub(super) struct Session {
     pub prompted: Option<SystemTime>,
     used: bool,
     model: Option<String>,
+    pub counted: Vec<Record>,
 }
 
 impl Session {
@@ -50,6 +52,7 @@ impl Session {
             prompted: None,
             used: false,
             model: None,
+            counted: Vec::new(),
         }
     }
 
@@ -104,6 +107,9 @@ impl Session {
     }
 
     fn message(&mut self, entry: &Value) {
+        if let Some(record) = counted(entry) {
+            self.counted.push(record);
+        }
         let Some(id) = entry["id"].as_str() else { return };
         if prompt(entry) {
             self.prompted = self.prompted.max(entry["timestamp"].as_str().and_then(Stamp::parse));
@@ -156,6 +162,23 @@ impl Session {
         let window = if model.starts_with("gemma-4") { 256_000 } else { 1_048_576 };
         Some(Context { model: model.into(), percent: reply.and_then(|r| r.input).map(|n| percent(n, window)) })
     }
+}
+
+fn counted(entry: &Value) -> Option<Record> {
+    let at = counting::timestamp(entry)?;
+    let id = entry["id"].as_str()?.into();
+    let usage = if prompt(entry) {
+        Usage::Prompt
+    } else if entry["type"] == "gemini" && entry["tokens"].is_object() {
+        let value = &entry["tokens"];
+        let mut tokens = counting::tokens(value, "input", "output", "cached", "unused");
+        tokens.input = tokens.input.saturating_sub(tokens.cache_read);
+        tokens.out = tokens.out.saturating_add(value["thoughts"].as_u64().unwrap_or(0));
+        Usage::Tokens(tokens)
+    } else {
+        return None;
+    };
+    Some(Record { at, id, usage })
 }
 
 pub(super) fn look(pid: i32, since: SystemTime, previous: Option<Session>, footer: Option<String>) -> Option<Session> {
@@ -523,5 +546,33 @@ mod tests {
     #[case::outside_footer("/model  context\ngemini-3.8-flash  1% used\none\ntwo\nthree\nfour\nfive\nsix", None)]
     fn the_labelled_footer_only_supplies_complete_model_ids(#[case] screen: &str, #[case] expected: Option<&str>) {
         assert_eq!(footer_model(screen).as_deref(), expected);
+    }
+}
+
+#[cfg(test)]
+mod counting_records {
+    use super::*;
+    use crate::context::counting::{
+        Ledger,
+        tests::{since, sum},
+    };
+
+    #[test]
+    fn rewritten_replies_add_only_the_increase_and_restored_history_adds_nothing() {
+        let mut session = Session::new(PathBuf::from("synthetic.jsonl"), "synthetic".into());
+        for line in include_str!("../../tests/fixtures/gemini/0.63.0/usage.jsonl").lines() {
+            session.apply(&serde_json::from_str(line).expect("record"));
+        }
+        let mut ledger = Ledger::default();
+        ledger.apply("a", since(), std::mem::take(&mut session.counted));
+        assert_eq!(
+            sum(ledger.take()),
+            (1, crate::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
+        );
+        for line in include_str!("../../tests/fixtures/gemini/0.63.0/usage-restore.jsonl").lines() {
+            session.apply(&serde_json::from_str(line).expect("record"));
+        }
+        ledger.apply("a", since(), std::mem::take(&mut session.counted));
+        assert_eq!(sum(ledger.take()).1.out, 0);
     }
 }

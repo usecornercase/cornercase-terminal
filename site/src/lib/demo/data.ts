@@ -1,3 +1,4 @@
+import { EXAMPLE } from '../stats/model';
 import returnsPage from '../../assets/demo/returns-page.png';
 
 export type Tree = { [name: string]: string | Tree };
@@ -493,4 +494,11 @@ export const USAGE: UsageSection[] = [
       { label: 'week', percent: 9, severity: 'normal', resets: 'resets in 5d 6h' },
     ],
   },
+];
+
+export const STATS = EXAMPLE;
+export const STATS_COLUMNS = [
+  ['4', '38', '35', '6h 12m', '5', '22m', '410k', '1.2M', '38M'],
+  ['31', '402', '377', '41h 03m', '7', '3h 40m', '3.1M', '11M', '310M'],
+  ['212', '3118', '2904', '310h', '9', '28h', '24M', '90M', '2.4B'],
 ];

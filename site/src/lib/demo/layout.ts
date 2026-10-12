@@ -842,10 +842,14 @@ export const issuesArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), ISSUES_WIDTH), Math.min(Math.max(0, rows - 2), ISSUES_HEIGHT));
 
 export const usageArea = (cols: number, rows: number, body: number) =>
-  centered(cols, rows, Math.min(Math.max(0, cols - 4), FORM_WIDTH), Math.min(body + 3, rows));
+  centered(cols, rows, Math.min(Math.max(0, cols - 2), FORM_WIDTH), Math.min(Math.max(body, 24) + 5, rows));
+
+export const usageInner = (r: Rect): Rect => r.w < 49 ? rect(r.x + 1, r.y + 1, Math.max(0, r.w - 2), Math.max(0, r.h - 2)) : inner(r);
+
+export const usageShare = (r: Rect): Rect => { const done = usageDone(r); return rect(done.x - 9, done.y, 7, 1); };
 
 export const usageDone = (r: Rect): Rect => {
-  const row = rect(r.x + 2, bottom(r) - 2, Math.max(0, r.w - 4), 1);
+  const c = usageInner(r); const row = rect(c.x, bottom(r) - 2, c.w, 1);
   const w = Math.min(buttonWidth(DONE), row.w);
   return rect(right(row) - w, row.y, w, 1);
 };

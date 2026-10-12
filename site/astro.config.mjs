@@ -9,6 +9,8 @@ export default defineConfig({
   site,
   base,
   trailingSlash: 'always',
+  build: { inlineStylesheets: 'never' },
+  vite: { build: { assetsInlineLimit: 0 } },
   integrations: [
     starlight({
       title: 'cornercase',

@@ -11,6 +11,23 @@ use crate::error::{Error, Result};
 use crate::issues;
 use crate::ui;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Page {
+    Limits,
+    #[default]
+    Stats,
+}
+impl Page {
+    pub const NAMES: [&'static str; 2] = ["Limits", "Stats"];
+    pub fn index(self) -> usize {
+        usize::from(self == Self::Stats)
+    }
+    #[must_use]
+    pub fn switched(self) -> Self {
+        if self == Self::Stats { Self::Limits } else { Self::Stats }
+    }
+}
+
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 const WARNING_FROM: u16 = 75;
 const CRITICAL_FROM: u16 = 90;
@@ -255,6 +272,8 @@ impl State {
 
     pub fn view(&self, now: Instant, clock: i64) -> ui::Usage {
         ui::Usage {
+            page: Page::Limits,
+            stats: crate::stats::View::default(),
             sections: self.shown.iter().map(|&agent| self.probes[agent.index()].section(agent, now, clock)).collect(),
         }
     }

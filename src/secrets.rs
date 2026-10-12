@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
-use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::io;
 use std::path::{Path, PathBuf};
 
 const FILE: &str = "secrets.json";
@@ -36,19 +35,13 @@ pub fn remove(path: &Path, key: &str) -> io::Result<()> {
 }
 
 fn store(path: &Path, secrets: &BTreeMap<String, String>) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    let mut file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    file.write_all(serde_json::to_string_pretty(secrets).map_err(io::Error::other)?.as_bytes())?;
-    file.sync_all()?;
-    std::fs::rename(&tmp, path)
+    crate::state::write(path, secrets, true)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use super::*;
     use crate::test_util::TempDir;
 

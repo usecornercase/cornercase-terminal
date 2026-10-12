@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 mkdir -p "$CC_HOME/code" "$CC_HOME/.claude/sessions" "$CC_HOME/.codex/sessions" "$CC_HOME/.config/cornercase" "$CC_HOME/.local/state/cornercase" "$CC_HOME/.cornercase/worktrees" "$CC_HOME/real"
+printf "PS1='\\W ❯ '\n" > "$CC_HOME/.bashrc"
 node "$CC_CAPTURE/dump.mjs" "$CC_TMP/data.mjs" "$CC_DATA"
 cp "$CC_ROOT/tests/fixtures/codex/0.160.0/context.jsonl" "$CC_DATA/codex-context.jsonl"
 for program in nvim npm cargo codex claude; do

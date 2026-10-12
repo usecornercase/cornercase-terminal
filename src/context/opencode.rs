@@ -8,6 +8,7 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::counting::{Record, Usage};
 use super::discovery::{folder, named};
 use super::message::{self, Said};
 use super::{Context, percent};
@@ -25,6 +26,7 @@ pub(super) struct Session {
     pub context: Option<Context>,
     pub prompted: Option<SystemTime>,
     pub place: Option<Place>,
+    pub counted: Vec<Record>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -304,7 +306,28 @@ fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Se
         .filter_map(|m| m.time.as_ref()?.created)
         .max()
         .and_then(|created| UNIX_EPOCH.checked_add(Duration::from_millis(created)));
-    Session { turn, context, prompted, place: None }
+    let counted = newest_first.iter().rev().filter_map(|data| counted(data)).collect();
+    Session { turn, context, prompted, place: None, counted }
+}
+
+fn counted(data: &str) -> Option<Record> {
+    let entry: Value = serde_json::from_str(data).ok()?;
+    let id = entry["id"].as_str()?.into();
+    let (ms, usage) = match entry["role"].as_str()? {
+        "user" => (entry["time"]["created"].as_u64()?, Usage::Prompt),
+        "assistant" => {
+            let v = entry.get("tokens")?;
+            let tokens = crate::stats::Tokens {
+                input: v["input"].as_u64().unwrap_or(0),
+                out: v["output"].as_u64().unwrap_or(0).saturating_add(v["reasoning"].as_u64().unwrap_or(0)),
+                cache_read: v["cache"]["read"].as_u64().unwrap_or(0),
+                cache_write: v["cache"]["write"].as_u64().unwrap_or(0),
+            };
+            (entry["time"]["completed"].as_u64()?, Usage::Completed(tokens))
+        }
+        _ => return None,
+    };
+    Some(Record { at: UNIX_EPOCH.checked_add(Duration::from_millis(ms))?, id, usage })
 }
 
 #[cfg(test)]
@@ -604,5 +627,28 @@ mod tests {
 
             assert!(error.to_string().contains(&said.fake.database.display().to_string()), "{error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod counting_records {
+    use super::*;
+    use crate::context::counting::{
+        Ledger,
+        tests::{since, sum},
+    };
+
+    #[test]
+    fn only_completed_messages_count_and_each_id_counts_once() {
+        let records: Vec<_> =
+            include_str!("../../tests/fixtures/opencode/1.18.35/usage.jsonl").lines().filter_map(counted).collect();
+        let mut ledger = Ledger::default();
+        ledger.apply("a", since(), records.clone());
+        assert_eq!(
+            sum(ledger.take()),
+            (1, crate::stats::Tokens { input: 20, out: 65, cache_read: 200, cache_write: 10 })
+        );
+        ledger.apply("a", since(), records);
+        assert_eq!(sum(ledger.take()).1.out, 0);
     }
 }

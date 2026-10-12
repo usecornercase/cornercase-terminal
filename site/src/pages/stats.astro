@@ -1,0 +1,86 @@
+---
+import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/jetbrains-mono';
+import InstallBox from '../components/landing/InstallBox.astro';
+const base = import.meta.env.BASE_URL;
+const origin = Astro.site ?? new URL('https://usecornercase.dev');
+const image = new URL(`${base}stats-og.png`, origin).href;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="description" content="Your agents' work in parallel, on a card you can share. Made privately in your browser." />
+    <meta property="og:title" content="cornercase stats" />
+    <meta property="og:description" content="See how much work your agents do in parallel. Make a card and share it." />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={image} />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="canonical" href={new URL(`${base}stats/`, origin)} />
+    <title>cornercase stats</title>
+  </head>
+  <body>
+    <main>
+      <a class="home" href={base}>cornercase</a>
+      <h1>Your agents, in parallel.</h1>
+      <p>Make a card of the work your agents did in cornercase.</p>
+      <p data-error role="alert" hidden></p>
+      <section data-stats>
+        <div role="tablist" aria-label="Stats window">
+          <button role="tab" data-window="24h" aria-selected="false">24 h</button>
+          <button role="tab" data-window="7d" aria-selected="true">7 days</button>
+          <button role="tab" data-window="all" aria-selected="false">total</button>
+        </div>
+        <p data-example>This is an example. Copy your own link with <code>cornercase stats --share</code> or <strong>share</strong> in Usage → Stats.</p>
+        <canvas data-card aria-label="Agent work stats card" role="img"></canvas>
+        <div class="buttons">
+          <button data-download>download PNG</button>
+          <button data-copy-image hidden>copy image</button>
+          <button data-share-image hidden>share</button>
+          <a data-x target="_blank" rel="noopener noreferrer">post on X</a>
+          <a data-linkedin target="_blank" rel="noopener noreferrer">post on LinkedIn</a>
+        </div>
+        <p data-status role="status"></p>
+        <p>Attach the downloaded PNG to your post. Link previews show an example card: crawlers cannot see the numbers after <code>#</code>.</p>
+        <p data-post-text></p>
+      </section>
+      <p class="privacy">Your numbers stay in this browser. Nothing is uploaded, and this page has no analytics. Anyone with your link can see the numbers in it.</p>
+      <section class="install-area">
+        <h2>Work with coding agents in parallel.</h2>
+        <p>cornercase is a terminal for projects, git worktrees and coding agents. Keep their work side by side, see who needs you, and come back to running shells.</p>
+        <InstallBox />
+        <a href={`${base}docs/guides/projects-workspaces-tabs/`}>Learn about Usage and stats →</a>
+      </section>
+    </main>
+    <script>import '../lib/stats/page';</script>
+  </body>
+</html>
+<style>
+  :root { color-scheme: dark; --font-body: 'Geist Variable', sans-serif; --font-mono: 'JetBrains Mono Variable', monospace; --text: #eeebf5; --text-3: #aaa1bc; --term: #16121f; --purple-2: #b294ff; --green: #70d6b1; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0b0911; color: var(--text); font-family: var(--font-body); }
+  main { max-width: 1144px; margin: 0 auto; padding: 36px 24px 80px; }
+  h1, h2, .home { font-family: 'Bricolage Grotesque Variable', sans-serif; }
+  h1 { font-size: clamp(32px, 5vw, 56px); letter-spacing: -0.04em; margin: 28px 0 8px; }
+  h2 { font-size: 28px; }
+  p { color: #bdb4cc; line-height: 1.6; }
+  a { color: #b294ff; text-decoration: none; }
+  .home { color: var(--text); font-size: 24px; font-weight: 700; }
+  canvas { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 18px; border: 1px solid #342749; margin: 18px 0; }
+  [role='tablist'], .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .buttons a { border: 1px solid #453357; color: var(--text); border-radius: 9px; padding: 10px 16px; background: #20162e; font: inherit; cursor: pointer; }
+  [aria-selected='true'], [data-download] { background: #7552f2; border-color: #9975ff; }
+  button:hover, .buttons a:hover { border-color: #c8b0ff; }
+  button:focus-visible, a:focus-visible { outline: 2px solid #c8b0ff; outline-offset: 3px; }
+  [hidden] { display: none !important; }
+  .privacy { font-size: 14px; margin-top: 28px; }
+  .install-area { border-top: 1px solid #342749; margin-top: 36px; padding-top: 18px; max-width: 660px; }
+  .install-area > a { display: inline-block; margin-top: 24px; }
+  code { font-family: var(--font-mono); font-size: 0.9em; }
+</style>

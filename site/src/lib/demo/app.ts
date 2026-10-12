@@ -1,3 +1,5 @@
+import { shareLink } from '../stats/model';
+import { STATS } from './data';
 import { type Demo, demo as english } from '../../i18n/en';
 import type { Cursor } from '../term/canvas';
 import { BOLD, Grid, type Rect, contains } from '../term/grid';
@@ -340,7 +342,7 @@ export class App {
   outerLines: Line[] = [];
   outerInput = '';
   config: Config = defaultConfig();
-  usage: { loading: boolean; at: number | null } = { loading: false, at: null };
+  usage: { page: number; loading: boolean; at: number | null } = { page: 1, loading: false, at: null };
   private ids = 1;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private listeners: Listener[] = [];
@@ -2053,10 +2055,19 @@ export class App {
     this.nav = null;
     this.overlay = { kind: 'usage' };
     this.emit('narrate', this.narration.usage);
+    if (this.usage.page === 0) this.probeUsage();
+    this.dirty();
+  }
+
+  usagePage(page: number): void { this.usage.page = page; if (page === 0) this.probeUsage(); this.dirty(); }
+
+  shareStats(): void { this.emit('copy', shareLink(STATS)); this.notify('copied a link to your stats'); }
+
+  private probeUsage(): void {
     if (!this.usage.loading) {
       this.usage.loading = true;
       this.after(1500, () => {
-        this.usage = { loading: false, at: this.now() };
+        this.usage = { ...this.usage, loading: false, at: this.now() };
         this.dirty();
       });
     }
@@ -3389,6 +3400,7 @@ export class App {
       if (k.key === 'Escape') this.closeOverlay();
       return true;
     }
+    if (o.kind === 'usage' && ['Tab', 'ArrowLeft', 'ArrowRight'].includes(k.key)) { this.usagePage(1 - this.usage.page); return true; }
     if (o.kind === 'groupStyle' || o.kind === 'usage') {
       if (k.key === 'Escape' || k.key === 'Enter') this.closeOverlay();
       return true;
