@@ -5716,6 +5716,13 @@ mod tests {
         (app, rx, dirs)
     }
 
+    fn pointer_after_drag(app: &mut App, away: Position) -> pointer::Shape {
+        mouse(app, MouseEventKind::Drag(MouseButton::Left), away);
+        let dragging = app.pointer(AREA);
+        mouse(app, MouseEventKind::Up(MouseButton::Left), away);
+        dragging
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -10556,10 +10563,7 @@ mod tests {
             let from = divider(&app).line.as_position();
             press(&mut app, from);
             let away = Position::new(pane().x, from.y + 3);
-            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), away);
-            let dragging = app.pointer(AREA);
-
-            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), away);
+            let dragging = pointer_after_drag(&mut app, away);
 
             assert_eq!((dragging, app.pointer(AREA)), (pointer::Shape::Columns, pointer::Shape::Default));
         }
@@ -11159,10 +11163,7 @@ mod tests {
             let from = border(&app, ui::Border::Projects);
             press(&mut app, from);
             let away = Position::new(AREA.width - 1, from.y + 4);
-            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), away);
-            let dragging = app.pointer(AREA);
-
-            mouse(&mut app, MouseEventKind::Up(MouseButton::Left), away);
+            let dragging = pointer_after_drag(&mut app, away);
 
             assert_eq!((dragging, app.pointer(AREA)), (pointer::Shape::Columns, pointer::Shape::Default));
         }
