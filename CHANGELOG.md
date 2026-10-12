@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.35
+
+- Usage now opens on Stats: see your agents’ work over 24 hours, seven days and all time, with parallelism, prompts, turns, time waiting for you, token kinds and a purple heatmap. Counts stay local and include only agents running inside cornercase.
+- Run `cornercase stats`, `--json` or `--share`, including with the server stopped. Share copies a private link to a card you can download as a PNG; plan limits remain on the Limits tab.
+
 ## 0.12.34
 
 - In Ghostty (1.0 or later), kitty (0.31 or later) and foot (1.12 or later), the mouse pointer turns into a resize arrow over the borders you can drag: ↔ on the borders between columns and between panes side by side, ↕ on the line between stacked lists, the line above the agents section and between panes one above the other. It stays while you drag and goes back to normal when you let go, when a dialog opens and when the window quits. Other terminals, and cornercase inside tmux, screen or Zellij, keep their usual pointer.
