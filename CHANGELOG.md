@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.40
+
+- No changes in the app. The tests that count agent work moved into their files' test modules.
+
 ## 0.12.38
 
 - No changes in the app. The app tests share their helpers, and new tests pin what session.json and config.json look like.
