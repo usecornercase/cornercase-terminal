@@ -30,9 +30,7 @@ mod tests {
 
     fn clone() -> Clone {
         let remote = git_repo(&[("README", "hi")]);
-        let tmp = TempDir::new();
-        git(tmp.path(), &["clone", "--quiet", &remote.path().display().to_string(), "clone"]);
-        let path = tmp.path().join("clone");
+        let (tmp, path) = crate::test_util::clone_of(remote.path());
         Clone { remote, _tmp: tmp, path }
     }
 

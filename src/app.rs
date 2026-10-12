@@ -7532,9 +7532,7 @@ mod tests {
             #[test]
             fn a_commit_on_the_remote_shows_until_it_is_pulled() {
                 let remote = git_repo(&[]);
-                let tmp = TempDir::new();
-                git(tmp.path(), &["clone", "--quiet", &remote.path().display().to_string(), "clone"]);
-                let clone = tmp.path().join("clone");
+                let (_tmp, clone) = crate::test_util::clone_of(remote.path());
                 let (mut app, rx) = app_in(&clone, no_config());
                 commit(remote.path());
                 let start = Instant::now();

@@ -315,9 +315,8 @@ mod tests {
     #[test]
     fn the_default_base_is_the_remote_head() {
         let remote = git_repo(&[("a.txt", "x\n")]);
-        let tmp = TempDir::new();
-        git(tmp.path(), &["clone", "--quiet", &remote.path().display().to_string(), "clone"]);
-        assert_eq!(default_base(&tmp.path().join("clone")).as_deref(), Some("origin/main"));
+        let (_tmp, clone) = crate::test_util::clone_of(remote.path());
+        assert_eq!(default_base(&clone).as_deref(), Some("origin/main"));
     }
 
     #[test]
@@ -329,9 +328,7 @@ mod tests {
     #[test]
     fn lists_local_and_remote_branches() {
         let remote = git_repo(&[]);
-        let tmp = TempDir::new();
-        git(tmp.path(), &["clone", "--quiet", &remote.path().display().to_string(), "clone"]);
-        let clone = tmp.path().join("clone");
+        let (_tmp, clone) = crate::test_util::clone_of(remote.path());
         git(&clone, &["branch", "topic"]);
         assert_eq!(branches(&clone), ["main", "topic", "origin/main"]);
     }

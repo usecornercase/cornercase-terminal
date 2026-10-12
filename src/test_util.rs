@@ -632,6 +632,13 @@ pub fn git_repo(files: &[(&str, &str)]) -> TempDir {
     repo
 }
 
+pub fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
+    let dir = TempDir::new();
+    git(dir.path(), &["clone", "--quiet", &remote.display().to_string(), "clone"]);
+    let path = dir.path().join("clone");
+    (dir, path)
+}
+
 pub struct FakeHttp {
     addr: std::net::SocketAddr,
     requests: std::sync::Arc<parking_lot::Mutex<Vec<String>>>,
