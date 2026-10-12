@@ -2094,12 +2094,18 @@ impl App {
         if term.emulator.mouse_mode() != mouse::MouseMode::None {
             return false;
         }
-        if !term.emulator.alternate_screen() {
+        let refused = if !term.emulator.alternate_screen() {
             term.emulator.scroll(delta);
+            false
         } else if term.emulator.alt_scroll() {
             let code = if delta < 0 { KeyCode::Up } else { KeyCode::Down };
             let key = term.emulator.encode_key(KeyEvent::new(code, KeyModifiers::NONE));
-            term.write(&key.repeat(delta.unsigned_abs()));
+            !term.write(&key.repeat(delta.unsigned_abs()))
+        } else {
+            false
+        };
+        if refused {
+            self.toast = Some(Toast::new(NOT_READING, ui::ToastIcon::Bug));
         }
         true
     }
@@ -10289,6 +10295,24 @@ rm -f "$1/sessions/$$.json"
             mouse(&mut app, MouseEventKind::Up(MouseButton::Left), end);
 
             assert_eq!(app.take_host_writes(), [clipboard::osc52(&first)]);
+        }
+
+        #[cfg(target_os = "linux")]
+        #[test]
+        fn a_full_pane_that_refuses_the_wheels_arrows_says_so() {
+            let (mut app, rx) = app();
+            type_line(&mut app, "printf '\\033[?1049h'; stty -echo; sleep 30");
+            pump_until(&mut app, &rx, "sleep runs on the alternate screen", |a| {
+                a.tab()
+                    .and_then(Tab::pane)
+                    .is_some_and(|t| t.emulator.alternate_screen() && t.program(&a.config).as_deref() == Some("sleep"))
+            });
+            let full = vec![b'x'; crate::term::MAX_QUEUED + 1024 * 1024];
+            let filled = app.term_mut().expect("a pane").write(&full);
+
+            mouse(&mut app, MouseEventKind::ScrollUp, in_pane());
+
+            assert_eq!((filled, toast(&app)), (true, Some(NOT_READING)));
         }
 
         #[test]
