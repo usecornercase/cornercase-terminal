@@ -16798,6 +16798,12 @@ mod tests {
             use super::*;
             use crate::test_util::git;
 
+            fn locked_workspace(app: &mut App, rx: &Receiver<AppEvent>, repo: &Path) -> (u64, PathBuf) {
+                let (id, path) = made(app, rx);
+                lock(repo, &path);
+                (id, path)
+            }
+
             fn removing_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
                 let (id, _) = made(app, rx);
                 app.start_removal(app.projects[0].id, id, false, false, None);
@@ -16921,8 +16927,7 @@ mod tests {
             #[test]
             fn a_locked_worktree_is_refused_before_anything_stops() {
                 let (mut app, rx, repo, _worktrees, _config) = repo();
-                let (id, path) = made(&mut app, &rx);
-                lock(repo.path(), &path);
+                let (id, path) = locked_workspace(&mut app, &rx, repo.path());
 
                 ask(&mut app, None, remove(id));
                 let message = error(answered(&mut app, &rx, "git status answers"));
@@ -16937,8 +16942,7 @@ mod tests {
             #[test]
             fn force_does_not_unlock_a_locked_worktree() {
                 let (mut app, rx, repo, _worktrees, _config) = repo();
-                let (id, path) = made(&mut app, &rx);
-                lock(repo.path(), &path);
+                let (id, path) = locked_workspace(&mut app, &rx, repo.path());
 
                 ask(&mut app, None, force_remove(id));
                 let message = error(answered(&mut app, &rx, "git status answers"));
