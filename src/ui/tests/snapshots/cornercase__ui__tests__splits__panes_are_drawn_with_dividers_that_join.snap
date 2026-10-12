@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/splits.rs
+assertion_line: 6898
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │ $ left              │ $ top              "
+"                                                         │                     │                    "
+" Projects                      │ Workspaces              │                     │                    "
+"                               │                         │                     │                    "
+"▌ ~ (1)                        │                         │                     │                    "
+"                               │                         │                     │                    "
+"  + New                        │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     ├────────────────────"
+"                               │                         │                     │ $ bottom           "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+"                               │                         │                     │                    "
+" ───────────────────────────── │                         │                     │                    "
+"  Settings                     │                         │                     │                    "
+"  Usage                        │                         │                     │                    "
+"  Quit                         │                         │                     │                    "

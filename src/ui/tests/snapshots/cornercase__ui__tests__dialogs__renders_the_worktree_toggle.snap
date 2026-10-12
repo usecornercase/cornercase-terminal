@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/dialogs.rs
+assertion_line: 6637
+expression: "render(&with(Overlay::Form(new_workspace_form(true)))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)  ╭─ New workspace ──────────────────────────────────────────────╮                  "
+"                  │ name                                                         │                  "
+"  + New           │ › feat/login                                                 │                  "
+"                  │ in ~/.cornercase/worktrees/cornercase/feat-login             │                  "
+"                  │ [x] with its own worktree                                    │                  "
+"                  │                                                              │                  "
+"                  │                                                              │                  "
+"                  │                                                              │                  "
+"                  │                                             create   cancel  │                  "
+"                  ╰──────────────────────────────────────────────────────────────╯                  "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/tab_context.rs
+expression: render(&view).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ shop (1)                     │  login                  │                                          "
+"                               │▌ ├ ◐ opencode           │                                          "
+"  + New                        │▌ │   DeepSeek V4… · 12% │                                          "
+"                               │  ├ › nvim               │                                          "
+"                               │  └ + Tab                │                no tab open               "
+"                               │                         │         + Tab opens a shell here         "
+"                               │  + New workspace        │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

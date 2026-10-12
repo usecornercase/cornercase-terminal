@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/search.rs
+expression: "render(&with(search(\"feat\", found()))).backend()"
+---
+"  ⌕ feat                                                 │                                          "
+"                                                         │                                          "
+"▌ feat/search                                      notes │                                          "
+"  nvim                               notes › feat/search │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"  enter goes to feat/search                              │                                          "

@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/draw.rs
+assertion_line: 6860
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │ $ echo hello                             "
+"                                                         │ hello                                    "
+" Projects                      │ Workspaces              │ $                                        "
+"                               │                         │                                          "
+"▌ ~ (1)                        │                         │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

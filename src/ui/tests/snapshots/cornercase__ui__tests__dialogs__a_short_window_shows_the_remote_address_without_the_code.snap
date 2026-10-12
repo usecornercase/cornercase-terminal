@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/dialogs.rs
+expression: "render(&with(Overlay::Remote(remote_access(Some(PAIR_URL))))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                  ╭─ Remote ─────────────────────────────────────────────────────╮                  "
+"▌ cornercase (1)  │ make this window larger to show the code                     │                  "
+"                  │                                                              │                  "
+"  + New           │ https://mac.tail1234.ts.net:8443/pair?t=0123456789abcdef0123 │                  "
+"                  │ 456789abcdef                                                 │                  "
+"                  │ scan the code with your phone's camera.                      │                  "
+"                  │ the phone needs the Tailscale app, logged in as              │                  "
+"                  │ ada@example.com.                                             │                  "
+"                  │                                                              │                  "
+"                  │                                                        done  │                  "
+"                  ╰──────────────────────────────────────────────────────────────╯                  "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

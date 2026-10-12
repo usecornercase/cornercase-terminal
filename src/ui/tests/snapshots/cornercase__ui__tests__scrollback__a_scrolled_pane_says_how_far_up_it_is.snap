@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/scrollback.rs
+expression: render(&scrolled_view()).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │ $ cargo build                            "
+"                                                         │    Compiling foo v0.1.0                  "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ ~ (1)                        │                         │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                               ↓ 42 more  "
