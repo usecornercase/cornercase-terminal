@@ -136,9 +136,7 @@ fn maps_clicks(#[case] pos: Position, #[case] expected: Option<IssuesHit>) {
 fn buttons_end_at_the_right_edge_in_order() {
     let b = issue_buttons(issues_area(AREA), &["start", "disconnect", "cancel"]);
     assert!(
-        b[0].right() < b[1].x
-            && b[1].right() < b[2].x
-            && b[2].right() == issues_rows(issues_area(AREA))[4].right()
+        b[0].right() < b[1].x && b[1].right() < b[2].x && b[2].right() == issues_rows(issues_area(AREA))[4].right()
     );
 }
 

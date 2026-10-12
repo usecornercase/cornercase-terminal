@@ -75,11 +75,7 @@ fn a_grouped_project_dragged_up(#[case] y: u16, #[case] expected: Option<(usize,
 #[case::onto_one_of_its_projects(SidebarRow::Group(1), row(7), None)]
 #[case::onto_a_group_below_lands_after_it(SidebarRow::Group(0), row(6), Some((8, Spot::Group(2))))]
 #[case::below_every_row(SidebarRow::Group(0), row(9), Some((8, Spot::Group(2))))]
-fn a_group_lands_among_groups(
-    #[case] dragged: SidebarRow,
-    #[case] y: u16,
-    #[case] expected: Option<(usize, Spot)>,
-) {
+fn a_group_lands_among_groups(#[case] dragged: SidebarRow, #[case] y: u16, #[case] expected: Option<(usize, Spot)>) {
     let expected = expected.map(|(at, spot)| Landing { at, spot });
     assert_eq!(sidebar_at(dragged, y), expected);
 }
@@ -134,11 +130,7 @@ fn many(n: usize, scroll: usize) -> Rows {
 #[case::the_new_button_scrolls_down(3, many(20, 3).button().as_position(), Some(1))]
 #[case::a_row_does_not_scroll(3, Position::new(3, list().y + 2), None)]
 #[case::nothing_hidden_above(0, more_above(list()).as_position(), None)]
-fn the_edges_of_a_long_list_scroll_it(
-    #[case] scroll: usize,
-    #[case] pos: Position,
-    #[case] expected: Option<isize>,
-) {
+fn the_edges_of_a_long_list_scroll_it(#[case] scroll: usize, #[case] pos: Position, #[case] expected: Option<isize>) {
     assert_eq!(many(20, scroll).edge(pos), expected);
 }
 

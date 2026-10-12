@@ -87,9 +87,7 @@ fn the_menu_button_opens_the_tab_menu() {
     let pos = strip(&app).menu(1).as_position();
     press(&mut app, pos);
     let tab = app.projects[0].workspaces[0].tabs[1].id;
-    let Some(Overlay::Menu { actions, .. }) = &app.overlay else {
-        panic!("no menu: {:?}", app.overlay.is_some())
-    };
+    let Some(Overlay::Menu { actions, .. }) = &app.overlay else { panic!("no menu: {:?}", app.overlay.is_some()) };
     assert!(matches!(actions[..], [MenuAction::Rename(Target::Tab(_, _, id))] if id == tab));
 }
 

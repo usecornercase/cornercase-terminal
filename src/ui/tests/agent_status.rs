@@ -10,11 +10,7 @@ fn with_agents() -> View<'static> {
         workspaces: vec![
             WorkspaceEntry {
                 name: "login".into(),
-                tabs: vec![
-                    tab("claude", Some(Status::Working)),
-                    tab("claude", Some(Status::Waiting)),
-                    "nvim".into(),
-                ],
+                tabs: vec![tab("claude", Some(Status::Working)), tab("claude", Some(Status::Waiting)), "nvim".into()],
                 behind: 2,
                 removing: false,
             },
@@ -43,8 +39,7 @@ fn tab_row(v: &View, w: usize, t: usize) -> Rect {
 }
 
 fn workspace_line(v: &View, w: usize) -> String {
-    let r =
-        workspace_row(areas().workspaces_list, areas().pitch, &v.tab_lines(), 0, WorkspaceRow::Workspace(w));
+    let r = workspace_row(areas().workspaces_list, areas().pitch, &v.tab_lines(), 0, WorkspaceRow::Workspace(w));
     row_text(&render(v), r).trim_end().to_string()
 }
 
@@ -88,10 +83,7 @@ fn a_tab_without_an_agent_shows_its_shell_before_the_name(#[case] running: bool,
     let r = tab_row(&v, 0, 2);
     let t = render(&v);
     let cell = &t.backend().buffer()[(r.x + 4, r.y)];
-    assert_eq!(
-        (row_text(&t, r).trim_end().to_string(), cell.fg),
-        (format!("  ├ {icon} nvim"), Color::DarkGray)
-    );
+    assert_eq!((row_text(&t, r).trim_end().to_string(), cell.fg), (format!("  ├ {icon} nvim"), Color::DarkGray));
 }
 
 #[test]
@@ -100,9 +92,7 @@ fn every_tab_icon_takes_one_cell() {
     let widths: Vec<usize> = agents
         .into_iter()
         .chain([(None, false), (None, true)])
-        .map(|(status, running)| {
-            TabEntry { status, running, ..TabEntry::from("") }.icon(Color::DarkGray).width()
-        })
+        .map(|(status, running)| TabEntry { status, running, ..TabEntry::from("") }.icon(Color::DarkGray).width())
         .collect();
     assert_eq!(widths, vec![1; 6]);
 }

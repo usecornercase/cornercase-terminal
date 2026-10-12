@@ -72,10 +72,7 @@ fn the_whole_restart_list_is_shown() {
 
     let notes = shown_notes(&app).join(" ");
     assert_eq!(message, "cornercase 9.0.0 is installed. Restart to use it.");
-    assert!(
-        notes.contains("sleep in") && notes.contains("each tab with a new shell in its folder."),
-        "{notes}"
-    );
+    assert!(notes.contains("sleep in") && notes.contains("each tab with a new shell in its folder."), "{notes}");
 }
 
 #[test]

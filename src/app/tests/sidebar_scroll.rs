@@ -23,8 +23,7 @@ fn the_active_project_is_scrolled_into_view() {
     let (mut app, _rx, _dirs) = app_with(4);
     app.follow(SHORT);
     assert!(
-        !ui::entry_row(short().list, short().pitch, &plain(4), app.projects_scroll, SidebarRow::Project(3))
-            .is_empty()
+        !ui::entry_row(short().list, short().pitch, &plain(4), app.projects_scroll, SidebarRow::Project(3)).is_empty()
     );
 }
 

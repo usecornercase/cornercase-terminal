@@ -13,25 +13,18 @@ fn tabs_and_panes_are_told_as_they_open_and_close_with_their_ids() {
 
     let ids = done(now(&mut app, None, new_tab(None))).ids;
     let opened = told(&streamed(&mut app));
-    let close =
-        wire::Close { item: Item::Tab(ids.tab.expect("a tab")), remove_worktree: false, force: false };
+    let close = wire::Close { item: Item::Tab(ids.tab.expect("a tab")), remove_worktree: false, force: false };
     done(now(&mut app, None, Command::Close(close)));
     let gone = until_told(&mut app, &rx, "the tab closes", |streamed| told(streamed).len() >= 2);
 
     let tab = wire::Ids { pane: None, ..ids };
     assert_eq!(
         opened,
-        [
-            (wire::What::Opened { kind: wire::Kind::Tab }, tab),
-            (wire::What::Opened { kind: wire::Kind::Pane }, ids)
-        ]
+        [(wire::What::Opened { kind: wire::Kind::Tab }, tab), (wire::What::Opened { kind: wire::Kind::Pane }, ids)]
     );
     assert_eq!(
         told(&gone),
-        [
-            (wire::What::Closed { kind: wire::Kind::Pane }, ids),
-            (wire::What::Closed { kind: wire::Kind::Tab }, tab)
-        ]
+        [(wire::What::Closed { kind: wire::Kind::Pane }, ids), (wire::What::Closed { kind: wire::Kind::Tab }, tab)]
     );
 }
 
@@ -48,9 +41,7 @@ fn following_panes_tells_only_about_them_and_ends_once_they_all_closed() {
         let close = wire::Close { item: Item::Pane(pane), remove_worktree: false, force: false };
         done(now(&mut app, None, Command::Close(close)));
     }
-    let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| {
-        streamed.last() == Some(&Streamed::End)
-    });
+    let got = until_told(&mut app, &rx, "the followed pane closes", |streamed| streamed.last() == Some(&Streamed::End));
 
     assert_eq!(told(&got), [(wire::What::Closed { kind: wire::Kind::Pane }, ids)]);
     assert!(!app.events.listening());
@@ -84,9 +75,7 @@ fn a_program_that_ends_is_told_by_its_name() {
     let pane = term(&app, 0).id;
     let typed = Launch::command(pane, "sleep 30".into(), Instant::now());
     app.launches.push(typed);
-    refreshing(&mut app, &rx, "sleep runs", |app| {
-        pane_job(app, pane).is_some_and(|job| job.program == "sleep")
-    });
+    refreshing(&mut app, &rx, "sleep runs", |app| pane_job(app, pane).is_some_and(|job| job.program == "sleep"));
 
     done(now(&mut app, None, press_keys(pane, &["ctrl+c"])));
     let got = until_told(&mut app, &rx, "sleep ends", |streamed| {
@@ -94,11 +83,7 @@ fn a_program_that_ends_is_told_by_its_name() {
     });
 
     let ids = first_tab(&app, pane);
-    assert!(
-        told(&got).contains(&(wire::What::Exited { program: "sleep".into() }, ids)),
-        "{:?}",
-        told(&got)
-    );
+    assert!(told(&got).contains(&(wire::What::Exited { program: "sleep".into() }, ids)), "{:?}", told(&got));
 }
 
 #[test]
@@ -106,9 +91,7 @@ fn programs_are_not_looked_up_while_nobody_follows() {
     let (mut app, rx, _dirs) = app_with(1);
     let id = term(&app, 0).id;
     app.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
-    refreshing(&mut app, &rx, "sleep runs", |app| {
-        pane(app, id).program(&app.config).as_deref() == Some("sleep")
-    });
+    refreshing(&mut app, &rx, "sleep runs", |app| pane(app, id).program(&app.config).as_deref() == Some("sleep"));
 
     app.watched = None;
     app.refresh(Instant::now());

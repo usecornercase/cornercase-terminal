@@ -40,10 +40,7 @@ fn rename_without_a_target_names_the_callers_tab() {
     let named = app.projects[0].workspaces[0].tabs[0].name.clone();
     done(now(&mut app, Some(caller), rename("")));
 
-    assert_eq!(
-        (named.as_deref(), app.projects[0].workspaces[0].tabs[0].name.as_deref()),
-        (Some("mine"), None)
-    );
+    assert_eq!((named.as_deref(), app.projects[0].workspaces[0].tabs[0].name.as_deref()), (Some("mine"), None));
 }
 
 #[test]
@@ -51,11 +48,8 @@ fn a_group_keeps_a_name() {
     let (mut app, _rx) = app();
     let group = app.add_group("work".into());
 
-    let message = error(now(
-        &mut app,
-        None,
-        Command::Rename(wire::Rename { item: Some(Item::Group(group)), name: " ".into() }),
-    ));
+    let message =
+        error(now(&mut app, None, Command::Rename(wire::Rename { item: Some(Item::Group(group)), name: " ".into() })));
 
     assert_eq!((message.as_str(), app.groups[0].entry.name.as_str()), ("a group needs a name", "work"));
 }

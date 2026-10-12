@@ -5,10 +5,7 @@ fn external_checkout() -> (TempDir, App, Receiver<AppEvent>, TempDir, PathBuf) {
     let (mut app, rx) = app_in(repo.path(), no_config());
     let tmp = TempDir::new();
     let path = tmp.path().join("hotfix");
-    crate::test_util::git(
-        repo.path(),
-        &["worktree", "add", "--quiet", "-b", "hotfix", &path.display().to_string()],
-    );
+    crate::test_util::git(repo.path(), &["worktree", "add", "--quiet", "-b", "hotfix", &path.display().to_string()]);
     app.sync_worktrees();
     (repo, app, rx, tmp, path)
 }

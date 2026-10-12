@@ -49,8 +49,7 @@ fn with_tabs(names: &[&str]) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 
 fn saved_tabs(app: &App) -> String {
     let state = app.state();
-    let names: Vec<String> =
-        state.projects[0].workspaces[0].tabs.iter().filter_map(|t| t.name.clone()).collect();
+    let names: Vec<String> = state.projects[0].workspaces[0].tabs.iter().filter_map(|t| t.name.clone()).collect();
     names.join(" ")
 }
 
@@ -271,18 +270,11 @@ fn a_restored_session_keeps_the_order_of_every_level() {
 
     let state = restored.state();
     let groups: Vec<&str> = state.groups.iter().map(|g| g.name.as_str()).collect();
-    let workspaces: Vec<Option<&str>> =
-        state.projects[1].workspaces.iter().map(|w| w.name.as_deref()).collect();
-    let tabs: Vec<Option<&str>> =
-        state.projects[1].workspaces[1].tabs.iter().map(|t| t.name.as_deref()).collect();
+    let workspaces: Vec<Option<&str>> = state.projects[1].workspaces.iter().map(|w| w.name.as_deref()).collect();
+    let tabs: Vec<Option<&str>> = state.projects[1].workspaces[1].tabs.iter().map(|t| t.name.as_deref()).collect();
     assert_eq!(
         (groups, state.projects[1].path.clone(), workspaces, tabs),
-        (
-            vec!["oss", "work"],
-            app.projects[1].path.clone(),
-            vec![Some("second"), None],
-            vec![Some("two"), Some("one")]
-        )
+        (vec!["oss", "work"], app.projects[1].path.clone(), vec![Some("second"), None], vec![Some("two"), Some("one")])
     );
     assert_eq!(state, saved);
 }

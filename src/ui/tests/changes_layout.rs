@@ -50,12 +50,7 @@ fn with_panel() -> View<'static> {
     View {
         has_project: true,
         issues: true,
-        workspaces: vec![WorkspaceEntry {
-            name: "main".into(),
-            tabs: vec!["zsh".into()],
-            behind: 0,
-            removing: false,
-        }],
+        workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false }],
         active_tab: Some(0),
         changes: Some(panel),
         changes_button: Some(ChangesButton { label: "Changes 3".into(), open: true }),

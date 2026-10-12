@@ -69,12 +69,7 @@ fn value(app: &mut App, caller: Option<u64>, command: Command) -> Value {
 }
 
 fn pane(app: &App, id: u64) -> &Term {
-    app.projects
-        .iter()
-        .flat_map(|p| &p.workspaces)
-        .flat_map(Workspace::terms)
-        .find(|t| t.id == id)
-        .expect("the pane")
+    app.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms).find(|t| t.id == id).expect("the pane")
 }
 
 #[test]
@@ -121,11 +116,7 @@ fn send_text(pane: u64, text: &str, enter: bool, wait: bool) -> Command {
 }
 
 fn press_keys(pane: u64, keys: &[&str]) -> Command {
-    Command::Keys(wire::Keys {
-        pane: Some(pane),
-        tab: None,
-        keys: keys.iter().map(ToString::to_string).collect(),
-    })
+    Command::Keys(wire::Keys { pane: Some(pane), tab: None, keys: keys.iter().map(ToString::to_string).collect() })
 }
 
 fn follow(app: &mut App, panes: &[u64]) {
@@ -187,10 +178,10 @@ fn change(from: Option<&str>, to: Option<&str>) -> (Option<String>, Option<Strin
     (from.map(str::to_string), to.map(str::to_string))
 }
 
-mod creating;
-mod talking;
-mod gemini;
 mod agents;
-mod events;
 mod arranging;
+mod creating;
+mod events;
+mod gemini;
+mod talking;
 mod worktrees;

@@ -111,10 +111,8 @@ fn an_open_project_gets_the_folder_name_unless_it_has_its_own() {
 fn a_folder_whose_shell_cannot_start_is_counted_and_the_rest_still_opens() {
     let mut s = open_picker();
     let locked = Locked::new();
-    let text = format!(
-        r#"{{"folders": [{{"path": "api"}}, {{"path": "{}"}}, {{"path": "web"}}]}}"#,
-        locked.path().display()
-    );
+    let text =
+        format!(r#"{{"folders": [{{"path": "api"}}, {{"path": "{}"}}, {{"path": "web"}}]}}"#, locked.path().display());
 
     import(&mut s, "w.code-workspace", &text);
 
@@ -128,10 +126,7 @@ fn a_folder_listed_twice_counts_once() {
 
     import(&mut s, "w.code-workspace", r#"{"folders": [{"path": "api"}, {"path": "./api"}]}"#);
 
-    assert_eq!(
-        (grouped(&s.app, "w"), toast(&s.app)),
-        (vec![s.root.join("api")], Some("1 project imported into w"))
-    );
+    assert_eq!((grouped(&s.app, "w"), toast(&s.app)), (vec![s.root.join("api")], Some("1 project imported into w")));
 }
 
 #[test]
@@ -269,8 +264,7 @@ fn the_wheel_scrolls_the_list() {
     let picker = Picker::open(tmp.path(), None).expect("open picker");
     let (mut app, _rx) = app();
     app.overlay = Some(Overlay::Picker { picker, group: None });
-    let ev =
-        MouseEvent { kind: MouseEventKind::ScrollDown, column: 50, row: 10, modifiers: KeyModifiers::NONE };
+    let ev = MouseEvent { kind: MouseEventKind::ScrollDown, column: 50, row: 10, modifiers: KeyModifiers::NONE };
 
     app.handle_event(AppEvent::Input(Event::Mouse(ev)), AREA).expect("handle wheel");
 

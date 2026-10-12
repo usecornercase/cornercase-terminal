@@ -30,10 +30,7 @@ fn entries() -> Vec<AgentEntry> {
             Some("issue-98-remove-in-background"),
             details("Opus 5.5", Some(23)),
         ),
-        AgentEntry {
-            active: true,
-            ..agent(Status::Working, "codex", "website", None, details("gpt-5.5", Some(41)))
-        },
+        AgentEntry { active: true, ..agent(Status::Working, "codex", "website", None, details("gpt-5.5", Some(41))) },
         agent(Status::Done, "claude", "api", Some("main"), Details::default()),
     ]
 }

@@ -129,10 +129,7 @@ fn clicks_in_the_modal_set_the_icon_and_the_colour() {
     click(&mut app, ui::style_icon(AREA, 7).as_position());
     click(&mut app, ui::style_colour(AREA, 12).as_position());
 
-    assert_eq!(
-        (app.groups[0].entry.icon, app.groups[0].entry.colour),
-        (ui::GROUP_ICONS[7], ui::GROUP_COLOURS[12])
-    );
+    assert_eq!((app.groups[0].entry.icon, app.groups[0].entry.colour), (ui::GROUP_ICONS[7], ui::GROUP_COLOURS[12]));
 }
 
 #[rstest]
@@ -493,9 +490,7 @@ fn the_scroll_reveals_the_header_of_a_collapsed_group_holding_the_active_project
 
     app.follow(AREA);
 
-    assert!(
-        !ui::entry_row(list(), 1, &app.sidebar_rows(), app.projects_scroll, SidebarRow::Group(5)).is_empty()
-    );
+    assert!(!ui::entry_row(list(), 1, &app.sidebar_rows(), app.projects_scroll, SidebarRow::Group(5)).is_empty());
 }
 
 #[test]

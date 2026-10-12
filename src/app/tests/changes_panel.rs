@@ -77,10 +77,7 @@ mod every_project {
         click(&mut app, sub);
         assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
         filter_changes(&mut app, "new.txt");
-        assert_eq!(
-            panel::rows(&app.panel_view().expect("panel")),
-            [panel::Row::Header(0), panel::Row::Header(2)]
-        );
+        assert_eq!(panel::rows(&app.panel_view().expect("panel")), [panel::Row::Header(0), panel::Row::Header(2)]);
         filter_changes(&mut app, "a.txt");
         assert_eq!(
             panel::rows(&app.panel_view().expect("panel")),
@@ -140,13 +137,9 @@ mod every_project {
         app.projects[0].name = Some("shop".into());
         app.changes.scope = changes::Scope::Every;
         let targets = app.every_targets();
-        let (workspace, generation, request) =
-            app.changes.request_every(&targets, Instant::now()).expect("summary");
+        let (workspace, generation, request) = app.changes.request_every(&targets, Instant::now()).expect("summary");
         app.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
-        assert_eq!(
-            app.panel_view().expect("panel").body,
-            panel::Body::Failed("shop: cannot read status".into())
-        );
+        assert_eq!(app.panel_view().expect("panel").body, panel::Body::Failed("shop: cannot read status".into()));
     }
 
     #[rstest::rstest]
@@ -182,9 +175,7 @@ mod every_project {
             "closed" => app.drop_workspace(project, workspace),
             "removed" => {
                 assert!(app.start_removal(project, workspace, true, false, None));
-                pump_until(&mut app, &rx, "the worktree is removed", |a| {
-                    a.workspace_position(workspace).is_none()
-                });
+                pump_until(&mut app, &rx, "the worktree is removed", |a| a.workspace_position(workspace).is_none());
             }
             _ => {
                 git(repo.path(), &["worktree", "remove", "--force", path.to_str().expect("path")]);
@@ -236,17 +227,11 @@ mod every_project {
         let scripts = TempDir::new();
         let agent = scripts.path().join("agent");
         let editor = scripts.path().join("editor");
-        write_executable(
-            &agent,
-            "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n",
-        );
+        write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n");
         write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
         let config_path = write_config(
             scripts.path(),
-            &Config {
-                agent_commands: [("fake".into(), agent.display().to_string())].into(),
-                ..Config::default()
-            },
+            &Config { agent_commands: [("fake".into(), agent.display().to_string())].into(), ..Config::default() },
         );
         let (mut app, rx) = app_in(second.path(), config_path);
         exec_agent(&mut app, &agent);
@@ -280,14 +265,8 @@ mod every_project {
         click(&mut app, open);
         wait_until("the editor runs in the owning workspace", || second.path().join("editor-got").exists());
         let got = std::fs::read_to_string(second.path().join("editor-got")).expect("editor arguments");
-        assert_eq!(
-            got,
-            format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display())
-        );
-        assert_eq!(
-            (app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()),
-            (2, 1)
-        );
+        assert_eq!(got, format!("{}\n+1\n{}\n", second.path().display(), second.path().join("b.txt").display()));
+        assert_eq!((app.projects[0].workspaces[0].tabs.len(), app.projects[active].workspaces[0].tabs.len()), (2, 1));
         assert_eq!(app.active, 0);
         assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
         assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
@@ -493,10 +472,8 @@ fn with_an_agent() -> (TempDir, TempDir, App) {
     let config = TempDir::new();
     let agent = config.path().join("agent");
     write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\n");
-    let settings = Config {
-        agent_commands: [("fake".to_string(), agent.display().to_string())].into(),
-        ..Config::default()
-    };
+    let settings =
+        Config { agent_commands: [("fake".to_string(), agent.display().to_string())].into(), ..Config::default() };
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(repo.path(), config_path);
     exec_agent(&mut app, &agent);

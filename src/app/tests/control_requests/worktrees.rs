@@ -27,11 +27,7 @@ fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
 }
 
 fn worktree(name: &str) -> Command {
-    Command::NewWorkspace(wire::NewWorkspace {
-        name: name.into(),
-        worktree: true,
-        ..wire::NewWorkspace::default()
-    })
+    Command::NewWorkspace(wire::NewWorkspace { name: name.into(), worktree: true, ..wire::NewWorkspace::default() })
 }
 
 #[test]
@@ -42,8 +38,7 @@ fn a_worktree_opens_with_a_tab_and_leaves_the_window_as_it_is() {
     ask(&mut app, None, worktree("feat/x"));
     let made = done(answered(&mut app, &rx, "git makes the worktree"));
 
-    let workspace =
-        app.projects[0].workspaces.iter().find(|w| Some(w.id) == made.ids.workspace).expect("it");
+    let workspace = app.projects[0].workspaces.iter().find(|w| Some(w.id) == made.ids.workspace).expect("it");
     assert_eq!((workspace.worktree, workspace.tabs.len(), app.focus()), (true, 1, before));
     assert!(workspace.path.starts_with(worktrees.path()), "{}", workspace.path.display());
 }
@@ -140,10 +135,7 @@ fn a_locked_worktree_is_refused_before_anything_stops() {
     ask(&mut app, None, remove(id));
     let message = error(answered(&mut app, &rx, "git status answers"));
 
-    assert!(
-        message.contains("is locked (on a usb disk)") && message.contains("git worktree unlock"),
-        "{message}"
-    );
+    assert!(message.contains("is locked (on a usb disk)") && message.contains("git worktree unlock"), "{message}");
     assert!(untouched(&app, id, &path));
 }
 

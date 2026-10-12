@@ -30,10 +30,7 @@ fn the_pane_gets_the_width_of_the_workspaces_column() {
 #[test]
 fn the_wheel_scrolls_it_anywhere_in_the_column() {
     let a = tree();
-    assert_eq!(
-        (a.sidebar.x, a.sidebar.width, a.sidebar.contains(a.list.as_position())),
-        (0, SIDEBAR_WIDTH, true)
-    );
+    assert_eq!((a.sidebar.x, a.sidebar.width, a.sidebar.contains(a.list.as_position())), (0, SIDEBAR_WIDTH, true));
 }
 
 #[test]

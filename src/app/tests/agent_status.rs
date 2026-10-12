@@ -253,8 +253,7 @@ fn codex_model_and_session_changes_discard_obsolete_percentages() {
         context(a).is_some_and(|c| c.model == "gpt-5.4-mini" && c.percent.is_none())
     });
 
-    let next =
-        fake.rollout.with_file_name("rollout-2026-10-05T12-00-00-019a1234-5678-7000-8000-000000000002.jsonl");
+    let next = fake.rollout.with_file_name("rollout-2026-10-05T12-00-00-019a1234-5678-7000-8000-000000000002.jsonl");
     let header = crate::test_util::fixture!("codex/0.160.0/context.jsonl")
         .lines()
         .next()
@@ -304,9 +303,7 @@ fn opencode_says(app: &mut App, rx: &Receiver<AppEvent>, opencode: &FakeOpencode
     let folder = app.projects[0].path.clone();
     opencode.write(FakeOpencode::SESSION, &folder, messages);
     let turn = messages == OPENCODE_WORKING;
-    watch_until(app, rx, "opencode's turn shows", |a| {
-        tab_term(a, 0, tab).context.opencode_turn() == Some(turn)
-    });
+    watch_until(app, rx, "opencode's turn shows", |a| tab_term(a, 0, tab).context.opencode_turn() == Some(turn));
 }
 
 struct Watched {
@@ -466,21 +463,16 @@ fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_dat
     let mut w = Watched::start(agents::GEMINI, false);
     let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
     fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
-    watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| {
-        a.tab().is_some_and(|t| t.context().is_some())
-    });
+    watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| a.tab().is_some_and(|t| t.context().is_some()));
     assert!(second_row(&mut w.app).1.contains("1%"));
     w.app.nav = Some(ui::Nav::Workspaces);
     let compact = render(&mut w.app, Rect::new(0, 0, 80, 30));
-    let contents: String =
-        compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
+    let contents: String = compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
     assert!(contents.contains("gemini-"));
     assert!(contents.contains("1%"));
     let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
     let other = fake.start(&w.app.projects[0].path);
-    watch_until(&mut w.app, &w.rx, "the ambiguous context goes", |a| {
-        a.tab().is_some_and(|t| t.context().is_none())
-    });
+    watch_until(&mut w.app, &w.rx, "the ambiguous context goes", |a| a.tab().is_some_and(|t| t.context().is_none()));
     assert_eq!(status(&w.app, 0, 0), Some(Status::Working));
     drop(other);
     watch_until(&mut w.app, &w.rx, "the unambiguous context returns", |a| {
@@ -553,9 +545,7 @@ fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::G
 }
 
 #[rstest]
-fn a_question_answered_at_once_stays_quiet(
-    #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
-) {
+fn a_question_answered_at_once_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
     let mut w = Watched::start(agent, true);
     w.report("waiting", 1);
 
@@ -674,8 +664,7 @@ mod resuming {
 
         wait_resumed(&mut back, &rx, "--permission-mode plan --resume s1");
 
-        let expected =
-            AgentState { kind: "claude".into(), conversation: "s1".into(), mode: Some("plan".into()) };
+        let expected = AgentState { kind: "claude".into(), conversation: "s1".into(), mode: Some("plan".into()) };
         assert_eq!(saved_agent(&saved), Some(&expected));
     }
 

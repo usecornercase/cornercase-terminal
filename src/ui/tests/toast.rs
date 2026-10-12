@@ -49,11 +49,7 @@ fn renders_over_the_pane() {
 #[case::agent_done(ToastIcon::Agent(Status::Done), "✓", Color::Green)]
 #[case::bug(ToastIcon::Bug, "✗", Color::Red)]
 #[case::restart(ToastIcon::Restart, "↻", Color::Cyan)]
-fn its_icon_and_border_say_what_it_is_about(
-    #[case] icon: ToastIcon,
-    #[case] glyph: &str,
-    #[case] colour: Color,
-) {
+fn its_icon_and_border_say_what_it_is_about(#[case] icon: ToastIcon, #[case] glyph: &str, #[case] colour: Color) {
     let toast = Toast { message: "something happened", icon, button: None };
     let r = toast_area(AREA, toast);
     let v = View { toast: Some(toast), ..view(&["~"]) };

@@ -38,10 +38,7 @@ fn dragging_the_projects_border_widens_the_sidebar() {
 
     drag(&mut app, from, 39);
 
-    assert_eq!(
-        app.widths,
-        ui::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..ui::Widths::default() }
-    );
+    assert_eq!(app.widths, ui::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..ui::Widths::default() });
 }
 
 #[test]
@@ -193,8 +190,7 @@ fn a_double_click_brings_back_the_default_width() {
 fn two_slow_clicks_are_not_a_double_click() {
     let (mut app, _rx, moved) = moved_projects_border();
     click(&mut app, moved);
-    app.border_click =
-        app.border_click.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
+    app.border_click = app.border_click.map(|(b, at)| (b, at.checked_sub(DOUBLE_CLICK).expect("an earlier instant")));
 
     click(&mut app, moved);
 

@@ -132,8 +132,7 @@ fn an_empty_workspace_says_so_in_the_pane() {
         workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: Vec::new(), behind: 0, removing: false }],
         ..with_workspaces(None)
     };
-    let text: String =
-        render(&v).backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
+    let text: String = render(&v).backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
     assert!(text.contains("no tab open"), "{text}");
 }
 

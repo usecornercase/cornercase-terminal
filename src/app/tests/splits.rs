@@ -438,12 +438,8 @@ fn a_pane_shown_alone_for_lack_of_room_cannot_be_split() {
 #[case::no_width(Rect { x: 10, y: 5, width: 0, height: 4 })]
 #[case::no_height(Rect { x: 10, y: 5, width: 4, height: 0 })]
 fn a_pane_with_no_room_has_no_cell_under_the_mouse(#[case] rect: Rect) {
-    let ev = MouseEvent {
-        kind: MouseEventKind::Drag(MouseButton::Left),
-        column: 12,
-        row: 6,
-        modifiers: KeyModifiers::NONE,
-    };
+    let ev =
+        MouseEvent { kind: MouseEventKind::Drag(MouseButton::Left), column: 12, row: 6, modifiers: KeyModifiers::NONE };
 
     assert_eq!(pane_cell(rect, ev), None);
 }

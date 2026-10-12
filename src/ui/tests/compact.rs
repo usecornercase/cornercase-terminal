@@ -58,11 +58,7 @@ fn the_search_button_is_the_end_of_the_bar() {
 #[case::closed(None, false, false)]
 #[case::projects(Some(Nav::Projects), true, false)]
 #[case::workspaces(Some(Nav::Workspaces), false, true)]
-fn the_menu_shows_one_column_at_a_time(
-    #[case] nav: Option<Nav>,
-    #[case] projects: bool,
-    #[case] workspaces: bool,
-) {
+fn the_menu_shows_one_column_at_a_time(#[case] nav: Option<Nav>, #[case] projects: bool, #[case] workspaces: bool) {
     let shown = small().shown(nav);
     assert_eq!((!shown.list.is_empty(), !shown.workspaces_list.is_empty()), (projects, workspaces));
     assert_eq!(!shown.back.is_empty(), workspaces);
@@ -149,9 +145,7 @@ fn renders_the_landing_line_between_tabs() {
     let nvim = workspace_row(list, COMPACT_PITCH, &tabs, 0, WorkspaceRow::Tab(0, 1));
     let dragged = WorkspaceRow::Tab(0, 0);
     let landing = workspace_drop(list, COMPACT_PITCH, &tabs, 0, dragged, nvim.as_position());
-    insta::assert_snapshot!(
-        render_small(&View { drag: Some(Drag::Workspaces(dragged, landing)), ..v }).backend()
-    );
+    insta::assert_snapshot!(render_small(&View { drag: Some(Drag::Workspaces(dragged, landing)), ..v }).backend());
 }
 
 #[test]
@@ -190,8 +184,7 @@ fn the_bar_shows_the_brand_without_a_project() {
 
 #[test]
 fn the_search_field_takes_the_whole_bar() {
-    let search =
-        Search { query: "feat".into(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
+    let search = Search { query: "feat".into(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
     let v = View { overlay: Some(Overlay::Search(search)), ..in_a_project(None) };
     let t = render_small(&v);
     let row: String = (0..SMALL.width).map(|x| t.backend().buffer()[(x, 1)].symbol().to_string()).collect();

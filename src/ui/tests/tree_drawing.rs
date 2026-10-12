@@ -29,18 +29,8 @@ fn with_tree() -> View<'static> {
     let workspaces = vec![
         Vec::new(),
         vec![
-            WorkspaceEntry {
-                name: "main".into(),
-                tabs: vec![claude, "zsh".into()],
-                behind: 0,
-                removing: false,
-            },
-            WorkspaceEntry {
-                name: "issue-50-reorder".into(),
-                tabs: vec![finished],
-                behind: 2,
-                removing: false,
-            },
+            WorkspaceEntry { name: "main".into(), tabs: vec![claude, "zsh".into()], behind: 0, removing: false },
+            WorkspaceEntry { name: "issue-50-reorder".into(), tabs: vec![finished], behind: 2, removing: false },
         ],
         Vec::new(),
     ];
@@ -124,16 +114,11 @@ fn only_folded_rows_show_what_needs_you(#[case] row: TreeRow, #[case] end: &str)
 #[case::a_tab(TreeRow::Tab(1, 0, 1), Landing { at: 5, spot: Spot::Tab(0) }, 8)]
 #[case::a_workspace(TreeRow::Workspace(1, 1), Landing { at: 4, spot: Spot::Workspace(0) }, 6)]
 #[case::a_project_into_a_group(TreeRow::Project(0), Landing { at: 3, spot: Spot::Project { group: Some(0), before: Some(1) } }, 4)]
-fn the_landing_line_starts_where_the_row_would(
-    #[case] row: TreeRow,
-    #[case] landing: Landing,
-    #[case] indent: usize,
-) {
+fn the_landing_line_starts_where_the_row_would(#[case] row: TreeRow, #[case] landing: Landing, #[case] indent: usize) {
     let v = View { drag: Some(Drag::Tree(row, Some(landing))), ..with_tree() };
     let t = render_sized(&v, W, TALL.height);
     let list = layout_with(TALL, v.widths, false, Sidebar::Tree).list;
-    let line =
-        (list.y..list.bottom()).map(|y| row_text(&t, Rect { y, height: 1, ..list })).find(|l| l.contains('─'));
+    let line = (list.y..list.bottom()).map(|y| row_text(&t, Rect { y, height: 1, ..list })).find(|l| l.contains('─'));
     assert_eq!(line.map(|l| l.find('─').map(|b| l[..b].chars().count())), Some(Some(indent)));
 }
 

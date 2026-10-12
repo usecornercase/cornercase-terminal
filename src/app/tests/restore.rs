@@ -94,26 +94,13 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
             },
         ],
         active: 1,
-        widths: Some(ui::Widths {
-            projects: 35,
-            workspaces: 24,
-            changes: Some(42),
-            stack: Some(11),
-            agents: Some(7),
-        }),
+        widths: Some(ui::Widths { projects: 35, workspaces: 24, changes: Some(42), stack: Some(11), agents: Some(7) }),
         issues: Some(IssuesState {
             tab: Some("github".into()),
             closed: true,
-            people: People {
-                github: [issues::Who::Me, issues::Who::Person("ana".into())],
-                ..People::default()
-            },
+            people: People { github: [issues::Who::Me, issues::Who::Person("ana".into())], ..People::default() },
         }),
-        changes: Some(ChangesState {
-            open: changes,
-            mode: changes::Mode::Commits,
-            scope: Some(changes::Scope::Every),
-        }),
+        changes: Some(ChangesState { open: changes, mode: changes::Mode::Commits, scope: Some(changes::Scope::Every) }),
         todo,
         files,
     };
@@ -123,9 +110,11 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
     wait_until("every shell reports its saved folder", || {
         app.projects.iter().zip(&saved.projects).all(|(project, saved)| {
             project.workspaces.iter().zip(&saved.workspaces).all(|(workspace, saved)| {
-                workspace.tabs.iter().zip(&saved.tabs).all(|(tab, saved)| {
-                    tab.panes.iter().zip(&saved.panes).all(|(pane, saved)| pane.cwd() == saved.cwd)
-                })
+                workspace
+                    .tabs
+                    .iter()
+                    .zip(&saved.tabs)
+                    .all(|(tab, saved)| tab.panes.iter().zip(&saved.panes).all(|(pane, saved)| pane.cwd() == saved.cwd))
             })
         })
     });
@@ -139,17 +128,13 @@ fn reopens_projects_workspaces_and_tabs() {
     let (a_path, b_path) = (canonical(&a), canonical(&b));
     std::fs::create_dir(a_path.join("sub")).expect("create folder");
     let (mut app, _rx) = empty_app();
-    let mut second =
-        WorkspaceState::plain(a_path.clone(), vec![Some(a_path.clone()), Some(a_path.join("sub"))], 0);
+    let mut second = WorkspaceState::plain(a_path.clone(), vec![Some(a_path.clone()), Some(a_path.join("sub"))], 0);
     second.name = Some("other".into());
     second.active = 1;
-    let mut first_project =
-        project(&a_path, vec![WorkspaceState::plain(a_path.clone(), vec![None], 0), second]);
+    let mut first_project = project(&a_path, vec![WorkspaceState::plain(a_path.clone(), vec![None], 0), second]);
     first_project.active = 1;
-    let state = saved(
-        vec![first_project, project(&b_path, vec![WorkspaceState::plain(b_path.clone(), vec![None], 0)])],
-        0,
-    );
+    let state =
+        saved(vec![first_project, project(&b_path, vec![WorkspaceState::plain(b_path.clone(), vec![None], 0)])], 0);
 
     assert!(app.restore(&state, AREA), "every tab comes back");
 
@@ -167,10 +152,8 @@ fn what_was_folded_stays_folded() {
     folded.collapsed = true;
     let mut other = project(&b_path, vec![WorkspaceState::plain(b_path.clone(), vec![None], 0)]);
     other.collapsed = true;
-    let state = saved(
-        vec![project(&a_path, vec![folded, WorkspaceState::plain(a_path.clone(), vec![None], 0)]), other],
-        0,
-    );
+    let state =
+        saved(vec![project(&a_path, vec![folded, WorkspaceState::plain(a_path.clone(), vec![None], 0)]), other], 0);
 
     app.restore(&state, AREA);
     let again = app.state();
@@ -196,11 +179,7 @@ fn the_first_draw_keeps_a_folded_active_project_folded() {
 
 fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
     let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None, None], 0);
-    ws.tabs[0].panes.push(PaneState {
-        cwd: Some(locked.path().to_path_buf()),
-        right_clicks: false,
-        agent: None,
-    });
+    ws.tabs[0].panes.push(PaneState { cwd: Some(locked.path().to_path_buf()), right_clicks: false, agent: None });
     ws
 }
 
@@ -213,8 +192,7 @@ fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
 
     assert!(!app.restore(&state, AREA), "the restore says a tab is missing");
 
-    let tabs: Vec<usize> =
-        app.projects.iter().map(|p| p.workspaces.iter().map(|w| w.tabs.len()).sum()).collect();
+    let tabs: Vec<usize> = app.projects.iter().map(|p| p.workspaces.iter().map(|w| w.tabs.len()).sum()).collect();
     assert_eq!(tabs, [1, 0, 1]);
     assert_eq!(toast(&app), Some("could not restore 1 tab (locked), see server.log"));
 }
@@ -223,10 +201,7 @@ fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
 fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
     let (dir, _locked, mut app, _rx, ws) = locked_restore();
 
-    assert!(
-        !app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA),
-        "the restore says a tab is missing"
-    );
+    assert!(!app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA), "the restore says a tab is missing");
 
     let label = app.project_label(&app.projects[0]);
     assert_eq!(app.projects[0].workspaces[0].tabs.len(), 1);

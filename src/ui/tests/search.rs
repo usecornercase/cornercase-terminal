@@ -27,9 +27,8 @@ fn item(i: usize) -> Position {
 #[test]
 fn the_bar_shows_a_placeholder_when_closed() {
     let bar = areas().search;
-    let text: String = (bar.x..bar.right())
-        .map(|x| render(&view(&[])).backend().buffer()[(x, bar.y)].symbol().to_string())
-        .collect();
+    let text: String =
+        (bar.x..bar.right()).map(|x| render(&view(&[])).backend().buffer()[(x, bar.y)].symbol().to_string()).collect();
     assert!(text.contains(SEARCH_PLACEHOLDER), "{text:?}");
 }
 

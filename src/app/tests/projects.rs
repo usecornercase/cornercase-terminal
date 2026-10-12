@@ -11,10 +11,7 @@ fn the_first_one_opens_in_the_server_folder() {
 fn a_new_one_has_one_workspace_with_one_tab_in_its_folder() {
     let (app, _rx, dirs) = app_with(1);
     let workspace = &app.projects[0].workspaces[0];
-    assert_eq!(
-        (workspace.path.clone(), workspace.worktree, workspace.tabs.len()),
-        (canonical(&dirs[0]), false, 1)
-    );
+    assert_eq!((workspace.path.clone(), workspace.worktree, workspace.tabs.len()), (canonical(&dirs[0]), false, 1));
 }
 
 #[test]

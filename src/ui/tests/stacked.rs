@@ -41,10 +41,7 @@ fn one_footer_holds_issues_todo_settings_usage_and_quit() {
 #[test]
 fn the_column_border_runs_the_whole_height() {
     let a = stacked(Sidebar::ProjectsOnTop);
-    assert_eq!(
-        (a.projects_border, a.workspaces_border),
-        (Rect::new(SIDEBAR_WIDTH - 1, 0, 1, 30), Rect::default())
-    );
+    assert_eq!((a.projects_border, a.workspaces_border), (Rect::new(SIDEBAR_WIDTH - 1, 0, 1, 30), Rect::default()));
 }
 
 #[rstest]

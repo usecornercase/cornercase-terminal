@@ -111,15 +111,8 @@ fn the_rows_below_move_down_one() {
 #[case::cuts_the_model_before_the_memory(30, Some(GB * 12 / 10), "▌ │   Opus 5… · 17% · 1.2 GB")]
 #[case::drops_the_model_before_the_memory(26, Some(GB * 12 / 10), "▌ │   17% · 1.2 GB")]
 #[case::moves_left_to_keep_the_memory(16, Some(GB * 12 / 10), "▌ 17% · 1.2 GB")]
-fn a_narrow_column_cuts_the_model_first(
-    #[case] workspaces: u16,
-    #[case] memory: Option<u64>,
-    #[case] expected: &str,
-) {
-    let v = View {
-        widths: Widths { workspaces, ..Widths::default() },
-        ..with_details(Details { memory, ..opus(17) })
-    };
+fn a_narrow_column_cuts_the_model_first(#[case] workspaces: u16, #[case] memory: Option<u64>, #[case] expected: &str) {
+    let v = View { widths: Widths { workspaces, ..Widths::default() }, ..with_details(Details { memory, ..opus(17) }) };
     let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
     assert_eq!(line(&render(&v), r, 1), expected);
 }
@@ -143,8 +136,7 @@ fn codex_model() -> Details {
 
 #[test]
 fn renders_the_memory_in_the_compact_layout() {
-    let view =
-        View { nav: Some(Nav::Workspaces), ..with_details(Details { memory: Some(GB * 12 / 10), ..opus(17) }) };
+    let view = View { nav: Some(Nav::Workspaces), ..with_details(Details { memory: Some(GB * 12 / 10), ..opus(17) }) };
 
     insta::assert_snapshot!(render_sized(&view, SMALL.width, SMALL.height).backend());
 }
@@ -175,9 +167,8 @@ fn the_percentage_turns_orange_then_red(#[case] percent: u16, #[case] colour: Co
 fn only_the_first_row_has_the_close_button() {
     let v = with_details(opus(17));
     let r = row(&v, AREA, WorkspaceRow::Tab(0, 0));
-    let hit = |x: u16, y: u16| {
-        workspace_hit(areas().workspaces_list, areas().pitch, &v.tab_lines(), 0, Position::new(x, y))
-    };
+    let hit =
+        |x: u16, y: u16| workspace_hit(areas().workspaces_list, areas().pitch, &v.tab_lines(), 0, Position::new(x, y));
     let menu = row_menu_button(r, areas().pitch);
     assert_eq!(
         [hit(r.x + 4, r.y + 1), hit(r.right() - 2, r.y + 1), hit(r.right() - 2, r.y), hit(menu.x, menu.y)],

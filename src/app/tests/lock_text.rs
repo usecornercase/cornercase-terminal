@@ -27,10 +27,6 @@ fn the_message_names_the_reason(#[case] reason: &str, #[case] expected: &str) {
     true,
     Some("Process 7 is gone; the lock was left behind. It has uncommitted changes, which are deleted.")
 )]
-fn the_note_says_who_holds_it(
-    #[case] holder: Option<Holder>,
-    #[case] changed: bool,
-    #[case] expected: Option<&str>,
-) {
+fn the_note_says_who_holds_it(#[case] holder: Option<Holder>, #[case] changed: bool, #[case] expected: Option<&str>) {
     assert_eq!(lock_note(&lock("busy", holder), changed).as_deref(), expected);
 }

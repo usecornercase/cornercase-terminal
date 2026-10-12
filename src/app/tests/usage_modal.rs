@@ -76,8 +76,7 @@ fn sharing_copies_only_after_something_was_counted() {
     click(&mut app, ui::usage_share(AREA, &view).as_position());
     assert_eq!(app.take_host_writes(), Vec::<Vec<u8>>::new());
     let now = SystemTime::now();
-    app.stats
-        .counted(crate::stats::Kind::Claude, crate::stats::Counted { prompts: vec![now], tokens: Vec::new() });
+    app.stats.counted(crate::stats::Kind::Claude, crate::stats::Counted { prompts: vec![now], tokens: Vec::new() });
     let expected = crate::stats::share_link(&app.stats, now);
     let view = shown(&app).expect("dialog");
     click(&mut app, ui::usage_share(AREA, &view).as_position());

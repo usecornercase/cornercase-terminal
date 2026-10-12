@@ -35,9 +35,7 @@ fn keys_go_to_the_active_tab() {
 
     type_line(&mut app, "cd /");
 
-    pump_until(&mut app, &rx, "second tab moves", |a| {
-        tab_term(a, 0, 1).cwd().as_deref() == Some(Path::new("/"))
-    });
+    pump_until(&mut app, &rx, "second tab moves", |a| tab_term(a, 0, 1).cwd().as_deref() == Some(Path::new("/")));
     assert_ne!(tab_term(&app, 0, 0).cwd().as_deref(), Some(Path::new("/")));
 }
 

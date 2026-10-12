@@ -86,10 +86,7 @@ fn the_row_goes_once_git_is_done_and_the_branch_stays() {
     click(&mut s.app, form_button(REMOVE_SUBMIT, 0));
 
     gone(&mut s);
-    assert_eq!(
-        (toast(&s.app), s.path.exists(), branch_exists(s.repo.path(), "wt")),
-        (Some("removed wt"), false, true)
-    );
+    assert_eq!((toast(&s.app), s.path.exists(), branch_exists(s.repo.path(), "wt")), (Some("removed wt"), false, true));
 }
 
 #[test]
@@ -229,11 +226,7 @@ fn a_lock_left_by_a_process_that_is_gone_says_so() {
 
     checked(&mut s);
 
-    assert!(
-        note(&s.app).is_some_and(|n| n.contains("is gone; the lock was left behind")),
-        "{:?}",
-        note(&s.app)
-    );
+    assert!(note(&s.app).is_some_and(|n| n.contains("is gone; the lock was left behind")), "{:?}", note(&s.app));
 }
 
 #[test]

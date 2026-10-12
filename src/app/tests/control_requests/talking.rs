@@ -36,10 +36,7 @@ fn the_last_message_needs_an_agent_that_keeps_one() {
 
     let message = error(now(&mut app, None, last));
 
-    assert!(
-        message.starts_with(&format!("pane {id} runs no agent, and cornercase only reads")),
-        "{message}"
-    );
+    assert!(message.starts_with(&format!("pane {id} runs no agent, and cornercase only reads")), "{message}");
 }
 
 #[test]
@@ -81,10 +78,7 @@ fn a_shell_busy_before_its_program_starts_is_not_back_yet() {
 #[rstest::rstest]
 #[case::send(|pane| send_text(pane, "", true, false), "did not take what was typed")]
 #[case::keys(|pane| press_keys(pane, &["enter"]), "is not reading its input")]
-fn an_enter_a_full_pane_refuses_is_not_reported_as_pressed(
-    #[case] enter: fn(u64) -> Command,
-    #[case] refused: &str,
-) {
+fn an_enter_a_full_pane_refuses_is_not_reported_as_pressed(#[case] enter: fn(u64) -> Command, #[case] refused: &str) {
     let (mut app, rx) = app();
     let id = first(&app);
     type_line(&mut app, "stty -echo; sleep 30");
@@ -121,10 +115,7 @@ fn a_wait_times_out_saying_what_it_waited_for() {
     ask(&mut app, None, wait_for(id, Until::Text("never".into()), Some(0.05)));
 
     let message = error(answered(&mut app, &rx, "the wait times out"));
-    assert_eq!(
-        message,
-        format!("timed out after 0.05s: no line on the screen of pane {id} matches `never`")
-    );
+    assert_eq!(message, format!("timed out after 0.05s: no line on the screen of pane {id} matches `never`"));
 }
 
 #[test]
@@ -259,11 +250,7 @@ fn a_pane_that_closes_ends_a_wait_on_several_as_closed() {
     let other = made.ids.pane.expect("the new pane");
     ask(&mut app, None, wait_on(&[other, id], &[], true, Until::Text(r"mark-\d".into()), None));
 
-    let close = wire::Close {
-        item: Item::Tab(made.ids.tab.expect("the tab")),
-        remove_worktree: false,
-        force: false,
-    };
+    let close = wire::Close { item: Item::Tab(made.ids.tab.expect("the tab")), remove_worktree: false, force: false };
     done(now(&mut app, None, Command::Close(close)));
     pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
     app.refresh(Instant::now());
@@ -272,10 +259,7 @@ fn a_pane_that_closes_ends_a_wait_on_several_as_closed() {
 
     let answer = done(answered(&mut app, &rx, "the open pane prints"));
     assert_eq!(early, []);
-    assert_eq!(
-        answer.panes,
-        [ended(None, Some(other), "closed", None), ended(None, Some(id), "text", Some("mark-2"))]
-    );
+    assert_eq!(answer.panes, [ended(None, Some(other), "closed", None), ended(None, Some(id), "text", Some("mark-2"))]);
 }
 
 #[test]

@@ -62,10 +62,7 @@ fn setup(git: bool, gh_script: &str) -> Setup {
 }
 
 fn listing() -> Setup {
-    setup(
-        true,
-        &format!("if [ \"$2\" = view ]; then cat <<'EOF'\n{VIEW}\nEOF\nelse cat <<'EOF'\n{LIST}\nEOF\nfi"),
-    )
+    setup(true, &format!("if [ \"$2\" = view ]; then cat <<'EOF'\n{VIEW}\nEOF\nelse cat <<'EOF'\n{LIST}\nEOF\nfi"))
 }
 
 fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> FakeHttp {
@@ -389,10 +386,7 @@ mod starting {
         let mut s = listing();
         open_loaded(&mut s, Source::Github);
         send_key(&mut s.app, KeyCode::Down, KeyModifiers::NONE);
-        click(
-            &mut s.app,
-            ui::issue_buttons(ui::issues_area(AREA), &["start", "refresh", "cancel"])[0].as_position(),
-        );
+        click(&mut s.app, ui::issue_buttons(ui::issues_area(AREA), &["start", "refresh", "cancel"])[0].as_position());
         pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
         assert_eq!(s.app.projects[0].workspaces[1].label(), "#3 Dark mode");
     }
@@ -514,12 +508,7 @@ mod starting {
 
         let workspace = &s.app.projects[0].workspaces[0];
         assert_eq!(
-            (
-                s.app.overlay.is_none(),
-                workspace.tabs.len(),
-                workspace.active,
-                workspace.tabs[1].label(&s.app.config)
-            ),
+            (s.app.overlay.is_none(), workspace.tabs.len(), workspace.active, workspace.tabs[1].label(&s.app.config)),
             (true, 2, 1, "sc-482 Returns page crashes".into())
         );
         wait_typed(&mut s, "agent ready> https://app.shortcut.com/acme/story/482");
@@ -582,8 +571,7 @@ mod tokens {
 
         click(
             &mut s.app,
-            ui::issue_buttons(ui::issues_area(AREA), &["start", "refresh", "disconnect", "cancel"])[2]
-                .as_position(),
+            ui::issue_buttons(ui::issues_area(AREA), &["start", "refresh", "disconnect", "cancel"])[2].as_position(),
         );
 
         assert_eq!(secrets::read(&secrets_file(&s), "shortcut_token"), None);
@@ -607,10 +595,8 @@ mod jira {
                 "updated":"2026-09-30T00:00:00.000+0000"}}],"isLast":true}"#;
 
     fn jira(s: &mut Setup) -> FakeHttp {
-        let server = FakeHttp::start(vec![
-            ("GET /rest/api/3/myself", 200, MYSELF),
-            ("GET /rest/api/3/search/jql", 200, SEARCH),
-        ]);
+        let server =
+            FakeHttp::start(vec![("GET /rest/api/3/myself", 200, MYSELF), ("GET /rest/api/3/search/jql", 200, SEARCH)]);
         s.app.apis.jira = Some(server.url());
         server
     }
@@ -651,10 +637,7 @@ mod jira {
 
         pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Jira));
         assert_eq!(shown(&s.app), ["SHOP-482"]);
-        assert_eq!(
-            (config.jira_site.as_str(), config.jira_email.as_str()),
-            ("acme.atlassian.net", "ana@acme.dev")
-        );
+        assert_eq!((config.jira_site.as_str(), config.jira_email.as_str()), ("acme.atlassian.net", "ana@acme.dev"));
         assert_eq!(secrets::read(&secrets_file(&s), "jira_api_token").as_deref(), Some("t0k"));
         let basic = clipboard::base64(b"ana@acme.dev:t0k").to_lowercase();
         assert!(server.request(0).to_lowercase().contains(&format!("authorization: basic {basic}")));
@@ -714,9 +697,7 @@ mod jira {
         let key = s.app.cache_key(Source::Jira, browser(&s.app).project, &browser(&s.app).query(Source::Jira));
         let account = Account { handle: "Ana".into(), workspace: "acme.atlassian.net".into() };
 
-        s.app
-            .token_checked(Source::Jira, &Secret("new".into()), Ok(account), AREA)
-            .expect("save the new token");
+        s.app.token_checked(Source::Jira, &Secret("new".into()), Ok(account), AREA).expect("save the new token");
         answer(&mut s, |e| matches!(e, AppEvent::IssuesLoaded { source: Source::Jira, .. }));
 
         assert_eq!(s.app.issue_cache.get(&key), None);

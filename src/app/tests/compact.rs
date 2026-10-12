@@ -17,8 +17,7 @@ fn open_menu(app: &mut App) {
 }
 
 fn row(app: &App, row: WorkspaceRow) -> Position {
-    let r =
-        ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.workspaces_scroll, row);
+    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.workspaces_scroll, row);
     Position::new(r.x + 3, r.y)
 }
 
@@ -58,9 +57,8 @@ fn picking_a_project_shows_its_workspaces() {
     let (mut app, _rx, _dirs) = app_with(2);
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
-    let first =
-        ui::entry_row(small().list, small().pitch, &plain(2), app.projects_scroll, SidebarRow::Project(0))
-            .as_position();
+    let first = ui::entry_row(small().list, small().pitch, &plain(2), app.projects_scroll, SidebarRow::Project(0))
+        .as_position();
     press(&mut app, first);
     assert_eq!((app.active, app.nav), (0, Some(ui::Nav::Workspaces)));
 }
@@ -80,8 +78,7 @@ fn closing_a_tab_keeps_the_menu_open() {
     let (mut app, _rx, _dirs) = app_with(1);
     app.add_tab(0, 0, SMALL).expect("add a tab");
     open_menu(&mut app);
-    let r =
-        ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), 0, WorkspaceRow::Tab(0, 0));
+    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), 0, WorkspaceRow::Tab(0, 0));
     press(&mut app, ui::row_close_button(r, small().pitch).as_position());
     assert_eq!(app.nav, Some(ui::Nav::Workspaces));
 }
@@ -148,8 +145,7 @@ fn with_workspace(worktree: bool) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
 }
 
 fn click_close(app: &mut App, row: WorkspaceRow) {
-    let r =
-        ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.workspaces_scroll, row);
+    let r = ui::workspace_row(small().workspaces_list, small().pitch, &app.tab_lines(), app.workspaces_scroll, row);
     press(app, ui::row_close_button(r, small().pitch).as_position());
 }
 
@@ -240,10 +236,7 @@ fn closing_a_project_asks_first() {
     press(&mut app, small().back.as_position());
     let rows = app.sidebar_rows();
 
-    press(
-        &mut app,
-        ui::close_button(small().list, small().pitch, &rows, 0, SidebarRow::Project(1)).as_position(),
-    );
+    press(&mut app, ui::close_button(small().list, small().pitch, &rows, 0, SidebarRow::Project(1)).as_position());
 
     assert!(matches!(app.overlay, Some(Overlay::CloseProject { .. })));
 }

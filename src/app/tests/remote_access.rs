@@ -90,10 +90,7 @@ fn is_off_until_switched_on() {
 fn switching_it_on_serves_the_port_over_tailscale_and_shows_the_button() {
     let r = ready();
 
-    assert_eq!(
-        calls(&r),
-        format!("status --json\nserve --bg --yes --https=8443 http://127.0.0.1:{}\n", r.port)
-    );
+    assert_eq!(calls(&r), format!("status --json\nserve --bg --yes --https=8443 http://127.0.0.1:{}\n", r.port));
     assert_eq!((r.app.remote_button(), r.app.remote.web.listening()), (Some(false), Some(r.port)));
     assert!(get(r.port, "/").starts_with("HTTP/1.1 401"));
 }
@@ -142,9 +139,7 @@ fn without_tailscale_the_dialog_says_so() {
     click(&mut r.app, ui::remote_button(areas().usage, false).as_position());
 
     let first = |a: &App| shown(a).and_then(|v| v.lines.first().cloned());
-    pump_until(&mut r.app, &r.rx, "tailscale is found missing", |a| {
-        first(a).as_deref() != Some("starting Tailscale…")
-    });
+    pump_until(&mut r.app, &r.rx, "tailscale is found missing", |a| first(a).as_deref() != Some("starting Tailscale…"));
     assert_eq!(first(&r.app).as_deref(), Some("tailscale is not installed on this computer"));
 }
 

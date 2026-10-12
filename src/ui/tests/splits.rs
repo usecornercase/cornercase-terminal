@@ -51,10 +51,7 @@ fn a_pane_landing_in_the_middle_offers_a_swap() {
 
 #[test]
 fn the_landing_takes_the_surface_background() {
-    let v = View {
-        tab: Some(TabView { landing: Some((areas().pane, Place::Swap)), ..three(true) }),
-        ..view(&["~"])
-    };
+    let v = View { tab: Some(TabView { landing: Some((areas().pane, Place::Swap)), ..three(true) }), ..view(&["~"]) };
     assert_eq!(style_at(&v, areas().pane.as_position()).bg, Some(v.surface()));
 }
 

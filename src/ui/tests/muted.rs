@@ -17,8 +17,7 @@ fn swaps_a_bright_black_that_may_not_show_for_a_fixed_grey(
 
 #[test]
 fn keeps_a_bright_black_that_shows() {
-    let mut theme =
-        HostTheme { background: Some(RgbColor { r: 0x28, g: 0x2a, b: 0x36 }), ..HostTheme::default() };
+    let mut theme = HostTheme { background: Some(RgbColor { r: 0x28, g: 0x2a, b: 0x36 }), ..HostTheme::default() };
     theme.palette[8] = Some(RgbColor { r: 0x62, g: 0x72, b: 0xa4 });
 
     assert_eq!(muted(&theme), Color::DarkGray);

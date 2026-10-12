@@ -318,9 +318,7 @@ fn the_search_field_takes_the_keys_until_a_press_outside() {
     let (mut app, rx) = opened(&repo);
     search(&mut app, &rx, files::Mode::Name, "ma");
     assert_eq!(
-        app.files
-            .query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws"))
-            .map(|q| q.text.as_str()),
+        app.files.query(app.project().and_then(Project::workspace).map(|w| w.id).expect("ws")).map(|q| q.text.as_str()),
         Some("ma")
     );
     click(&mut app, areas().pane.as_position());
@@ -493,8 +491,7 @@ mod images {
 
         let (buffer, placed) = render_frame(&mut app, AREA, &iterm);
         let placed = placed.expect("placed");
-        let covered: Vec<Position> =
-            placed.rect.positions().filter(|&p| buffer[p].symbol() != MARKER).collect();
+        let covered: Vec<Position> = placed.rect.positions().filter(|&p| buffer[p].symbol() != MARKER).collect();
 
         assert!(!covered.is_empty(), "the menu reaches the picture");
         assert!(!placed.drawn);

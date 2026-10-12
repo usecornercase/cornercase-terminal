@@ -55,11 +55,8 @@ fn texts(app: &App) -> Vec<String> {
 fn undo(app: &mut App, message: &str) {
     click(
         app,
-        ui::toast_button(
-            AREA,
-            ui::Toast { message, icon: ui::ToastIcon::Check, button: Some(ui::ToastButton::Undo) },
-        )
-        .as_position(),
+        ui::toast_button(AREA, ui::Toast { message, icon: ui::ToastIcon::Check, button: Some(ui::ToastButton::Undo) })
+            .as_position(),
     );
 }
 

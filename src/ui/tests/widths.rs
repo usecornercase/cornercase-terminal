@@ -83,10 +83,7 @@ fn dragging_leaves_room_for_the_pane(#[case] border: Border) {
 
 #[test]
 fn reset_brings_back_the_default_width_of_that_column_only() {
-    assert_eq!(
-        WIDE.reset(Border::Projects),
-        Widths { projects: SIDEBAR_WIDTH, workspaces: 30, ..Widths::default() }
-    );
+    assert_eq!(WIDE.reset(Border::Projects), Widths { projects: SIDEBAR_WIDTH, workspaces: 30, ..Widths::default() });
 }
 
 const STACKED: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
@@ -120,8 +117,7 @@ fn a_room_too_short_for_both_lists_is_split_in_half() {
 
 #[test]
 fn dragging_the_line_puts_it_under_the_mouse() {
-    let widths =
-        Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED, false);
+    let widths = Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED, false);
     assert_eq!(widths.stack, Some(12));
 }
 

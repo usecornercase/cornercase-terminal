@@ -115,9 +115,7 @@ fn styling(icon: char, colour: u8) -> View<'static> {
 
 #[test]
 fn every_preset_is_offered_in_the_modal() {
-    assert!(
-        GROUP_STYLES.iter().all(|(icon, colour)| GROUP_ICONS.contains(icon) && GROUP_COLOURS.contains(colour))
-    );
+    assert!(GROUP_STYLES.iter().all(|(icon, colour)| GROUP_ICONS.contains(icon) && GROUP_COLOURS.contains(colour)));
 }
 
 #[test]
@@ -156,8 +154,7 @@ fn style_hits(#[case] cell: Rect, #[case] expected: Option<StyleHit>) {
 #[test]
 fn the_cells_fit_a_narrow_terminal() {
     let narrow = Rect::new(0, 0, 40, 20);
-    let all =
-        (0..GROUP_ICONS.len()).map(|i| style_icon(narrow, i)).chain((0..16).map(|i| style_colour(narrow, i)));
+    let all = (0..GROUP_ICONS.len()).map(|i| style_icon(narrow, i)).chain((0..16).map(|i| style_colour(narrow, i)));
     assert!(all.into_iter().all(|r| r.width >= ICON_CELL));
 }
 

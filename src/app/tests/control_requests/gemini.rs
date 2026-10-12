@@ -42,10 +42,7 @@ fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() 
     let mut running = Running::new();
     let id = first(&running.app);
     running.send("fix the login");
-    assert_eq!(
-        done(answered(&mut running.app, &running.rx, "Gemini records the prompt")).ids.pane,
-        Some(id)
-    );
+    assert_eq!(done(answered(&mut running.app, &running.rx, "Gemini records the prompt")).ids.pane, Some(id));
     ask(&mut running.app, None, wait_for(id, Until::TurnOver, Some(5.0)));
     running.app.refresh(Instant::now());
     assert_eq!(answers(&mut running.app).len(), 0);
@@ -58,8 +55,7 @@ fn a_send_is_confirmed_and_wait_and_last_message_follow_the_same_conversation() 
         None,
         Command::LastMessage(wire::LastMessage { pane: Some(id), ..wire::LastMessage::default() }),
     );
-    let Response::Ok(message) = answered(&mut running.app, &running.rx, "Gemini's last message is read")
-    else {
+    let Response::Ok(message) = answered(&mut running.app, &running.rx, "Gemini's last message is read") else {
         panic!("last message failed")
     };
     assert_eq!(message["agent"], "gemini");
@@ -101,9 +97,7 @@ fn status_events_and_a_pending_restart_follow_geminis_turn() {
         statuses(events, id) == [change(Some("idle"), Some("working"))]
     });
     assert!(
-        told(&events)
-            .iter()
-            .any(|(what, _)| { matches!(what, wire::What::Status { agent, .. } if agent == "gemini") })
+        told(&events).iter().any(|(what, _)| { matches!(what, wire::What::Status { agent, .. } if agent == "gemini") })
     );
     let status = value(&mut running.app, None, Command::Status(wire::Status {}));
     assert_eq!(status["projects"][0]["workspaces"][0]["tabs"][0]["panes"][0]["status"], "working");
@@ -112,9 +106,6 @@ fn status_events_and_a_pending_restart_follow_geminis_turn() {
     assert_eq!(answers(&mut running.app), Vec::<Response>::new());
     assert!(running.app.take_restart().is_none());
     running.title("◇  Ready (project)");
-    assert!(matches!(
-        answered(&mut running.app, &running.rx, "Gemini releases the restart"),
-        Response::Ok(_)
-    ));
+    assert!(matches!(answered(&mut running.app, &running.rx, "Gemini releases the restart"), Response::Ok(_)));
     assert!(running.app.take_restart().is_some());
 }

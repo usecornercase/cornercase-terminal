@@ -80,8 +80,7 @@ fn adding_a_tab_under_another_project_switches_to_it() {
 fn a_new_workspace_under_another_project_is_asked_for_that_project() {
     let (mut app, _rx, _dirs) = tree(2);
     click_name(&mut app, TreeRow::NewWorkspace(0));
-    let asked =
-        matches!(app.overlay, Some(Overlay::NewWorkspace { project, .. }) if project == app.projects[0].id);
+    let asked = matches!(app.overlay, Some(Overlay::NewWorkspace { project, .. }) if project == app.projects[0].id);
     assert_eq!((asked, app.active), (true, 1));
 }
 
@@ -140,10 +139,8 @@ fn a_tab_dragged_in_another_project_moves_there() {
 fn a_search_result_unfolds_the_way_to_it() {
     let (mut app, _rx, _dirs) = tree(2);
     let id = app.take_id();
-    app.groups.push(Group {
-        id,
-        entry: ui::GroupEntry { name: "work".into(), icon: '●', colour: 4, collapsed: true },
-    });
+    app.groups
+        .push(Group { id, entry: ui::GroupEntry { name: "work".into(), icon: '●', colour: 4, collapsed: true } });
     app.projects[0].group = Some(id);
     app.projects[0].collapsed = true;
     app.projects[0].workspaces[0].collapsed = true;
@@ -151,8 +148,7 @@ fn a_search_result_unfolds_the_way_to_it() {
 
     app.goto(Goto::Place { project, workspace: Some(workspace), tab: Some(tab) });
 
-    let folds =
-        (app.groups[0].entry.collapsed, app.projects[0].collapsed, app.projects[0].workspaces[0].collapsed);
+    let folds = (app.groups[0].entry.collapsed, app.projects[0].collapsed, app.projects[0].workspaces[0].collapsed);
     assert_eq!(folds, (false, false, false));
 }
 

@@ -249,10 +249,7 @@ fn a_mode_picked_here_is_how_the_agent_starts() {
 
     pick(&mut s, &Row::Kind("claude".into()), "plan");
 
-    assert_eq!(
-        agents::command_line(&config::load(&config_path(&s)), "claude"),
-        "claude --permission-mode plan"
-    );
+    assert_eq!(agents::command_line(&config::load(&config_path(&s)), "claude"), "claude --permission-mode plan");
 }
 
 #[test]

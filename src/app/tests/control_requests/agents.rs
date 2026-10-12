@@ -89,8 +89,7 @@ mod work_stats {
     fn working_grows_time_and_finishing_counts_a_turn_and_the_recorded_tokens() {
         let mut agent = Agent::new();
         let id = agent.start(Some("synthetic work"));
-        agent
-            .refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
+        agent.refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
         let before = total(&agent);
         sample(&mut agent);
         let working = total(&agent);
@@ -112,8 +111,7 @@ mod work_stats {
     fn background_shells_stop_agent_time() {
         let mut agent = Agent::new();
         let id = agent.start(Some("background"));
-        agent
-            .refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
+        agent.refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
         agent.finish();
         agent.refreshing("background shell", |a| pane(a, id).agent.background_shell());
         sample(&mut agent);
@@ -203,8 +201,7 @@ fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn() {
     let turn = done(agent.answered("the turn is over"));
 
     let report: Report =
-        serde_json::from_value(value(&mut agent.app, None, Command::Status(wire::Status {})))
-            .expect("a report");
+        serde_json::from_value(value(&mut agent.app, None, Command::Status(wire::Status {}))).expect("a report");
     let info = report
         .projects
         .iter()
@@ -228,8 +225,7 @@ fn a_turn_over_with_a_background_shell_ends_only_a_wait_for_the_turn() {
 }
 
 fn in_status(app: &mut App, id: u64) -> wire::PaneInfo {
-    let report: Report =
-        serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
+    let report: Report = serde_json::from_value(value(app, None, Command::Status(wire::Status {}))).expect("a report");
     let mut tabs = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
     tabs.find_map(|t| t.panes.iter().find(|p| p.id == id)).expect("the agent's pane").clone()
 }
@@ -258,10 +254,7 @@ fn send_refuses_an_agent_showing_a_panel_and_says_when_a_forced_prompt_was_not_t
 
     assert_eq!((shown, in_status(&mut agent.app, id).dialog), (true, false));
     assert!(refused.contains("shows a dialog, a panel or its shell mode"), "{refused}");
-    assert!(
-        unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"),
-        "{unconfirmed}"
-    );
+    assert!(unconfirmed.starts_with("not confirmed: the prompt may not have been submitted"), "{unconfirmed}");
 }
 
 #[test]
@@ -303,9 +296,7 @@ fn a_wait_on_several_ends_at_the_turn_over_of_an_agent_with_a_background_shell()
     let timed_out = error(agent.answered("waiting for it to stop times out"));
     agent.finish();
 
-    let endings = |done: &Done| {
-        done.panes.iter().map(|p| (p.ids.tab, p.ids.pane, p.ended.clone())).collect::<Vec<_>>()
-    };
+    let endings = |done: &Done| done.panes.iter().map(|p| (p.ids.tab, p.ids.pane, p.ended.clone())).collect::<Vec<_>>();
     let shell = Some("shell".to_string());
     assert_eq!(endings(&any), [(None, Some(id), shell.clone())]);
     assert_eq!(endings(&all), [(None, Some(id), shell.clone()), (Some(tab), Some(id), shell)]);
@@ -364,13 +355,10 @@ impl Agent {
         refreshing(app, rx, "the pane knows its conversation", |a| {
             pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
         });
-        let Some(context::Record::Claude(path)) =
-            pane(&self.app, id).context.record_for(crate::agents::CLAUDE)
-        else {
+        let Some(context::Record::Claude(path)) = pane(&self.app, id).context.record_for(crate::agents::CLAUDE) else {
             panic!("not a transcript")
         };
-        let mut file =
-            std::fs::OpenOptions::new().create(true).append(true).open(path).expect("open the transcript");
+        let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path).expect("open the transcript");
         let text: String = lines.iter().flat_map(|line| [*line, "\n"]).collect();
         std::io::Write::write_all(&mut file, text.as_bytes()).expect("write the transcript");
     }
@@ -412,10 +400,7 @@ fn the_record_of_another_agent_is_not_read() {
 
     let message = error(now(&mut agent.app, None, last_message(id)));
 
-    assert!(
-        message.starts_with(&format!("cornercase has not found where the codex agent in pane {id}")),
-        "{message}"
-    );
+    assert!(message.starts_with(&format!("cornercase has not found where the codex agent in pane {id}")), "{message}");
 }
 
 #[test]
@@ -433,9 +418,7 @@ mod restarting_when_idle {
 
     fn finish_and_recheck(agent: &mut Agent, id: u64) {
         agent.finish();
-        agent.refreshing("the agent stops", |a| {
-            pane(a, id).agent.status() != Some(activity::Status::Working)
-        });
+        agent.refreshing("the agent stops", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
         looked_again(agent);
     }
 
@@ -447,9 +430,7 @@ mod restarting_when_idle {
         let id = agent.start(None);
         ask(&mut agent.app, None, send_text(id, prompt, true, false));
         done(agent.answered("the enter is pressed"));
-        agent.refreshing("the agent works", |a| {
-            pane(a, id).agent.status() == Some(activity::Status::Working)
-        });
+        agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
         id
     }
 
@@ -607,8 +588,7 @@ mod keeping_awake {
         let id = working(&mut agent, "next step");
         let held = (agent.app.awake.state(), agent.app.report(None).keep_awake);
         agent.finish();
-        agent
-            .refreshing("the turn ends", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
+        agent.refreshing("the turn ends", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
 
         let kept = later(&mut agent, Duration::ZERO);
         let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));

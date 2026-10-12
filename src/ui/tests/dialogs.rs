@@ -117,11 +117,7 @@ fn codex_usage() -> UsageSection {
 }
 
 fn usage() -> Usage {
-    Usage {
-        page: crate::usage::Page::Limits,
-        stats: crate::stats::View::default(),
-        sections: vec![claude_usage()],
-    }
+    Usage { page: crate::usage::Page::Limits, stats: crate::stats::View::default(), sections: vec![claude_usage()] }
 }
 
 fn stats_usage(empty: bool) -> Usage {
@@ -185,14 +181,12 @@ fn renders_one_section_per_agent() {
 
 #[test]
 fn renders_usage_while_loading_and_after_a_failure() {
-    let loading =
-        UsageSection { status: "loading…".into(), windows: Vec::new(), extra: None, ..claude_usage() };
+    let loading = UsageSection { status: "loading…".into(), windows: Vec::new(), extra: None, ..claude_usage() };
     let failed = UsageSection {
         title: "Codex".into(),
         status: String::new(),
         error: Some(
-            "usage unavailable: could not run /opt/codex/bin/codex: No such file or directory (os error 2)"
-                .into(),
+            "usage unavailable: could not run /opt/codex/bin/codex: No such file or directory (os error 2)".into(),
         ),
         windows: Vec::new(),
         ..codex_usage()
@@ -255,8 +249,7 @@ fn a_usage_too_tall_for_the_screen_keeps_its_done_button() {
 fn renders_a_confirmation() {
     let confirm = Confirm {
         title: "Remove workspace",
-        message: "Remove the workspace login and delete its worktree folder ~/wt/login? The branch is kept."
-            .into(),
+        message: "Remove the workspace login and delete its worktree folder ~/wt/login? The branch is kept.".into(),
         note: Some(Note::Error("contains modified or untracked files, use --force to delete it".into())),
         submit: "remove anyway",
         extra: None,

@@ -81,9 +81,8 @@ fn a_program_that_copies_reaches_the_clipboard_with_a_toast() {
 #[test]
 fn the_toast_goes_away_after_a_while() {
     let (mut app, _rx) = showing("hello world");
-    app.toast = Instant::now()
-        .checked_sub(TOAST_FOR)
-        .map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
+    app.toast =
+        Instant::now().checked_sub(TOAST_FOR).map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
     render(&mut app, AREA);
 
     assert_eq!(app.toast, None);

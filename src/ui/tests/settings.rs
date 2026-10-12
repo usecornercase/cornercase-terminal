@@ -129,8 +129,7 @@ fn a_dangerous_value_is_red() {
     };
     let r = settings_row(AREA, &["How each agent starts"], 0, 0);
     let t = render(&with(Settings { tab: 1, rows: vec![claude], ..settings(0) }));
-    let cell =
-        (r.x..r.right()).map(|x| &t.backend().buffer()[(x, r.y)]).find(|c| c.symbol() == "k").expect("text");
+    let cell = (r.x..r.right()).map(|x| &t.backend().buffer()[(x, r.y)]).find(|c| c.symbol() == "k").expect("text");
     assert_eq!(cell.fg, Color::Red);
 }
 
@@ -139,8 +138,8 @@ fn the_edit_line_puts_the_cursor_after_the_value() {
     let edit = SettingsEdit { label: "Linear API key".into(), value: "•••".into() };
     let mut t = render(&with(Settings { edit: Some(edit), ..settings(2) }));
     let row = settings_edit(settings_area(AREA));
-    let x = row.x
-        + u16::try_from(INPUT_PROMPT.chars().count() + "Linear API key: ".chars().count() + 3).expect("width");
+    let x =
+        row.x + u16::try_from(INPUT_PROMPT.chars().count() + "Linear API key: ".chars().count() + 3).expect("width");
     assert_eq!(t.get_cursor_position().expect("cursor"), Position::new(x, row.y));
 }
 

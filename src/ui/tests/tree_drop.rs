@@ -73,8 +73,5 @@ fn a_project_dropped_above_the_list_lands_before_the_project_after_its_own_rows(
 
 #[test]
 fn a_group_moves_with_everything_in_it() {
-    assert_eq!(
-        drop_on(TreeRow::Group(0), TreeRow::Tab(0, 0, 0)),
-        Some(Landing { at: 6, spot: Spot::Group(0) })
-    );
+    assert_eq!(drop_on(TreeRow::Group(0), TreeRow::Tab(0, 0, 0)), Some(Landing { at: 6, spot: Spot::Group(0) }));
 }

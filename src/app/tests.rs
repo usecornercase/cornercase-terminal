@@ -47,10 +47,7 @@ fn panel_area(app: &App) -> Rect {
     app.layout(AREA).changes
 }
 
-fn fake_shortcut<B: Into<Vec<u8>>>(
-    app: &mut App,
-    routes: Vec<(&'static str, u16, B)>,
-) -> crate::test_util::FakeHttp {
+fn fake_shortcut<B: Into<Vec<u8>>>(app: &mut App, routes: Vec<(&'static str, u16, B)>) -> crate::test_util::FakeHttp {
     let server = crate::test_util::FakeHttp::start(routes);
     app.apis.shortcut = format!("{}/api/v3", server.url());
     server
@@ -345,35 +342,35 @@ fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
     (worktrees, config, config_path)
 }
 
-mod keys;
-mod shortcuts;
-mod projects;
-mod groups;
-mod sidebar_clicks;
-mod reorder;
-mod tabs;
-mod workspaces;
-mod remove_worktree;
-mod lock_text;
-mod context_menu;
-mod rename;
-mod shows;
-mod restore;
-mod picker;
 mod agent_status;
-mod compact;
-mod sidebar_scroll;
-mod search;
-mod settings;
-mod select_text;
-mod scrollback;
-mod splits;
-mod resize_columns;
-mod muted_text;
 mod click_outside;
-mod tab_bar;
-mod tree_sidebar;
+mod compact;
+mod context_menu;
+mod groups;
+mod keys;
+mod lock_text;
+mod muted_text;
+mod picker;
+mod projects;
+mod remove_worktree;
+mod rename;
+mod reorder;
+mod resize_columns;
+mod restore;
+mod scrollback;
+mod search;
+mod select_text;
+mod settings;
+mod shortcuts;
+mod shows;
+mod sidebar_clicks;
+mod sidebar_scroll;
+mod splits;
 mod stacked_sidebar;
+mod tab_bar;
+mod tabs;
+mod tree_sidebar;
+mod workspaces;
 
 #[test]
 fn resize_fits_terminals_to_the_pane() {
@@ -385,16 +382,16 @@ fn resize_fits_terminals_to_the_pane() {
     );
 }
 
+mod bugs;
+mod changes_panel;
+mod control_requests;
+mod esc_closes_the_side_panel;
+mod files_panel;
 mod issue_list;
+mod path_links;
+mod remote_access;
 mod restarting;
+mod todo_panel;
+mod trace;
 mod updates;
 mod usage_modal;
-mod remote_access;
-mod changes_panel;
-mod files_panel;
-mod path_links;
-mod todo_panel;
-mod esc_closes_the_side_panel;
-mod control_requests;
-mod bugs;
-mod trace;
