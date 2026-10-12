@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.38
+
+- No changes in the app. The app tests share their helpers, and new tests pin what session.json and config.json look like.
+
 ## 0.12.37
 
 - Open cornercase from your phone. Turn on **remote access** in Settings › UI, click the new **Remote** button at the right of the Usage row, and scan the QR code with your phone: the same session opens in its browser, in the compact layout, over [Tailscale](https://tailscale.com), so nothing is published on the internet. Swipe to scroll, tap to click; the screen makes room for the keyboard, and the page reconnects by itself when the connection drops. Only the browsers you pair with a code (once, valid ten minutes) and only your Tailscale account can open it, and Settings › UI forgets them all in one go. The button shows a green dot while a browser is attached. You need Tailscale on the computer and on the phone, with HTTPS certificates turned on for your tailnet; the docs page *From your phone* walks through it.
