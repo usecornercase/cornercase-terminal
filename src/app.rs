@@ -5657,6 +5657,16 @@ mod tests {
     use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
     use crate::ui::WorkspaceRow;
 
+    fn drain(app: &mut App, rx: &Receiver<AppEvent>) {
+        drain_in(app, rx, AREA);
+    }
+
+    fn drain_in(app: &mut App, rx: &Receiver<AppEvent>, area: Rect) {
+        while let Ok(ev) = rx.try_recv() {
+            app.handle_event(ev, area).expect("handle event");
+        }
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -5726,9 +5736,7 @@ mod tests {
 
     fn shows(app: &mut App, rx: &Receiver<AppEvent>, text: &str) {
         wait_until(text, || {
-            while let Ok(ev) = rx.try_recv() {
-                app.handle_event(ev, AREA).expect("handle event");
-            }
+            drain(app, rx);
             screen(app).contains(text)
         });
     }
@@ -5737,18 +5745,14 @@ mod tests {
         type_text(app, &format!("echo {word}-\"\"typed"));
         send_key(app, KeyCode::Enter, KeyModifiers::NONE);
         wait_until("the pane gets the keys", || {
-            while let Ok(ev) = rx.try_recv() {
-                app.handle_event(ev, AREA).expect("handle event");
-            }
+            drain(app, rx);
             screen(app).contains(&format!("{word}-typed"))
         });
     }
 
     fn refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
         wait_until(what, || {
-            while let Ok(ev) = rx.try_recv() {
-                app.handle_event(ev, AREA).expect("handle event");
-            }
+            drain(app, rx);
             app.refresh(Instant::now());
             cond(app)
         });
@@ -5756,9 +5760,7 @@ mod tests {
 
     fn pump_until(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
         wait_until(what, || {
-            while let Ok(ev) = rx.try_recv() {
-                app.handle_event(ev, AREA).expect("handle event");
-            }
+            drain(app, rx);
             cond(app)
         });
     }
@@ -7306,9 +7308,7 @@ mod tests {
             click_close(&mut app, WorkspaceRow::Tab(0, 1));
 
             wait_until("the tab closes", || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(&mut app, &rx);
                 app.refresh(Instant::now());
                 app.projects[0].workspaces[0].tabs.len() == 1
             });
@@ -8661,9 +8661,7 @@ rm -f "$1/sessions/$$.json"
 
         fn watch_until(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
             wait_until(what, || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(app, rx);
                 tick(app);
                 cond(app)
             });
@@ -9270,9 +9268,7 @@ rm -f "$1/sessions/$$.json"
 
             fn wait_resumed(app: &mut App, rx: &Receiver<AppEvent>, line: &str) {
                 wait_until("the conversation is resumed", || {
-                    while let Ok(ev) = rx.try_recv() {
-                        app.handle_event(ev, AREA).expect("handle event");
-                    }
+                    drain(app, rx);
                     app.refresh(Instant::now());
                     squeezed(&screen(app)).contains(&squeezed(&format!("resumed: {line}")))
                 });
@@ -10741,9 +10737,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, rx) = split_right();
             type_line(&mut app, "echo split-\"\"works");
             wait_until("the new pane runs the command", || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(&mut app, &rx);
                 pane_text(&mut app, 1).contains("split-works")
             });
             assert!(!pane_text(&mut app, 0).contains("split-works"));
@@ -12004,9 +11998,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         fn pump(s: &mut Setup) {
-            while let Ok(ev) = s.rx.try_recv() {
-                s.app.handle_event(ev, AREA).expect("handle event");
-            }
+            drain(&mut s.app, &s.rx);
             s.app.refresh(Instant::now());
         }
 
@@ -14139,9 +14131,7 @@ rm -f "$1/sessions/$$.json"
         fn settle(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&panel::View) -> bool) {
             wait_until(what, || {
                 app.refresh(Instant::now());
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(app, rx);
                 cond(&view(app))
             });
         }
@@ -14522,9 +14512,7 @@ rm -f "$1/sessions/$$.json"
             fn ready(app: &mut App, rx: &Receiver<AppEvent>, sight: &Sight) -> (Buffer, Placed) {
                 let mut last = None;
                 wait_until("the payload is ready", || {
-                    while let Ok(ev) = rx.try_recv() {
-                        app.handle_event(ev, AREA).expect("handle event");
-                    }
+                    drain(app, rx);
                     last = Some(draw(app, sight));
                     last.as_ref().is_some_and(|(_, p)| p.as_ref().is_some_and(|p| p.payload.is_some()))
                 });
@@ -14730,9 +14718,7 @@ rm -f "$1/sessions/$$.json"
             assert!(!written(&app), "the program never gets the click");
             wait_until("the outside file is read", || {
                 app.refresh(Instant::now());
-                while let Ok(event) = rx.try_recv() {
-                    app.handle_event(event, area).expect("handle event");
-                }
+                drain_in(&mut app, &rx, area);
                 matches!(app.files_view().expect("files view").screen, ui::files::Screen::File(f)
                     if f.content.as_ref().is_some_and(|c| if picture_file {
                         matches!(&c.body, files::disk::Body::Image(p) if (p.format, p.width, p.height) == ("PNG", 16, 8))
@@ -15325,9 +15311,7 @@ rm -f "$s"
         fn answered(app: &mut App, rx: &Receiver<AppEvent>, what: &str) -> Response {
             let mut got = Vec::new();
             wait_until(what, || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(app, rx);
                 app.refresh(Instant::now());
                 got = answers(app);
                 !got.is_empty()
@@ -15460,9 +15444,7 @@ rm -f "$s"
         ) -> Vec<Streamed> {
             let mut got = Vec::new();
             wait_until(what, || {
-                while let Ok(ev) = rx.try_recv() {
-                    app.handle_event(ev, AREA).expect("handle event");
-                }
+                drain(app, rx);
                 app.refresh(Instant::now());
                 got.extend(streamed(app));
                 enough(&got)
@@ -16827,7 +16809,7 @@ rm -f "$s"
                 let pane = term(&app, 0).id;
                 let typed = Launch::command(pane, "sleep 30".into(), Instant::now());
                 app.launches.push(typed);
-                pump_refreshing(&mut app, &rx, "sleep runs", |app| {
+                refreshing(&mut app, &rx, "sleep runs", |app| {
                     pane_job(app, pane).is_some_and(|job| job.program == "sleep")
                 });
 
@@ -16849,7 +16831,7 @@ rm -f "$s"
                 let (mut app, rx, _dirs) = app_with(1);
                 let id = term(&app, 0).id;
                 app.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
-                pump_refreshing(&mut app, &rx, "sleep runs", |app| {
+                refreshing(&mut app, &rx, "sleep runs", |app| {
                     pane(app, id).program(&app.config).as_deref() == Some("sleep")
                 });
 
@@ -16861,16 +16843,6 @@ rm -f "$s"
 
             fn pane_job(app: &App, id: u64) -> Option<crate::term::Job> {
                 pane(app, id).job.clone()
-            }
-
-            fn pump_refreshing(app: &mut App, rx: &Receiver<AppEvent>, what: &str, cond: impl Fn(&App) -> bool) {
-                wait_until(what, || {
-                    while let Ok(ev) = rx.try_recv() {
-                        app.handle_event(ev, AREA).expect("handle event");
-                    }
-                    app.refresh(Instant::now());
-                    cond(app)
-                });
             }
         }
 
