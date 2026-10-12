@@ -64,7 +64,7 @@ npx -y jscpd@4.3.0         # copy-paste detector
 ## Tests
 
 - **Unit tests** sit next to the code, in a `mod` named after the unit of work, with names that read as sentences, like `close_button_closes_its_entry`. Tables of cases use `rstest` with named `#[case::…]`.
-- **Where tests live:** the tests of `foo.rs` go in `foo/tests.rs`, and a file over 1,000 lines keeps its helpers and puts each group in `foo/tests/<group>.rs`. They stay child modules, so they reach private items.
+- **Where tests live:** the tests of `foo.rs` (or `foo/mod.rs`) go in `foo/tests.rs`, and a file over 1,000 lines keeps its helpers and puts each group in `foo/tests/<group>.rs`. They stay child modules, so they reach private items.
 - **UI tests** render a `View` into ratatui's `TestBackend`: `insta` snapshots for layouts, cell styles for things like hover colours.
 - **Terminal and app tests** spawn real `/bin/sh` PTYs, never your own shell, and wait with `test_util::wait_until`, never with sleeps.
 - **End-to-end tests** in `tests/e2e.rs` run the real binary in a PTY, parse its output with `vt100`, and send raw bytes and SGR mouse sequences. Each test gets its own server through a `Session`, which runs `kill-server` when dropped. Wait for output that proves the previous step finished before sending the next one.
