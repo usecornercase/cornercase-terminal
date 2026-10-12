@@ -5677,6 +5677,13 @@ mod tests {
         terminal
     }
 
+    fn render_frame(app: &mut App, area: Rect, sight: &Sight) -> (Buffer, Option<Placed>) {
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("terminal");
+        let mut placed = None;
+        let buffer = terminal.draw(|f| placed = app.draw(f, sight)).expect("draw").buffer.clone();
+        (buffer, placed)
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -14485,18 +14492,11 @@ rm -f "$1/sessions/$$.json"
                 (app, rx)
             }
 
-            fn draw(app: &mut App, sight: &Sight) -> (Buffer, Option<Placed>) {
-                let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("terminal");
-                let mut placed = None;
-                let buffer = terminal.draw(|f| placed = app.draw(f, sight)).expect("draw").buffer.clone();
-                (buffer, placed)
-            }
-
             fn ready(app: &mut App, rx: &Receiver<AppEvent>, sight: &Sight) -> (Buffer, Placed) {
                 let mut last = None;
                 wait_until("the payload is ready", || {
                     drain(app, rx);
-                    last = Some(draw(app, sight));
+                    last = Some(render_frame(app, AREA, sight));
                     last.as_ref().is_some_and(|(_, p)| p.as_ref().is_some_and(|p| p.payload.is_some()))
                 });
                 let (buffer, placed) = last.expect("drawn");
@@ -14532,7 +14532,7 @@ rm -f "$1/sessions/$$.json"
                 let (mut app, rx) = shown(&dir);
                 let kitty = sight(Some(Protocol::Kitty));
 
-                let (first, placed) = draw(&mut app, &kitty);
+                let (first, placed) = render_frame(&mut app, AREA, &kitty);
                 assert!(placed.is_some_and(|p| !p.drawn), "blank until the payload comes");
                 assert_eq!(cells(&first, panel_area(&app), |s| s.starts_with(PLACEHOLDER)), 0);
                 let (buffer, placed) = ready(&mut app, &rx, &kitty);
@@ -14559,7 +14559,7 @@ rm -f "$1/sessions/$$.json"
                 let (mut app, _rx) = shown(&dir);
                 let blind = sight(None);
 
-                let (buffer, placed) = draw(&mut app, &blind);
+                let (buffer, placed) = render_frame(&mut app, AREA, &blind);
 
                 assert!(placed.is_none());
                 let missing = blind.support.missing.expect("missing");
@@ -14575,13 +14575,13 @@ rm -f "$1/sessions/$$.json"
                 let settings = app.layout(AREA).settings.as_position();
                 click(&mut app, settings);
 
-                let (buffer, placed) = draw(&mut app, &kitty);
+                let (buffer, placed) = render_frame(&mut app, AREA, &kitty);
                 let placed = placed.expect("placed");
                 assert!(!placed.drawn);
                 assert_eq!(cells(&buffer, placed.rect, |s| s.starts_with(PLACEHOLDER)), 0);
 
                 send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-                assert!(draw(&mut app, &kitty).1.is_some_and(|p| p.drawn));
+                assert!(render_frame(&mut app, AREA, &kitty).1.is_some_and(|p| p.drawn));
             }
 
             #[test]
@@ -14593,7 +14593,7 @@ rm -f "$1/sessions/$$.json"
                 let pane = app.layout(AREA).pane;
                 right_click(&mut app, Position::new(pane.right() - 1, placed.rect.y));
 
-                let (buffer, placed) = draw(&mut app, &iterm);
+                let (buffer, placed) = render_frame(&mut app, AREA, &iterm);
                 let placed = placed.expect("placed");
                 let covered: Vec<Position> =
                     placed.rect.positions().filter(|&p| buffer[p].symbol() != MARKER).collect();
@@ -14611,7 +14611,7 @@ rm -f "$1/sessions/$$.json"
                 let (_, wide) = ready(&mut app, &rx, &kitty);
                 let narrow = Sight { visible: Rect::new(0, 0, wide.rect.x + 6, AREA.height), ..kitty };
 
-                let (_, placed) = draw(&mut app, &narrow);
+                let (_, placed) = render_frame(&mut app, AREA, &narrow);
 
                 let placed = placed.expect("placed");
                 assert!(placed.rect.right() <= narrow.visible.right() && placed.rect.width < wide.rect.width);
