@@ -862,7 +862,7 @@ pub(crate) mod tests {
     }
     pub(crate) fn example(now: SystemTime) -> Stats {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/stats/share-v1.txt")).expect("fixture");
+            serde_json::from_str(crate::test_util::fixture!("stats/share-v1.txt")).expect("fixture");
         let mut stats = Stats::new(now.checked_sub(Duration::from_hours(2640)).expect("counting start"));
         let bucket = |name: &str| {
             let a: Vec<u64> =
@@ -914,7 +914,7 @@ pub(crate) mod tests {
     #[test]
     fn sharing_matches_the_site_contract() {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../tests/fixtures/stats/share-v1.txt")).expect("fixture");
+            serde_json::from_str(crate::test_util::fixture!("stats/share-v1.txt")).expect("fixture");
         let now = at(10_000);
         let stats = example(now);
         assert_eq!(share_link(&stats, now), fixture["link"].as_str().expect("link"));

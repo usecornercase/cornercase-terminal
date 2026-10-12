@@ -332,8 +332,7 @@ mod tests {
         #[test]
         fn pinned_titles_report_only_the_state_gemini_supplies() {
             let titles: serde_json::Value =
-                serde_json::from_str(include_str!("../tests/fixtures/gemini/0.63.0/titles.json"))
-                    .expect("Gemini titles");
+                serde_json::from_str(crate::test_util::fixture!("gemini/0.63.0/titles.json")).expect("Gemini titles");
             for fixture in titles.as_array().expect("titles array") {
                 let expected = match fixture["state"].as_str() {
                     Some("working") => Some(Activity::Working),

@@ -256,16 +256,16 @@ mod tests {
     use crate::test_util::{FakeCodex, Running, Sleeper, TempDir, wait_until, write_executable};
 
     const ID: &str = "019a1234-5678-7000-8000-000000000001";
-    const CONTEXT: &str = include_str!("../../tests/fixtures/codex/0.160.0/context.jsonl");
-    const MODEL_CHANGE: &str = include_str!("../../tests/fixtures/codex/0.160.0/model-change.jsonl");
-    const COMPACTED: &str = include_str!("../../tests/fixtures/codex/0.160.0/compacted.jsonl");
-    const UNAVAILABLE: &str = include_str!("../../tests/fixtures/codex/0.160.0/unavailable.jsonl");
-    const MALFORMED: &str = include_str!("../../tests/fixtures/codex/0.160.0/malformed.jsonl");
-    const VSCODE: &str = include_str!("../../tests/fixtures/codex/0.160.0/vscode-context.jsonl");
-    const STARTED: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-started.jsonl");
-    const COMPLETE: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-complete.jsonl");
-    const ABORTED: &str = include_str!("../../tests/fixtures/codex/0.160.0/turn-aborted.jsonl");
-    const USER_MESSAGE: &str = include_str!("../../tests/fixtures/codex/0.160.0/user-message.jsonl");
+    const CONTEXT: &str = crate::test_util::fixture!("codex/0.160.0/context.jsonl");
+    const MODEL_CHANGE: &str = crate::test_util::fixture!("codex/0.160.0/model-change.jsonl");
+    const COMPACTED: &str = crate::test_util::fixture!("codex/0.160.0/compacted.jsonl");
+    const UNAVAILABLE: &str = crate::test_util::fixture!("codex/0.160.0/unavailable.jsonl");
+    const MALFORMED: &str = crate::test_util::fixture!("codex/0.160.0/malformed.jsonl");
+    const VSCODE: &str = crate::test_util::fixture!("codex/0.160.0/vscode-context.jsonl");
+    const STARTED: &str = crate::test_util::fixture!("codex/0.160.0/turn-started.jsonl");
+    const COMPLETE: &str = crate::test_util::fixture!("codex/0.160.0/turn-complete.jsonl");
+    const ABORTED: &str = crate::test_util::fixture!("codex/0.160.0/turn-aborted.jsonl");
+    const USER_MESSAGE: &str = crate::test_util::fixture!("codex/0.160.0/user-message.jsonl");
 
     struct Written {
         _dir: TempDir,
@@ -638,7 +638,7 @@ mod counting_records {
 
     #[test]
     fn cumulative_usage_adds_deltas_and_smaller_totals_start_a_new_baseline() {
-        let records: Vec<_> = include_str!("../../tests/fixtures/codex/0.160.0/usage.jsonl")
+        let records: Vec<_> = crate::test_util::fixture!("codex/0.160.0/usage.jsonl")
             .lines()
             .filter_map(|s| counted(&serde_json::from_str(s).expect("record")))
             .collect();

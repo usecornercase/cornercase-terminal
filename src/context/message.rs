@@ -405,8 +405,8 @@ mod tests {
     mod codex {
         use super::*;
 
-        const CONTEXT: &str = include_str!("../../tests/fixtures/codex/0.160.0/context.jsonl");
-        const REPLY: &str = include_str!("../../tests/fixtures/codex/0.160.0/reply.jsonl");
+        const CONTEXT: &str = crate::test_util::fixture!("codex/0.160.0/context.jsonl");
+        const REPLY: &str = crate::test_util::fixture!("codex/0.160.0/reply.jsonl");
 
         fn last_codex(text: &str) -> Option<Said> {
             codex(&Written::new(text).path).expect("read the rollout")

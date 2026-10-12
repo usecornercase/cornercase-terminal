@@ -1,3 +1,11 @@
+macro_rules! fixture {
+    ($path:literal) => {
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/", $path))
+    };
+}
+
+pub(crate) use fixture;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -207,7 +215,7 @@ impl FakeCodex {
         let sessions = dir.path().join("sessions/2026/10/05");
         std::fs::create_dir_all(&sessions).expect("create sessions");
         let rollout = sessions.join(format!("rollout-2026-10-05T12-00-00-{id}.jsonl"));
-        let fixture = include_str!("../tests/fixtures/codex/0.160.0/context.jsonl")
+        let fixture = fixture!("codex/0.160.0/context.jsonl")
             .replace("019a1234-5678-7000-8000-000000000001", id)
             .replace("gpt-5.4", model);
         std::fs::write(&rollout, fixture).expect("write rollout");
@@ -337,8 +345,7 @@ impl FakeGemini {
         std::fs::write(dir.path().join(".gemini/projects.json"), registry.to_string()).expect("write Gemini projects");
         std::fs::write(project.join(".project_root"), cwd.to_string_lossy().as_bytes()).expect("write Gemini owner");
         let session = project.join("chats/session-2026-10-10T12-00-00000000.jsonl");
-        std::fs::write(&session, include_str!("../tests/fixtures/gemini/0.63.0/initial.jsonl"))
-            .expect("write Gemini metadata");
+        std::fs::write(&session, fixture!("gemini/0.63.0/initial.jsonl")).expect("write Gemini metadata");
         let script = dir.path().join("gemini");
         let body = r#"#!/bin/sh
 watch_titles() {
@@ -415,7 +422,7 @@ impl FakeOpencode {
         let database = data.join("opencode.db");
         rusqlite::Connection::open(&database)
             .and_then(|db| {
-                db.execute_batch(include_str!("../tests/fixtures/opencode/1.18.35/schema.sql"))?;
+                db.execute_batch(fixture!("opencode/1.18.35/schema.sql"))?;
                 db.execute(
                     "INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) \
                      VALUES ('global', '/', 0, 0, '[]')",
@@ -423,8 +430,7 @@ impl FakeOpencode {
                 )
             })
             .expect("create the database");
-        std::fs::write(cache.join("models.json"), include_str!("../tests/fixtures/opencode/1.18.35/models.json"))
-            .expect("write models.json");
+        std::fs::write(cache.join("models.json"), fixture!("opencode/1.18.35/models.json")).expect("write models.json");
         let script = dir.path().join("bin/opencode");
         std::fs::create_dir_all(script.parent().expect("bin folder")).expect("create bin folder");
         write_executable(

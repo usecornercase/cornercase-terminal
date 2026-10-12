@@ -326,10 +326,10 @@ mod tests {
     use super::*;
     use crate::test_util::{FakeGemini, TempDir};
 
-    const INITIAL: &str = include_str!("../../tests/fixtures/gemini/0.63.0/initial.jsonl");
-    const PROMPT: &str = include_str!("../../tests/fixtures/gemini/0.63.0/prompt.jsonl");
-    const REPLY: &str = include_str!("../../tests/fixtures/gemini/0.63.0/reply.jsonl");
-    const COMPACTED: &str = include_str!("../../tests/fixtures/gemini/0.63.0/compacted.jsonl");
+    const INITIAL: &str = crate::test_util::fixture!("gemini/0.63.0/initial.jsonl");
+    const PROMPT: &str = crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl");
+    const REPLY: &str = crate::test_util::fixture!("gemini/0.63.0/reply.jsonl");
+    const COMPACTED: &str = crate::test_util::fixture!("gemini/0.63.0/compacted.jsonl");
 
     fn written(text: &str) -> (TempDir, Session) {
         let dir = TempDir::new();
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn a_resumed_history_keeps_message_times_and_omits_thought_parts() {
-        let (_dir, session) = written(include_str!("../../tests/fixtures/gemini/0.63.0/resumed.jsonl"));
+        let (_dir, session) = written(crate::test_util::fixture!("gemini/0.63.0/resumed.jsonl"));
         let said = last_message(&session.path).expect("read resumed reply").expect("resumed reply");
         assert!(said.text.starts_with("If there were finitely many primes"));
         assert!(!said.text.contains("Formulating Prime Proof"));
@@ -560,7 +560,7 @@ mod counting_records {
     #[test]
     fn rewritten_replies_add_only_the_increase_and_restored_history_adds_nothing() {
         let mut session = Session::new(PathBuf::from("synthetic.jsonl"), "synthetic".into());
-        for line in include_str!("../../tests/fixtures/gemini/0.63.0/usage.jsonl").lines() {
+        for line in crate::test_util::fixture!("gemini/0.63.0/usage.jsonl").lines() {
             session.apply(&serde_json::from_str(line).expect("record"));
         }
         let mut ledger = Ledger::default();
@@ -569,7 +569,7 @@ mod counting_records {
             sum(ledger.take()),
             (1, crate::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
         );
-        for line in include_str!("../../tests/fixtures/gemini/0.63.0/usage-restore.jsonl").lines() {
+        for line in crate::test_util::fixture!("gemini/0.63.0/usage-restore.jsonl").lines() {
             session.apply(&serde_json::from_str(line).expect("record"));
         }
         ledger.apply("a", since(), std::mem::take(&mut session.counted));

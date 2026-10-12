@@ -8616,10 +8616,10 @@ while [ -d "$1" ] && [ ! -e "$1/quit" ]; do sleep 0.02; done
 rm -f "$s"
 "#;
 
-        const TURN_STARTED: &str = include_str!("../tests/fixtures/codex/0.160.0/turn-started.jsonl");
-        const TURN_COMPLETE: &str = include_str!("../tests/fixtures/codex/0.160.0/turn-complete.jsonl");
-        const OPENCODE_WORKING: &str = include_str!("../tests/fixtures/opencode/1.18.35/working.jsonl");
-        const OPENCODE_REPLY: &str = include_str!("../tests/fixtures/opencode/1.18.35/reply.jsonl");
+        const TURN_STARTED: &str = crate::test_util::fixture!("codex/0.160.0/turn-started.jsonl");
+        const TURN_COMPLETE: &str = crate::test_util::fixture!("codex/0.160.0/turn-complete.jsonl");
+        const OPENCODE_WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");
+        const OPENCODE_REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
 
         const SILENT_CLAUDE: &str = "#!/bin/sh\nwhile [ -d \"$1\" ] && [ ! -e \"$1/quit\" ]; do sleep 0.02; done\n";
 
@@ -8880,7 +8880,7 @@ rm -f "$1/sessions/$$.json"
             assert_eq!(context(&app, 0).expect("first").model, "gpt-5.4");
             assert_eq!(context(&app, 1).expect("second").model, "gpt-5.4-mini");
             assert_eq!(status(&app, 0, 1), Some(Status::Idle));
-            second.append(include_str!("../tests/fixtures/codex/0.160.0/compacted.jsonl"));
+            second.append(crate::test_util::fixture!("codex/0.160.0/compacted.jsonl"));
             watch_until(&mut app, &rx, "compaction clears the percentage", |a| {
                 context(a, 1).is_some_and(|c| c.percent.is_none())
             });
@@ -8899,14 +8899,14 @@ rm -f "$1/sessions/$$.json"
             let context = |a: &App| a.projects[0].workspaces[0].tabs[0].context().cloned();
             type_line(&mut app, &fake.command_line());
             watch_until(&mut app, &rx, "Codex answers", |a| context(a).is_some());
-            fake.append(include_str!("../tests/fixtures/codex/0.160.0/model-change.jsonl"));
+            fake.append(crate::test_util::fixture!("codex/0.160.0/model-change.jsonl"));
             watch_until(&mut app, &rx, "Codex changes models", |a| {
                 context(a).is_some_and(|c| c.model == "gpt-5.4-mini" && c.percent.is_none())
             });
 
             let next =
                 fake.rollout.with_file_name("rollout-2026-10-05T12-00-00-019a1234-5678-7000-8000-000000000002.jsonl");
-            let header = include_str!("../tests/fixtures/codex/0.160.0/context.jsonl")
+            let header = crate::test_util::fixture!("codex/0.160.0/context.jsonl")
                 .lines()
                 .next()
                 .expect("header")
@@ -9116,7 +9116,7 @@ rm -f "$1/sessions/$$.json"
         fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_data() {
             let mut w = Watched::start(agents::GEMINI, false);
             let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
-            fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+            fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
             watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| {
                 a.tab().is_some_and(|t| t.context().is_some())
             });
@@ -9343,7 +9343,7 @@ rm -f "$1/sessions/$$.json"
                 let gemini = FakeGemini::new(&app.projects[0].path);
                 type_line(&mut app, &format!("{} --approval-mode plan", gemini.command_line()));
                 watch_until(&mut app, &rx, "Gemini is ready", |a| status(a, 0, 0) == Some(Status::Idle));
-                gemini.append(include_str!("../tests/fixtures/gemini/0.63.0/prompt.jsonl"));
+                gemini.append(crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl"));
                 let saved = remembered(&mut app, &rx);
                 let (mut back, rx, _bin) = restored(&saved, agents::GEMINI, true);
                 wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
@@ -15924,7 +15924,7 @@ rm -f "$s"
                 ask(&mut running.app, None, wait_for(id, Until::TurnOver, Some(5.0)));
                 running.app.refresh(Instant::now());
                 assert_eq!(answers(&mut running.app).len(), 0);
-                running.fake.append(include_str!("../tests/fixtures/gemini/0.63.0/reply.jsonl"));
+                running.fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
                 running.title("◇  Ready (project)");
                 let ended = done(answered(&mut running.app, &running.rx, "the Gemini turn ends"));
                 assert_eq!(ended.ended.as_deref(), Some("idle"));

@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn gemini_trust_waits_for_the_user_or_accepts_the_highlighted_folder() {
-        let screen = include_str!("../tests/fixtures/gemini/0.63.0/trust.txt");
+        let screen = crate::test_util::fixture!("gemini/0.63.0/trust.txt");
         assert_eq!(answer_keys(screen, false), b"\r");
         let (mut launch, t) = started(false);
         assert_eq!(step(&mut launch, t + AGENT_QUIET, &asking_you(screen)), Step::Wait);

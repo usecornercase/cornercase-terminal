@@ -338,13 +338,13 @@ mod tests {
     use crate::context::Pane;
     use crate::test_util::{FakeOpencode, Sleeper, TempDir, wait_until};
 
-    const REPLY: &str = include_str!("../../tests/fixtures/opencode/1.18.35/reply.jsonl");
-    const WORKING: &str = include_str!("../../tests/fixtures/opencode/1.18.35/working.jsonl");
-    const ABORTED: &str = include_str!("../../tests/fixtures/opencode/1.18.35/aborted.jsonl");
-    const COMPACTION: &str = include_str!("../../tests/fixtures/opencode/1.18.35/compaction.jsonl");
-    const MODELS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/models.json");
-    const REPLY_PARTS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/reply-parts.jsonl");
-    const TOOL_PARTS: &str = include_str!("../../tests/fixtures/opencode/1.18.35/tool-parts.jsonl");
+    const REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
+    const WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");
+    const ABORTED: &str = crate::test_util::fixture!("opencode/1.18.35/aborted.jsonl");
+    const COMPACTION: &str = crate::test_util::fixture!("opencode/1.18.35/compaction.jsonl");
+    const MODELS: &str = crate::test_util::fixture!("opencode/1.18.35/models.json");
+    const REPLY_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/reply-parts.jsonl");
+    const TOOL_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/tool-parts.jsonl");
     const FLASH: &str =
         r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
     const QUEUED: &str = r#"{"role":"user","time":{"created":1791469765000},"model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"}}"#;
@@ -641,7 +641,7 @@ mod counting_records {
     #[test]
     fn only_completed_messages_count_and_each_id_counts_once() {
         let records: Vec<_> =
-            include_str!("../../tests/fixtures/opencode/1.18.35/usage.jsonl").lines().filter_map(counted).collect();
+            crate::test_util::fixture!("opencode/1.18.35/usage.jsonl").lines().filter_map(counted).collect();
         let mut ledger = Ledger::default();
         ledger.apply("a", since(), records.clone());
         assert_eq!(

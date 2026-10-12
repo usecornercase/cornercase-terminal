@@ -1252,7 +1252,7 @@ mod counting_records {
     use crate::context::counting::tests::{since, sum};
     use crate::test_util::{TempDir, wait_until};
 
-    const FIXTURE: &str = include_str!("../tests/fixtures/claude/2.1.296/usage.jsonl");
+    const FIXTURE: &str = crate::test_util::fixture!("claude/2.1.296/usage.jsonl");
 
     #[rstest::rstest]
     #[case::reply(r#"{"type":"assistant","message":{"usage":{"output_tokens":1}}}"#, true)]
@@ -1305,7 +1305,7 @@ mod counting_records {
 
     #[test]
     fn absorbed_and_dequeued_human_prompts_each_count_once() {
-        let fixture = include_str!("../tests/fixtures/claude/2.1.296/queued-prompts.jsonl");
+        let fixture = crate::test_util::fixture!("claude/2.1.296/queued-prompts.jsonl");
         let records: Vec<_> = fixture
             .lines()
             .map(|line| serde_json::from_str::<Value>(line).expect("entry"))
@@ -1327,7 +1327,7 @@ mod counting_records {
         let sub = transcript.with_extension("").join("subagents/agent-synthetic.jsonl");
         std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
         std::fs::write(&transcript, FIXTURE).expect("transcript");
-        std::fs::write(&sub, include_str!("../tests/fixtures/claude/2.1.296/subagent.jsonl")).expect("subagent");
+        std::fs::write(&sub, crate::test_util::fixture!("claude/2.1.296/subagent.jsonl")).expect("subagent");
         let session = crate::activity::Session::parse(
             &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
             1,
