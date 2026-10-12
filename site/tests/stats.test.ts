@@ -66,3 +66,9 @@ test('the first counting day shares its current heatmap square', () => {
   assert.ok(link.endsWith('&days=0&map=IA'));
   assert.deepEqual(parse(new URL(link).hash)?.levels, [1]);
 });
+
+test('the legend ends at the right edge of the heatmap', () => {
+  const grid = cardGrid(EXAMPLE, '7d');
+  assert.equal(grid.line(11).slice(77, 96), 'less · ■ ■ ■ ■ more');
+  assert.equal(grid.line(11).slice(1, 77).trim(), '');
+});

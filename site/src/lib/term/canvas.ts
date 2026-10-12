@@ -30,9 +30,9 @@ export class CanvasView {
   onImage: (() => void) | null = null;
   private pictures = new Map<string, HTMLImageElement>();
 
-  constructor(canvas: HTMLCanvasElement, t: Theme = defaultTheme) {
+  constructor(canvas: HTMLCanvasElement, t: Theme = defaultTheme, private transparent = false) {
     this.canvas = canvas;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha: transparent });
     if (!ctx) throw new Error('no 2d context');
     this.ctx = ctx;
     this.theme = t;
@@ -68,8 +68,8 @@ export class CanvasView {
     const { ctx, cwD, chD } = this;
     const t = this.theme;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = t.background;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.transparent) ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    else { ctx.fillStyle = t.background; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height); }
     const lw = Math.max(1, Math.round(this.dpr));
     const ops = paint(grid, { cw: cwD, ch: chD, lw, snap: Math.round, theme: t });
     const size = cwD / 0.6;

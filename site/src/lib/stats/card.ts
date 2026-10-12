@@ -14,9 +14,9 @@ export function cardGrid(stats: Stats, window: WindowName): Grid {
     const level = stats.levels[i];
     if (level !== undefined) grid.put(44 + week * 2, 3 + row, '■', { fg: ramp[level] });
   }
-  grid.text(44, 11, 'less · ', { fg: 8 });
-  for (let level = 1; level <= 4; level++) grid.put(49 + level * 2, 11, '■', { fg: ramp[level] });
-  grid.text(60, 11, 'more', { fg: 8 });
+  grid.text(77, 11, 'less · ', { fg: 8 });
+  for (let level = 1; level <= 4; level++) grid.put(82 + level * 2, 11, '■', { fg: ramp[level] });
+  grid.text(92, 11, 'more', { fg: 8 });
   grid.text(4, 13, '26 weeks · one block per 24 h · newest bottom right', { fg: 8 });
   return grid;
 }
@@ -45,9 +45,12 @@ export function drawCard(canvas: HTMLCanvasElement, stats: Stats, window: Window
   const n = stats.windows[window];
   ctx.font = '400 21px "Geist Variable"'; ctx.fillStyle = '#bbb3cb';
   ctx.fillText(`${duration(n[2])} of agent work in ${duration(n[3])} · ${LABELS[window]}${example ? ' · example' : ''}`, 62, 192);
-  const terminal = document.createElement('canvas'); const view = new CanvasView(terminal);
+  const terminal = document.createElement('canvas'); const view = new CanvasView(terminal, undefined, true);
   view.measure(1080, 100, 16, 2); view.draw(cardGrid(stats, window), null, false, true);
   const y = preview ? 218 : 231; const h = preview ? 325 : 359.4;
+  const cw = 1080 / 100, ch = h / 16;
+  ctx.fillStyle = view.theme.background;
+  ctx.beginPath(); ctx.roundRect(60 + cw / 2, y + ch / 2, 1080 - cw, h - ch, cw / 2); ctx.fill();
   ctx.drawImage(terminal, 60, y, 1080, h);
   ctx.font = '400 18px "Geist Variable"'; ctx.fillStyle = '#aaa2ba';
   ctx.fillText(`counting for ${stats.days} days`, 62, preview ? 588 : 634);

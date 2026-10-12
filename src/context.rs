@@ -269,7 +269,7 @@ impl Subagents {
                 let records = batch
                     .bytes
                     .split(|b| *b == b'\n')
-                    .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
+                    .filter_map(claude_entry)
                     .filter_map(|entry| counted_claude(&entry, false))
                     .collect();
                 self.records.push((path.clone(), records));
@@ -396,13 +396,24 @@ impl Transcript {
         }
         let read_at = SystemTime::now();
         for line in batch.bytes.split(|b| *b == b'\n') {
-            let Ok(entry) = serde_json::from_slice::<Value>(line) else { continue };
+            let Some(entry) = claude_entry(line) else { continue };
             self.prompted = self.prompted.max(prompt(&entry, read_at));
             if let Some(record) = counted_claude(&entry, true) {
                 self.counted.push(record);
             }
         }
     }
+}
+
+fn relevant_claude(line: &str) -> bool {
+    [r#""usage""#, r#""origin""#, "queued_command", COMMAND, SHELL_INPUT, r#""operation""#, COMPACT_BOUNDARY]
+        .iter()
+        .any(|marker| line.contains(marker))
+}
+
+fn claude_entry(line: &[u8]) -> Option<Value> {
+    let line = std::str::from_utf8(line).ok()?;
+    relevant_claude(line).then(|| serde_json::from_str(line).ok()).flatten()
 }
 
 fn text(entry: &Value) -> &str {
@@ -464,7 +475,7 @@ enum Mark {
 
 fn mark(line: &[u8]) -> Option<Mark> {
     let line = std::str::from_utf8(line).ok()?;
-    if !line.contains(ASSISTANT) && !line.contains(COMPACT_BOUNDARY) {
+    if !(line.contains(COMPACT_BOUNDARY) || line.contains(ASSISTANT) && line.contains(r#""usage""#)) {
         return None;
     }
     let entry: Entry = serde_json::from_str(line).ok()?;
@@ -1242,6 +1253,30 @@ mod counting_records {
     use crate::test_util::{TempDir, wait_until};
 
     const FIXTURE: &str = include_str!("../tests/fixtures/claude/2.1.296/usage.jsonl");
+
+    #[rstest::rstest]
+    #[case::reply(r#"{"type":"assistant","message":{"usage":{"output_tokens":1}}}"#, true)]
+    #[case::typed(r#"{"type":"user", "origin": {"kind":"human"}}"#, true)]
+    #[case::absorbed(r#"{"type":"attachment","attachment":{"type":"queued_command"}}"#, true)]
+    #[case::queued(r#"{"type":"queue-operation", "operation": "enqueue"}"#, true)]
+    #[case::slash(r#"{"type":"system","content":"<command-name>/synthetic"}"#, true)]
+    #[case::shell(r#"{"type":"user","message":{"content":"<bash-input>synthetic"}}"#, true)]
+    #[case::compacted(r#"{"type":"system","subtype":"compact_boundary"}"#, true)]
+    #[case::tool_result(
+        r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"synthetic"}]}}"#,
+        false
+    )]
+    #[case::tool_input(
+        r#"{"type":"assistant","message":{"content":[{"type":"tool_use","input":{"content":"synthetic"}}]}}"#,
+        false
+    )]
+    #[case::metadata(r#"{"type":"file-history-snapshot","snapshot":{}}"#, false)]
+    fn only_lines_that_can_change_context_or_counts_reach_json_parsing(#[case] line: &str, #[case] relevant: bool) {
+        assert_eq!(relevant_claude(line), relevant);
+        assert_eq!(claude_entry(line.as_bytes()).is_some(), relevant);
+        let large = line.replace("synthetic", &"x".repeat(300_000));
+        assert_eq!(claude_entry(large.as_bytes()).is_some(), relevant);
+    }
 
     #[test]
     fn repeated_message_usage_and_conversation_resets_count_once() {

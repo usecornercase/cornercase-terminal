@@ -182,6 +182,7 @@ pub struct Stats {
     total: Bucket,
     hours: BTreeMap<u64, Bucket>,
     previous: HashMap<u64, Sample>,
+    started: HashMap<u64, (Kind, i32)>,
     revision: u64,
     pruned_hour: Option<u64>,
 }
@@ -226,6 +227,7 @@ impl Stats {
             total: Bucket::default(),
             hours: BTreeMap::new(),
             previous: HashMap::new(),
+            started: HashMap::new(),
             revision: 0,
             pruned_hour: None,
         }
@@ -253,7 +255,7 @@ impl Stats {
         let mut simultaneous = 0;
         let mut busy = false;
         for &sample in samples {
-            if self.previous.get(&sample.pane).is_none_or(|s| (s.kind, s.pid) != (sample.kind, sample.pid))
+            if self.started.insert(sample.pane, (sample.kind, sample.pid)) != Some((sample.kind, sample.pid))
                 && !sample.resuming
             {
                 self.add(now, sample.kind, Counts { agents: 1, ..Counts::default() });
@@ -722,7 +724,7 @@ pub(crate) mod tests {
         assert_eq!((c.agent_seconds, c.turns, c.waited_seconds), (1.0, 2, 2.0));
     }
     #[test]
-    fn automatic_resumes_are_suppressed_and_reused_pids_count_as_new_agents() {
+    fn automatic_resumes_stay_suppressed_after_a_foreground_absence() {
         let mut stats = Stats::new(at(1_000));
         let mut s = working(1, Kind::Claude);
         s.resuming = true;
@@ -733,9 +735,19 @@ pub(crate) mod tests {
         stats.sample(at(1_000), Duration::ZERO, &[]);
         assert!(stats.previous.is_empty());
         stats.sample(at(1_000), Duration::ZERO, &[s]);
+        assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 0);
+    }
+
+    #[test]
+    fn an_agent_returning_from_an_editor_counts_only_when_its_pid_changes() {
+        let mut stats = Stats::new(at(1_000));
+        let mut sample = working(1, Kind::Claude);
+        stats.sample(at(1_000), Duration::ZERO, &[sample]);
+        stats.sample(at(1_000), Duration::ZERO, &[]);
+        stats.sample(at(1_000), Duration::ZERO, &[sample]);
         assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 1);
-        s.pid = 2;
-        stats.sample(at(1_000), Duration::ZERO, &[s]);
+        sample.pid = 2;
+        stats.sample(at(1_000), Duration::ZERO, &[sample]);
         assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 2);
     }
     #[test]

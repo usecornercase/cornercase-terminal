@@ -25,7 +25,9 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     let colour = |level| shade(line, light, level);
     let dim = Style::default().fg(muted);
     if stats.empty {
-        return markdown::wrap_text(stats::EMPTY, dim, width);
+        let mut lines = markdown::wrap_text(stats::EMPTY, dim, width);
+        lines.push(Line::default());
+        return lines;
     }
     let mut lines = markdown::wrap_text(&stats.headline(true), Style::default(), width);
     lines.push(Line::default());
@@ -71,5 +73,6 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     }
     spans.extend(legend);
     lines.push(Line::from(spans));
+    lines.push(Line::default());
     lines
 }

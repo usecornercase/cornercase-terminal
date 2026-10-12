@@ -216,7 +216,7 @@ The dialog opens on **Stats** and remembers your last tab until the server resta
   name="usage"
   alt="The Usage dialog: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h and the week for Opus at 12%; Codex on a plus plan, the session at 22% resetting in 3h 41m and the week at 9% resetting in 4d 10h; both updated just now, and a done button"
   caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
-  crop={[23, 6, 64, 26]}
+  crop={[23, 5, 64, 27]}
 />
 
 Each installed Claude Code or Codex gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
@@ -226,7 +226,7 @@ The numbers come from the agents themselves: showing the Limits tab runs `claude
 
 Stats counts **only Claude Code, Codex, Gemini CLI and opencode running inside cornercase**, from when this feature was installed. It never imports the agents' histories. The columns show the current hour and the 23 before it (**24 h**), 168 hours (**7 days**) and **total**. These are rolling windows, independent of your time zone.
 
-<Screen name="usage-stats" alt="Usage on the Stats tab, showing parallel work, three windows of agent counts and durations, token kinds and a purple heatmap, with share and done buttons" caption="How much your agents worked, and how much of it they did side by side." crop={[23, 6, 64, 26]} />
+<Screen name="usage-stats" alt="Usage on the Stats tab, showing parallel work, three windows of agent counts and durations, token kinds and a purple heatmap, with share and done buttons" caption="How much your agents worked, and how much of it they did side by side." crop={[23, 5, 64, 27]} />
 
 | Row | What it counts |
 | --- | --- |

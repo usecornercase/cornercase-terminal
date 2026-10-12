@@ -1148,6 +1148,7 @@ export class Painter {
     const legend: Line = [seg('less · ', DARK), ...[1,2,3,4].map((level) => seg('■ ', { fg: ramp[level] })), seg('more', DARK)];
     if (left.length + 19 > width) lines.push([seg(left, DARK)], legend);
     else lines.push([seg(left + ' '.repeat(width - left.length - 19), DARK), ...legend]);
+    lines.push([]);
     return lines;
   }
 
