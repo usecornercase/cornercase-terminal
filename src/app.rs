@@ -7386,6 +7386,19 @@ mod tests {
     mod workspaces {
         use super::*;
 
+        fn external_checkout() -> (TempDir, App, Receiver<AppEvent>, TempDir, PathBuf) {
+            let repo = git_repo(&[]);
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            let tmp = TempDir::new();
+            let path = tmp.path().join("hotfix");
+            crate::test_util::git(
+                repo.path(),
+                &["worktree", "add", "--quiet", "-b", "hotfix", &path.display().to_string()],
+            );
+            app.sync_worktrees();
+            (repo, app, rx, tmp, path)
+        }
+
         fn open_form(app: &mut App) {
             let pos = new_workspace_pos(app);
             click(app, pos);
@@ -7490,16 +7503,7 @@ mod tests {
 
         #[test]
         fn checkouts_made_outside_show_up() {
-            let repo = git_repo(&[]);
-            let (mut app, _rx) = app_in(repo.path(), no_config());
-            let tmp = TempDir::new();
-            let path = tmp.path().join("hotfix");
-            crate::test_util::git(
-                repo.path(),
-                &["worktree", "add", "--quiet", "-b", "hotfix", &path.display().to_string()],
-            );
-
-            app.sync_worktrees();
+            let (_repo, app, _rx, _tmp, _path) = external_checkout();
 
             let workspace = &app.projects[0].workspaces[1];
             assert_eq!((workspace.label(), workspace.worktree, workspace.tabs.len()), ("hotfix".into(), true, 0));
@@ -7507,15 +7511,7 @@ mod tests {
 
         #[test]
         fn checkouts_removed_outside_go_away() {
-            let repo = git_repo(&[]);
-            let (mut app, _rx) = app_in(repo.path(), no_config());
-            let tmp = TempDir::new();
-            let path = tmp.path().join("hotfix");
-            crate::test_util::git(
-                repo.path(),
-                &["worktree", "add", "--quiet", "-b", "hotfix", &path.display().to_string()],
-            );
-            app.sync_worktrees();
+            let (_repo, mut app, _rx, _tmp, path) = external_checkout();
 
             std::fs::remove_dir_all(&path).expect("remove checkout");
             app.sync_worktrees();
