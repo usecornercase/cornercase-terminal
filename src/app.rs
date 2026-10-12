@@ -13707,6 +13707,14 @@ mod tests {
             }
         }
 
+        fn filtered_changes() -> (TempDir, App, Receiver<AppEvent>) {
+            let repo = repo_with_edit();
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            open_filter(&mut app, &rx);
+            type_text(&mut app, "*.txt");
+            (repo, app, rx)
+        }
+
         fn first_changed_file(app: &App) -> (Checkout, std::sync::Arc<changes::diff::File>) {
             let target = app.changes_target().expect("target");
             let file = app.changed_diff(&target).expect("diff").files[0].clone();
@@ -13955,10 +13963,7 @@ mod tests {
 
         #[test]
         fn keys_go_to_the_field_until_a_click_in_the_pane() {
-            let repo = repo_with_edit();
-            let (mut app, rx) = app_in(repo.path(), no_config());
-            open_filter(&mut app, &rx);
-            type_text(&mut app, "*.txt");
+            let (_repo, mut app, rx) = filtered_changes();
             let pane = app.layout(AREA).pane;
             click(&mut app, Position::new(pane.x + 2, pane.y + 2));
             type_in_pane(&mut app, &rx, "pane");
@@ -14010,10 +14015,7 @@ mod tests {
 
         #[test]
         fn esc_closes_the_field_and_clears_the_filter() {
-            let repo = repo_with_edit();
-            let (mut app, rx) = app_in(repo.path(), no_config());
-            open_filter(&mut app, &rx);
-            type_text(&mut app, "*.txt");
+            let (_repo, mut app, _rx) = filtered_changes();
             send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
             assert_eq!((query(&app), app.filtering()), (None, false));
         }
