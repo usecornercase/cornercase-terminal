@@ -38,7 +38,7 @@ cargo-machete              # cargo install cargo-machete
 npx -y jscpd@4.3.0         # copy-paste detector
 ```
 
-UI changes usually change a snapshot. `cargo test` then writes `src/snapshots/*.snap.new` and fails; check the new render and accept it with `INSTA_UPDATE=always cargo test`.
+UI changes usually change a snapshot. `cargo test` then writes its `.snap.new` in the `snapshots/` folder next to the test's file (`src/ui/tests/snapshots/` for the `ui` tests) and fails; check the new render and accept it with `INSTA_UPDATE=always cargo test`.
 
 ## Code style
 

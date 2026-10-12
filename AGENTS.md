@@ -21,7 +21,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - **The toolchain is pinned** in `rust-toolchain.toml` (version and components), and CI installs exactly that one, so a new Rust release cannot break CI with new lints. Bump it by hand: change the version, then fix what clippy reports.
 - `.cargo/config.toml` sets `LIBGHOSTTY_VT_SYS_OPTIMIZE=ReleaseFast`; a Zig Debug build of Ghostty is too slow to use.
 - **After rebuilding, run `cargo run -- kill-server`**: the client refuses to attach to a server from another build.
-- Snapshots (`insta`): a changed render writes `src/snapshots/*.snap.new` and fails. Check it, then accept with `INSTA_UPDATE=always cargo test`. Delete snapshots of renamed or removed tests by hand.
+- Snapshots (`insta`): a changed render writes its `.snap.new` in the `snapshots/` folder next to the test's file (`src/ui/tests/snapshots/` for the `ui` tests) and fails. Check it, then accept with `INSTA_UPDATE=always cargo test`. Delete snapshots of renamed or removed tests by hand.
 - **Before calling a task done, run fmt, clippy, tests, `cargo-machete` and jscpd, and fix what fails.** If one cannot pass, say so.
 - **A change that adds, removes or changes a feature updates the website in the same change** (see Website below).
 - `jscpd` fails above 1 % duplication (50-token clones) in every file of `src/` and `tests/`. It is a ratchet: extract the shared code, do not raise the threshold. `cargo-machete` is a text search; a false positive goes in `[package.metadata.cargo-machete] ignored`.
@@ -117,7 +117,7 @@ skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 
 ## Tests
 
-- Unit tests sit next to the code in `mod <unit_of_work>` with sentence-like names; tabular cases use `rstest` with named `#[case::...]`.
+- The tests of `foo.rs` (or `foo/mod.rs`) go in `foo/tests.rs`, declared as the last item with `#[cfg(test)] mod tests;`; a test file over 1,000 lines keeps its helpers and `mod` lines and moves each group to `foo/tests/<group>.rs`. Tests are `mod <unit_of_work>` groups with sentence-like names; tabular cases use `rstest` with named `#[case::...]`.
 - UI: render a `View` into `TestBackend`; `insta` snapshots for layout, cell styles for hover.
 - App tests `click` with a press and a release (rows act on release); drags start with `press`.
 - App tests drain events with `drain`, draw with `render` and write their config with `write_config`. Fixtures are read with `test_util::fixture!`, never with a relative `include_str!`.
