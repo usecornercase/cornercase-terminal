@@ -8137,6 +8137,114 @@ mod tests {
             }
         }
 
+        #[rstest::rstest]
+        #[case::changes(true, false, false)]
+        #[case::todo(false, true, false)]
+        #[case::files(false, false, true)]
+        fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool, #[case] files: bool) {
+            let dirs: Vec<TempDir> = (0..4).map(|_| TempDir::new()).collect();
+            let paths: Vec<PathBuf> = dirs.iter().map(canonical).collect();
+            let mut loose = WorkspaceState::plain(paths[0].clone(), vec![Some(paths[0].clone())], 0);
+            loose.name = Some("planning".into());
+            loose.base = Some("main".into());
+            loose.collapsed = true;
+            loose.tabs[0].name = Some("notes".into());
+            let split = TabState {
+                name: Some("split shell".into()),
+                panes: vec![
+                    PaneState { cwd: Some(paths[2].clone()), right_clicks: false, agent: None },
+                    PaneState { cwd: Some(paths[3].clone()), right_clicks: true, agent: None },
+                ],
+                active: 1,
+                layout: Some(split::Node::Split {
+                    dir: Dir::Down,
+                    ratio: 0.375,
+                    first: Box::new(split::Node::Leaf(0)),
+                    second: Box::new(split::Node::Leaf(1)),
+                }),
+            };
+            let saved = State {
+                version: state::VERSION,
+                groups: vec![
+                    ui::GroupEntry { name: "work".into(), icon: ui::GROUP_ICONS[0], colour: 99, collapsed: false },
+                    ui::GroupEntry { name: "archive".into(), icon: ui::GROUP_ICONS[3], colour: 33, collapsed: true },
+                ],
+                projects: vec![
+                    ProjectState { name: Some("Notes".into()), collapsed: true, ..project(&paths[0], vec![loose]) },
+                    ProjectState {
+                        name: Some("Shop".into()),
+                        group: Some(1),
+                        active: 1,
+                        collapsed: true,
+                        ..project(
+                            &paths[1],
+                            vec![
+                                WorkspaceState::plain(paths[1].clone(), vec![Some(paths[1].clone())], 0),
+                                WorkspaceState {
+                                    path: paths[2].clone(),
+                                    name: Some("returns".into()),
+                                    worktree: true,
+                                    tabs: vec![
+                                        TabState {
+                                            name: Some("build".into()),
+                                            panes: vec![PaneState {
+                                                cwd: Some(paths[2].clone()),
+                                                right_clicks: false,
+                                                agent: None,
+                                            }],
+                                            active: 0,
+                                            layout: None,
+                                        },
+                                        split,
+                                    ],
+                                    active: 1,
+                                    base: Some("release".into()),
+                                    collapsed: true,
+                                },
+                            ],
+                        )
+                    },
+                ],
+                active: 1,
+                widths: Some(ui::Widths {
+                    projects: 35,
+                    workspaces: 24,
+                    changes: Some(42),
+                    stack: Some(11),
+                    agents: Some(7),
+                }),
+                issues: Some(IssuesState {
+                    tab: Some("github".into()),
+                    closed: true,
+                    people: People {
+                        github: [issues::Who::Me, issues::Who::Person("ana".into())],
+                        ..People::default()
+                    },
+                }),
+                changes: Some(ChangesState {
+                    open: changes,
+                    mode: changes::Mode::Commits,
+                    scope: Some(changes::Scope::Every),
+                }),
+                todo,
+                files,
+            };
+            let (mut app, _rx) = empty_app();
+
+            assert!(app.restore(&saved, AREA), "every tab comes back");
+            wait_until("every shell reports its saved folder", || {
+                app.projects.iter().zip(&saved.projects).all(|(project, saved)| {
+                    project.workspaces.iter().zip(&saved.workspaces).all(|(workspace, saved)| {
+                        workspace.tabs.iter().zip(&saved.tabs).all(|(tab, saved)| {
+                            tab.panes.iter().zip(&saved.panes).all(|(pane, saved)| pane.cwd() == saved.cwd)
+                        })
+                    })
+                })
+            });
+
+            assert_eq!(app.state(), saved);
+        }
+
         #[test]
         fn reopens_projects_workspaces_and_tabs() {
             let (a, b) = (TempDir::new(), TempDir::new());

@@ -1,0 +1,151 @@
+{
+  "version": 5,
+  "groups": [
+    {
+      "name": "work",
+      "icon": "●",
+      "colour": 99,
+      "collapsed": false
+    },
+    {
+      "name": "archive",
+      "icon": "◆",
+      "colour": 33,
+      "collapsed": true
+    }
+  ],
+  "projects": [
+    {
+      "path": "projects/loose",
+      "name": "Notes",
+      "workspaces": [
+        {
+          "path": "projects/loose",
+          "name": "planning",
+          "worktree": false,
+          "tabs": [
+            {
+              "name": "notes",
+              "panes": [
+                {
+                  "cwd": null
+                }
+              ],
+              "active": 0
+            }
+          ],
+          "active": 0,
+          "base": "main",
+          "collapsed": true
+        }
+      ],
+      "active": 0
+    },
+    {
+      "path": "projects/shop",
+      "name": "Shop",
+      "group": 0,
+      "workspaces": [
+        {
+          "path": "worktrees/returns",
+          "name": "returns",
+          "worktree": true,
+          "tabs": [
+            {
+              "name": "agent and shell",
+              "panes": [
+                {
+                  "cwd": "worktrees/returns",
+                  "right_clicks": true,
+                  "agent": {
+                    "kind": "claude",
+                    "conversation": "conversation-plan",
+                    "mode": "plan"
+                  }
+                },
+                {
+                  "cwd": "worktrees/returns/src",
+                  "agent": {
+                    "kind": "codex",
+                    "conversation": "conversation-default"
+                  }
+                }
+              ],
+              "active": 1,
+              "layout": {
+                "split": {
+                  "dir": "right",
+                  "ratio": 0.375,
+                  "first": {
+                    "leaf": 0
+                  },
+                  "second": {
+                    "leaf": 1
+                  }
+                }
+              }
+            }
+          ],
+          "active": 0
+        }
+      ],
+      "active": 0,
+      "collapsed": true
+    }
+  ],
+  "active": 1,
+  "widths": {
+    "projects": 35,
+    "workspaces": 24,
+    "changes": 42,
+    "stack": 11,
+    "agents": 7
+  },
+  "issues": {
+    "tab": "shortcut",
+    "closed": true,
+    "people": {
+      "github": [
+        "me",
+        {
+          "person": "ana"
+        }
+      ],
+      "shortcut": [
+        {
+          "user": {
+            "id": "u-1",
+            "name": "Bo"
+          }
+        },
+        "anyone"
+      ],
+      "linear": [
+        "anyone",
+        "me"
+      ],
+      "jira": [
+        {
+          "person": "zoe"
+        },
+        "anyone"
+      ],
+      "plane": [
+        "anyone",
+        {
+          "user": {
+            "id": "u-2",
+            "name": "Kai"
+          }
+        }
+      ]
+    }
+  },
+  "changes": {
+    "open": true,
+    "mode": "all",
+    "scope": "every"
+  },
+  "todo": true,
+  "files": true
+}

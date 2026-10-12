@@ -1,0 +1,53 @@
+{
+  "worktrees_dir": "worktrees",
+  "fetch_minutes": 12,
+  "issue_tabs": [
+    "shortcut",
+    "github"
+  ],
+  "jira_site": "acme.atlassian.net",
+  "jira_email": "ana@acme.dev",
+  "jira_jql": "project = SHOP",
+  "plane_url": "https://plane.example",
+  "plane_workspace": "shop",
+  "plane_filter": "state:todo",
+  "agent": "codex",
+  "agent_args": {
+    "codex": [
+      "--sandbox",
+      "workspace-write"
+    ]
+  },
+  "agent_modes": {
+    "claude": {
+      "plan": [
+        "--permission-mode",
+        "plan"
+      ]
+    }
+  },
+  "agent_commands": {
+    "codex": "fake-codex"
+  },
+  "prompt": "Fix {url}",
+  "submit": true,
+  "accept_trust_prompts": true,
+  "resume_agents": false,
+  "keep_awake": true,
+  "trust_prompt_pattern": "Allow this folder",
+  "gh": "fake-gh",
+  "sidebar": "tree",
+  "tabs": "top",
+  "agents_section": true,
+  "counts": false,
+  "todo_dot": false,
+  "dim_inactive_panes": false,
+  "prefix_key": "ctrl+]",
+  "model": false,
+  "context": false,
+  "memory": true,
+  "desktop_notifications": "off",
+  "check_updates": false,
+  "remote": true,
+  "remote_port": 47682
+}

@@ -351,6 +351,123 @@ mod tests {
         use super::*;
 
         #[test]
+        #[expect(clippy::too_many_lines, reason = "pin every version 5 field explicitly against the fixture")]
+        fn version_five_matches_the_saved_format() {
+            use crate::issues::Who;
+            use crate::split::Dir;
+
+            let expected = State {
+                version: 5,
+                groups: vec![
+                    GroupEntry { name: "work".into(), icon: '●', colour: 99, collapsed: false },
+                    GroupEntry { name: "archive".into(), icon: '◆', colour: 33, collapsed: true },
+                ],
+                projects: vec![
+                    ProjectState {
+                        path: "projects/loose".into(),
+                        name: Some("Notes".into()),
+                        group: None,
+                        workspaces: vec![WorkspaceState {
+                            path: "projects/loose".into(),
+                            name: Some("planning".into()),
+                            worktree: false,
+                            tabs: vec![TabState {
+                                name: Some("notes".into()),
+                                panes: vec![PaneState { cwd: None, right_clicks: false, agent: None }],
+                                active: 0,
+                                layout: None,
+                            }],
+                            active: 0,
+                            base: Some("main".into()),
+                            collapsed: true,
+                        }],
+                        active: 0,
+                        collapsed: false,
+                    },
+                    ProjectState {
+                        path: "projects/shop".into(),
+                        name: Some("Shop".into()),
+                        group: Some(0),
+                        workspaces: vec![WorkspaceState {
+                            path: "worktrees/returns".into(),
+                            name: Some("returns".into()),
+                            worktree: true,
+                            tabs: vec![TabState {
+                                name: Some("agent and shell".into()),
+                                panes: vec![
+                                    PaneState {
+                                        cwd: Some("worktrees/returns".into()),
+                                        right_clicks: true,
+                                        agent: Some(AgentState {
+                                            kind: "claude".into(),
+                                            conversation: "conversation-plan".into(),
+                                            mode: Some("plan".into()),
+                                        }),
+                                    },
+                                    PaneState {
+                                        cwd: Some("worktrees/returns/src".into()),
+                                        right_clicks: false,
+                                        agent: Some(AgentState {
+                                            kind: "codex".into(),
+                                            conversation: "conversation-default".into(),
+                                            mode: None,
+                                        }),
+                                    },
+                                ],
+                                active: 1,
+                                layout: Some(Node::Split {
+                                    dir: Dir::Right,
+                                    ratio: 0.375,
+                                    first: Box::new(Node::Leaf(0)),
+                                    second: Box::new(Node::Leaf(1)),
+                                }),
+                            }],
+                            active: 0,
+                            base: None,
+                            collapsed: false,
+                        }],
+                        active: 0,
+                        collapsed: true,
+                    },
+                ],
+                active: 1,
+                widths: Some(Widths {
+                    projects: 35,
+                    workspaces: 24,
+                    changes: Some(42),
+                    stack: Some(11),
+                    agents: Some(7),
+                }),
+                issues: Some(IssuesState {
+                    tab: Some("shortcut".into()),
+                    closed: true,
+                    people: People {
+                        github: [Who::Me, Who::Person("ana".into())],
+                        shortcut: [Who::User { id: "u-1".into(), name: "Bo".into() }, Who::Anyone],
+                        linear: [Who::Anyone, Who::Me],
+                        jira: [Who::Person("zoe".into()), Who::Anyone],
+                        plane: [Who::Anyone, Who::User { id: "u-2".into(), name: "Kai".into() }],
+                    },
+                }),
+                changes: Some(ChangesState { open: true, mode: Mode::All, scope: Some(Scope::Every) }),
+                todo: true,
+                files: true,
+            };
+            let fixture = crate::test_util::fixture!("session/v5.json");
+            let dir = TempDir::new();
+            let path = dir.path().join("session.json");
+            std::fs::write(&path, fixture).expect("write the session fixture");
+
+            assert_eq!(load(&path), Some(expected.clone()));
+
+            save(&path, &expected).expect("save the session");
+            assert_eq!(
+                std::fs::read_to_string(&path).expect("read the saved session"),
+                fixture.strip_suffix('\n').expect("fixture newline")
+            );
+        }
+
+        #[test]
         fn round_trips() {
             let tmp = TempDir::new();
             let path = tmp.path().join("nested").join("session.json");

@@ -197,6 +197,70 @@ mod tests {
     mod file {
         use super::*;
 
+        fn matches_fixture(fixture: &str, expected: &Config) {
+            let dir = TempDir::new();
+            let path = dir.path().join("config.json");
+            std::fs::write(&path, fixture).expect("write the config fixture");
+
+            assert_eq!(load(&path), *expected);
+
+            save(&path, expected).expect("save the config");
+            assert_eq!(
+                std::fs::read_to_string(&path).expect("read the saved config"),
+                fixture.strip_suffix('\n').expect("fixture newline")
+            );
+        }
+
+        #[test]
+        fn every_key_matches_the_saved_format() {
+            let expected = Config {
+                worktrees_dir: "worktrees".into(),
+                fetch_minutes: 12,
+                issue_tabs: vec!["shortcut".into(), "github".into()],
+                jira_site: "acme.atlassian.net".into(),
+                jira_email: "ana@acme.dev".into(),
+                jira_jql: "project = SHOP".into(),
+                plane_url: "https://plane.example".into(),
+                plane_workspace: "shop".into(),
+                plane_filter: "state:todo".into(),
+                agent: "codex".into(),
+                agent_args: [("codex".into(), vec!["--sandbox".into(), "workspace-write".into()])].into(),
+                agent_modes: [(
+                    "claude".into(),
+                    [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into(),
+                )]
+                .into(),
+                agent_commands: [("codex".into(), "fake-codex".into())].into(),
+                prompt: "Fix {url}".into(),
+                submit: true,
+                accept_trust_prompts: true,
+                resume_agents: false,
+                keep_awake: true,
+                trust_prompt_pattern: "Allow this folder".into(),
+                gh: "fake-gh".into(),
+                sidebar: "tree".into(),
+                tabs: "top".into(),
+                agents_section: true,
+                counts: false,
+                todo_dot: false,
+                dim_inactive_panes: false,
+                prefix_key: "ctrl+]".into(),
+                model: false,
+                context: false,
+                memory: true,
+                desktop_notifications: "off".into(),
+                check_updates: false,
+                remote: true,
+                remote_port: 47682,
+            };
+            matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
+        }
+
+        #[test]
+        fn defaults_match_the_saved_format() {
+            matches_fixture(crate::test_util::fixture!("config/default.json"), &Config::default());
+        }
+
         #[test]
         fn round_trips() {
             let tmp = TempDir::new();
