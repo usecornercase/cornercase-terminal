@@ -16798,6 +16798,12 @@ mod tests {
             use super::*;
             use crate::test_util::git;
 
+            fn changed_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
+                let (id, path) = made(app, rx);
+                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+                (id, path)
+            }
+
             fn locked_workspace(app: &mut App, rx: &Receiver<AppEvent>, repo: &Path) -> (u64, PathBuf) {
                 let (id, path) = made(app, rx);
                 lock(repo, &path);
@@ -16898,8 +16904,7 @@ mod tests {
             #[test]
             fn a_worktree_with_changes_is_refused_before_anything_stops() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
-                let (id, path) = made(&mut app, &rx);
-                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+                let (id, path) = changed_workspace(&mut app, &rx);
 
                 ask(&mut app, None, remove(id));
                 let message = error(answered(&mut app, &rx, "git status answers"));
@@ -16954,8 +16959,7 @@ mod tests {
             #[test]
             fn force_removes_a_worktree_with_changes() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
-                let (id, path) = made(&mut app, &rx);
-                std::fs::write(path.join("notes.txt"), "draft").expect("write file");
+                let (id, path) = changed_workspace(&mut app, &rx);
 
                 ask(&mut app, None, force_remove(id));
                 done(answered(&mut app, &rx, "git removes the worktree"));
