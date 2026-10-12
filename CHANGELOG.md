@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.34
+
+- In Ghostty (1.0 or later), kitty (0.31 or later) and foot (1.12 or later), the mouse pointer turns into a resize arrow over the borders you can drag: ↔ on the borders between columns and between panes side by side, ↕ on the line between stacked lists, the line above the agents section and between panes one above the other. It stays while you drag and goes back to normal when you let go, when a dialog opens and when the window quits. Other terminals, and cornercase inside tmux, screen or Zellij, keep their usual pointer.
+- `Esc` now ends a column or divider drag where it is, instead of reaching the program in the pane. The prefix key ends it too as it opens the keys menu.
+
 ## 0.12.33
 
 - No changes in the app. A test that fails no longer leaves a fake agent running, which kept piped test runs from ending.
