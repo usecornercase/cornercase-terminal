@@ -547,32 +547,31 @@ mod tests {
     fn the_labelled_footer_only_supplies_complete_model_ids(#[case] screen: &str, #[case] expected: Option<&str>) {
         assert_eq!(footer_model(screen).as_deref(), expected);
     }
-}
 
-#[cfg(test)]
-mod counting_records {
-    use super::*;
-    use crate::context::counting::{
-        Ledger,
-        tests::{since, sum},
-    };
+    mod counting_records {
+        use super::*;
+        use crate::context::counting::{
+            Ledger,
+            tests::{since, sum},
+        };
 
-    #[test]
-    fn rewritten_replies_add_only_the_increase_and_restored_history_adds_nothing() {
-        let mut session = Session::new(PathBuf::from("synthetic.jsonl"), "synthetic".into());
-        for line in crate::test_util::fixture!("gemini/0.63.0/usage.jsonl").lines() {
-            session.apply(&serde_json::from_str(line).expect("record"));
+        #[test]
+        fn rewritten_replies_add_only_the_increase_and_restored_history_adds_nothing() {
+            let mut session = Session::new(PathBuf::from("synthetic.jsonl"), "synthetic".into());
+            for line in crate::test_util::fixture!("gemini/0.63.0/usage.jsonl").lines() {
+                session.apply(&serde_json::from_str(line).expect("record"));
+            }
+            let mut ledger = Ledger::default();
+            ledger.apply("a", since(), std::mem::take(&mut session.counted));
+            assert_eq!(
+                sum(ledger.take()),
+                (1, crate::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
+            );
+            for line in crate::test_util::fixture!("gemini/0.63.0/usage-restore.jsonl").lines() {
+                session.apply(&serde_json::from_str(line).expect("record"));
+            }
+            ledger.apply("a", since(), std::mem::take(&mut session.counted));
+            assert_eq!(sum(ledger.take()).1.out, 0);
         }
-        let mut ledger = Ledger::default();
-        ledger.apply("a", since(), std::mem::take(&mut session.counted));
-        assert_eq!(
-            sum(ledger.take()),
-            (1, crate::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
-        );
-        for line in crate::test_util::fixture!("gemini/0.63.0/usage-restore.jsonl").lines() {
-            session.apply(&serde_json::from_str(line).expect("record"));
-        }
-        ledger.apply("a", since(), std::mem::take(&mut session.counted));
-        assert_eq!(sum(ledger.take()).1.out, 0);
     }
 }

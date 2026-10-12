@@ -628,27 +628,26 @@ mod tests {
             assert!(error.to_string().contains(&said.fake.database.display().to_string()), "{error}");
         }
     }
-}
 
-#[cfg(test)]
-mod counting_records {
-    use super::*;
-    use crate::context::counting::{
-        Ledger,
-        tests::{since, sum},
-    };
+    mod counting_records {
+        use super::*;
+        use crate::context::counting::{
+            Ledger,
+            tests::{since, sum},
+        };
 
-    #[test]
-    fn only_completed_messages_count_and_each_id_counts_once() {
-        let records: Vec<_> =
-            crate::test_util::fixture!("opencode/1.18.35/usage.jsonl").lines().filter_map(counted).collect();
-        let mut ledger = Ledger::default();
-        ledger.apply("a", since(), records.clone());
-        assert_eq!(
-            sum(ledger.take()),
-            (1, crate::stats::Tokens { input: 20, out: 65, cache_read: 200, cache_write: 10 })
-        );
-        ledger.apply("a", since(), records);
-        assert_eq!(sum(ledger.take()).1.out, 0);
+        #[test]
+        fn only_completed_messages_count_and_each_id_counts_once() {
+            let records: Vec<_> =
+                crate::test_util::fixture!("opencode/1.18.35/usage.jsonl").lines().filter_map(counted).collect();
+            let mut ledger = Ledger::default();
+            ledger.apply("a", since(), records.clone());
+            assert_eq!(
+                sum(ledger.take()),
+                (1, crate::stats::Tokens { input: 20, out: 65, cache_read: 200, cache_write: 10 })
+            );
+            ledger.apply("a", since(), records);
+            assert_eq!(sum(ledger.take()).1.out, 0);
+        }
     }
 }
