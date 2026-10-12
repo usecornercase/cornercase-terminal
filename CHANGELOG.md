@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.31
+
+- Scroll back through a pane's output with the mouse wheel, over a shell or any program that doesn't use the mouse. The wheel scrolls the pane under the pointer without making it active, and ` ↓ n more ` at the bottom right says how far up you are; new output doesn't move what you are reading. Click it, type or paste to get back to the bottom. You can select and copy text up there too. In `less`, `man` and git's pager, the wheel scrolls the page.
+- Each pane now keeps its last 10 MB of output, as Ghostty does: about 14,000 lines at 80 columns. It kept far fewer lines than the 5,000 it was meant to (about 600), so `cornercase read --lines` reaches much further back too.
+
 ## 0.12.30
 
 - Restarting cornercase (after an update, from Settings, or with `cornercase restart` or `cornercase update --yes`) no longer flashes the shell you started it from and a blank screen: the window keeps showing your session until it comes back. The first restart into this version still flashes once, since the old version does it.
