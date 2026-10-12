@@ -5723,6 +5723,11 @@ mod tests {
         dragging
     }
 
+    fn running_sleep(app: &mut App) {
+        type_line(app, "sleep 30");
+        wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -12662,8 +12667,7 @@ mod tests {
         fn the_settings_button_says_what_stops_before_restarting() {
             let (mut app, _rx) = empty_app();
             app.open_here(AREA).expect("open a project");
-            type_line(&mut app, "sleep 30");
-            wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+            running_sleep(&mut app);
 
             open(&mut app);
 
@@ -12750,8 +12754,7 @@ mod tests {
         fn the_whole_restart_list_is_shown() {
             let (mut app, _rx) = found(replaced());
             app.open_here(AREA).expect("open a project");
-            type_line(&mut app, "sleep 30");
-            wait_until("sleep runs", || app.term().and_then(|t| t.program(&app.config)).as_deref() == Some("sleep"));
+            running_sleep(&mut app);
 
             let message = installed(&mut app);
 
