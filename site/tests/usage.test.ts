@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
+import { inputKey } from '../src/lib/demo/client';
 import { world } from '../src/lib/demo/world';
 import { usageArea } from '../src/lib/demo/layout';
 
@@ -21,5 +22,18 @@ for (const columns of [110, 46]) test(`Usage opens on Stats and keeps its border
   app.advance(1500); app.render(); assert.ok(app.textAt('resets in'));
   app.closeOverlay(); app.openUsage(); assert.equal(app.usage.page, 0);
   app.usagePage(1); app.render(); assert.ok(app.textAt('prompts'));
+  app.destroy();
+});
+
+test('Tab and Shift Tab reach Usage through the client key handler', () => {
+  const app = new App(); app.virtual = true;
+  const event = { key: 'Tab', metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: false };
+  assert.equal(inputKey(app, event), undefined);
+  app.openUsage();
+  assert.equal(app.usage.page, 1);
+  assert.equal(inputKey(app, event), true);
+  assert.equal(app.usage.page, 0);
+  assert.equal(inputKey(app, { ...event, shiftKey: true }), true);
+  assert.equal(app.usage.page, 1);
   app.destroy();
 });

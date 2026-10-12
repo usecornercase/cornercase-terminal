@@ -1132,7 +1132,7 @@ export class Painter {
     const headline = `${factor(n)} in the last 24 h · ${duration(n[2])} of work in ${duration(n[3])}`;
     const lines: Line[] = wrapAll([[seg(headline)]], width).map((row) => row.map((c) => seg(c.ch)));
     lines.push([]);
-    const col = Math.floor((width - 20) / 3);
+    const col = Math.max(0, Math.floor((width - 20) / 3));
     lines.push([seg(' '.repeat(18) + ['24 h', '7 days', 'total'].map((s) => s.padStart(col)).join(' '), DARK)]);
     ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache'].forEach((label, i) => {
       lines.push([seg(label.padEnd(18) + STATS_COLUMNS.map((c) => c[i].padStart(col)).join(' '))]);

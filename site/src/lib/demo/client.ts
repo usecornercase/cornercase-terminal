@@ -33,6 +33,17 @@ export interface MountOptions {
 
 const KEYS = new Set(['Enter', 'Backspace', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End', 'PageUp', 'PageDown', 'F10']);
 
+export function inputKey(app: App, e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'isComposing' | 'ctrlKey' | 'altKey' | 'shiftKey'>): boolean | undefined {
+  if (e.metaKey || e.isComposing) return;
+  if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) return;
+  const overlay = app.overlay?.kind;
+  if (e.key === 'Tab' && !(overlay === 'settings' || overlay === 'issues' || overlay === 'picker' || overlay === 'newWorkspace' || overlay === 'usage')) return;
+  const named = KEYS.has(e.key);
+  if (!named && e.key.length !== 1) return;
+  const k: Key = { key: e.ctrlKey && e.key.length === 1 ? e.key.toLowerCase() : e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey };
+  return app.key(k);
+}
+
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
 export const richText = (s: string) => escapeHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -199,14 +210,9 @@ export async function mount(root: HTMLElement, opts: MountOptions): Promise<Moun
       });
       listen(input, 'keydown', (e) => {
         root.dispatchEvent(new CustomEvent('demo-interact'));
-        if (e.metaKey || e.isComposing) return;
-        if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) return;
-        const overlay = app.overlay?.kind;
-        if (e.key === 'Tab' && !(overlay === 'settings' || overlay === 'issues' || overlay === 'picker' || overlay === 'newWorkspace')) return;
-        const named = KEYS.has(e.key);
-        if (!named && e.key.length !== 1) return;
-        const k: Key = { key: e.ctrlKey && e.key.length === 1 ? e.key.toLowerCase() : e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey };
-        if (app.key(k)) e.preventDefault();
+        const handled = inputKey(app, e);
+        if (handled === undefined) return;
+        if (handled) e.preventDefault();
         blinkOn = true;
       });
       listen(input, 'input', () => {
