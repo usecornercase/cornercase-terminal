@@ -8611,6 +8611,14 @@ mod tests {
         use crate::activity::Status;
         use crate::test_util::{FakeClaude, FakeCodex, FakeGemini, FakeOpencode, write_executable};
 
+        fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
+            let (mut app, rx, dirs) = app_with(1);
+            let claude = FakeClaude::new();
+            claude.start(&mut app);
+            watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
+            (app, rx, dirs, claude)
+        }
+
         const TURN_STARTED: &str = crate::test_util::fixture!("codex/0.160.0/turn-started.jsonl");
         const TURN_COMPLETE: &str = crate::test_util::fixture!("codex/0.160.0/turn-complete.jsonl");
         const OPENCODE_WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");
@@ -8660,11 +8668,7 @@ mod tests {
 
         #[test]
         fn a_tab_follows_what_claude_says_it_is_doing() {
-            let (mut app, rx, _dirs) = app_with(1);
-            let claude = FakeClaude::new();
-
-            claude.start(&mut app);
-            watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
+            let (mut app, rx, _dirs, claude) = working_claude();
             claude.signal("finish");
             watch_until(&mut app, &rx, "claude finishes in sight", |a| status(a, 0, 0) == Some(Status::Idle));
             claude.signal("quit");
@@ -8674,10 +8678,7 @@ mod tests {
 
         #[test]
         fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
-            let (mut app, rx, _dirs) = app_with(1);
-            let claude = FakeClaude::new();
-            claude.start(&mut app);
-            watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
+            let (mut app, rx, _dirs, claude) = working_claude();
             app.add_tab(0, 0, AREA).expect("add a tab");
             claude.signal("finish");
             watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
@@ -8691,10 +8692,7 @@ mod tests {
 
         #[test]
         fn the_compact_menu_hides_the_tab_beneath_it() {
-            let (mut app, rx, _dirs) = app_with(1);
-            let claude = FakeClaude::new();
-            claude.start(&mut app);
-            watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
+            let (mut app, rx, _dirs, claude) = working_claude();
             app.nav = Some(ui::Nav::Workspaces);
             claude.signal("finish");
             watch_until(&mut app, &rx, "claude finishes under the menu", |a| status(a, 0, 0) == Some(Status::Done));
