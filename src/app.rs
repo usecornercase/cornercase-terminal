@@ -8100,6 +8100,13 @@ mod tests {
     mod restore {
         use super::*;
 
+        fn locked_restore() -> (TempDir, Locked, App, Receiver<AppEvent>, WorkspaceState) {
+            let (dir, locked) = (TempDir::new(), Locked::new());
+            let (app, rx) = empty_app();
+            let ws = with_a_locked_pane(dir.path(), &locked);
+            (dir, locked, app, rx, ws)
+        }
+
         fn project(path: &Path, workspaces: Vec<WorkspaceState>) -> ProjectState {
             ProjectState { path: path.to_path_buf(), name: None, group: None, workspaces, active: 0, collapsed: false }
         }
@@ -8206,9 +8213,7 @@ mod tests {
 
         #[test]
         fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
-            let (dir, locked) = (TempDir::new(), Locked::new());
-            let (mut app, _rx) = empty_app();
-            let ws = with_a_locked_pane(dir.path(), &locked);
+            let (dir, _locked, mut app, _rx, ws) = locked_restore();
 
             assert!(
                 !app.restore(&saved(vec![project(dir.path(), vec![ws])], 0), AREA),
@@ -8222,9 +8227,7 @@ mod tests {
 
         #[test]
         fn a_tab_that_cannot_start_names_the_folder_and_why() {
-            let (dir, locked) = (TempDir::new(), Locked::new());
-            let (mut app, _rx) = empty_app();
-            let ws = with_a_locked_pane(dir.path(), &locked);
+            let (dir, locked, mut app, _rx, ws) = locked_restore();
 
             let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA) else {
                 panic!("the second pane cannot start");
