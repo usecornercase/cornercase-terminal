@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The code that draws the screen moved from ui.rs into one file per part of it.
 
+## 0.12.44
+
+- No changes in the app. The tests that count agent work moved into their files' test modules.
+
 ## 0.12.43
 
 - No changes in the app. The tests of the app, ui, server, client and cli trees moved into files of their own.
