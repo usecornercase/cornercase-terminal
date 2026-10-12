@@ -13660,10 +13660,7 @@ mod tests {
                     },
                 );
                 let (mut app, rx) = app_in(second.path(), config_path);
-                app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
-                wait_until("the agent runs", || {
-                    agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
-                });
+                exec_agent(&mut app, &agent);
                 let owner = app.projects[0].workspaces[0].id;
                 let agent_pane = app.term().expect("agent pane").id;
                 app.open_project(first.path().to_path_buf(), AREA).expect("other project");
@@ -13708,6 +13705,13 @@ mod tests {
                 assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
                 assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
             }
+        }
+
+        fn exec_agent(app: &mut App, agent: &Path) {
+            app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
+            wait_until("the agent runs", || {
+                agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
+            });
         }
 
         fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
@@ -13893,10 +13897,7 @@ mod tests {
             };
             let config_path = write_config(config.path(), &settings);
             let (mut app, rx) = app_in(repo.path(), config_path);
-            app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
-            wait_until("the agent runs", || {
-                agents::detect(&app.config, &app.term().expect("pane").foreground_args()).is_some()
-            });
+            exec_agent(&mut app, &agent);
             refresh_until_loaded(&mut app, &rx);
             (repo, config, app)
         }
