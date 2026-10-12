@@ -12408,6 +12408,14 @@ mod tests {
         mod jira {
             use super::*;
 
+            fn configured_jira() -> (Setup, FakeHttp) {
+                let mut s = setup(false, "echo '[]'");
+                let server = jira(&mut s);
+                s.app.config.jira_site = "acme.atlassian.net".into();
+                s.app.config.jira_email = "ana@acme.dev".into();
+                (s, server)
+            }
+
             const MYSELF: &str = r#"{"accountId":"a1","displayName":"Ana"}"#;
             const SEARCH: &str = r#"{"issues":[{"key":"SHOP-482","fields":{"summary":"Returns page crashes",
                 "updated":"2026-09-30T00:00:00.000+0000"}}],"isLast":true}"#;
@@ -12490,10 +12498,7 @@ mod tests {
 
             #[test]
             fn a_list_asked_before_the_site_changed_is_dropped() {
-                let mut s = setup(false, "echo '[]'");
-                let _server = jira(&mut s);
-                s.app.config.jira_site = "acme.atlassian.net".into();
-                s.app.config.jira_email = "ana@acme.dev".into();
+                let (mut s, _server) = configured_jira();
                 secrets::write(&secrets_file(&s), "jira_api_token", "t0k").expect("save token");
                 open_list(&mut s);
                 let key = s.app.cache_key(Source::Jira, browser(&s.app).project, &browser(&s.app).query(Source::Jira));
@@ -12506,10 +12511,7 @@ mod tests {
 
             #[test]
             fn a_token_checked_against_the_old_email_is_not_saved() {
-                let mut s = setup(false, "echo '[]'");
-                let _server = jira(&mut s);
-                s.app.config.jira_site = "acme.atlassian.net".into();
-                s.app.config.jira_email = "ana@acme.dev".into();
+                let (mut s, _server) = configured_jira();
 
                 s.app.check_token(Source::Jira, Secret("t0k".into()));
                 s.app.set_config(Config { jira_email: "bo@acme.dev".into(), ..s.app.config.clone() });
@@ -12520,10 +12522,7 @@ mod tests {
 
             #[test]
             fn a_list_asked_with_the_old_token_is_dropped_once_a_new_one_is_saved() {
-                let mut s = setup(false, "echo '[]'");
-                let _server = jira(&mut s);
-                s.app.config.jira_site = "acme.atlassian.net".into();
-                s.app.config.jira_email = "ana@acme.dev".into();
+                let (mut s, _server) = configured_jira();
                 secrets::write(&secrets_file(&s), "jira_api_token", "old").expect("save token");
                 open_list(&mut s);
                 let key = s.app.cache_key(Source::Jira, browser(&s.app).project, &browser(&s.app).query(Source::Jira));
