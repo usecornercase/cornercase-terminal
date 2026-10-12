@@ -275,22 +275,11 @@ pub struct Saver<T = State> {
     path: PathBuf,
     saved: Option<T>,
     pending: Option<(T, Instant)>,
-    interval: Option<Duration>,
-    writer: fn(&Path, &T) -> io::Result<()>,
 }
 
-impl<T: PartialEq + Serialize + Clone> Saver<T> {
+impl<T: PartialEq + Serialize> Saver<T> {
     pub fn new(path: PathBuf, saved: Option<T>) -> Self {
-        Self { path, saved, pending: None, interval: None, writer: |path, state| save(path, state) }
-    }
-
-    pub fn periodic(
-        path: PathBuf,
-        saved: Option<T>,
-        interval: Duration,
-        writer: fn(&Path, &T) -> io::Result<()>,
-    ) -> Self {
-        Self { path, saved, pending: None, interval: Some(interval), writer }
+        Self { path, saved, pending: None }
     }
 
     pub fn observe(&mut self, state: T, now: Instant) -> io::Result<bool> {
@@ -299,25 +288,22 @@ impl<T: PartialEq + Serialize + Clone> Saver<T> {
             return Ok(false);
         }
         match &self.pending {
-            Some((pending, since)) if *pending == state || self.interval.is_some() => {
-                if now.duration_since(*since) >= self.interval.unwrap_or(SETTLE) {
-                    (self.writer)(&self.path, &state)?;
+            Some((pending, since)) if *pending == state => {
+                if now.duration_since(*since) >= SETTLE {
+                    save(&self.path, &state)?;
                     self.saved = Some(state);
                     self.pending = None;
                     return Ok(true);
                 }
             }
-            _ => self.pending = Some((state.clone(), now)),
-        }
-        if let Some((pending, _)) = &mut self.pending {
-            *pending = state;
+            _ => self.pending = Some((state, now)),
         }
         Ok(false)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
         if let Some((state, _)) = self.pending.take() {
-            (self.writer)(&self.path, &state)?;
+            save(&self.path, &state)?;
             self.saved = Some(state);
         }
         Ok(())
@@ -363,25 +349,6 @@ mod tests {
 
     mod file {
         use super::*;
-
-        #[test]
-        fn periodic_saves_survive_continuous_changes_and_flush_the_latest_value() {
-            let tmp = TempDir::new();
-            let path = tmp.path().join("stats.json");
-            let mut saver = Saver::periodic(path.clone(), Some(0_u64), Duration::from_secs(60), |path, value| {
-                write(path, value, true)
-            });
-            let now = Instant::now();
-            for second in 0..60 {
-                assert!(!saver.observe(second + 1, now + Duration::from_secs(second)).expect("observe"));
-            }
-            assert!(!path.exists());
-            assert!(saver.observe(61, now + Duration::from_secs(60)).expect("save"));
-            assert_eq!(std::fs::read_to_string(&path).expect("read"), "61");
-            assert!(!saver.observe(62, now + Duration::from_secs(61)).expect("pending"));
-            saver.flush().expect("flush");
-            assert_eq!(std::fs::read_to_string(&path).expect("read"), "62");
-        }
 
         #[test]
         fn round_trips() {

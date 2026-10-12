@@ -4,8 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.35
 
-- Usage now opens on Stats: see your agents’ work over 24 hours, seven days and all time, with parallelism, prompts, turns, time waiting for you, token kinds and a purple heatmap. Counts stay local and include only agents running inside cornercase.
-- Run `cornercase stats`, `--json` or `--share`, including with the server stopped. Share copies a private link to a card you can download as a PNG; plan limits remain on the Limits tab.
+- Usage now opens on Stats: see your agents' work over 24 hours, seven days and all time, with parallelism, prompts, turns, time waiting for you, token kinds and a purple heatmap. Counts stay local and include only agents running inside cornercase.
+- Run `cornercase stats`, `--json` or `--share`, including with the server stopped. Share copies a link to a card made in your browser that you can download as a PNG; plan limits remain on the Limits tab.
 
 ## 0.12.34
 

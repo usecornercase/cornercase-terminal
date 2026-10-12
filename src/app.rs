@@ -4353,8 +4353,8 @@ impl App {
     pub fn set_stats(&mut self, stats: crate::stats::Stats) {
         self.stats = stats;
     }
-    pub fn stats_saved(&self, now: SystemTime) -> crate::stats::Saved {
-        self.stats.saved(now)
+    pub fn stats(&self) -> &crate::stats::Stats {
+        &self.stats
     }
 
     fn open_settings(&mut self) {

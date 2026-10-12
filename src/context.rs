@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::activity::Claude;
 use crate::agents;
+#[cfg(test)]
 use crate::log::Stamp;
 use crate::process;
 
@@ -32,8 +33,6 @@ const LONG_SUFFIX: &str = "[1m]";
 const SYNTHETIC: &str = "<synthetic>";
 const ASSISTANT: &str = r#""type":"assistant""#;
 const COMPACT_BOUNDARY: &str = r#""compact_boundary""#;
-const TYPED: &str = r#""origin":{"kind":"human""#;
-const QUEUED: &str = r#""operation":"enqueue""#;
 const COMMAND: &str = "<command-name>";
 const SHELL_INPUT: &str = "<bash-input>";
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
@@ -194,9 +193,11 @@ impl Pane {
             }
             self.subagents = found;
         }
-        if !self.following.running() {
+        if !self.following.running()
+            && let Some((_, since)) = self.agent
+        {
             let state = std::mem::take(&mut self.subagents);
-            self.following.start(move || state.read(&parent));
+            self.following.start(move || state.read(&parent, since));
         }
     }
 
@@ -237,27 +238,41 @@ impl Pane {
 
 #[derive(Debug, Default)]
 struct Subagents {
+    directory: Option<(PathBuf, SystemTime)>,
     tails: HashMap<PathBuf, Tail>,
     records: Vec<(PathBuf, Vec<CountRecord>)>,
 }
 
 impl Subagents {
-    fn read(mut self, parent: &Path) -> Self {
-        self.tails.retain(|path, _| path.parent() == Some(parent));
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("agent-"))
-                    || !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
-                {
-                    continue;
+    fn read(mut self, parent: &Path, since: SystemTime) -> Self {
+        let directory = std::fs::metadata(parent).and_then(|m| m.modified()).ok().map(|at| (parent.to_path_buf(), at));
+        if directory != self.directory {
+            let mut paths = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.file_name().and_then(|s| s.to_str()).is_some_and(|s| s.starts_with("agent-"))
+                        && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jsonl"))
+                    {
+                        paths.push(path);
+                    }
                 }
-                let tail = self.tails.entry(path.clone()).or_default();
-                if let Ok(batch) = tail.read(&path) {
-                    let records =
-                        batch.bytes.split(|b| *b == b'\n').filter_map(|line| counted_claude(line, false)).collect();
-                    self.records.push((path, records));
-                }
+            }
+            self.tails.retain(|path, _| paths.contains(path));
+            for path in paths {
+                self.tails.entry(path).or_default();
+            }
+            self.directory = directory;
+        }
+        for (path, tail) in &mut self.tails {
+            if let Ok(batch) = tail.read_since(path, Some(since)) {
+                let records = batch
+                    .bytes
+                    .split(|b| *b == b'\n')
+                    .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
+                    .filter_map(|entry| counted_claude(&entry, false))
+                    .collect();
+                self.records.push((path.clone(), records));
             }
         }
         self
@@ -381,64 +396,35 @@ impl Transcript {
         }
         let read_at = SystemTime::now();
         for line in batch.bytes.split(|b| *b == b'\n') {
-            self.prompted = self.prompted.max(prompt(line, read_at));
-            if let Some(record) = counted_claude(line, true) {
+            let Ok(entry) = serde_json::from_slice::<Value>(line) else { continue };
+            self.prompted = self.prompted.max(prompt(&entry, read_at));
+            if let Some(record) = counted_claude(&entry, true) {
                 self.counted.push(record);
             }
         }
     }
 }
 
-#[derive(Deserialize)]
-struct Line {
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    #[serde(rename = "isSidechain")]
-    sidechain: Option<bool>,
-    #[serde(rename = "isMeta")]
-    meta: Option<bool>,
-    origin: Option<Origin>,
-    operation: Option<String>,
-    content: Option<Value>,
-    message: Option<Sent>,
-    timestamp: Option<String>,
+fn text(entry: &Value) -> &str {
+    entry["message"]["content"].as_str().or_else(|| entry["content"].as_str()).unwrap_or_default()
 }
 
-#[derive(Deserialize)]
-struct Origin {
-    kind: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Sent {
-    content: Option<Value>,
-}
-
-fn prompt(line: &[u8], read_at: SystemTime) -> Option<SystemTime> {
-    let line = std::str::from_utf8(line).ok()?;
-    if ![TYPED, QUEUED, COMMAND, SHELL_INPUT].iter().any(|marker| line.contains(marker)) {
+fn prompt(entry: &Value, read_at: SystemTime) -> Option<SystemTime> {
+    if entry["isSidechain"] == true || entry["isMeta"] == true {
         return None;
     }
-    let record: Line = serde_json::from_str(line).ok()?;
-    if record.sidechain == Some(true) || record.meta == Some(true) {
-        return None;
-    }
-    let content = record.message.and_then(|said| said.content).or(record.content);
-    let text = content.as_ref().and_then(Value::as_str).unwrap_or_default();
-    let typed = match record.kind.as_deref()? {
-        "user" if record.origin.and_then(|origin| origin.kind).as_deref() == Some("human") => true,
+    let text = text(entry);
+    let typed = match entry["type"].as_str()? {
+        "user" if entry["origin"]["kind"] == "human" => true,
         "user" | "system" => text.starts_with(COMMAND) || text.starts_with(SHELL_INPUT),
-        "queue-operation" => {
-            record.operation.as_deref() == Some("enqueue") && !NOT_TYPED.iter().any(|tag| text.starts_with(tag))
-        }
+        "queue-operation" => entry["operation"] == "enqueue" && !NOT_TYPED.iter().any(|tag| text.starts_with(tag)),
         _ => false,
     };
-    typed.then(|| record.timestamp.as_deref().and_then(Stamp::parse).unwrap_or(read_at))
+    typed.then(|| counting::timestamp(entry).unwrap_or(read_at))
 }
 
-fn counted_claude(line: &[u8], prompts: bool) -> Option<CountRecord> {
-    let entry: Value = serde_json::from_slice(line).ok()?;
-    let at = counting::timestamp(&entry)?;
+fn counted_claude(entry: &Value, prompts: bool) -> Option<CountRecord> {
+    let at = counting::timestamp(entry)?;
     let usage = &entry["message"]["usage"];
     if entry["type"] == "assistant" && usage.is_object() && entry["message"]["model"] != SYNTHETIC {
         return Some(CountRecord {
@@ -453,8 +439,15 @@ fn counted_claude(line: &[u8], prompts: bool) -> Option<CountRecord> {
             )),
         });
     }
-    let text = entry["message"]["content"].as_str().or_else(|| entry["content"].as_str()).unwrap_or_default();
-    if prompts && !text.starts_with(SHELL_INPUT) && prompt(line, at).is_some() {
+    let queued = entry["type"] == "attachment"
+        && entry["attachment"]["type"] == "queued_command"
+        && entry["attachment"]["commandMode"] == "prompt"
+        && entry["attachment"]["origin"]["kind"] == "human";
+    let typed = entry["origin"]["kind"] != "peer"
+        && matches!(entry["type"].as_str(), Some("user" | "system"))
+        && !text(entry).starts_with(SHELL_INPUT)
+        && prompt(entry, at).is_some();
+    if prompts && entry["isSidechain"] != true && entry["isMeta"] != true && (queued || typed) {
         let id = entry["uuid"]
             .as_str()
             .or_else(|| entry["id"].as_str())
@@ -1253,22 +1246,42 @@ mod counting_records {
     #[test]
     fn repeated_message_usage_and_conversation_resets_count_once() {
         let mut ledger = Ledger::default();
-        let records: Vec<_> = FIXTURE.lines().filter_map(|line| counted_claude(line.as_bytes(), true)).collect();
+        let records: Vec<_> = FIXTURE
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .filter_map(|entry| counted_claude(&entry, true))
+            .collect();
         ledger.apply("a", since(), records.clone());
         assert_eq!(
             sum(ledger.take()),
-            (3, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
+            (2, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
         );
         ledger.apply("clear", since(), Vec::new());
         ledger.apply("a", since(), records);
         assert_eq!(sum(ledger.take()), (0, crate::stats::Tokens::default()));
         assert!(
             counted_claude(
-                br#"{"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}"#,
+                &serde_json::json!({"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}),
                 true
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn absorbed_and_dequeued_human_prompts_each_count_once() {
+        let fixture = include_str!("../tests/fixtures/claude/2.1.296/queued-prompts.jsonl");
+        let records: Vec<_> = fixture
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("entry"))
+            .filter_map(|entry| counted_claude(&entry, true))
+            .collect();
+        assert_eq!(records.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["absorbed", "dequeued"]);
+        let mut ledger = Ledger::default();
+        ledger.apply("queue", since(), records.clone());
+        assert_eq!(sum(ledger.take()).0, 2);
+        ledger.apply("queue", since(), records);
+        assert_eq!(sum(ledger.take()).0, 0);
     }
 
     #[test]

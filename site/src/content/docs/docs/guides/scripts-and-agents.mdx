@@ -304,7 +304,7 @@ cornercase stats --share
 
 `--json` prints an object with `since` (UTC), `windows` (`24h`, `7d`, `total`) and `blocks` (newest first). Each window has `agents`, `prompts`, `turns`, `agent_seconds`, `busy_seconds`, `most_at_once`, `waited_seconds`, `tokens` (`in`, `out`, `cache_read`, `cache_write`) and `by_agent` (`claude`, `codex`, `gemini`, `opencode`). Durations preserve milliseconds as fractional seconds. Busy time and most-at-once span all kinds; the per-agent counters contain starts, prompts, turns, working/waiting durations and token kinds. Every key is present, even when zero. Each block gives `agent_seconds`.
 
-`--share` prints the same private share link as Usage → Stats → share. Copy and post it yourself; anyone with the link sees the numbers on the card. See [Usage and stats](../projects-workspaces-tabs/#usage-and-stats) for the counting rules and privacy.
+`--share` prints the same share link as Usage → Stats → share. Copy and post it yourself; anyone with the link sees the numbers on the card. See [Usage and stats](../projects-workspaces-tabs/#usage-and-stats) for the counting rules and privacy.
 
 ## JSON
 

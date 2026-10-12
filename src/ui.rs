@@ -1758,20 +1758,20 @@ pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
 }
 
 pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
-    let width = area.width.saturating_sub(2).min(FORM_WIDTH);
+    let width = if area.width < 49 { area.width } else { area.width.saturating_sub(2) }.min(FORM_WIDTH);
     let body = usage_inner(Rect::new(0, 0, width, 3)).width;
-    let lines = u16::try_from(usage_lines((Color::Reset, Color::Reset), usage, body).len().max(stats::HEIGHT))
-        .unwrap_or(u16::MAX);
+    let lines = u16::try_from(
+        usage_lines((Color::Reset, Color::Reset), usage, body)
+            .len()
+            .max(stats::lines((Color::Reset, Color::Reset, false), &usage.stats, body).len()),
+    )
+    .unwrap_or(u16::MAX);
     let height = lines.saturating_add(5).min(area.height);
     Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height)
 }
 
 fn usage_inner(usage: Rect) -> Rect {
-    if usage.width < 49 {
-        Rect::new(usage.x + 1, usage.y + 1, usage.width.saturating_sub(2), usage.height.saturating_sub(2))
-    } else {
-        form_inner(usage)
-    }
+    form_inner(usage)
 }
 
 fn usage_rows(usage: Rect) -> [Rect; 3] {
@@ -3184,7 +3184,7 @@ fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     let [_, body, _] = usage_rows(r);
     draw_tabs(f, view, &usage_tabs(f.area(), usage), &crate::usage::Page::NAMES, usage.page.index());
     let lines = if usage.page == crate::usage::Page::Stats {
-        stats::lines(view, &usage.stats, body.width)
+        stats::lines((view.line(), view.muted, view.light), &usage.stats, body.width)
     } else {
         usage_lines((view.muted, view.line()), usage, body.width)
     };

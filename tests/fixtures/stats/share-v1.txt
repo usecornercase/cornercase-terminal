@@ -134,7 +134,8 @@
     3,
     1,
     1,
-    2
+    2,
+    0
   ],
   "link": "https://usecornercase.dev/stats/#v1&24h=4.38.22320.6600.5.410000&7d=31.402.147780.43800.7.3100000&all=212.3118.1116000.300000.9.24000000&days=110&map=kAABKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKZKA",
   "block_seconds": [
@@ -247,6 +248,7 @@
     4,
     1,
     2,
-    3
+    3,
+    0
   ]
 }

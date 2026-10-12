@@ -1,23 +1,29 @@
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 
+#[cfg(test)]
 use super::View;
 use crate::markdown;
 use crate::stats::{self, WEEKS};
 
-pub(super) const HEIGHT: usize = 24;
-
+#[cfg(test)]
 pub fn colour(view: &View, level: u8) -> Color {
+    shade(view.line(), view.light, level)
+}
+
+fn shade(line: Color, light: bool, level: u8) -> Color {
     if level == 0 {
-        return view.line();
+        return line;
     }
-    let ramp = if view.light { [189, 141, 99, 55] } else { [60, 97, 141, 99] };
+    let ramp = if light { [189, 141, 99, 55] } else { [60, 97, 141, 99] };
     Color::Indexed(ramp[usize::from(level.saturating_sub(1).min(3))])
 }
 
-pub(super) fn lines(view: &View, stats: &stats::View, width: u16) -> Vec<Line<'static>> {
+pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u16) -> Vec<Line<'static>> {
     let width = usize::from(width);
-    let dim = Style::default().fg(view.muted);
+    let (line, muted, light) = colours;
+    let colour = |level| shade(line, light, level);
+    let dim = Style::default().fg(muted);
     if stats.empty {
         return markdown::wrap_text(stats::EMPTY, dim, width);
     }
@@ -42,7 +48,7 @@ pub(super) fn lines(view: &View, stats: &stats::View, width: u16) -> Vec<Line<'s
             let level = levels[week * 7 + 6 - row];
             spans.push(Span::styled(
                 if level.is_some() { "■ " } else { "  " },
-                Style::default().fg(colour(view, level.unwrap_or(0))),
+                Style::default().fg(colour(level.unwrap_or(0))),
             ));
         }
         lines.push(Line::from(spans));
@@ -50,10 +56,10 @@ pub(super) fn lines(view: &View, stats: &stats::View, width: u16) -> Vec<Line<'s
     let left = format!("{weeks} weeks · counting for {} days", stats.days);
     let legend = vec![
         Span::styled("less · ", dim),
-        Span::styled("■ ", Style::default().fg(colour(view, 1))),
-        Span::styled("■ ", Style::default().fg(colour(view, 2))),
-        Span::styled("■ ", Style::default().fg(colour(view, 3))),
-        Span::styled("■ ", Style::default().fg(colour(view, 4))),
+        Span::styled("■ ", Style::default().fg(colour(1))),
+        Span::styled("■ ", Style::default().fg(colour(2))),
+        Span::styled("■ ", Style::default().fg(colour(3))),
+        Span::styled("■ ", Style::default().fg(colour(4))),
         Span::styled("more", dim),
     ];
     let mut spans = vec![Span::styled(left.clone(), dim)];

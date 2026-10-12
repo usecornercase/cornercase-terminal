@@ -13,7 +13,7 @@ export function parse(hash: string): Stats | null {
   const arrays = [match[1], match[2], match[3]].map((text) => text.split('.').map(Number));
   const days = Number(match[4]);
   if ([days, ...arrays.flat()].some((n) => !Number.isSafeInteger(n) || n < 0)) return null;
-  const blocks = Math.min(days, 182);
+  const blocks = Math.min(days + 1, 182);
   const bytes = Math.ceil(blocks * 3 / 8);
   const map = match[5];
   if (map.length !== Math.ceil(bytes * 4 / 3)) return null;
@@ -47,7 +47,7 @@ export const ramp = [239, 60, 97, 141, 99];
 export const EXAMPLE: Stats = {
   windows: { '24h': [4, 38, 22320, 6600, 5, 410000], '7d': [31, 402, 147780, 43800, 7, 3100000], all: [212, 3118, 1116000, 300000, 9, 24000000] },
   days: 110,
-  levels: Array.from({ length: 110 }, (_, i) => i % 11 === 0 ? 0 : (i * 7 + Math.floor(i / 3)) % 4 + 1),
+  levels: Array.from({ length: 111 }, (_, i) => i % 11 === 0 ? 0 : (i * 7 + Math.floor(i / 3)) % 4 + 1),
 };
 export function postText(stats: Stats, window: WindowName): string {
   const n = stats.windows[window];
@@ -55,7 +55,7 @@ export function postText(stats: Stats, window: WindowName): string {
 }
 
 export function shareLink(stats: Stats): string {
-  const levels = stats.levels.slice(0, Math.min(stats.days, 182));
+  const levels = stats.levels.slice(0, Math.min(stats.days + 1, 182));
   const bytes = new Uint8Array(Math.ceil(levels.length * 3 / 8));
   levels.forEach((level, i) => { for (let bit = 0; bit < 3; bit++) if (level & (1 << (2 - bit))) { const at = i * 3 + bit; bytes[Math.floor(at / 8)] |= 1 << (7 - at % 8); } });
   const map = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

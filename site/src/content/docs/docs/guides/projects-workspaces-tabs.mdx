@@ -216,7 +216,7 @@ The dialog opens on **Stats** and remembers your last tab until the server resta
   name="usage"
   alt="The Usage dialog: Claude Code on a max plan, the five-hour session at 34% resetting in 2h 14m, the week at 81% in orange resetting in 3d 4h and the week for Opus at 12%; Codex on a plus plan, the session at 22% resetting in 3h 41m and the week at 9% resetting in 4d 10h; both updated just now, and a done button"
   caption="One section per agent, one bar per limit, with when it resets. Claude's week is orange: it is getting close."
-  crop={[23, 4, 64, 29]}
+  crop={[23, 6, 64, 26]}
 />
 
 Each installed Claude Code or Codex gets its own section, and each limit shows how much you have used and when it resets. The bar, a thin line, is green, orange when you get close and red at the limit. A weekly limit for one model, when your plan has one, gets its own bar, and Claude Code's extra usage or Codex's credits show below them when you have some. Accounts without plan limits, such as an API key, Bedrock or Vertex, say so, and a Codex that isn't signed in says `not signed in · run codex login`.
@@ -226,7 +226,7 @@ The numbers come from the agents themselves: showing the Limits tab runs `claude
 
 Stats counts **only Claude Code, Codex, Gemini CLI and opencode running inside cornercase**, from when this feature was installed. It never imports the agents' histories. The columns show the current hour and the 23 before it (**24 h**), 168 hours (**7 days**) and **total**. These are rolling windows, independent of your time zone.
 
-<Screen name="usage-stats" alt="Usage on the Stats tab, showing parallel work, three windows of agent counts and durations, token kinds and a purple heatmap, with share and done buttons" caption="How much your agents worked, and how much of it they did side by side." crop={[23, 4, 64, 29]} />
+<Screen name="usage-stats" alt="Usage on the Stats tab, showing parallel work, three windows of agent counts and durations, token kinds and a purple heatmap, with share and done buttons" caption="How much your agents worked, and how much of it they did side by side." crop={[23, 6, 64, 26]} />
 
 | Row | What it counts |
 | --- | --- |
@@ -242,7 +242,7 @@ Stats counts **only Claude Code, Codex, Gemini CLI and opencode running inside c
 
 The headline compares agent time with time when at least one agent worked: **3.4× in parallel** means 3.4 hours of agent work per busy hour. It appears after a minute of busy time. Samples arrive every half second, with a two-second cap per interval so sleep and stalls add no long gap. Records count once across reader resets and resumed conversations; Claude's subagent tokens count too. Nothing is priced in money.
 
-Each heatmap square is a 24-hour block, newest at the bottom right. Rows are not weekdays. Up to 26 weeks fit; colour measures agent time, with four levels from the nonzero blocks' quartiles. The count of days is whole 24-hour blocks since counting began.
+Each heatmap square is a 24-hour block, newest at the bottom right. Rows are not weekdays. Up to 26 weeks fit; colour measures agent time, with four levels from the nonzero blocks' quartiles. The count of days is whole 24-hour blocks since counting began; the first incomplete day and the block where counting started also get a square.
 
 **share** copies a link to [a stats card](https://usecornercase.dev/stats/). The page makes a PNG in your browser, with download, copy and supported share options. The link holds only agent starts, prompts, work and busy durations, peak parallelism, output tokens, counting days and heatmap levels. Anyone with the link can see these numbers. It omits waiting, input/cache tokens, turns, agent breakdowns, projects, paths and names. The fragment after `#` is never sent to the site, which has no analytics; nothing is uploaded. Attach the downloaded PNG to posts: link previews show an example card.
 

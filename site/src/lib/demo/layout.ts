@@ -842,9 +842,9 @@ export const issuesArea = (cols: number, rows: number) =>
   centered(cols, rows, Math.min(Math.max(0, cols - 4), ISSUES_WIDTH), Math.min(Math.max(0, rows - 2), ISSUES_HEIGHT));
 
 export const usageArea = (cols: number, rows: number, body: number) =>
-  centered(cols, rows, Math.min(Math.max(0, cols - 2), FORM_WIDTH), Math.min(Math.max(body, 24) + 5, rows));
+  centered(cols, rows, Math.min(Math.max(0, cols < 49 ? cols : cols - 2), FORM_WIDTH), Math.min(body + 5, rows));
 
-export const usageInner = (r: Rect): Rect => r.w < 49 ? rect(r.x + 1, r.y + 1, Math.max(0, r.w - 2), Math.max(0, r.h - 2)) : inner(r);
+export const usageInner = (r: Rect): Rect => inner(r);
 
 export const usageShare = (r: Rect): Rect => { const done = usageDone(r); return rect(done.x - 9, done.y, 7, 1); };
 

@@ -1,0 +1,8 @@
+{"type":"queue-operation","operation":"enqueue","uuid":"enqueue-absorbed","content":"synthetic absorbed prompt","timestamp":"2026-10-10T12:00:02.000Z"}
+{"type":"queue-operation","operation":"remove","reason":"absorbed_mid_turn","timestamp":"2026-10-10T12:00:03.000Z"}
+{"type":"attachment","uuid":"absorbed","attachment":{"type":"queued_command","commandMode":"prompt","origin":{"kind":"human"},"prompt":"synthetic absorbed prompt"},"timestamp":"2026-10-10T12:00:04.000Z"}
+{"type":"queue-operation","operation":"enqueue","uuid":"enqueue-dequeued","content":"synthetic dequeued prompt","timestamp":"2026-10-10T12:00:05.000Z"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-10T12:00:06.000Z"}
+{"type":"user","uuid":"dequeued","origin":{"kind":"human"},"message":{"content":"synthetic dequeued prompt"},"timestamp":"2026-10-10T12:00:07.000Z"}
+{"type":"attachment","uuid":"notification","attachment":{"type":"queued_command","commandMode":"task-notification","origin":{"kind":"human"},"prompt":"synthetic notification"},"timestamp":"2026-10-10T12:00:08.000Z"}
+{"type":"attachment","uuid":"peer","attachment":{"type":"queued_command","commandMode":"prompt","origin":{"kind":"peer"},"prompt":"synthetic peer"},"timestamp":"2026-10-10T12:00:09.000Z"}

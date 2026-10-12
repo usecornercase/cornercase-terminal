@@ -275,7 +275,7 @@ struct Server {
     session: PathBuf,
     saver: Saver,
     todo_saver: Saver<todo::Saved>,
-    stats_saver: Saver<crate::stats::Saved>,
+    stats_saver: crate::stats::Saver,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
     drawn: Option<Instant>,
@@ -415,12 +415,7 @@ fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>)
 
 impl Server {
     fn new(app: App, session: PathBuf, todo_saver: Saver<todo::Saved>, tx: Sender<ServerEvent>) -> Self {
-        let stats_saver = Saver::periodic(
-            crate::stats::path(&session),
-            Some(app.stats_saved(SystemTime::now())),
-            Duration::from_secs(60),
-            crate::stats::save,
-        );
+        let stats_saver = crate::stats::Saver::new(crate::stats::path(&session), app.stats().revision());
         Self {
             app,
             clients: Vec::new(),
@@ -567,7 +562,7 @@ impl Server {
                 Err(e) => log::error!("server", "failed to save the session", error = e),
             }
         }
-        match self.stats_saver.observe(self.app.stats_saved(SystemTime::now()), now) {
+        match self.stats_saver.observe(self.app.stats(), SystemTime::now(), now) {
             Ok(true) => log::debug!("stats", "saved"),
             Ok(false) => {}
             Err(e) => log::error!("stats", "failed to save", error = e),
@@ -866,11 +861,7 @@ impl Server {
 
     fn shutdown(&mut self) {
         self.answer();
-        if let Err(e) = self
-            .stats_saver
-            .observe(self.app.stats_saved(SystemTime::now()), Instant::now())
-            .and_then(|_| self.stats_saver.flush())
-        {
+        if let Err(e) = self.stats_saver.flush(self.app.stats(), SystemTime::now()) {
             log::error!("stats", "failed to save", error = e);
         }
         if let Err(e) =

@@ -59,3 +59,10 @@ test('a heatmap square is a snapped shape with equal sides', () => {
   assert.equal(ops.length, 1); const square = ops[0]; assert.equal(square.k, 'rect');
   if (square.k === 'rect') { assert.equal(square.w, square.h); assert.equal(square.x, 1); assert.equal(square.y, 6); }
 });
+
+test('the first counting day shares its current heatmap square', () => {
+  const stats = { ...EXAMPLE, days: 0, levels: [1] };
+  const link = shareLink(stats);
+  assert.ok(link.endsWith('&days=0&map=IA'));
+  assert.deepEqual(parse(new URL(link).hash)?.levels, [1]);
+});

@@ -1112,7 +1112,7 @@ export class Painter {
         lines.push([]);
       }
     }
-    const r = usageArea(app.cols, app.rows, lines.length);
+    const r = usageArea(app.cols, app.rows, Math.max(lines.length, this.statsLines(width).length));
     this.dialogBackdrop(r);
     this.box(r, 'Usage');
     const c = usageInner(r);

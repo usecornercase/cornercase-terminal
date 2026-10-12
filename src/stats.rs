@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -182,7 +182,8 @@ pub struct Stats {
     total: Bucket,
     hours: BTreeMap<u64, Bucket>,
     previous: HashMap<u64, Sample>,
-    started: HashSet<(Kind, i32)>,
+    revision: u64,
+    pruned_hour: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -225,10 +226,15 @@ impl Stats {
             total: Bucket::default(),
             hours: BTreeMap::new(),
             previous: HashMap::new(),
-            started: HashSet::new(),
+            revision: 0,
+            pruned_hour: None,
         }
     }
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
     fn add(&mut self, at: SystemTime, kind: Kind, counts: Counts) {
+        self.revision = self.revision.saturating_add(1);
         self.total.by_agent[kind.index()].add(counts);
         self.hours.entry(hour(at)).or_default().by_agent[kind.index()].add(counts);
     }
@@ -247,7 +253,9 @@ impl Stats {
         let mut simultaneous = 0;
         let mut busy = false;
         for &sample in samples {
-            if self.started.insert((sample.kind, sample.pid)) && !sample.resuming {
+            if self.previous.get(&sample.pane).is_none_or(|s| (s.kind, s.pid) != (sample.kind, sample.pid))
+                && !sample.resuming
+            {
                 self.add(now, sample.kind, Counts { agents: 1, ..Counts::default() });
             }
             if sample.working() {
@@ -272,8 +280,15 @@ impl Stats {
         if simultaneous > 0 || busy {
             let addition =
                 Bucket { busy_ms: if busy { ms } else { 0 }, most_at_once: simultaneous, ..Bucket::default() };
-            self.total.add(&addition);
-            self.hours.entry(hour(now)).or_default().add(&addition);
+            let bucket = self.hours.entry(hour(now)).or_default();
+            if addition.busy_ms > 0
+                || addition.most_at_once > bucket.most_at_once
+                || addition.most_at_once > self.total.most_at_once
+            {
+                self.revision = self.revision.saturating_add(1);
+                self.total.add(&addition);
+                bucket.add(&addition);
+            }
         }
         self.previous = samples.iter().map(|s| (s.pane, *s)).collect();
     }
@@ -291,7 +306,16 @@ impl Stats {
         }
     }
     pub fn prune(&mut self, now: SystemTime) {
-        self.hours = self.hours.split_off(&hour(now).saturating_sub(RETAIN - 1));
+        let current = hour(now);
+        if self.pruned_hour == Some(current) {
+            return;
+        }
+        self.pruned_hour = Some(current);
+        let oldest = current.saturating_sub(RETAIN - 1);
+        if self.hours.first_key_value().is_some_and(|(&at, _)| at < oldest) {
+            self.hours = self.hours.split_off(&oldest);
+            self.revision = self.revision.saturating_add(1);
+        }
     }
     fn window(&self, now: SystemTime, hours: u64) -> Bucket {
         let end = hour(now);
@@ -359,6 +383,38 @@ pub fn load(path: &Path, now: SystemTime) -> Stats {
 }
 pub fn save(path: &Path, saved: &Saved) -> std::io::Result<()> {
     state::write(path, saved, true)
+}
+
+#[derive(Debug)]
+pub struct Saver {
+    path: PathBuf,
+    revision: u64,
+    dirty: Option<Instant>,
+}
+
+impl Saver {
+    pub fn new(path: PathBuf, revision: u64) -> Self {
+        Self { path, revision, dirty: None }
+    }
+    pub fn observe(&mut self, stats: &Stats, wall: SystemTime, now: Instant) -> std::io::Result<bool> {
+        if stats.revision() == self.revision {
+            return Ok(false);
+        }
+        let since = *self.dirty.get_or_insert(now);
+        if now.saturating_duration_since(since) < Duration::from_secs(60) {
+            return Ok(false);
+        }
+        self.flush(stats, wall)?;
+        Ok(true)
+    }
+    pub fn flush(&mut self, stats: &Stats, wall: SystemTime) -> std::io::Result<()> {
+        if stats.revision() != self.revision {
+            save(&self.path, &stats.saved(wall))?;
+            self.revision = stats.revision();
+            self.dirty = None;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -480,7 +536,7 @@ impl View {
     }
     pub fn levels(&self, weeks: usize) -> Vec<Option<u8>> {
         let shown = weeks.min(WEEKS) * 7;
-        let days = usize::try_from(self.days).unwrap_or(usize::MAX).min(shown);
+        let days = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX).min(shown);
         let mut positive: Vec<f64> =
             self.blocks.iter().take(days).map(|b| b.agent_seconds).filter(|n| *n > 0.0).collect();
         positive.sort_by(f64::total_cmp);
@@ -666,19 +722,21 @@ pub(crate) mod tests {
         assert_eq!((c.agent_seconds, c.turns, c.waited_seconds), (1.0, 2, 2.0));
     }
     #[test]
-    fn automatic_resumes_and_repeated_processes_are_not_new_agents() {
+    fn automatic_resumes_are_suppressed_and_reused_pids_count_as_new_agents() {
         let mut stats = Stats::new(at(1_000));
         let mut s = working(1, Kind::Claude);
         s.resuming = true;
         stats.sample(at(1_000), Duration::ZERO, &[s]);
         s.resuming = false;
         stats.sample(at(1_000), Duration::ZERO, &[s]);
-        stats.sample(at(1_000), Duration::ZERO, &[]);
-        stats.sample(at(1_000), Duration::ZERO, &[s]);
         assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 0);
-        s.pid = 2;
+        stats.sample(at(1_000), Duration::ZERO, &[]);
+        assert!(stats.previous.is_empty());
         stats.sample(at(1_000), Duration::ZERO, &[s]);
         assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 1);
+        s.pid = 2;
+        stats.sample(at(1_000), Duration::ZERO, &[s]);
+        assert_eq!(stats.view(at(1_000)).windows["total"].counts.agents, 2);
     }
     #[test]
     fn heatmap_blocks_go_back_from_the_hour_and_use_nonzero_quartiles() {
@@ -688,8 +746,60 @@ pub(crate) mod tests {
         }
         let view = stats.view(at(1_000));
         assert_eq!(view.blocks.iter().take(5).map(|b| b.agent_seconds).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 0.0]);
-        assert_eq!(view.levels(1), [Some(1), Some(2), Some(3), Some(4), Some(0), None, None]);
+        assert_eq!(view.levels(1), [Some(1), Some(2), Some(3), Some(4), Some(0), Some(0), None]);
     }
+    #[test]
+    fn the_first_incomplete_day_has_a_heatmap_square() {
+        let mut stats = Stats::new(at(1_000));
+        stats.add(at(1_000), Kind::Claude, Counts { agent_ms: 1000, ..Counts::default() });
+        let view = stats.view(at(1_000));
+        assert_eq!(view.days, 0);
+        assert_eq!(view.levels(1), [Some(1), None, None, None, None, None, None]);
+        assert!(view.share_link().ends_with("&days=0&map=IA"));
+    }
+
+    #[test]
+    fn saving_observes_revisions_until_a_minute_passes_and_flushes_the_latest_numbers() {
+        let dir = TempDir::new();
+        let path = dir.path().join("stats.json");
+        let mut stats = Stats::new(at(1_000));
+        let mut saver = Saver::new(path.clone(), stats.revision());
+        let now = Instant::now();
+        prompts(&mut stats, 1_000, 1);
+        assert!(!saver.observe(&stats, at(1_000), now).expect("observe"));
+        for second in 1..60 {
+            prompts(&mut stats, 1_000, 1);
+            assert!(!saver.observe(&stats, at(1_000), now + Duration::from_secs(second)).expect("observe"));
+        }
+        assert!(!path.exists());
+        assert!(saver.observe(&stats, at(1_000), now + Duration::from_secs(60)).expect("save"));
+        assert_eq!(load(&path, at(1_000)).view(at(1_000)).windows["total"].counts.prompts, 60);
+        prompts(&mut stats, 1_000, 1);
+        saver.flush(&stats, at(1_000)).expect("flush");
+        assert_eq!(load(&path, at(1_000)).view(at(1_000)).windows["total"].counts.prompts, 61);
+        assert!(!saver.observe(&stats, at(1_000), now + Duration::from_secs(120)).expect("unchanged"));
+    }
+
+    #[test]
+    fn unchanged_samples_and_repeated_pruning_keep_the_revision() {
+        let mut stats = Stats::new(at(1_000));
+        let mut sample = working(1, Kind::Claude);
+        sample.status = Some(Status::Idle);
+        stats.sample(at(1_000), Duration::ZERO, &[sample]);
+        let revision = stats.revision();
+        stats.sample(at(1_000), Duration::from_secs(1), &[sample]);
+        stats.prune(at(1_000));
+        stats.prune(at(1_000));
+        assert_eq!(stats.revision(), revision);
+        prompts(&mut stats, 1_000, 1);
+        assert!(stats.revision() > revision);
+        stats.prune(at(6_000));
+        let revision = stats.revision();
+        stats.prune(at(6_000));
+        assert_eq!(stats.revision(), revision);
+        assert!(stats.hours.is_empty());
+    }
+
     #[test]
     fn a_private_file_round_trips_without_transient_process_state() {
         let dir = TempDir::new();
