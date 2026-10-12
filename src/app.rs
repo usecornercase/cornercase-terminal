@@ -12697,6 +12697,13 @@ mod tests {
         use crate::error::Error;
         use crate::test_util::FakeHttp;
 
+        fn scrolled_notes() -> (App, Receiver<AppEvent>) {
+            let notes: Vec<String> = (0..60).map(|i| format!("- change {i}")).collect();
+            let (mut app, rx) = with_notes(&notes.join("\n"));
+            mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
+            (app, rx)
+        }
+
         const LATEST: &str = r#"{"tag_name": "v9.0.0", "assets": []}"#;
 
         fn release() -> Release {
@@ -12825,19 +12832,14 @@ mod tests {
 
         #[test]
         fn the_wheel_scrolls_long_notes() {
-            let notes: Vec<String> = (0..60).map(|i| format!("- change {i}")).collect();
-            let (mut app, _rx) = with_notes(&notes.join("\n"));
-
-            mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
+            let (app, _rx) = scrolled_notes();
 
             assert_eq!(app.update_scroll, 3);
         }
 
         #[test]
         fn the_restart_list_starts_at_its_top() {
-            let notes: Vec<String> = (0..60).map(|i| format!("- change {i}")).collect();
-            let (mut app, _rx) = with_notes(&notes.join("\n"));
-            mouse(&mut app, MouseEventKind::ScrollDown, ui::update_notes(AREA).as_position());
+            let (mut app, _rx) = scrolled_notes();
 
             app.handle_event(AppEvent::Updated(Ok(())), AREA).expect("handle the update");
 
