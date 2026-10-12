@@ -13707,6 +13707,12 @@ mod tests {
             }
         }
 
+        fn first_changed_file(app: &App) -> (Checkout, std::sync::Arc<changes::diff::File>) {
+            let target = app.changes_target().expect("target");
+            let file = app.changed_diff(&target).expect("diff").files[0].clone();
+            (target, file)
+        }
+
         fn exec_agent(app: &mut App, agent: &Path) {
             app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
             wait_until("the agent runs", || {
@@ -13879,8 +13885,7 @@ mod tests {
         #[test]
         fn copy_puts_the_hunk_on_the_clipboard() {
             let (_repo, mut app, _rx) = open_changes();
-            let target = app.changes_target().expect("target");
-            let file = app.changed_diff(&target).expect("diff").files[0].clone();
+            let (target, file) = first_changed_file(&app);
             app.hunk_action(&target, &file, 0, HunkAction::Copy, AREA).expect("copy");
             let patch = file.hunks[0].patch();
             assert_eq!((app.take_host_writes(), toast(&app)), (vec![clipboard::osc52(&patch)], Some(COPIED)));
@@ -13903,8 +13908,7 @@ mod tests {
         }
 
         fn ask_about_the_first_hunk(app: &mut App) {
-            let target = app.changes_target().expect("target");
-            let file = app.changed_diff(&target).expect("diff").files[0].clone();
+            let (target, file) = first_changed_file(app);
             app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
         }
 
@@ -13934,8 +13938,7 @@ mod tests {
             let repo = repo_with_edit();
             let (mut app, rx) = app_in(repo.path(), no_config());
             refresh_until_loaded(&mut app, &rx);
-            let target = app.changes_target().expect("target");
-            let file = app.changed_diff(&target).expect("diff").files[0].clone();
+            let (target, file) = first_changed_file(&app);
             app.hunk_action(&target, &file, 0, HunkAction::Ask, AREA).expect("ask");
             assert_eq!(app.take_host_writes(), vec![clipboard::osc52("a.txt:2")]);
         }
@@ -14032,8 +14035,7 @@ mod tests {
             let (mut app, rx) = app_in(repo.path(), no_config());
             app.editor_env = vec![("VISUAL".into(), "true".into())];
             refresh_until_loaded(&mut app, &rx);
-            let target = app.changes_target().expect("target");
-            let file = app.changed_diff(&target).expect("diff").files[0].clone();
+            let (target, file) = first_changed_file(&app);
             let tabs = app.projects[0].workspaces[0].tabs.len();
             app.hunk_action(&target, &file, 0, HunkAction::Open, AREA).expect("open");
             let workspace = &app.projects[0].workspaces[0];
