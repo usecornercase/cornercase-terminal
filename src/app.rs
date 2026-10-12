@@ -16044,6 +16044,10 @@ rm -f "$s"
                     pump_until(app, rx, what, |a| cond(a));
                 }
 
+                fn refreshing(&mut self, what: &str, cond: impl Fn(&App) -> bool) {
+                    refreshing(&mut self.app, &self.rx, what, cond);
+                }
+
                 fn status(&self, id: u64) -> Option<activity::Status> {
                     pane(&self.app, id).agent.status()
                 }
@@ -16069,17 +16073,14 @@ rm -f "$s"
                 fn working_grows_time_and_finishing_counts_a_turn_and_the_recorded_tokens() {
                     let mut agent = Agent::new();
                     let id = agent.start(Some("synthetic work"));
-                    refreshing(&mut agent.app, &agent.rx, "agent working", |a| {
-                        pane(a, id).agent.status() == Some(activity::Status::Working)
-                    });
+                    agent
+                        .refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                     let before = total(&agent);
                     sample(&mut agent);
                     let working = total(&agent);
                     assert!(working.counts.agent_seconds >= before.counts.agent_seconds + 0.9);
                     agent.finish();
-                    refreshing(&mut agent.app, &agent.rx, "agent idle", |a| {
-                        pane(a, id).agent.status() != Some(activity::Status::Working)
-                    });
+                    agent.refreshing("agent idle", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
                     let after = total(&agent);
                     assert_eq!(
                         (after.counts.agents, after.counts.prompts, after.counts.turns, after.counts.tokens.out),
@@ -16095,11 +16096,10 @@ rm -f "$s"
                 fn background_shells_stop_agent_time() {
                     let mut agent = Agent::new();
                     let id = agent.start(Some("background"));
-                    refreshing(&mut agent.app, &agent.rx, "agent working", |a| {
-                        pane(a, id).agent.status() == Some(activity::Status::Working)
-                    });
+                    agent
+                        .refreshing("agent working", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                     agent.finish();
-                    refreshing(&mut agent.app, &agent.rx, "background shell", |a| pane(a, id).agent.background_shell());
+                    agent.refreshing("background shell", |a| pane(a, id).agent.background_shell());
                     sample(&mut agent);
                     let before = total(&agent);
                     sample(&mut agent);
@@ -16113,9 +16113,7 @@ rm -f "$s"
                     let mut agent = Agent::new();
                     let id = agent.start(Some("please ask"));
                     agent.finish();
-                    refreshing(&mut agent.app, &agent.rx, "waiting", |a| {
-                        pane(a, id).agent.status() == Some(activity::Status::Waiting)
-                    });
+                    agent.refreshing("waiting", |a| pane(a, id).agent.status() == Some(activity::Status::Waiting));
                     let before = total(&agent).counts.waited_seconds;
                     sample(&mut agent);
                     assert!(total(&agent).counts.waited_seconds >= before + 0.9);
@@ -16124,9 +16122,7 @@ rm -f "$s"
                         None,
                         Command::Keys(wire::Keys { pane: Some(id), tab: None, keys: vec!["y".into(), "enter".into()] }),
                     ));
-                    refreshing(&mut agent.app, &agent.rx, "unseen done", |a| {
-                        pane(a, id).agent.status() == Some(activity::Status::Done)
-                    });
+                    agent.refreshing("unseen done", |a| pane(a, id).agent.status() == Some(activity::Status::Done));
                     sample(&mut agent);
                     let before = total(&agent).counts.waited_seconds;
                     sample(&mut agent);
@@ -16153,10 +16149,7 @@ rm -f "$s"
                 let id = agent.start(None);
 
                 ask(&mut agent.app, None, send_text(id, "next step", true, true));
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent works", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                 let early = answers(&mut agent.app);
                 agent.finish();
 
@@ -16172,10 +16165,7 @@ rm -f "$s"
                 done(agent.answered("the enter is pressed"));
 
                 ask(&mut agent.app, None, wait_for(id, Until::Stops, None));
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent works", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                 let early = answers(&mut agent.app);
                 agent.finish();
 
@@ -16196,10 +16186,7 @@ rm -f "$s"
                     ..wire::SendText::default()
                 };
                 ask(&mut agent.app, None, Command::Send(send));
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent works", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                 agent.finish();
                 let turn = done(agent.answered("the turn is over"));
 
@@ -16292,13 +16279,9 @@ rm -f "$s"
                 let tab = agent.app.projects[0].workspaces[0].tabs[1].id;
                 ask(&mut agent.app, None, send_text(id, "watch the tests in the background", true, false));
                 done(agent.answered("the enter is pressed"));
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent works", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
                 agent.finish();
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+                agent.refreshing("the turn is over", |a| pane(a, id).agent.background_shell());
 
                 ask(&mut agent.app, None, wait_on(&[id], &[tab], false, Until::TurnOver, None));
                 let any = done(agent.answered("the first one's turn is over"));
@@ -16351,10 +16334,7 @@ rm -f "$s"
                 let mut agent = Agent::new();
                 let id = agent.start(Some("please ask"));
                 agent.finish();
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent asks", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Waiting)
-                });
+                agent.refreshing("the agent asks", |a| pane(a, id).agent.status() == Some(activity::Status::Waiting));
 
                 let message = error(now(&mut agent.app, None, send_text(id, "yes", true, false)));
 
@@ -16394,18 +16374,12 @@ rm -f "$s"
                 ]);
                 ask(&mut agent.app, None, send_text(id, "next step", true, false));
                 done(agent.answered("the enter is pressed"));
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent works", |a| {
-                    pane(a, id).agent.status() == Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
 
                 ask(&mut agent.app, None, last_message(id));
                 let working = done(agent.answered("the transcript is read"));
                 agent.finish();
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the agent stops", |a| {
-                    pane(a, id).agent.status() != Some(activity::Status::Working)
-                });
+                agent.refreshing("the agent stops", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
                 ask(&mut agent.app, None, last_message(id));
                 let over = done(agent.answered("the transcript is read again"));
 
@@ -16422,8 +16396,7 @@ rm -f "$s"
             fn the_record_of_another_agent_is_not_read() {
                 let mut agent = Agent::new();
                 let id = agent.start(None);
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the pane knows its conversation", |a| {
+                agent.refreshing("the pane knows its conversation", |a| {
                     pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
                 });
                 let term = agent.app.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id);
@@ -16441,8 +16414,7 @@ rm -f "$s"
             fn an_agent_that_has_not_written_yet_has_no_last_message() {
                 let mut agent = Agent::new();
                 let id = agent.start(None);
-                let (app, rx) = (&mut agent.app, &agent.rx);
-                refreshing(app, rx, "the pane knows its conversation", |a| {
+                agent.refreshing("the pane knows its conversation", |a| {
                     pane(a, id).context.record_for(crate::agents::CLAUDE).is_some()
                 });
 
@@ -16463,8 +16435,7 @@ rm -f "$s"
                     let id = agent.start(None);
                     ask(&mut agent.app, None, send_text(id, prompt, true, false));
                     done(agent.answered("the enter is pressed"));
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the agent works", |a| {
+                    agent.refreshing("the agent works", |a| {
                         pane(a, id).agent.status() == Some(activity::Status::Working)
                     });
                     id
@@ -16472,8 +16443,7 @@ rm -f "$s"
 
                 fn looked_again(agent: &mut Agent) {
                     let since = Instant::now();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "another look at the agents", |a| a.watched.is_some_and(|at| at > since));
+                    agent.refreshing("another look at the agents", |a| a.watched.is_some_and(|at| at > since));
                 }
 
                 fn report(response: Response) -> Report {
@@ -16509,8 +16479,7 @@ rm -f "$s"
                     let mut agent = Agent::new();
                     let id = working(&mut agent, "watch in the background");
                     agent.finish();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+                    agent.refreshing("the turn is over", |a| pane(a, id).agent.background_shell());
 
                     ask(&mut agent.app, None, when_idle(None));
                     report(agent.answered("the restart"));
@@ -16579,8 +16548,7 @@ rm -f "$s"
                     click(&mut agent.app, cancel);
                     let message = error(answers(&mut agent.app).remove(0));
                     agent.finish();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the agent stops", |a| {
+                    agent.refreshing("the agent stops", |a| {
                         pane(a, id).agent.status() != Some(activity::Status::Working)
                     });
                     looked_again(&mut agent);
@@ -16597,8 +16565,7 @@ rm -f "$s"
 
                     agent.app.forget(CLIENT);
                     agent.finish();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the agent stops", |a| {
+                    agent.refreshing("the agent stops", |a| {
                         pane(a, id).agent.status() != Some(activity::Status::Working)
                     });
                     looked_again(&mut agent);
@@ -16636,10 +16603,8 @@ rm -f "$s"
                     let id = working(&mut agent, "next step");
                     let held = (agent.app.awake.state(), agent.app.report(None).keep_awake);
                     agent.finish();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the turn ends", |a| {
-                        pane(a, id).agent.status() != Some(activity::Status::Working)
-                    });
+                    agent
+                        .refreshing("the turn ends", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
 
                     let kept = later(&mut agent, Duration::ZERO);
                     let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
@@ -16655,8 +16620,7 @@ rm -f "$s"
                     let _fakes = holding(&mut agent);
                     let id = working(&mut agent, "watch in the background");
                     agent.finish();
-                    let (app, rx) = (&mut agent.app, &agent.rx);
-                    refreshing(app, rx, "the turn is over", |a| pane(a, id).agent.background_shell());
+                    agent.refreshing("the turn is over", |a| pane(a, id).agent.background_shell());
 
                     later(&mut agent, Duration::ZERO);
                     let released = later(&mut agent, KEEP_FOR + Duration::from_secs(1));
