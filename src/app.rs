@@ -15187,6 +15187,13 @@ mod tests {
         use crate::control::{self as wire, Command, Done, Item, Report, Response, Until};
         use crate::test_util::{FakeClaude, write_executable};
 
+        fn wait_after_typing(app: &mut App, rx: &Receiver<AppEvent>) -> Instant {
+            let id = done(answered(app, rx, "the command is typed")).ids.pane.expect("the pane");
+            let typed = Instant::now();
+            ask(app, None, wait_for(id, Until::Shell, None));
+            typed
+        }
+
         const CLIENT: u64 = 9;
 
         fn request(app: &mut App, caller: Option<u64>, command: Command, area: Option<Rect>) {
@@ -15572,10 +15579,7 @@ mod tests {
             fn wait_until_shell_right_after_typing_waits_for_the_program() {
                 let (mut app, rx) = app();
                 ask(&mut app, None, new_tab(Some("sleep 1")));
-                let id = done(answered(&mut app, &rx, "the command is typed")).ids.pane.expect("the pane");
-                let typed = Instant::now();
-
-                ask(&mut app, None, wait_for(id, Until::Shell, None));
+                let typed = wait_after_typing(&mut app, &rx);
                 done(answered(&mut app, &rx, "sleep ends"));
 
                 assert!(typed.elapsed() >= Duration::from_millis(900), "it ended after {:?}", typed.elapsed());
@@ -15585,10 +15589,7 @@ mod tests {
             fn a_shell_busy_before_its_program_starts_is_not_back_yet() {
                 let (mut app, rx) = app();
                 ask(&mut app, None, new_tab(Some("x=$(sleep 0.6); sleep 1")));
-                let id = done(answered(&mut app, &rx, "the command is typed")).ids.pane.expect("the pane");
-                let typed = Instant::now();
-
-                ask(&mut app, None, wait_for(id, Until::Shell, None));
+                let typed = wait_after_typing(&mut app, &rx);
                 done(answered(&mut app, &rx, "the program ends"));
 
                 assert!(typed.elapsed() >= Duration::from_millis(1500), "it ended after {:?}", typed.elapsed());
