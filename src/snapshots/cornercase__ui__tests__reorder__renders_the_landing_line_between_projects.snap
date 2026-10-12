@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 8143
 expression: "render_sized(&v, TALL.width, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "

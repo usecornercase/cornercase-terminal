@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 8359
 expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "

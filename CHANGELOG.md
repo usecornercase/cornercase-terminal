@@ -6,6 +6,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 - Usage now opens on Stats: see your agents' work over 24 hours, seven days and all time, with parallelism, prompts, turns, time waiting for you, token kinds and a purple heatmap. Counts stay local and include only agents running inside cornercase.
 - Run `cornercase stats`, `--json` or `--share`, including with the server stopped. Share copies a link to a card made in your browser that you can download as a PNG; plan limits remain on the Limits tab.
+- The **TODO** button shows a grey dot, ` TODO ● ` (or ` ☐ ● ` in the compact layout's top bar), while at least one item is left to do, so a closed list no longer looks the same with ten items as with none. The dot carries no number and goes away once every item is done or the list is empty. Turn it off in **Settings → UI → TODO dot** (`todo_dot` in `config.json`).
 
 ## 0.12.34
 

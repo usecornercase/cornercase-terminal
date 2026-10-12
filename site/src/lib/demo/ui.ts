@@ -60,8 +60,10 @@ import {
   usageInner,
   workspaceLayout,
   workspaceRows,
+  TODO_DOT,
   TODO_LABEL,
   FILES_LABEL,
+  todoDot,
 } from './layout';
 import { USAGE, STATS, STATS_COLUMNS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -523,7 +525,7 @@ export class Painter {
     const showFiles = !!app.project();
     const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
     const todo = areas.todoButton;
-    this.band(todo, [seg(centered('☐', todo.w))], app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
+    this.band(todo, todoIcon(app.config.todoDot && app.todo.pending() > 0, todo.w), app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
     this.region({ r: todo, click: () => app.toggleTodo(), cursor: 'pointer' });
     if (showFiles) {
       const f = areas.filesButton;
@@ -925,6 +927,8 @@ export class Painter {
     if (!areas.compact) {
       const r = areas.todoButton;
       this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
+      const dot = todoDot(areas);
+      if (dot && app.config.todoDot && app.todo.pending() > 0) this.line(dot, [seg(TODO_DOT, DARK)]);
       this.region({ r, click: () => app.toggleTodo(), cursor: 'pointer' });
       const f = areas.filesButton;
       this.button(f, '', FILES_LABEL, this.buttonStyle(f, app.filesShown() ? { fg: 6, add: BOLD } : DARK, 6));
@@ -1437,6 +1441,12 @@ function treeAmongTabs(rows: TreeRow[], i: number): TreeRow | null {
   const below = rows[i + 1];
   if (!above || !below || (above.kind !== 'ws' && above.kind !== 'tab') || (below.kind !== 'tab' && below.kind !== 'newTab')) return null;
   return above.p === below.p && above.w === below.w ? { kind: 'tab', p: above.p, w: above.w, t: 0 } : null;
+}
+
+function todoIcon(pending: boolean, w: number): Line {
+  if (!pending) return [seg(centered('☐', w))];
+  const left = Math.floor((w - 1) / 2);
+  return [seg(`${' '.repeat(left)}☐ ${TODO_DOT}${' '.repeat(Math.max(0, w - left - 3))}`)];
 }
 
 function menuLabel(status: Status | null, w: number, lit: boolean): Line {

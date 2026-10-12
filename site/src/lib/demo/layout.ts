@@ -374,9 +374,15 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
 }
 
 export const TODO_LABEL = 'TODO';
+export const TODO_DOT = '●';
 const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
 export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
+
+export function todoDot(areas: Areas): Rect | null {
+  const x = areas.todoButton.x - 1;
+  return !areas.compact && x > right(areas.filesButton) ? rect(x, areas.todoButton.y, 1, 1) : null;
+}
 
 export const stackedWidth = (w: Widths, total: number): number =>
   Math.max(MIN_COLUMN_WIDTH, Math.min(w.projects, Math.max(0, total - (PANE_PADDING + MIN_PANE_WIDTH))));

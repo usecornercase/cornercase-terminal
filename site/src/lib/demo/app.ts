@@ -2298,6 +2298,7 @@ export class App {
       { id: 'tabs', section: '', label: 'tabs', value: this.tabsOnTop() ? 'top' : 'sidebar', note: "where a workspace's tabs are listed" },
       { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
       { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or collapsed group holds, such as (3)' },
+      { id: 'todoDot', section: '', label: 'TODO dot', value: c.todoDot ? '[x] shown' : '[ ] hidden', note: 'while items are pending' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
@@ -2357,6 +2358,9 @@ export class App {
     } else if (row.id === 'counts') {
       c.counts = !c.counts;
       o.notice = c.counts ? 'rows show how many they hold' : 'rows no longer show how many they hold';
+    } else if (row.id === 'todoDot') {
+      c.todoDot = !c.todoDot;
+      o.notice = c.todoDot ? 'TODO shows a dot while items are pending' : 'TODO no longer shows a dot';
     } else if (row.id === 'dim') {
       c.dim = !c.dim;
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';

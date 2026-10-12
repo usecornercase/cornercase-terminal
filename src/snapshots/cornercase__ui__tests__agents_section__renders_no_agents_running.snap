@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 8466
 expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "

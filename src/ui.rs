@@ -68,6 +68,7 @@ const CHANGES_ICON: &str = "±";
 const TODO_ICON: &str = "☐";
 const FILES_ICON: &str = "▤";
 pub const TODO_LABEL: &str = "TODO";
+const TODO_DOT: &str = "●";
 const UNDO_LABEL: &str = "undo";
 const MOVE_LABEL: &str = "move here";
 const SWAP_LABEL: &str = "swap";
@@ -393,6 +394,12 @@ impl Areas {
 
     pub fn compact(&self) -> bool {
         !self.bar.is_empty()
+    }
+
+    pub fn todo_dot(&self) -> Option<Rect> {
+        let r = self.todo_button;
+        let x = r.x.checked_sub(1).filter(|&x| !self.compact() && x > self.files_button.right())?;
+        Some(Rect { x, width: 1, ..r })
     }
 
     #[must_use]
@@ -2506,6 +2513,8 @@ pub struct View<'a> {
     pub changes: Option<changes::View>,
     pub changes_button: Option<ChangesButton>,
     pub todo: Option<todo::View>,
+    pub todo_dot: bool,
+    pub todo_pending: bool,
     pub files: Option<files::View>,
     pub attention: Option<Status>,
     pub drag: Option<Drag>,
@@ -3662,8 +3671,9 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     let r = areas.todo_button;
     let mut right = areas.search_button.width + r.width;
-    let style = if view.todo.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
-    draw_band(f, r, Span::styled(centered(TODO_ICON, r.width), style), style);
+    let lit = view.todo.is_some() || sidebar_hovered(view, r);
+    let style = if lit { pressed } else { surface.fg(view.muted) };
+    draw_band(f, r, todo_icon(view.todo_dot && view.todo_pending, r.width, style), style);
     if view.has_project {
         let r = areas.files_button;
         right += r.width;
@@ -3979,7 +3989,7 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
         draw_panel_button(f, view, changes_button(areas.issues, &button.label), &button.label, button.open);
     }
     if !areas.compact() {
-        draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
+        draw_todo_button(f, view, areas);
         draw_panel_button(f, view, areas.files_button, files::LABEL, view.files.is_some());
     }
 }
@@ -3991,6 +4001,25 @@ fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: boo
         Style::default().fg(view.muted)
     };
     draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
+}
+
+fn draw_todo_button(f: &mut Frame, view: &View, areas: &Areas) {
+    draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
+    if let Some(r) = areas.todo_dot().filter(|_| view.todo_dot && view.todo_pending) {
+        f.render_widget(Span::styled(TODO_DOT, Style::default().fg(view.muted)), r);
+    }
+}
+
+fn todo_icon(pending: bool, width: u16, style: Style) -> Line<'static> {
+    if !pending {
+        return Line::from(Span::styled(centered(TODO_ICON, width), style));
+    }
+    let width = usize::from(width);
+    let left = width.saturating_sub(1) / 2;
+    Line::from(Span::styled(
+        format!("{}{TODO_ICON} {TODO_DOT}{}", " ".repeat(left), " ".repeat(width.saturating_sub(left + 3))),
+        style,
+    ))
 }
 
 fn draw_details(
@@ -4483,6 +4512,8 @@ mod tests {
             changes: None,
             changes_button: None,
             todo: None,
+            todo_dot: true,
+            todo_pending: false,
             files: None,
             attention: None,
             drag: None,
@@ -4681,7 +4712,63 @@ mod tests {
                 muted: Color::DarkGray,
                 drag: None,
             };
-            View { changes: None, todo: Some(panel), ..with_panel() }
+            View { changes: None, todo: Some(panel), todo_pending: true, ..with_panel() }
+        }
+
+        fn pending(pending: bool, dot: bool) -> View<'static> {
+            View { changes: None, todo_pending: pending, todo_dot: dot, ..with_panel() }
+        }
+
+        #[test]
+        fn todo_shows_a_dot_while_items_are_pending() {
+            insta::assert_snapshot!(render_sized(&pending(true, true), 140, 18).backend());
+        }
+
+        #[test]
+        fn todo_shows_no_dot_when_nothing_is_pending() {
+            insta::assert_snapshot!(render_sized(&pending(false, true), 140, 18).backend());
+        }
+
+        #[test]
+        fn todo_shows_no_dot_when_it_is_switched_off() {
+            insta::assert_snapshot!(render_sized(&pending(true, false), 140, 18).backend());
+        }
+
+        #[test]
+        fn the_compact_todo_button_shows_a_dot_while_items_are_pending() {
+            insta::assert_snapshot!(render_sized(&pending(true, true), 80, 18).backend());
+        }
+
+        #[test]
+        fn the_compact_todo_button_shows_no_dot_when_nothing_is_pending() {
+            insta::assert_snapshot!(render_sized(&pending(false, true), 80, 18).backend());
+        }
+
+        #[test]
+        fn the_dot_is_muted_and_left_of_the_button() {
+            let a = layout(Rect::new(0, 0, 140, 18), Widths::default());
+            let r = a.todo_button;
+            let with = render_sized(&pending(true, true), 140, 18);
+            let without = render_sized(&pending(false, true), 140, 18);
+            let row = Rect { x: r.x - 2, width: r.width + 2, ..r };
+            let dot = with.backend().buffer()[(r.x - 1, r.y)].clone();
+            assert_eq!(
+                (row_text(&with, row), row_text(&without, row), dot.fg),
+                (" ● TODO ".to_string(), "   TODO ".to_string(), Color::DarkGray)
+            );
+        }
+
+        #[test]
+        fn the_button_stays_right_aligned_with_changes() {
+            let a = layout(Rect::new(0, 0, 140, 18), Widths::default());
+            assert_eq!((a.todo_button.right(), a.todo_button.width), (changes_button(a.issues, "Changes").right(), 6));
+        }
+
+        #[test]
+        fn a_narrow_footer_leaves_out_the_dot() {
+            let widths = Widths { workspaces: MIN_COLUMN_WIDTH, ..Widths::default() };
+            let a = layout(Rect::new(0, 0, 140, 18), widths);
+            assert_eq!(a.todo_dot(), None);
         }
 
         #[test]

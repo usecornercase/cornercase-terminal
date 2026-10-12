@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 6155
 expression: render(&with_workspaces(Some(0))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "

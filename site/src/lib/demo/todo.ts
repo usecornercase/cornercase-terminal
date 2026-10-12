@@ -85,7 +85,7 @@ export class TodoPanel {
     this.items = seed.map(([text, done]) => ({ id: this.next++, text, done }));
   }
 
-  private pending(): number {
+  pending(): number {
     return this.items.filter((i) => !i.done).length;
   }
 

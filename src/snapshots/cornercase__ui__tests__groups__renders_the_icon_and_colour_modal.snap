@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 5615
 expression: "render(&styling('★', 99)).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
