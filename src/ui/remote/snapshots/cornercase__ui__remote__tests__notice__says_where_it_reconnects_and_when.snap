@@ -1,0 +1,17 @@
+---
+source: src/ui/remote/tests.rs
+assertion_line: 110
+expression: "drawn(70, 12, &notice).backend()"
+---
+"                                                                      "
+"                                                                      "
+"     ╭─ Connection lost ────────────────────────────────────────╮     "
+"     │                                                          │     "
+"     │ reconnecting to devbox…                                  │     "
+"     │ trying again in 4 s                                      │     "
+"     │ ssh: connect to host devbox port 22: Connection refused  │     "
+"     │                                                          │     "
+"     │ its shells keep running on devbox                  quit  │     "
+"     ╰──────────────────────────────────────────────────────────╯     "
+"                                                                      "
+"                                                                      "

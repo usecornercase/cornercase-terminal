@@ -1,0 +1,17 @@
+---
+source: src/ui/remote/tests.rs
+assertion_line: 117
+expression: "drawn(70, 12, &notice).backend()"
+---
+"                                                                      "
+"                                                                      "
+"     ╭─ Connection lost ────────────────────────────────────────╮     "
+"     │                                                          │     "
+"     │ reconnecting to devbox…                                  │     "
+"     │ connecting…                                              │     "
+"     │                                                          │     "
+"     │                                                          │     "
+"     │ its shells keep running on devbox                  quit  │     "
+"     ╰──────────────────────────────────────────────────────────╯     "
+"                                                                      "
+"                                                                      "
