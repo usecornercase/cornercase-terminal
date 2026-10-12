@@ -5653,6 +5653,10 @@ fn pane_cell(pane: Rect, ev: MouseEvent) -> Option<Position> {
 mod tests {
     use std::sync::mpsc::{self, Receiver};
 
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use ratatui::buffer::Buffer;
+
     use super::*;
     use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
     use crate::ui::WorkspaceRow;
@@ -5665,6 +5669,12 @@ mod tests {
         while let Ok(ev) = rx.try_recv() {
             app.handle_event(ev, area).expect("handle event");
         }
+    }
+
+    fn render(app: &mut App, area: Rect) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
+        terminal.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+        terminal
     }
 
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
@@ -8580,8 +8590,6 @@ mod tests {
     }
 
     mod agent_status {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
         use rstest::rstest;
 
         use super::*;
@@ -8671,19 +8679,13 @@ rm -f "$1/sessions/$$.json"
             app.projects[p].workspaces[0].tabs[t].status()
         }
 
-        fn rendered(app: &mut App, area: Rect) -> Terminal<TestBackend> {
-            let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
-            t
-        }
-
         fn text(t: &Terminal<TestBackend>, r: Rect) -> String {
             (r.x..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
         }
 
         fn second_row(app: &mut App) -> (u16, String) {
             let r = row_rect(app, WorkspaceRow::Tab(0, 0));
-            let below = text(&rendered(app, AREA), Rect { y: r.y + 1, height: 1, ..r });
+            let below = text(&render(app, AREA), Rect { y: r.y + 1, height: 1, ..r });
             (r.height, below.trim_end().to_string())
         }
 
@@ -8728,7 +8730,7 @@ rm -f "$1/sessions/$$.json"
             claude.signal("finish");
             watch_until(&mut app, &rx, "claude finishes under the menu", |a| status(a, 0, 0) == Some(Status::Done));
             let small = Rect::new(0, 0, 80, 30);
-            let bar = text(&rendered(&mut app, small), Rect::new(0, 1, 7, 1));
+            let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
             app.nav = None;
             let now = app.watched.expect("watched");
@@ -8842,7 +8844,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, rx, _dirs) = app_with(2);
             app.config.memory = true;
             app.config.sidebar = ui::Sidebar::Tree.id().into();
-            rendered(&mut app, Rect::new(0, 0, 100, 30));
+            render(&mut app, Rect::new(0, 0, 100, 30));
 
             let measured = |a: &App| a.projects.iter().all(|p| p.workspaces[0].tabs[0].memory().is_some());
             watch_until(&mut app, &rx, "the tabs of both projects are measured", measured);
@@ -8916,9 +8918,9 @@ rm -f "$1/sessions/$$.json"
             watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
 
             let row = ui::entry_row(list(), areas().pitch, &app.sidebar_rows(), 0, SidebarRow::Project(0));
-            let sidebar = text(&rendered(&mut app, AREA), row);
+            let sidebar = text(&render(&mut app, AREA), row);
             let small = Rect::new(0, 0, 80, 30);
-            let bar = text(&rendered(&mut app, small), Rect::new(0, 1, 7, 1));
+            let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
             assert_eq!((sidebar.trim_end().ends_with('✓'), bar.as_str()), (true, "   ≡ ✓ "));
         }
@@ -9109,7 +9111,7 @@ rm -f "$1/sessions/$$.json"
             });
             assert!(second_row(&mut w.app).1.contains("1%"));
             w.app.nav = Some(ui::Nav::Workspaces);
-            let compact = rendered(&mut w.app, Rect::new(0, 0, 80, 30));
+            let compact = render(&mut w.app, Rect::new(0, 0, 80, 30));
             let contents: String =
                 compact.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect();
             assert!(contents.contains("gemini-"));
@@ -9423,7 +9425,7 @@ rm -f "$1/sessions/$$.json"
                 right_click(&mut app, Position::new(pane.x + 1, pane.y + 1));
                 pick(&mut app, "split right");
                 app.active = 0;
-                rendered(&mut app, TALL);
+                render(&mut app, TALL);
                 let agents: Vec<String> = app.agents_view().entries.into_iter().map(|e| e.agent).collect();
 
                 let at = agent_pos(&app, TALL, 1);
@@ -9456,11 +9458,11 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn the_switch_shows_and_hides_the_section() {
                 let (mut app, _rx, _dirs) = app_with(1);
-                let off = text(&rendered(&mut app, TALL), app.layout(TALL).agents_list).trim().to_string();
+                let off = text(&render(&mut app, TALL), app.layout(TALL).agents_list).trim().to_string();
 
                 app.config.agents_section = true;
                 let list = app.layout(TALL).agents_list;
-                let on = text(&rendered(&mut app, TALL), list).trim().to_string();
+                let on = text(&render(&mut app, TALL), list).trim().to_string();
 
                 assert_eq!((off.as_str(), on.as_str()), ("", "no agents running"));
             }
@@ -9502,7 +9504,7 @@ rm -f "$1/sessions/$$.json"
                 let (mut app, rx, _dirs, claude, codex) = two_agents();
                 let claude_pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
                 app.nav = Some(ui::Nav::Projects);
-                rendered(&mut app, SMALL);
+                render(&mut app, SMALL);
 
                 let button = app.layout(SMALL).shown(app.nav).agents_button.as_position();
                 click_in(&mut app, button, SMALL);
@@ -9519,8 +9521,6 @@ rm -f "$1/sessions/$$.json"
     }
 
     mod compact {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
         use rstest::rstest;
 
         use super::*;
@@ -9650,8 +9650,7 @@ rm -f "$1/sessions/$$.json"
         fn a_wide_terminal_closes_the_menu() {
             let (mut app, _rx) = app();
             open_menu(&mut app);
-            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            render(&mut app, AREA);
             assert_eq!(app.nav, None);
         }
 
@@ -10308,8 +10307,6 @@ rm -f "$1/sessions/$$.json"
     }
 
     mod select_text {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
         use ratatui::style::Modifier;
 
         use super::*;
@@ -10402,9 +10399,7 @@ rm -f "$1/sessions/$$.json"
             app.toast = Instant::now()
                 .checked_sub(TOAST_FOR)
                 .map(|at| Toast { at, ..Toast::new(COPIED, ui::ToastIcon::Check) });
-            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            render(&mut app, AREA);
 
             assert_eq!(app.toast, None);
         }
@@ -11362,8 +11357,6 @@ rm -f "$1/sessions/$$.json"
 
     mod muted_text {
         use libghostty_vt::style::RgbColor;
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
         use ratatui::style::Color;
 
         use super::*;
@@ -11375,9 +11368,7 @@ rm -f "$1/sessions/$$.json"
                 background: Some(RgbColor { r: 0x1d, g: 0x20, b: 0x22 }),
                 ..HostTheme::default()
             });
-            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            let t = render(&mut app, AREA);
 
             let settings = areas().settings;
             assert_eq!(t.backend().buffer()[(settings.x + 2, settings.y)].fg, Color::Indexed(243));
@@ -11441,15 +11432,12 @@ rm -f "$1/sessions/$$.json"
     }
 
     mod tab_bar {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
 
         use super::*;
         use crate::ui::tab_bar::Strip;
 
         fn drawn_in(app: &mut App, area: Rect) {
-            let mut t = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            render(app, area);
         }
 
         fn on_top(tabs: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -11579,8 +11567,6 @@ rm -f "$1/sessions/$$.json"
     }
 
     mod tree_sidebar {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
 
         use super::*;
         use crate::ui::TreeRow;
@@ -11588,8 +11574,7 @@ rm -f "$1/sessions/$$.json"
         const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
 
         fn drawn(app: &mut App) {
-            let mut t = Terminal::new(TestBackend::new(TALL.width, TALL.height)).expect("test backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            render(app, TALL);
         }
 
         fn tree(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
@@ -14461,9 +14446,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         mod images {
-            use ratatui::Terminal;
-            use ratatui::backend::TestBackend;
-            use ratatui::buffer::{Buffer, CellDiffOption};
+            use ratatui::buffer::CellDiffOption;
 
             use super::*;
             use crate::files::disk::Body;
@@ -14637,8 +14620,6 @@ rm -f "$1/sessions/$$.json"
     }
 
     mod path_links {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
         use ratatui::style::Modifier;
         use rstest::rstest;
 
@@ -14709,8 +14690,7 @@ rm -f "$1/sessions/$$.json"
             let pane = app.layout(area).pane;
             let pos = Position::new(pane.x + 2, pane.y);
             mouse_in(&mut app, MouseEventKind::Moved, pos, area);
-            let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-            terminal.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            let terminal = render(&mut app, area);
             assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
             click_in(&mut app, pos, area);
             assert_eq!(shown(&app), Some((path.clone(), Some((2, 3)))));
@@ -14773,8 +14753,7 @@ rm -f "$1/sessions/$$.json"
             let repo = repo();
             let (mut app, _rx) = showing(&repo, "open src/main.rs now");
             mouse(&mut app, MouseEventKind::Moved, cell(7, 0));
-            let mut t = Terminal::new(TestBackend::new(AREA.width, AREA.height)).expect("test backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            let t = render(&mut app, AREA);
             let lined = |col: u16| t.backend().buffer()[cell(col, 0)].modifier.contains(Modifier::UNDERLINED);
             assert_eq!([lined(4), lined(5), lined(15), lined(16)], [false, true, true, false]);
         }
@@ -15012,9 +14991,7 @@ rm -f "$1/sessions/$$.json"
         fn todo_button(app: &mut App) -> String {
             let open = std::mem::replace(&mut app.todo.open, false);
             let r = app.layout(AREA).todo_button;
-            let mut t =
-                ratatui::Terminal::new(ratatui::backend::TestBackend::new(AREA.width, AREA.height)).expect("backend");
-            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            let t = render(app, AREA);
             app.todo.open = open;
             (r.x - 2..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
         }
