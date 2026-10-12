@@ -14708,6 +14708,11 @@ mod tests {
         use super::*;
         use crate::ui::todo as panel;
 
+        fn toggle_button(app: &mut App) -> String {
+            tap(app, |a| panel::check(item_row(a, 0)));
+            todo_button(app)
+        }
+
         fn edited_typo() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
             let (mut app, rx, dirs) = opened();
             add(&mut app, &["fix logn", "b"]);
@@ -14944,10 +14949,8 @@ mod tests {
             let mut seen = vec![todo_button(&mut app)];
             add(&mut app, &["a"]);
             seen.push(todo_button(&mut app));
-            tap(&mut app, |a| panel::check(item_row(a, 0)));
-            seen.push(todo_button(&mut app));
-            tap(&mut app, |a| panel::check(item_row(a, 0)));
-            seen.push(todo_button(&mut app));
+            seen.push(toggle_button(&mut app));
+            seen.push(toggle_button(&mut app));
             tap(&mut app, |a| panel::check(item_row(a, 0)));
             tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
             seen.push(todo_button(&mut app));
