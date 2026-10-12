@@ -13710,6 +13710,14 @@ mod tests {
             }
         }
 
+        fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
+            let repo = repo_with_edit();
+            let (mut app, rx) = app_in(repo.path(), no_config());
+            app.changes.open = true;
+            refresh_until_loaded(&mut app, &rx);
+            (repo, app, rx)
+        }
+
         fn repo_with_edit() -> TempDir {
             let repo = git_repo(&[("a.txt", "one\ntwo\n")]);
             std::fs::write(repo.path().join("a.txt"), "one\nTWO\n").expect("edit");
@@ -13761,10 +13769,7 @@ mod tests {
 
         #[test]
         fn the_panel_shows_the_changed_file() {
-            let repo = repo_with_edit();
-            let (mut app, rx) = app_in(repo.path(), no_config());
-            app.changes.open = true;
-            refresh_until_loaded(&mut app, &rx);
+            let (_repo, app, _rx) = open_changes();
             let Some(panel::View { body: panel::Body::Ready(diff), .. }) = app.panel_view() else {
                 panic!("the panel has a diff")
             };
@@ -13869,10 +13874,7 @@ mod tests {
 
         #[test]
         fn copy_puts_the_hunk_on_the_clipboard() {
-            let repo = repo_with_edit();
-            let (mut app, rx) = app_in(repo.path(), no_config());
-            app.changes.open = true;
-            refresh_until_loaded(&mut app, &rx);
+            let (_repo, mut app, _rx) = open_changes();
             let target = app.changes_target().expect("target");
             let file = app.changed_diff(&target).expect("diff").files[0].clone();
             app.hunk_action(&target, &file, 0, HunkAction::Copy, AREA).expect("copy");
