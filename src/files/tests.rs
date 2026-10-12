@@ -102,10 +102,7 @@ mod viewer {
         panel.open_file(1, "a.rs");
         let (generation, _) = panel.load(1, Path::new("/repo"), now).expect("a read");
         panel.read(1, generation, "a.rs", Some(content(&["a"])), false);
-        assert!(
-            panel.load(1, Path::new("/repo"), now + CHECK_EVERY).is_none(),
-            "the highlighting is still on its way"
-        );
+        assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY).is_none(), "the highlighting is still on its way");
         panel.read(1, generation, "a.rs", None, true);
         assert!(panel.load(1, Path::new("/repo"), now + CHECK_EVERY / 2).is_none());
         let (_, load) = panel.load(1, Path::new("/repo"), now + CHECK_EVERY).expect("checked again");

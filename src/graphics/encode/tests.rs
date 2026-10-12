@@ -35,8 +35,7 @@ pub fn noise(width: u32, height: u32) -> RgbaImage {
 pub fn photo(width: u32, height: u32) -> RgbaImage {
     let grain = noise(width, height);
     RgbaImage::from_fn(width, height, |x, y| {
-        let shade =
-            |at: u32, of: u32, grain: u8| u8::try_from(at * 200 / of + u32::from(grain % 24)).unwrap_or(255);
+        let shade = |at: u32, of: u32, grain: u8| u8::try_from(at * 200 / of + u32::from(grain % 24)).unwrap_or(255);
         let speck = grain.get_pixel(x, y);
         Rgba([shade(x, width, speck[0]), shade(y, height, speck[1]), shade(x + y, width + height, speck[2]), 255])
     })
@@ -111,10 +110,7 @@ mod fit {
             assert!(fit.cols >= 1 && fit.cols <= room.0 && fit.rows >= 1 && fit.rows <= room.1, "{case}");
             assert!(protocol != Protocol::Kitty || fit.cols.max(fit.rows) <= kitty::MAX_CELLS, "{case}");
             assert!(protocol != Protocol::Iterm || fit.rows <= ITERM_ROWS, "{case}");
-            assert!(
-                protocol != SIXEL || fit.height.is_multiple_of(sixel::BAND) || fit.height < sixel::BAND,
-                "{case}"
-            );
+            assert!(protocol != SIXEL || fit.height.is_multiple_of(sixel::BAND) || fit.height < sixel::BAND, "{case}");
             assert!(fit.width <= width && fit.height <= height, "{case}");
             assert!(fit.width <= u32::from(fit.cols) * cw && fit.width > u32::from(fit.cols - 1) * cw, "{case}");
             assert!(fit.height <= u32::from(fit.rows) * ch && fit.height > u32::from(fit.rows - 1) * ch, "{case}");

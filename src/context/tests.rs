@@ -90,7 +90,9 @@ mod transcript {
     }
 
     #[rstest]
-    #[case::subagent(r#"{"isSidechain":true,"type":"assistant","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":5}}}"#)]
+    #[case::subagent(
+        r#"{"isSidechain":true,"type":"assistant","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":5}}}"#
+    )]
     #[case::synthetic(r#"{"type":"assistant","message":{"model":"<synthetic>","usage":{"input_tokens":0}}}"#)]
     #[case::no_usage(r#"{"type":"assistant","message":{"model":"claude-opus-5-5"}}"#)]
     #[case::no_tokens(r#"{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":0}}}"#)]
@@ -134,9 +136,8 @@ mod transcript {
     fn only_the_last_mebibyte_is_read_at_first() {
         let mut file = Written::new();
         let filler = user(&"x".repeat(1000));
-        let lines: Vec<String> = std::iter::once(assistant("claude-opus-4-1", 1, 0, 9))
-            .chain(std::iter::repeat_n(filler, 1100))
-            .collect();
+        let lines: Vec<String> =
+            std::iter::once(assistant("claude-opus-4-1", 1, 0, 9)).chain(std::iter::repeat_n(filler, 1100)).collect();
 
         assert_eq!(file.lines(&lines), None);
     }
@@ -145,9 +146,8 @@ mod transcript {
     fn a_reply_within_the_last_mebibyte_is_found() {
         let mut file = Written::new();
         let filler = user(&"x".repeat(1000));
-        let lines: Vec<String> = std::iter::repeat_n(filler, 1100)
-            .chain(std::iter::once(assistant("claude-opus-5-5", 1, 0, 9)))
-            .collect();
+        let lines: Vec<String> =
+            std::iter::repeat_n(filler, 1100).chain(std::iter::once(assistant("claude-opus-5-5", 1, 0, 9))).collect();
 
         assert_eq!(file.lines(&lines), Some(reply("claude-opus-5-5", 10)));
     }
@@ -156,9 +156,8 @@ mod transcript {
     fn a_compaction_in_a_large_append_is_not_skipped() {
         let mut file = Written::new();
         file.lines(&[assistant("claude-opus-5-5", 1, 0, 180_000)]);
-        let lines: Vec<String> = std::iter::once(COMPACTED.to_string())
-            .chain(std::iter::repeat_n(user(&"x".repeat(1000)), 1100))
-            .collect();
+        let lines: Vec<String> =
+            std::iter::once(COMPACTED.to_string()).chain(std::iter::repeat_n(user(&"x".repeat(1000)), 1100)).collect();
 
         assert_eq!(file.lines(&lines), None);
     }
@@ -167,11 +166,8 @@ mod transcript {
     fn a_file_that_starts_over_is_read_again() {
         let mut file = Written::new();
         file.lines(&[assistant("claude-opus-5-5", 1, 0, 9_999), user("a long question")]);
-        std::fs::write(
-            file.dir.path().join("session.jsonl"),
-            format!("{}\n", assistant("claude-haiku-4-5", 1, 0, 9)),
-        )
-        .expect("rewrite the transcript");
+        std::fs::write(file.dir.path().join("session.jsonl"), format!("{}\n", assistant("claude-haiku-4-5", 1, 0, 9)))
+            .expect("rewrite the transcript");
 
         file.transcript.update();
 
@@ -322,10 +318,7 @@ mod folder {
 
     #[rstest]
     #[case::plain("/home/ubuntu/projects/shop", "-home-ubuntu-projects-shop")]
-    #[case::dots_and_dashes(
-        "/home/a/.cornercase/worktrees/shop/feat-x",
-        "-home-a--cornercase-worktrees-shop-feat-x"
-    )]
+    #[case::dots_and_dashes("/home/a/.cornercase/worktrees/shop/feat-x", "-home-a--cornercase-worktrees-shop-feat-x")]
     #[case::accents_and_emoji("/home/ana/código/🦀 shop", "-home-ana-c-digo----shop")]
     fn is_the_folder_with_every_other_character_as_a_dash(#[case] cwd: &str, #[case] expected: &str) {
         assert_eq!(project_dir(Path::new(cwd)), expected);
@@ -560,10 +553,7 @@ mod pane {
 
         let found = [agents::OPENCODE, agents::CLAUDE].map(|agent| replaced.record_for(agent));
 
-        assert_eq!(
-            found,
-            [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]
-        );
+        assert_eq!(found, [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]);
     }
 
     fn answered() -> (Setup, Pane) {

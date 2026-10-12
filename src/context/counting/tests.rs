@@ -39,8 +39,7 @@ fn discarded_ids_are_not_counted_again_and_updates_only_add_the_difference() {
 #[test]
 fn a_shared_timestamp_cannot_make_evicted_ids_count_again() {
     let mut ledger = Ledger::default();
-    let records: Vec<_> =
-        (0..600).map(|i| Record { at: since(), id: i.to_string(), usage: Usage::Prompt }).collect();
+    let records: Vec<_> = (0..600).map(|i| Record { at: since(), id: i.to_string(), usage: Usage::Prompt }).collect();
     ledger.apply("a", since(), records.clone());
     assert!(sum(ledger.take()).0 > 0);
     ledger.apply("a", since(), records);
@@ -53,11 +52,7 @@ fn completed_replies_count_once_even_if_the_final_numbers_are_rewritten() {
         ledger.apply(
             "a",
             since(),
-            [Record {
-                at: since(),
-                id: "one".into(),
-                usage: Usage::Completed(Tokens { out, ..Tokens::default() }),
-            }],
+            [Record { at: since(), id: "one".into(), usage: Usage::Completed(Tokens { out, ..Tokens::default() }) }],
         );
     }
     assert_eq!(sum(ledger.take()).1.out, 10);

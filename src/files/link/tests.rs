@@ -82,8 +82,7 @@ fn a_file_outside_the_workspace_opens_with_its_absolute_path() {
     let (root, other) = (TempDir::new(), TempDir::new());
     fs::write(other.path().join("x.txt"), "").expect("write");
     let path = other.path().join("x.txt").display().to_string();
-    let target =
-        resolve(&Link { start: 0, end: 1, path: path.clone(), lines: Some((2, 4)) }, None, root.path(), None);
+    let target = resolve(&Link { start: 0, end: 1, path: path.clone(), lines: Some((2, 4)) }, None, root.path(), None);
     assert_eq!(target, Some(Target { path, lines: Some((2, 4)) }));
 }
 
@@ -98,10 +97,7 @@ fn expands_home_paths(#[case] inside: bool) {
     fs::write(&file, "# Plan").expect("write");
     let link = Link { start: 0, end: 1, path: "~/.claude/plans/fix.md".into(), lines: Some((3, 9)) };
     let path = if inside { ".claude/plans/fix.md".to_string() } else { file.display().to_string() };
-    assert_eq!(
-        resolve(&link, Some(root.path()), root.path(), Some(home)),
-        Some(Target { path, lines: link.lines })
-    );
+    assert_eq!(resolve(&link, Some(root.path()), root.path(), Some(home)), Some(Target { path, lines: link.lines }));
     assert!(resolve(&link, None, root.path(), None).is_none());
 }
 

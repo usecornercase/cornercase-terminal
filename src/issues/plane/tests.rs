@@ -335,8 +335,7 @@ fn view_falls_back_to_the_plain_description() {
 
 #[test]
 fn a_missing_work_item_says_so() {
-    let server =
-        FakeHttp::start(vec![("GET /api/v1/workspaces/acme/work-items/ENG-9/", 404, r#"{"error":"nope"}"#)]);
+    let server = FakeHttp::start(vec![("GET /api/v1/workspaces/acme/work-items/ENG-9/", 404, r#"{"error":"nope"}"#)]);
     let err = api(&server, "").view("ENG-9").err().map(|e| e.to_string());
     assert_eq!(err.as_deref(), Some("work item ENG-9 not found"));
 }
@@ -346,10 +345,7 @@ fn a_missing_work_item_says_so() {
 #[case::trimmed(" /Acme-Team/ ", Ok("acme-team"))]
 #[case::empty("  ", Err("type your workspace, the part after app.plane.so/, such as acme"))]
 #[case::not_a_slug("acme corp", Err("a workspace is lowercase letters, numbers and dashes, such as acme"))]
-#[case::a_url(
-    "https://app.plane.so/acme",
-    Err("a workspace is lowercase letters, numbers and dashes, such as acme")
-)]
+#[case::a_url("https://app.plane.so/acme", Err("a workspace is lowercase letters, numbers and dashes, such as acme"))]
 fn a_workspace_is_a_slug(#[case] input: &str, #[case] expected: std::result::Result<&str, &str>) {
     assert_eq!(check_workspace(input), expected.map(String::from));
 }

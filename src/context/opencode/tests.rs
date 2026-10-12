@@ -13,7 +13,8 @@ const REPLY_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/reply-par
 const TOOL_PARTS: &str = crate::test_util::fixture!("opencode/1.18.35/tool-parts.jsonl");
 const FLASH: &str =
     r#"{"role":"user","time":{"created":1},"model":{"providerID":"deepseek","modelID":"deepseek-v4-flash"}}"#;
-const QUEUED: &str = r#"{"role":"user","time":{"created":1791469765000},"model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"}}"#;
+const QUEUED: &str =
+    r#"{"role":"user","time":{"created":1791469765000},"model":{"providerID":"deepseek","modelID":"deepseek-v4-pro"}}"#;
 
 struct Models {
     dir: TempDir,
@@ -143,9 +144,7 @@ fn a_subagents_session_is_not_the_pane() {
     running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
     running.fake.write("ses_child", running.project.path(), WORKING);
     Connection::open(&running.fake.database)
-        .and_then(|db| {
-            db.execute("UPDATE session SET parent_id = ?1 WHERE id = 'ses_child'", [FakeOpencode::SESSION])
-        })
+        .and_then(|db| db.execute("UPDATE session SET parent_id = ?1 WHERE id = 'ses_child'", [FakeOpencode::SESSION]))
         .expect("make it a subagent");
 
     assert_eq!(running.look(SystemTime::UNIX_EPOCH).map(|s| s.turn), Some(false));
@@ -284,9 +283,7 @@ mod last_message {
     #[test]
     fn a_database_that_cannot_be_queried_says_which() {
         let said = Chat::new();
-        Connection::open(&said.fake.database)
-            .and_then(|db| db.execute_batch("DROP TABLE part;"))
-            .expect("drop parts");
+        Connection::open(&said.fake.database).and_then(|db| db.execute_batch("DROP TABLE part;")).expect("drop parts");
         said.messages(REPLY);
 
         let error = said.last().expect_err("no parts to read");

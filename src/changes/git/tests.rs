@@ -77,8 +77,7 @@ fn compares_from_where_the_branch_left_the_base() {
 fn the_base_can_be_any_branch() {
     let repo = feature_branch();
     git(repo.path(), &["branch", "other", "HEAD"]);
-    let loaded =
-        load(&Request { base: Some("other".into()), ..request(repo.path(), Mode::Commits) }).expect("load");
+    let loaded = load(&Request { base: Some("other".into()), ..request(repo.path(), Mode::Commits) }).expect("load");
     assert_eq!((loaded.base.as_deref(), loaded.diff.expect("diff").files.len()), (Some("other"), 0));
 }
 
@@ -115,8 +114,7 @@ fn an_unchanged_repo_reports_no_new_diff() {
     let repo = git_repo(&[("a.txt", "one\n")]);
     write(repo.path(), "a.txt", "two\n");
     let first = load(&request(repo.path(), Mode::Uncommitted)).expect("load");
-    let again =
-        load(&Request { last: Some(first.digest), ..request(repo.path(), Mode::Uncommitted) }).expect("load");
+    let again = load(&Request { last: Some(first.digest), ..request(repo.path(), Mode::Uncommitted) }).expect("load");
     assert!(again.diff.is_none());
 }
 

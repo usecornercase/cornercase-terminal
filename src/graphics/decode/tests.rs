@@ -266,11 +266,7 @@ mod refusals {
     #[case::png_cut_short(ImageFormat::Png, 60, "the file ends too early")]
     #[case::gif_cut_short(ImageFormat::Gif, 30, "the GIF data is damaged")]
     #[case::webp_cut_short(ImageFormat::WebP, 26, "the WebP data is damaged")]
-    fn says_why_a_damaged_file_cannot_be_read(
-        #[case] format: ImageFormat,
-        #[case] keep: usize,
-        #[case] reason: &str,
-    ) {
+    fn says_why_a_damaged_file_cannot_be_read(#[case] format: ImageFormat, #[case] keep: usize, #[case] reason: &str) {
         let bytes = file(&halves(64, 64), format);
 
         assert_eq!(decode(&bytes[..keep], 1), Err(reason.to_string()));

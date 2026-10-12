@@ -36,13 +36,7 @@ fn an_origin_must_match_the_host_it_was_sent_to() {
     let none = request(&["GET /ws HTTP/1.1", "Host: mac.ts.net:8443"]);
 
     assert_eq!(
-        [
-            tailnet.same_origin(),
-            forwarded.same_origin(),
-            other.same_origin(),
-            scheme.same_origin(),
-            none.same_origin()
-        ],
+        [tailnet.same_origin(), forwarded.same_origin(), other.same_origin(), scheme.same_origin(), none.same_origin()],
         [true, true, false, false, false]
     );
 }

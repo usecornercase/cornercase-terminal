@@ -95,9 +95,8 @@ fn only_valid_reported_numbers_give_a_percentage(
 fn rate_limit_updates_do_not_change_context_usage() {
     let mut file = Written::new(CONTEXT);
 
-    let found = file.append(
-        "{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":null,\"rate_limits\":{}}}\n",
-    );
+    let found = file
+        .append("{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":null,\"rate_limits\":{}}}\n");
 
     assert_eq!(found, Some(shown("gpt-5.4", Some(20))));
 }
@@ -227,8 +226,7 @@ fn a_large_append_does_not_skip_a_compaction() {
 #[test]
 fn an_initial_tail_without_a_model_does_not_reuse_a_percentage() {
     let filler = format!("{{\"type\":\"response_item\",\"payload\":\"{}\"}}\n", "x".repeat(1000));
-    let file =
-        Written::new(&format!("{CONTEXT}{}\n{}\n", filler.repeat(1100), CONTEXT.lines().last().expect("usage")));
+    let file = Written::new(&format!("{CONTEXT}{}\n{}\n", filler.repeat(1100), CONTEXT.lines().last().expect("usage")));
 
     assert_eq!(file.rollout.context(), None);
 }
@@ -247,8 +245,7 @@ fn the_home_is_read_from_the_agent_process() {
 #[test]
 fn oversized_records_cannot_leave_an_obsolete_percentage_forever() {
     let mut file = Written::new(CONTEXT);
-    let compacted =
-        format!("{{\"type\":\"compacted\",\"payload\":{{\"message\":\"{}\"}}}}\n", "x".repeat(2_100_000));
+    let compacted = format!("{{\"type\":\"compacted\",\"payload\":{{\"message\":\"{}\"}}}}\n", "x".repeat(2_100_000));
 
     assert_eq!(file.append(&compacted), None);
     file.rollout.update();
@@ -266,9 +263,8 @@ fn a_fake_agent_is_associated_by_its_open_rollout_and_cleared_on_exit(#[case] wr
     let fake = FakeCodex::new(ID, "gpt-5.4", wrapper);
     std::fs::write(&fake.rollout, CONTEXT.replace("\"source\":\"cli\"", &format!("\"source\":\"{source}\"")))
         .expect("write the session source");
-    let child = Running::spawn(
-        std::process::Command::new(&fake.script).args(fake.args()).env("CODEX_HOME", fake.dir.path()),
-    );
+    let child =
+        Running::spawn(std::process::Command::new(&fake.script).args(fake.args()).env("CODEX_HOME", fake.dir.path()));
     let pid = child.pid();
     let mut pane = Pane::default();
     wait_until("the fake agent opens its rollout", || {
@@ -287,8 +283,7 @@ fn a_fake_agent_is_associated_by_its_open_rollout_and_cleared_on_exit(#[case] wr
 #[test]
 fn ambiguous_open_rollouts_are_hidden_and_subagent_rollouts_are_excluded() {
     let fake = FakeCodex::new(ID, "gpt-5.4", false);
-    let other =
-        fake.rollout.with_file_name("rollout-2026-10-05T12-00-00-019a1234-5678-7000-8000-000000000002.jsonl");
+    let other = fake.rollout.with_file_name("rollout-2026-10-05T12-00-00-019a1234-5678-7000-8000-000000000002.jsonl");
     let content = CONTEXT.replace(ID, "019a1234-5678-7000-8000-000000000002");
     std::fs::write(&other, &content).expect("other rollout");
     write_executable(
@@ -393,10 +388,7 @@ mod counting_records {
             .collect();
         let mut ledger = Ledger::default();
         ledger.apply("thread", since(), records.clone());
-        assert_eq!(
-            sum(ledger.take()).1,
-            crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 }
-        );
+        assert_eq!(sum(ledger.take()).1, crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 });
         ledger.apply("thread", since(), records.clone());
         assert_eq!(sum(ledger.take()).1.out, 0);
         let mut first = Ledger::default();

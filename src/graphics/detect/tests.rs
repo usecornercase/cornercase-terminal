@@ -14,8 +14,7 @@ struct Bench {
 
 const WINDOW: (u16, u16, u16, u16) = (100, 30, 1000, 570);
 const TMUX_ANSWERS: &[u8] = b"\x1b[6;19;10t\x1b[?1;0;1024S\x1b[?2;3;0S\x1bP>|tmux 3.6\x1b\\\x1b[?1;2;4c";
-const TMUX_ENV: Vars =
-    &[("TERM", "tmux-256color"), ("TERM_PROGRAM", "tmux"), ("TMUX", "/tmp/tmux-1000/default,1,0")];
+const TMUX_ENV: Vars = &[("TERM", "tmux-256color"), ("TERM_PROGRAM", "tmux"), ("TMUX", "/tmp/tmux-1000/default,1,0")];
 const OVER_SSH_FROM_TMUX: Vars = &[("TERM", "tmux-256color")];
 
 const GHOSTTY: Bench = Bench {
@@ -164,10 +163,7 @@ mod bench {
     #[case::foot(FOOT, shows(TMUX_SIXEL, CELL, Tmux::None))]
     #[case::xterm_as_a_vt340(XTERM_VT340, shows(TMUX_SIXEL, XTERM_CELL, Tmux::None))]
     #[case::xterm(XTERM, says(Missing::TmuxOuter { name: Some("xterm 407".into()) }, XTERM_CELL))]
-    fn passes_kitty_placeholders_through_tmux_or_lets_tmux_draw_sixel(
-        #[case] bench: Bench,
-        #[case] expected: Support,
-    ) {
+    fn passes_kitty_placeholders_through_tmux_or_lets_tmux_draw_sixel(#[case] bench: Bench, #[case] expected: Support) {
         assert_eq!(local_tmux_with(&bench, "on"), expected);
     }
 
@@ -317,18 +313,13 @@ mod terminals {
 
     #[test]
     fn says_ghostty_has_images_off_when_it_does_not_answer_through_tmux() {
-        assert_eq!(
-            remote_tmux_with(b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c"),
-            says(Missing::GhosttyStorage, CELL)
-        );
+        assert_eq!(remote_tmux_with(b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c"), says(Missing::GhosttyStorage, CELL));
     }
 
     #[test]
     fn needs_a_cell_size_for_sixel() {
-        let support = decide(
-            &facts(FOOT.env, b"\x1bP>|foot(1.25.0)\x1b\\\x1b[?62;4;22;28;52c", (0, 0, 0, 0)),
-            vars(FOOT.env),
-        );
+        let support =
+            decide(&facts(FOOT.env, b"\x1bP>|foot(1.25.0)\x1b\\\x1b[?62;4;22;28;52c", (0, 0, 0, 0)), vars(FOOT.env));
 
         assert_eq!(support, says(Missing::NoCellSize, None));
     }
@@ -449,10 +440,7 @@ mod tmux_answer {
     }
 
     #[rstest]
-    #[case::on(
-        "/dev/pts/7|on|ghostty 1.3.1|bpaste,ccolour,clipboard,cstyle,focus,RGB,title\n",
-        Some(ghostty(true))
-    )]
+    #[case::on("/dev/pts/7|on|ghostty 1.3.1|bpaste,ccolour,clipboard,cstyle,focus,RGB,title\n", Some(ghostty(true)))]
     #[case::all("/dev/pts/7|all|ghostty 1.3.1|256,RGB\n", Some(ghostty(true)))]
     #[case::off("/dev/pts/7|off|ghostty 1.3.1|256,RGB\n", Some(ghostty(false)))]
     #[case::off_in_tmux_3_3("/dev/pts/7|0|ghostty 1.3.1|256,RGB\n", Some(ghostty(false)))]
@@ -666,16 +654,12 @@ mod messages {
     fn forgets_both_kitty_ids_of_this_client() {
         let support = Support { protocol: Some(Protocol::Kitty), id_hi: 42, ..Support::default() };
 
-        assert_eq!(
-            support.forget(),
-            [kitty::delete(kitty::id(42, 0xf0)), kitty::delete(kitty::id(42, 0xf1))].concat()
-        );
+        assert_eq!(support.forget(), [kitty::delete(kitty::id(42, 0xf0)), kitty::delete(kitty::id(42, 0xf1))].concat());
     }
 
     #[test]
     fn forgets_them_through_tmux() {
-        let support =
-            Support { protocol: Some(Protocol::Kitty), tmux: Tmux::Wrap, id_hi: 42, ..Support::default() };
+        let support = Support { protocol: Some(Protocol::Kitty), tmux: Tmux::Wrap, id_hi: 42, ..Support::default() };
         let ids = [kitty::id(42, 0xf0), kitty::id(42, 0xf1)];
 
         assert_eq!(support.forget(), ids.map(|id| tmux::wrap(&kitty::delete(id))).concat());

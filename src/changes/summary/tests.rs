@@ -31,11 +31,8 @@ fn request(dir: &std::path::Path, paths: &[&str]) -> Request {
 #[case::at_the_limit("limit")]
 fn folded_counts_match_the_project_diff(#[case] change: &str) {
     let path = if change.ends_with("lockfile") { "Cargo.lock" } else { "a.txt" };
-    let original = if change == "large-replacement" {
-        "old\n".repeat(diff::MAX_LINES / 2 + 1)
-    } else {
-        "one\ntwo\n".to_string()
-    };
+    let original =
+        if change == "large-replacement" { "old\n".repeat(diff::MAX_LINES / 2 + 1) } else { "one\ntwo\n".to_string() };
     let repo = if change == "unborn" {
         let repo = TempDir::new();
         git(repo.path(), &["init", "--quiet"]);
@@ -65,8 +62,7 @@ fn folded_counts_match_the_project_diff(#[case] change: &str) {
         }
     }
     let summary = git::load(&request(repo.path(), &[])).expect("summary").diff.expect("diff");
-    let full =
-        git::load(&Request { expanded: None, ..request(repo.path(), &[]) }).expect("full").diff.expect("diff");
+    let full = git::load(&Request { expanded: None, ..request(repo.path(), &[]) }).expect("full").diff.expect("diff");
     let counts = |diff: &Diff| {
         diff.files
             .iter()
@@ -101,10 +97,7 @@ fn an_unfold_request_keeps_large_tracked_files_folded_without_reading_their_patc
         panel.loaded(workspace, generation, &request, Ok(result));
         let diff = panel.summary(workspace).expect("model").diff().expect("diff");
         let file = &diff.files[0];
-        assert_eq!(
-            (file.fold, file.added, file.removed, file.hunks.len()),
-            (Fold::Large, diff::MAX_LINES + 1, 1, 0)
-        );
+        assert_eq!((file.fold, file.added, file.removed, file.hunks.len()), (Fold::Large, diff::MAX_LINES + 1, 1, 0));
         assert!(panel.folded(workspace, diff, file));
     }
 }
@@ -190,8 +183,5 @@ fn a_summary_leaves_the_index_and_its_lock_alone() {
     std::fs::write(repo.path().join(".git/index.lock"), "held").expect("lock");
     git::load(&request(repo.path(), &["a.txt"])).expect("locked index");
     assert_eq!(std::fs::read(index).expect("index"), before);
-    assert_eq!(
-        std::fs::metadata(repo.path().join(".git/index")).expect("metadata").modified().expect("time"),
-        time
-    );
+    assert_eq!(std::fs::metadata(repo.path().join(".git/index")).expect("metadata").modified().expect("time"), time);
 }

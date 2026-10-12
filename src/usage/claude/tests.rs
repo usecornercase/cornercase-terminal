@@ -76,12 +76,7 @@ fn unknown_fields_and_kinds_are_tolerated() {
     let expected = Report {
         plan: Some("max".into()),
         limited: true,
-        windows: vec![Window {
-            label: "daily burst".into(),
-            percent: 13,
-            severity: Severity::Normal,
-            resets_at: None,
-        }],
+        windows: vec![Window { label: "daily burst".into(), percent: 13, severity: Severity::Normal, resets_at: None }],
         extra: Some("extra usage: 12.34 USD of 50.00 USD".into()),
         notice: None,
     };
@@ -111,7 +106,8 @@ fn other_lines_are_skipped(#[case] line: &str) {
 
 #[test]
 fn an_error_response_carries_its_message() {
-    let line = r#"{"type":"control_response","response":{"subtype":"error","request_id":"usage","error":"not logged in"}}"#;
+    let line =
+        r#"{"type":"control_response","response":{"subtype":"error","request_id":"usage","error":"not logged in"}}"#;
     let error = answer(line).expect("the usage answer").expect_err("an error");
     assert_eq!(error.to_string(), "not logged in");
 }

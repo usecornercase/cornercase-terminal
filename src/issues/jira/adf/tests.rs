@@ -96,8 +96,7 @@ fn a_hard_break_ends_the_line() {
 
 #[test]
 fn bullet_lists_nest() {
-    let nested =
-        json!({ "type": "bulletList", "content": [item(json!([paragraph(json!([text_node("inner")]))]))] });
+    let nested = json!({ "type": "bulletList", "content": [item(json!([paragraph(json!([text_node("inner")]))]))] });
     let value = doc(json!([{ "type": "bulletList", "content": [
         item(json!([paragraph(json!([text_node("outer")])), nested])),
         item(json!([paragraph(json!([text_node("next")]))]))

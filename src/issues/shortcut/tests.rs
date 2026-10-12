@@ -96,8 +96,7 @@ mod list {
 
     #[test]
     fn searches_the_open_stories() {
-        let (_, server) =
-            listed(&Query::default(), vec![("GET /api/v3/search/stories", 200, r#"{"data":[]}"#.into())]);
+        let (_, server) = listed(&Query::default(), vec![("GET /api/v3/search/stories", 200, r#"{"data":[]}"#.into())]);
         let request = search_request(&server);
         assert!(request.contains("query=!is%3Adone%20!is%3Aarchived&"), "{request}");
     }

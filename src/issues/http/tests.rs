@@ -16,8 +16,7 @@ fn origin_is_scheme_and_host(#[case] url: &str, #[case] expected: &str) {
 fn get_sends_the_headers_and_the_query() {
     let server = FakeHttp::start(vec![("GET /things", 200, r#"{"a":1}"#)]);
 
-    let answer =
-        get(&SERVICE, &format!("{}/things", server.url()), &[("q", "a b")], &[("Token", "t0k")]).expect("get");
+    let answer = get(&SERVICE, &format!("{}/things", server.url()), &[("q", "a b")], &[("Token", "t0k")]).expect("get");
 
     let request = server.request(0);
     assert_eq!((answer.status, answer.json["a"].as_i64()), (200, Some(1)));

@@ -1,8 +1,7 @@
 use super::*;
 use crate::test_util::FakeHttp;
 
-const VIEWER: &str =
-    r#"{"data":{"viewer":{"name":"Ana Pérez","displayName":"ana","organization":{"urlKey":"acme"}}}}"#;
+const VIEWER: &str = r#"{"data":{"viewer":{"name":"Ana Pérez","displayName":"ana","organization":{"urlKey":"acme"}}}}"#;
 const NODE: &str = r#"{"id":"x","identifier":"ENG-123","number":123,"title":"Returns page crashes",
         "url":"https://linear.app/acme/issue/ENG-123/returns","updatedAt":"2026-09-19T12:00:00.000Z",
         "state":{"name":"In Progress","type":"started"},"assignee":{"displayName":"luis"},

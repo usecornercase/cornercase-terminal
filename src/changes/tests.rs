@@ -295,12 +295,7 @@ fn gap_lines_come_from_the_new_side_between_two_hunks() {
     let line = |kind, old, new| Line { kind, old, new, text: "x".into(), syntax: None, emphasis: Vec::new() };
     f.hunks = vec![
         Hunk { old_start: 1, new_start: 1, context: String::new(), lines: vec![line(Kind::Added, None, Some(1))] },
-        Hunk {
-            old_start: 4,
-            new_start: 5,
-            context: String::new(),
-            lines: vec![line(Kind::Context, Some(4), Some(5))],
-        },
+        Hunk { old_start: 4, new_start: 5, context: String::new(), lines: vec![line(Kind::Context, Some(4), Some(5))] },
     ];
     let new_side: Vec<String> = (1..=6).map(|n| format!("line {n}")).collect();
     let gap: Vec<(u32, u32, String)> =

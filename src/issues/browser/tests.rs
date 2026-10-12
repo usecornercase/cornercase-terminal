@@ -750,12 +750,7 @@ mod people {
         let rows: Vec<String> = items.iter().map(|i| format!("{} {}", i.key, i.title)).collect();
         assert_eq!(
             rows,
-            [
-                "GitHub assignee anyone",
-                "GitHub author anyone",
-                "Shortcut owner anyone",
-                "Shortcut requester anyone"
-            ]
+            ["GitHub assignee anyone", "GitHub author anyone", "Shortcut owner anyone", "Shortcut requester anyone"]
         );
     }
 
@@ -804,10 +799,7 @@ mod people {
     fn the_toggle_says_who_filters() {
         let mut b = with_lists();
         b.people.shortcut[0] = Who::Me;
-        assert_eq!(
-            b.toggles(),
-            (vec!["closed".to_string(), "people: Shortcut owner me".into()], vec![false, true])
-        );
+        assert_eq!(b.toggles(), (vec!["closed".to_string(), "people: Shortcut owner me".into()], vec![false, true]));
     }
 
     #[test]

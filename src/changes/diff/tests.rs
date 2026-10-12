@@ -100,8 +100,7 @@ mod parse {
 
     #[test]
     fn lockfiles_are_folded_but_keep_their_lines() {
-        let patch =
-            "diff --git a/Cargo.lock b/Cargo.lock\n--- a/Cargo.lock\n+++ b/Cargo.lock\n@@ -1 +1 @@\n-a\n+b\n";
+        let patch = "diff --git a/Cargo.lock b/Cargo.lock\n--- a/Cargo.lock\n+++ b/Cargo.lock\n@@ -1 +1 @@\n-a\n+b\n";
         let file = &parse(patch)[0];
         assert_eq!((file.fold, file.hunks.len()), (Fold::Lockfile, 1));
     }
