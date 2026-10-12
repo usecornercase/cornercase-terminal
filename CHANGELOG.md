@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.35
+
+- The **TODO** button shows a grey dot, ` TODO ● ` (or ` ☐ ● ` in the compact layout's top bar), while at least one item is left to do, so a closed list no longer looks the same with ten items as with none. The dot carries no number and goes away once every item is done or the list is empty. Turn it off in **Settings → UI → TODO dot** (`todo_dot` in `config.json`).
+
 ## 0.12.34
 
 - In Ghostty (1.0 or later), kitty (0.31 or later) and foot (1.12 or later), the mouse pointer turns into a resize arrow over the borders you can drag: ↔ on the borders between columns and between panes side by side, ↕ on the line between stacked lists, the line above the agents section and between panes one above the other. It stays while you drag and goes back to normal when you let go, when a dialog opens and when the window quits. Other terminals, and cornercase inside tmux, screen or Zellij, keep their usual pointer.
