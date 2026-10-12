@@ -8614,71 +8614,25 @@ mod tests {
 
         use super::*;
         use crate::activity::Status;
-        use crate::test_util::{FakeCodex, FakeGemini, FakeOpencode, write_executable};
-
-        const FAKE_CLAUDE: &str = r#"#!/bin/sh
-s="$1/sessions/$$.json"
-printf '{"pid":%s,"status":"busy"}' $$ > "$s"
-while [ -d "$1" ] && [ ! -e "$1/finish" ]; do sleep 0.02; done
-printf '{"pid":%s,"status":"idle"}' $$ > "$s"
-while [ -d "$1" ] && [ ! -e "$1/quit" ]; do sleep 0.02; done
-rm -f "$s"
-"#;
+        use crate::test_util::{FakeClaude, FakeCodex, FakeGemini, FakeOpencode, write_executable};
 
         const TURN_STARTED: &str = crate::test_util::fixture!("codex/0.160.0/turn-started.jsonl");
         const TURN_COMPLETE: &str = crate::test_util::fixture!("codex/0.160.0/turn-complete.jsonl");
         const OPENCODE_WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");
         const OPENCODE_REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
 
-        const SILENT_CLAUDE: &str = "#!/bin/sh\nwhile [ -d \"$1\" ] && [ ! -e \"$1/quit\" ]; do sleep 0.02; done\n";
-
-        const ANSWERING_CLAUDE: &str = r#"#!/bin/sh
-p=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
-mkdir -p "$1/projects/$p"
-printf '{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":2,"cache_creation_input_tokens":15655,"cache_read_input_tokens":149954}}}\n' > "$1/projects/$p/s1.jsonl"
-printf '{"pid":%s,"sessionId":"s1","cwd":"%s","status":"idle"}' $$ "$PWD" > "$1/sessions/$$.json"
-while [ -d "$1" ] && [ ! -e "$1/quit" ]; do sleep 0.02; done
-rm -f "$1/sessions/$$.json"
-"#;
-
-        struct Claude {
-            dir: TempDir,
-            _bin: TempDir,
-            script: PathBuf,
-        }
-
-        impl Claude {
-            fn new() -> Self {
-                Self::running(FAKE_CLAUDE)
-            }
-
-            fn running(script: &str) -> Self {
-                let (dir, bin) = (TempDir::new(), TempDir::new());
-                std::fs::create_dir(dir.path().join("sessions")).expect("create the sessions folder");
-                let path = bin.path().join("claude");
-                write_executable(&path, script);
-                Self { dir, _bin: bin, script: path }
-            }
-
+        trait StartClaude {
             fn start(&self, app: &mut App) {
                 self.start_with(app, "");
             }
 
+            fn start_with(&self, app: &mut App, args: &str);
+        }
+
+        impl StartClaude for FakeClaude {
             fn start_with(&self, app: &mut App, args: &str) {
-                app.claude_dir = Some(self.dir.path().to_path_buf());
-                let unset = format!("env -u {} -u {}", context::NO_LONG_ENV, context::NO_COMPACT_ENV);
-                type_line(app, &format!("{unset} {} {} {args}", self.script.display(), self.dir.path().display()));
-            }
-
-            fn signal(&self, name: &str) {
-                std::fs::write(self.dir.path().join(name), "").expect("write the signal");
-            }
-
-            fn report(&self, pid: i32, status: &str) {
-                let next = self.dir.path().join("next.json");
-                std::fs::write(&next, format!(r#"{{"pid":{pid},"status":"{status}"}}"#)).expect("write the session");
-                let session = self.dir.path().join("sessions").join(format!("{pid}.json"));
-                std::fs::rename(next, session).expect("put the session in place");
+                app.claude_dir = Some(self.dir().to_path_buf());
+                type_line(app, &self.command_line(args));
             }
         }
 
@@ -8712,7 +8666,7 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn a_tab_follows_what_claude_says_it_is_doing() {
             let (mut app, rx, _dirs) = app_with(1);
-            let claude = Claude::new();
+            let claude = FakeClaude::new();
 
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
@@ -8726,7 +8680,7 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
             let (mut app, rx, _dirs) = app_with(1);
-            let claude = Claude::new();
+            let claude = FakeClaude::new();
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
             app.add_tab(0, 0, AREA).expect("add a tab");
@@ -8743,7 +8697,7 @@ rm -f "$1/sessions/$$.json"
         #[test]
         fn the_compact_menu_hides_the_tab_beneath_it() {
             let (mut app, rx, _dirs) = app_with(1);
-            let claude = Claude::new();
+            let claude = FakeClaude::new();
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
             app.nav = Some(ui::Nav::Workspaces);
@@ -8771,7 +8725,7 @@ rm -f "$1/sessions/$$.json"
         ) {
             let (mut app, rx, _dirs) = app_with(1);
             (app.config.model, app.config.context) = (model, context);
-            let claude = Claude::running(ANSWERING_CLAUDE);
+            let claude = FakeClaude::running(FakeClaude::ANSWERING);
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude answers", |a| a.projects[0].workspaces[0].tabs[0].context().is_some());
 
@@ -8785,10 +8739,10 @@ rm -f "$1/sessions/$$.json"
             app.projects[0].workspaces[0].tabs[0].memory()
         }
 
-        fn measured_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, Claude) {
+        fn measured_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
             let (mut app, rx, dirs) = app_with(1);
             app.config.memory = true;
-            let claude = Claude::running(SILENT_CLAUDE);
+            let claude = FakeClaude::running(FakeClaude::SILENT);
             claude.start(&mut app);
             watch_until(&mut app, &rx, "the memory is measured", |a| memory(a).is_some());
             (app, rx, dirs, claude)
@@ -8930,7 +8884,7 @@ rm -f "$1/sessions/$$.json"
         fn another_project_and_the_menu_button_show_that_claude_finished() {
             let (mut app, rx, _dirs) = app_with(2);
             app.active = 0;
-            let claude = Claude::new();
+            let claude = FakeClaude::new();
             claude.start(&mut app);
             watch_until(&mut app, &rx, "claude works", |a| status(a, 0, 0) == Some(Status::Working));
             app.active = 1;
@@ -8946,7 +8900,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         enum Fake {
-            Claude(Claude, i32),
+            Claude(FakeClaude, i32),
             Codex(FakeCodex, usize),
             Gemini(FakeGemini, usize),
             Opencode(FakeOpencode, usize),
@@ -9003,7 +8957,7 @@ rm -f "$1/sessions/$$.json"
                 } else if agent == agents::OPENCODE {
                     Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active)
                 } else {
-                    let claude = Claude::running(SILENT_CLAUDE);
+                    let claude = FakeClaude::running(FakeClaude::SILENT);
                     claude.start(app);
                     pump_until(app, rx, "claude runs", |a| runs(a, agents::CLAUDE));
                     let pid = app.term().and_then(Term::foreground_pid).expect("the pid of claude");
@@ -9299,17 +9253,17 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn an_agent_restored_in_its_conversation_is_not_a_new_start() {
                 let (mut app, rx, _dirs) = app_with(1);
-                let claude = Claude::running(ANSWERING_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
                 claude.start(&mut app);
                 let saved = remembered(&mut app, &rx);
                 assert_eq!(app.stats_view(SystemTime::now()).windows["total"].counts.agents, 1);
                 claude.signal("quit");
                 watch_until(&mut app, &rx, "old agent exits", |a| !runs(a, agents::CLAUDE));
-                std::fs::remove_file(claude.dir.path().join("quit")).expect("clear quit");
+                std::fs::remove_file(claude.dir().join("quit")).expect("clear quit");
                 let (mut back, rx, _dirs) = app_with(0);
-                back.config.agent_commands.insert(agents::CLAUDE.into(), claude.script.display().to_string());
-                back.config.agent_args.insert(agents::CLAUDE.into(), vec![claude.dir.path().display().to_string()]);
-                back.claude_dir = Some(claude.dir.path().to_path_buf());
+                back.config.agent_commands.insert(agents::CLAUDE.into(), claude.script().display().to_string());
+                back.config.agent_args.insert(agents::CLAUDE.into(), vec![claude.dir().display().to_string()]);
+                back.claude_dir = Some(claude.dir().to_path_buf());
                 assert!(back.restore(&saved, AREA));
                 refreshing(&mut back, &rx, "resumed conversation", |a| {
                     a.term().and_then(|t| t.context.conversation()).is_some()
@@ -9321,7 +9275,7 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn claude_comes_back_in_its_conversation_and_mode() {
                 let (mut app, rx, _dirs) = app_with(1);
-                let claude = Claude::running(ANSWERING_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
                 claude.start_with(&mut app, "--permission-mode plan");
                 let saved = remembered(&mut app, &rx);
                 claude.signal("quit");
@@ -9362,7 +9316,7 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn the_conversation_is_kept_until_its_agent_is_back_or_the_grace_runs_out() {
                 let (mut app, rx, _dirs) = app_with(1);
-                let claude = Claude::running(ANSWERING_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
                 claude.start(&mut app);
                 let saved = remembered(&mut app, &rx);
                 claude.signal("quit");
@@ -9380,7 +9334,7 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn a_pane_whose_agent_quit_comes_back_as_a_shell() {
                 let (mut app, rx, _dirs) = app_with(1);
-                let claude = Claude::running(ANSWERING_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
                 claude.start(&mut app);
                 remembered(&mut app, &rx);
 
@@ -9392,7 +9346,7 @@ rm -f "$1/sessions/$$.json"
             #[test]
             fn nothing_resumes_when_it_is_turned_off() {
                 let (mut app, rx, _dirs) = app_with(1);
-                let claude = Claude::running(ANSWERING_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
                 claude.start(&mut app);
                 let saved = remembered(&mut app, &rx);
                 claude.signal("quit");
@@ -9423,11 +9377,11 @@ rm -f "$1/sessions/$$.json"
                 (app.active, app.term().map(|t| t.id))
             }
 
-            fn two_agents() -> (App, Receiver<AppEvent>, Vec<TempDir>, Claude, FakeCodex) {
+            fn two_agents() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude, FakeCodex) {
                 let (mut app, rx, dirs) = app_with(2);
                 app.config.agents_section = true;
                 app.active = 0;
-                let claude = Claude::running(SILENT_CLAUDE);
+                let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(&mut app);
                 pump_until(&mut app, &rx, "claude runs", |a| runs(a, agents::CLAUDE));
                 app.active = 1;
@@ -9462,7 +9416,7 @@ rm -f "$1/sessions/$$.json"
             fn the_rows_follow_an_agent_as_it_starts_changes_and_quits() {
                 let (mut app, rx, _dirs) = app_with(1);
                 app.config.agents_section = true;
-                let claude = Claude::new();
+                let claude = FakeClaude::new();
                 let before = statuses(&app);
 
                 claude.start(&mut app);
@@ -15215,37 +15169,9 @@ rm -f "$1/sessions/$$.json"
 
         use super::*;
         use crate::control::{self as wire, Command, Done, Item, Report, Response, Until};
-        use crate::test_util::write_executable;
+        use crate::test_util::{FakeClaude, write_executable};
 
         const CLIENT: u64 = 9;
-        const AGENT: &str = r#"#!/bin/sh
-d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
-mkdir -p "$t"
-state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
-state idle
-n=0
-while printf '\033[H\033[2J%s\n────────────\n❯ ' "$said" && IFS= read -r line; do
-  case "$line" in *panel*) printf '\033[H\033[2J────────────\n  Shell details\n  x to stop\n'; read -r line; continue ;; esac
-  case "$line" in *survey*)
-    printf '\033[H\033[2J● How is Claude doing this session? (optional)\n  1: Bad    2: Fine   3: Good   0: Dismiss\n\n'
-    printf '────────────\n❯ '; IFS= read -r line; [ "$line" = 0 ] && continue ;;
-  esac
-  n=$((n + 1))
-  printf '{"type":"user","uuid":"p%s","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$n" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
-  state busy
-  while [ ! -e "$d/finish" ]; do sleep 0.02; done
-  rm -f "$d/finish"
-  printf '{"type":"assistant","timestamp":"%s.999Z","message":{"id":"m%s","model":"synthetic","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
-  case "$line" in
-    *ask*) state waiting; read answer ;;
-    *background*) state shell
-      while [ ! -e "$d/finish" ]; do sleep 0.02; done; rm -f "$d/finish" ;;
-  esac
-  said="done: $line"
-  state idle
-done
-rm -f "$s"
-"#;
 
         fn request(app: &mut App, caller: Option<u64>, command: Command, area: Option<Rect>) {
             let server = caller.map(|_| wire::server_token().to_string());
@@ -16003,26 +15929,24 @@ rm -f "$s"
             struct Agent {
                 app: App,
                 rx: Receiver<AppEvent>,
-                dir: TempDir,
+                fake: FakeClaude,
                 _config: TempDir,
                 _project: TempDir,
             }
 
             impl Agent {
                 fn new() -> Self {
-                    let (dir, config, project) = (TempDir::new(), TempDir::new(), TempDir::new());
-                    std::fs::create_dir(dir.path().join("sessions")).expect("create the sessions folder");
-                    let script = config.path().join("claude");
-                    write_executable(&script, AGENT);
+                    let (config, project) = (TempDir::new(), TempDir::new());
+                    let fake = FakeClaude::running(FakeClaude::CONTROL);
                     let settings = Config {
-                        agent_commands: [("claude".to_string(), script.display().to_string())].into(),
-                        agent_args: [("claude".to_string(), vec![dir.path().display().to_string()])].into(),
+                        agent_commands: [("claude".to_string(), fake.script().display().to_string())].into(),
+                        agent_args: [("claude".to_string(), vec![fake.dir().display().to_string()])].into(),
                         ..Config::default()
                     };
                     let config_path = write_config(config.path(), &settings);
                     let (mut app, rx) = app_in(project.path(), config_path);
-                    app.claude_dir = Some(dir.path().to_path_buf());
-                    Self { app, rx, dir, _config: config, _project: project }
+                    app.claude_dir = Some(fake.dir().to_path_buf());
+                    Self { app, rx, fake, _config: config, _project: project }
                 }
 
                 fn start(&mut self, prompt: Option<&str>) -> u64 {
@@ -16038,7 +15962,7 @@ rm -f "$s"
                 }
 
                 fn finish(&self) {
-                    std::fs::write(self.dir.path().join("finish"), "").expect("finish");
+                    self.fake.signal("finish");
                 }
 
                 fn until(&mut self, what: &str, cond: impl Fn(&App) -> bool) {
