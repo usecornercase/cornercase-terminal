@@ -18,5 +18,5 @@ expression: render(&view).backend()
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files          TODO    │                                          "
+"  Usage                        │  Files            TODO  │                                          "
 "  Quit                         │                         │                                          "

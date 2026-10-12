@@ -28,7 +28,7 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 "                               │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
-"  Files                TODO    │                                                                    "
+"  Files                  TODO  │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "

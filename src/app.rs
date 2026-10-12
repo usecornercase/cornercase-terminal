@@ -1998,11 +1998,7 @@ impl App {
             Some(label) => ui::changes_button(areas.issues, &label),
             None => Rect::default(),
         };
-        let todo = if areas.compact() || self.project().is_some() {
-            areas.todo(self.config.todo_dot)
-        } else {
-            Rect::default()
-        };
+        let todo = if areas.compact() || self.project().is_some() { areas.todo_button } else { Rect::default() };
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
@@ -14586,12 +14582,12 @@ rm -f "$1/sessions/$$.json"
 
         fn todo_button(app: &mut App) -> String {
             let open = std::mem::replace(&mut app.todo.open, false);
-            let r = app.layout(AREA).todo(app.config.todo_dot);
+            let r = app.layout(AREA).todo_button;
             let mut t =
                 ratatui::Terminal::new(ratatui::backend::TestBackend::new(AREA.width, AREA.height)).expect("backend");
             t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
             app.todo.open = open;
-            (r.x..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
+            (r.x - 2..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
         }
 
         #[test]
@@ -14607,7 +14603,7 @@ rm -f "$1/sessions/$$.json"
             tap(&mut app, |a| panel::check(item_row(a, 0)));
             tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
             seen.push(todo_button(&mut app));
-            assert_eq!(seen, [" TODO   ", " TODO ● ", " TODO   ", " TODO ● ", " TODO   "]);
+            assert_eq!(seen, ["   TODO ", " ● TODO ", "   TODO ", " ● TODO ", "   TODO "]);
         }
 
         #[test]
@@ -14615,7 +14611,7 @@ rm -f "$1/sessions/$$.json"
             let (mut app, _rx, _dirs) = opened();
             add(&mut app, &["a"]);
             app.config.todo_dot = false;
-            assert_eq!(todo_button(&mut app), " TODO ");
+            assert_eq!(todo_button(&mut app), "   TODO ");
         }
 
         #[test]

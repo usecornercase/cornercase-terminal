@@ -375,20 +375,13 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
 
 export const TODO_LABEL = 'TODO';
 export const TODO_DOT = '●';
-const TODO_ROOM = `${TODO_LABEL} ${TODO_DOT}`;
-const rightButton = (row: Rect, label: string): Rect => intersect(rect(right(row) - [...label].length - 3, row.y, [...label].length + 2, 1), row);
+const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
 export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
-const todoButton = (row: Rect): Rect => {
-  const reserved = rightButton(row, TODO_ROOM);
-  return reserved.x > right(filesButton(row)) ? reserved : rightButton(row, TODO_LABEL);
-};
 
-export function todoArea(areas: Areas, dot: boolean): Rect {
-  const r = areas.todoButton;
-  if (dot || areas.compact) return r;
-  const w = Math.min(TODO_LABEL.length + 2, r.w);
-  return rect(right(r) - w, r.y, w, r.h);
+export function todoDot(areas: Areas): Rect | null {
+  const x = areas.todoButton.x - 1;
+  return !areas.compact && x > right(areas.filesButton) ? rect(x, areas.todoButton.y, 1, 1) : null;
 }
 
 export const stackedWidth = (w: Widths, total: number): number =>

@@ -28,7 +28,7 @@ expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).back
 "  ↓ 1 more                     │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
-"  Files                TODO    │                                                                    "
+"  Files                  TODO  │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "
