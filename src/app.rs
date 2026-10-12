@@ -5690,6 +5690,12 @@ mod tests {
         path
     }
 
+    fn drag(app: &mut App, from: Position, to: Position) {
+        press(app, from);
+        mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
+        mouse(app, MouseEventKind::Up(MouseButton::Left), to);
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -6967,12 +6973,6 @@ mod tests {
         use rstest::rstest;
 
         use super::*;
-
-        fn drag(app: &mut App, from: Position, to: Position) {
-            press(app, from);
-            mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
-            mouse(app, MouseEventKind::Up(MouseButton::Left), to);
-        }
 
         fn drag_entry(app: &mut App, from: SidebarRow, to: SidebarRow) {
             let (from, to) = (sidebar_pos(app, from), sidebar_pos(app, to));
@@ -10332,12 +10332,6 @@ rm -f "$1/sessions/$$.json"
             Position::new(areas().pane.x + col, areas().pane.y + row)
         }
 
-        fn drag(app: &mut App, from: Position, to: Position) {
-            press(app, from);
-            mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
-            mouse(app, MouseEventKind::Up(MouseButton::Left), to);
-        }
-
         #[test]
         fn dragging_over_text_copies_it_to_the_clipboard() {
             let (mut app, _rx) = showing("hello world");
@@ -10589,12 +10583,6 @@ rm -f "$1/sessions/$$.json"
 
         fn divider(app: &App) -> split::Divider {
             tab(app).layout.dividers(pane()).remove(0)
-        }
-
-        fn drag(app: &mut App, from: Position, to: Position) {
-            press(app, from);
-            mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
-            mouse(app, MouseEventKind::Up(MouseButton::Left), to);
         }
 
         #[test]
