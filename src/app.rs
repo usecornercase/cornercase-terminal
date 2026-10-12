@@ -6354,6 +6354,15 @@ mod tests {
 
         use super::*;
 
+        fn renaming_group() -> (App, Receiver<AppEvent>) {
+            let (mut app, rx) = app();
+            new_group(&mut app, "work");
+            right_click_sidebar(&mut app, SidebarRow::Group(0));
+            pick(&mut app, "rename group");
+            clear_input(&mut app);
+            (app, rx)
+        }
+
         fn click_sidebar(app: &mut App, row: SidebarRow) {
             let pos = sidebar_pos(app, row);
             click(app, pos);
@@ -6600,11 +6609,7 @@ mod tests {
 
         #[test]
         fn the_group_menu_renames_it() {
-            let (mut app, _rx) = app();
-            new_group(&mut app, "work");
-            right_click_sidebar(&mut app, SidebarRow::Group(0));
-            pick(&mut app, "rename group");
-            clear_input(&mut app);
+            let (mut app, _rx) = renaming_group();
 
             submit_text(&mut app, "clients");
 
@@ -6613,11 +6618,7 @@ mod tests {
 
         #[test]
         fn an_empty_rename_keeps_the_group_name() {
-            let (mut app, _rx) = app();
-            new_group(&mut app, "work");
-            right_click_sidebar(&mut app, SidebarRow::Group(0));
-            pick(&mut app, "rename group");
-            clear_input(&mut app);
+            let (mut app, _rx) = renaming_group();
 
             send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
 
