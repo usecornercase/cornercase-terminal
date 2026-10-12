@@ -13415,6 +13415,12 @@ mod tests {
         mod every_project {
             use super::*;
 
+            fn filter_changes(app: &mut App, query: &str) {
+                let mut filter = changes::filter::Filter::default();
+                query.chars().for_each(|c| filter.push(c));
+                app.changes.filter = Some(filter);
+            }
+
             fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
                 app.changes.open = true;
                 app.changes.set_scope(changes::Scope::Every);
@@ -13481,16 +13487,12 @@ mod tests {
                 let sub = row(&app, panel::Row::Header(2));
                 click(&mut app, sub);
                 assert!(!panel::rows(&app.panel_view().expect("panel")).contains(&panel::Row::File(1)));
-                let mut filter = changes::filter::Filter::default();
-                "new.txt".chars().for_each(|c| filter.push(c));
-                app.changes.filter = Some(filter);
+                filter_changes(&mut app, "new.txt");
                 assert_eq!(
                     panel::rows(&app.panel_view().expect("panel")),
                     [panel::Row::Header(0), panel::Row::Header(2)]
                 );
-                let mut filter = changes::filter::Filter::default();
-                "a.txt".chars().for_each(|c| filter.push(c));
-                app.changes.filter = Some(filter);
+                filter_changes(&mut app, "a.txt");
                 assert_eq!(
                     panel::rows(&app.panel_view().expect("panel")),
                     [
