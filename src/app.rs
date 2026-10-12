@@ -9209,6 +9209,14 @@ mod tests {
         mod resuming {
             use super::*;
 
+            fn remembered_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude, State) {
+                let (mut app, rx, dirs) = app_with(1);
+                let claude = FakeClaude::running(FakeClaude::ANSWERING);
+                claude.start(&mut app);
+                let saved = remembered(&mut app, &rx);
+                (app, rx, dirs, claude, saved)
+            }
+
             const CODEX_ID: &str = "019a1234-5678-7000-8000-000000000001";
 
             fn saved_agent(saved: &State) -> Option<&AgentState> {
@@ -9245,10 +9253,7 @@ mod tests {
 
             #[test]
             fn an_agent_restored_in_its_conversation_is_not_a_new_start() {
-                let (mut app, rx, _dirs) = app_with(1);
-                let claude = FakeClaude::running(FakeClaude::ANSWERING);
-                claude.start(&mut app);
-                let saved = remembered(&mut app, &rx);
+                let (mut app, rx, _dirs, claude, saved) = remembered_claude();
                 assert_eq!(app.stats_view(SystemTime::now()).windows["total"].counts.agents, 1);
                 claude.signal("quit");
                 watch_until(&mut app, &rx, "old agent exits", |a| !runs(a, agents::CLAUDE));
@@ -9308,10 +9313,7 @@ mod tests {
 
             #[test]
             fn the_conversation_is_kept_until_its_agent_is_back_or_the_grace_runs_out() {
-                let (mut app, rx, _dirs) = app_with(1);
-                let claude = FakeClaude::running(FakeClaude::ANSWERING);
-                claude.start(&mut app);
-                let saved = remembered(&mut app, &rx);
+                let (_app, _rx, _dirs, claude, saved) = remembered_claude();
                 claude.signal("quit");
                 let (mut back, _rx, _bin) = restored(&saved, agents::CLAUDE, true);
                 back.launches.clear();
@@ -9338,10 +9340,7 @@ mod tests {
 
             #[test]
             fn nothing_resumes_when_it_is_turned_off() {
-                let (mut app, rx, _dirs) = app_with(1);
-                let claude = FakeClaude::running(FakeClaude::ANSWERING);
-                claude.start(&mut app);
-                let saved = remembered(&mut app, &rx);
+                let (_app, _rx, _dirs, claude, saved) = remembered_claude();
                 claude.signal("quit");
 
                 let (back, _rx, _bin) = restored(&saved, agents::CLAUDE, false);
