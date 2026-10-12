@@ -71,14 +71,8 @@ mod a_bug {
             base: None,
             collapsed: false,
         };
-        let project = ProjectState {
-            path,
-            name: None,
-            group: None,
-            workspaces: vec![workspace],
-            active: 0,
-            collapsed: false,
-        };
+        let project =
+            ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };
         State { version: state::VERSION, projects: vec![project], ..State::default() }
     }
 
@@ -109,18 +103,8 @@ mod a_bug {
         let _ = server.handle(ServerEvent::Accepted(ours));
         let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
         let (notify, probe) = (Channel::Bell, String::new());
-        let hello = Hello {
-            version,
-            build,
-            cols: COLS,
-            rows: ROWS,
-            theme,
-            notify,
-            terminal: None,
-            pointer,
-            graphics,
-            probe,
-        };
+        let hello =
+            Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, pointer, graphics, probe };
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {

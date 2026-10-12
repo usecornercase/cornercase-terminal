@@ -188,10 +188,7 @@ fn changed_words_get_a_stronger_tint() {
     let r = row_of(&view, Row::Line(0, 0, 3));
     let buffer = terminal.backend().buffer();
     let x = (0..AREA.width).find(|&x| buffer[(x, r.y)].symbol() == "O").expect("Option on screen");
-    assert_eq!(
-        (Some(buffer[(x, r.y)].bg), buffer[(2, r.y)].bg),
-        (Some(TINTS.added_word), TINTS.added.expect("tint"))
-    );
+    assert_eq!((Some(buffer[(x, r.y)].bg), buffer[(2, r.y)].bg), (Some(TINTS.added_word), TINTS.added.expect("tint")));
 }
 
 #[test]
@@ -307,8 +304,7 @@ mod filter {
     fn says_when_no_file_matches() {
         let terminal = render(&filtered(&sample(), "nothing"), None);
         let body = parts(AREA, &filtered(&sample(), "nothing")).body;
-        let text: String =
-            (body.x..body.right()).map(|x| terminal.backend().buffer()[(x, body.y)].symbol()).collect();
+        let text: String = (body.x..body.right()).map(|x| terminal.backend().buffer()[(x, body.y)].symbol()).collect();
         assert_eq!(text.trim(), NO_FILE_MATCHES);
     }
 

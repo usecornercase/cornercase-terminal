@@ -45,8 +45,7 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
     let source = "fn main() {\n    run();\n    done();\n}\n";
     let lines = source.lines().map(String::from).collect();
     let styles = crate::syntax::highlight(source, "rust");
-    let content =
-        Content { stamp: disk::Stamp::default(), language: Some("rust"), body: Body::Text { lines, styles } };
+    let content = Content { stamp: disk::Stamp::default(), language: Some("rust"), body: Body::Text { lines, styles } };
     let gutter = files::gutter(&diff::parse(PATCH)[0], 4);
     View {
         root: "~/projects/shop".into(),
@@ -178,10 +177,8 @@ fn the_viewer_lights_what_was_searched() {
     terminal.draw(|f| draw(f, AREA, &view, None)).expect("draw");
     let row = parts(AREA).body.y + 2;
     let buffer = terminal.backend().buffer();
-    let lit: String = (0..AREA.width)
-        .filter(|&x| buffer[(x, row)].bg == Color::Yellow)
-        .map(|x| buffer[(x, row)].symbol())
-        .collect();
+    let lit: String =
+        (0..AREA.width).filter(|&x| buffer[(x, row)].bg == Color::Yellow).map(|x| buffer[(x, row)].symbol()).collect();
     assert_eq!(lit, "done");
 }
 

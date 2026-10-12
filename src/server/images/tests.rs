@@ -8,13 +8,7 @@ const NOTHING: &[u8] = b"";
 const RECT: Rect = Rect { x: 50, y: 3, width: 20, height: 10 };
 
 fn support(protocol: Protocol, tmux: Tmux) -> Support {
-    Support {
-        protocol: Some(protocol),
-        missing: None,
-        cell: Some(CellSize { width: 10, height: 20 }),
-        tmux,
-        id_hi: HI,
-    }
+    Support { protocol: Some(protocol), missing: None, cell: Some(CellSize { width: 10, height: 20 }), tmux, id_hi: HI }
 }
 
 const fn fit(cols: u16, rows: u16, width: u32, height: u32) -> Fit {

@@ -249,10 +249,7 @@ mod output {
 
         let text = render(&report, Some(Path::new("/home/ana")));
 
-        assert!(
-            text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"),
-            "{text}"
-        );
+        assert!(text.contains("pane 5  claude  working (background shell)  Opus 5.5 · 23%  ~/shop  (you)\n"), "{text}");
     }
 
     #[test]
