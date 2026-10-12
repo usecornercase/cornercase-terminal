@@ -5700,6 +5700,15 @@ mod tests {
         app.layout(AREA).changes
     }
 
+    fn fake_shortcut<B: Into<Vec<u8>>>(
+        app: &mut App,
+        routes: Vec<(&'static str, u16, B)>,
+    ) -> crate::test_util::FakeHttp {
+        let server = crate::test_util::FakeHttp::start(routes);
+        app.apis.shortcut = format!("{}/api/v3", server.url());
+        server
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -10087,9 +10096,7 @@ rm -f "$1/sessions/$$.json"
         }
 
         fn shortcut(s: &mut Setup, status: u16) -> FakeHttp {
-            let server = FakeHttp::start(vec![("GET /api/v3/member", status, crate::test_util::SHORTCUT_MEMBER)]);
-            s.app.apis.shortcut = format!("{}/api/v3", server.url());
-            server
+            fake_shortcut(&mut s.app, vec![("GET /api/v3/member", status, crate::test_util::SHORTCUT_MEMBER)])
         }
 
         fn paste_shortcut_token(s: &mut Setup, token: &str) {
@@ -11930,9 +11937,7 @@ rm -f "$1/sessions/$$.json"
                 ("GET /api/v3/search/stories", 200, STORIES),
             ];
             all.splice(0..0, routes);
-            let server = FakeHttp::start(all);
-            s.app.apis.shortcut = format!("{}/api/v3", server.url());
-            server
+            fake_shortcut(&mut s.app, all)
         }
 
         fn secrets_file(s: &Setup) -> PathBuf {
