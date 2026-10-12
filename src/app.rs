@@ -6354,6 +6354,15 @@ mod tests {
 
         use super::*;
 
+        fn moving_while_deleting() -> (App, Receiver<AppEvent>, Vec<TempDir>, u64) {
+            let (mut app, rx, dirs) = asked_to_delete(1, 2);
+            let work = group_label(&app, 0);
+            let moved = app.projects[1].id;
+            click(&mut app, extra_button());
+            move_to(&mut app, 1, &work);
+            (app, rx, dirs, moved)
+        }
+
         fn renaming_group() -> (App, Receiver<AppEvent>) {
             let (mut app, rx) = app();
             new_group(&mut app, "work");
@@ -6771,11 +6780,7 @@ mod tests {
 
         #[test]
         fn a_project_moved_into_the_group_meanwhile_keeps_it_after_the_others_close() {
-            let (mut app, rx, _dirs) = asked_to_delete(1, 2);
-            let work = group_label(&app, 0);
-            let moved = app.projects[1].id;
-            click(&mut app, extra_button());
-            move_to(&mut app, 1, &work);
+            let (mut app, rx, _dirs, moved) = moving_while_deleting();
 
             pump_until(&mut app, &rx, "the old project closes", |a| a.projects.len() == 1);
             app.close_project(moved);
@@ -6786,11 +6791,7 @@ mod tests {
 
         #[test]
         fn a_project_moved_into_the_group_and_closed_before_the_others_still_keeps_it() {
-            let (mut app, rx, _dirs) = asked_to_delete(1, 2);
-            let work = group_label(&app, 0);
-            let moved = app.projects[1].id;
-            click(&mut app, extra_button());
-            move_to(&mut app, 1, &work);
+            let (mut app, rx, _dirs, moved) = moving_while_deleting();
             app.projects[1].workspaces[0].tabs.clear();
 
             app.close_project(moved);
