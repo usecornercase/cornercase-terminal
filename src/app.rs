@@ -9992,6 +9992,13 @@ mod tests {
         use crate::settings::{Detail, Row};
         use crate::test_util::FakeHttp;
 
+        fn issues_after_settings(s: &mut Setup) -> &Browser {
+            send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
+            click(&mut s.app, areas().issues.as_position());
+            let Some(Overlay::Issues(b)) = &s.app.overlay else { panic!("the issues are not open") };
+            b
+        }
+
         struct Setup {
             app: App,
             rx: Receiver<AppEvent>,
@@ -10222,11 +10229,7 @@ mod tests {
             let _server = shortcut(&mut s, 200);
             paste_shortcut_token(&mut s, "t0k");
             pump_until(&mut s.app, &s.rx, "the check finishes", |a| !form(a).busy());
-            send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
-
-            click(&mut s.app, areas().issues.as_position());
-
-            let Some(Overlay::Issues(b)) = &s.app.overlay else { panic!("the issues are not open") };
+            let b = issues_after_settings(&mut s);
             assert!(b.connections.contains_key(&Source::Shortcut));
         }
 
@@ -10246,11 +10249,7 @@ mod tests {
         fn the_default_agent_picked_here_takes_the_issues() {
             let mut s = open();
             pick(&mut s, &Row::DefaultAgent, "codex");
-            send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
-
-            click(&mut s.app, areas().issues.as_position());
-
-            let Some(Overlay::Issues(b)) = &s.app.overlay else { panic!("the issues are not open") };
+            let b = issues_after_settings(&mut s);
             assert_eq!(b.agents.default.as_deref(), Some("codex"));
         }
 
@@ -10259,11 +10258,7 @@ mod tests {
             let mut s = open();
             go_to(&mut s, &Row::Tab("linear"));
             enter(&mut s);
-            send_key(&mut s.app, KeyCode::Esc, KeyModifiers::NONE);
-
-            click(&mut s.app, areas().issues.as_position());
-
-            let Some(Overlay::Issues(b)) = &s.app.overlay else { panic!("the issues are not open") };
+            let b = issues_after_settings(&mut s);
             assert!(!b.tabs.contains(&IssueTab::One(Source::Linear)));
         }
     }
