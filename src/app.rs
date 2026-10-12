@@ -14708,6 +14708,15 @@ mod tests {
         use super::*;
         use crate::ui::todo as panel;
 
+        fn edited_typo() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+            let (mut app, rx, dirs) = opened();
+            add(&mut app, &["fix logn", "b"]);
+            let row = item_row(&app, 0);
+            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
+            type_text(&mut app, "i");
+            (app, rx, dirs)
+        }
+
         fn tap(app: &mut App, at: impl Fn(&App) -> Rect) {
             let pos = at(app).as_position();
             click(app, pos);
@@ -14877,22 +14886,14 @@ mod tests {
 
         #[test]
         fn checking_an_item_being_edited_saves_the_text_and_checks_it() {
-            let (mut app, _rx, _dirs) = opened();
-            add(&mut app, &["fix logn", "b"]);
-            let row = item_row(&app, 0);
-            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
-            type_text(&mut app, "i");
+            let (mut app, _rx, _dirs) = edited_typo();
             tap(&mut app, |a| panel::check(item_row(a, 0)));
             assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into(), "[x] fix login".into()]));
         }
 
         #[test]
         fn deleting_an_item_being_edited_saves_the_text_and_undo_brings_it_back() {
-            let (mut app, _rx, _dirs) = opened();
-            add(&mut app, &["fix logn", "b"]);
-            let row = item_row(&app, 0);
-            click(&mut app, Position::new(row.x + panel::TEXT_X + 7, row.y));
-            type_text(&mut app, "i");
+            let (mut app, _rx, _dirs) = edited_typo();
             tap(&mut app, |a| panel::delete(item_row(a, 0)));
             assert_eq!((app.todo.field.is_none(), texts(&app)), (true, vec!["b".into()]));
             undo(&mut app, "deleted");
