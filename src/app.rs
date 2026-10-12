@@ -11829,6 +11829,11 @@ mod tests {
         use super::*;
         use crate::test_util::{FakeHttp, fake_gh};
 
+        fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
+            s.app.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
+            s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+        }
+
         fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
             let server = shortcut(s, Vec::new());
             secrets::write(&secrets_file(s), "shortcut_token", "t0k").expect("save token");
@@ -12544,8 +12549,7 @@ mod tests {
             #[test]
             fn another_site_forgets_the_account_and_the_lists_of_the_old_one() {
                 let mut s = setup(false, "echo '[]'");
-                s.app.accounts.insert(Source::Jira, Account { handle: "Ana".into(), workspace: "a".into() });
-                s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+                accounts_with_linear(&mut s, Source::Jira, "a");
 
                 s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
 
@@ -12621,8 +12625,7 @@ mod tests {
             #[test]
             fn another_workspace_forgets_the_account_of_the_old_one() {
                 let mut s = setup(false, "echo '[]'");
-                s.app.accounts.insert(Source::Plane, Account { handle: "Ana".into(), workspace: "acme".into() });
-                s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+                accounts_with_linear(&mut s, Source::Plane, "acme");
 
                 s.app.set_config(Config { plane_workspace: "other".into(), ..s.app.config.clone() });
 
