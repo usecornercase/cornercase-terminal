@@ -8098,24 +8098,6 @@ mod tests {
     mod restore {
         use super::*;
 
-        fn workspace(path: &Path, cwds: Vec<Option<PathBuf>>) -> WorkspaceState {
-            let tabs = cwds.into_iter().map(|cwd| TabState {
-                name: None,
-                panes: vec![PaneState { cwd, right_clicks: false, agent: None }],
-                active: 0,
-                layout: None,
-            });
-            WorkspaceState {
-                path: path.to_path_buf(),
-                name: None,
-                worktree: false,
-                tabs: tabs.collect(),
-                active: 0,
-                base: None,
-                collapsed: false,
-            }
-        }
-
         fn project(path: &Path, workspaces: Vec<WorkspaceState>) -> ProjectState {
             ProjectState { path: path.to_path_buf(), name: None, group: None, workspaces, active: 0, collapsed: false }
         }
@@ -8140,12 +8122,17 @@ mod tests {
             let (a_path, b_path) = (canonical(&a), canonical(&b));
             std::fs::create_dir(a_path.join("sub")).expect("create folder");
             let (mut app, _rx) = empty_app();
-            let mut second = workspace(&a_path, vec![Some(a_path.clone()), Some(a_path.join("sub"))]);
+            let mut second =
+                WorkspaceState::plain(a_path.clone(), vec![Some(a_path.clone()), Some(a_path.join("sub"))], 0);
             second.name = Some("other".into());
             second.active = 1;
-            let mut first_project = project(&a_path, vec![workspace(&a_path, vec![None]), second]);
+            let mut first_project =
+                project(&a_path, vec![WorkspaceState::plain(a_path.clone(), vec![None], 0), second]);
             first_project.active = 1;
-            let state = saved(vec![first_project, project(&b_path, vec![workspace(&b_path, vec![None])])], 0);
+            let state = saved(
+                vec![first_project, project(&b_path, vec![WorkspaceState::plain(b_path.clone(), vec![None], 0)])],
+                0,
+            );
 
             assert!(app.restore(&state, AREA), "every tab comes back");
 
@@ -8159,11 +8146,14 @@ mod tests {
             let (a, b) = (TempDir::new(), TempDir::new());
             let (a_path, b_path) = (canonical(&a), canonical(&b));
             let (mut app, _rx) = empty_app();
-            let mut folded = workspace(&a_path, vec![None]);
+            let mut folded = WorkspaceState::plain(a_path.clone(), vec![None], 0);
             folded.collapsed = true;
-            let mut other = project(&b_path, vec![workspace(&b_path, vec![None])]);
+            let mut other = project(&b_path, vec![WorkspaceState::plain(b_path.clone(), vec![None], 0)]);
             other.collapsed = true;
-            let state = saved(vec![project(&a_path, vec![folded, workspace(&a_path, vec![None])]), other], 0);
+            let state = saved(
+                vec![project(&a_path, vec![folded, WorkspaceState::plain(a_path.clone(), vec![None], 0)]), other],
+                0,
+            );
 
             app.restore(&state, AREA);
             let again = app.state();
@@ -8178,7 +8168,7 @@ mod tests {
         fn the_first_draw_keeps_a_folded_active_project_folded() {
             let dir = TempDir::new();
             let (mut app, _rx) = empty_app();
-            let mut folded = project(&canonical(&dir), vec![workspace(&canonical(&dir), vec![None])]);
+            let mut folded = project(&canonical(&dir), vec![WorkspaceState::plain(canonical(&dir), vec![None], 0)]);
             folded.collapsed = true;
             app.restore(&saved(vec![folded], 0), AREA);
 
@@ -8188,7 +8178,7 @@ mod tests {
         }
 
         fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
-            let mut ws = workspace(dir, vec![None, None]);
+            let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None, None], 0);
             ws.tabs[0].panes.push(PaneState {
                 cwd: Some(locked.path().to_path_buf()),
                 right_clicks: false,
@@ -8201,7 +8191,7 @@ mod tests {
         fn a_tab_whose_shell_cannot_start_is_left_out_and_the_rest_comes_back() {
             let (first, last, locked) = (TempDir::new(), TempDir::new(), Locked::new());
             let (mut app, _rx) = empty_app();
-            let one_tab = |path: &Path| project(path, vec![workspace(path, vec![None])]);
+            let one_tab = |path: &Path| project(path, vec![WorkspaceState::plain(path.to_path_buf(), vec![None], 0)]);
             let state = saved(vec![one_tab(first.path()), one_tab(locked.path()), one_tab(last.path())], 0);
 
             assert!(!app.restore(&state, AREA), "the restore says a tab is missing");
@@ -8258,8 +8248,10 @@ mod tests {
         fn skips_workspaces_whose_folder_is_gone() {
             let dir = TempDir::new();
             let (mut app, _rx) = empty_app();
-            let workspaces =
-                vec![workspace(Path::new("/nonexistent/folder"), vec![None]), workspace(dir.path(), vec![None])];
+            let workspaces = vec![
+                WorkspaceState::plain(Path::new("/nonexistent/folder").to_path_buf(), vec![None], 0),
+                WorkspaceState::plain(dir.path().to_path_buf(), vec![None], 0),
+            ];
 
             app.restore(&saved(vec![project(dir.path(), workspaces)], 0), AREA);
 
@@ -8271,7 +8263,7 @@ mod tests {
             let dir = TempDir::new();
             let path = canonical(&dir);
             let (mut app, _rx) = empty_app();
-            let ws = workspace(&path, vec![Some(PathBuf::from("/nonexistent/folder"))]);
+            let ws = WorkspaceState::plain(path.clone(), vec![Some(PathBuf::from("/nonexistent/folder"))], 0);
 
             app.restore(&saved(vec![project(&path, vec![ws])], 0), AREA);
 
@@ -8282,7 +8274,7 @@ mod tests {
         fn keeps_the_names() {
             let dir = TempDir::new();
             let (mut app, _rx) = empty_app();
-            let mut ws = workspace(dir.path(), vec![None]);
+            let mut ws = WorkspaceState::plain(dir.path().to_path_buf(), vec![None], 0);
             ws.name = Some("main line".into());
             ws.tabs[0].name = Some("server".into());
             let mut p = project(dir.path(), vec![ws]);

@@ -112,7 +112,7 @@ pub struct AgentState {
 }
 
 impl WorkspaceState {
-    fn plain(path: PathBuf, cwds: Vec<Option<PathBuf>>, active: usize) -> Self {
+    pub(crate) fn plain(path: PathBuf, cwds: Vec<Option<PathBuf>>, active: usize) -> Self {
         let tabs = cwds.into_iter().map(|cwd| TabState {
             name: None,
             panes: vec![PaneState { cwd, right_clicks: false, agent: None }],
