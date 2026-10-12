@@ -11937,6 +11937,10 @@ mod tests {
         use super::*;
         use crate::test_util::{FakeHttp, fake_gh};
 
+        fn assert_only_linear(s: &Setup) {
+            assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+        }
+
         fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
             s.app.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
             s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
@@ -12661,7 +12665,7 @@ mod tests {
 
                 s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
 
-                assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+                assert_only_linear(&s);
             }
         }
 
@@ -12737,7 +12741,7 @@ mod tests {
 
                 s.app.set_config(Config { plane_workspace: "other".into(), ..s.app.config.clone() });
 
-                assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+                assert_only_linear(&s);
             }
 
             #[test]
