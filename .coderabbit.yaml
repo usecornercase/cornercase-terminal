@@ -24,7 +24,7 @@ reviews:
     - "!Cargo.lock"
     - "!site/package-lock.json"
     - "!skills-lock.json"
-    - "!src/snapshots/**"
+    - "!src/**/snapshots/**"
     - "!site/src/screens/**"
     - "!.github/workflows/release.yml"
     - "!.agents/**"
@@ -37,7 +37,7 @@ reviews:
         If the PR changes the app (src/, Cargo.toml, Cargo.lock, rust-toolchain.toml, .cargo/), check that it bumps
         `version` in Cargo.toml and adds a matching `## <version>` section to CHANGELOG.md written for users.
         If it adds, removes or changes a feature, setting, message or click, check that site/ is updated too.
-    - path: "tests/**/*.rs"
+    - path: "{tests/**/*.rs,src/**/tests.rs,src/**/tests/**/*.rs}"
       instructions: |
         Tests must not sleep; they wait with `test_util::wait_until` or for output that proves the previous step finished.
         They must never call real `gh`, Shortcut or Linear, nor use the user's shell or config.

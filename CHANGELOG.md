@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The tests that count agent work moved into their files' test modules.
 
+## 0.12.39
+
+- No changes in the app. The tests of app.rs and ui.rs moved into files of their own.
+
 ## 0.12.38
 
 - No changes in the app. The app tests share their helpers, and new tests pin what session.json and config.json look like.

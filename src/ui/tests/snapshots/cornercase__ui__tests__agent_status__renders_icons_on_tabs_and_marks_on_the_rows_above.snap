@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/agent_status.rs
+expression: render(&with_agents()).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ shop (1)              !      │  login        ! ↓2      │                                          "
+"  api (1)               ✓      │▌ ├ ◐ claude             │                                          "
+"                               │  ├ ! claude             │                                          "
+"  ▸ ● work (2)          !      │  ├ › nvim               │                                          "
+"                               │  └ + Tab                │                no tab open               "
+"  + New                        │                         │         + Tab opens a shell here         "
+"                               │  main            ✓      │                                          "
+"                               │  ├ ✓ claude             │                                          "
+"                               │  ↓ 1 more               │                                          "
+"                               │  + New workspace        │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

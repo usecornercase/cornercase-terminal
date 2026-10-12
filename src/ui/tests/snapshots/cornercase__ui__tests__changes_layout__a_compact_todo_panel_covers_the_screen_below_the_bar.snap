@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/changes_layout.rs
+expression: "render_sized(&with_todo(), 80, 18).backend()"
+---
+"                                                                                "
+"   ≡     shop › main › zsh                             ±      ▤      ☐ ●    ⌕   "
+"                                                                                "
+" TODO 2                                                         clear done   ×  "
+"                                                                                "
+"  ○  fix the login bug in safari                                                "
+"  ○  renew the domain                                                           "
+"  ✓  write docs                                                                 "
+"                                                                                "
+"  + New TODO                                                                    "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "

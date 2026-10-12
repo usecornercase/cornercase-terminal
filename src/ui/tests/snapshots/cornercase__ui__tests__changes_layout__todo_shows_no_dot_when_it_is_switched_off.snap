@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/changes_layout.rs
+expression: "render_sized(&pending(true, false), 140, 18).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                                                                  "
+"                                                         │                                                                                  "
+" Projects                      │ Workspaces              │                                                                                  "
+"                               │                         │                                                                                  "
+"▌ shop (1)                     │  main                   │                                                                                  "
+"                               │▌ ├ › zsh                │                                                                                  "
+"  + New                        │  └ + Tab                │                                                                                  "
+"                               │                         │                                                                                  "
+"                               │  + New workspace        │                                    no tab open                                   "
+"                               │                         │                             + Tab opens a shell here                             "
+"                               │                         │                                                                                  "
+"                               │                         │                                                                                  "
+"                               │                         │                                                                                  "
+"                               │                         │                                                                                  "
+" ───────────────────────────── │ ─────────────────────── │                                                                                  "
+"  Settings                     │  Issues      Changes 3  │                                                                                  "
+"  Usage                        │  Files            TODO  │                                                                                  "
+"  Quit                         │                         │                                                                                  "

@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/overlay.rs
+assertion_line: 7051
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │                         │                                          "
+"    ╭──────────────╮           │                         │                                          "
+"  + │ new worktree │           │                         │                                          "
+"    ╰──────────────╯           │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │                         │                                          "
+"  Quit                         │                         │                                          "

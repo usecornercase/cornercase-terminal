@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/picker.rs
+assertion_line: 7217
+expression: render(&with(picker(None))).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"              ╭─ New workspace ──────────────────────────────────────────────────────╮              "
+" Projects     │ › ~/projects/                                                        │              "
+"              │                                                                      │              "
+"▌ cornercase (│  ..                                                                  │              "
+"              │  cornercase                                                    main  │              "
+"  + New       │  notes                                                               │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+" ─────────────│ enter opens ~/projects                                               │              "
+"  Settings    │                                                       open   cancel  │              "
+"  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
+"  Quit                         │                         │                                          "

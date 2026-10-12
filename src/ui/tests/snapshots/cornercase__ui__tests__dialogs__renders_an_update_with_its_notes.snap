@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/dialogs.rs
+assertion_line: 6782
+expression: "render(&with(Overlay::Update(update))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"              ╭─ Update ─────────────────────────────────────────────────────────────╮              "
+" Projects     │ cornercase 9.0.0 is out (you have 0.1.0). Updating replaces          │              "
+"              │ ~/.local/bin/cornercase; your terminals keep running until you       │              "
+"▌ cornercase (│ restart.                                                             │              "
+"              │                                                                      │              "
+"  + New       │ • change 31                                                          │              "
+"              │ • change 32                                                          │              "
+"              │ • change 33                                                          │              "
+"              │ • change 34                                                          │              "
+"              │ • change 35                                                          │              "
+"              │ • change 36                                                          │              "
+"              │ • change 37                                                          │              "
+"              │ • change 38                                                          │              "
+" ─────────────│ downloading…                                                         │              "
+"  Settings    │                                                     update   cancel  │              "
+"  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
+"  Quit                         │                         │                                          "

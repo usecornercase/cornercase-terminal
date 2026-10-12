@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/tab_context.rs
+expression: "render(&codex(\"gpt-5.4\", Some(20))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ shop (1)                     │  login                  │                                          "
+"                               │▌ ├ › codex              │                                          "
+"  + New                        │▌ │   gpt-5.4 · 20%      │                                          "
+"                               │  ├ › nvim               │                                          "
+"                               │  └ + Tab                │                no tab open               "
+"                               │                         │         + Tab opens a shell here         "
+"                               │  + New workspace        │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/workspaces_column.rs
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ cornercase (1)               │  login          ↓3  ⋯ × │                                          "
+"                               │▌ ├ › claude             │                                          "
+"  + New                        │  ├ › nvim               │                                          "
+"                               │  └ + Tab                │                                          "
+"                               │                         │                no tab open               "
+"                               │  main           ↓1      │         + Tab opens a shell here         "
+"                               │  ├ › zsh                │                                          "
+"                               │  └ + Tab                │                                          "
+"                               │                         │                                          "
+"                               │  + New workspace        │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "
