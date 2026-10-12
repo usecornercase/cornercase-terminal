@@ -8369,10 +8369,6 @@ mod tests {
             app.projects.iter().filter(|p| id.is_some() && p.group == id).map(|p| p.path.clone()).collect()
         }
 
-        fn toast(app: &App) -> Option<&str> {
-            app.toast.as_ref().map(|t| t.message.as_str())
-        }
-
         #[test]
         fn a_vscode_workspace_becomes_a_group_of_its_folders() {
             let mut s = open_picker();
