@@ -24,7 +24,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 Stats contains only numbers and counting times: no prompts, replies, models, projects, paths or conversation ids. It is saved at most once a minute while changed, and flushed on shutdown and before a restart. Deleting `stats.json` with the server stopped starts counting again; a running server keeps its copy in memory.
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json`, `todos.json` and `server.log` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json`, `todos.json`, `stats.json` and `server.log` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
 
 ### With `CORNERCASE_SOCKET`
 
@@ -37,6 +37,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Session | `/tmp/cc-demo/server.json` |
 | Issue cache | `/tmp/cc-demo/issues.json` |
 | TODO list | `/tmp/cc-demo/todos.json` |
+| Agent stats | `/tmp/cc-demo/stats.json` |
 
 ### Elsewhere on disk
 

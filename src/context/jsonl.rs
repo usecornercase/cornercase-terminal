@@ -93,7 +93,7 @@ mod tests {
         std::fs::write(&path, "old\npartial").expect("old transcript");
         let since = std::fs::metadata(&path).expect("metadata").modified().expect("modified") + Duration::from_secs(1);
         let mut tail = Tail::default();
-        assert!(tail.read_since(&path, Some(since)).expect("seed").bytes.is_empty());
+        assert_eq!(tail.read_since(&path, Some(since)).expect("seed").bytes, [] as [u8; 0]);
         assert_eq!(tail.read, 11);
         let mut file = std::fs::OpenOptions::new().append(true).open(&path).expect("append");
         file.write_all(b" continuation\nnew\n").expect("records");
