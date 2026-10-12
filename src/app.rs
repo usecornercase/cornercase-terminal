@@ -5684,6 +5684,12 @@ mod tests {
         (buffer, placed)
     }
 
+    fn write_config(dir: &Path, config: &Config) -> PathBuf {
+        let path = dir.join("config.json");
+        config::save(&path, config).expect("write config");
+        path
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -5949,9 +5955,8 @@ mod tests {
 
     fn with_worktrees_config() -> (TempDir, TempDir, PathBuf) {
         let (worktrees, config) = (TempDir::new(), TempDir::new());
-        let config_path = config.path().join("config.json");
         let worktrees_dir = worktrees.path().display().to_string();
-        config::save(&config_path, &Config { worktrees_dir, ..Config::default() }).expect("write config");
+        let config_path = write_config(config.path(), &Config { worktrees_dir, ..Config::default() });
         (worktrees, config, config_path)
     }
 
@@ -7544,8 +7549,7 @@ mod tests {
             fn nothing_is_fetched_when_turned_off() {
                 let repo = git_repo(&[]);
                 let tmp = TempDir::new();
-                let config_path = tmp.path().join("config.json");
-                config::save(&config_path, &Config { fetch_minutes: 0, ..Config::default() }).expect("save config");
+                let config_path = write_config(tmp.path(), &Config { fetch_minutes: 0, ..Config::default() });
                 let (mut app, _rx) = app_in(repo.path(), config_path);
                 app.projects[0].workspaces[0].behind = 2;
 
@@ -11909,7 +11913,6 @@ rm -f "$1/sessions/$$.json"
         fn setup(git: bool, gh_script: &str) -> Setup {
             let dir = if git { git_repo(&[("README", "hi")]) } else { TempDir::new() };
             let (worktrees, config) = (TempDir::new(), TempDir::new());
-            let config_path = config.path().join("config.json");
             let gh = fake_gh(config.path(), &format!("touch \"$0.called\"\necho \"$@\" >> \"$0.args\"\n{gh_script}"));
             let agent = config.path().join("agent");
             crate::test_util::write_executable(&agent, FAKE_AGENT);
@@ -11921,7 +11924,7 @@ rm -f "$1/sessions/$$.json"
                 accept_trust_prompts: true,
                 ..Config::default()
             };
-            config::save(&config_path, &settings).expect("write config");
+            let config_path = write_config(config.path(), &settings);
             let (mut app, rx) = app_in(dir.path(), config_path);
             app.env_tokens.clear();
             Setup { app, rx, worktrees, config, _dir: dir }
@@ -13704,15 +13707,13 @@ rm -f "$1/sessions/$$.json"
                     "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\nIFS= read -r line\n",
                 );
                 write_executable(&editor, "#!/bin/sh\nprintf '%s\n' \"$PWD\" \"$@\" > editor-got\nIFS= read -r line\n");
-                let config_path = scripts.path().join("config.json");
-                config::save(
-                    &config_path,
+                let config_path = write_config(
+                    scripts.path(),
                     &Config {
                         agent_commands: [("fake".into(), agent.display().to_string())].into(),
                         ..Config::default()
                     },
-                )
-                .expect("config");
+                );
                 let (mut app, rx) = app_in(second.path(), config_path);
                 app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
                 wait_until("the agent runs", || {
@@ -13943,12 +13944,11 @@ rm -f "$1/sessions/$$.json"
             let config = TempDir::new();
             let agent = config.path().join("agent");
             write_executable(&agent, "#!/bin/sh\nIFS= read -r line\nprintf '%s' \"$line\" > got\n");
-            let config_path = config.path().join("config.json");
             let settings = Config {
                 agent_commands: [("fake".to_string(), agent.display().to_string())].into(),
                 ..Config::default()
             };
-            config::save(&config_path, &settings).expect("save config");
+            let config_path = write_config(config.path(), &settings);
             let (mut app, rx) = app_in(repo.path(), config_path);
             app.term_mut().expect("pane").write(format!("exec {}\n", agent.display()).as_bytes());
             wait_until("the agent runs", || {
@@ -16041,8 +16041,7 @@ rm -f "$s"
                         agent_args: [("claude".to_string(), vec![dir.path().display().to_string()])].into(),
                         ..Config::default()
                     };
-                    let config_path = config.path().join("config.json");
-                    config::save(&config_path, &settings).expect("write config");
+                    let config_path = write_config(config.path(), &settings);
                     let (mut app, rx) = app_in(project.path(), config_path);
                     app.claude_dir = Some(dir.path().to_path_buf());
                     Self { app, rx, dir, _config: config, _project: project }
