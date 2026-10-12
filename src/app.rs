@@ -5709,6 +5709,13 @@ mod tests {
         server
     }
 
+    fn closing_last_tab() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (mut app, rx, dirs) = app_with(1);
+        click_close(&mut app, WorkspaceRow::Tab(0, 0));
+        pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+        (app, rx, dirs)
+    }
+
     const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
     fn areas() -> ui::Areas {
@@ -6707,9 +6714,7 @@ mod tests {
 
         #[test]
         fn without_tabs_the_confirmation_stops_nothing() {
-            let (mut app, rx, _dirs) = app_with(1);
-            click_close(&mut app, WorkspaceRow::Tab(0, 0));
-            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            let (mut app, _rx, _dirs) = closing_last_tab();
             new_group(&mut app, "work");
             let work = group_label(&app, 0);
             move_to(&mut app, 0, &work);
@@ -6919,9 +6924,7 @@ mod tests {
 
         #[test]
         fn without_tabs_the_confirmation_only_asks() {
-            let (mut app, rx, _dirs) = app_with(1);
-            click_close(&mut app, WorkspaceRow::Tab(0, 0));
-            pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.is_empty());
+            let (mut app, _rx, _dirs) = closing_last_tab();
 
             ask_to_close(&mut app, 0);
 
