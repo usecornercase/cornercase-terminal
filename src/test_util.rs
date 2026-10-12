@@ -194,6 +194,13 @@ pub fn write_executable(path: &Path, contents: &str) {
     assert!(child.wait().expect("wait for sh").success(), "failed to write {}", path.display());
 }
 
+fn append(path: &Path, text: &str) -> std::fs::File {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new().append(true).open(path).expect("open agent records");
+    file.write_all(text.as_bytes()).expect("append agent records");
+    file
+}
+
 const TITLE_SIGNAL: &str = r#"if mv "$2/title" "$2/.shown" 2>/dev/null; then
     printf '\033]0;%s\007' "$(cat "$2/.shown")"
   fi"#;
@@ -368,9 +375,7 @@ done
     }
 
     pub fn append(&self, text: &str) {
-        use std::io::Write;
-        let mut file = std::fs::OpenOptions::new().append(true).open(&self.rollout).expect("open rollout");
-        file.write_all(text.as_bytes()).expect("append rollout");
+        append(&self.rollout, text);
     }
 
     pub fn serve(&self, cwd: &Path) -> Running {
@@ -481,9 +486,7 @@ done
     }
 
     pub fn append(&self, text: &str) {
-        use std::io::Write;
-        let mut file = std::fs::OpenOptions::new().append(true).open(&self.session).expect("open Gemini session");
-        file.write_all(text.as_bytes()).expect("append Gemini records");
+        let file = append(&self.session, text);
         file.set_modified(std::time::SystemTime::now()).expect("set the write time");
     }
 
