@@ -14765,6 +14765,18 @@ rm -f "$1/sessions/$$.json"
         }
 
         #[test]
+        fn a_drag_of_the_panel_border_takes_esc_first_and_puts_the_pointer_back() {
+            let (mut app, _rx, _repo) = with_cat();
+            open(&mut app, Side::Todo);
+            let r = app.layout(AREA).border(ui::Border::Changes);
+            press(&mut app, Position::new(r.x, r.y + 1));
+            mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, r.y + 1));
+            assert_eq!(app.pointer(AREA), pointer::Shape::Columns);
+            esc(&mut app);
+            assert_eq!((app.resizing, app.panel_shown(), app.pointer(AREA)), (None, true, pointer::Shape::Default));
+        }
+
+        #[test]
         fn a_menu_takes_esc_first() {
             let (mut app, _rx, _repo) = with_cat();
             open(&mut app, Side::Todo);
