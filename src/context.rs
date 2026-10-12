@@ -7,8 +7,6 @@ use serde_json::Value;
 
 use crate::activity::Claude;
 use crate::agents;
-#[cfg(test)]
-use crate::log::Stamp;
 use crate::process;
 
 mod codex;
@@ -622,6 +620,7 @@ mod tests {
 
     use super::*;
     use crate::activity::Session;
+    use crate::log::Stamp;
     use crate::test_util::{Sleeper, TempDir};
 
     fn assistant(model: &str, input: u64, created: u64, read: u64) -> String {
@@ -1244,114 +1243,114 @@ mod tests {
             assert_eq!(pane.prompted(), Stamp::parse("2026-10-08T20:23:15.694Z"));
         }
     }
-}
 
-#[cfg(test)]
-mod counting_records {
-    use super::*;
-    use crate::context::counting::tests::{since, sum};
-    use crate::test_util::{TempDir, wait_until};
+    #[expect(unused_qualifications, reason = "preserve the existing test bodies when nesting this module")]
+    mod counting_records {
+        use super::*;
+        use crate::context::counting::tests::{since, sum};
+        use crate::test_util::{TempDir, wait_until};
 
-    const FIXTURE: &str = crate::test_util::fixture!("claude/2.1.296/usage.jsonl");
+        const FIXTURE: &str = crate::test_util::fixture!("claude/2.1.296/usage.jsonl");
 
-    #[rstest::rstest]
-    #[case::reply(r#"{"type":"assistant","message":{"usage":{"output_tokens":1}}}"#, true)]
-    #[case::typed(r#"{"type":"user", "origin": {"kind":"human"}}"#, true)]
-    #[case::absorbed(r#"{"type":"attachment","attachment":{"type":"queued_command"}}"#, true)]
-    #[case::queued(r#"{"type":"queue-operation", "operation": "enqueue"}"#, true)]
-    #[case::slash(r#"{"type":"system","content":"<command-name>/synthetic"}"#, true)]
-    #[case::shell(r#"{"type":"user","message":{"content":"<bash-input>synthetic"}}"#, true)]
-    #[case::compacted(r#"{"type":"system","subtype":"compact_boundary"}"#, true)]
-    #[case::tool_result(
-        r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"synthetic"}]}}"#,
-        false
-    )]
-    #[case::tool_input(
-        r#"{"type":"assistant","message":{"content":[{"type":"tool_use","input":{"content":"synthetic"}}]}}"#,
-        false
-    )]
-    #[case::metadata(r#"{"type":"file-history-snapshot","snapshot":{}}"#, false)]
-    fn only_lines_that_can_change_context_or_counts_reach_json_parsing(#[case] line: &str, #[case] relevant: bool) {
-        assert_eq!(relevant_claude(line), relevant);
-        assert_eq!(claude_entry(line.as_bytes()).is_some(), relevant);
-        let large = line.replace("synthetic", &"x".repeat(300_000));
-        assert_eq!(claude_entry(large.as_bytes()).is_some(), relevant);
-    }
+        #[rstest::rstest]
+        #[case::reply(r#"{"type":"assistant","message":{"usage":{"output_tokens":1}}}"#, true)]
+        #[case::typed(r#"{"type":"user", "origin": {"kind":"human"}}"#, true)]
+        #[case::absorbed(r#"{"type":"attachment","attachment":{"type":"queued_command"}}"#, true)]
+        #[case::queued(r#"{"type":"queue-operation", "operation": "enqueue"}"#, true)]
+        #[case::slash(r#"{"type":"system","content":"<command-name>/synthetic"}"#, true)]
+        #[case::shell(r#"{"type":"user","message":{"content":"<bash-input>synthetic"}}"#, true)]
+        #[case::compacted(r#"{"type":"system","subtype":"compact_boundary"}"#, true)]
+        #[case::tool_result(
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"synthetic"}]}}"#,
+            false
+        )]
+        #[case::tool_input(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","input":{"content":"synthetic"}}]}}"#,
+            false
+        )]
+        #[case::metadata(r#"{"type":"file-history-snapshot","snapshot":{}}"#, false)]
+        fn only_lines_that_can_change_context_or_counts_reach_json_parsing(#[case] line: &str, #[case] relevant: bool) {
+            assert_eq!(relevant_claude(line), relevant);
+            assert_eq!(claude_entry(line.as_bytes()).is_some(), relevant);
+            let large = line.replace("synthetic", &"x".repeat(300_000));
+            assert_eq!(claude_entry(large.as_bytes()).is_some(), relevant);
+        }
 
-    #[test]
-    fn repeated_message_usage_and_conversation_resets_count_once() {
-        let mut ledger = Ledger::default();
-        let records: Vec<_> = FIXTURE
-            .lines()
-            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-            .filter_map(|entry| counted_claude(&entry, true))
-            .collect();
-        ledger.apply("a", since(), records.clone());
-        assert_eq!(
-            sum(ledger.take()),
-            (2, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
-        );
-        ledger.apply("clear", since(), Vec::new());
-        ledger.apply("a", since(), records);
-        assert_eq!(sum(ledger.take()), (0, crate::stats::Tokens::default()));
-        assert!(
-            counted_claude(
-                &serde_json::json!({"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}),
-                true
+        #[test]
+        fn repeated_message_usage_and_conversation_resets_count_once() {
+            let mut ledger = Ledger::default();
+            let records: Vec<_> = FIXTURE
+                .lines()
+                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                .filter_map(|entry| counted_claude(&entry, true))
+                .collect();
+            ledger.apply("a", since(), records.clone());
+            assert_eq!(
+                sum(ledger.take()),
+                (2, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
+            );
+            ledger.apply("clear", since(), Vec::new());
+            ledger.apply("a", since(), records);
+            assert_eq!(sum(ledger.take()), (0, crate::stats::Tokens::default()));
+            assert!(
+                counted_claude(
+                    &serde_json::json!({"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}),
+                    true
+                )
+                .is_none()
+            );
+        }
+
+        #[test]
+        fn absorbed_and_dequeued_human_prompts_each_count_once() {
+            let fixture = crate::test_util::fixture!("claude/2.1.296/queued-prompts.jsonl");
+            let records: Vec<_> = fixture
+                .lines()
+                .map(|line| serde_json::from_str::<Value>(line).expect("entry"))
+                .filter_map(|entry| counted_claude(&entry, true))
+                .collect();
+            assert_eq!(records.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["absorbed", "dequeued"]);
+            let mut ledger = Ledger::default();
+            ledger.apply("queue", since(), records.clone());
+            assert_eq!(sum(ledger.take()).0, 2);
+            ledger.apply("queue", since(), records);
+            assert_eq!(sum(ledger.take()).0, 0);
+        }
+
+        #[test]
+        fn a_subagent_adds_tokens_through_its_own_incremental_tail() {
+            let dir = TempDir::new();
+            let cwd = dir.path().join("synthetic");
+            let transcript = transcript_path(dir.path(), &cwd, "session").expect("path");
+            let sub = transcript.with_extension("").join("subagents/agent-synthetic.jsonl");
+            std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
+            std::fs::write(&transcript, FIXTURE).expect("transcript");
+            std::fs::write(&sub, crate::test_util::fixture!("claude/2.1.296/subagent.jsonl")).expect("subagent");
+            let session = crate::activity::Session::parse(
+                &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
+                1,
             )
-            .is_none()
-        );
-    }
-
-    #[test]
-    fn absorbed_and_dequeued_human_prompts_each_count_once() {
-        let fixture = crate::test_util::fixture!("claude/2.1.296/queued-prompts.jsonl");
-        let records: Vec<_> = fixture
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).expect("entry"))
-            .filter_map(|entry| counted_claude(&entry, true))
-            .collect();
-        assert_eq!(records.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["absorbed", "dequeued"]);
-        let mut ledger = Ledger::default();
-        ledger.apply("queue", since(), records.clone());
-        assert_eq!(sum(ledger.take()).0, 2);
-        ledger.apply("queue", since(), records);
-        assert_eq!(sum(ledger.take()).0, 0);
-    }
-
-    #[test]
-    fn a_subagent_adds_tokens_through_its_own_incremental_tail() {
-        let dir = TempDir::new();
-        let cwd = dir.path().join("synthetic");
-        let transcript = transcript_path(dir.path(), &cwd, "session").expect("path");
-        let sub = transcript.with_extension("").join("subagents/agent-synthetic.jsonl");
-        std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
-        std::fs::write(&transcript, FIXTURE).expect("transcript");
-        std::fs::write(&sub, crate::test_util::fixture!("claude/2.1.296/subagent.jsonl")).expect("subagent");
-        let session = crate::activity::Session::parse(
-            &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
-            1,
-        )
-        .expect("session");
-        let claude = Claude { pid: 1, args: Vec::new(), session: Some(session) };
-        let mut pane = Pane { agent: Some((1, since())), kind: Some(agents::CLAUDE), ..Pane::default() };
-        let mut output = 0;
-        wait_until("subagent usage", || {
+            .expect("session");
+            let claude = Claude { pid: 1, args: Vec::new(), session: Some(session) };
+            let mut pane = Pane { agent: Some((1, since())), kind: Some(agents::CLAUDE), ..Pane::default() };
+            let mut output = 0;
+            wait_until("subagent usage", || {
+                pane.update(Some(dir.path()), Some(&claude));
+                output += sum(pane.take_counted()).1.out;
+                output == 100
+            });
             pane.update(Some(dir.path()), Some(&claude));
-            output += sum(pane.take_counted()).1.out;
-            output == 100
-        });
-        pane.update(Some(dir.path()), Some(&claude));
-        assert_eq!(sum(pane.take_counted()).1.out, 0);
-        let cleared = transcript_path(dir.path(), &cwd, "clear-session").expect("path");
-        std::fs::write(cleared, "").expect("clear transcript");
-        let session = crate::activity::Session::parse(
-            &serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
-            1,
-        )
-        .expect("clear session");
-        pane.update(Some(dir.path()), Some(&Claude { pid: 1, args: Vec::new(), session: Some(session) }));
-        pane.update(Some(dir.path()), Some(&claude));
-        assert_eq!(sum(pane.take_counted()).1.out, 0);
+            assert_eq!(sum(pane.take_counted()).1.out, 0);
+            let cleared = transcript_path(dir.path(), &cwd, "clear-session").expect("path");
+            std::fs::write(cleared, "").expect("clear transcript");
+            let session = crate::activity::Session::parse(
+                &serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
+                1,
+            )
+            .expect("clear session");
+            pane.update(Some(dir.path()), Some(&Claude { pid: 1, args: Vec::new(), session: Some(session) }));
+            pane.update(Some(dir.path()), Some(&claude));
+            assert_eq!(sum(pane.take_counted()).1.out, 0);
+        }
     }
 }

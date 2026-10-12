@@ -626,29 +626,31 @@ mod tests {
         drop(second);
         assert_eq!(rollout_path(agent.pid(), since), Some(fake.rollout.clone()));
     }
-}
 
-#[cfg(test)]
-mod counting_records {
-    use super::*;
-    use crate::context::counting::{
-        Ledger,
-        tests::{since, sum},
-    };
+    mod counting_records {
+        use super::*;
+        use crate::context::counting::{
+            Ledger,
+            tests::{since, sum},
+        };
 
-    #[test]
-    fn cumulative_usage_adds_deltas_and_smaller_totals_start_a_new_baseline() {
-        let records: Vec<_> = crate::test_util::fixture!("codex/0.160.0/usage.jsonl")
-            .lines()
-            .filter_map(|s| counted(&serde_json::from_str(s).expect("record")))
-            .collect();
-        let mut ledger = Ledger::default();
-        ledger.apply("thread", since(), records.clone());
-        assert_eq!(sum(ledger.take()).1, crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 });
-        ledger.apply("thread", since(), records.clone());
-        assert_eq!(sum(ledger.take()).1.out, 0);
-        let mut first = Ledger::default();
-        first.apply("thread", since(), records.into_iter().skip(1).take(1));
-        assert_eq!(sum(first.take()).1.out, 50);
+        #[test]
+        fn cumulative_usage_adds_deltas_and_smaller_totals_start_a_new_baseline() {
+            let records: Vec<_> = crate::test_util::fixture!("codex/0.160.0/usage.jsonl")
+                .lines()
+                .filter_map(|s| counted(&serde_json::from_str(s).expect("record")))
+                .collect();
+            let mut ledger = Ledger::default();
+            ledger.apply("thread", since(), records.clone());
+            assert_eq!(
+                sum(ledger.take()).1,
+                crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 }
+            );
+            ledger.apply("thread", since(), records.clone());
+            assert_eq!(sum(ledger.take()).1.out, 0);
+            let mut first = Ledger::default();
+            first.apply("thread", since(), records.into_iter().skip(1).take(1));
+            assert_eq!(sum(first.take()).1.out, 50);
+        }
     }
 }
