@@ -16798,6 +16798,12 @@ mod tests {
             use super::*;
             use crate::test_util::git;
 
+            fn removing_workspace(app: &mut App, rx: &Receiver<AppEvent>) -> u64 {
+                let (id, _) = made(app, rx);
+                app.start_removal(app.projects[0].id, id, false, false, None);
+                id
+            }
+
             fn repo() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
                 let repo = git_repo(&[("README", "hi")]);
                 let (worktrees, config, config_path) = with_worktrees_config();
@@ -16853,8 +16859,7 @@ mod tests {
             #[test]
             fn a_worktree_already_being_removed_is_refused() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
-                let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, false, None);
+                let id = removing_workspace(&mut app, &rx);
 
                 let message = error(now(&mut app, None, remove(id)));
 
@@ -16864,8 +16869,7 @@ mod tests {
             #[test]
             fn no_tab_opens_in_a_worktree_being_removed() {
                 let (mut app, rx, _repo, _worktrees, _config) = repo();
-                let (id, _) = made(&mut app, &rx);
-                app.start_removal(app.projects[0].id, id, false, false, None);
+                let id = removing_workspace(&mut app, &rx);
 
                 let new = wire::NewTab { workspace: Some(id), ..wire::NewTab::default() };
                 let message = error(now(&mut app, None, Command::NewTab(new)));
