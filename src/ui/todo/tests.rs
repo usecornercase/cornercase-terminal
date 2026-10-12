@@ -142,7 +142,7 @@ mod drawing {
         let t = render(&v, Some(r.as_position()));
         let x = delete(r);
         assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].symbol(), "×");
-        assert_eq!(t.backend().buffer()[(r.x, r.y)].bg, crate::ui::DARK_HOVER);
+        assert_eq!(t.backend().buffer()[(r.x, r.y)].bg, crate::ui::theme::DARK_HOVER);
     }
 
     #[test]

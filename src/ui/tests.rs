@@ -1,10 +1,31 @@
+use std::collections::HashMap;
+use std::path::Path;
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::text::{Line, Span};
 use rstest::rstest;
 
+use super::agents_section::draw_agent;
+use super::chrome::{ISSUES_LABEL, SEARCH_ICON, SEARCH_PLACEHOLDER};
+use super::dialog::form::form_rows;
+use super::dialog::group_style::ICON_CELL;
+use super::dialog::issues::issues_rows;
+use super::dialog::picker::picker_rows;
+use super::dialog::usage::usage_rows;
+use super::dialog::{INPUT_PROMPT, list_item, tabs_in};
+use super::drop::landed;
+use super::layout::{COMPACT_BUTTON_WIDTH, HEADER_HEIGHT};
+use super::pane::TAGLINE;
+use super::rows::{Band, CLOSE_BUTTON_WIDTH, COMPACT_CLOSE_WIDTH, MENU_BUTTON_WIDTH, MIN_MENU_ROW_WIDTH};
+use super::theme::{DARK_HOVER, DARK_LINE, DARK_SURFACE, LIGHT_HOVER, LIGHT_SURFACE, WAITING_COLOR};
+use super::workspaces::{GB, MB, draw_tab_band, memory_size};
 use super::*;
 use crate::emulator::Emulator;
+use crate::emulator::Snapshot;
 use crate::host_theme::HostTheme;
+use crate::split::{Node, Place};
+use crate::usage::Severity;
 
 const W: u16 = 100;
 const H: u16 = 18;
