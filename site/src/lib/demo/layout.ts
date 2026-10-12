@@ -374,9 +374,22 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
 }
 
 export const TODO_LABEL = 'TODO';
-const todoButton = (row: Rect): Rect => intersect(rect(right(row) - TODO_LABEL.length - 3, row.y, TODO_LABEL.length + 2, 1), row);
+export const TODO_DOT = '●';
+const TODO_ROOM = `${TODO_LABEL} ${TODO_DOT}`;
+const rightButton = (row: Rect, label: string): Rect => intersect(rect(right(row) - [...label].length - 3, row.y, [...label].length + 2, 1), row);
 export const FILES_LABEL = 'Files';
 const filesButton = (row: Rect): Rect => intersect(rect(row.x + 1, row.y, FILES_LABEL.length + 2, 1), row);
+const todoButton = (row: Rect): Rect => {
+  const reserved = rightButton(row, TODO_ROOM);
+  return reserved.x > right(filesButton(row)) ? reserved : rightButton(row, TODO_LABEL);
+};
+
+export function todoArea(areas: Areas, dot: boolean): Rect {
+  const r = areas.todoButton;
+  if (dot || areas.compact) return r;
+  const w = Math.min(TODO_LABEL.length + 2, r.w);
+  return rect(right(r) - w, r.y, w, r.h);
+}
 
 export const stackedWidth = (w: Widths, total: number): number =>
   Math.max(MIN_COLUMN_WIDTH, Math.min(w.projects, Math.max(0, total - (PANE_PADDING + MIN_PANE_WIDTH))));

@@ -67,6 +67,8 @@ const CHANGES_ICON: &str = "±";
 const TODO_ICON: &str = "☐";
 const FILES_ICON: &str = "▤";
 pub const TODO_LABEL: &str = "TODO";
+const TODO_DOT: &str = "●";
+const TODO_ROOM: &str = "TODO ●";
 const UNDO_LABEL: &str = "undo";
 const MOVE_LABEL: &str = "move here";
 const SWAP_LABEL: &str = "swap";
@@ -394,6 +396,15 @@ impl Areas {
         !self.bar.is_empty()
     }
 
+    pub fn todo(&self, dot: bool) -> Rect {
+        let r = self.todo_button;
+        if dot || self.compact() {
+            return r;
+        }
+        let width = button_width(TODO_LABEL).min(r.width);
+        Rect { x: r.right() - width, width, ..r }
+    }
+
     #[must_use]
     pub fn with_tab_bar(self, shown: bool) -> Self {
         if !shown || self.compact() {
@@ -574,7 +585,7 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool) -> Areas {
         changes: Rect::default(),
         changes_border: Rect::default(),
         changes_button: Rect::default(),
-        todo_button: changes_button(todo, TODO_LABEL),
+        todo_button: todo_button(todo),
         files_button: files_button(todo),
         ..agents_areas
     }
@@ -610,7 +621,7 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool) -> (Areas, Re
         results,
         pane,
         projects_border: right_edge(column),
-        todo_button: changes_button(todo, TODO_LABEL),
+        todo_button: todo_button(todo),
         files_button: files_button(todo),
         ..Areas::default()
     };
@@ -1613,6 +1624,11 @@ pub fn changes_button(issues: Rect, label: &str) -> Rect {
     Rect { x: issues.right().saturating_sub(width + 1), width, ..issues }.intersection(issues)
 }
 
+fn todo_button(row: Rect) -> Rect {
+    let reserved = changes_button(row, TODO_ROOM);
+    if reserved.x > files_button(row).right() { reserved } else { changes_button(row, TODO_LABEL) }
+}
+
 pub fn files_button(row: Rect) -> Rect {
     Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
 }
@@ -2484,6 +2500,8 @@ pub struct View<'a> {
     pub changes: Option<changes::View>,
     pub changes_button: Option<ChangesButton>,
     pub todo: Option<todo::View>,
+    pub todo_dot: bool,
+    pub todo_pending: bool,
     pub files: Option<files::View>,
     pub attention: Option<Status>,
     pub drag: Option<Drag>,
@@ -3631,8 +3649,9 @@ fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     let r = areas.todo_button;
     let mut right = areas.search_button.width + r.width;
-    let style = if view.todo.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
-    draw_band(f, r, Span::styled(centered(TODO_ICON, r.width), style), style);
+    let lit = view.todo.is_some() || sidebar_hovered(view, r);
+    let style = if lit { pressed } else { surface.fg(view.muted) };
+    draw_band(f, r, todo_icon(view.todo_dot && view.todo_pending, r.width, style), style);
     if view.has_project {
         let r = areas.files_button;
         right += r.width;
@@ -3948,7 +3967,7 @@ fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
         draw_panel_button(f, view, changes_button(areas.issues, &button.label), &button.label, button.open);
     }
     if !areas.compact() {
-        draw_panel_button(f, view, areas.todo_button, TODO_LABEL, view.todo.is_some());
+        draw_todo_button(f, view, areas.todo(view.todo_dot));
         draw_panel_button(f, view, areas.files_button, files::LABEL, view.files.is_some());
     }
 }
@@ -3960,6 +3979,39 @@ fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: boo
         Style::default().fg(view.muted)
     };
     draw_button(f, r, "", label, button_style(view, r, idle, Color::Cyan));
+}
+
+fn draw_todo_button(f: &mut Frame, view: &View, r: Rect) {
+    if !view.todo_dot || r.width < button_width(TODO_ROOM) {
+        draw_panel_button(f, view, r, TODO_LABEL, view.todo.is_some());
+        return;
+    }
+    let idle = if view.todo.is_some() {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(view.muted)
+    };
+    let style = button_style(view, r, idle, Color::Cyan);
+    let dot = if view.todo_pending { TODO_DOT } else { " " };
+    let dot_style = if sidebar_hovered(view, r) { style } else { Style::default().fg(view.muted) };
+    let line = Line::from(vec![
+        Span::styled(format!(" {TODO_LABEL} "), style),
+        Span::styled(dot, dot_style),
+        Span::styled(" ", style),
+    ]);
+    f.render_widget(Paragraph::new(line), middle(r));
+}
+
+fn todo_icon(pending: bool, width: u16, style: Style) -> Line<'static> {
+    if !pending {
+        return Line::from(Span::styled(centered(TODO_ICON, width), style));
+    }
+    let width = usize::from(width);
+    let left = width.saturating_sub(1) / 2;
+    Line::from(Span::styled(
+        format!("{}{TODO_ICON} {TODO_DOT}{}", " ".repeat(left), " ".repeat(width.saturating_sub(left + 3))),
+        style,
+    ))
 }
 
 fn draw_details(
@@ -4452,6 +4504,8 @@ mod tests {
             changes: None,
             changes_button: None,
             todo: None,
+            todo_dot: true,
+            todo_pending: false,
             files: None,
             attention: None,
             drag: None,
@@ -4650,7 +4704,56 @@ mod tests {
                 muted: Color::DarkGray,
                 drag: None,
             };
-            View { changes: None, todo: Some(panel), ..with_panel() }
+            View { changes: None, todo: Some(panel), todo_pending: true, ..with_panel() }
+        }
+
+        fn pending(pending: bool, dot: bool) -> View<'static> {
+            View { changes: None, todo_pending: pending, todo_dot: dot, ..with_panel() }
+        }
+
+        #[test]
+        fn todo_shows_a_dot_while_items_are_pending() {
+            insta::assert_snapshot!(render_sized(&pending(true, true), 140, 18).backend());
+        }
+
+        #[test]
+        fn todo_shows_no_dot_when_nothing_is_pending() {
+            insta::assert_snapshot!(render_sized(&pending(false, true), 140, 18).backend());
+        }
+
+        #[test]
+        fn todo_shows_no_dot_when_it_is_switched_off() {
+            insta::assert_snapshot!(render_sized(&pending(true, false), 140, 18).backend());
+        }
+
+        #[test]
+        fn the_compact_todo_button_shows_a_dot_while_items_are_pending() {
+            insta::assert_snapshot!(render_sized(&pending(true, true), 80, 18).backend());
+        }
+
+        #[test]
+        fn the_compact_todo_button_shows_no_dot_when_nothing_is_pending() {
+            insta::assert_snapshot!(render_sized(&pending(false, true), 80, 18).backend());
+        }
+
+        #[test]
+        fn the_dot_is_muted_and_keeps_the_button_in_place() {
+            let area = Rect::new(0, 0, 140, 18);
+            let r = layout(area, Widths::default()).todo(true);
+            let with = render_sized(&pending(true, true), 140, 18);
+            let without = render_sized(&pending(false, true), 140, 18);
+            let row = Rect { y: r.y, height: 1, ..r };
+            let dot = with.backend().buffer()[(r.right() - 2, r.y)].clone();
+            assert_eq!(
+                (row_text(&with, row), row_text(&without, row), dot.fg),
+                (" TODO ● ".to_string(), " TODO   ".to_string(), Color::DarkGray)
+            );
+        }
+
+        #[test]
+        fn switched_off_the_button_is_as_wide_as_its_label() {
+            let a = layout(Rect::new(0, 0, 140, 18), Widths::default());
+            assert_eq!((a.todo(false).right(), a.todo(false).width, a.todo(true).width), (a.todo_button.right(), 6, 8));
         }
 
         #[test]

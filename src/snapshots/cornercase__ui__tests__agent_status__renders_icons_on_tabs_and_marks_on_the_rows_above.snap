@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 6279
 expression: render(&with_agents()).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,5 +18,5 @@ expression: render(&with_agents()).backend()
 "                               │  + New workspace        │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

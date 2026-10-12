@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 6480
 expression: "render(&codex(\"gpt-5.4\", Some(20))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,5 +18,5 @@ expression: "render(&codex(\"gpt-5.4\", Some(20))).backend()"
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

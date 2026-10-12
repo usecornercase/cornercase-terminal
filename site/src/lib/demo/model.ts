@@ -167,6 +167,7 @@ export interface Config {
   tabs: string;
   agentsSection: boolean;
   counts: boolean;
+  todoDot: boolean;
   dim: boolean;
   model: boolean;
   context: boolean;
@@ -197,6 +198,7 @@ export const defaultConfig = (): Config => ({
   tabs: 'sidebar',
   agentsSection: false,
   counts: true,
+  todoDot: true,
   dim: true,
   model: true,
   context: true,

@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 5577
 expression: "render_sized(&grouped(0, true), W, TALL).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -23,5 +22,5 @@ expression: "render_sized(&grouped(0, true), W, TALL).backend()"
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

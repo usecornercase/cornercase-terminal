@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 8436
 expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -31,5 +30,5 @@ expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height
 "  ↓ 1 more                     │                         │                                          "
 " ───────────────────────────── │ ─────────────────────── │                                          "
 "  Settings                     │  Issues                 │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

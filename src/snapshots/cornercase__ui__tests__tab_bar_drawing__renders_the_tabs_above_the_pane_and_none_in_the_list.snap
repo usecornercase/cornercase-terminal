@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 8519
 expression: render(&with_bar()).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │  ◐ claude      › zsh      +              "
@@ -19,5 +18,5 @@ expression: render(&with_bar()).backend()
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

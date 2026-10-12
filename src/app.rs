@@ -1998,7 +1998,11 @@ impl App {
             Some(label) => ui::changes_button(areas.issues, &label),
             None => Rect::default(),
         };
-        let todo = if areas.compact() || self.project().is_some() { areas.todo_button } else { Rect::default() };
+        let todo = if areas.compact() || self.project().is_some() {
+            areas.todo(self.config.todo_dot)
+        } else {
+            Rect::default()
+        };
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
@@ -4729,6 +4733,8 @@ impl App {
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
             todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            todo_dot: self.config.todo_dot,
+            todo_pending: self.todos.pending() > 0,
             files,
             attention,
             drag,
@@ -14575,6 +14581,40 @@ rm -f "$1/sessions/$$.json"
             assert_eq!((texts(&app), toast(&app)), (vec!["c".into()], Some("cleared 2 done")));
             undo(&mut app, "cleared 2 done");
             assert_eq!(texts(&app), ["c", "[x] a", "[x] b"]);
+        }
+
+        fn todo_button(app: &mut App) -> String {
+            let open = std::mem::replace(&mut app.todo.open, false);
+            let r = app.layout(AREA).todo(app.config.todo_dot);
+            let mut t =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(AREA.width, AREA.height)).expect("backend");
+            t.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+            app.todo.open = open;
+            (r.x..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
+        }
+
+        #[test]
+        fn the_button_shows_a_dot_while_items_are_pending() {
+            let (mut app, _rx, _dirs) = opened();
+            let mut seen = vec![todo_button(&mut app)];
+            add(&mut app, &["a"]);
+            seen.push(todo_button(&mut app));
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            seen.push(todo_button(&mut app));
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            seen.push(todo_button(&mut app));
+            tap(&mut app, |a| panel::check(item_row(a, 0)));
+            tap(&mut app, |a| panel::clear_done(panel_area(a), &view(a)));
+            seen.push(todo_button(&mut app));
+            assert_eq!(seen, [" TODO   ", " TODO ● ", " TODO   ", " TODO ● ", " TODO   "]);
+        }
+
+        #[test]
+        fn switched_off_the_button_shows_no_dot() {
+            let (mut app, _rx, _dirs) = opened();
+            add(&mut app, &["a"]);
+            app.config.todo_dot = false;
+            assert_eq!(todo_button(&mut app), " TODO ");
         }
 
         #[test]

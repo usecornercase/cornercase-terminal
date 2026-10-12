@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 4569
 expression: "render_sized(&with_todo(), 140, 18).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          │ TODO 2                clear done   ×  "
@@ -19,5 +18,5 @@ expression: "render_sized(&with_todo(), 140, 18).backend()"
 "                               │                         │                                          │                                       "
 " ───────────────────────────── │ ─────────────────────── │                                          │                                       "
 "  Settings                     │  Issues      Changes 3  │                                          │                                       "
-"  Usage                        │  Files            TODO  │                                          │                                       "
+"  Usage                        │  Files          TODO ●  │                                          │                                       "
 "  Quit                         │                         │                                          │                                       "

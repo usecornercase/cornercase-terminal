@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 6170
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,5 +18,5 @@ expression: render(&v).backend()
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
-"  Usage                        │  Files            TODO  │                                          "
+"  Usage                        │  Files          TODO    │                                          "
 "  Quit                         │                         │                                          "

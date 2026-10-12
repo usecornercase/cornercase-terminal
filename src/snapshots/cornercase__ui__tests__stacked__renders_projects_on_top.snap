@@ -1,6 +1,5 @@
 ---
 source: src/ui.rs
-assertion_line: 4977
 expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -29,7 +28,7 @@ expression: "render_sized(&with_lists(Sidebar::ProjectsOnTop), W, TALL.height).b
 "  + New workspace              │                                                                    "
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
-"  Files                  TODO  │                                                                    "
+"  Files                TODO    │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "

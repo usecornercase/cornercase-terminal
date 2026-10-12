@@ -88,6 +88,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
 | **agents section** | List every Claude Code, Codex, Gemini CLI and opencode, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a collapsed group holds. On by default. |
+| **TODO dot** | Show a grey `●` next to the [TODO](../../guides/todo/) button while items are left to do. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
 | **model** | Show the model of a Claude Code, Codex, Gemini CLI or opencode tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
@@ -147,6 +148,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "tabs": "sidebar",
   "agents_section": false,
   "counts": true,
+  "todo_dot": true,
   "dim_inactive_panes": true,
   "prefix_key": "",
   "model": true,
@@ -185,6 +187,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`tabs`](#tabs) | string | `"sidebar"` |
 | [`agents_section`](#agents_section) | boolean | `false` |
 | [`counts`](#counts) | boolean | `true` |
+| [`todo_dot`](#todo_dot) | boolean | `true` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
 | [`prefix_key`](#prefix_key) | string | `""` |
 | [`model`](#model) | boolean | `true` |
@@ -292,6 +295,10 @@ Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI and
 #### `counts`
 
 Whether a project shows how many workspaces it has after its name, such as `(3)`, and a collapsed group how many projects it holds.
+
+#### `todo_dot`
+
+Whether the **`TODO`** button shows a grey `●` while at least one item is left to do (`☐ ●` in the compact layout's top bar). It never shows a number, and goes away once every item is done or the list is empty. See [TODO list](../../guides/todo/#open-and-close-it).
 
 #### `dim_inactive_panes`
 

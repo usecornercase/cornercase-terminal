@@ -1,10 +1,9 @@
 ---
 source: src/ui.rs
-assertion_line: 4562
 expression: "render_sized(&with_todo(), 80, 18).backend()"
 ---
 "                                                                                "
-"   ≡     shop › main › zsh                             ±      ▤      ☐      ⌕   "
+"   ≡     shop › main › zsh                             ±      ▤      ☐ ●    ⌕   "
 "                                                                                "
 " TODO 2                                                         clear done   ×  "
 "                                                                                "

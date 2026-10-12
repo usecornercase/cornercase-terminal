@@ -32,6 +32,7 @@ pub enum Row {
     Tabs,
     AgentsSection,
     Counts,
+    TodoDot,
     DimPanes,
     Detail(Detail),
     Notifications,
@@ -63,6 +64,7 @@ impl Row {
             | Self::Tabs
             | Self::AgentsSection
             | Self::Counts
+            | Self::TodoDot
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
@@ -99,6 +101,7 @@ impl Row {
             | Self::Tabs
             | Self::AgentsSection
             | Self::Counts
+            | Self::TodoDot
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
@@ -310,6 +313,7 @@ impl Settings {
             Row::Tabs,
             Row::AgentsSection,
             Row::Counts,
+            Row::TodoDot,
             Row::DimPanes,
             Row::Detail(Detail::Model),
             Row::Detail(Detail::Context),
@@ -411,6 +415,8 @@ impl Settings {
             Row::Counts => {
                 self.flip(|c| &mut c.counts, ["rows show how many they hold", "rows no longer show how many they hold"])
             }
+            Row::TodoDot => self
+                .flip(|c| &mut c.todo_dot, ["TODO shows a dot while items are pending", "TODO no longer shows a dot"]),
             Row::DimPanes => {
                 self.flip(|c| &mut c.dim_inactive_panes, ["inactive panes are dimmed", "every pane looks the same"])
             }
@@ -918,6 +924,10 @@ impl Settings {
             Row::Counts => {
                 let value = if config.counts { "[x] shown" } else { "[ ] hidden" };
                 ("counts".into(), value.into(), "what a project or collapsed group holds, such as (3)".into(), false)
+            }
+            Row::TodoDot => {
+                let value = if config.todo_dot { "[x] shown" } else { "[ ] hidden" };
+                ("TODO dot".into(), value.into(), "while items are pending".into(), false)
             }
             Row::DimPanes => {
                 let value = if config.dim_inactive_panes { "[x] dimmed" } else { "[ ] as bright as the active one" };
@@ -1592,6 +1602,18 @@ mod tests {
         }
     }
 
+    mod todo_dot {
+        use super::*;
+
+        #[test]
+        fn is_a_switch_that_starts_on() {
+            let mut s = settings();
+            let before = s.config.todo_dot;
+            go_to(&mut s, &Row::TodoDot);
+            assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).todo_dot), (true, false));
+        }
+    }
+
     mod agent_tabs {
         use rstest::rstest;
 
@@ -1634,6 +1656,7 @@ mod tests {
                     Row::Tabs,
                     Row::AgentsSection,
                     Row::Counts,
+                    Row::TodoDot,
                     Row::DimPanes,
                     Row::Detail(Detail::Model),
                     Row::Detail(Detail::Context),
