@@ -1,7 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
-use super::{App, Overlay, Target, Toast};
+use super::menus::Target;
+use super::{App, Overlay, Toast};
 use crate::activity::Status;
 use crate::error::Result;
 use crate::files::Mode;

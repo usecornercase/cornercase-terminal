@@ -26,6 +26,7 @@ const MAX_CONNECTIONS: usize = 32;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
 const COOKIE_AGE: u64 = 365 * 24 * 60 * 60;
 const ACCEPT_POLL: Duration = Duration::from_millis(50);
+const REBIND_FOR: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
@@ -108,7 +109,7 @@ impl Web {
             return Ok(());
         }
         self.close();
-        let listener = TcpListener::bind(("127.0.0.1", port))?;
+        let listener = bind(port)?;
         listener.set_nonblocking(true)?;
         let stop = Arc::new(AtomicBool::new(false));
         let (context, stopped) = (self.context.clone(), Arc::clone(&stop));
@@ -171,6 +172,16 @@ impl Web {
 impl Drop for Web {
     fn drop(&mut self) {
         self.close();
+    }
+}
+
+fn bind(port: u16) -> io::Result<TcpListener> {
+    let deadline = Instant::now() + REBIND_FOR;
+    loop {
+        match TcpListener::bind(("127.0.0.1", port)) {
+            Err(e) if e.kind() == io::ErrorKind::AddrInUse && Instant::now() < deadline => thread::sleep(ACCEPT_POLL),
+            other => return other,
+        }
     }
 }
 
