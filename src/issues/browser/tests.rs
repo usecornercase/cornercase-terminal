@@ -3,7 +3,7 @@ use crossterm::event::KeyEventKind;
 use super::*;
 use crate::issues::{Comment, issue};
 
-const AREA: Rect = Rect { x: 0, y: 0, width: 120, height: 34 };
+const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106 };
 
 fn browser() -> Browser {
     Browser {
@@ -65,7 +65,7 @@ fn agents(default: Option<&str>) -> Agents {
     }
 }
 
-fn with_lists() -> Browser {
+pub(crate) fn with_lists() -> Browser {
     let mut b = browser();
     b.connected(Source::Shortcut, Connection { from_env: false, account: None });
     let old = Issue { updated_at: "2026-01-01T00:00:00Z".into(), ..issue(Source::Github, 1, "old bug") };
@@ -75,7 +75,7 @@ fn with_lists() -> Browser {
     b
 }
 
-fn press(b: &mut Browser, code: KeyCode) -> Action {
+pub(crate) fn press(b: &mut Browser, code: KeyCode) -> Action {
     b.key(
         KeyEvent {
             code,
@@ -83,7 +83,7 @@ fn press(b: &mut Browser, code: KeyCode) -> Action {
             kind: KeyEventKind::Press,
             state: crossterm::event::KeyEventState::NONE,
         },
-        AREA,
+        ROOM,
     )
 }
 
@@ -97,20 +97,14 @@ fn keys(b: &Browser) -> Vec<String> {
     b.shown().iter().map(|i| i.key.clone()).collect()
 }
 
-fn click(b: &mut Browser, pos: Position) -> Action {
-    let ev = MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: pos.x,
-        row: pos.y,
-        modifiers: KeyModifiers::NONE,
-    };
-    b.mouse(ev, pos, AREA)
+fn click(b: &mut Browser, hit: IssuesHit) -> Action {
+    b.mouse(MouseEventKind::Down(MouseButton::Left), Some(hit), ROOM)
 }
 
-fn button(b: &Browser, label: &str) -> Position {
+fn button(b: &Browser, label: &str) -> IssuesHit {
     let labels = b.labels();
     let i = labels.iter().position(|l| *l == label).expect("the button is there");
-    ui::issue_buttons(ui::issues_area(AREA), &labels)[i].as_position()
+    IssuesHit::Button(i)
 }
 
 mod tabs {
@@ -174,9 +168,7 @@ mod tabs {
     #[test]
     fn a_click_on_a_tab_switches_to_it() {
         let mut b = browser();
-        let names = b.tab_names();
-        let pos = ui::issue_tabs(ui::issues_area(AREA), &names)[2].as_position();
-        click(&mut b, pos);
+        click(&mut b, IssuesHit::Tab(2));
         assert_eq!(b.current(), Tab::One(Source::Shortcut));
     }
 }
@@ -194,7 +186,7 @@ mod filter {
     #[test]
     fn closed_reloads_everything_with_the_new_query() {
         let mut b = with_lists();
-        let toggle = ui::issue_toggles(ui::issues_area(AREA), &["closed", "people"])[0].as_position();
+        let toggle = IssuesHit::Toggle(0);
 
         let action = click(&mut b, toggle);
 
@@ -229,8 +221,7 @@ mod detail {
     #[test]
     fn a_click_on_an_issue_reads_it() {
         let mut b = with_lists();
-        let row = ui::issues_list(ui::issues_area(AREA));
-        let action = click(&mut b, Position::new(row.x + 2, row.y + 1));
+        let action = click(&mut b, IssuesHit::Item(1));
         assert!(matches!(action, Action::Read(i) if i.key == "#1"));
     }
 
@@ -265,7 +256,7 @@ mod detail {
         press(&mut b, KeyCode::End);
         press(&mut b, KeyCode::Down);
         let Screen::Detail { scroll, .. } = b.screen else { panic!("not in the detail") };
-        assert_eq!(scroll, b.detail_lines(AREA).len() - Browser::detail_rows(AREA));
+        assert_eq!(scroll, b.detail_lines(ROOM).len() - ROOM.detail_rows);
     }
 
     #[test]
@@ -323,8 +314,7 @@ mod tokens {
     fn the_token_is_never_shown() {
         let mut b = on_shortcut();
         type_text(&mut b, "t0k");
-        let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues view") };
-        assert!(matches!(view.body, ui::IssuesBody::Token { input, .. } if input == "•••"));
+        assert_eq!(b.token_field(Source::Shortcut).1, "•••");
     }
 
     #[test]
@@ -351,9 +341,7 @@ mod tokens {
     }
 
     fn field(b: &Browser) -> (&'static str, String) {
-        let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues view") };
-        let ui::IssuesBody::Token { label, input, .. } = view.body else { panic!("not the form") };
-        (label, input)
+        b.token_field(b.token_form().expect("the token form"))
     }
 
     mod jira {
@@ -497,10 +485,10 @@ mod tokens {
     }
 }
 
-mod buttons {
+pub(crate) mod buttons {
     use super::*;
 
-    fn reading() -> Browser {
+    pub(crate) fn reading() -> Browser {
         let mut b = with_lists();
         press(&mut b, KeyCode::Enter);
         let body = "# Title\n\n    indented **bold**".to_string();
@@ -510,7 +498,7 @@ mod buttons {
 
     fn body_text(b: &Browser) -> Vec<String> {
         let lines: Vec<String> =
-            b.detail_lines(AREA).iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
+            b.detail_lines(ROOM).iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
         let prompt = lines.iter().position(|l| l.starts_with("prompt")).expect("the prompt row");
         lines[prompt + 2..].to_vec()
     }
@@ -561,19 +549,6 @@ mod buttons {
     }
 
     #[test]
-    fn a_notice_shows_until_the_next_key() {
-        let mut b = reading();
-        b.notice = Some("copied".into());
-        let hint = |b: &Browser| match b.view(AREA, 0) {
-            ui::Overlay::Issues(v) => v.hint,
-            _ => String::new(),
-        };
-        let before = hint(&b);
-        press(&mut b, KeyCode::Down);
-        assert_eq!((before.as_str(), hint(&b) == "copied"), ("copied", false));
-    }
-
-    #[test]
     fn tabs_round_trip_through_their_id() {
         let tabs = [Tab::All, Tab::One(Source::Linear)];
         assert_eq!(tabs.map(|t| Tab::from_id(t.id())), tabs.map(Some));
@@ -590,7 +565,7 @@ mod agent {
     }
 
     fn line_with(b: &Browser, label: &str) -> Line<'static> {
-        b.detail_lines(AREA)
+        b.detail_lines(ROOM)
             .into_iter()
             .find(|l| l.spans.first().is_some_and(|s| s.content.trim() == label))
             .expect("the row is there")
@@ -691,7 +666,7 @@ mod place {
         let mut b = two_places();
         b.place = Some(1);
         let start: String = b
-            .detail_lines(AREA)
+            .detail_lines(ROOM)
             .into_iter()
             .find(|l| l.spans.first().is_some_and(|s| s.content.trim() == "start"))
             .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
@@ -719,17 +694,14 @@ mod place {
     }
 }
 
-mod people {
+pub(crate) mod people {
     use super::*;
 
-    fn toggle() -> Position {
-        let b = with_lists();
-        let (labels, _) = b.toggles();
-        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
-        ui::issue_toggles(ui::issues_area(AREA), &labels)[1].as_position()
+    fn toggle() -> IssuesHit {
+        IssuesHit::Toggle(1)
     }
 
-    fn filtering() -> Browser {
+    pub(crate) fn filtering() -> Browser {
         let mut b = with_lists();
         click(&mut b, toggle());
         b
@@ -740,18 +712,6 @@ mod people {
         let mut b = with_lists();
         let action = click(&mut b, toggle());
         assert_eq!((action, b.filtering), (Action::LoadPeople(vec![Source::Github, Source::Shortcut]), Some(0)));
-    }
-
-    #[test]
-    fn each_source_has_its_two_fields() {
-        let b = filtering();
-        let ui::Overlay::Issues(view) = b.view(AREA, 0) else { panic!("not the issues") };
-        let ui::IssuesBody::List { items, .. } = view.body else { panic!("not a list") };
-        let rows: Vec<String> = items.iter().map(|i| format!("{} {}", i.key, i.title)).collect();
-        assert_eq!(
-            rows,
-            ["GitHub assignee anyone", "GitHub author anyone", "Shortcut owner anyone", "Shortcut requester anyone"]
-        );
     }
 
     #[test]

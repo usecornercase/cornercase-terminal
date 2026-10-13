@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The settings model is split into files by concern: choosing a row, submitting a pick or an edit, the Issues page, keys and row texts.
 
+## 0.12.64
+
+- No changes in the app. The issues dialog's view and hit testing now live with the app, and its browser takes sizes and hits instead of UI types.
+
 ## 0.12.63
 
 - No changes in the app. The ssh window and the client no longer import each other.

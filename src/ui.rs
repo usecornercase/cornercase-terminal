@@ -33,7 +33,7 @@ pub use dialog::form::{
 };
 pub use dialog::group_style::{StyleHit, style_colour, style_done, style_hit, style_icon};
 pub use dialog::issues::{
-    IssueRow, Issues, IssuesBody, IssuesHit, issue_button_hit, issue_buttons, issue_detail, issue_tabs, issue_toggles,
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons, issue_detail, issue_tabs, issue_toggles,
     issues_area, issues_hit, issues_list,
 };
 pub use dialog::menu::{menu_area, menu_hit, menu_item};
@@ -76,6 +76,7 @@ pub use workspaces::{
 use crate::activity::Status;
 
 pub use crate::config::{Sidebar, Tabs};
+pub use crate::issues::browser::IssuesHit;
 pub use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES, GroupEntry};
 pub use crate::state::Widths;
 

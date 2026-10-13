@@ -8,6 +8,7 @@ use super::{
     Note, dialog_button_style, draw_input, draw_tabs, first_visible, form_inner, list_item, pick_background,
     right_aligned, tabs_in,
 };
+use crate::issues::browser::IssuesHit;
 use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
@@ -63,14 +64,6 @@ pub fn issue_buttons(issues: Rect, labels: &[&str]) -> Vec<Rect> {
 
 pub(super) fn issue_buttons_in(row: Rect, labels: &[&str]) -> Vec<Rect> {
     right_aligned(row, labels, button_width, 1)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IssuesHit {
-    Tab(usize),
-    Toggle(usize),
-    Item(usize),
-    Button(usize),
 }
 
 pub fn issue_button_hit(area: Rect, buttons: &[&str], pos: Position) -> Option<usize> {

@@ -8,7 +8,7 @@ const LEAVES: &[&str] =
     &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
 
 const APP_EXCEPTIONS: &[&str] = &[];
-const UI_EXCEPTIONS: &[&str] = &["src/issues/browser.rs"];
+const UI_EXCEPTIONS: &[&str] = &[];
 const LONG_FILES: &[&str] = &["src/issues/browser.rs"];
 
 struct Source {
