@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.58
+
+- No changes in the app. The terminal and the browser access no longer import the app: they send their own events, and the app builds the environment of every shell.
+
 ## 0.12.52
 
 - No changes in the app. The code that answers commands for scripts and agents moved from app/control.rs into one file per family of requests.
