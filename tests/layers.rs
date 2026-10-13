@@ -20,7 +20,6 @@ const LONG_FILES: &[&str] = &[
     "src/app/control.rs",
     "src/cli.rs",
     "src/client.rs",
-    "src/control.rs",
     "src/issues/browser.rs",
     "src/settings.rs",
     "src/ui.rs",
