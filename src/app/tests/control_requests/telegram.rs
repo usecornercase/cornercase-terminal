@@ -185,7 +185,7 @@ mod away {
     use super::*;
 
     #[test]
-    fn the_away_button_shows_once_paired_and_typing_in_a_window_ends_it() {
+    fn the_away_button_shows_once_paired_toggles_and_typing_in_a_window_ends_it() {
         let (mut app, _rx) = app();
         assert_eq!(app.away_button(), None);
         let mut phone = Phone::paired(&mut app);
@@ -194,14 +194,15 @@ mod away {
         click(&mut app, ui::away_button(areas().quit, false).as_position());
         let away = (app.telegram.away, toast(&app).map(String::from));
         click(&mut app, ui::away_button(areas().quit, true).as_position());
-        let still = app.telegram.away;
+        let toggled = app.telegram.away;
+        click(&mut app, ui::away_button(areas().quit, false).as_position());
         send_key(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
 
         assert_eq!(away, (true, Some("away: agents message you on Telegram until you type in a window".into())));
-        assert!(still && !app.telegram.away);
+        assert!(!toggled && !app.telegram.away);
         let said: Vec<String> = phone.read(&mut app).iter().map(|(_, order)| html(order).to_string()).collect();
-        assert!(said[0].starts_with("<b>Away</b>") && said[1].starts_with("<b>Away</b>"), "{said:?}");
-        assert!(said[2].starts_with("<b>Back at the computer</b>"), "{said:?}");
+        let starts: Vec<&str> = said.iter().map(|html| html.split("</b>").next().unwrap_or_default()).collect();
+        assert_eq!(starts, ["<b>Away", "<b>Back at the computer", "<b>Away", "<b>Back at the computer"], "{said:?}");
     }
 
     #[test]
@@ -266,6 +267,30 @@ mod agents {
         assert!(html(&order).starts_with("<b>✓ claude finished</b> · "), "{}", html(&order));
         assert!(html(&order).ends_with("\n\nFixed <b>the login</b>."), "{}", html(&order));
         assert!(button(&order, "screen").ends_with(&format!(":s:{id}")));
+    }
+
+    #[test]
+    fn a_header_that_would_pass_the_limit_goes_apart_from_the_message() {
+        let (mut agent, mut phone, id) = seen_agent();
+        agent.app.projects[0].name = Some("p".repeat(300));
+        away(&mut agent, &mut phone);
+        let asked = phone.says(&mut agent.app, "write a lot");
+        phone.waits(&mut agent, "the prompt is confirmed", reacted(asked));
+        let long = "word ".repeat(799);
+        let line = format!(
+            r#"{{"type":"assistant","timestamp":"2026-10-13T10:00:00.000Z","message":{{"id":"t2","model":"claude-opus-5-5","content":[{{"type":"text","text":"{}"}}]}}}}"#,
+            long.trim()
+        );
+        agent.transcript(id, &[&line]);
+        agent.finish();
+
+        let (_, header) = phone.says_in_html(&mut agent, "the finished notice", "finished");
+        let body = phone.seen.iter().map(|(_, order)| order).find(|order| html(order).starts_with("word word"));
+
+        let size = |order: &Order| crate::telegram::html::length(&crate::telegram::html::plain(html(order)));
+        let body = body.expect("the message comes apart from its header");
+        assert!(!html(&header).contains("word") && size(&header) < 200, "{}", html(&header));
+        assert!(size(body) <= crate::telegram::html::MAX, "{}", size(body));
     }
 
     #[test]

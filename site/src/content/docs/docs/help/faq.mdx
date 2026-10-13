@@ -107,7 +107,9 @@ From the app: when a new version is out, a button with its number appears next t
 
 ### Does it phone home?
 
-It asks GitHub for the latest release when the server starts and then every hour. Nothing about you or your projects is sent. With a [Telegram bot](../../guides/telegram/) set up, it also talks to Telegram, as that bot, and while you are away sends your chat the agents' messages. Turn it off in **settings → UI → check for updates**, or with `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates).
+It asks GitHub for the latest release when the server starts and then every hour. Nothing about you or your projects is sent. Turn it off in **settings → UI → check for updates**, or with `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates).
+
+With a [Telegram bot](../../guides/telegram/) set up, it also talks to Telegram, as that bot, and while you are away sends your chat the agents' messages. `check_updates` doesn't change that: remove the bot in **Settings › Agents**, under **Telegram**, to stop it.
 
 ### Can I run two independent sessions?
 

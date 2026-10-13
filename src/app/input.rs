@@ -271,6 +271,8 @@ impl App {
                 self.open_update();
             } else if remote {
                 self.open_remote();
+            } else if away && self.telegram.away {
+                self.come_back(super::telegram::By::Window);
             } else if away {
                 let _ = self.go_away(super::telegram::By::Window);
             } else if areas.quit.contains(pos) {

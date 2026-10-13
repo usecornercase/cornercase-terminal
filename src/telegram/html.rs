@@ -3,6 +3,7 @@ use std::fmt::Write as _;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
 pub(crate) const LIMIT: usize = 4000;
+pub(crate) const MAX: usize = 4096;
 const MOST: usize = 4;
 const CUT: &str = "… the rest is in cornercase";
 
@@ -38,8 +39,16 @@ pub(crate) fn plain(html: &str) -> String {
     out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
 }
 
-pub(crate) fn pre(text: &str) -> String {
-    format!("<pre>{}</pre>", escape(&tail(text, LIMIT)))
+pub(crate) fn pre(text: &str, room: usize) -> String {
+    format!("<pre>{}</pre>", escape(&tail(text, room.min(LIMIT))))
+}
+
+pub(crate) fn room(header: &str) -> usize {
+    MAX.saturating_sub(length(&plain(header)) + 2)
+}
+
+pub(crate) fn fits(header: &str, part: &str) -> bool {
+    length(&plain(part)) <= room(header)
 }
 
 pub(crate) fn tail(text: &str, limit: usize) -> String {

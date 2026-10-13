@@ -71,10 +71,16 @@ mod screens {
     fn a_screen_keeps_its_last_lines_as_code() {
         let screen = (0..2_000).map(|i| format!("row {i}")).collect::<Vec<_>>().join("\n");
 
-        let pre = pre(&screen);
+        let pre = pre(&screen, LIMIT);
+        let under = pre_under(&screen);
 
         assert!(pre.starts_with("<pre>") && pre.ends_with("row 1999</pre>"));
         assert!(length(&plain(&pre)) <= LIMIT);
+        assert!(fits(&"h".repeat(500), &under) && !fits(&"h".repeat(500), &pre));
+    }
+
+    fn pre_under(screen: &str) -> String {
+        pre(screen, room(&"h".repeat(500)))
     }
 
     #[test]

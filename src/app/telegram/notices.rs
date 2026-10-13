@@ -10,13 +10,14 @@ use crate::app::App;
 use crate::control::{Command, LastMessage};
 use crate::project::Hierarchy;
 use crate::telegram::{self, Keyboard, Tap, html};
-use crate::text::CRUMB_SEPARATOR;
+use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
 const SETTLE: Duration = Duration::from_secs(1);
 const EXCERPT: usize = 15;
 const SCREEN: usize = 40;
 const MOST_LISTED: usize = 25;
 const LABEL: usize = 40;
+const PLACE: usize = 120;
 const WORKING: &str = "working";
 const WAITING: &str = "waiting";
 
@@ -57,6 +58,11 @@ fn label(text: &str) -> String {
     out
 }
 
+fn with_screen(header: &str, screen: &str, lines: usize) -> String {
+    let screen = html::pre(&excerpt(screen, lines), html::room(header));
+    format!("{header}\n{screen}")
+}
+
 fn excerpt(screen: &str, lines: usize) -> String {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
     let end = rows.iter().rposition(|row| !row.is_empty()).map_or(0, |i| i + 1);
@@ -75,6 +81,7 @@ impl App {
             place = format!("{place}{CRUMB_SEPARATOR}{}", workspace.label());
         }
         let screen = term.emulator.screen_text().unwrap_or_default();
+        let place = truncate_right(&place, PLACE);
         Some(Agent { kind, place, status: term.agent.status(), screen })
     }
 
@@ -136,12 +143,8 @@ impl App {
             self.telegram.tap("esc", &Tap::Key(pane, "esc".into())),
             self.telegram.tap("screen", &Tap::Screen(pane)),
         ]);
-        let html = format!(
-            "<b>! {} needs you</b> · {}\n{}",
-            html::escape(&agent.kind),
-            html::escape(&agent.place),
-            html::pre(&excerpt(&agent.screen, EXCERPT))
-        );
+        let header = format!("<b>! {} needs you</b> · {}", html::escape(&agent.kind), html::escape(&agent.place));
+        let html = with_screen(&header, &agent.screen, EXCERPT);
         self.say(html, keyboard, Some(Route::Pane(pane)), None);
     }
 
@@ -163,7 +166,7 @@ impl App {
             Some(text) if !text.trim().is_empty() => html::markdown(&text),
             _ => {
                 let screen = self.agent_at(pane).map(|agent| agent.screen).unwrap_or_default();
-                vec![html::pre(&excerpt(&screen, EXCERPT))]
+                vec![html::pre(&excerpt(&screen, EXCERPT), html::room(header))]
             }
         };
         self.say_long(header, parts, keyboard, Some(Route::Pane(pane)));
@@ -178,13 +181,9 @@ impl App {
             self.telegram.tap("refresh", &Tap::Screen(pane)),
             self.telegram.tap("esc", &Tap::Key(pane, "esc".into())),
         ]];
-        let html = format!(
-            "{} <b>{}</b> · {}\n{}",
-            icon(agent.status),
-            html::escape(&agent.kind),
-            html::escape(&agent.place),
-            html::pre(&excerpt(&agent.screen, SCREEN))
-        );
+        let header =
+            format!("{} <b>{}</b> · {}", icon(agent.status), html::escape(&agent.kind), html::escape(&agent.place));
+        let html = with_screen(&header, &agent.screen, SCREEN);
         self.say(html, keyboard, Some(Route::Pane(pane)), None);
     }
 

@@ -257,7 +257,11 @@ impl App {
             return;
         }
         for (i, part) in parts.into_iter().enumerate() {
-            let html = if i == 0 { format!("{header}\n\n{part}") } else { part };
+            let joined = i == 0 && html::fits(header, &part);
+            if i == 0 && !joined {
+                self.say(header.to_string(), Vec::new(), route, None);
+            }
+            let html = if joined { format!("{header}\n\n{part}") } else { part };
             let keys = if i + 1 == count { keyboard.clone() } else { Vec::new() };
             self.say(html, keys, route, None);
         }
