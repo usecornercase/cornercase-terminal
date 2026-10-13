@@ -20,21 +20,19 @@ impl App {
         if !path.is_dir() {
             return None;
         }
-        let mut workspace = Workspace::new(self.take_id(), path.clone(), saved.name.clone(), saved.worktree);
-        workspace.base.clone_from(&saved.base);
-        workspace.collapsed = saved.collapsed;
+        let id = self.take_id();
+        let mut tabs = Vec::new();
         let mut lost = 0;
         for saved_tab in saved.tabs.iter().filter(|t| !t.panes.is_empty()) {
             match self.restore_tab(saved_tab, &path, area) {
-                Ok(tab) => workspace.tabs.push(tab),
+                Ok(tab) => tabs.push(tab),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
                     lost += 1;
                 }
             }
         }
-        workspace.active = saved.active.min(workspace.tabs.len().saturating_sub(1));
-        Some((workspace, lost))
+        Some((saved.restore(id, path, tabs), lost))
     }
 
     pub(super) fn restore_tab(&mut self, saved: &TabState, dir: &Path, area: Rect) -> Result<Tab> {
@@ -45,11 +43,7 @@ impl App {
             self.resume(&mut term, pane.agent.as_ref());
             panes.push(term);
         }
-        let mut tab = Tab::restored(self.take_id(), saved.name.clone(), panes, saved.layout.as_ref());
-        tab.active = saved.active.min(tab.panes.len() - 1);
-        tab.right_clicks =
-            saved.panes.iter().zip(&tab.panes).filter(|(s, _)| s.right_clicks).map(|(_, t)| t.id).collect();
-        Ok(tab)
+        Ok(saved.restore(self.take_id(), panes))
     }
 
     fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>) {

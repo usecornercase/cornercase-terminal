@@ -7,6 +7,7 @@ use crate::issues::People;
 use crate::project::group::GroupEntry;
 use crate::project::{Project, Tab, Workspace};
 use crate::split::Node;
+use crate::term::Term;
 
 pub use crate::agents::AgentState;
 
@@ -135,6 +136,38 @@ impl ProjectState {
             active: project.active,
             collapsed: project.collapsed,
         }
+    }
+}
+
+impl ProjectState {
+    pub fn restore(&self, id: u64, path: PathBuf, group: Option<u64>, workspaces: Vec<Workspace>) -> Project {
+        let mut project = Project::new(id, path, self.name.clone());
+        project.group = group;
+        project.collapsed = self.collapsed;
+        project.active = self.active.min(workspaces.len().saturating_sub(1));
+        project.workspaces = workspaces;
+        project
+    }
+}
+
+impl WorkspaceState {
+    pub fn restore(&self, id: u64, path: PathBuf, tabs: Vec<Tab>) -> Workspace {
+        let mut workspace = Workspace::new(id, path, self.name.clone(), self.worktree);
+        workspace.base.clone_from(&self.base);
+        workspace.collapsed = self.collapsed;
+        workspace.active = self.active.min(tabs.len().saturating_sub(1));
+        workspace.tabs = tabs;
+        workspace
+    }
+}
+
+impl TabState {
+    pub fn restore(&self, id: u64, panes: Vec<Term>) -> Tab {
+        let mut tab = Tab::restored(id, self.name.clone(), panes, self.layout.as_ref());
+        tab.active = self.active.min(tab.panes.len() - 1);
+        tab.right_clicks =
+            self.panes.iter().zip(&tab.panes).filter(|(s, _)| s.right_clicks).map(|(_, t)| t.id).collect();
+        tab
     }
 }
 

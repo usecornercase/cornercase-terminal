@@ -406,20 +406,20 @@ impl App {
             if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
                 continue;
             }
-            let mut project = Project::new(self.take_id(), path, saved_project.name.clone());
-            project.group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
-            project.collapsed = saved_project.collapsed;
+            let id = self.take_id();
+            let group = saved_project.group.and_then(|g| self.groups.get(first_group + g)).map(|g| g.id);
+            let mut workspaces = Vec::new();
             let mut lost = 0;
             for saved_ws in &saved_project.workspaces {
                 if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area) {
-                    project.workspaces.push(workspace);
+                    workspaces.push(workspace);
                     lost += missing;
                 }
             }
+            let project = saved_project.restore(id, path, group, workspaces);
             if lost > 0 {
                 missed.push((self.project_label(&project), lost));
             }
-            project.active = saved_project.active.min(project.workspaces.len().saturating_sub(1));
             if i <= saved.active {
                 self.active = self.projects.len();
             }
