@@ -127,6 +127,7 @@ impl Web {
         log::info!("web", "stopped listening", port = listening.port);
     }
 
+    #[cfg(test)]
     pub(crate) fn listening(&self) -> Option<u16> {
         self.listening.as_ref().map(|l| l.port)
     }
@@ -144,10 +145,6 @@ impl Web {
 
     pub(crate) fn unpair(&self) {
         self.context.shared.lock().pairing = None;
-    }
-
-    pub(crate) fn browsers(&self) -> usize {
-        self.context.shared.lock().browsers
     }
 
     pub(crate) fn paired(&self) -> usize {

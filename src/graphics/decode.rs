@@ -7,6 +7,7 @@ use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Li
 use super::Picture;
 use super::encode::{resize, round};
 
+#[cfg(test)]
 pub(crate) const HEAD: usize = 32;
 pub(crate) const MAX_SIDE: u32 = 2048;
 pub(crate) const LIMIT_SIDE: u32 = 16_384;

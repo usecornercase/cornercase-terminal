@@ -15,6 +15,7 @@ pub(crate) fn branch(dir: &Path) -> Option<String> {
     head.get(..SHORT_SHA_LEN).map(str::to_string)
 }
 
+#[cfg(test)]
 pub(crate) fn main_worktree(dir: &Path) -> Option<PathBuf> {
     let root = dir.ancestors().find(|d| d.join(".git").exists())?;
     root.join(".git").is_dir().then(|| root.to_path_buf())

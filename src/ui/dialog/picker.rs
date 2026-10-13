@@ -45,10 +45,6 @@ pub fn picker_item(picker: Rect, items: usize, scroll: usize, i: usize) -> Rect 
     list_item(picker_list(picker), items, scroll, i)
 }
 
-pub(crate) fn list_item_at(list_box: Rect, items: usize, scroll: usize, i: usize) -> Position {
-    list_item(picker_list(list_box), items, scroll, i).as_position()
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PickerHit {
     Item(usize),

@@ -23,6 +23,7 @@ mod status;
 mod update;
 
 pub use args::Cli;
+#[cfg(test)]
 pub(crate) use status::{pane_table, render};
 
 const FOLLOW_EVERY: Duration = Duration::from_millis(200);

@@ -94,7 +94,7 @@ mod usage_dialog;
 mod view;
 mod worktrees;
 
-pub(crate) use event::{AppEvent, Start};
+pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
 

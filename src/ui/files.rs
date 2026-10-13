@@ -177,6 +177,7 @@ pub(crate) fn parts(area: Rect) -> Parts {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn action(area: Rect, file: &FileView, action: Action) -> Rect {
     file.actions(parts(area).info).into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
 }
@@ -296,6 +297,7 @@ pub(crate) fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
     })
 }
 
+#[cfg(test)]
 pub(crate) fn row_of(view: &View, line: u32) -> usize {
     match &view.screen {
         Screen::File(file) => file.lines().row_of(line),

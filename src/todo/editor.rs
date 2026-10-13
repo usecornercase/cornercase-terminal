@@ -20,6 +20,7 @@ impl Editor {
         self.chars.is_empty()
     }
 
+    #[cfg(test)]
     pub(crate) fn cursor(&self) -> usize {
         self.cursor
     }

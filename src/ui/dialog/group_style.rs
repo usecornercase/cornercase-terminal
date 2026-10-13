@@ -37,14 +37,17 @@ fn grid_cell(grid: Rect, per_row: usize, width: u16, i: usize) -> Rect {
     Rect::new(grid.x.saturating_add(col.saturating_mul(width)), grid.y.saturating_add(row), width, 1).intersection(grid)
 }
 
+#[cfg(test)]
 pub(crate) fn style_icon(area: Rect, i: usize) -> Rect {
     grid_cell(style_rows(area)[1], ICONS_PER_ROW, ICON_CELL, i)
 }
 
+#[cfg(test)]
 pub(crate) fn style_colour(area: Rect, i: usize) -> Rect {
     grid_cell(style_rows(area)[3], COLOURS_PER_ROW, COLOUR_CELL, i)
 }
 
+#[cfg(test)]
 pub(crate) fn style_done(area: Rect) -> Rect {
     update_button(style_rows(area)[4], crate::settings::DONE)
 }

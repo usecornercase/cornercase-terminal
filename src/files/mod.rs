@@ -231,10 +231,6 @@ impl Panel {
         }
     }
 
-    pub(crate) fn indexed_files(&self, workspace: u64) -> Option<usize> {
-        self.index.get(&workspace).map(|paths| paths.len())
-    }
-
     pub(crate) fn searching(&self, workspace: u64) -> bool {
         let running = match self.mode(workspace) {
             Mode::Name => self.naming.is_some(),
@@ -564,10 +560,6 @@ impl<'a> Lines<'a> {
         self.count + self.blocks.iter().map(|(_, lines)| lines.len()).sum::<usize>()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     pub(crate) fn at(&self, row: usize) -> Option<Line> {
         let mut extra = 0;
         for (key, lines) in &self.blocks {
@@ -588,6 +580,7 @@ impl<'a> Lines<'a> {
         self.blocks.iter().find(|(b, _)| *b == key).and_then(|(_, lines)| lines.get(k)).map(String::as_str)
     }
 
+    #[cfg(test)]
     pub(crate) fn row_of(&self, line: u32) -> usize {
         let before: usize = self.blocks.iter().filter(|(key, _)| *key <= line).map(|(_, l)| l.len()).sum();
         usize::try_from(line).unwrap_or(usize::MAX).saturating_sub(1) + before

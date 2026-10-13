@@ -38,6 +38,7 @@ pub(crate) fn settings_body(settings: Rect) -> Rect {
     settings_rows(settings)[1]
 }
 
+#[cfg(test)]
 pub(crate) fn settings_edit(settings: Rect) -> Rect {
     settings_rows(settings)[2]
 }

@@ -26,45 +26,66 @@ mod widgets;
 mod widths;
 mod workspaces;
 
-pub(crate) use agents_section::{AGENTS_LABEL, AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
-pub(crate) use chrome::{ChangesButton, TODO_LABEL};
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_extra_button, form_hit, form_toggle};
+pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
+pub(crate) use chrome::ChangesButton;
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
 pub use dialog::form::{form_area, form_buttons};
-pub(crate) use dialog::group_style::{StyleHit, style_colour, style_done, style_hit, style_icon};
+#[cfg(test)]
+pub(crate) use dialog::form::{form_extra_button, form_toggle};
+pub(crate) use dialog::group_style::{StyleHit, style_hit};
+#[cfg(test)]
+pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_detail, issue_tabs, issue_toggles, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_detail, issues_hit, issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
+#[cfg(test)]
+pub(crate) use dialog::issues::{issue_tabs, issue_toggles};
 pub(crate) use dialog::menu::menu_hit;
 pub use dialog::menu::{menu_area, menu_item};
-pub(crate) use dialog::picker::{Entry, Picker, PickerHit, list_item_at, picker_hit, picker_list};
+pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
-pub(crate) use dialog::search::{ResultRow, Search, result_hit, result_item, results_list};
+#[cfg(test)]
+pub(crate) use dialog::search::result_item;
+pub(crate) use dialog::search::{ResultRow, Search, result_hit, results_list};
 pub(crate) use dialog::settings::{
-    Settings, SettingsEdit, SettingsHit, SettingsLayout, SettingsLine, SettingsPick, SettingsRow, settings_area,
-    settings_body, settings_done, settings_edit, settings_hit, settings_lines, settings_moves, settings_pick_list,
-    settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
+    Settings, SettingsEdit, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, settings_area, settings_hit,
+    settings_pick_list,
+};
+#[cfg(test)]
+pub(crate) use dialog::settings::{
+    SettingsLine, settings_body, settings_done, settings_edit, settings_lines, settings_moves, settings_remove,
+    settings_restart, settings_row, settings_scroll, settings_tabs,
 };
 pub(crate) use dialog::update::{Update, update_buttons, update_notes, update_scroll};
-pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_area, usage_done, usage_share, usage_tabs};
+#[cfg(test)]
+pub(crate) use dialog::usage::usage_area;
+pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
-pub(crate) use layout::{Nav, files_button, full_layout};
-pub(crate) use pane::{TabView, scrollback_badge, scrollback_label};
+pub(crate) use layout::{Nav, full_layout};
+pub(crate) use pane::{TabView, scrollback_badge};
 pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
 pub use rows::row_close_button;
-pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above, row_menu_button};
+#[cfg(test)]
+pub(crate) use rows::row_menu_button;
+pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
 pub(crate) use theme::muted;
-pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_area, toast_button};
+#[cfg(test)]
+pub(crate) use toast::toast_area;
+pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
 pub(crate) use tree::{
-    ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_arrow, tree_close,
-    tree_hit, tree_layout_rows, tree_row, tree_rows,
+    ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_hit, tree_layout_rows,
+    tree_row, tree_rows,
 };
+#[cfg(test)]
+pub(crate) use tree::{tree_arrow, tree_close};
 pub(crate) use widgets::update_button;
 pub use widths::SIDEBAR_WIDTH;
+#[cfg(test)]
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{

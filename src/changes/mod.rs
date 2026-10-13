@@ -337,6 +337,7 @@ impl Panel {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn fold_all(&mut self, workspace: u64, diff: &Diff) {
         let fold = diff.files.iter().any(|f| !self.folded(workspace, diff, f));
         for file in &diff.files {

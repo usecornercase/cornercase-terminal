@@ -6,9 +6,10 @@ use ratatui::text::Span;
 use super::View;
 use super::drop::{Drag, Spot, landed};
 use super::layout::Areas;
+#[cfg(test)]
+use super::rows::row_close_button;
 use super::rows::{
-    Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_close_button,
-    row_rect,
+    Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_rect,
 };
 use super::sidebar::{SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
@@ -148,10 +149,12 @@ pub(crate) fn tree_row(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRo
     row_rect(&tree_layout_rows(list, shape, &rows, scroll), &rows, &row)
 }
 
+#[cfg(test)]
 pub(crate) fn tree_arrow(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
     arrow_in(tree_row(list, shape, scroll, row), shape, row)
 }
 
+#[cfg(test)]
 pub(crate) fn tree_close(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
     row_close_button(tree_row(list, shape, scroll, row), 1)
 }

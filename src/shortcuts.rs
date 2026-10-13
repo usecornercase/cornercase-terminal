@@ -91,10 +91,6 @@ impl Prefix {
         Self::normal(key) == self
     }
 
-    pub(crate) fn event(self) -> KeyEvent {
-        KeyEvent::new(self.code, self.modifiers)
-    }
-
     pub(crate) fn clash(self) -> Option<&'static str> {
         let name = self.to_string();
         CLASHES.iter().find(|(key, _)| *key == name).map(|(_, why)| *why)
