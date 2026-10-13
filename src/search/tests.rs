@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::project::group::Group;
 
 fn candidate(kind: Kind, name: &str, keys: &[&str]) -> Candidate {
     Candidate {
@@ -99,5 +100,84 @@ mod find {
         #[case] expected: Option<(usize, usize)>,
     ) {
         assert_eq!(find(haystack, needle), expected);
+    }
+}
+
+mod candidates {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::config::Config;
+    use crate::project::group::GroupEntry;
+    use crate::project::{Phase, Project, Tab, Workspace};
+    use crate::split::Node;
+    use crate::test_util::{git, git_repo};
+
+    fn group(id: u64, name: &str) -> Group {
+        Group { id, entry: GroupEntry { name: name.into(), icon: '●', colour: 4, collapsed: false } }
+    }
+
+    fn named_tab(id: u64, name: &str) -> Tab {
+        Tab {
+            id,
+            name: Some(name.into()),
+            panes: Vec::new(),
+            active: 0,
+            layout: Node::Leaf(0),
+            right_clicks: Vec::new(),
+        }
+    }
+
+    fn project(id: u64, name: &str, group: Option<u64>) -> Project {
+        let mut project = Project::new(id, PathBuf::from(format!("/{name}")), Some(name.into()));
+        project.group = group;
+        project
+    }
+
+    fn all(groups: &[Group], projects: &[Project]) -> Vec<Candidate> {
+        candidates(groups, projects, &Config::default(), None)
+    }
+
+    #[test]
+    fn put_groups_first_and_give_a_project_its_groups_name_as_context() {
+        let groups = [group(1, "work")];
+        let found = all(&groups, &[project(10, "api", Some(1)), project(11, "blog", None)]);
+        assert_eq!(names(&found), ["● work", "api", "blog"]);
+        assert_eq!(found[0].kind, Kind::Group);
+        assert_eq!((found[1].context.as_str(), found[2].context.as_str()), ("work", ""));
+    }
+
+    #[test]
+    fn leave_out_workspaces_that_are_closing_or_being_removed() {
+        let mut p = project(10, "api", None);
+        for (id, phase) in [(11, Phase::Open), (12, Phase::Closing), (13, Phase::Removing("gone".into()))] {
+            let mut w = Workspace::new(id, PathBuf::from(format!("/api/{id}")), Some(format!("w{id}")), false);
+            w.phase = phase;
+            p.workspaces.push(w);
+        }
+        let found = all(&[], &[p]);
+        assert_eq!(names(&found), ["api", "w11"]);
+    }
+
+    #[test]
+    fn find_a_named_workspace_by_its_branch_too() {
+        let repo = git_repo(&[("a", "a")]);
+        git(repo.path(), &["checkout", "--quiet", "-b", "fix/login"]);
+        let mut p = project(10, "api", None);
+        p.workspaces.push(Workspace::new(11, repo.path().to_path_buf(), Some("login".into()), true));
+        let found = all(&[], &[p]);
+        assert_eq!(found[1].keys, ["login", "fix/login"]);
+    }
+
+    #[test]
+    fn give_a_tab_the_project_and_workspace_as_context() {
+        let mut p = project(10, "api", None);
+        let mut w = Workspace::new(11, PathBuf::from("/api/w"), Some("login".into()), false);
+        w.tabs.push(named_tab(12, "server"));
+        p.workspaces.push(w);
+        let found = all(&[], &[p]);
+        let tab = found.last().expect("a tab");
+        assert_eq!((tab.kind, tab.context.as_str()), (Kind::Tab, "api › login"));
+        assert_eq!(tab.goto, Goto::Place { project: 10, workspace: Some(11), tab: Some(12) });
     }
 }
