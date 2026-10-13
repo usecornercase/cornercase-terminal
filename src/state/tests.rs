@@ -474,4 +474,14 @@ mod mapping {
         assert_eq!(project.restore(1, "/p".into(), Some(7), vec![restored]).active, 0);
         assert_eq!(saved_tab(2, 9).restore(8, vec![spawn_term(9, &[], None).0, spawn_term(10, &[], None).0]).active, 1);
     }
+
+    #[test]
+    fn a_restored_project_keeps_its_name_group_and_fold() {
+        let mut project = Project::new(1, "/p".into(), Some("name".into()));
+        project.collapsed = true;
+        let saved = ProjectState::of(&project, Some(0));
+        let back = saved.restore(8, "/q".into(), Some(7), Vec::new());
+        assert_eq!((back.id, back.group, back.collapsed), (8, Some(7), true));
+        assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), std::path::Path::new("/q")));
+    }
 }
