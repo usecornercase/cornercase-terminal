@@ -47,7 +47,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 - **Mouse first; the only app keys sit behind an opt-in prefix key.** Every key goes to the program in the active pane, except while a modal, the search, the changes panel's filter field, the files panel's search field or a TODO field has them (then `Enter` submits, `Esc` cancels; the files panel's search field also takes `↑` `↓` to pick a result; a TODO field also takes `←` `→` `↑` `↓` `Home` `End` `Delete` to move and edit, since editing an item means fixing a word in the middle), `Esc` while a row, border or divider is dragged, which only ends the drag (a side panel stays open), else while a side panel (changes, files, TODO) shows, which closes it (a field with text clears first), and the prefix key (`prefix_key`, off by default, chosen by the user), which opens the keys menu (`shortcuts.rs`, see DESIGN.md). Do not add keyboard shortcuts outside that menu, nor a default prefix, without asking. No `Alt` shortcuts (Option is a compose key on macOS), no `Ctrl+letter` (steals shell bindings). `e2e::ctrl_b_reaches_the_shell` guards this.
 - Closing the last project leaves the app open and empty. ` Quit ` only detaches.
-- `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`ui::truncate_right`), paths at the start (`truncate_left`).
+- `×` and ` ⋯ ` (the row's menu, as a right-click) buttons only show while hovering their row, except in compact mode, where they always show dimmed (touch screens have no hover) and closing a tab or a plain workspace asks first (`Overlay::CloseTab`, `Overlay::CloseWorkspace`), since an always-visible `×` is easy to tap by accident. Names are cut at the end (`text::truncate_right`), paths at the start (`truncate_left`).
 - At most one overlay is open (menu, form, confirmation, settings, usage, remote, picker, issues, search, keys menu). While it is open, no mouse event reaches the columns or the pane.
 - Overlays, hover, scroll, column widths and the toast live in `App` and are shared by every attached client. A toast can carry an ` undo ` (TODO removals), then lasts 6 s, or a ` cancel ` (a pending restart, shown for as long as it waits).
 
@@ -62,8 +62,8 @@ src/web/          browser access: mod.rs (the loopback listener, routes, pairing
 src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser access
 src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
-src/protocol.rs   messages, length-prefixed postcard framing, socket and lock paths, build id
-src/state.rs      the saved session as JSON, migrations, and the Saver that writes it (or todos.json) once it settles
+src/protocol.rs   messages and length-prefixed postcard framing
+src/state.rs      the saved session as JSON, migrations and mapping to the hierarchy
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), `~` expansion, validation
@@ -84,7 +84,7 @@ src/log.rs        server.log: levels, the line format, the writer thread and its
 src/secrets.rs    Shortcut / Linear / Jira / Plane tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
-src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), http.rs, browser.rs (modal state), cache.rs (lists on disk)
+src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state), cache.rs (lists on disk)
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
@@ -92,7 +92,7 @@ src/graphics/     images in the files panel: mod.rs (Support, Missing, Picture),
 src/files/        files panel: mod.rs (open folders, viewer, search bar and mode, jobs, tree marks and margin marks from the changes diff), disk.rs (one folder's listing with `ignore`, reading a file), search.rs (the workspace's file index, fuzzy names with nucleo, text with ripgrep's searcher), link.rs (the path under a pane click and where it points)
 src/syntax.rs     tree-sitter highlighting through arborium: which grammar a file gets, captures -> palette colours
 src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps)
-src/search.rs     global search: candidates, ranking, state
+src/search.rs     global search: candidates and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
@@ -108,13 +108,20 @@ src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view an
                   control.rs (commands and waits), events.rs (event subscribers), shortcuts.rs (keys menu actions), trace.rs (changes for logs and events), images.rs (placement and encode jobs), remote_access.rs (browser access)
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
-src/ui.rs         `View`, `draw()` and the re-exports of `ui/`; the rest of the screen is one file per part (no PTYs): ui/theme.rs colours, ui/widgets.rs shared drawing helpers, ui/text.rs truncation, ui/layout.rs and ui/widths.rs the areas and column widths, ui/rows.rs the list engine, ui/sidebar.rs, ui/workspaces.rs, ui/tree.rs and ui/agents_section.rs the lists, ui/drop.rs where a dragged row lands, ui/chrome.rs footer, compact bar and borders, ui/pane.rs the pane, ui/toast.rs, ui/dialog.rs and ui/dialog/ every dialog; ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/keys.rs the keys menu, ui/stats.rs the Stats page of the usage dialog, ui/remote_access.rs the ` Remote ` button and its QR dialog
+src/ui.rs         `View`, `draw()` and the re-exports of `ui/`; the rest of the screen is one file per part (no PTYs): ui/theme.rs colours, ui/widgets.rs shared drawing helpers, ui/layout.rs and ui/widths.rs the areas and column widths, ui/rows.rs the list engine, ui/sidebar.rs, ui/workspaces.rs, ui/tree.rs and ui/agents_section.rs the lists, ui/drop.rs where a dragged row lands, ui/chrome.rs footer, compact bar and borders, ui/pane.rs the pane, ui/toast.rs, ui/dialog.rs and ui/dialog/ every dialog; ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/keys.rs the keys menu, ui/stats.rs the Stats page of the usage dialog, ui/remote_access.rs the ` Remote ` button and its QR dialog
 src/keys.rs       KeyEvent -> bytes (Ghostty's encoder for special keys, legacy encoder for the rest)
 src/mouse.rs      MouseEvent -> bytes in the protocol the program asked for
 src/host_theme.rs asks the outer terminal for its colours and its name (XTVERSION)
 src/git.rs        branch from .git/HEAD, repo roots, linked worktrees (no git process)
 src/update.rs     update check against GitHub releases, download, checksum, binary swap
 src/error.rs      library error type
+src/version.rs    the binary version, version comparison and build id
+src/paths.rs      socket and lock paths, and every file cornercase keeps
+src/time.rs       timestamps, calendar dates and ages
+src/persist.rs    safe JSON writes, backups and the Saver that writes once the state settles
+src/text.rs       truncation, displayed paths, folder names, breadcrumbs, one-line text and hex
+src/list.rs       list cursors and search queries with a selection and scroll
+src/http.rs       HTTP requests and downloads for issue trackers and updates
 skills/cornercase/SKILL.md  the agent skill, embedded for `cornercase skill`
 ```
 

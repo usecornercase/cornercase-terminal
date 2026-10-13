@@ -4,6 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const LEAVES: &[&str] =
+    &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
+
 const APP_EXCEPTIONS: &[&str] = &["src/term.rs", "src/web/mod.rs"];
 const UI_EXCEPTIONS: &[&str] = &[
     "src/config.rs",
@@ -313,6 +316,25 @@ fn import_failures(sources: &[Source], target: &str, allowed: &[&str], exception
     failures
 }
 
+fn leaf_failures(sources: &[Source]) -> Vec<String> {
+    let mut failures = Vec::new();
+    for source in sources {
+        let Some(module) = source.module.first() else { continue };
+        if !LEAVES.contains(&module.as_str()) || source.module.iter().any(|part| part == "tests") {
+            continue;
+        }
+        for used in source.production_uses() {
+            if used != *module && !LEAVES.contains(&used.as_str()) {
+                failures.push(format!(
+                    "{} (module {}) uses crate::{used}. Shared leaves may use only other leaves (see Code layout in DESIGN.md). Move the dependency out of the leaf.",
+                    source.path.display(), source.module.join("::")
+                ));
+            }
+        }
+    }
+    failures
+}
+
 fn size_failures(sources: &[Source], exceptions: &[&str]) -> Vec<String> {
     let mut failures = Vec::new();
     for source in sources {
@@ -344,8 +366,10 @@ fn assert_clean(failures: &[String]) {
 }
 
 #[test]
-fn only_app_and_the_server_use_app() {
-    assert_clean(&import_failures(&sources(), "app", &["app", "server"], APP_EXCEPTIONS));
+fn production_modules_follow_the_dependency_rules() {
+    let sources = sources();
+    assert_clean(&import_failures(&sources, "app", &["app", "server"], APP_EXCEPTIONS));
+    assert_clean(&leaf_failures(&sources));
 }
 
 #[test]
@@ -403,6 +427,17 @@ fn the_scanner_resolves_paths_and_skips_strings_and_tests() {
         ("src/issues/mod.rs", "src/issues/mod.rs", true),
     ] {
         assert_eq!(covers_import(Path::new(exception), Path::new(path)), expected);
+    }
+    for (module, text, rejected) in [
+        ("log", "$crate::log::write(); crate::time::Stamp();", false),
+        ("error", "use crate::update;", true),
+        ("persist", "use crate::state::State;", true),
+        ("time/tests", "use crate::issues;", false),
+        ("time", "#[cfg(test)] mod tests { use crate::issues; }", false),
+        ("process", "#[cfg(target_os = \"macos\")] mod imp { use crate::ui; }", true),
+    ] {
+        let source = Source::new(PathBuf::from(format!("src/{module}.rs")), text.to_owned());
+        assert_eq!(!leaf_failures(&[source]).is_empty(), rejected, "module {module}: {text}");
     }
     let child = Source::new(PathBuf::from("src/app/control.rs"), "\n".repeat(1001));
     assert!(size_failures(&[child], &["src/app.rs"])[0].contains("over 1000"));
