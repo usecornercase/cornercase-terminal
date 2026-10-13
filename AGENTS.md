@@ -42,6 +42,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - Imports in three groups: `std`, external crates, then `super`/`crate`.
 - `rustfmt.toml`: `max_width = 120`.
 - **Where code goes** (the reasons are in DESIGN.md, Code layout): by domain; `impl App` only in `app.rs` and under `src/app/`; only `app` and `server` use `crate::app`, and only `ui`, `app`, `server` and `client` use `crate::ui`; the tests of `foo.rs` in `foo/tests.rs`; at most 1,000 lines per file. `tests/layers.rs` checks the imports and the sizes, and its lists of exceptions only shrink.
+- **`pub` only for what `src/main.rs` or the e2e tests use**; everything else is `pub(crate)` or narrower. `unreachable_pub` (in `Cargo.toml`) enforces it, so `dead_code` reports what nothing uses: delete it, or put it under `#[cfg(test)]` when only tests use it.
 
 ## Interaction
 
@@ -95,7 +96,7 @@ src/update.rs     update check against GitHub releases, download, checksum, bina
 
 src/ui.rs         `View`, `draw()` and the re-exports of `ui/`; the rest of the screen is one file per part (no PTYs): ui/theme.rs colours, ui/widgets.rs shared drawing helpers, ui/layout.rs and ui/widths.rs the areas and column widths, ui/rows.rs the list engine, ui/sidebar.rs, ui/workspaces.rs, ui/tree.rs and ui/agents_section.rs the lists, ui/drop.rs where a dragged row lands, ui/chrome.rs footer, compact bar and borders, ui/pane.rs the pane, ui/toast.rs, ui/dialog.rs and ui/dialog/ every dialog; ui/changes.rs draws the changes panel, ui/todo.rs the TODO panel, ui/files.rs the files panel, ui/remote.rs the reconnecting notice, ui/tab_bar.rs the tab bar above the pane (geometry and drawing), ui/keys.rs the keys menu, ui/stats.rs the Stats page of the usage dialog, ui/remote_access.rs the ` Remote ` button and its QR dialog
 
-src/app.rs        App state (issues, update, agents, outbox, scroll, upstream groups), new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
+src/app.rs        App state (issues, update, agents, outbox, scroll, upstream groups), new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the event and image types
 src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)
                   input.rs (keys, mouse and paste), interaction.rs (drags and timing), jobs.rs (`spawn_job`, the one way to start a background job), layout.rs (focus and side panels), view.rs (View entries)
                   hierarchy.rs (active lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)

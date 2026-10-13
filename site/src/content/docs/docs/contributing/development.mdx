@@ -90,6 +90,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 - Imports in three groups: `std`, external crates, then `super` and `crate`.
 - `rustfmt.toml` sets `max_width = 120`.
 - **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
+- **`pub` only for what `src/main.rs` or the end-to-end tests use**; everything else is `pub(crate)` or narrower. The `unreachable_pub` lint enforces it, so the compiler's `dead_code` warnings then point at code nothing uses: delete it, or put it under `#[cfg(test)]` when only tests use it.
 
 <Aside type="caution" title="Two rules that are easy to break">
 **Mouse first**: keys go to the program in the pane, and `e2e::input::ctrl_b_reaches_the_shell` guards it. The only shortcuts live in the menu behind the optional prefix key (`src/shortcuts.rs`), off by default. Please don't add others, or a default prefix, without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.
