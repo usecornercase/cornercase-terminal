@@ -7,8 +7,8 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 use crate::activity::Status;
-use crate::log::Stamp;
 use crate::state;
+use crate::time::Stamp;
 
 pub const WEEKS: usize = 26;
 pub const BLOCKS: usize = WEEKS * 7;

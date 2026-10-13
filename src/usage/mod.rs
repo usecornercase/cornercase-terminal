@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::agents;
 use crate::error::{Error, Result};
-use crate::issues;
+use crate::time;
 use crate::ui;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -197,7 +197,7 @@ fn updated(secs: u64) -> String {
     if secs < 60 {
         "updated just now".into()
     } else {
-        format!("updated {} ago", issues::age(i64::try_from(secs).unwrap_or(i64::MAX)))
+        format!("updated {} ago", time::age(i64::try_from(secs).unwrap_or(i64::MAX)))
     }
 }
 
@@ -312,7 +312,7 @@ mod tests {
         assert_eq!((loading.sections[0].windows.len(), loading.sections[0].status.as_str()), (0, "loading…"));
 
         state.answered(Agent::Claude, Ok(claude::tests::report(claude::tests::RECORDED)), now);
-        let clock = issues::parse_time("2026-10-04T11:46:59").expect("a time");
+        let clock = time::parse_time("2026-10-04T11:46:59").expect("a time");
         let view = state.view(now + Duration::from_secs(120), clock);
         let section = &view.sections[0];
         assert_eq!(

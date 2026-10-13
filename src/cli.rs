@@ -1225,7 +1225,7 @@ fn print_stats(args: &StatsArgs) -> Result<bool> {
     let view = match ask("stats", control::Command::Stats(control::Stats {})) {
         Ok(value) => {
             let mut view: crate::stats::View = answer(value)?;
-            view.days = log::Stamp::parse(&view.since)
+            view.days = crate::time::Stamp::parse(&view.since)
                 .map_or(0, |since| now.duration_since(since).unwrap_or_default().as_secs() / 86_400);
             view
         }

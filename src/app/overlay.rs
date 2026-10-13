@@ -13,11 +13,11 @@ use crate::changes::BranchPicker;
 use crate::clipboard;
 use crate::error::Result;
 use crate::issues::browser::Browser;
-use crate::issues::{self};
 use crate::picker::Picker;
 use crate::search::Search;
 use crate::settings::Settings;
 use crate::shortcuts::Group as KeysGroup;
+use crate::time;
 use crate::ui::{self, FormHit};
 use crate::usage;
 use crate::worktree;
@@ -320,7 +320,7 @@ impl App {
             }),
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
-            Overlay::Issues(b) => b.view(area, issues::now()),
+            Overlay::Issues(b) => b.view(area, time::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),

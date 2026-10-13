@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Write as _};
+use std::fmt::{Display, Write as _};
 use std::fs::{File, OpenOptions, Permissions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -7,7 +7,9 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime};
+
+use crate::time::Stamp;
 
 pub const LEVEL_ENV: &str = "CORNERCASE_LOG";
 pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
@@ -107,63 +109,6 @@ fn quote(out: &mut String, value: &str) {
     } else {
         let _ = write!(out, "{value:?}");
     }
-}
-
-pub struct Stamp(pub SystemTime);
-
-impl Stamp {
-    pub fn parse(text: &str) -> Option<SystemTime> {
-        let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
-        let [year, month, day] = numbers(date, '-')?;
-        let (clock, fraction) = time.split_once('.').unwrap_or((time, ""));
-        let [hour, minute, second] = numbers(clock, ':')?;
-        let valid = (1..=12).contains(&month) && (1..=31).contains(&day) && hour < 24 && minute < 60 && second < 60;
-        if !valid || fraction.len() > 9 || !fraction.bytes().all(|b| b.is_ascii_digit()) {
-            return None;
-        }
-        let nanos = format!("{fraction:0<9}").parse().ok()?;
-        let secs = days(year, month, day)? * 86_400 + hour * 3600 + minute * 60 + second;
-        UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
-    }
-}
-
-fn numbers(text: &str, separator: char) -> Option<[u64; 3]> {
-    let mut parts = text.split(separator).map(|part| part.bytes().all(|b| b.is_ascii_digit()).then(|| part.parse()));
-    let found = [parts.next()??.ok()?, parts.next()??.ok()?, parts.next()??.ok()?];
-    parts.next().is_none().then_some(found)
-}
-
-fn days(year: u64, month: u64, day: u64) -> Option<u64> {
-    let year = year.checked_sub(u64::from(month <= 2))?;
-    let era = year / 400;
-    let yoe = year % 400;
-    let doy = (153 * if month > 2 { month - 3 } else { month + 9 } + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    (era * 146_097 + doe).checked_sub(719_468)
-}
-
-impl Display for Stamp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let since = self.0.duration_since(UNIX_EPOCH).unwrap_or_default();
-        let secs = since.as_secs();
-        let (year, month, day) = civil(secs / 86_400);
-        let (hour, minute, second) = (secs / 3600 % 24, secs / 60 % 60, secs % 60);
-        let millis = since.subsec_millis();
-        write!(f, "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
-    }
-}
-
-fn civil(days: u64) -> (u64, u64, u64) {
-    let z = days + 719_468;
-    let era = z / 146_097;
-    let doe = z % 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + u64::from(month <= 2);
-    (year, month, day)
 }
 
 pub struct Job {

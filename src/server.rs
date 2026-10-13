@@ -230,7 +230,7 @@ impl Client {
             return;
         }
         log::warning!("server", "events dropped", client = self.id, count = self.dropped);
-        let time = log::Stamp(SystemTime::now()).to_string();
+        let time = crate::time::Stamp(SystemTime::now()).to_string();
         let notice = control::Event { time, what: What::Dropped { count: self.dropped }, ids: Ids::default() };
         if let Some(text) = notice.streamed() {
             self.send(ServerMessage::Response(text));

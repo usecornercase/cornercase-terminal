@@ -6,9 +6,9 @@ use super::App;
 use super::event::AppEvent;
 use super::overlay::Overlay;
 use crate::agents;
-use crate::issues::{self};
 use crate::log::{Job, Level};
 use crate::panics;
+use crate::time;
 use crate::ui::{self};
 use crate::usage;
 
@@ -39,7 +39,7 @@ impl App {
     }
 
     pub(super) fn usage_view(&self) -> ui::Usage {
-        let mut view = self.usage.view(Instant::now(), issues::now());
+        let mut view = self.usage.view(Instant::now(), time::now());
         view.page = self.usage_page;
         view.stats = self.stats_view(SystemTime::now());
         view

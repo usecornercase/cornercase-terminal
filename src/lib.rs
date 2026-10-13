@@ -44,6 +44,7 @@ pub mod stats;
 pub mod syntax;
 pub mod tailscale;
 pub mod term;
+pub mod time;
 pub mod todo;
 pub mod ui;
 pub mod update;

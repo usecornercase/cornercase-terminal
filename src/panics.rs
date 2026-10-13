@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use parking_lot::Mutex;
 
 use crate::error::{Error, Result};
-use crate::log::Stamp;
+use crate::time::Stamp;
 
 #[cfg(not(panic = "unwind"))]
 compile_error!("the server contains panics with catch_unwind, so cornercase must be built with panic = \"unwind\"");

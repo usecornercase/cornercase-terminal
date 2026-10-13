@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::time::{age, parse_time};
 
 pub const LIMIT: usize = 100;
 const SLUG_MAX: usize = 40;
@@ -420,58 +421,6 @@ pub fn age_of(timestamp: &str, now: i64) -> String {
     parse_time(timestamp).map(|t| age(now - t)).unwrap_or_default()
 }
 
-pub fn age(secs: i64) -> String {
-    let minutes = secs.max(0) / 60;
-    let hours = minutes / 60;
-    let days = hours / 24;
-    if minutes < 60 {
-        format!("{minutes}m")
-    } else if hours < 24 {
-        format!("{hours}h")
-    } else if days < 30 {
-        format!("{days}d")
-    } else if days < 365 {
-        format!("{}mo", days / 30)
-    } else {
-        format!("{}y", days / 365)
-    }
-}
-
-pub fn parse_time(text: &str) -> Option<i64> {
-    let field = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
-    let (year, month, day) = (field(0, 4)?, field(5, 7)?, field(8, 10)?);
-    let (hour, minute, second) = (field(11, 13)?, field(14, 16)?, field(17, 19)?);
-    let local = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
-    Some(local - offset(text.get(19..).unwrap_or_default()))
-}
-
-fn offset(rest: &str) -> i64 {
-    let zone = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
-    let sign = match zone.chars().next() {
-        Some('+') => 1,
-        Some('-') => -1,
-        _ => return 0,
-    };
-    let digits: String = zone.chars().filter(char::is_ascii_digit).collect();
-    let part = |range: std::ops::Range<usize>| digits.get(range).and_then(|d| d.parse::<i64>().ok()).unwrap_or(0);
-    sign * (part(0..2) * 3_600 + part(2..4) * 60)
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let year_of_era = year - era * 400;
-    let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era - 719_468
-}
-
-pub fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
-
 pub fn checklist(title: &str, items: &[(bool, String)]) -> String {
     if items.is_empty() {
         return String::new();
@@ -639,23 +588,6 @@ mod tests {
         #[test]
         fn leaves_out_what_is_missing() {
             assert_eq!(meta(&Issue { author: String::new(), ..gh(1, "x") }, 0), "");
-        }
-
-        #[rstest]
-        #[case::utc("1970-01-02T00:00:10Z", 86_410)]
-        #[case::ahead("1970-01-02T02:00:10.000+0200", 86_410)]
-        #[case::behind_with_a_colon("1970-01-01T19:30:10-04:30", 86_410)]
-        #[case::no_zone("1970-01-02T00:00:10", 86_410)]
-        fn parses_the_time_zone_offset(#[case] text: &str, #[case] expected: i64) {
-            assert_eq!(parse_time(text), Some(expected));
-        }
-
-        #[test]
-        fn parses_timestamps_with_or_without_milliseconds() {
-            assert_eq!(
-                (parse_time("1970-01-02T00:00:10Z"), parse_time("1970-01-02T00:00:10.250Z")),
-                (Some(86_410), Some(86_410))
-            );
         }
     }
 

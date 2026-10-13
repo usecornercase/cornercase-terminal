@@ -13,8 +13,8 @@ use super::discovery::{folder, named};
 use super::message::{self, Said};
 use super::{Context, percent};
 use crate::error::{self, Error};
-use crate::log::Stamp;
 use crate::process;
+use crate::time::Stamp;
 
 const NAME: &str = "opencode";
 const BUSY_FOR: Duration = Duration::from_millis(100);

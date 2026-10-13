@@ -10,8 +10,8 @@ use super::jsonl::{Tail, head};
 use super::message::{self, Backwards, Said};
 use super::{Context, percent};
 use crate::error::{Error, Result};
-use crate::log::Stamp;
 use crate::process;
+use crate::time::Stamp;
 
 const NAME: &str = "gemini";
 const REPLIES: usize = 512;

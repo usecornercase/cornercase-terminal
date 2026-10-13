@@ -164,7 +164,7 @@ impl Ledger {
 }
 
 pub(super) fn timestamp(entry: &serde_json::Value) -> Option<SystemTime> {
-    entry["timestamp"].as_str().and_then(crate::log::Stamp::parse)
+    entry["timestamp"].as_str().and_then(crate::time::Stamp::parse)
 }
 
 pub(super) fn tokens(value: &serde_json::Value, input: &str, output: &str, read: &str, write: &str) -> Tokens {
@@ -183,7 +183,7 @@ pub(super) mod tests {
     use super::*;
 
     pub fn since() -> SystemTime {
-        crate::log::Stamp::parse("2026-10-10T12:00:01.000Z").expect("time")
+        crate::time::Stamp::parse("2026-10-10T12:00:01.000Z").expect("time")
     }
     pub fn sum(counted: Counted) -> (usize, Tokens) {
         let mut sum = Tokens::default();

@@ -6,7 +6,7 @@ use serde_json::Value;
 use super::{Report, Window, window};
 use crate::activity;
 use crate::error::{Error, Result};
-use crate::issues;
+use crate::time;
 
 const ARGS: [&str; 9] = [
     "-p",
@@ -100,7 +100,7 @@ impl Money {
 }
 
 fn time(text: Option<&str>) -> Option<i64> {
-    text.and_then(issues::parse_time)
+    text.and_then(time::parse_time)
 }
 
 fn label(limit: &Limit) -> String {
@@ -188,7 +188,7 @@ pub mod tests {
     pub const RECORDED: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"session":{"total_cost_usd":0},"subscription_type":"team","rate_limits_available":true,"rate_limits":{"five_hour":{"utilization":7,"resets_at":"2026-10-04T13:59:59.953605+00:00"},"seven_day":{"utilization":74,"resets_at":"2026-10-04T15:59:59.953630+00:00"},"extra_usage":{"is_enabled":false},"limits":[{"kind":"session","group":"session","percent":7,"severity":"normal","resets_at":"2026-10-04T13:59:59.953605+00:00","scope":null,"is_active":false},{"kind":"weekly_all","group":"weekly","percent":74,"severity":"normal","resets_at":"2026-10-04T15:59:59.953630+00:00","scope":null,"is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"severity":"normal","resets_at":"2026-10-04T16:00:00+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}],"spend":{"used":{"amount_minor":0,"currency":"USD","exponent":2},"limit":null,"percent":0,"severity":"normal","enabled":false}},"behaviors":{}}}}"#;
 
     fn at(text: &str) -> Option<i64> {
-        issues::parse_time(text)
+        time::parse_time(text)
     }
 
     pub fn report(line: &str) -> Report {

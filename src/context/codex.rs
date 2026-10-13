@@ -7,8 +7,8 @@ use super::counting::{self, Record, Usage};
 use super::discovery::{self, folder};
 use super::jsonl::{Tail, head};
 use super::{Context, percent};
-use crate::log::Stamp;
 use crate::process;
+use crate::time::Stamp;
 
 pub(super) fn rollout_path(pid: i32, since: SystemTime) -> Option<PathBuf> {
     let mut pids = vec![pid];

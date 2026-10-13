@@ -272,7 +272,7 @@ impl App {
         if changes.is_empty() || !self.events.listening() {
             return (notes, Vec::new());
         }
-        let time = log::Stamp(SystemTime::now()).to_string();
+        let time = crate::time::Stamp(SystemTime::now()).to_string();
         (notes, changes.iter().filter_map(|change| change.event(&time)).collect())
     }
 
