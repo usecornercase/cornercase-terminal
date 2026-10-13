@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.73
+
+- No changes in the app. Projects, workspaces, tabs and panes are found by id in one place.
+
 ## 0.12.71
 
 - No changes in the app. It keeps one side panel at a time.
