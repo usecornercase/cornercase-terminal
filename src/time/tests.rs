@@ -38,6 +38,7 @@ mod stamp {
     #[case::a_sign("2026-10-08T20:23:+2.749Z", None)]
     #[case::too_many_parts("2026-10-08-01T20:23:20Z", None)]
     #[case::before_the_epoch("0000-01-01T00:00:00Z", None)]
+    #[case::a_year_too_large_for_the_calendar("25252734927766554-01-01T00:00:00Z", None)]
     #[case::empty("", None)]
     fn reads_utc_times_of_other_programs(#[case] text: &str, #[case] expected: Option<SystemTime>) {
         assert_eq!(Stamp::parse(text), expected);

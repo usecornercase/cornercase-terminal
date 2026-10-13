@@ -1,10 +1,10 @@
 pub(crate) mod adf;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::Value;
 
 use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body};
 use crate::error::{Error, Result};
-use crate::host::clipboard;
 use crate::http::{self, Answer, Service, path_segment, text};
 use crate::time::parse_time;
 
@@ -32,7 +32,7 @@ pub(crate) struct Api {
 impl Api {
     fn get(&self, path: &str, query: &[(&str, &str)], missing: &str) -> Result<Value> {
         let login = format!("{}:{}", self.email, self.token);
-        let auth = format!("Basic {}", clipboard::base64(login.as_bytes()));
+        let auth = format!("Basic {}", STANDARD.encode(login.as_bytes()));
         let url = format!("{}{path}", self.base.trim_end_matches('/'));
         let answer = http::get(&SERVICE, &url, query, &[("Authorization", &auth)])?;
         http::into_json(answer, missing, failure)

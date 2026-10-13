@@ -10,7 +10,7 @@ use super::*;
 #[case::url("https://x.dev/1", "aHR0cHM6Ly94LmRldi8x")]
 #[case::non_ascii("ñ", "w7E=")]
 fn encodes_like_rfc_4648(#[case] input: &str, #[case] expected: &str) {
-    assert_eq!(base64(input.as_bytes()), expected);
+    assert_eq!(STANDARD.encode(input.as_bytes()), expected);
 }
 
 #[test]

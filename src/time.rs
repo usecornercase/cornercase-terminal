@@ -14,7 +14,13 @@ impl Stamp {
             return None;
         }
         let nanos = format!("{fraction:0<9}").parse().ok()?;
-        let secs = days(year, month, day)? * 86_400 + hour * 3600 + minute * 60 + second;
+        let days = u64::try_from(days_from_civil(
+            i64::try_from(year).ok().filter(|year| *year < 1 << 40)?,
+            month.cast_signed(),
+            day.cast_signed(),
+        ))
+        .ok()?;
+        let secs = days.checked_mul(86_400)?.checked_add(hour * 3600 + minute * 60 + second)?;
         UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
     }
 }
@@ -25,37 +31,15 @@ fn numbers(text: &str, separator: char) -> Option<[u64; 3]> {
     parts.next().is_none().then_some(found)
 }
 
-fn days(year: u64, month: u64, day: u64) -> Option<u64> {
-    let year = year.checked_sub(u64::from(month <= 2))?;
-    let era = year / 400;
-    let yoe = year % 400;
-    let doy = (153 * if month > 2 { month - 3 } else { month + 9 } + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    (era * 146_097 + doe).checked_sub(719_468)
-}
-
 impl Display for Stamp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let since = self.0.duration_since(UNIX_EPOCH).unwrap_or_default();
         let secs = since.as_secs();
-        let (year, month, day) = civil(secs / 86_400);
+        let (year, month, day) = civil_from_days((secs / 86_400).cast_signed());
         let (hour, minute, second) = (secs / 3600 % 24, secs / 60 % 60, secs % 60);
         let millis = since.subsec_millis();
         write!(f, "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
     }
-}
-
-fn civil(days: u64) -> (u64, u64, u64) {
-    let z = days + 719_468;
-    let era = z / 146_097;
-    let doe = z % 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + u64::from(month <= 2);
-    (year, month, day)
 }
 
 pub(crate) fn age(secs: i64) -> String {
@@ -109,7 +93,12 @@ pub(crate) fn now() -> i64 {
 }
 
 pub(crate) fn date(millis: i64) -> String {
-    let days = millis.div_euclid(86_400_000) + 719_468;
+    let (year, month, day) = civil_from_days(millis.div_euclid(86_400_000));
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let days = days + 719_468;
     let era = days.div_euclid(146_097);
     let day_of_era = days - era * 146_097;
     let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
@@ -117,8 +106,7 @@ pub(crate) fn date(millis: i64) -> String {
     let shifted = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * shifted + 2) / 5 + 1;
     let month = if shifted < 10 { shifted + 3 } else { shifted - 9 };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
+    (year_of_era + era * 400 + i64::from(month <= 2), month, day)
 }
 
 #[cfg(test)]
