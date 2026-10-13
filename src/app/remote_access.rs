@@ -2,6 +2,9 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;
 
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::{Position, Rect};
+
 use super::{App, AppEvent, Overlay, Toast};
 use crate::log::{self, Job, Level};
 use crate::panics;
@@ -82,6 +85,13 @@ fn work(orders: &Receiver<(Order, PathBuf)>, tx: &Sender<AppEvent>) {
 }
 
 impl App {
+    pub(super) fn remote_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        let done = ui::remote_done(area, &self.remote_view());
+        if ev.kind == MouseEventKind::Down(MouseButton::Left) && done.contains(pos) {
+            self.overlay = None;
+        }
+    }
+
     pub(super) fn sync_remote(&mut self) {
         if !matches!(self.overlay, Some(Overlay::Remote)) && self.remote.token.take().is_some() {
             self.remote.web.unpair();

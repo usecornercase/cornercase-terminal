@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. Projects, workspaces, tabs and panes are found by id in one place.
 
+## 0.12.72
+
+- No changes in the app. Each overlay's view, submission and mouse handling run through their own methods.
+
 ## 0.12.71
 
 - No changes in the app. It keeps one side panel at a time.

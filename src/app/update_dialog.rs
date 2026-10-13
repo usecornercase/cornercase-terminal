@@ -167,6 +167,11 @@ impl App {
         markdown::render(&notes.join("\n\n"), width)
     }
 
+    pub(super) fn submit_restart(&mut self) -> Option<Overlay> {
+        self.outbox.restart = true;
+        None
+    }
+
     pub(super) fn submit_update(&mut self, step: UpdateStep) -> Option<Overlay> {
         match step {
             UpdateStep::Ask | UpdateStep::Failed(_) => {
