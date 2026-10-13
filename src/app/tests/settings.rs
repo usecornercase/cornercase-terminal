@@ -20,7 +20,7 @@ struct Setup {
 fn open() -> Setup {
     let (dir, config) = (TempDir::new(), TempDir::new());
     let (mut app, rx) = app_in(dir.path(), config.path().join("config.json"));
-    app.env_tokens.clear();
+    app.issues.env_tokens.clear();
     click(&mut app, areas().settings.as_position());
     Setup { app, rx, config, _dir: dir }
 }
@@ -210,7 +210,7 @@ fn a_saved_token_shows_as_connected() {
     let (dir, config) = (TempDir::new(), TempDir::new());
     secrets::write(&paths::secrets(&config.path().join("config.json")), "linear_api_key", "k").expect("save");
     let (mut app, _rx) = app_in(dir.path(), config.path().join("config.json"));
-    app.env_tokens.clear();
+    app.issues.env_tokens.clear();
 
     click(&mut app, areas().settings.as_position());
 

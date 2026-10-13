@@ -74,7 +74,7 @@ fn a_program_that_ends_is_told_by_its_name() {
     follow(&mut app, &[]);
     let pane = term(&app, 0).id;
     let typed = Launch::command(pane, "sleep 30".into(), Instant::now());
-    app.launches.push(typed);
+    app.agents.launches.push(typed);
     refreshing(&mut app, &rx, "sleep runs", |app| pane_job(app, pane).is_some_and(|job| job.program == "sleep"));
 
     done(now(&mut app, None, press_keys(pane, &["ctrl+c"])));
@@ -90,10 +90,10 @@ fn a_program_that_ends_is_told_by_its_name() {
 fn programs_are_not_looked_up_while_nobody_follows() {
     let (mut app, rx, _dirs) = app_with(1);
     let id = term(&app, 0).id;
-    app.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
+    app.agents.launches.push(Launch::command(id, "sleep 30".into(), Instant::now()));
     refreshing(&mut app, &rx, "sleep runs", |app| pane(app, id).program(&app.config).as_deref() == Some("sleep"));
 
-    app.watched = None;
+    app.agents.watched = None;
     app.refresh(Instant::now());
 
     assert_eq!(pane_job(&app, id), None);

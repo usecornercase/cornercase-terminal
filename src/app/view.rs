@@ -38,7 +38,7 @@ impl App {
     pub(super) fn tree_view(&self) -> ui::TreeView {
         let shape = self.tree_shape();
         let rows = ui::tree_rows(&shape);
-        let (above, below) = ui::tree_layout_rows(self.drawn.list, &shape, &rows, self.projects_scroll).hidden();
+        let (above, below) = ui::tree_layout_rows(self.drawn.list, &shape, &rows, self.scroll.projects).hidden();
         let shown = &rows[above.end..below.start];
         let open = self.tree_open();
         let workspaces = self.projects.iter().enumerate().map(|(p, project)| {

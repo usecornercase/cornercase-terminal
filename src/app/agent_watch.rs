@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
@@ -6,7 +6,9 @@ use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::activity::{self, Claude, Session};
 use crate::agents;
+use crate::awake::{self, Awake};
 use crate::config::Config;
+use crate::launch::Launch;
 use crate::log::{self};
 use crate::notify::{self, Notification};
 use crate::process;
@@ -16,21 +18,43 @@ use crate::state::AgentState;
 use crate::term::Term;
 use crate::ui::{self, SidebarRow};
 
+pub(super) struct AgentRuntime {
+    pub(super) launches: Vec<Launch>,
+    pub(super) trust_prompt: agents::TrustPrompt,
+    pub(super) claude_dir: Option<PathBuf>,
+    pub(super) watched: Option<Instant>,
+    pub(super) awake: Awake,
+    pub(super) stats: crate::stats::Stats,
+}
+
+impl AgentRuntime {
+    pub(super) fn new(home: Option<&Path>) -> Self {
+        Self {
+            launches: Vec::new(),
+            trust_prompt: agents::TrustPrompt::default(),
+            claude_dir: activity::claude_dir(home),
+            watched: None,
+            awake: Awake::new(awake::tools()),
+            stats: crate::stats::Stats::new(SystemTime::now()),
+        }
+    }
+}
+
 pub(super) const WATCH_AGENTS_EVERY: Duration = Duration::from_millis(500);
 
 impl App {
     pub(super) fn watch_agents(&mut self, now: Instant) {
         let visible = self.visible_tab();
-        let read = self.watched.is_none_or(|at| now.duration_since(at) >= WATCH_AGENTS_EVERY);
-        let elapsed = self.watched.map_or(Duration::ZERO, |at| now.saturating_duration_since(at));
+        let read = self.agents.watched.is_none_or(|at| now.duration_since(at) >= WATCH_AGENTS_EVERY);
+        let elapsed = self.agents.watched.map_or(Duration::ZERO, |at| now.saturating_duration_since(at));
         let clock = SystemTime::now();
         let mut samples = Vec::new();
         if read {
-            self.watched = Some(now);
+            self.agents.watched = Some(now);
         }
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
-        let (config, dir, tree) = (&self.config, self.claude_dir.as_deref(), self.drawn.tree);
+        let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
         let jobs = self.events.listening();
         let mut notices = Vec::new();
         for (project, open) in self.projects.iter_mut().zip(open) {
@@ -51,7 +75,7 @@ impl App {
                             if let Some(kind) = term.context.kind().and_then(crate::stats::Kind::of)
                                 && let Some((pid, _)) = term.context.agent()
                             {
-                                self.stats.counted(kind, term.context.take_counted());
+                                self.agents.stats.counted(kind, term.context.take_counted());
                                 samples.push(crate::stats::Sample {
                                     pane: term.id,
                                     kind,
@@ -91,8 +115,8 @@ impl App {
             }
         }
         if read {
-            self.stats.sample(clock, elapsed, &samples);
-            self.stats.prune(clock);
+            self.agents.stats.sample(clock, elapsed, &samples);
+            self.agents.stats.prune(clock);
         }
         for (agent, status, project, workspace) in notices {
             self.notify(&agent, status, project, workspace);
@@ -103,9 +127,9 @@ impl App {
         let terms = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms);
         let working =
             |term: &&Term| term.agent.status() == Some(activity::Status::Working) && !term.agent.background_shell();
-        self.awake.update(self.config.keep_awake, terms.filter(working).count(), now);
+        self.agents.awake.update(self.config.keep_awake, terms.filter(working).count(), now);
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.awake = self.awake.state().note();
+            s.awake = self.agents.awake.state().note();
         }
     }
 
@@ -123,7 +147,7 @@ impl App {
             project = project.id,
             workspace = project.workspaces[w].id
         );
-        self.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
     }
 

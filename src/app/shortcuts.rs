@@ -142,7 +142,7 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
-            Action::Quit => self.detach = true,
+            Action::Quit => self.outbox.detach = true,
         }
         Ok(())
     }

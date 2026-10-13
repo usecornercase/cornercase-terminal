@@ -35,7 +35,7 @@ impl Agent {
         };
         let config_path = write_config(config.path(), &settings);
         let (mut app, rx) = app_in(project.path(), config_path);
-        app.claude_dir = Some(fake.dir().to_path_buf());
+        app.agents.claude_dir = Some(fake.dir().to_path_buf());
         Self { app, rx, fake, _config: config, _project: project }
     }
 
@@ -78,7 +78,7 @@ mod work_stats {
 
     fn sample(agent: &mut Agent) {
         let now = Instant::now();
-        agent.app.watched = Some(now.checked_sub(Duration::from_secs(1)).expect("previous read"));
+        agent.app.agents.watched = Some(now.checked_sub(Duration::from_secs(1)).expect("previous read"));
         agent.app.watch_agents(now);
     }
     fn total(agent: &Agent) -> crate::stats::Window {
@@ -436,7 +436,7 @@ mod restarting_when_idle {
 
     fn looked_again(agent: &mut Agent) {
         let since = Instant::now();
-        agent.refreshing("another look at the agents", |a| a.watched.is_some_and(|at| at > since));
+        agent.refreshing("another look at the agents", |a| a.agents.watched.is_some_and(|at| at > since));
     }
 
     fn report(response: Response) -> Report {
@@ -501,10 +501,10 @@ mod restarting_when_idle {
         ask(&mut agent.app, None, when_idle(None));
         let typed = Instant::now();
 
-        agent.app.watched = None;
+        agent.app.agents.watched = None;
         agent.app.refresh(typed);
         let held = (answers(&mut agent.app), agent.app.take_restart());
-        agent.app.watched = None;
+        agent.app.agents.watched = None;
         agent.app.refresh(typed + Duration::from_secs(3));
 
         assert_eq!(held, (Vec::new(), None));
@@ -570,15 +570,15 @@ mod keeping_awake {
         let fakes = TempDir::new();
         let script = fakes.path().join("holds");
         write_executable(&script, "#!/bin/sh\nexec cat\n");
-        agent.app.awake = Awake::new(vec![Tool::new("holds", script, &[])]);
+        agent.app.agents.awake = Awake::new(vec![Tool::new("holds", script, &[])]);
         agent.app.config.keep_awake = true;
         fakes
     }
 
     fn later(agent: &mut Agent, by: Duration) -> State {
-        agent.app.watched = None;
+        agent.app.agents.watched = None;
         agent.app.refresh(Instant::now() + by);
-        agent.app.awake.state()
+        agent.app.agents.awake.state()
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod keeping_awake {
         let mut agent = Agent::new();
         let _fakes = holding(&mut agent);
         let id = working(&mut agent, "next step");
-        let held = (agent.app.awake.state(), agent.app.report(None).keep_awake);
+        let held = (agent.app.agents.awake.state(), agent.app.report(None).keep_awake);
         agent.finish();
         agent.refreshing("the turn ends", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
 

@@ -3,12 +3,12 @@ use crate::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
 
 fn assert_only_linear(s: &Setup) {
-    assert_eq!(s.app.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
+    assert_eq!(s.app.issues.accounts.keys().collect::<Vec<_>>(), [&Source::Linear]);
 }
 
 fn accounts_with_linear(s: &mut Setup, source: Source, workspace: &str) {
-    s.app.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
-    s.app.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
+    s.app.issues.accounts.insert(source, Account { handle: "Ana".into(), workspace: workspace.into() });
+    s.app.issues.accounts.insert(Source::Linear, Account { handle: "ana".into(), workspace: "b".into() });
 }
 
 fn shortcut_with_token(s: &mut Setup) -> FakeHttp {
@@ -58,7 +58,7 @@ fn setup(git: bool, gh_script: &str) -> Setup {
     };
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(dir.path(), config_path);
-    app.env_tokens.clear();
+    app.issues.env_tokens.clear();
     Setup { app, rx, worktrees, config, _dir: dir }
 }
 
@@ -129,7 +129,7 @@ const LAUNCH_WAIT: Duration = Duration::from_secs(20);
 fn wait_typed(s: &mut Setup, text: &str) {
     wait_until_within("the command is typed", LAUNCH_WAIT, || {
         pump(s);
-        s.app.launches.is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
+        s.app.agents.launches.is_empty() && screen(&mut s.app).replace('\n', "").contains(text)
     });
 }
 
@@ -245,7 +245,7 @@ mod filters_and_places {
         pump_until(&mut s.app, &s.rx, "the filtered list loads", |a| loaded(a, Source::Github));
 
         assert!(gh_args(&s).contains("--assignee zoe"), "{}", gh_args(&s));
-        assert_eq!(s.app.issue_people.github[0], issues::Who::Person("zoe".into()));
+        assert_eq!(s.app.issues.people.github[0], issues::Who::Person("zoe".into()));
     }
 
     #[test]
@@ -302,9 +302,9 @@ mod remembering {
         };
         let (mut app, _rx) = empty_app();
         app.restore(&saved, AREA);
-        s.app.issue_tab = app.issue_tab;
-        s.app.issue_closed = app.issue_closed;
-        s.app.issue_people = app.issue_people.clone();
+        s.app.issues.tab = app.issues.tab;
+        s.app.issues.closed = app.issues.closed;
+        s.app.issues.people = app.issues.people.clone();
 
         open_list(&mut s);
 
@@ -414,7 +414,7 @@ mod starting {
 
         wait_until_within("the launch waits for you", LAUNCH_WAIT, || {
             pump(&mut s);
-            s.app.launches.iter().all(Launch::waits_for_you) && !s.app.launches.is_empty()
+            s.app.agents.launches.iter().all(Launch::waits_for_you) && !s.app.agents.launches.is_empty()
         });
 
         assert_eq!(s.app.tick(Instant::now()), None);
@@ -555,7 +555,7 @@ mod tokens {
     fn a_token_from_the_environment_needs_no_form() {
         let mut s = setup(false, "echo '[]'");
         let _server = shortcut(&mut s, Vec::new());
-        s.app.env_tokens.insert(Source::Shortcut, "env-token".into());
+        s.app.issues.env_tokens.insert(Source::Shortcut, "env-token".into());
 
         open_loaded(&mut s, Source::Shortcut);
 
@@ -598,7 +598,7 @@ mod jira {
     fn jira(s: &mut Setup) -> FakeHttp {
         let server =
             FakeHttp::start(vec![("GET /rest/api/3/myself", 200, MYSELF), ("GET /rest/api/3/search/jql", 200, SEARCH)]);
-        s.app.apis.jira = Some(server.url());
+        s.app.issues.apis.jira = Some(server.url());
         server
     }
 
@@ -648,7 +648,7 @@ mod jira {
     fn a_token_from_the_environment_connects_once_the_email_is_typed() {
         let mut s = setup(false, "echo '[]'");
         let _server = jira(&mut s);
-        s.app.env_tokens.insert(Source::Jira, "env-token".into());
+        s.app.issues.env_tokens.insert(Source::Jira, "env-token".into());
 
         type_site_and_email(&mut s);
 
@@ -676,7 +676,7 @@ mod jira {
         s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
         answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::Listed { source: Source::Jira, .. })));
 
-        assert_eq!((s.app.accounts.get(&Source::Jira), s.app.issue_cache.get(&key)), (None, None));
+        assert_eq!((s.app.issues.accounts.get(&Source::Jira), s.app.issues.cache.get(&key)), (None, None));
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod jira {
         s.app.token_checked(Source::Jira, &Secret("new".into()), Ok(account), AREA).expect("save the new token");
         answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::Listed { source: Source::Jira, .. })));
 
-        assert_eq!(s.app.issue_cache.get(&key), None);
+        assert_eq!(s.app.issues.cache.get(&key), None);
     }
 
     #[test]
@@ -730,7 +730,7 @@ mod plane {
             ("GET /api/v1/workspaces/acme/members/", 200, MEMBERS),
             ("GET /api/v2/workspaces/acme/work-items/", 200, ITEMS),
         ]);
-        s.app.apis.plane = Some(server.url());
+        s.app.issues.apis.plane = Some(server.url());
         server
     }
 
@@ -762,7 +762,7 @@ mod plane {
     fn a_key_from_the_environment_connects_once_the_workspace_is_typed() {
         let mut s = setup(false, "echo '[]'");
         let _server = plane(&mut s);
-        s.app.env_tokens.insert(Source::Plane, "env-key".into());
+        s.app.issues.env_tokens.insert(Source::Plane, "env-key".into());
 
         type_workspace(&mut s);
 

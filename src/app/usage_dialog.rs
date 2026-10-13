@@ -66,7 +66,7 @@ impl App {
     }
 
     pub fn stats_view(&self, now: SystemTime) -> crate::stats::View {
-        self.stats.view(now)
+        self.agents.stats.view(now)
     }
 }
 

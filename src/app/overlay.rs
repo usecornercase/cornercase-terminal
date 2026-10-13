@@ -191,7 +191,9 @@ impl App {
                     && !view.stats.empty
                     && ui::usage_share(area, &view).contains(pos)
                 {
-                    self.host_writes.push(clipboard::osc52(&crate::stats::share_link(&self.stats, SystemTime::now())));
+                    self.outbox
+                        .host_writes
+                        .push(clipboard::osc52(&crate::stats::share_link(&self.agents.stats, SystemTime::now())));
                     self.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
                 }
             }

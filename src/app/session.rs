@@ -57,7 +57,7 @@ impl App {
         let Some(line) = agents::resume_line(&self.config, agent) else { return };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
-        self.launches.push(Launch::command(term.id, line, now));
+        self.agents.launches.push(Launch::command(term.id, line, now));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
     }

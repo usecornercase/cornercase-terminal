@@ -504,7 +504,7 @@ impl App {
                     }
                     _ => path,
                 };
-                copy(&mut self.host_writes, &mut self.toast, &text);
+                copy(&mut self.outbox.host_writes, &mut self.toast, &text);
             }
         }
         Ok(())

@@ -23,7 +23,7 @@ fn the_active_project_is_scrolled_into_view() {
     let (mut app, _rx, _dirs) = app_with(4);
     app.follow(SHORT);
     assert!(
-        !ui::entry_row(short().list, short().pitch, &plain(4), app.projects_scroll, SidebarRow::Project(3)).is_empty()
+        !ui::entry_row(short().list, short().pitch, &plain(4), app.scroll.projects, SidebarRow::Project(3)).is_empty()
     );
 }
 
@@ -33,7 +33,7 @@ fn the_wheel_scrolls_the_projects() {
     app.active = 0;
     app.follow(SHORT);
     wheel_at(&mut app, MouseEventKind::ScrollDown, short().list.as_position());
-    assert_eq!(app.projects_scroll, 2);
+    assert_eq!(app.scroll.projects, 2);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn scrolling_away_does_not_snap_back_to_the_active_project() {
     app.follow(SHORT);
     wheel_at(&mut app, MouseEventKind::ScrollUp, short().list.as_position());
     app.follow(SHORT);
-    assert_eq!(app.projects_scroll, 0);
+    assert_eq!(app.scroll.projects, 0);
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn a_new_tab_is_scrolled_into_view() {
         short().workspaces_list,
         short().pitch,
         &app.tab_lines(),
-        app.workspaces_scroll,
+        app.scroll.workspaces,
         WorkspaceRow::Tab(0, 3),
     );
     assert!(!row.is_empty());
@@ -75,5 +75,5 @@ fn the_wheel_scrolls_the_workspaces() {
     app.projects[0].workspaces[0].active = 0;
     app.follow(SHORT);
     wheel_at(&mut app, MouseEventKind::ScrollDown, short().workspaces_list.as_position());
-    assert_eq!(app.workspaces_scroll, 3);
+    assert_eq!(app.scroll.workspaces, 3);
 }

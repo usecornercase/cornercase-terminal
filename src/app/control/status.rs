@@ -83,7 +83,7 @@ impl App {
     }
 
     fn keep_awake_info(&self) -> Option<KeepAwake> {
-        match self.awake.state() {
+        match self.agents.awake.state() {
             awake::State::Off => None,
             awake::State::Released => Some(KeepAwake::default()),
             awake::State::Held(by) => Some(KeepAwake { held: true, by: Some(by), unavailable: None }),

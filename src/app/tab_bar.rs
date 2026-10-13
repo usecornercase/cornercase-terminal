@@ -12,17 +12,17 @@ use crate::ui::{self};
 impl App {
     pub(super) fn reveal_in_tab_bar(&mut self, areas: &ui::Areas, moved: bool) {
         if moved {
-            self.tab_bar_scroll = 0;
+            self.scroll.tab_bar = 0;
         }
         let Some(t) = self.project().and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active)
         else {
             return;
         };
-        self.tab_bar_scroll = self.tab_strip(areas).reveal(t);
+        self.scroll.tab_bar = self.tab_strip(areas).reveal(t);
     }
 
     pub(super) fn tab_strip(&self, areas: &ui::Areas) -> ui::tab_bar::Strip {
-        ui::tab_bar::Strip::new(areas.tab_bar, &self.bar_tabs(), self.tab_bar_scroll)
+        ui::tab_bar::Strip::new(areas.tab_bar, &self.bar_tabs(), self.scroll.tab_bar)
     }
 
     fn bar_tabs(&self) -> Vec<ui::TabEntry> {
@@ -37,7 +37,7 @@ impl App {
             tabs: self.bar_tabs(),
             active: workspace.filter(|w| !w.tabs.is_empty()).map(|w| w.active),
             details: self.details(pane.and_then(|t| t.context.context()), pane.and_then(|t| t.memory.bytes())),
-            scroll: self.tab_bar_scroll,
+            scroll: self.scroll.tab_bar,
         }
     }
 
@@ -61,7 +61,7 @@ impl App {
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Close(t)) => self.close_tab(p, w, t),
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::New) => self.add_tab(p, w, area)?,
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Scroll(delta)) => {
-                self.tab_bar_scroll = strip.scrolled(delta);
+                self.scroll.tab_bar = strip.scrolled(delta);
             }
             (MouseEventKind::Down(MouseButton::Left), ui::tab_bar::Hit::Menu(t))
             | (

@@ -17,7 +17,7 @@ fn release() -> Release {
 
 fn found(install: Install) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = empty_app();
-    app.updates.install = install;
+    app.update.updates.install = install;
     app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(release())))), AREA).expect("handle check");
     (app, rx)
 }
@@ -43,7 +43,7 @@ fn submit(app: &mut App) {
 }
 
 fn installed(app: &mut App) -> String {
-    app.updates.installed = true;
+    app.update.updates.installed = true;
     open(app);
     let Some(ui::Overlay::Update(update)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
         panic!("the update dialog");
@@ -117,7 +117,7 @@ fn with_notes(notes: &str) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = found(replaced());
     let body = format!("## Release Notes\n\n{notes}\n\n## Install cornercase 9.0.0\n");
     let json = serde_json::json!({"tag_name": "v9.0.0", "assets": [], "body": body});
-    app.updates.available = update::release(&json);
+    app.update.updates.available = update::release(&json);
     open(&mut app);
     (app, rx)
 }
@@ -136,7 +136,7 @@ fn the_dialog_shows_the_release_notes() {
 fn the_wheel_scrolls_long_notes() {
     let (app, _rx) = scrolled_notes();
 
-    assert_eq!(app.update_scroll, 3);
+    assert_eq!(app.update.scroll, 3);
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn the_restart_list_starts_at_its_top() {
 
     app.handle_event(AppEvent::Update(UpdateEvent::Installed(Ok(()))), AREA).expect("handle the update");
 
-    assert_eq!((step(&app), app.update_scroll), (Some(&UpdateStep::Installed), 0));
+    assert_eq!((step(&app), app.update.scroll), (Some(&UpdateStep::Installed), 0));
 }
 
 #[test]
@@ -211,8 +211,8 @@ fn an_update_in_progress_cannot_be_dismissed() {
 
 fn checking(server: &FakeHttp) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = empty_app();
-    app.updates.enabled = true;
-    app.updates.url = format!("{}/releases/latest", server.url());
+    app.update.updates.enabled = true;
+    app.update.updates.url = format!("{}/releases/latest", server.url());
     (app, rx)
 }
 
@@ -258,7 +258,7 @@ fn the_dialog_shows_the_changelog_of_every_version_since_this_one() {
     ]});
     let server = FakeHttp::start(vec![("GET /releases/latest", 200, latest.to_string())]);
     let (mut app, rx) = checking(&server);
-    app.updates.install = replaced();
+    app.update.updates.install = replaced();
 
     app.refresh(Instant::now());
     pump_until(&mut app, &rx, "the update is found", |app| app.update_label().is_some());
@@ -273,11 +273,11 @@ fn the_dialog_shows_the_changelog_of_every_version_since_this_one() {
 #[test]
 fn the_check_can_be_turned_off() {
     let (mut app, _rx) = empty_app();
-    app.updates.enabled = true;
-    app.updates.url = "http://127.0.0.1:1/never".into();
+    app.update.updates.enabled = true;
+    app.update.updates.url = "http://127.0.0.1:1/never".into();
     app.config.check_updates = false;
 
     app.refresh(Instant::now());
 
-    assert_eq!(app.updates.checked, None);
+    assert_eq!(app.update.updates.checked, None);
 }

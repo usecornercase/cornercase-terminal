@@ -243,7 +243,7 @@ impl App {
         let Some((spec, _)) = launch else { return Ok(false) };
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
-        self.launches.push(launch);
+        self.agents.launches.push(launch);
         pending.stage = Stage::launch(then.wait);
         Ok(true)
     }

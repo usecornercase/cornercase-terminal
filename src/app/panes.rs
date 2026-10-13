@@ -141,7 +141,7 @@ impl App {
         }
         self.selecting = None;
         if let Ok(Some(text)) = term.emulator.finish_selection() {
-            copy(&mut self.host_writes, &mut self.toast, &text);
+            copy(&mut self.outbox.host_writes, &mut self.toast, &text);
         }
         if let Some(press) = self.link_press.take().filter(|p| p.term == id && Some(p.at) == at) {
             self.open_link(&press.target);

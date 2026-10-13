@@ -50,7 +50,7 @@ impl App {
     }
 
     pub(super) fn holding(&self, caller: Option<u64>, now: Instant) -> Vec<u64> {
-        let launching: Vec<u64> = self.launches.iter().filter(|l| !l.waits_for_you()).map(|l| l.term).collect();
+        let launching: Vec<u64> = self.agents.launches.iter().filter(|l| !l.waits_for_you()).map(|l| l.term).collect();
         let terms = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms);
         let holds = |term: &&Term| Some(term.id) != caller && (launching.contains(&term.id) || self.at_work(term, now));
         terms.filter(holds).map(|term| term.id).collect()

@@ -183,7 +183,7 @@ fn dragging_over_the_numbers_selects_lines_for_the_agent() {
     assert_eq!(file(&app).selection, Some((1, 3)));
     let ask = action_pos(&app, Action::Ask);
     click(&mut app, ask);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("src/main.rs:1-3")));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("src/main.rs:1-3")));
     assert_eq!(toast(&app), Some(NO_AGENT));
 }
 
@@ -204,7 +204,7 @@ fn copy_takes_the_selected_lines() {
     click(&mut app, pos);
     let copy = action_pos(&app, Action::Copy);
     click(&mut app, copy);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("    run();")));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("    run();")));
 }
 
 #[test]
@@ -219,16 +219,16 @@ fn an_outside_file_keeps_its_absolute_path_for_actions_and_the_previous_search()
     assert!(file(&app).gutter.is_none());
     let ask = action_pos(&app, Action::Ask);
     click(&mut app, ask);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&format!("{path}:1-2"))));
     let copy = action_pos(&app, Action::Copy);
     click(&mut app, copy);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52("# Note\nRead this.")));
     let workspace = app.project().expect("project").workspace().expect("workspace").id;
     app.files.viewer_mut(workspace).expect("viewer").selection = None;
     click(&mut app, copy);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
     click(&mut app, ask);
-    assert_eq!(app.host_writes.last(), Some(&clipboard::osc52(&path)));
+    assert_eq!(app.outbox.host_writes.last(), Some(&clipboard::osc52(&path)));
     open(&mut app);
     open(&mut app);
     assert_eq!(file(&app).path, path, "reopening the panel keeps the outside file");

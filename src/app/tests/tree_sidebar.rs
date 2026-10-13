@@ -19,7 +19,7 @@ fn list() -> Rect {
 }
 
 fn row(app: &App, row: TreeRow) -> Rect {
-    ui::tree_row(list(), &app.tree_shape(), app.projects_scroll, row)
+    ui::tree_row(list(), &app.tree_shape(), app.scroll.projects, row)
 }
 
 fn click_at(app: &mut App, pos: Position) {
@@ -33,7 +33,7 @@ fn click_name(app: &mut App, r: TreeRow) {
 }
 
 fn click_arrow(app: &mut App, r: TreeRow) {
-    let arrow = ui::tree_arrow(list(), &app.tree_shape(), app.projects_scroll, r);
+    let arrow = ui::tree_arrow(list(), &app.tree_shape(), app.scroll.projects, r);
     click_at(app, arrow.as_position());
 }
 

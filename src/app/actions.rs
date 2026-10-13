@@ -59,7 +59,7 @@ impl App {
                 .map(|i| (t, tab.panes[i].id))
         });
         let Some((t, id)) = found else {
-            self.host_writes.push(clipboard::osc52(text.trim_end()));
+            self.outbox.host_writes.push(clipboard::osc52(text.trim_end()));
             self.toast = Some(Toast::new(NO_AGENT, ui::ToastIcon::Check));
             return;
         };

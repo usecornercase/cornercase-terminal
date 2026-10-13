@@ -40,6 +40,8 @@ Each client has its own writer thread, so a slow client never blocks the loop. A
 
 `AppEvent` has 13 variants. Background answers are grouped into `WorktreeEvent`, `IssueEvent`, `ChangesEvent`, `FilesEvent` and `UpdateEvent`, each defined and handled in its concern's file under `app/`. Every arm of `App::handle_event` calls one method; input filtering and PTY output stay in `app.rs`. The nested enums supply the existing event names for `server.log`, and the issues handler keeps the connection epochs that reject stale answers.
 
+`App` groups state into `issues` (`IssueConnections` in `app/issues_dialog.rs`), `update` (`UpdateState` in `app/update_dialog.rs`), `agents` (`AgentRuntime` in `app/agent_watch.rs`), `scroll` (`Scrolls` in `app/layout.rs`) and `upstream` (`Upstream` in `app/worktrees.rs`). Each group keeps its construction and defaults with its concern. A private `Outbox` in `app.rs` holds host writes, notifications, detach and restart requests for the server to take through the same methods. The grouped fields are visible only inside `app`; callers borrow individual fields so independent state can still be read and updated together. Core state, the panels and the knobs tests set stay as they were.
+
 ## Protocol
 
 `protocol.rs` frames messages with a little-endian length prefix and encodes them with `postcard`; messages over 64 MiB are refused.

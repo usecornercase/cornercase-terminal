@@ -110,7 +110,7 @@ fn panel_area(app: &App) -> Rect {
 
 fn fake_shortcut<B: Into<Vec<u8>>>(app: &mut App, routes: Vec<(&'static str, u16, B)>) -> crate::test_util::FakeHttp {
     let server = crate::test_util::FakeHttp::start(routes);
-    app.apis.shortcut = format!("{}/api/v3", server.url());
+    app.issues.apis.shortcut = format!("{}/api/v3", server.url());
     server
 }
 
@@ -290,16 +290,16 @@ fn entry_pos() -> Position {
 }
 
 fn sidebar_pos(app: &App, row: SidebarRow) -> Position {
-    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.projects_scroll, row);
+    let r = ui::entry_row(list(), 1, &app.sidebar_rows(), app.scroll.projects, row);
     Position::new(r.x + 3, r.y)
 }
 
 fn sidebar_close(app: &App, row: SidebarRow) -> Position {
-    ui::close_button(list(), 1, &app.sidebar_rows(), app.projects_scroll, row).as_position()
+    ui::close_button(list(), 1, &app.sidebar_rows(), app.scroll.projects, row).as_position()
 }
 
 fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
-    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.workspaces_scroll, row)
+    ui::workspace_row(areas().workspaces_list, areas().pitch, &app.tab_lines(), app.scroll.workspaces, row)
 }
 
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {

@@ -1,38 +1,47 @@
-use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
-use std::time::{Duration, Instant, SystemTime};
+#[cfg(test)]
+use std::time::SystemTime;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 
 use crate::activity::{self};
+#[cfg(test)]
 use crate::agents;
-use crate::awake::{self, Awake};
+#[cfg(test)]
+use crate::awake::Awake;
 use crate::changes::{self};
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
 use crate::files;
 use crate::host_theme::HostTheme;
+use crate::issues::People;
 use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
-use crate::issues::{Account, People, Person, Source};
+#[cfg(test)]
+use crate::issues::{Account, Source};
+#[cfg(test)]
 use crate::launch::Launch;
 use crate::notify::Notification;
 use crate::paths;
 use crate::pointer;
 use crate::project::{Group, Project, Tab, group};
+#[cfg(test)]
 use crate::restart;
 use crate::settings::Page;
 use crate::split::Dir;
 use crate::state::{self, ChangesState, IssuesState, PaneState, ProjectState, State, TabState, WorkspaceState};
 use crate::todo::{self, Todos};
 use crate::ui::{self};
-use crate::update::{Install, Updates};
+use crate::update::Install;
 use crate::usage;
 use crate::web::Web;
-use agent_watch::WATCH_AGENTS_EVERY;
+use agent_watch::{AgentRuntime, WATCH_AGENTS_EVERY};
 use changes_panel::ChangesEvent;
 use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
@@ -40,18 +49,17 @@ use interaction::Grab;
 use interaction::LinkPress;
 use interaction::PaneDrag;
 use interaction::RowDrag;
-use issues_dialog::Apis;
-use issues_dialog::IssueEvent;
-use issues_dialog::env_tokens;
+use issues_dialog::{IssueConnections, IssueEvent};
 use launches::LAUNCH_EVERY;
+#[cfg(test)]
 use layout::Focus;
+use layout::Scrolls;
 use overlay::Overlay;
 use session::not_restored;
 use toast::Toast;
 use toast::copy;
-use update_dialog::UpdateEvent;
-use worktrees::SYNC_EVERY;
-use worktrees::WorktreeEvent;
+use update_dialog::{UpdateEvent, UpdateState};
+use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 
 mod actions;
 mod agent_watch;
@@ -94,20 +102,28 @@ pub use event::{AppEvent, Start};
 pub use events::Streamed;
 pub use images::{Placed, Sight};
 
+#[derive(Default)]
+struct Outbox {
+    host_writes: Vec<Vec<u8>>,
+    notifications: Vec<Notification>,
+    detach: bool,
+    restart: bool,
+}
+
 pub struct App {
+    upstream: Upstream,
+    scroll: Scrolls,
+    outbox: Outbox,
+    agents: AgentRuntime,
+    update: UpdateState,
+    issues: IssueConnections,
     groups: Vec<Group>,
     deleting_groups: Vec<u64>,
     projects: Vec<Project>,
     active: usize,
-    projects_scroll: usize,
-    workspaces_scroll: usize,
-    agents_scroll: usize,
-    tab_bar_scroll: usize,
-    followed: Focus,
     drawn: ui::Areas,
     nav: Option<ui::Nav>,
     next_id: u64,
-    detach: bool,
     hover: Option<Position>,
     widths: ui::Widths,
     resizing: Option<ui::Border>,
@@ -127,38 +143,12 @@ pub struct App {
     theme: HostTheme,
     tx: Sender<AppEvent>,
     synced: Option<Instant>,
-    issue_cache: IssueCache,
-    issue_closed: bool,
-    issue_people: People,
-    people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
-    host_writes: Vec<Vec<u8>>,
-    notifications: Vec<Notification>,
-    accounts: HashMap<Source, Account>,
-    issue_epochs: HashMap<Source, u64>,
-    issue_tab: Option<IssueTab>,
     settings_page: Page,
-    apis: Apis,
-    env_tokens: HashMap<Source, String>,
-    secrets_path: PathBuf,
-    launches: Vec<Launch>,
-    trust_prompt: agents::TrustPrompt,
-    fetched: HashMap<u64, Instant>,
-    counting: HashSet<u64>,
-    counted: Option<Instant>,
-    updates: Updates,
-    update_scroll: usize,
-    restart_list: Vec<restart::Running>,
-    listed: Option<Instant>,
-    restart: bool,
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
-    claude_dir: Option<PathBuf>,
-    watched: Option<Instant>,
-    awake: Awake,
     remote: remote_access::Remote,
     usage: usage::State,
     usage_page: usage::Page,
-    stats: crate::stats::Stats,
     usage_timeout: Duration,
     confirm_within: Duration,
     todos: Todos,
@@ -174,22 +164,22 @@ impl App {
     pub fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
         let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
-        let claude_dir = activity::claude_dir(home.as_deref());
         let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
         Self {
+            upstream: Upstream::default(),
+            scroll: Scrolls::default(),
+            outbox: Outbox::default(),
+            agents: AgentRuntime::new(home.as_deref()),
+            home,
+            update: UpdateState::from_env(),
+            issues: IssueConnections::new(secrets_path),
             groups: Vec::new(),
             projects: Vec::new(),
             active: 0,
-            projects_scroll: 0,
-            workspaces_scroll: 0,
-            agents_scroll: 0,
-            tab_bar_scroll: 0,
-            followed: Focus::default(),
             drawn: ui::Areas::default(),
             nav: None,
             deleting_groups: Vec::new(),
             next_id: 1,
-            detach: false,
             hover: None,
             widths: ui::Widths::default(),
             resizing: None,
@@ -205,42 +195,15 @@ impl App {
             config: config::load(&config_path),
             config_path,
             shell,
-            home,
             theme,
             tx,
             synced: None,
-            issue_cache: IssueCache::new(None),
-            issue_closed: false,
-            issue_people: People::default(),
-            people_cache: HashMap::new(),
-            host_writes: Vec::new(),
-            notifications: Vec::new(),
-            accounts: HashMap::new(),
-            issue_epochs: HashMap::new(),
-            issue_tab: None,
             settings_page: Page::default(),
-            apis: Apis::from_env(),
-            env_tokens: env_tokens(),
-            secrets_path,
-            launches: Vec::new(),
-            trust_prompt: agents::TrustPrompt::default(),
-            fetched: HashMap::new(),
-            counting: HashSet::new(),
-            counted: None,
-            updates: Updates::from_env(),
-            update_scroll: 0,
-            restart_list: Vec::new(),
-            listed: None,
-            restart: false,
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
-            claude_dir,
-            watched: None,
-            awake: Awake::new(awake::tools()),
             remote: remote_access::Remote::new(web),
             usage: usage::State::default(),
             usage_page: usage::Page::default(),
-            stats: crate::stats::Stats::new(SystemTime::now()),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
             todos: Todos::default(),
@@ -254,15 +217,15 @@ impl App {
     }
 
     pub fn take_detach(&mut self) -> bool {
-        std::mem::take(&mut self.detach)
+        std::mem::take(&mut self.outbox.detach)
     }
 
     pub fn take_restart(&mut self) -> Option<PathBuf> {
-        if !std::mem::take(&mut self.restart) {
+        if !std::mem::take(&mut self.outbox.restart) {
             return None;
         }
-        Some(match &self.updates.install {
-            Install::Replace(exe) if self.updates.installed => exe.clone(),
+        Some(match &self.update.updates.install {
+            Install::Replace(exe) if self.update.updates.installed => exe.clone(),
             _ => std::env::current_exe().unwrap_or_default(),
         })
     }
@@ -360,14 +323,14 @@ impl App {
 
     pub fn tick(&self, now: Instant) -> Option<Duration> {
         let drag = self.row_drag.filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
-        let launch = self.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
+        let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         [drag, launch, self.next_request(now)].into_iter().flatten().min()
     }
 
     pub fn refresh(&mut self, now: Instant) {
         self.reap();
         if self.overlay.as_ref().is_some_and(Overlay::lists_running)
-            && self.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
+            && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
         {
             self.list_running(now);
         }
@@ -438,11 +401,11 @@ impl App {
                 collapsed: p.collapsed,
             })
             .collect();
-        let chosen = self.issue_tab.is_some() || self.issue_closed || self.issue_people != People::default();
+        let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {
-            tab: self.issue_tab.map(|t| t.id().to_string()),
-            closed: self.issue_closed,
-            people: self.issue_people.clone(),
+            tab: self.issues.tab.map(|t| t.id().to_string()),
+            closed: self.issues.closed,
+            people: self.issues.people.clone(),
         });
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let changes = (self.changes.open
@@ -476,9 +439,9 @@ impl App {
         self.todo.open = saved.todo && !saved.files;
         self.files.open = saved.files;
         if let Some(issues) = &saved.issues {
-            self.issue_tab = issues.tab.as_deref().and_then(IssueTab::from_id);
-            self.issue_closed = issues.closed;
-            self.issue_people = issues.people.clone();
+            self.issues.tab = issues.tab.as_deref().and_then(IssueTab::from_id);
+            self.issues.closed = issues.closed;
+            self.issues.people = issues.people.clone();
         }
         let first_group = self.groups.len();
         for entry in &saved.groups {
@@ -548,19 +511,19 @@ impl App {
     }
 
     fn output(&mut self, id: u64, bytes: &[u8]) {
-        for launch in self.launches.iter_mut().filter(|l| l.term == id) {
+        for launch in self.agents.launches.iter_mut().filter(|l| l.term == id) {
             launch.output(Instant::now());
         }
         if let Some(t) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
             t.feed(bytes);
             for text in t.emulator.take_copied() {
-                copy(&mut self.host_writes, &mut self.toast, &text);
+                copy(&mut self.outbox.host_writes, &mut self.toast, &text);
             }
         }
     }
 
     pub fn set_issue_cache(&mut self, path: PathBuf) {
-        self.issue_cache = IssueCache::new(Some(path));
+        self.issues.cache = IssueCache::new(Some(path));
     }
 
     pub fn set_todos(&mut self, todos: Todos) {
@@ -572,19 +535,19 @@ impl App {
     }
 
     pub fn take_host_writes(&mut self) -> Vec<Vec<u8>> {
-        std::mem::take(&mut self.host_writes)
+        std::mem::take(&mut self.outbox.host_writes)
     }
 
     pub fn take_notifications(&mut self) -> Vec<Notification> {
-        std::mem::take(&mut self.notifications)
+        std::mem::take(&mut self.outbox.notifications)
     }
 
     pub fn set_stats(&mut self, stats: crate::stats::Stats) {
-        self.stats = stats;
+        self.agents.stats = stats;
     }
 
     pub fn stats(&self) -> &crate::stats::Stats {
-        &self.stats
+        &self.agents.stats
     }
 
     pub fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
@@ -656,12 +619,12 @@ impl App {
             groups,
             projects,
             active: self.active,
-            projects_scroll: self.projects_scroll,
+            projects_scroll: self.scroll.projects,
             has_project,
             workspaces,
             active_workspace,
             active_tab,
-            workspaces_scroll: self.workspaces_scroll,
+            workspaces_scroll: self.scroll.workspaces,
             issues: self.issues_available(),
             hover: self.hover.filter(|_| self.pane_drag.is_none()),
             widths: self.widths,

@@ -282,7 +282,7 @@ impl App {
         let Some(mut launch) = launch else { return Some(json(&done)) };
         let key = self.requests.key();
         launch.key = Some(key);
-        self.launches.push(launch);
+        self.agents.launches.push(launch);
         self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage });
         None
     }

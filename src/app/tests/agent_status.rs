@@ -27,13 +27,13 @@ trait StartClaude {
 
 impl StartClaude for FakeClaude {
     fn start_with(&self, app: &mut App, args: &str) {
-        app.claude_dir = Some(self.dir().to_path_buf());
+        app.agents.claude_dir = Some(self.dir().to_path_buf());
         type_line(app, &self.command_line(args));
     }
 }
 
 fn tick(app: &mut App) {
-    let now = app.watched.map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
+    let now = app.agents.watched.map_or_else(Instant::now, |at| at + WATCH_AGENTS_EVERY);
     app.watch_agents(now);
 }
 
@@ -77,7 +77,7 @@ fn finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
     watch_until(&mut app, &rx, "claude finishes out of sight", |a| status(a, 0, 0) == Some(Status::Done));
 
     click_row(&mut app, WorkspaceRow::Tab(0, 0));
-    let now = app.watched.expect("watched");
+    let now = app.agents.watched.expect("watched");
     app.watch_agents(now);
 
     assert_eq!(status(&app, 0, 0), Some(Status::Idle));
@@ -93,7 +93,7 @@ fn the_compact_menu_hides_the_tab_beneath_it() {
     let bar = text(&render(&mut app, small), Rect::new(0, 1, 7, 1));
 
     app.nav = None;
-    let now = app.watched.expect("watched");
+    let now = app.agents.watched.expect("watched");
     app.watch_agents(now);
 
     assert_eq!((bar.as_str(), status(&app, 0, 0)), ("   ≡ ✓ ", Some(Status::Idle)));
@@ -644,7 +644,7 @@ mod resuming {
         let (mut back, rx, _dirs) = app_with(0);
         back.config.agent_commands.insert(agents::CLAUDE.into(), claude.script().display().to_string());
         back.config.agent_args.insert(agents::CLAUDE.into(), vec![claude.dir().display().to_string()]);
-        back.claude_dir = Some(claude.dir().to_path_buf());
+        back.agents.claude_dir = Some(claude.dir().to_path_buf());
         assert!(back.restore(&saved, AREA));
         refreshing(&mut back, &rx, "resumed conversation", |a| {
             a.term().and_then(|t| t.context.conversation()).is_some()
@@ -698,7 +698,7 @@ mod resuming {
         let (_app, _rx, _dirs, claude, saved) = remembered_claude();
         claude.signal("quit");
         let (mut back, _rx, _bin) = restored(&saved, agents::CLAUDE, true);
-        back.launches.clear();
+        back.agents.launches.clear();
         let now = Instant::now();
 
         back.watch_agents(now + RESUME_GRACE / 2);
@@ -727,7 +727,7 @@ mod resuming {
 
         let (back, _rx, _bin) = restored(&saved, agents::CLAUDE, false);
 
-        assert_eq!((back.launches.len(), saved_agent(&back.state())), (0, None));
+        assert_eq!((back.agents.launches.len(), saved_agent(&back.state())), (0, None));
     }
 }
 
@@ -743,7 +743,7 @@ mod agents_section {
 
     fn agent_pos(app: &App, area: Rect, i: usize) -> Position {
         let a = app.layout(area).shown(app.nav);
-        let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.agents_scroll, i);
+        let r = ui::agent_row(a.agents_list, a.pitch, app.agent_places().len(), app.scroll.agents, i);
         Position::new(r.x + 4, r.y + r.height / 2)
     }
 
@@ -839,7 +839,7 @@ mod agents_section {
         let at = app.layout(area).agents_list.as_position();
 
         mouse_in(&mut app, MouseEventKind::ScrollDown, at, area);
-        let scroll = app.agents_scroll;
+        let scroll = app.scroll.agents;
         claude.signal("quit");
         codex.signal("quit", "");
         drop(rx);

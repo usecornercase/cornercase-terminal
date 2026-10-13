@@ -86,15 +86,15 @@ impl App {
         }
         if areas.tree {
             let shape = self.tree_shape();
-            return Some(ui::Drag::Tree(row, ui::tree_drop(areas.list, &shape, self.projects_scroll, row, pos)));
+            return Some(ui::Drag::Tree(row, ui::tree_drop(areas.list, &shape, self.scroll.projects, row, pos)));
         }
         let sidebar = |row: SidebarRow| {
             let rows = self.sidebar_rows();
-            ui::Drag::Sidebar(row, ui::sidebar_drop(areas.list, areas.pitch, &rows, self.projects_scroll, row, pos))
+            ui::Drag::Sidebar(row, ui::sidebar_drop(areas.list, areas.pitch, &rows, self.scroll.projects, row, pos))
         };
         let workspaces = |row: WorkspaceRow| {
             let (list, tabs) = (areas.workspaces_list, self.tab_lines());
-            ui::Drag::Workspaces(row, ui::workspace_drop(list, areas.pitch, &tabs, self.workspaces_scroll, row, pos))
+            ui::Drag::Workspaces(row, ui::workspace_drop(list, areas.pitch, &tabs, self.scroll.workspaces, row, pos))
         };
         match row {
             ui::TreeRow::Group(g) => Some(sidebar(SidebarRow::Group(g))),
@@ -153,7 +153,7 @@ impl App {
         };
         if matches!(target, Target::Tab(..)) && !areas.tab_bar.is_empty() {
             if let Some(delta) = self.tab_strip(&areas).edge(pos) {
-                self.tab_bar_scroll = self.tab_strip(&areas).scrolled(delta);
+                self.scroll.tab_bar = self.tab_strip(&areas).scrolled(delta);
                 self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
             }
             return;
@@ -162,10 +162,10 @@ impl App {
         let rows = if sidebar {
             self.sidebar_layout(&areas)
         } else {
-            ui::workspace_layout(areas.workspaces_list, areas.pitch, &self.tab_lines(), self.workspaces_scroll)
+            ui::workspace_layout(areas.workspaces_list, areas.pitch, &self.tab_lines(), self.scroll.workspaces)
         };
         let Some(delta) = rows.edge(pos) else { return };
-        let scroll = if sidebar { &mut self.projects_scroll } else { &mut self.workspaces_scroll };
+        let scroll = if sidebar { &mut self.scroll.projects } else { &mut self.scroll.workspaces };
         *scroll = rows.scrolled(delta);
         self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
     }

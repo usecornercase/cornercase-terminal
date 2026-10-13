@@ -15,7 +15,7 @@ impl App {
         let shown =
             [rows.iter().position(|r| *r == ui::TreeRow::Project(p)), ui::tree_active_row(&rows, &shape, (p, w, t))];
         for i in shown.into_iter().flatten() {
-            self.projects_scroll = ui::tree_layout_rows(list, &shape, &rows, self.projects_scroll).reveal(i);
+            self.scroll.projects = ui::tree_layout_rows(list, &shape, &rows, self.scroll.projects).reveal(i);
         }
     }
 
@@ -43,7 +43,7 @@ impl App {
 
     pub(in crate::app) fn tree_layout(&self, list: Rect) -> ui::Rows {
         let shape = self.tree_shape();
-        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.projects_scroll)
+        ui::tree_layout_rows(list, &shape, &ui::tree_rows(&shape), self.scroll.projects)
     }
 
     pub(in crate::app) fn tree_target(&self, row: ui::TreeRow) -> Option<Target> {
@@ -82,7 +82,7 @@ impl App {
 
     pub(in crate::app) fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
         let shape = self.tree_shape();
-        let scroll = self.projects_scroll;
+        let scroll = self.scroll.projects;
         match self.tree_hit(list, &shape, pos) {
             Some(hit @ (ui::TreeHit::Select(row) | ui::TreeHit::Fold(row))) => {
                 if let Some(target) = self.tree_target(row) {
@@ -101,7 +101,7 @@ impl App {
     }
 
     pub(in crate::app) fn tree_hit(&self, list: Rect, shape: &ui::TreeShape, pos: Position) -> Option<ui::TreeHit> {
-        ui::tree_hit(list, shape, self.projects_scroll, pos)
+        ui::tree_hit(list, shape, self.scroll.projects, pos)
             .filter(|hit| !hit.workspace().is_some_and(|(p, w)| self.removing(p, w)))
     }
 }

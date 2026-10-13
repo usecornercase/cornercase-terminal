@@ -14,14 +14,14 @@ pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
 impl App {
     pub(super) fn drive_launches(&mut self, now: Instant) {
-        if self.launches.is_empty() {
+        if self.agents.launches.is_empty() {
             return;
         }
-        let regex = self.trust_prompt.regex(&self.config.trust_prompt_pattern);
+        let regex = self.agents.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
         let mut finished = Vec::new();
-        for (i, launch) in self.launches.iter_mut().enumerate() {
+        for (i, launch) in self.agents.launches.iter_mut().enumerate() {
             let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == launch.term) else {
                 finished.push((i, false));
                 continue;
@@ -75,7 +75,7 @@ impl App {
             }
         }
         for (i, started) in finished.into_iter().rev() {
-            if let Some(key) = self.launches.remove(i).key {
+            if let Some(key) = self.agents.launches.remove(i).key {
                 self.requests.launched(key, started);
             }
         }
@@ -88,7 +88,7 @@ impl App {
         if let Some(tab) = self.projects[p].workspaces[w].tab_mut() {
             tab.name = Some(start.name);
             if let Some(term) = tab.pane() {
-                self.launches.push(Launch::new(term.id, start.spec, Instant::now()));
+                self.agents.launches.push(Launch::new(term.id, start.spec, Instant::now()));
             }
         }
         Ok(())

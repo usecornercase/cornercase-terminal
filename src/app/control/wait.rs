@@ -120,7 +120,7 @@ impl App {
                 None => kept.push(pending),
                 Some(reply) => {
                     if reply.is_ok() && matches!(pending.stage, Stage::Restart { .. }) {
-                        self.restart = true;
+                        self.outbox.restart = true;
                     }
                     self.answer(pending.client, reply);
                     if matches!(pending.stage, Stage::Worktree(_)) {
@@ -192,7 +192,7 @@ impl App {
             }
         }
         if let Stage::Restart { caller } = pending.stage
-            && self.watched == Some(now)
+            && self.agents.watched == Some(now)
             && self.holding(caller, now).is_empty()
         {
             return Some(Ok(json(&self.report(caller))));

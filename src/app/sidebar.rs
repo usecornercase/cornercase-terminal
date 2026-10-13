@@ -27,8 +27,8 @@ impl App {
 
     pub(super) fn click_projects(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) {
         let rows = self.sidebar_rows();
-        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.projects_scroll, row);
-        match ui::sidebar_hit(list, pitch, &rows, self.projects_scroll, pos) {
+        let rect = |row: SidebarRow| ui::entry_row(list, pitch, &rows, self.scroll.projects, row);
+        match ui::sidebar_hit(list, pitch, &rows, self.scroll.projects, pos) {
             Some(SidebarHit::Select(i)) => {
                 self.grab(Target::Project(self.projects[i].id), rect(SidebarRow::Project(i)), area, false);
             }
@@ -51,7 +51,7 @@ impl App {
         if areas.tree {
             self.tree_layout(areas.list)
         } else {
-            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.projects_scroll)
+            ui::project_rows(areas.list, areas.pitch, &self.sidebar_rows(), self.scroll.projects)
         }
     }
 
@@ -94,16 +94,16 @@ impl App {
                 active: focus.tab == Some(tab.id) && tab.active == i,
             }
         });
-        ui::AgentsView { entries: entries.collect(), scroll: self.agents_scroll }
+        ui::AgentsView { entries: entries.collect(), scroll: self.scroll.agents }
     }
 
     pub(super) fn agent_layout(&self, areas: &ui::Areas) -> ui::Rows {
-        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_places().len(), self.agents_scroll)
+        ui::agent_rows(areas.agents_list, areas.pitch, self.agent_places().len(), self.scroll.agents)
     }
 
     pub(super) fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
         let places = self.agent_places();
-        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.agents_scroll);
+        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
         let Some(i) = ui::agent_hit(list, pitch, places.len(), scroll, pos) else { return };
         let (p, w, t, pane) = places[i];
         let pane = self.projects[p].workspaces[w].tabs[t].panes[pane].id;
@@ -129,7 +129,7 @@ impl App {
         }
         let p = self.active;
         let ask = pitch > 1;
-        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.workspaces_scroll, row);
+        let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
         let project = &self.projects[p];
         match hit {
             Some(WorkspaceHit::Workspace(w)) => {
@@ -163,7 +163,7 @@ impl App {
     }
 
     pub(super) fn open_project_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
-        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.projects_scroll, pos) {
+        let actions = match ui::sidebar_hit(list, pitch, &self.sidebar_rows(), self.scroll.projects, pos) {
             Some(SidebarHit::Select(i) | SidebarHit::Close(i) | SidebarHit::Menu(i)) => self.project_menu(i),
             Some(SidebarHit::Group(g) | SidebarHit::CloseGroup(g) | SidebarHit::GroupMenu(g)) => self.group_menu(g),
             _ => return,
@@ -221,7 +221,7 @@ impl App {
     }
 
     fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, pos: Position) -> Option<WorkspaceHit> {
-        ui::workspace_hit(list, pitch, tabs, self.workspaces_scroll, pos)
+        ui::workspace_hit(list, pitch, tabs, self.scroll.workspaces, pos)
             .filter(|hit| !hit.workspace().is_some_and(|w| self.removing(self.active, w)))
     }
 }

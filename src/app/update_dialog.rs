@@ -16,8 +16,21 @@ use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::restart;
 use crate::ui::{self};
-use crate::update::{self, Install, Release};
+use crate::update::{self, Install, Release, Updates};
 use crate::version;
+
+pub(super) struct UpdateState {
+    pub(super) updates: Updates,
+    pub(super) scroll: usize,
+    pub(super) restart_list: Vec<restart::Running>,
+    pub(super) listed: Option<Instant>,
+}
+
+impl UpdateState {
+    pub(super) fn from_env() -> Self {
+        Self { updates: Updates::from_env(), scroll: 0, restart_list: Vec::new(), listed: None }
+    }
+}
 
 pub(super) const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 
@@ -62,11 +75,11 @@ impl App {
     }
 
     pub(super) fn check_updates(&mut self, now: Instant) {
-        if !self.config.check_updates || !self.updates.due(now) {
+        if !self.config.check_updates || !self.update.updates.due(now) {
             return;
         }
-        self.updates.checked = Some(now);
-        let url = self.updates.url.clone();
+        self.update.updates.checked = Some(now);
+        let url = self.update.updates.url.clone();
         let check = move || {
             let found = update::check(&url, version::CURRENT)?;
             Ok(found.map(|release| update::with_changelog(release, version::CURRENT)))
@@ -77,12 +90,12 @@ impl App {
 
     pub(super) fn update_checked(&mut self, result: Result<Option<Release>>) {
         match result {
-            Ok(Some(release)) if !self.updates.installed => {
+            Ok(Some(release)) if !self.update.updates.installed => {
                 log::info!("update", "release found", version = release.version);
-                if self.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
+                if self.update.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
                     self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
                 }
-                self.updates.available = Some(release);
+                self.update.updates.available = Some(release);
             }
             _ => {}
         }
@@ -93,24 +106,24 @@ impl App {
     }
 
     pub(super) fn list_running(&mut self, now: Instant) {
-        self.restart_list = self.running();
-        self.listed = Some(now);
+        self.update.restart_list = self.running();
+        self.update.listed = Some(now);
     }
 
     pub(super) fn update_label(&self) -> Option<String> {
-        if self.updates.installed {
+        if self.update.updates.installed {
             return Some(RESTART_LABEL.into());
         }
-        self.updates.available.as_ref().map(|release| format!("↑ {}", release.version))
+        self.update.updates.available.as_ref().map(|release| format!("↑ {}", release.version))
     }
 
     pub(super) fn open_update(&mut self) {
-        let step = match &self.updates.install {
-            _ if self.updates.installed => UpdateStep::Installed,
+        let step = match &self.update.updates.install {
+            _ if self.update.updates.installed => UpdateStep::Installed,
             Install::Replace(_) => UpdateStep::Ask,
             Install::Command(command) => UpdateStep::Manual(command),
         };
-        self.update_scroll = 0;
+        self.update.scroll = 0;
         if step == UpdateStep::Installed {
             self.list_running(Instant::now());
         }
@@ -138,16 +151,16 @@ impl App {
     pub(super) fn scroll_update(&mut self, delta: isize, area: Rect) {
         if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
             let lines = self.update_notes(area).len();
-            self.update_scroll = ui::update_scroll(area, lines, self.update_scroll.saturating_add_signed(delta));
+            self.update.scroll = ui::update_scroll(area, lines, self.update.scroll.saturating_add_signed(delta));
         }
     }
 
     pub(super) fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
         if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
-            return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
+            return markdown::render(&restart::confirmation(Some(&self.update.restart_list)), width);
         }
-        let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
+        let Some(release) = self.update.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
             return Vec::new();
         };
         let notes: Vec<String> =
@@ -159,7 +172,7 @@ impl App {
         match step {
             UpdateStep::Ask | UpdateStep::Failed(_) => {
                 let (Some(release), Install::Replace(exe), Some(target)) =
-                    (self.updates.available.clone(), self.updates.install.clone(), update::target())
+                    (self.update.updates.available.clone(), self.update.updates.install.clone(), update::target())
                 else {
                     return None;
                 };
@@ -172,11 +185,11 @@ impl App {
                 Some(Overlay::Update(UpdateStep::Updating))
             }
             UpdateStep::Installed => {
-                self.restart = true;
+                self.outbox.restart = true;
                 None
             }
             UpdateStep::Manual(command) => {
-                copy(&mut self.host_writes, &mut self.toast, command);
+                copy(&mut self.outbox.host_writes, &mut self.toast, command);
                 None
             }
             UpdateStep::Updating => Some(Overlay::Update(step)),
@@ -186,8 +199,8 @@ impl App {
     pub(super) fn updated(&mut self, result: Result<()>) {
         let step = match result {
             Ok(()) => {
-                self.updates.installed = true;
-                self.update_scroll = 0;
+                self.update.updates.installed = true;
+                self.update.scroll = 0;
                 self.list_running(Instant::now());
                 UpdateStep::Installed
             }
@@ -199,7 +212,7 @@ impl App {
     }
 
     pub(super) fn update_view(&self, step: &UpdateStep, area: Rect) -> ui::Overlay {
-        let version = self.updates.available.as_ref().map_or("", |r| r.version.as_str());
+        let version = self.update.updates.available.as_ref().map_or("", |r| r.version.as_str());
         let current = version::CURRENT;
         let message = match step {
             UpdateStep::Installed => format!("cornercase {version} is installed. Restart to use it."),
@@ -207,7 +220,7 @@ impl App {
                 format!("cornercase {version} is out (you have {current}). Update it with:\n{command}")
             }
             UpdateStep::Ask | UpdateStep::Updating | UpdateStep::Failed(_) => {
-                let exe = match &self.updates.install {
+                let exe = match &self.update.updates.install {
                     Install::Replace(exe) => crate::text::display_path(exe, self.home.as_deref()),
                     Install::Command(_) => String::new(),
                 };
@@ -229,7 +242,7 @@ impl App {
             title: UPDATE_TITLE,
             message,
             notes,
-            scroll: self.update_scroll,
+            scroll: self.update.scroll,
             note,
             submit,
             cancel,
@@ -237,7 +250,7 @@ impl App {
     }
 
     pub(super) fn open_restart(&mut self) {
-        self.update_scroll = 0;
+        self.update.scroll = 0;
         self.list_running(Instant::now());
         self.overlay = Some(Overlay::Restart);
     }
@@ -247,7 +260,7 @@ impl App {
             title: RESTART_TITLE,
             message: RESTART_MESSAGE.into(),
             notes: self.update_notes(area),
-            scroll: self.update_scroll,
+            scroll: self.update.scroll,
             note: None,
             submit: RESTART_SUBMIT,
             cancel: ui::CANCEL_LABEL,

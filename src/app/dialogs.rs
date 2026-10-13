@@ -130,7 +130,7 @@ impl App {
             }
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => {
-                self.restart = true;
+                self.outbox.restart = true;
                 None
             }
             busy => Some(busy),

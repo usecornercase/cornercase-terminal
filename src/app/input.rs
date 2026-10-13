@@ -229,18 +229,18 @@ impl App {
     pub(super) fn scroll_column(&mut self, areas: &ui::Areas, pos: Position, delta: isize) -> bool {
         let items = if areas.pitch > 1 { delta.signum() } else { delta };
         if areas.tab_bar.contains(pos) {
-            self.tab_bar_scroll = self.tab_strip(areas).scrolled(delta.signum());
+            self.scroll.tab_bar = self.tab_strip(areas).scrolled(delta.signum());
             true
         } else if areas.agents.contains(pos) {
-            self.agents_scroll = self.agent_layout(areas).scrolled(items);
+            self.scroll.agents = self.agent_layout(areas).scrolled(items);
             true
         } else if areas.sidebar.contains(pos) {
-            self.projects_scroll = self.sidebar_layout(areas).scrolled(items);
+            self.scroll.projects = self.sidebar_layout(areas).scrolled(items);
             true
         } else if areas.workspaces.contains(pos) {
             let tabs = self.tab_lines();
-            let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.workspaces_scroll);
-            self.workspaces_scroll = layout.scrolled(items);
+            let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.scroll.workspaces);
+            self.scroll.workspaces = layout.scrolled(items);
             true
         } else {
             false
@@ -258,7 +258,7 @@ impl App {
             None if self.project().is_some() => Some(ui::Nav::Workspaces),
             None => Some(ui::Nav::Projects),
         };
-        self.followed = Focus::default();
+        self.scroll.followed = Focus::default();
     }
 
     fn footer_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
@@ -272,7 +272,7 @@ impl App {
             } else if remote {
                 self.open_remote();
             } else if areas.quit.contains(pos) {
-                self.detach = true;
+                self.outbox.detach = true;
             } else if areas.usage.contains(pos) {
                 self.open_usage();
             } else {

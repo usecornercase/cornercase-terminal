@@ -34,7 +34,7 @@ fn a_click_on_a_tab_selects_it() {
     let (mut app, _rx, _dirs) = stacked(1);
     app.add_tab(0, 0, TALL).expect("add a tab");
     let list = app.layout(TALL).workspaces_list;
-    let tab = ui::workspace_row(list, 1, &app.tab_lines(), app.workspaces_scroll, WorkspaceRow::Tab(0, 0));
+    let tab = ui::workspace_row(list, 1, &app.tab_lines(), app.scroll.workspaces, WorkspaceRow::Tab(0, 0));
     click_in(&mut app, tab.as_position(), TALL);
     assert_eq!(app.projects[0].workspaces[0].active, 0);
 }
@@ -44,9 +44,9 @@ fn the_wheel_over_the_projects_scrolls_only_the_projects() {
     let (mut app, _rx, _dirs) = stacked(4);
     app.active = 0;
     app.follow(AREA);
-    let (before, at) = (app.workspaces_scroll, app.layout(AREA).list.as_position());
+    let (before, at) = (app.scroll.workspaces, app.layout(AREA).list.as_position());
     mouse(&mut app, MouseEventKind::ScrollDown, at);
-    assert_eq!((app.projects_scroll > 0, app.workspaces_scroll), (true, before));
+    assert_eq!((app.scroll.projects > 0, app.scroll.workspaces), (true, before));
 }
 
 #[test]
@@ -57,9 +57,9 @@ fn the_wheel_over_the_workspaces_scrolls_only_the_workspaces() {
     }
     app.projects[0].workspaces[0].active = 0;
     app.follow(AREA);
-    let (before, at) = (app.workspaces_scroll, app.layout(AREA).workspaces_list.as_position());
+    let (before, at) = (app.scroll.workspaces, app.layout(AREA).workspaces_list.as_position());
     mouse(&mut app, MouseEventKind::ScrollDown, at);
-    assert_eq!((app.workspaces_scroll > before, app.projects_scroll), (true, 0));
+    assert_eq!((app.scroll.workspaces > before, app.scroll.projects), (true, 0));
 }
 
 #[test]

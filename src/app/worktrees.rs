@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -16,6 +17,13 @@ use crate::project::{Phase, Tab, Workspace};
 use crate::ui::{self};
 use crate::upstream;
 use crate::worktree;
+
+#[derive(Default)]
+pub(super) struct Upstream {
+    pub(super) fetched: HashMap<u64, Instant>,
+    pub(super) counting: HashSet<u64>,
+    pub(super) counted: Option<Instant>,
+}
 
 pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
 
@@ -85,11 +93,11 @@ impl App {
             self.projects.iter_mut().flat_map(|p| &mut p.workspaces).for_each(|w| w.behind = 0);
             return;
         };
-        if self.counted.is_some_and(|at| now.duration_since(at) < COUNT_BEHIND_EVERY) {
+        if self.upstream.counted.is_some_and(|at| now.duration_since(at) < COUNT_BEHIND_EVERY) {
             return;
         }
-        self.counted = Some(now);
-        self.fetched.retain(|id, _| self.projects.iter().any(|p| p.id == *id));
+        self.upstream.counted = Some(now);
+        self.upstream.fetched.retain(|id, _| self.projects.iter().any(|p| p.id == *id));
         for project in &self.projects {
             let workspaces: Vec<(u64, PathBuf)> = project
                 .workspaces
@@ -97,12 +105,12 @@ impl App {
                 .filter(|w| git::branch(&w.path).is_some())
                 .map(|w| (w.id, w.path.clone()))
                 .collect();
-            if workspaces.is_empty() || !self.counting.insert(project.id) {
+            if workspaces.is_empty() || !self.upstream.counting.insert(project.id) {
                 continue;
             }
-            let fetch = self.fetched.get(&project.id).is_none_or(|at| now.duration_since(*at) >= fetch_every);
+            let fetch = self.upstream.fetched.get(&project.id).is_none_or(|at| now.duration_since(*at) >= fetch_every);
             if fetch {
-                self.fetched.insert(project.id, now);
+                self.upstream.fetched.insert(project.id, now);
             }
             let (id, repo) = (project.id, project.path.clone());
             let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch);
@@ -119,7 +127,7 @@ impl App {
     }
 
     pub(super) fn behind_counted(&mut self, project: u64, behind: &[(u64, u32)]) {
-        self.counting.remove(&project);
+        self.upstream.counting.remove(&project);
         if self.config.fetch_every().is_none() {
             return;
         }
@@ -251,7 +259,7 @@ impl App {
             self.add_tab(p, w, area)?;
             let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
             if let (Some(term), Some(start)) = (term, start) {
-                self.launches.push(Launch::new(term, start.spec, Instant::now()));
+                self.agents.launches.push(Launch::new(term, start.spec, Instant::now()));
             }
         }
         self.projects[p].active = w;

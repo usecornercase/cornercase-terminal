@@ -11,6 +11,15 @@ pub(super) struct Focus {
     pub(super) tab: Option<u64>,
 }
 
+#[derive(Default)]
+pub(super) struct Scrolls {
+    pub(super) projects: usize,
+    pub(super) workspaces: usize,
+    pub(super) agents: usize,
+    pub(super) tab_bar: usize,
+    pub(super) followed: Focus,
+}
+
 impl App {
     pub(super) fn sidebar(&self) -> ui::Sidebar {
         ui::Sidebar::from_setting(&self.config.sidebar)
@@ -56,7 +65,7 @@ impl App {
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;
         let focus = self.focus();
-        let before = std::mem::replace(&mut self.followed, focus);
+        let before = std::mem::replace(&mut self.scroll.followed, focus);
         if focus == before && !relayout {
             return;
         }
@@ -70,9 +79,9 @@ impl App {
         }
         if focus.project != before.project || relayout {
             let sidebar = self.sidebar_rows();
-            let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.projects_scroll);
+            let rows = ui::project_rows(areas.list, areas.pitch, &sidebar, self.scroll.projects);
             if let Some(i) = self.active_row(&sidebar) {
-                self.projects_scroll = rows.reveal(i);
+                self.scroll.projects = rows.reveal(i);
             }
         }
         let Some(project) = self.project() else { return };
@@ -85,8 +94,8 @@ impl App {
         let rows = ui::workspace_rows(&tabs);
         for row in shown {
             if let Some(i) = rows.iter().position(|r| *r == row) {
-                let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.workspaces_scroll);
-                self.workspaces_scroll = layout.reveal(i);
+                let layout = ui::workspace_layout(areas.workspaces_list, areas.pitch, &tabs, self.scroll.workspaces);
+                self.scroll.workspaces = layout.reveal(i);
             }
         }
     }

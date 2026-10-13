@@ -37,13 +37,13 @@ impl App {
                 let status = match self.token(source) {
                     None => Status::Missing,
                     Some((_, true)) => Status::Env,
-                    Some((_, false)) => Status::Saved(self.accounts.get(&source).cloned()),
+                    Some((_, false)) => Status::Saved(self.issues.accounts.get(&source).cloned()),
                 };
                 (source, status)
             })
             .collect();
         let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
-        settings.awake = self.awake.state().note();
+        settings.awake = self.agents.awake.state().note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
@@ -136,7 +136,7 @@ impl App {
                 }
             }
             settings::Action::RemoveToken(source) => {
-                let removed = source.secret_key().map(|key| secrets::remove(&self.secrets_path, key));
+                let removed = source.secret_key().map(|key| secrets::remove(&self.issues.secrets_path, key));
                 let Some(Overlay::Settings(s)) = &mut self.overlay else { return };
                 if let Some(Err(e)) = removed {
                     s.notice = Some(format!("failed to remove the {}: {e}", source.token_name()));

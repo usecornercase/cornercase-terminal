@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::{Position, Rect};
@@ -15,9 +16,9 @@ use crate::git;
 use crate::issues::browser::{
     self, Action, Browser, Connection, IssuesHit, Listing, Pick, Place, Room, Screen, Step, Tab, TokenForm,
 };
-use crate::issues::cache::Key as CacheKey;
+use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self};
 use crate::list::Search;
@@ -26,6 +27,36 @@ use crate::markdown;
 use crate::secrets;
 use crate::time;
 use crate::ui;
+
+pub(super) struct IssueConnections {
+    pub(super) cache: IssueCache,
+    pub(super) closed: bool,
+    pub(super) people: People,
+    pub(super) people_cache: HashMap<(Source, Option<u64>), Vec<Person>>,
+    pub(super) accounts: HashMap<Source, Account>,
+    pub(super) epochs: HashMap<Source, u64>,
+    pub(super) tab: Option<Tab>,
+    pub(super) apis: Apis,
+    pub(super) env_tokens: HashMap<Source, String>,
+    pub(super) secrets_path: PathBuf,
+}
+
+impl IssueConnections {
+    pub(super) fn new(secrets_path: PathBuf) -> Self {
+        Self {
+            cache: IssueCache::new(None),
+            closed: false,
+            people: People::default(),
+            people_cache: HashMap::new(),
+            accounts: HashMap::new(),
+            epochs: HashMap::new(),
+            tab: None,
+            apis: Apis::from_env(),
+            env_tokens: env_tokens(),
+            secrets_path,
+        }
+    }
+}
 
 pub(super) struct Apis {
     pub(super) shortcut: String,
@@ -103,10 +134,10 @@ impl App {
     }
 
     pub(super) fn token(&self, source: Source) -> Option<(String, bool)> {
-        if let Some(token) = self.env_tokens.get(&source) {
+        if let Some(token) = self.issues.env_tokens.get(&source) {
             return Some((token.clone(), true));
         }
-        source.secret_key().and_then(|key| secrets::read(&self.secrets_path, key)).map(|token| (token, false))
+        source.secret_key().and_then(|key| secrets::read(&self.issues.secrets_path, key)).map(|token| (token, false))
     }
 
     fn jira(&self, token: String) -> Option<jira::Api> {
@@ -115,7 +146,7 @@ impl App {
             return None;
         }
         Some(jira::Api {
-            base: self.apis.jira.clone().unwrap_or_else(|| format!("https://{}", config.jira_site)),
+            base: self.issues.apis.jira.clone().unwrap_or_else(|| format!("https://{}", config.jira_site)),
             site: config.jira_site.clone(),
             email: config.jira_email.clone(),
             token,
@@ -128,7 +159,7 @@ impl App {
         if config.plane_workspace.is_empty() {
             return None;
         }
-        let (base, app) = plane::endpoints(&config.plane_url, self.apis.plane.as_deref());
+        let (base, app) = plane::endpoints(&config.plane_url, self.issues.apis.plane.as_deref());
         Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
     }
 
@@ -149,9 +180,11 @@ impl App {
                 Some(Client::Github { gh: self.config.gh(self.home.as_deref()), dir })
             }
             Source::Shortcut => {
-                Some(Client::Shortcut { base: self.apis.shortcut.clone(), token: self.token(source)?.0 })
+                Some(Client::Shortcut { base: self.issues.apis.shortcut.clone(), token: self.token(source)?.0 })
             }
-            Source::Linear => Some(Client::Linear { url: self.apis.linear.clone(), token: self.token(source)?.0 }),
+            Source::Linear => {
+                Some(Client::Linear { url: self.issues.apis.linear.clone(), token: self.token(source)?.0 })
+            }
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
             Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
         }
@@ -187,7 +220,7 @@ impl App {
             .into_iter()
             .filter_map(|source| {
                 let from_env = self.connected(source)?;
-                Some((source, Connection { from_env, account: self.accounts.get(&source).cloned() }))
+                Some((source, Connection { from_env, account: self.issues.accounts.get(&source).cloned() }))
             })
             .collect();
         let mut browser = Browser {
@@ -197,8 +230,8 @@ impl App {
             worktrees: git::is_repo_root(&project.path),
             tabs: browser::tabs(&self.config.issue_tabs),
             tab: 0,
-            closed: self.issue_closed,
-            people: self.issue_people.clone(),
+            closed: self.issues.closed,
+            people: self.issues.people.clone(),
             search: Search::default(),
             lists: HashMap::new(),
             connections,
@@ -210,7 +243,7 @@ impl App {
             starting: false,
             error: None,
             notice: None,
-            secrets_path: crate::text::display_path(&self.secrets_path, self.home.as_deref()),
+            secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
             agents: self.agent_choices(),
             picker: None,
             places,
@@ -218,13 +251,14 @@ impl App {
             place: None,
             filtering: None,
             members: self
+                .issues
                 .people_cache
                 .iter()
                 .filter(|((_, p), _)| p.is_none_or(|p| p == project.id))
                 .map(|((s, _), m)| (*s, Ok(m.clone())))
                 .collect(),
         };
-        if let Some(tab) = self.issue_tab {
+        if let Some(tab) = self.issues.tab {
             browser.tab_to(tab);
         }
         let action = browser.needs_load();
@@ -256,9 +290,9 @@ impl App {
 
     fn act(&mut self, action: Action, area: Rect) -> Result<()> {
         if let Some(Overlay::Issues(b)) = &self.overlay {
-            self.issue_tab = Some(b.current());
-            self.issue_closed = b.closed;
-            self.issue_people = b.people.clone();
+            self.issues.tab = Some(b.current());
+            self.issues.closed = b.closed;
+            self.issues.people = b.people.clone();
         }
         match action {
             Action::None => {}
@@ -298,7 +332,7 @@ impl App {
             }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
-                self.host_writes.push(clipboard::osc52(&url));
+                self.outbox.host_writes.push(clipboard::osc52(&url));
                 if let Some(Overlay::Issues(b)) = &mut self.overlay {
                     b.notice = Some(format!("copied {url}"));
                 }
@@ -335,7 +369,7 @@ impl App {
 
     pub(super) fn people_loaded(&mut self, project: u64, source: Source, result: Result<Vec<Person>>) {
         if let Ok(people) = &result {
-            self.people_cache.insert((source, (source == Source::Github).then_some(project)), people.clone());
+            self.issues.people_cache.insert((source, (source == Source::Github).then_some(project)), people.clone());
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay
             && b.project == project
@@ -349,7 +383,7 @@ impl App {
         let (project, query) = (b.project, b.query(source));
         let client = self.client(source, project);
         let key = self.cache_key(source, project, &query);
-        let cached = self.issue_cache.get(&key);
+        let cached = self.issues.cache.get(&key);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return };
         let listing = b.lists.entry(source).or_default();
         listing.loading = true;
@@ -374,9 +408,9 @@ impl App {
     pub(super) fn issues_loaded(&mut self, project: u64, source: Source, query: &Query, result: Result<Listed>) {
         if let Ok(listed) = &result {
             let key = self.cache_key(source, project, query);
-            self.issue_cache.put(key, listed.issues.clone());
+            self.issues.cache.put(key, listed.issues.clone());
             if let Some(account) = &listed.account {
-                self.accounts.insert(source, account.clone());
+                self.issues.accounts.insert(source, account.clone());
             }
         }
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return };
@@ -429,21 +463,23 @@ impl App {
     }
 
     pub(super) fn epoch(&self, source: Source) -> u64 {
-        self.issue_epochs.get(&source).copied().unwrap_or(0)
+        self.issues.epochs.get(&source).copied().unwrap_or(0)
     }
 
     pub(super) fn forget_issues(&mut self, source: Source) {
-        self.accounts.remove(&source);
-        self.issue_cache.forget(source);
-        self.people_cache.retain(|(s, _), _| *s != source);
-        *self.issue_epochs.entry(source).or_default() += 1;
+        self.issues.accounts.remove(&source);
+        self.issues.cache.forget(source);
+        self.issues.people_cache.retain(|(s, _), _| *s != source);
+        *self.issues.epochs.entry(source).or_default() += 1;
     }
 
     pub(super) fn check_token(&mut self, source: Source, token: Secret) {
         let client = match source {
             Source::Github => return,
-            Source::Shortcut => Ok(Client::Shortcut { base: self.apis.shortcut.clone(), token: token.0.clone() }),
-            Source::Linear => Ok(Client::Linear { url: self.apis.linear.clone(), token: token.0.clone() }),
+            Source::Shortcut => {
+                Ok(Client::Shortcut { base: self.issues.apis.shortcut.clone(), token: token.0.clone() })
+            }
+            Source::Linear => Ok(Client::Linear { url: self.issues.apis.linear.clone(), token: token.0.clone() }),
             Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
             Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
         };
@@ -478,7 +514,7 @@ impl App {
     ) -> Result<()> {
         let saved = result.and_then(|account| {
             let key = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
-            secrets::write(&self.secrets_path, key, &token.0)
+            secrets::write(&self.issues.secrets_path, key, &token.0)
                 .map_err(|e| Error::Api(format!("failed to save the {}: {e}", source.token_name())))?;
             Ok(account)
         });
@@ -487,7 +523,7 @@ impl App {
         }
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             if let Ok(account) = &saved {
-                self.accounts.insert(source, account.clone());
+                self.issues.accounts.insert(source, account.clone());
             }
             s.checked(source, saved.map_err(|e| e.to_string()));
             return Ok(());
@@ -495,7 +531,7 @@ impl App {
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         match saved {
             Ok(account) => {
-                self.accounts.insert(source, account.clone());
+                self.issues.accounts.insert(source, account.clone());
                 b.connected(source, Connection { from_env: false, account: Some(account) });
                 let action = b.needs_load();
                 self.act(action, area)
@@ -508,7 +544,7 @@ impl App {
     }
 
     fn disconnect(&mut self, source: Source) {
-        let removed = source.secret_key().map(|key| secrets::remove(&self.secrets_path, key));
+        let removed = source.secret_key().map(|key| secrets::remove(&self.issues.secrets_path, key));
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return };
         if let Some(Err(e)) = removed {
             b.error = Some(format!("failed to remove the {}: {e}", source.token_name()));

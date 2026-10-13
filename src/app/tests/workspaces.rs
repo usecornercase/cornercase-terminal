@@ -165,7 +165,7 @@ mod behind {
 
         app.count_behind(Instant::now());
 
-        pump_until(&mut app, &rx, "the count answers", |a| a.counting.is_empty());
+        pump_until(&mut app, &rx, "the count answers", |a| a.upstream.counting.is_empty());
         assert_eq!(behind(&app), 0);
     }
 
@@ -179,7 +179,7 @@ mod behind {
 
         app.count_behind(Instant::now());
 
-        assert_eq!((app.counting.len(), behind(&app)), (0, 0));
+        assert_eq!((app.upstream.counting.len(), behind(&app)), (0, 0));
     }
 }
 
