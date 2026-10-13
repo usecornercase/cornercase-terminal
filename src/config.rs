@@ -10,7 +10,83 @@ use crate::agents;
 use crate::notify;
 use crate::persist;
 use crate::shortcuts::Prefix;
-use crate::ui;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Sidebar {
+    SideBySide,
+    #[default]
+    ProjectsOnTop,
+    WorkspacesOnTop,
+    Tree,
+}
+
+impl Sidebar {
+    pub const ALL: [Self; 4] = [Self::SideBySide, Self::ProjectsOnTop, Self::WorkspacesOnTop, Self::Tree];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::SideBySide => "side_by_side",
+            Self::ProjectsOnTop => "projects_on_top",
+            Self::WorkspacesOnTop => "workspaces_on_top",
+            Self::Tree => "tree",
+        }
+    }
+
+    fn note(self) -> &'static str {
+        match self {
+            Self::SideBySide => "projects and workspaces in two columns",
+            Self::ProjectsOnTop => "one column, workspaces below projects",
+            Self::WorkspacesOnTop => "one column, projects below workspaces",
+            Self::Tree => "one list: projects, workspaces and tabs",
+        }
+    }
+
+    pub fn choices() -> Vec<(&'static str, &'static str)> {
+        Self::ALL.into_iter().map(|s| (s.id(), s.note())).collect()
+    }
+
+    pub fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+
+    pub fn stacked(self) -> bool {
+        self != Self::SideBySide
+    }
+}
+
+fn from_setting<T: Copy + Default>(all: &[T], id: fn(T) -> &'static str, setting: &str) -> T {
+    all.iter().copied().find(|s| id(*s).eq_ignore_ascii_case(setting.trim())).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Tabs {
+    #[default]
+    Sidebar,
+    Top,
+}
+
+impl Tabs {
+    pub const ALL: [Self; 2] = [Self::Sidebar, Self::Top];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Sidebar => "sidebar",
+            Self::Top => "top",
+        }
+    }
+
+    pub fn choices() -> Vec<(&'static str, &'static str)> {
+        let note = |t: Self| match t {
+            Self::Sidebar => "under their workspace in the sidebar",
+            Self::Top => "in a bar above the pane, only the active workspace's",
+        };
+        Self::ALL.into_iter().map(|t| (t.id(), note(t))).collect()
+    }
+
+    pub fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+}
 
 pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub const DEFAULT_PROMPT: &str = "{url}";
@@ -81,8 +157,8 @@ impl Default for Config {
             keep_awake: false,
             trust_prompt_pattern: agents::DEFAULT_TRUST_PROMPT.into(),
             gh: DEFAULT_GH.into(),
-            sidebar: ui::Sidebar::default().id().into(),
-            tabs: ui::Tabs::default().id().into(),
+            sidebar: Sidebar::default().id().into(),
+            tabs: Tabs::default().id().into(),
             agents_section: false,
             counts: true,
             todo_dot: true,

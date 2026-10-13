@@ -22,7 +22,7 @@ use crate::launch::Launch;
 use crate::notify::Notification;
 use crate::paths;
 use crate::pointer;
-use crate::project::{Group, Project, Tab};
+use crate::project::{Group, Project, Tab, group};
 use crate::restart;
 use crate::settings::Page;
 use crate::split::Dir;
@@ -476,7 +476,7 @@ impl App {
         }
         let first_group = self.groups.len();
         for entry in &saved.groups {
-            let icon = if ui::GROUP_ICONS.contains(&entry.icon) { entry.icon } else { ui::GROUP_ICONS[0] };
+            let icon = group::known_icon(entry.icon);
             let id = self.take_id();
             self.groups.push(Group { id, entry: ui::GroupEntry { icon, ..entry.clone() } });
         }

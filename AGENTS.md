@@ -63,13 +63,13 @@ src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser ac
 src/remote.rs     `cornercase remote`: the ssh command and the pipes it connects (`remote::Piped`), the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket, connecting through a function `cli` passes)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages and length-prefixed postcard framing
-src/state.rs      the saved session as JSON, migrations and mapping to the hierarchy
+src/state.rs      the saved session as JSON, its Widths schema, migrations and mapping to the hierarchy
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
-src/config.rs     user settings (config.json), `~` expansion, validation
-src/settings.rs   the settings modal's state; returns Actions for App
+src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
+src/settings.rs   the settings modal's state and plain row/edit/pick texts; returns Actions for App
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
-src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt
+src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
 src/awake.rs      keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child
 src/activity.rs   what the agent in a pane is doing: Claude Code's session file, its title glyph, Codex's title and turns, opencode's turns, done-but-unseen, rollups
 src/context.rs    model/context lines for Claude Code, Codex, Gemini CLI and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line, its last message), context/message.rs the last message each wrote (`read --last-message`), reading JSONL backwards
@@ -96,7 +96,7 @@ src/search.rs     global search: candidates and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid; stopping and reaping a child
-src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
+src/project.rs    Project > Workspace > Tab > panes, labels, removal, moving; project/group.rs holds Group, GroupEntry, icons, colours, preset selection and saved-icon normalization
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state, new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
 src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)
@@ -104,7 +104,7 @@ src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view an
                   hierarchy.rs (lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)
                   sidebar.rs (lists, row menus and agents section), sidebar/drag.rs (row drags), sidebar/tree.rs, tab_bar.rs, panes.rs (pane mouse, scrollback, selection and dividers), links.rs (paths in panes)
                   agent_watch.rs (status, stats samples, notifications and keeping awake), launches.rs (typing into agents), worktrees.rs (creating, checking, removing and upstream counts), actions.rs (editor and agent actions)
-                  changes_panel.rs and changes_panel/branches.rs, files_panel.rs, todo_panel.rs; issues_dialog.rs, update_dialog.rs, picker_dialog.rs, search_dialog.rs, settings_dialog.rs, usage_dialog.rs
+                  changes_panel.rs and changes_panel/branches.rs, files_panel.rs, todo_panel.rs; issues_dialog.rs, update_dialog.rs, picker_dialog.rs, search_dialog.rs, settings_dialog.rs (builds the settings view), usage_dialog.rs
                   control.rs (the request switchboard and lookups) and control/ (wait.rs waits, idle_restart.rs restart-when-idle, create.rs, talk.rs sending and reading, close.rs, arrange.rs renaming and TODOs, status.rs), events.rs (event subscribers), shortcuts.rs (keys menu actions), trace.rs (changes for logs and events), images.rs (placement and encode jobs), remote_access.rs (browser access)
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui

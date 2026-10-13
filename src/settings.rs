@@ -3,12 +3,11 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::agents;
-use crate::config::{self, Config};
+use crate::config::{self, Config, Sidebar, Tabs};
 use crate::issues::{Account, Secret, Source, jira, plane};
 use crate::list::Search;
 use crate::notify;
 use crate::shortcuts::Prefix;
-use crate::ui;
 
 const RESUME_NOTE: &str = "Claude Code, Codex and Gemini, in their tabs";
 pub const DONE: &str = "done";
@@ -58,6 +57,10 @@ pub enum Row {
 }
 
 impl Row {
+    pub fn movable(&self) -> bool {
+        matches!(self, Self::Tab(_))
+    }
+
     pub fn section(&self) -> &'static str {
         match self {
             Self::Folder
@@ -189,7 +192,7 @@ impl Page {
         }
     }
 
-    fn index(self) -> usize {
+    pub fn index(self) -> usize {
         Self::ALL.iter().position(|p| *p == self).unwrap_or(0)
     }
 }
@@ -227,6 +230,14 @@ pub struct Pick {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PickItem {
+    pub value: String,
+    pub note: String,
+    pub dangerous: bool,
+}
+
+#[derive(Debug)]
+pub struct RowText {
+    pub label: String,
     pub value: String,
     pub note: String,
     pub dangerous: bool,
@@ -426,8 +437,8 @@ impl Settings {
                 *detail.switch(&mut config) = on;
                 self.save(config, detail.notice(on).into())
             }
-            Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
-            Row::Tabs => self.pick_from(row, ui::Tabs::choices()),
+            Row::Sidebar => self.pick_from(row, Sidebar::choices()),
+            Row::Tabs => self.pick_from(row, Tabs::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
             Row::Updates => self.flip(
                 |c| &mut c.check_updates,
@@ -526,8 +537,8 @@ impl Settings {
     fn open_pick(&mut self, row: Row, items: Vec<PickItem>) {
         let current = match &row {
             Row::DefaultAgent => Some(self.config.agent.clone()),
-            Row::Sidebar => Some(ui::Sidebar::from_setting(&self.config.sidebar).id().to_string()),
-            Row::Tabs => Some(ui::Tabs::from_setting(&self.config.tabs).id().to_string()),
+            Row::Sidebar => Some(Sidebar::from_setting(&self.config.sidebar).id().to_string()),
+            Row::Tabs => Some(Tabs::from_setting(&self.config.tabs).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
             Row::Kind(kind) => Some(
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
@@ -897,7 +908,7 @@ impl Settings {
         ("keep awake".into(), value.into(), self.awake.clone(), false)
     }
 
-    fn row_view(&self, row: &Row) -> ui::SettingsRow {
+    pub fn row_text(&self, row: &Row) -> RowText {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
             Row::Folder => (
@@ -989,15 +1000,7 @@ impl Settings {
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
         };
-        ui::SettingsRow {
-            section: row.section(),
-            label,
-            value,
-            note,
-            dangerous,
-            removable: false,
-            movable: matches!(row, Row::Tab(_)),
-        }
+        RowText { label, value, note, dangerous }
     }
 
     fn tab_row(&self, id: &str) -> (String, String, String, bool) {
@@ -1026,14 +1029,8 @@ impl Settings {
         ("prefix key".into(), value, note, clash.is_some())
     }
 
-    pub fn view(&self) -> ui::Overlay {
-        let rows: Vec<ui::SettingsRow> = self
-            .rows()
-            .iter()
-            .enumerate()
-            .map(|(i, row)| ui::SettingsRow { removable: self.removable(i).is_some(), ..self.row_view(row) })
-            .collect();
-        let edit = self.edit.as_ref().map(|edit| {
+    pub fn edit_field(&self) -> Option<(String, String)> {
+        self.edit.as_ref().map(|edit| {
             let token = matches!(edit.row, Row::Token(_));
             let label = match &edit.row {
                 Row::Folder => "worktrees folder".to_string(),
@@ -1049,29 +1046,30 @@ impl Settings {
                 _ => String::new(),
             };
             let value = if token { "•".repeat(edit.input.chars().count()) } else { edit.input.clone() };
-            ui::SettingsEdit { label, value }
-        });
-        let pick = self.pick.as_ref().map(|pick| {
-            let choices = self.pick_choices();
-            let title = match &pick.row {
-                Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
-                Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
-                Row::Tabs => "Where should a workspace's tabs go?".to_string(),
-                Row::Notifications => "How should your terminal notify you?".to_string(),
-                Row::Kind(kind) => format!("How should {kind} start?"),
-                _ => "Which agent do you want to set up?".to_string(),
-            };
-            ui::SettingsPick {
-                title,
-                filter: pick.search.query().to_string(),
-                items: choices.iter().map(|item| (item.value.clone(), item.note.clone(), item.dangerous)).collect(),
-                selected: choices.len().checked_sub(1).map(|last| pick.search.selected().min(last)),
-                scroll: pick.search.scroll(),
-            }
-        });
-        let error = self.edit.as_ref().and_then(|e| e.error.clone());
-        let note = if self.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
-        let hint = self.notice.clone().unwrap_or_else(|| {
+            (label, value)
+        })
+    }
+
+    pub fn pick_title(&self) -> String {
+        let Some(pick) = &self.pick else { return String::new() };
+        match &pick.row {
+            Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
+            Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
+            Row::Tabs => "Where should a workspace's tabs go?".to_string(),
+            Row::Notifications => "How should your terminal notify you?".to_string(),
+            Row::Kind(kind) => format!("How should {kind} start?"),
+            _ => "Which agent do you want to set up?".to_string(),
+        }
+    }
+
+    pub fn pick_selected(&self) -> Option<usize> {
+        let pick = self.pick.as_ref()?;
+        let choices = self.pick_choices();
+        choices.len().checked_sub(1).map(|last| pick.search.selected().min(last))
+    }
+
+    pub fn hint(&self) -> String {
+        self.notice.clone().unwrap_or_else(|| {
             if self.capturing {
                 "press the keys you want · backspace turns them off · esc cancels".into()
             } else if self.edit.is_some() {
@@ -1083,17 +1081,6 @@ impl Settings {
             } else {
                 "enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once".into()
             }
-        });
-        ui::Overlay::Settings(ui::Settings {
-            tabs: Page::ALL.iter().map(|p| p.name()).collect(),
-            tab: self.page.index(),
-            rows,
-            cursor: self.cursor,
-            edit,
-            pick,
-            note,
-            hint,
-            submit: DONE,
         })
     }
 }
@@ -1115,9 +1102,9 @@ fn with_args(config: &Config, kind: &str, args: Vec<String>) -> Config {
 
 fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let (label, value, note) = if *row == Row::Tabs {
-        ("tabs", ui::Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed")
+        ("tabs", Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed")
     } else {
-        ("sidebar", ui::Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out")
+        ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out")
     };
     (label.into(), value.into(), note.into(), false)
 }

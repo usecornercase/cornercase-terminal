@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::menus::MenuAction;
 use super::menus::Target;
+use super::settings_dialog::settings_view;
 use super::toast::Toast;
 use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
@@ -267,7 +268,7 @@ impl App {
                     submit: CREATE_SUBMIT,
                 })
             }
-            Overlay::Settings(s) => s.view(),
+            Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::Rename { target, input } => ui::Overlay::Form(ui::Form {
                 title: target.rename_title(),
                 label: "name",

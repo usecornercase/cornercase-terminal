@@ -2,9 +2,25 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.60
+## 0.12.63
 
 - No changes in the app. The ssh window and the client no longer import each other.
+
+## 0.12.60
+
+- No changes in the app. The settings dialog's view is now built in app/settings_dialog.rs instead of in the settings module.
+
+## 0.12.56
+
+- No changes in the app. Session and config types now belong to their models instead of the UI, and group preset and saved-icon rules live with the groups.
+
+## 0.12.55
+
+- No changes in the app. The plan usage dialog's view is now built in app/usage_dialog.rs instead of in the usage module.
+
+## 0.12.54
+
+- The model, context and last message of a Gemini CLI tab no longer disappear for a moment when Gemini starts a process. The same goes for opencode.
 
 ## 0.12.53
 

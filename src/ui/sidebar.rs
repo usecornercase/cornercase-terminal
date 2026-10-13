@@ -3,7 +3,6 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Clear;
-use serde::{Deserialize, Serialize};
 
 use super::View;
 use super::drop::landed;
@@ -15,18 +14,12 @@ use super::rows::{
 use super::theme::status_icon;
 use super::widgets::{button_style, draw_band, draw_button, draw_title};
 use crate::activity::{self, Status};
+use crate::project::group::GroupEntry;
 use crate::text::truncate_right;
 
 pub const NEW_BUTTON: &str = "+ New";
 
 const GROUP_INDENT: &str = "  ";
-
-pub const GROUP_ICONS: [char; 12] = ['●', '◉', '◐', '◆', '■', '▲', '▼', '★', '✦', '♥', '♣', '♠'];
-
-pub const GROUP_COLOURS: [u8; 16] = [1, 9, 208, 214, 3, 11, 2, 10, 6, 14, 4, 12, 99, 5, 13, 205];
-
-pub const GROUP_STYLES: [(char, u8); 8] =
-    [('●', 12), ('◆', 2), ('★', 99), ('♥', 9), ('▲', 208), ('■', 214), ('✦', 205), ('◉', 6)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SidebarRow {
@@ -112,21 +105,6 @@ pub struct ProjectEntry {
     pub workspaces: usize,
     pub group: Option<usize>,
     pub status: Option<Status>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GroupEntry {
-    pub name: String,
-    pub icon: char,
-    pub colour: u8,
-    #[serde(default)]
-    pub collapsed: bool,
-}
-
-impl GroupEntry {
-    pub fn label(&self) -> String {
-        format!("{} {}", self.icon, self.name)
-    }
 }
 
 pub(super) fn group_header(group: &GroupEntry, max: usize) -> Span<'static> {

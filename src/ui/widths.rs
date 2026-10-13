@@ -1,8 +1,8 @@
 use ratatui::layout::{Position, Rect};
-use serde::{Deserialize, Serialize};
 
 use super::changes;
 use super::layout::{Border, STACKED_KEEP, split_agents, stack_room};
+use crate::state::Widths;
 
 pub const SIDEBAR_WIDTH: u16 = 32;
 
@@ -15,18 +15,6 @@ pub const MIN_COLUMN_WIDTH: u16 = 16;
 pub const MIN_PANE_WIDTH: u16 = 20;
 
 pub const MIN_STACK_SECTION: u16 = 5;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Widths {
-    pub projects: u16,
-    pub workspaces: u16,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub changes: Option<u16>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stack: Option<u16>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agents: Option<u16>,
-}
 
 impl Default for Widths {
     fn default() -> Self {
