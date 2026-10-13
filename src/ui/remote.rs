@@ -8,25 +8,25 @@ use super::{muted, overlay_block, surface_colour};
 use crate::host::theme::HostTheme;
 use crate::text::truncate_right;
 
-pub const TITLE: &str = "Connection lost";
-pub const QUIT: &str = " quit ";
+pub(crate) const TITLE: &str = "Connection lost";
+pub(crate) const QUIT: &str = " quit ";
 const WIDTH: u16 = 60;
 const HEIGHT: u16 = 8;
 
-pub struct Notice<'a> {
-    pub host: &'a str,
-    pub retry_in: Option<u64>,
-    pub error: Option<&'a str>,
-    pub hovered: bool,
+pub(crate) struct Notice<'a> {
+    pub(crate) host: &'a str,
+    pub(crate) retry_in: Option<u64>,
+    pub(crate) error: Option<&'a str>,
+    pub(crate) hovered: bool,
 }
 
-pub fn area(screen: Rect) -> Rect {
+pub(crate) fn area(screen: Rect) -> Rect {
     let width = WIDTH.min(screen.width);
     let height = HEIGHT.min(screen.height);
     Rect { x: screen.x + (screen.width - width) / 2, y: screen.y + (screen.height - height) / 2, width, height }
 }
 
-pub fn quit(screen: Rect) -> Rect {
+pub(crate) fn quit(screen: Rect) -> Rect {
     let r = area(screen);
     let width = u16::try_from(QUIT.chars().count()).unwrap_or(u16::MAX).min(r.width.saturating_sub(4));
     Rect {
@@ -37,11 +37,11 @@ pub fn quit(screen: Rect) -> Rect {
     }
 }
 
-pub fn hits_quit(screen: Rect, at: Position) -> bool {
+pub(crate) fn hits_quit(screen: Rect, at: Position) -> bool {
     quit(screen).contains(at)
 }
 
-pub fn draw(buf: &mut Buffer, theme: &HostTheme, notice: &Notice) {
+pub(crate) fn draw(buf: &mut Buffer, theme: &HostTheme, notice: &Notice) {
     let screen = buf.area;
     let r = area(screen);
     let grey = muted(theme);

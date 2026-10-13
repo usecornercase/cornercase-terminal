@@ -4,18 +4,18 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 
-pub const EXTENSION: &str = "code-workspace";
+pub(crate) const EXTENSION: &str = "code-workspace";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Workspace {
-    pub name: String,
-    pub folders: Vec<Folder>,
+pub(crate) struct Workspace {
+    pub(crate) name: String,
+    pub(crate) folders: Vec<Folder>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Folder {
-    pub path: PathBuf,
-    pub name: Option<String>,
+pub(crate) struct Folder {
+    pub(crate) path: PathBuf,
+    pub(crate) name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -31,11 +31,11 @@ struct Entry {
     name: Option<String>,
 }
 
-pub fn is_workspace(path: &Path) -> bool {
+pub(crate) fn is_workspace(path: &Path) -> bool {
     path.extension().is_some_and(|e| e == EXTENSION)
 }
 
-pub fn read(file: &Path) -> Result<Workspace> {
+pub(crate) fn read(file: &Path) -> Result<Workspace> {
     let invalid = |reason: String| Error::CodeWorkspace { path: file.to_path_buf(), reason };
     let text = std::fs::read_to_string(file).map_err(|e| invalid(e.to_string()))?;
     let text = text.trim_start_matches('\u{feff}');

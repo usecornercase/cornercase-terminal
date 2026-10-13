@@ -7,16 +7,16 @@ use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Li
 use super::Picture;
 use super::encode::{resize, round};
 
-pub const HEAD: usize = 32;
-pub const MAX_SIDE: u32 = 2048;
-pub const LIMIT_SIDE: u32 = 16_384;
-pub const LIMIT_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const HEAD: usize = 32;
+pub(crate) const MAX_SIDE: u32 = 2048;
+pub(crate) const LIMIT_SIDE: u32 = 16_384;
+pub(crate) const LIMIT_BYTES: u64 = 256 * 1024 * 1024;
 
-pub fn sniff(head: &[u8]) -> Option<&'static str> {
+pub(crate) fn sniff(head: &[u8]) -> Option<&'static str> {
     kind(head).map(|(name, _)| name)
 }
 
-pub fn decode(bytes: &[u8], id: u64) -> Result<Picture, String> {
+pub(crate) fn decode(bytes: &[u8], id: u64) -> Result<Picture, String> {
     let (format, kind) = kind(bytes).ok_or("not an image")?;
     let damaged = |error| reason(&error, format);
     let mut reader = ImageReader::with_format(Cursor::new(bytes), kind);

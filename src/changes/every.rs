@@ -9,15 +9,15 @@ use crate::git;
 use crate::project::Project;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Header {
-    pub id: u64,
-    pub label: String,
-    pub files: Range<usize>,
-    pub workspace: bool,
-    pub folded: bool,
+pub(crate) struct Header {
+    pub(crate) id: u64,
+    pub(crate) label: String,
+    pub(crate) files: Range<usize>,
+    pub(crate) workspace: bool,
+    pub(crate) folded: bool,
 }
 
-pub fn targets(projects: &[Project], order: &[usize], panel: &Panel) -> Vec<(Checkout, bool)> {
+pub(crate) fn targets(projects: &[Project], order: &[usize], panel: &Panel) -> Vec<(Checkout, bool)> {
     order
         .iter()
         .flat_map(|&p| {
@@ -43,7 +43,7 @@ pub fn targets(projects: &[Project], order: &[usize], panel: &Panel) -> Vec<(Che
         .collect()
 }
 
-pub fn group(
+pub(crate) fn group(
     projects: &[Project],
     order: &[usize],
     panel: &Panel,

@@ -104,18 +104,18 @@ fn metadata(path: &Path) -> Option<(String, Option<PathBuf>)> {
 
 #[derive(Debug)]
 pub(super) struct Rollout {
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     tail: Tail,
     id: Option<String>,
     model: Option<String>,
     percent: Option<u16>,
     turn: bool,
     prompted: Option<SystemTime>,
-    pub counted: Vec<Record>,
+    pub(crate) counted: Vec<Record>,
 }
 
 impl Rollout {
-    pub fn new(path: PathBuf) -> Self {
+    pub(super) fn new(path: PathBuf) -> Self {
         Self {
             path,
             tail: Tail::default(),
@@ -128,23 +128,23 @@ impl Rollout {
         }
     }
 
-    pub fn context(&self) -> Option<Context> {
+    pub(super) fn context(&self) -> Option<Context> {
         Some(Context { model: self.model.clone()?, percent: self.percent })
     }
 
-    pub fn turn(&self) -> bool {
+    pub(super) fn turn(&self) -> bool {
         self.turn
     }
 
-    pub fn prompted(&self) -> Option<SystemTime> {
+    pub(super) fn prompted(&self) -> Option<SystemTime> {
         self.prompted
     }
 
-    pub fn id(&self) -> Option<&str> {
+    pub(super) fn id(&self) -> Option<&str> {
         self.id.as_deref()
     }
 
-    pub fn update(&mut self) {
+    pub(super) fn update(&mut self) {
         if self.read_file().is_none() {
             *self = Self::new(std::mem::take(&mut self.path));
         }

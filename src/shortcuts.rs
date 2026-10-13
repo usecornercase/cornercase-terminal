@@ -20,13 +20,13 @@ const CLASHES: [(&str, &str); 6] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Prefix {
+pub(crate) struct Prefix {
     code: KeyCode,
     modifiers: KeyModifiers,
 }
 
 impl Prefix {
-    pub fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         let text = text.trim().to_lowercase();
         if text.is_empty() {
             return None;
@@ -53,7 +53,7 @@ impl Prefix {
         Self::from_key(KeyEvent::new(code, modifiers)).ok()
     }
 
-    pub fn from_key(key: KeyEvent) -> Result<Self, String> {
+    pub(crate) fn from_key(key: KeyEvent) -> Result<Self, String> {
         let prefix = Self::normal(key);
         match prefix.code {
             KeyCode::F(n) if (1..=24).contains(&n) => Ok(prefix),
@@ -87,15 +87,15 @@ impl Prefix {
         Self { code, modifiers }
     }
 
-    pub fn matches(self, key: KeyEvent) -> bool {
+    pub(crate) fn matches(self, key: KeyEvent) -> bool {
         Self::normal(key) == self
     }
 
-    pub fn event(self) -> KeyEvent {
+    pub(crate) fn event(self) -> KeyEvent {
         KeyEvent::new(self.code, self.modifiers)
     }
 
-    pub fn clash(self) -> Option<&'static str> {
+    pub(crate) fn clash(self) -> Option<&'static str> {
         let name = self.to_string();
         CLASHES.iter().find(|(key, _)| *key == name).map(|(_, why)| *why)
     }
@@ -118,7 +118,7 @@ impl fmt::Display for Prefix {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
+pub(crate) enum Action {
     NextTab,
     PreviousTab,
     Tab(usize),
@@ -149,14 +149,14 @@ pub enum Action {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Group {
+pub(crate) enum Group {
     Find,
     Git,
     Workspace,
 }
 
 impl Group {
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Find => "Find",
             Self::Git => "Git",
@@ -174,16 +174,16 @@ impl Group {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Step {
+pub(crate) enum Step {
     Run(Action),
     Open(Group),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Item {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub step: Option<Step>,
+pub(crate) struct Item {
+    pub(crate) key: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) step: Option<Step>,
 }
 
 const fn run(key: &'static str, label: &'static str, action: Action) -> Item {
@@ -235,7 +235,7 @@ const WORKSPACE: [Item; 3] = [
     run("x", "close workspace", Action::CloseWorkspace),
 ];
 
-pub fn items(group: Option<Group>) -> &'static [Item] {
+pub(crate) fn items(group: Option<Group>) -> &'static [Item] {
     match group {
         None => &ROOT,
         Some(Group::Find) => &FIND,
@@ -244,7 +244,7 @@ pub fn items(group: Option<Group>) -> &'static [Item] {
     }
 }
 
-pub fn lookup(group: Option<Group>, key: KeyEvent) -> Option<Step> {
+pub(crate) fn lookup(group: Option<Group>, key: KeyEvent) -> Option<Step> {
     if key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) {
         return None;
     }

@@ -15,11 +15,11 @@ use crate::term::keys;
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Command>,
+    pub(crate) command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub(crate) enum Command {
     #[command(flatten)]
     Control(Control),
     #[command(
@@ -57,7 +57,7 @@ Examples:
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Control {
+pub(crate) enum Control {
     #[command(about = "List the projects, workspaces, tabs and panes, with their ids", after_help = STATUS_HELP)]
     Status(StatusArgs),
     #[command(about = "Open a folder as a project, or find the open one, and print its id", after_help = OPEN_HELP)]
@@ -110,124 +110,124 @@ pub enum Control {
 }
 
 #[derive(Debug, Args)]
-pub struct Print {
+pub(crate) struct Print {
     #[arg(long, help = "Print JSON instead of text")]
-    pub json: bool,
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Args)]
-pub struct StatusArgs {
+pub(crate) struct StatusArgs {
     #[arg(long, help = "One line per pane, its columns separated by tabs, for scripts")]
-    pub panes: bool,
+    pub(crate) panes: bool,
     #[command(flatten)]
-    pub print: Print,
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
-pub struct Create {
+pub(crate) struct Create {
     #[arg(long, help = "Also show it in the window, which otherwise stays as it is")]
-    pub focus: bool,
+    pub(crate) focus: bool,
     #[command(flatten)]
-    pub print: Print,
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
-pub struct Target {
+pub(crate) struct Target {
     #[arg(long, value_name = "ID", help = HERE_PANE)]
-    pub pane: Option<u64>,
+    pub(crate) pane: Option<u64>,
     #[arg(long, value_name = "ID", conflicts_with = "pane", help = "A tab: its agent's pane, else its active one")]
-    pub tab: Option<u64>,
+    pub(crate) tab: Option<u64>,
 }
 
 #[derive(Debug, Args)]
-pub struct OpenArgs {
+pub(crate) struct OpenArgs {
     #[arg(value_name = "PATH", help = "The folder")]
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     #[command(flatten)]
-    pub create: Create,
+    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]
-pub struct NewWorkspaceArgs {
+pub(crate) struct NewWorkspaceArgs {
     #[arg(value_name = "NAME", help = "Its name, or its branch with --worktree")]
-    pub name: String,
+    pub(crate) name: String,
     #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
-    pub project: Option<u64>,
+    pub(crate) project: Option<u64>,
     #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
-    pub worktree: bool,
+    pub(crate) worktree: bool,
     #[command(flatten)]
-    pub create: Create,
+    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]
-pub struct NewTabArgs {
+pub(crate) struct NewTabArgs {
     #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
-    pub workspace: Option<u64>,
+    pub(crate) workspace: Option<u64>,
     #[arg(long, value_name = "BRANCH", value_parser = branch, conflicts_with = "workspace", help = BY_BRANCH)]
-    pub worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     #[arg(long, help = "The tab's name [default: the name of the program it runs]")]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[command(flatten)]
-    pub create: Create,
+    pub(crate) create: Create,
     #[arg(last = true, value_name = "COMMAND", help = "What to type into its shell")]
-    pub command: Vec<String>,
+    pub(crate) command: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct SplitArgs {
+pub(crate) struct SplitArgs {
     #[arg(long, value_name = "ID", help = HERE_PANE)]
-    pub pane: Option<u64>,
+    pub(crate) pane: Option<u64>,
     #[arg(long, help = "Split it down instead of right")]
-    pub down: bool,
+    pub(crate) down: bool,
     #[command(flatten)]
-    pub create: Create,
+    pub(crate) create: Create,
     #[arg(last = true, value_name = "COMMAND", help = "What to type into the new shell")]
-    pub command: Vec<String>,
+    pub(crate) command: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct StartArgs {
+pub(crate) struct StartArgs {
     #[arg(
         value_name = "AGENT",
         help = "The agent, such as claude or codex [default: the one chosen in settings → agents, else the one \
                 running here]"
     )]
-    pub agent: Option<String>,
+    pub(crate) agent: Option<String>,
     #[arg(
         long,
         value_name = "BRANCH",
         conflicts_with = "workspace",
         help = "Start it in the worktree of this branch, made when missing"
     )]
-    pub worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = HERE_WORKSPACE)]
-    pub workspace: Option<u64>,
+    pub(crate) workspace: Option<u64>,
     #[arg(long, help = "The tab's name [default: the agent's]")]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[arg(long, value_name = "TEXT", conflicts_with = "prompt_file", help = "What to ask it")]
-    pub prompt: Option<String>,
+    pub(crate) prompt: Option<String>,
     #[arg(long, value_name = "FILE", help = "Read the prompt from a file, or from standard input with -")]
-    pub prompt_file: Option<PathBuf>,
+    pub(crate) prompt_file: Option<PathBuf>,
     #[arg(long, help = "Then wait until the agent stops working, and print how it ended")]
-    pub wait: bool,
+    pub(crate) wait: bool,
     #[arg(long, value_enum, requires = "wait", help = UNTIL_AFTER)]
-    pub until: Option<UntilArg>,
+    pub(crate) until: Option<UntilArg>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
-    pub timeout: Option<f64>,
+    pub(crate) timeout: Option<f64>,
     #[command(flatten)]
-    pub create: Create,
+    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]
-pub struct SendArgs {
+pub(crate) struct SendArgs {
     #[command(flatten)]
-    pub target: Target,
+    pub(crate) target: Target,
     #[arg(long, help = "Press Enter once the screen settles")]
-    pub enter: bool,
+    pub(crate) enter: bool,
     #[arg(long, requires = "enter", help = "Then wait until the agent stops working, and print how it ended")]
-    pub wait: bool,
+    pub(crate) wait: bool,
     #[arg(long, value_enum, requires = "wait", help = UNTIL_AFTER)]
-    pub until: Option<UntilArg>,
+    pub(crate) until: Option<UntilArg>,
     #[arg(
         long,
         value_name = "SECONDS",
@@ -235,60 +235,60 @@ pub struct SendArgs {
         value_parser = seconds,
         help = "Give up waiting after this long, with status 1"
     )]
-    pub timeout: Option<f64>,
+    pub(crate) timeout: Option<f64>,
     #[arg(
         long,
         help = "Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or its \
                 feedback survey"
     )]
-    pub force: bool,
+    pub(crate) force: bool,
     #[command(flatten)]
-    pub print: Print,
+    pub(crate) print: Print,
     #[arg(
         value_name = "TEXT",
         required_unless_present = "enter",
         help = "The text, or - to read it from standard input"
     )]
-    pub text: Option<String>,
+    pub(crate) text: Option<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct KeysArgs {
+pub(crate) struct KeysArgs {
     #[command(flatten)]
-    pub target: Target,
+    pub(crate) target: Target,
     #[arg(required = true, value_name = "KEY", value_parser = key, help = KEY_NAMES)]
-    pub keys: Vec<String>,
+    pub(crate) keys: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct ReadArgs {
+pub(crate) struct ReadArgs {
     #[arg(
         long = "pane",
         value_name = "ID",
         help = "The pane; with --last-message, repeat it to read several [default: the one this runs in, else the shown one]"
     )]
-    pub panes: Vec<u64>,
+    pub(crate) panes: Vec<u64>,
     #[arg(
         long = "tab",
         value_name = "ID",
         help = "A tab: its agent's pane, else its active one; with --last-message, repeat it"
     )]
-    pub tabs: Vec<u64>,
+    pub(crate) tabs: Vec<u64>,
     #[arg(
         long,
         value_name = "N",
         value_parser = clap::value_parser!(u64).range(1..),
         help = "The last N lines, scrollback included (a pane keeps its last 10 MB of output)"
     )]
-    pub lines: Option<u64>,
+    pub(crate) lines: Option<u64>,
     #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
-    pub last_message: bool,
+    pub(crate) last_message: bool,
     #[command(flatten)]
-    pub print: Print,
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum UntilArg {
+pub(crate) enum UntilArg {
     #[value(help = "The agent is idle or done")]
     Idle,
     #[value(help = "The agent is working")]
@@ -314,17 +314,17 @@ impl From<UntilArg> for Until {
 }
 
 #[derive(Debug, Args)]
-pub struct WaitArgs {
+pub(crate) struct WaitArgs {
     #[arg(long = "pane", value_name = "ID", help = WAIT_PANE)]
-    pub panes: Vec<u64>,
+    pub(crate) panes: Vec<u64>,
     #[arg(long = "tab", value_name = "ID", help = WAIT_TAB)]
-    pub tabs: Vec<u64>,
+    pub(crate) tabs: Vec<u64>,
     #[arg(long, conflicts_with = "all", help = "Return once any of the panes meets the condition")]
-    pub any: bool,
+    pub(crate) any: bool,
     #[arg(long, help = "Return once every one of the panes has met the condition")]
-    pub all: bool,
+    pub(crate) all: bool,
     #[arg(long, value_enum, conflicts_with_all = ["text", "quiet"], help = "Until the pane is in this state")]
-    pub until: Option<UntilArg>,
+    pub(crate) until: Option<UntilArg>,
     #[arg(
         long,
         value_name = "REGEX",
@@ -332,92 +332,92 @@ pub struct WaitArgs {
         value_parser = pattern,
         help = "Until a line on its screen matches, one already there included"
     )]
-    pub text: Option<String>,
+    pub(crate) text: Option<String>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Until it writes nothing for this long")]
-    pub quiet: Option<f64>,
+    pub(crate) quiet: Option<f64>,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
-    pub timeout: Option<f64>,
+    pub(crate) timeout: Option<f64>,
     #[command(flatten)]
-    pub print: Print,
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
 #[group(required = true, multiple = false)]
-pub struct Which {
+pub(crate) struct Which {
     #[arg(long, value_name = "ID", help = "A pane")]
-    pub pane: Option<u64>,
+    pub(crate) pane: Option<u64>,
     #[arg(long, value_name = "ID", help = "A tab and its panes")]
-    pub tab: Option<u64>,
+    pub(crate) tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "A workspace and its tabs")]
-    pub workspace: Option<u64>,
+    pub(crate) workspace: Option<u64>,
     #[arg(long, value_name = "BRANCH", value_parser = branch, help = BY_BRANCH)]
-    pub worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "A project and its workspaces")]
-    pub project: Option<u64>,
+    pub(crate) project: Option<u64>,
 }
 
 #[derive(Debug, Args)]
-pub struct CloseArgs {
+pub(crate) struct CloseArgs {
     #[command(flatten)]
-    pub which: Which,
+    pub(crate) which: Which,
     #[arg(
         long,
         conflicts_with_all = ["pane", "tab", "project"],
         help = "Also remove the workspace's git worktree from disk"
     )]
-    pub remove_worktree: bool,
+    pub(crate) remove_worktree: bool,
     #[arg(long, requires = "remove_worktree", help = "Remove it even when git would lose changes")]
-    pub force: bool,
+    pub(crate) force: bool,
 }
 
 #[derive(Debug, Args)]
-pub struct FocusArgs {
+pub(crate) struct FocusArgs {
     #[command(flatten)]
-    pub which: Which,
+    pub(crate) which: Which,
 }
 
 #[derive(Debug, Args)]
 #[group(multiple = false)]
-pub struct Renamed {
+pub(crate) struct Renamed {
     #[arg(long, value_name = "ID", help = "The tab [default: the one this runs in, else the shown one]")]
-    pub tab: Option<u64>,
+    pub(crate) tab: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this workspace instead")]
-    pub workspace: Option<u64>,
+    pub(crate) workspace: Option<u64>,
     #[arg(
         long,
         value_name = "BRANCH",
         value_parser = branch,
         help = "Rename the workspace on this branch instead, looked up in the project this runs in, else the shown one"
     )]
-    pub worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "Rename this project instead")]
-    pub project: Option<u64>,
+    pub(crate) project: Option<u64>,
     #[arg(long, value_name = "ID", help = "Rename this group instead")]
-    pub group: Option<u64>,
+    pub(crate) group: Option<u64>,
 }
 
 #[derive(Debug, Args)]
-pub struct RenameArgs {
+pub(crate) struct RenameArgs {
     #[command(flatten)]
-    pub renamed: Renamed,
+    pub(crate) renamed: Renamed,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
-    pub name: String,
+    pub(crate) name: String,
 }
 
 #[derive(Debug, Args)]
-pub struct NotifyArgs {
+pub(crate) struct NotifyArgs {
     #[arg(required = true, value_name = "TEXT", help = "The message")]
-    pub text: Vec<String>,
+    pub(crate) text: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct TodoArgs {
+pub(crate) struct TodoArgs {
     #[command(subcommand)]
-    pub action: TodoAction,
+    pub(crate) action: TodoAction,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum TodoAction {
+pub(crate) enum TodoAction {
     #[command(about = "Add an item and print its id")]
     Add {
         #[arg(required = true, value_name = "TEXT", help = "What to do")]
@@ -438,65 +438,65 @@ pub enum TodoAction {
 }
 
 #[derive(Debug, Args)]
-pub struct EventsArgs {
+pub(crate) struct EventsArgs {
     #[arg(
         long = "pane",
         value_name = "ID",
         num_args = 1..,
         help = "Only what happens to these panes, and stop once they all closed"
     )]
-    pub panes: Vec<u64>,
+    pub(crate) panes: Vec<u64>,
     #[arg(long, help = "Print one JSON object per line instead of text")]
-    pub json: bool,
+    pub(crate) json: bool,
 }
 
 #[derive(Debug, Args)]
-pub struct RemoteArgs {
+pub(crate) struct RemoteArgs {
     #[arg(value_name = "DESTINATION", help = "Where ssh connects: a host from ~/.ssh/config, or user@host")]
-    pub destination: String,
+    pub(crate) destination: String,
     #[arg(
         long,
         value_name = "COMMAND",
         help = "How to run cornercase there, as sh reads it [default: cornercase, also looked for in \
                 ~/.local/bin, ~/.cargo/bin and Homebrew's folders]"
     )]
-    pub command: Option<String>,
+    pub(crate) command: Option<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct LogsArgs {
+pub(crate) struct LogsArgs {
     #[arg(short = 'n', long, value_name = "N", default_value_t = 200, help = "How many of the last lines to print")]
-    pub lines: usize,
+    pub(crate) lines: usize,
     #[arg(short, long, help = "Keep printing what the server writes, until interrupted")]
-    pub follow: bool,
+    pub(crate) follow: bool,
     #[arg(long, conflicts_with_all = ["lines", "follow"], help = "Print only where the log is")]
-    pub path: bool,
+    pub(crate) path: bool,
 }
 
 #[derive(Debug, Args)]
-pub struct RestartArgs {
+pub(crate) struct RestartArgs {
     #[arg(short, long, help = "Restart the server without asking")]
-    pub yes: bool,
+    pub(crate) yes: bool,
     #[command(flatten)]
-    pub when: WhenArgs,
+    pub(crate) when: WhenArgs,
 }
 
 #[derive(Debug, Args)]
-pub struct UpdateArgs {
+pub(crate) struct UpdateArgs {
     #[arg(long, conflicts_with = "when_idle", help = "Only say whether a newer version is out")]
-    pub check: bool,
+    pub(crate) check: bool,
     #[arg(short, long, help = "Restart the server without asking")]
-    pub yes: bool,
+    pub(crate) yes: bool,
     #[command(flatten)]
-    pub when: WhenArgs,
+    pub(crate) when: WhenArgs,
 }
 
 #[derive(Debug, Args)]
-pub struct WhenArgs {
+pub(crate) struct WhenArgs {
     #[arg(long, help = WHEN_IDLE)]
-    pub when_idle: bool,
+    pub(crate) when_idle: bool,
     #[arg(long, value_name = "SECONDS", value_parser = seconds, requires = "when_idle", help = RESTART_TIMEOUT)]
-    pub timeout: Option<f64>,
+    pub(crate) timeout: Option<f64>,
 }
 
 fn seconds(text: &str) -> Result<f64, String> {
@@ -520,7 +520,7 @@ fn key(text: &str) -> Result<String, String> {
 }
 
 #[derive(Debug, Args)]
-pub struct StatsArgs {
+pub(crate) struct StatsArgs {
     #[arg(long, conflicts_with = "share", help = "Print every counter and the heatmap blocks as JSON")]
     pub(super) json: bool,
     #[arg(long, help = "Print a link to a card made locally in the browser")]

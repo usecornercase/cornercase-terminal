@@ -11,35 +11,35 @@ use crate::error::{Error, Result};
 use crate::time;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Page {
+pub(crate) enum Page {
     Limits,
     #[default]
     Stats,
 }
 impl Page {
-    pub const NAMES: [&'static str; 2] = ["Limits", "Stats"];
-    pub fn index(self) -> usize {
+    pub(crate) const NAMES: [&'static str; 2] = ["Limits", "Stats"];
+    pub(crate) fn index(self) -> usize {
         usize::from(self == Self::Stats)
     }
     #[must_use]
-    pub fn switched(self) -> Self {
+    pub(crate) fn switched(self) -> Self {
         if self == Self::Stats { Self::Limits } else { Self::Stats }
     }
 }
 
-pub const TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 const WARNING_FROM: u16 = 75;
 const CRITICAL_FROM: u16 = 90;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Severity {
+pub(crate) enum Severity {
     Normal,
     Warning,
     Critical,
 }
 
 impl Severity {
-    pub fn of(percent: u16) -> Self {
+    pub(crate) fn of(percent: u16) -> Self {
         if percent >= CRITICAL_FROM {
             Self::Critical
         } else if percent >= WARNING_FROM {
@@ -59,46 +59,46 @@ impl Severity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Window {
-    pub label: String,
-    pub percent: u16,
-    pub severity: Severity,
-    pub resets_at: Option<i64>,
+pub(crate) struct Window {
+    pub(crate) label: String,
+    pub(crate) percent: u16,
+    pub(crate) severity: Severity,
+    pub(crate) resets_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Report {
-    pub plan: Option<String>,
-    pub limited: bool,
-    pub windows: Vec<Window>,
-    pub extra: Option<String>,
-    pub notice: Option<&'static str>,
+pub(crate) struct Report {
+    pub(crate) plan: Option<String>,
+    pub(crate) limited: bool,
+    pub(crate) windows: Vec<Window>,
+    pub(crate) extra: Option<String>,
+    pub(crate) notice: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Agent {
+pub(crate) enum Agent {
     Claude,
     Codex,
 }
 
 impl Agent {
-    pub const ALL: [Self; 2] = [Self::Claude, Self::Codex];
+    pub(crate) const ALL: [Self; 2] = [Self::Claude, Self::Codex];
 
-    pub fn kind(self) -> &'static str {
+    pub(crate) fn kind(self) -> &'static str {
         match self {
             Self::Claude => agents::CLAUDE,
             Self::Codex => agents::CODEX,
         }
     }
 
-    pub fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         match self {
             Self::Claude => "Claude Code",
             Self::Codex => "Codex",
         }
     }
 
-    pub fn no_limits(self) -> &'static str {
+    pub(crate) fn no_limits(self) -> &'static str {
         match self {
             Self::Claude => "no plan limits for this account (API key, Bedrock or Vertex)",
             Self::Codex => "no plan limits for this account",
@@ -173,14 +173,14 @@ fn run(agent: Agent, mut command: Command, requests: &str, answer: Answer, timeo
     answer
 }
 
-pub fn probe(agent: Agent, program: &str, timeout: Duration) -> Result<Report> {
+pub(crate) fn probe(agent: Agent, program: &str, timeout: Duration) -> Result<Report> {
     match agent {
         Agent::Claude => run(agent, claude::command(program), claude::REQUESTS, claude::answer, timeout),
         Agent::Codex => run(agent, codex::command(program), &codex::requests(), codex::answer, timeout),
     }
 }
 
-pub fn until(secs: i64) -> String {
+pub(crate) fn until(secs: i64) -> String {
     let minutes = (secs.max(0) + 59) / 60;
     let (days, hours, minutes) = (minutes / 1_440, minutes / 60 % 24, minutes % 60);
     if days > 0 {
@@ -192,7 +192,7 @@ pub fn until(secs: i64) -> String {
     }
 }
 
-pub fn updated(secs: u64) -> String {
+pub(crate) fn updated(secs: u64) -> String {
     if secs < 60 {
         "updated just now".into()
     } else {
@@ -201,7 +201,7 @@ pub fn updated(secs: u64) -> String {
 }
 
 #[derive(Debug, Default)]
-pub struct Probe {
+pub(crate) struct Probe {
     last: Option<(Report, Instant)>,
     loading: bool,
     error: Option<String>,
@@ -224,36 +224,36 @@ impl Probe {
             Err(e) => self.error = Some(e.to_string()),
         }
     }
-    pub fn last(&self) -> Option<&(Report, Instant)> {
+    pub(crate) fn last(&self) -> Option<&(Report, Instant)> {
         self.last.as_ref()
     }
 
-    pub fn loading(&self) -> bool {
+    pub(crate) fn loading(&self) -> bool {
         self.loading
     }
 
-    pub fn error(&self) -> Option<&str> {
+    pub(crate) fn error(&self) -> Option<&str> {
         self.error.as_deref()
     }
 }
 
 #[derive(Debug, Default)]
-pub struct State {
+pub(crate) struct State {
     shown: Vec<Agent>,
     probes: [Probe; 2],
 }
 
 impl State {
-    pub fn start(&mut self, shown: Vec<Agent>) -> Vec<Agent> {
+    pub(crate) fn start(&mut self, shown: Vec<Agent>) -> Vec<Agent> {
         self.shown = shown;
         self.shown.iter().copied().filter(|agent| self.probes[agent.index()].start()).collect()
     }
 
-    pub fn answered(&mut self, agent: Agent, result: Result<Report>, now: Instant) {
+    pub(crate) fn answered(&mut self, agent: Agent, result: Result<Report>, now: Instant) {
         self.probes[agent.index()].answered(result, now);
     }
 
-    pub fn shown(&self) -> impl Iterator<Item = (Agent, &Probe)> {
+    pub(crate) fn shown(&self) -> impl Iterator<Item = (Agent, &Probe)> {
         self.shown.iter().map(|&agent| (agent, &self.probes[agent.index()]))
     }
 }

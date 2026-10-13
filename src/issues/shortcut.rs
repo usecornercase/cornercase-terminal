@@ -6,17 +6,17 @@ use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Sourc
 use crate::error::{Error, Result};
 use crate::http::{self, Service, text};
 
-pub const TOKEN_ENV: &str = "SHORTCUT_API_TOKEN";
-pub const API_ENV: &str = "CORNERCASE_SHORTCUT_API";
-pub const DEFAULT_API: &str = "https://api.app.shortcut.com/api/v3";
+pub(crate) const TOKEN_ENV: &str = "SHORTCUT_API_TOKEN";
+pub(crate) const API_ENV: &str = "CORNERCASE_SHORTCUT_API";
+pub(crate) const DEFAULT_API: &str = "https://api.app.shortcut.com/api/v3";
 const SERVICE: Service = Service { name: "Shortcut", rejected: "Shortcut rejected the token" };
 const OPEN_QUERY: &str = "!is:done !is:archived";
 const ANY_QUERY: &str = "!is:archived";
 const PAGE_SIZE: &str = "25";
 
-pub struct Api<'a> {
-    pub base: &'a str,
-    pub token: &'a str,
+pub(crate) struct Api<'a> {
+    pub(crate) base: &'a str,
+    pub(crate) token: &'a str,
 }
 
 #[derive(Default)]
@@ -49,7 +49,7 @@ impl Api<'_> {
         format!("{}{path}", self.base.trim_end_matches('/'))
     }
 
-    pub fn whoami(&self) -> Result<Account> {
+    pub(crate) fn whoami(&self) -> Result<Account> {
         let member = self.request(&self.path("/member"), &[], "member")?;
         Ok(Account { handle: text(&member, "/mention_name"), workspace: text(&member, "/workspace2/url_slug") })
     }
@@ -73,7 +73,7 @@ impl Api<'_> {
         Ok(lookups)
     }
 
-    pub fn people(&self) -> Result<Vec<Person>> {
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
         let members = self.request(&self.path("/members"), &[], "members")?;
         let mut people: Vec<Person> = members
             .as_array()
@@ -89,7 +89,7 @@ impl Api<'_> {
         Ok(people)
     }
 
-    pub fn list(&self, query: &Query) -> Result<Listed> {
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         let account = self.whoami()?;
         let lookups = self.lookups()?;
         let search = search_query(query, &account.handle);
@@ -120,7 +120,7 @@ impl Api<'_> {
         Err(Error::Api(format!("refusing to send the Shortcut token to {}", http::origin(next))))
     }
 
-    pub fn view(&self, id: u64) -> Result<Detail> {
+    pub(crate) fn view(&self, id: u64) -> Result<Detail> {
         let lookups = self.lookups()?;
         let story = self.request(&self.path(&format!("/stories/{id}")), &[], &format!("story sc-{id}"))?;
         Ok(detail(&story, &lookups))

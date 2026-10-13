@@ -1,12 +1,12 @@
-pub mod browser;
-pub mod cache;
-pub mod github;
-pub mod jira;
-pub mod linear;
-pub mod md;
-pub mod plane;
-pub mod secrets;
-pub mod shortcut;
+pub(crate) mod browser;
+pub(crate) mod cache;
+pub(crate) mod github;
+pub(crate) mod jira;
+pub(crate) mod linear;
+pub(crate) mod md;
+pub(crate) mod plane;
+pub(crate) mod secrets;
+pub(crate) mod shortcut;
 
 use std::fmt;
 use std::path::PathBuf;
@@ -16,13 +16,13 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::time::{age, parse_time};
 
-pub const LIMIT: usize = 100;
+pub(crate) const LIMIT: usize = 100;
 const SLUG_MAX: usize = 40;
 const NAME_MAX: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Source {
+pub(crate) enum Source {
     Github,
     Shortcut,
     Linear,
@@ -31,10 +31,10 @@ pub enum Source {
 }
 
 impl Source {
-    pub const ALL: [Self; 5] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
-    pub const REMOTE: [Self; 4] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
+    pub(crate) const ALL: [Self; 5] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
+    pub(crate) const REMOTE: [Self; 4] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
 
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Github => "github",
             Self::Shortcut => "shortcut",
@@ -44,7 +44,7 @@ impl Source {
         }
     }
 
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Github => "GitHub",
             Self::Shortcut => "Shortcut",
@@ -54,14 +54,14 @@ impl Source {
         }
     }
 
-    pub fn token_name(self) -> &'static str {
+    pub(crate) fn token_name(self) -> &'static str {
         match self {
             Self::Github | Self::Shortcut | Self::Jira => "API token",
             Self::Linear | Self::Plane => "API key",
         }
     }
 
-    pub fn token_env(self) -> Option<&'static str> {
+    pub(crate) fn token_env(self) -> Option<&'static str> {
         match self {
             Self::Github => None,
             Self::Shortcut => Some(shortcut::TOKEN_ENV),
@@ -71,7 +71,7 @@ impl Source {
         }
     }
 
-    pub fn secret_key(self) -> Option<&'static str> {
+    pub(crate) fn secret_key(self) -> Option<&'static str> {
         match self {
             Self::Github => None,
             Self::Shortcut => Some("shortcut_token"),
@@ -81,7 +81,7 @@ impl Source {
         }
     }
 
-    pub fn people_fields(self) -> [&'static str; 2] {
+    pub(crate) fn people_fields(self) -> [&'static str; 2] {
         match self {
             Self::Github => ["assignee", "author"],
             Self::Shortcut => ["owner", "requester"],
@@ -90,7 +90,7 @@ impl Source {
         }
     }
 
-    pub fn token_help(self) -> &'static str {
+    pub(crate) fn token_help(self) -> &'static str {
         match self {
             Self::Github => "",
             Self::Shortcut => {
@@ -110,7 +110,7 @@ impl Source {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct Secret(pub String);
+pub(crate) struct Secret(pub String);
 
 impl fmt::Debug for Secret {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -120,7 +120,7 @@ impl fmt::Debug for Secret {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Who {
+pub(crate) enum Who {
     #[default]
     Anyone,
     Me,
@@ -132,7 +132,7 @@ pub enum Who {
 }
 
 impl Who {
-    pub fn describe(&self) -> String {
+    pub(crate) fn describe(&self) -> String {
         match self {
             Self::Anyone => "anyone".into(),
             Self::Me => "me".into(),
@@ -142,24 +142,24 @@ impl Who {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-pub struct Query {
-    pub closed: bool,
+pub(crate) struct Query {
+    pub(crate) closed: bool,
     #[serde(default)]
-    pub people: [Who; 2],
+    pub(crate) people: [Who; 2],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct People {
-    pub github: [Who; 2],
-    pub shortcut: [Who; 2],
-    pub linear: [Who; 2],
-    pub jira: [Who; 2],
-    pub plane: [Who; 2],
+pub(crate) struct People {
+    pub(crate) github: [Who; 2],
+    pub(crate) shortcut: [Who; 2],
+    pub(crate) linear: [Who; 2],
+    pub(crate) jira: [Who; 2],
+    pub(crate) plane: [Who; 2],
 }
 
 impl People {
-    pub fn of(&self, source: Source) -> &[Who; 2] {
+    pub(crate) fn of(&self, source: Source) -> &[Who; 2] {
         match source {
             Source::Github => &self.github,
             Source::Shortcut => &self.shortcut,
@@ -169,7 +169,7 @@ impl People {
         }
     }
 
-    pub fn of_mut(&mut self, source: Source) -> &mut [Who; 2] {
+    pub(crate) fn of_mut(&mut self, source: Source) -> &mut [Who; 2] {
         match source {
             Source::Github => &mut self.github,
             Source::Shortcut => &mut self.shortcut,
@@ -179,7 +179,7 @@ impl People {
         }
     }
 
-    pub fn describe(&self, source: Source) -> String {
+    pub(crate) fn describe(&self, source: Source) -> String {
         source
             .people_fields()
             .iter()
@@ -192,14 +192,14 @@ impl People {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Person {
-    pub handle: String,
-    pub name: String,
-    pub id: Option<String>,
+pub(crate) struct Person {
+    pub(crate) handle: String,
+    pub(crate) name: String,
+    pub(crate) id: Option<String>,
 }
 
 impl Person {
-    pub fn who(&self) -> Who {
+    pub(crate) fn who(&self) -> Who {
         match &self.id {
             Some(id) => Who::User { id: id.clone(), name: self.handle.clone() },
             None => Who::Person(self.handle.clone()),
@@ -208,42 +208,42 @@ impl Person {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Issue {
-    pub source: Source,
-    pub number: u64,
-    pub key: String,
-    pub title: String,
-    pub url: String,
-    pub state: String,
-    pub closed: bool,
-    pub labels: Vec<String>,
-    pub assignees: Vec<String>,
-    pub author: String,
-    pub updated_at: String,
+pub(crate) struct Issue {
+    pub(crate) source: Source,
+    pub(crate) number: u64,
+    pub(crate) key: String,
+    pub(crate) title: String,
+    pub(crate) url: String,
+    pub(crate) state: String,
+    pub(crate) closed: bool,
+    pub(crate) labels: Vec<String>,
+    pub(crate) assignees: Vec<String>,
+    pub(crate) author: String,
+    pub(crate) updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Comment {
-    pub author: String,
-    pub created_at: String,
-    pub body: String,
+pub(crate) struct Comment {
+    pub(crate) author: String,
+    pub(crate) created_at: String,
+    pub(crate) body: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Detail {
-    pub info: Vec<String>,
-    pub body: String,
-    pub comments: Vec<Comment>,
+pub(crate) struct Detail {
+    pub(crate) info: Vec<String>,
+    pub(crate) body: String,
+    pub(crate) comments: Vec<Comment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Account {
-    pub handle: String,
-    pub workspace: String,
+pub(crate) struct Account {
+    pub(crate) handle: String,
+    pub(crate) workspace: String,
 }
 
 impl Account {
-    pub fn describe(&self) -> String {
+    pub(crate) fn describe(&self) -> String {
         match (self.handle.is_empty(), self.workspace.is_empty()) {
             (false, false) => format!("@{} in {}", self.handle, self.workspace),
             (false, true) => format!("@{}", self.handle),
@@ -253,12 +253,12 @@ impl Account {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Listed {
-    pub account: Option<Account>,
-    pub issues: Vec<Issue>,
+pub(crate) struct Listed {
+    pub(crate) account: Option<Account>,
+    pub(crate) issues: Vec<Issue>,
 }
 
-pub enum Client {
+pub(crate) enum Client {
     Github { gh: PathBuf, dir: PathBuf },
     Shortcut { base: String, token: String },
     Linear { url: String, token: String },
@@ -267,7 +267,7 @@ pub enum Client {
 }
 
 impl Client {
-    pub fn people(&self) -> Result<Vec<Person>> {
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
         match self {
             Self::Github { gh, dir } => github::people(gh, dir),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.people(),
@@ -277,7 +277,7 @@ impl Client {
         }
     }
 
-    pub fn list(&self, query: &Query) -> Result<Listed> {
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         match self {
             Self::Github { gh, dir } => Ok(Listed { account: None, issues: github::list(gh, dir, query)? }),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.list(query),
@@ -287,7 +287,7 @@ impl Client {
         }
     }
 
-    pub fn read(&self, issue: &Issue) -> Result<Detail> {
+    pub(crate) fn read(&self, issue: &Issue) -> Result<Detail> {
         match self {
             Self::Github { gh, dir } => github::view(gh, dir, issue.number),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.view(issue.number),
@@ -297,7 +297,7 @@ impl Client {
         }
     }
 
-    pub fn whoami(&self) -> Result<Account> {
+    pub(crate) fn whoami(&self) -> Result<Account> {
         match self {
             Self::Github { .. } => Err(Error::Api("GitHub goes through gh and its own login".into())),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.whoami(),
@@ -308,7 +308,7 @@ impl Client {
     }
 }
 
-pub fn filter<'a>(issues: impl IntoIterator<Item = &'a Issue>, query: &str) -> Vec<&'a Issue> {
+pub(crate) fn filter<'a>(issues: impl IntoIterator<Item = &'a Issue>, query: &str) -> Vec<&'a Issue> {
     let needle = query.trim().to_lowercase();
     issues
         .into_iter()
@@ -322,11 +322,11 @@ pub fn filter<'a>(issues: impl IntoIterator<Item = &'a Issue>, query: &str) -> V
         .collect()
 }
 
-pub fn sort_by_updated(issues: &mut [&Issue]) {
+pub(crate) fn sort_by_updated(issues: &mut [&Issue]) {
     issues.sort_by_key(|issue| std::cmp::Reverse(parse_time(&issue.updated_at).unwrap_or(0)));
 }
 
-pub fn branch(issue: &Issue) -> String {
+pub(crate) fn branch(issue: &Issue) -> String {
     let prefix = match issue.source {
         Source::Github => format!("issue-{}", issue.number),
         Source::Shortcut => format!("sc-{}", issue.number),
@@ -336,7 +336,7 @@ pub fn branch(issue: &Issue) -> String {
     if slug.is_empty() { prefix } else { format!("{prefix}-{slug}") }
 }
 
-pub fn workspace_name(issue: &Issue) -> String {
+pub(crate) fn workspace_name(issue: &Issue) -> String {
     crate::text::truncate_right(&format!("{} {}", issue.key, issue.title), NAME_MAX)
 }
 
@@ -371,7 +371,7 @@ fn slug(text: &str, max: usize) -> String {
     slug[..end].trim_end_matches('-').to_string()
 }
 
-pub fn prompt(template: &str, issue: &Issue, branch: &str) -> String {
+pub(crate) fn prompt(template: &str, issue: &Issue, branch: &str) -> String {
     let number = issue.number.to_string();
     let labels = issue.labels.join(", ");
     let vars = [
@@ -403,7 +403,7 @@ pub fn prompt(template: &str, issue: &Issue, branch: &str) -> String {
     out
 }
 
-pub fn meta(issue: &Issue, now: i64) -> String {
+pub(crate) fn meta(issue: &Issue, now: i64) -> String {
     let state = if issue.source == Source::Github && !issue.closed { "" } else { issue.state.as_str() };
     let labels = issue.labels.join(", ");
     [state, labels.as_str(), issue.author.as_str(), age_of(&issue.updated_at, now).as_str()]
@@ -413,11 +413,11 @@ pub fn meta(issue: &Issue, now: i64) -> String {
         .join(" · ")
 }
 
-pub fn age_of(timestamp: &str, now: i64) -> String {
+pub(crate) fn age_of(timestamp: &str, now: i64) -> String {
     parse_time(timestamp).map(|t| age(now - t)).unwrap_or_default()
 }
 
-pub fn checklist(title: &str, items: &[(bool, String)]) -> String {
+pub(crate) fn checklist(title: &str, items: &[(bool, String)]) -> String {
     if items.is_empty() {
         return String::new();
     }
@@ -430,12 +430,12 @@ pub fn checklist(title: &str, items: &[(bool, String)]) -> String {
     format!("**{title}**\n\n{}", lines.join("\n"))
 }
 
-pub fn join_body(parts: &[&str]) -> String {
+pub(crate) fn join_body(parts: &[&str]) -> String {
     parts.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n\n")
 }
 
 #[cfg(test)]
-pub fn issue(source: Source, number: u64, title: &str) -> Issue {
+pub(crate) fn issue(source: Source, number: u64, title: &str) -> Issue {
     let key = match source {
         Source::Github => format!("#{number}"),
         Source::Shortcut => format!("sc-{number}"),

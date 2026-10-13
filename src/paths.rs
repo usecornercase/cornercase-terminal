@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
 pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
-pub const TODOS_FILE: &str = "todos.json";
+pub(crate) const TODOS_FILE: &str = "todos.json";
 const SECRETS_FILE: &str = "secrets.json";
 const LOG_FILE: &str = "server.log";
 const ISSUE_CACHE_FILE: &str = "issues.json";
 
-pub fn socket() -> PathBuf {
+pub(crate) fn socket() -> PathBuf {
     if let Some(path) = std::env::var_os(SOCKET_ENV) {
         return path.into();
     }
@@ -17,11 +17,11 @@ pub fn socket() -> PathBuf {
     dir.join("server.sock")
 }
 
-pub fn lock(socket: &Path) -> PathBuf {
+pub(crate) fn lock(socket: &Path) -> PathBuf {
     socket.with_extension("lock")
 }
 
-pub fn config() -> PathBuf {
+pub(crate) fn config() -> PathBuf {
     if let Some(socket) = std::env::var_os(SOCKET_ENV) {
         return Path::new(&socket).with_file_name("config.json");
     }
@@ -32,15 +32,15 @@ pub fn config() -> PathBuf {
     config_home.join("cornercase").join("config.json")
 }
 
-pub fn secrets(config_path: &Path) -> PathBuf {
+pub(crate) fn secrets(config_path: &Path) -> PathBuf {
     config_path.with_file_name(SECRETS_FILE)
 }
 
-pub fn browsers(config: &Path) -> PathBuf {
+pub(crate) fn browsers(config: &Path) -> PathBuf {
     config.with_file_name("browsers.json")
 }
 
-pub fn session() -> PathBuf {
+pub(crate) fn session() -> PathBuf {
     if let Some(socket) = std::env::var_os(SOCKET_ENV) {
         return Path::new(&socket).with_extension("json");
     }
@@ -51,22 +51,22 @@ pub fn session() -> PathBuf {
     state_home.join("cornercase").join("session.json")
 }
 
-pub fn todos(state: &Path) -> PathBuf {
+pub(crate) fn todos(state: &Path) -> PathBuf {
     state.with_file_name(TODOS_FILE)
 }
 
-pub fn stats(session: &Path) -> PathBuf {
+pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
 }
 
-pub fn log() -> PathBuf {
+pub(crate) fn log() -> PathBuf {
     match std::env::var_os(SOCKET_ENV) {
         Some(socket) => Path::new(&socket).with_extension("log"),
         None => session().with_file_name(LOG_FILE),
     }
 }
 
-pub fn issue_cache(session: &Path) -> PathBuf {
+pub(crate) fn issue_cache(session: &Path) -> PathBuf {
     session.with_file_name(ISSUE_CACHE_FILE)
 }
 

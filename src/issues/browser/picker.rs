@@ -19,7 +19,7 @@ impl Browser {
         self.picker = Some(Picker { pick, search, then_start });
     }
 
-    pub fn choices(&self) -> Vec<Choice> {
+    pub(crate) fn choices(&self) -> Vec<Choice> {
         let Some(picker) = &self.picker else { return Vec::new() };
         let needle = picker.search.query().trim().to_lowercase();
         let all: Vec<Choice> = match picker.pick {
@@ -111,7 +111,7 @@ impl Browser {
         Action::None
     }
 
-    pub fn default_agent_set(&mut self, kind: String) {
+    pub(crate) fn default_agent_set(&mut self, kind: String) {
         self.notice = Some(format!("{kind} is now the default agent"));
         self.agents.default = Some(kind);
     }

@@ -84,7 +84,7 @@ fn person(who: &Who) -> Option<String> {
     }
 }
 
-pub fn list(gh: &Path, dir: &Path, query: &Query) -> Result<Vec<Issue>> {
+pub(crate) fn list(gh: &Path, dir: &Path, query: &Query) -> Result<Vec<Issue>> {
     let state = if query.closed { "all" } else { "open" };
     let limit = LIMIT.to_string();
     let mut args: Vec<String> =
@@ -99,7 +99,7 @@ pub fn list(gh: &Path, dir: &Path, query: &Query) -> Result<Vec<Issue>> {
     Ok(raw.into_iter().map(Issue::from).collect())
 }
 
-pub fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
+pub(crate) fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
     let out = run_raw(gh, dir, &["api", "repos/{owner}/{repo}/assignees", "--paginate", "--jq", ".[].login"])?;
     let mut people: Vec<Person> = String::from_utf8_lossy(&out)
         .lines()
@@ -111,7 +111,7 @@ pub fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
     Ok(people)
 }
 
-pub fn view(gh: &Path, dir: &Path, number: u64) -> Result<Detail> {
+pub(crate) fn view(gh: &Path, dir: &Path, number: u64) -> Result<Detail> {
     let number = number.to_string();
     let raw: RawView = run(gh, dir, &["issue", "view", &number, "--json", VIEW_FIELDS])?;
     let issue = Issue::from(raw.issue);

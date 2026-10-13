@@ -4,9 +4,9 @@ use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Sourc
 use crate::error::{Error, Result};
 use crate::http::{self, Service, text};
 
-pub const TOKEN_ENV: &str = "LINEAR_API_KEY";
-pub const API_ENV: &str = "CORNERCASE_LINEAR_API";
-pub const DEFAULT_API: &str = "https://api.linear.app/graphql";
+pub(crate) const TOKEN_ENV: &str = "LINEAR_API_KEY";
+pub(crate) const API_ENV: &str = "CORNERCASE_LINEAR_API";
+pub(crate) const DEFAULT_API: &str = "https://api.linear.app/graphql";
 const REJECTED: &str = "Linear rejected the API key";
 const SERVICE: Service = Service { name: "Linear", rejected: REJECTED };
 const PAGE: usize = 50;
@@ -17,9 +17,9 @@ const VIEW_FIELDS: &str = "description priority priorityLabel estimate project {
     parent { identifier } children(first: 50) { nodes { identifier title state { type } } } \
     comments(first: 100) { nodes { body createdAt user { displayName } botActor { name } } }";
 
-pub struct Api<'a> {
-    pub url: &'a str,
-    pub token: &'a str,
+pub(crate) struct Api<'a> {
+    pub(crate) url: &'a str,
+    pub(crate) token: &'a str,
 }
 
 impl Api<'_> {
@@ -35,7 +35,7 @@ impl Api<'_> {
         Ok(answer.json["data"].clone())
     }
 
-    pub fn whoami(&self) -> Result<Account> {
+    pub(crate) fn whoami(&self) -> Result<Account> {
         let data = self.request(
             "query Viewer { viewer { name displayName organization { name urlKey } } }",
             &json!({}),
@@ -47,7 +47,7 @@ impl Api<'_> {
         Ok(Account { handle, workspace: text(viewer, "/organization/urlKey") })
     }
 
-    pub fn people(&self) -> Result<Vec<Person>> {
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
         let data = self.request(
             "query Users { users(first: 250) { nodes { displayName name active } } }",
             &json!({}),
@@ -65,7 +65,7 @@ impl Api<'_> {
         Ok(people)
     }
 
-    pub fn list(&self, query: &Query) -> Result<Listed> {
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         let account = self.whoami()?;
         let request = format!(
             "query Issues($first: Int!, $after: String, $filter: IssueFilter) {{ issues(first: $first, after: $after, \
@@ -88,7 +88,7 @@ impl Api<'_> {
         Ok(Listed { account: Some(account), issues: nodes.iter().map(issue).collect() })
     }
 
-    pub fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
         let request = format!("query Issue($id: String!) {{ issue(id: $id) {{ {LIST_FIELDS} {VIEW_FIELDS} }} }}");
         let data = self.request(&request, &json!({ "id": key }), &format!("issue {key}"))?;
         if data["issue"].is_null() {

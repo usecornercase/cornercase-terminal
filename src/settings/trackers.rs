@@ -4,7 +4,7 @@ use crate::issues::{Account, Source};
 use super::{Action, Move, Row, Settings, Status};
 
 impl Settings {
-    pub fn checked(&mut self, source: Source, result: Result<Account, String>) {
+    pub(crate) fn checked(&mut self, source: Source, result: Result<Account, String>) {
         self.checking.retain(|s| *s != source);
         match result {
             Ok(account) => {
@@ -20,7 +20,7 @@ impl Settings {
         }
     }
 
-    pub fn removed(&mut self, source: Source) {
+    pub(crate) fn removed(&mut self, source: Source) {
         self.set_status(source, Status::Missing);
         self.notice = Some(format!("the {} {} was removed", source.name(), source.token_name()));
     }
@@ -45,7 +45,7 @@ impl Settings {
         self.save_tabs(&shown)
     }
 
-    pub fn move_tab(&mut self, row: usize, to: Move) -> Action {
+    pub(crate) fn move_tab(&mut self, row: usize, to: Move) -> Action {
         let Some(Row::Tab(id)) = self.rows().get(row).cloned() else { return Action::None };
         let mut shown = self.shown_tabs();
         let Some(from) = shown.iter().position(|t| *t == id) else { return Action::None };
@@ -68,7 +68,7 @@ impl Settings {
         self.save(Config { issue_tabs: names, ..self.config.clone() }, notice)
     }
 
-    pub fn removable(&self, row: usize) -> Option<Source> {
+    pub(crate) fn removable(&self, row: usize) -> Option<Source> {
         match self.rows().get(row) {
             Some(Row::Token(source)) if matches!(self.status(*source), Some(Status::Saved(_))) => Some(*source),
             _ => None,

@@ -8,7 +8,7 @@ use super::{Action, Move, Row, Settings};
 const PREFIX_OFF: &str = "keyboard shortcuts are off";
 
 impl Settings {
-    pub fn key(&mut self, key: KeyEvent, rows: usize) -> Action {
+    pub(crate) fn key(&mut self, key: KeyEvent, rows: usize) -> Action {
         if self.busy() {
             return Action::None;
         }
@@ -102,7 +102,7 @@ impl Settings {
         }
     }
 
-    pub fn paste(&mut self, text: &str) {
+    pub(crate) fn paste(&mut self, text: &str) {
         if let Some(edit) = &mut self.edit {
             let token = matches!(edit.row, Row::Token(_));
             edit.input.extend(text.chars().filter(|c| !c.is_control() && (!token || !c.is_whitespace())));

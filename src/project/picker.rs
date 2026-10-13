@@ -5,15 +5,15 @@ use crate::list::Cursor;
 use crate::{git, project::vscode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Item {
-    pub name: String,
-    pub path: PathBuf,
-    pub branch: Option<String>,
-    pub workspace: bool,
+pub(crate) struct Item {
+    pub(crate) name: String,
+    pub(crate) path: PathBuf,
+    pub(crate) branch: Option<String>,
+    pub(crate) workspace: bool,
 }
 
 #[derive(Debug)]
-pub struct Picker {
+pub(crate) struct Picker {
     dir: PathBuf,
     home: Option<PathBuf>,
     parent: Option<Item>,
@@ -25,7 +25,7 @@ pub struct Picker {
 }
 
 impl Picker {
-    pub fn open(dir: &Path, home: Option<&Path>) -> io::Result<Self> {
+    pub(crate) fn open(dir: &Path, home: Option<&Path>) -> io::Result<Self> {
         let parent =
             dir.parent().map(|p| Item { name: "..".into(), path: p.to_path_buf(), branch: None, workspace: false });
         Ok(Self {
@@ -40,27 +40,27 @@ impl Picker {
         })
     }
 
-    pub fn dir(&self) -> &Path {
+    pub(crate) fn dir(&self) -> &Path {
         &self.dir
     }
 
-    pub fn filter(&self) -> &str {
+    pub(crate) fn filter(&self) -> &str {
         &self.filter
     }
 
-    pub fn selected(&self) -> Option<usize> {
+    pub(crate) fn selected(&self) -> Option<usize> {
         self.selected
     }
 
-    pub fn scroll(&self) -> usize {
+    pub(crate) fn scroll(&self) -> usize {
         self.scroll
     }
 
-    pub fn error(&self) -> Option<&str> {
+    pub(crate) fn error(&self) -> Option<&str> {
         self.error.as_deref()
     }
 
-    pub fn items(&self) -> Vec<&Item> {
+    pub(crate) fn items(&self) -> Vec<&Item> {
         let needle = self.filter.to_lowercase();
         let show_hidden = self.filter.starts_with('.');
         let mut matches: Vec<(u8, &Item)> = self
@@ -86,7 +86,7 @@ impl Picker {
         parent.into_iter().chain(matches.into_iter().map(|(_, f)| f)).collect()
     }
 
-    pub fn push(&mut self, c: char) {
+    pub(crate) fn push(&mut self, c: char) {
         self.error = None;
         match c {
             '/' if self.filter.is_empty() && self.selected.is_none() => self.go(Path::new("/")),
@@ -104,7 +104,7 @@ impl Picker {
         }
     }
 
-    pub fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         self.error = None;
         if self.filter.pop().is_none() {
             self.up();
@@ -114,19 +114,19 @@ impl Picker {
         self.scroll = 0;
     }
 
-    pub fn up(&mut self) {
+    pub(crate) fn up(&mut self) {
         if let Some(parent) = self.dir.parent().map(Path::to_path_buf) {
             self.go(&parent);
         }
     }
 
-    pub fn enter(&mut self, i: usize) {
+    pub(crate) fn enter(&mut self, i: usize) {
         if let Some(path) = self.items().get(i).filter(|item| !item.workspace).map(|item| item.path.clone()) {
             self.go(&path);
         }
     }
 
-    pub fn choose(&mut self, i: usize) -> Option<PathBuf> {
+    pub(crate) fn choose(&mut self, i: usize) -> Option<PathBuf> {
         let item = self.items().get(i).map(|item| (item.workspace, item.path.clone()));
         match item {
             Some((true, path)) => Some(path),
@@ -138,17 +138,17 @@ impl Picker {
         }
     }
 
-    pub fn fail(&mut self, error: String) {
+    pub(crate) fn fail(&mut self, error: String) {
         self.error = Some(error);
     }
 
-    pub fn enter_selected(&mut self) {
+    pub(crate) fn enter_selected(&mut self) {
         if let Some(i) = self.selected {
             self.enter(i);
         }
     }
 
-    pub fn submit(&mut self) -> Option<PathBuf> {
+    pub(crate) fn submit(&mut self) -> Option<PathBuf> {
         match self.selected {
             Some(i) => self.choose(i),
             None if self.filter.is_empty() => Some(self.dir.clone()),
@@ -156,13 +156,13 @@ impl Picker {
         }
     }
 
-    pub fn move_selection(&mut self, delta: isize, rows: usize) {
+    pub(crate) fn move_selection(&mut self, delta: isize, rows: usize) {
         let mut cursor = Cursor { selected: self.selected, scroll: self.scroll };
         cursor.move_by(delta, self.items().len(), rows);
         (self.selected, self.scroll) = (cursor.selected, cursor.scroll);
     }
 
-    pub fn scroll_by(&mut self, delta: isize, rows: usize) {
+    pub(crate) fn scroll_by(&mut self, delta: isize, rows: usize) {
         let mut cursor = Cursor { selected: self.selected, scroll: self.scroll };
         cursor.scroll_by(delta, self.items().len(), rows);
         self.scroll = cursor.scroll;

@@ -286,7 +286,7 @@ struct Server {
     observed: Option<Instant>,
 }
 
-pub fn run() -> Result<()> {
+pub(crate) fn run() -> Result<()> {
     panics::log_to_stderr();
     let _ = rustix::process::setsid();
     let path = paths::socket();

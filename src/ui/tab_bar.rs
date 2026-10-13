@@ -11,7 +11,7 @@ use super::{
 };
 use crate::text::truncate_right;
 
-pub const HEIGHT: u16 = 2;
+pub(crate) const HEIGHT: u16 = 2;
 const MAX_NAME: usize = 24;
 const CLOSE_WIDTH: u16 = 3;
 const MENU_WIDTH: u16 = 2;
@@ -20,20 +20,20 @@ const NEW_LABEL: &str = "+";
 const LEFT_LABEL: &str = "‹";
 const RIGHT_LABEL: &str = "›";
 
-pub struct TabBar {
-    pub tabs: Vec<TabEntry>,
-    pub active: Option<usize>,
-    pub details: Details,
-    pub scroll: usize,
+pub(crate) struct TabBar {
+    pub(crate) tabs: Vec<TabEntry>,
+    pub(crate) active: Option<usize>,
+    pub(crate) details: Details,
+    pub(crate) scroll: usize,
 }
 
 impl TabBar {
-    pub fn strip(&self, bar: Rect) -> Strip {
+    pub(crate) fn strip(&self, bar: Rect) -> Strip {
         Strip::new(bar, &self.tabs, self.scroll)
     }
 }
 
-pub fn width(tab: &TabEntry) -> u16 {
+pub(crate) fn width(tab: &TabEntry) -> u16 {
     let name = tab.name.chars().count().min(MAX_NAME);
     let others = others(tab).map_or(0, |n| 1 + n.chars().count());
     u16::try_from(1 + ICON_WIDTH + name + others).unwrap_or(u16::MAX).saturating_add(MENU_WIDTH + CLOSE_WIDTH)
@@ -44,14 +44,14 @@ fn others(tab: &TabEntry) -> Option<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Strip {
+pub(crate) struct Strip {
     row: Rect,
     widths: Vec<u16>,
     scroll: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hit {
+pub(crate) enum Hit {
     Tab(usize),
     Close(usize),
     Menu(usize),
@@ -60,7 +60,7 @@ pub enum Hit {
 }
 
 impl Strip {
-    pub fn new(bar: Rect, tabs: &[TabEntry], scroll: usize) -> Self {
+    pub(crate) fn new(bar: Rect, tabs: &[TabEntry], scroll: usize) -> Self {
         Self { row: Rect { height: bar.height.min(1), ..bar }, widths: tabs.iter().map(width).collect(), scroll }
     }
 
@@ -104,7 +104,7 @@ impl Strip {
         Rect { x: self.start(), width: self.room(), ..self.row }.intersection(self.row)
     }
 
-    pub fn item(&self, i: usize) -> Rect {
+    pub(crate) fn item(&self, i: usize) -> Rect {
         let first = self.first();
         if !(first..self.end()).contains(&i) {
             return Rect::default();
@@ -114,22 +114,22 @@ impl Strip {
         Rect { x, width: self.widths[i], ..self.row }.intersection(self.tabs_area())
     }
 
-    pub fn close(&self, i: usize) -> Rect {
+    pub(crate) fn close(&self, i: usize) -> Rect {
         let r = self.item(i);
         Rect { x: r.right().saturating_sub(CLOSE_WIDTH), width: CLOSE_WIDTH.min(r.width), ..r }
     }
 
-    pub fn menu(&self, i: usize) -> Rect {
+    pub(crate) fn menu(&self, i: usize) -> Rect {
         let close = self.close(i);
         let x = close.x.saturating_sub(MENU_WIDTH).max(self.item(i).x);
         Rect { x, width: close.x - x, ..close }
     }
 
-    pub fn at(&self, pos: Position) -> Option<usize> {
+    pub(crate) fn at(&self, pos: Position) -> Option<usize> {
         (self.first()..self.end()).find(|&i| self.item(i).contains(pos))
     }
 
-    pub fn new_button(&self) -> Rect {
+    pub(crate) fn new_button(&self) -> Rect {
         let x = if self.overflows() {
             self.row.right().saturating_sub(BUTTON_WIDTH)
         } else {
@@ -139,30 +139,30 @@ impl Strip {
         Rect { x, width: BUTTON_WIDTH, ..self.row }.intersection(self.row)
     }
 
-    pub fn left(&self) -> Rect {
+    pub(crate) fn left(&self) -> Rect {
         if !self.overflows() {
             return Rect::default();
         }
         Rect { width: BUTTON_WIDTH, ..self.row }.intersection(self.row)
     }
 
-    pub fn right(&self) -> Rect {
+    pub(crate) fn right(&self) -> Rect {
         if !self.overflows() {
             return Rect::default();
         }
         Rect { x: self.tabs_area().right(), width: BUTTON_WIDTH, ..self.row }.intersection(self.row)
     }
 
-    pub fn hidden(&self) -> (bool, bool) {
+    pub(crate) fn hidden(&self) -> (bool, bool) {
         (self.first() > 0, self.end() < self.widths.len())
     }
 
-    pub fn scrolled(&self, delta: isize) -> usize {
+    pub(crate) fn scrolled(&self, delta: isize) -> usize {
         let max = self.fitting_before(self.widths.len());
         self.first().saturating_add_signed(delta).min(max)
     }
 
-    pub fn reveal(&self, i: usize) -> usize {
+    pub(crate) fn reveal(&self, i: usize) -> usize {
         let first = self.first();
         if i >= self.widths.len() || (first..self.end()).contains(&i) {
             first
@@ -173,7 +173,7 @@ impl Strip {
         }
     }
 
-    pub fn edge(&self, pos: Position) -> Option<isize> {
+    pub(crate) fn edge(&self, pos: Position) -> Option<isize> {
         let (before, after) = self.hidden();
         if before && self.left().contains(pos) {
             Some(-1)
@@ -184,7 +184,7 @@ impl Strip {
         }
     }
 
-    pub fn hit(&self, pos: Position) -> Option<Hit> {
+    pub(crate) fn hit(&self, pos: Position) -> Option<Hit> {
         if self.new_button().contains(pos) {
             return Some(Hit::New);
         }
@@ -204,7 +204,7 @@ impl Strip {
         })
     }
 
-    pub fn drop(&self, dragged: usize, pos: Position) -> Option<usize> {
+    pub(crate) fn drop(&self, dragged: usize, pos: Position) -> Option<usize> {
         if self.left().contains(pos) {
             return Some(self.first());
         }
@@ -232,7 +232,7 @@ impl Strip {
     }
 }
 
-pub fn draw(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
+pub(crate) fn draw(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
     let strip = bar.strip(r);
     let dragged = match view.drag {
         Some(Drag::Bar(t, landing)) => Some((t, landing)),

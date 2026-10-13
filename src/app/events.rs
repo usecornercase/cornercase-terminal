@@ -3,7 +3,7 @@ use crate::control::{Event, Kind, What};
 use crate::log;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Streamed {
+pub(crate) enum Streamed {
     Event(String),
     End,
 }
@@ -67,7 +67,7 @@ impl Events {
 }
 
 impl App {
-    pub fn take_events(&mut self) -> Vec<(u64, Streamed)> {
+    pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
         std::mem::take(&mut self.events.out)
     }
 }

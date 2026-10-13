@@ -37,26 +37,26 @@ fn grid_cell(grid: Rect, per_row: usize, width: u16, i: usize) -> Rect {
     Rect::new(grid.x.saturating_add(col.saturating_mul(width)), grid.y.saturating_add(row), width, 1).intersection(grid)
 }
 
-pub fn style_icon(area: Rect, i: usize) -> Rect {
+pub(crate) fn style_icon(area: Rect, i: usize) -> Rect {
     grid_cell(style_rows(area)[1], ICONS_PER_ROW, ICON_CELL, i)
 }
 
-pub fn style_colour(area: Rect, i: usize) -> Rect {
+pub(crate) fn style_colour(area: Rect, i: usize) -> Rect {
     grid_cell(style_rows(area)[3], COLOURS_PER_ROW, COLOUR_CELL, i)
 }
 
-pub fn style_done(area: Rect) -> Rect {
+pub(crate) fn style_done(area: Rect) -> Rect {
     update_button(style_rows(area)[4], crate::settings::DONE)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StyleHit {
+pub(crate) enum StyleHit {
     Icon(usize),
     Colour(usize),
     Done,
 }
 
-pub fn style_hit(area: Rect, pos: Position) -> Option<StyleHit> {
+pub(crate) fn style_hit(area: Rect, pos: Position) -> Option<StyleHit> {
     let [_, icons, _, colours, last] = style_rows(area);
     if update_button(last, crate::settings::DONE).contains(pos) {
         return Some(StyleHit::Done);

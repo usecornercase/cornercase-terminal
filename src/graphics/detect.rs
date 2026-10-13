@@ -1,12 +1,12 @@
 use super::{CellSize, Missing, Protocol, Support, Tmux};
 
-pub const OVERRIDE_ENV: &str = "CORNERCASE_IMAGES";
-pub const KITTY_QUERY: &str = "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
-pub const KITTY_QUERY_ID: &str = "31";
-pub const TMUX_PROBE: &str = "\x1bPtmux;\x1b\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\x1b\\\x1b\\\
+pub(crate) const OVERRIDE_ENV: &str = "CORNERCASE_IMAGES";
+pub(crate) const KITTY_QUERY: &str = "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\";
+pub(crate) const KITTY_QUERY_ID: &str = "31";
+pub(crate) const TMUX_PROBE: &str = "\x1bPtmux;\x1b\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\x1b\\\x1b\\\
      \x1bPtmux;\x1b\x1b[>q\x1b\\\x1bPtmux;\x1b\x1b[c\x1b\\";
-pub const TMUX_FORMAT: &str = "#{pane_tty}|#{allow-passthrough}|#{client_termtype}|#{client_termfeatures}";
-pub const PANE_TITLE: &str = "\x1b]2;cornercase\x1b\\";
+pub(crate) const TMUX_FORMAT: &str = "#{pane_tty}|#{allow-passthrough}|#{client_termtype}|#{client_termfeatures}";
+pub(crate) const PANE_TITLE: &str = "\x1b]2;cornercase\x1b\\";
 const DEFAULT_REGISTERS: u16 = 256;
 const SIXEL: u32 = 4;
 const MIN_KITTY: Version = (0, 28, 0);
@@ -39,13 +39,13 @@ type Version = (u32, u32, u32);
 type Var<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Replies {
-    pub terminal: Option<String>,
-    pub attributes: Option<Vec<u32>>,
-    pub kitty: Option<String>,
-    pub cell: Option<CellSize>,
-    pub registers: Option<u32>,
-    pub geometry: Option<(u32, u32)>,
+pub(crate) struct Replies {
+    pub(crate) terminal: Option<String>,
+    pub(crate) attributes: Option<Vec<u32>>,
+    pub(crate) kitty: Option<String>,
+    pub(crate) cell: Option<CellSize>,
+    pub(crate) registers: Option<u32>,
+    pub(crate) geometry: Option<(u32, u32)>,
 }
 
 impl Replies {
@@ -61,41 +61,41 @@ impl Replies {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Outer {
+pub(crate) enum Outer {
     Local { passthrough: bool, terminal: Option<String>, sixel: bool },
     Probed(Replies),
     Stale,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Facts {
-    pub replies: Replies,
-    pub asked_kitty: bool,
-    pub window: Option<CellSize>,
-    pub tmux: Option<Outer>,
+pub(crate) struct Facts {
+    pub(crate) replies: Replies,
+    pub(crate) asked_kitty: bool,
+    pub(crate) window: Option<CellSize>,
+    pub(crate) tmux: Option<Outer>,
 }
 
 impl Facts {
-    pub fn cell(&self) -> Option<CellSize> {
+    pub(crate) fn cell(&self) -> Option<CellSize> {
         self.replies.cell.filter(|cell| plausible(*cell)).or(self.window.filter(|cell| plausible(*cell)))
     }
 
-    pub fn resized(&mut self, window: Option<CellSize>) {
+    pub(crate) fn resized(&mut self, window: Option<CellSize>) {
         if window.is_some() && window != self.window {
             self.replies.cell = None;
             self.window = window;
         }
     }
 
-    pub fn checks_tmux_again(&self) -> bool {
+    pub(crate) fn checks_tmux_again(&self) -> bool {
         matches!(self.tmux, Some(Outer::Local { .. }))
     }
 
-    pub fn renamed_tmux_pane(&self) -> bool {
+    pub(crate) fn renamed_tmux_pane(&self) -> bool {
         self.asked_kitty && self.replies.terminal.as_deref().is_some_and(is_tmux)
     }
 
-    pub fn summary(&self) -> String {
+    pub(crate) fn summary(&self) -> String {
         let cell = |cell: Option<CellSize>| cell.map_or_else(|| "-".to_string(), |c| c.to_string());
         format!(
             "da1={} kitty={} 16t={} window={} registers={} geometry={} tmux={}",
@@ -137,7 +137,7 @@ fn kitty_summary(asked: bool, reply: Option<&str>) -> String {
     }
 }
 
-pub fn window_cell(cols: u16, rows: u16, width: u16, height: u16) -> Option<CellSize> {
+pub(crate) fn window_cell(cols: u16, rows: u16, width: u16, height: u16) -> Option<CellSize> {
     (cols > 0 && rows > 0 && width > 0 && height > 0).then(|| CellSize { width: width / cols, height: height / rows })
 }
 
@@ -146,21 +146,21 @@ fn plausible(cell: CellSize) -> bool {
     (2..=256).contains(&w) && (4..=512).contains(&h) && w <= h * 2 && h <= w * 8
 }
 
-pub fn overridden(var: impl Fn(&str) -> Option<String>) -> bool {
+pub(crate) fn overridden(var: impl Fn(&str) -> Option<String>) -> bool {
     var(OVERRIDE_ENV).is_some_and(|value| forced(&value, &Replies::default(), false).is_some())
 }
 
-pub fn ignored_override(var: impl Fn(&str) -> Option<String>) -> Option<String> {
+pub(crate) fn ignored_override(var: impl Fn(&str) -> Option<String>) -> Option<String> {
     var(OVERRIDE_ENV).filter(|value| forced(value, &Replies::default(), false).is_none())
 }
 
-pub fn in_multiplexer(var: impl Fn(&str) -> Option<String>) -> bool {
+pub(crate) fn in_multiplexer(var: impl Fn(&str) -> Option<String>) -> bool {
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
     let term = var("TERM").unwrap_or_default();
     set("TMUX") || set("STY") || set("ZELLIJ") || term.starts_with("tmux") || term.starts_with("screen")
 }
 
-pub fn likely_kitty(var: impl Fn(&str) -> Option<String>) -> bool {
+pub(crate) fn likely_kitty(var: impl Fn(&str) -> Option<String>) -> bool {
     let is = |name: &str, values: &[&str]| var(name).is_some_and(|v| values.iter().any(|w| v.eq_ignore_ascii_case(w)));
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
     is("TERM", &["xterm-kitty", "xterm-ghostty", "xterm-rio", "rio"])
@@ -169,11 +169,11 @@ pub fn likely_kitty(var: impl Fn(&str) -> Option<String>) -> bool {
         || set("GHOSTTY_RESOURCES_DIR")
 }
 
-pub fn in_tmux(terminal: Option<&str>, var: impl Fn(&str) -> Option<String>) -> bool {
+pub(crate) fn in_tmux(terminal: Option<&str>, var: impl Fn(&str) -> Option<String>) -> bool {
     multiplexer(terminal, &var, true) == Some(Mux::Tmux)
 }
 
-pub fn local_tmux(output: &str, own_tty: Option<&str>) -> Option<Outer> {
+pub(crate) fn local_tmux(output: &str, own_tty: Option<&str>) -> Option<Outer> {
     let mut parts = output.lines().next()?.splitn(4, '|');
     let (tty, passthrough, terminal) = (parts.next()?.trim(), parts.next()?.trim(), parts.next()?.trim());
     let features = parts.next().unwrap_or_default();
@@ -187,7 +187,7 @@ pub fn local_tmux(output: &str, own_tty: Option<&str>) -> Option<Outer> {
     })
 }
 
-pub fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
+pub(crate) fn decide(facts: &Facts, var: impl Fn(&str) -> Option<String>) -> Support {
     let mut support = Support { cell: facts.cell(), ..Support::default() };
     match choose(facts, &var) {
         Ok(pick) => {
@@ -593,7 +593,7 @@ fn vte_label(version: Option<u32>, name: Option<&str>) -> String {
     }
 }
 
-pub fn version(text: &str) -> Option<Version> {
+pub(crate) fn version(text: &str) -> Option<Version> {
     let digits: String = text.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
     let mut parts = digits.split('.').map(|part| part.parse::<u32>().ok());
     let major = parts.next().flatten()?;

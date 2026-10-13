@@ -3,8 +3,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use super::Picture;
 use super::encode::{Key, png, sized};
 
-pub const CHUNK: usize = 4096;
-pub const MAX_CELLS: u16 = 297;
+pub(crate) const CHUNK: usize = 4096;
+pub(crate) const MAX_CELLS: u16 = 297;
 const PLACEHOLDER: char = '\u{10EEEE}';
 
 const DIACRITICS: [char; 297] = [
@@ -307,11 +307,11 @@ const DIACRITICS: [char; 297] = [
     '\u{1D244}',
 ];
 
-pub fn id(hi: u8, lo: u8) -> u32 {
+pub(crate) fn id(hi: u8, lo: u8) -> u32 {
     (u32::from(hi) << 24) | u32::from(lo)
 }
 
-pub fn image(picture: &Picture, key: &Key) -> Vec<Vec<u8>> {
+pub(crate) fn image(picture: &Picture, key: &Key) -> Vec<Vec<u8>> {
     let fit = key.fit;
     let (width, height) = picture.rgba.dimensions();
     let pixels = if fit.width < width && fit.height < height {
@@ -324,7 +324,7 @@ pub fn image(picture: &Picture, key: &Key) -> Vec<Vec<u8>> {
     out
 }
 
-pub fn transmit(id: u32, png: &[u8]) -> Vec<Vec<u8>> {
+pub(crate) fn transmit(id: u32, png: &[u8]) -> Vec<Vec<u8>> {
     let data = STANDARD.encode(png);
     let mut chunks: Vec<&[u8]> = data.as_bytes().chunks(CHUNK).collect();
     if chunks.is_empty() {
@@ -346,11 +346,11 @@ pub fn transmit(id: u32, png: &[u8]) -> Vec<Vec<u8>> {
         .collect()
 }
 
-pub fn place(id: u32, cols: u16, rows: u16) -> Vec<u8> {
+pub(crate) fn place(id: u32, cols: u16, rows: u16) -> Vec<u8> {
     command(&format!("a=p,U=1,q=2,i={id},p=1,c={cols},r={rows}"), b"")
 }
 
-pub fn delete(id: u32) -> Vec<u8> {
+pub(crate) fn delete(id: u32) -> Vec<u8> {
     command(&format!("a=d,d=I,q=2,i={id}"), b"")
 }
 
@@ -366,7 +366,7 @@ fn command(keys: &str, payload: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn cell(id: u32, row: u16, col: u16) -> (String, u8) {
+pub(crate) fn cell(id: u32, row: u16, col: u16) -> (String, u8) {
     let [hi, _, _, lo] = id.to_be_bytes();
     let symbol = [PLACEHOLDER, diacritic(row), diacritic(col), diacritic(u16::from(hi))].into_iter().collect();
     (symbol, lo)

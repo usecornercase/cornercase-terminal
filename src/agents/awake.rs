@@ -7,24 +7,24 @@ use std::time::{Duration, Instant};
 
 use crate::log;
 
-pub const KEEP_FOR: Duration = Duration::from_secs(30);
+pub(crate) const KEEP_FOR: Duration = Duration::from_secs(30);
 const REASON: &str = "an agent is working in cornercase";
 const STDERR_WAIT: Duration = Duration::from_millis(200);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tool {
-    pub label: String,
-    pub program: PathBuf,
-    pub args: Vec<String>,
+pub(crate) struct Tool {
+    pub(crate) label: String,
+    pub(crate) program: PathBuf,
+    pub(crate) args: Vec<String>,
 }
 
 impl Tool {
-    pub fn new(label: &str, program: impl Into<PathBuf>, args: &[&str]) -> Self {
+    pub(crate) fn new(label: &str, program: impl Into<PathBuf>, args: &[&str]) -> Self {
         Self { label: label.into(), program: program.into(), args: args.iter().map(|a| (*a).to_string()).collect() }
     }
 }
 
-pub fn tools() -> Vec<Tool> {
+pub(crate) fn tools() -> Vec<Tool> {
     if cfg!(target_os = "macos") {
         let pid = std::process::id().to_string();
         return vec![Tool::new("caffeinate", "/usr/bin/caffeinate", &["-i", "-w", &pid])];
@@ -48,7 +48,7 @@ fn session_bus() -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum State {
+pub(crate) enum State {
     Off,
     Released,
     Held(String),
@@ -56,7 +56,7 @@ pub enum State {
 }
 
 impl State {
-    pub fn note(&self) -> String {
+    pub(crate) fn note(&self) -> String {
         match self {
             Self::Off => "no idle sleep while an agent works".into(),
             Self::Released => "not held: no agent is working".into(),
@@ -73,7 +73,7 @@ struct Holder {
     stderr: Receiver<String>,
 }
 
-pub struct Awake {
+pub(crate) struct Awake {
     tools: Vec<Tool>,
     on: bool,
     holder: Option<Holder>,
@@ -84,11 +84,11 @@ pub struct Awake {
 }
 
 impl Awake {
-    pub fn new(tools: Vec<Tool>) -> Self {
+    pub(crate) fn new(tools: Vec<Tool>) -> Self {
         Self { tools, on: false, holder: None, next: 0, failed: None, unavailable: None, idle_since: None }
     }
 
-    pub fn update(&mut self, on: bool, working: usize, now: Instant) {
+    pub(crate) fn update(&mut self, on: bool, working: usize, now: Instant) {
         if !on {
             self.release();
             *self = Self::new(std::mem::take(&mut self.tools));
@@ -109,7 +109,7 @@ impl Awake {
         }
     }
 
-    pub fn state(&self) -> State {
+    pub(crate) fn state(&self) -> State {
         match (&self.holder, &self.unavailable) {
             _ if !self.on => State::Off,
             (Some(holder), _) => State::Held(self.tools[holder.tool].label.clone()),

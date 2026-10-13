@@ -23,10 +23,10 @@ mod status;
 mod update;
 
 pub use args::Cli;
-pub use status::{pane_table, render};
+pub(crate) use status::{pane_table, render};
 
 const FOLLOW_EVERY: Duration = Duration::from_millis(200);
-pub const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
+pub(crate) const SKILL: &str = include_str!("../skills/cornercase/SKILL.md");
 
 impl Which {
     fn item(&self, command: &'static str) -> Result<Option<Item>> {

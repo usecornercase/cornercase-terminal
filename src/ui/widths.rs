@@ -6,15 +6,15 @@ use crate::state::Widths;
 
 pub const SIDEBAR_WIDTH: u16 = 32;
 
-pub const WORKSPACES_WIDTH: u16 = 26;
+pub(crate) const WORKSPACES_WIDTH: u16 = 26;
 
-pub const PANE_PADDING: u16 = 1;
+pub(crate) const PANE_PADDING: u16 = 1;
 
-pub const MIN_COLUMN_WIDTH: u16 = 16;
+pub(crate) const MIN_COLUMN_WIDTH: u16 = 16;
 
-pub const MIN_PANE_WIDTH: u16 = 20;
+pub(crate) const MIN_PANE_WIDTH: u16 = 20;
 
-pub const MIN_STACK_SECTION: u16 = 5;
+pub(crate) const MIN_STACK_SECTION: u16 = 5;
 
 impl Default for Widths {
     fn default() -> Self {
@@ -28,25 +28,25 @@ fn columns_room(total: u16) -> u16 {
 
 impl Widths {
     #[must_use]
-    pub fn fit(self, total: u16) -> Self {
+    pub(crate) fn fit(self, total: u16) -> Self {
         let room = columns_room(total);
         let workspaces = self.workspaces.min(room.saturating_sub(self.projects)).max(MIN_COLUMN_WIDTH);
         let projects = self.projects.min(room.saturating_sub(workspaces)).max(MIN_COLUMN_WIDTH);
         Self { projects, workspaces, ..self }
     }
 
-    pub fn changes_width(self, total: u16) -> u16 {
+    pub(crate) fn changes_width(self, total: u16) -> u16 {
         let max = total.saturating_sub(PANE_PADDING + MIN_PANE_WIDTH + 2 * MIN_COLUMN_WIDTH);
         let half = total.saturating_sub(self.projects + self.workspaces + PANE_PADDING) / 2;
         self.changes.unwrap_or_else(|| half.min(changes::DEFAULT_WIDTH)).max(changes::MIN_WIDTH).min(max)
     }
 
-    pub fn main_width(self, total: u16, changes: bool) -> u16 {
+    pub(crate) fn main_width(self, total: u16, changes: bool) -> u16 {
         if changes { total.saturating_sub(self.changes_width(total)) } else { total }
     }
 
     #[must_use]
-    pub fn dragged(self, border: Border, x: u16, total: u16) -> Self {
+    pub(crate) fn dragged(self, border: Border, x: u16, total: u16) -> Self {
         let fitted = self.fit(total);
         let room = columns_room(total);
         let right = x.saturating_add(1);
@@ -68,7 +68,7 @@ impl Widths {
     }
 
     #[must_use]
-    pub fn reset(self, border: Border) -> Self {
+    pub(crate) fn reset(self, border: Border) -> Self {
         match border {
             Border::Projects => Self { projects: SIDEBAR_WIDTH, ..self },
             Border::Workspaces => Self { workspaces: WORKSPACES_WIDTH, ..self },
@@ -78,18 +78,18 @@ impl Widths {
         }
     }
 
-    pub fn stacked_width(self, total: u16) -> u16 {
+    pub(crate) fn stacked_width(self, total: u16) -> u16 {
         self.projects.min(columns_room(total)).max(MIN_COLUMN_WIDTH)
     }
 
-    pub fn top_rows(self, room: u16) -> u16 {
+    pub(crate) fn top_rows(self, room: u16) -> u16 {
         if room < 2 * MIN_STACK_SECTION {
             return room / 2;
         }
         self.stack.unwrap_or(room / 2).clamp(MIN_STACK_SECTION, room - MIN_STACK_SECTION)
     }
 
-    pub fn agents_rows(self, room: u16, keep: u16) -> u16 {
+    pub(crate) fn agents_rows(self, room: u16, keep: u16) -> u16 {
         if room < keep + MIN_STACK_SECTION {
             return room / 3;
         }
@@ -97,7 +97,7 @@ impl Widths {
     }
 
     #[must_use]
-    pub fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool) -> Self {
+    pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool) -> Self {
         match border {
             Border::Projects => {
                 let max = columns_room(area.width).max(MIN_COLUMN_WIDTH);

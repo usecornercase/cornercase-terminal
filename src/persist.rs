@@ -5,13 +5,13 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-pub const SETTLE: Duration = Duration::from_secs(2);
+pub(crate) const SETTLE: Duration = Duration::from_secs(2);
 
-pub fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {
+pub(crate) fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {
     write(path, value, false)
 }
 
-pub fn write(path: &Path, value: &impl Serialize, private: bool) -> io::Result<()> {
+pub(crate) fn write(path: &Path, value: &impl Serialize, private: bool) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -33,7 +33,7 @@ pub fn write(path: &Path, value: &impl Serialize, private: bool) -> io::Result<(
     std::fs::rename(tmp, path)
 }
 
-pub fn back_up(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn back_up(path: &Path) -> io::Result<PathBuf> {
     let backup = path.with_extension("json.bak");
     if backup.exists() {
         std::fs::rename(&backup, path.with_extension("json.bak.1"))?;
@@ -43,18 +43,18 @@ pub fn back_up(path: &Path) -> io::Result<PathBuf> {
 }
 
 #[derive(Debug)]
-pub struct Saver<T> {
+pub(crate) struct Saver<T> {
     path: PathBuf,
     saved: Option<T>,
     pending: Option<(T, Instant)>,
 }
 
 impl<T: PartialEq + Serialize> Saver<T> {
-    pub fn new(path: PathBuf, saved: Option<T>) -> Self {
+    pub(crate) fn new(path: PathBuf, saved: Option<T>) -> Self {
         Self { path, saved, pending: None }
     }
 
-    pub fn observe(&mut self, state: T, now: Instant) -> io::Result<bool> {
+    pub(crate) fn observe(&mut self, state: T, now: Instant) -> io::Result<bool> {
         if self.saved.as_ref() == Some(&state) {
             self.pending = None;
             return Ok(false);
@@ -73,7 +73,7 @@ impl<T: PartialEq + Serialize> Saver<T> {
         Ok(false)
     }
 
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub(crate) fn flush(&mut self) -> io::Result<()> {
         if let Some((state, _)) = self.pending.take() {
             save(&self.path, &state)?;
             self.saved = Some(state);

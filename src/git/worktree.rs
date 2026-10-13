@@ -8,10 +8,10 @@ use crate::error::{Error, Result};
 use crate::log;
 use crate::process;
 
-pub const INCLUDE_FILE: &str = ".worktreeinclude";
+pub(crate) const INCLUDE_FILE: &str = ".worktreeinclude";
 const DEFAULT_SLUG: &str = "worktree";
 
-pub fn slug(branch: &str) -> String {
+pub(crate) fn slug(branch: &str) -> String {
     let mut slug = String::new();
     for c in branch.chars() {
         if c.is_ascii_alphanumeric() {
@@ -24,12 +24,12 @@ pub fn slug(branch: &str) -> String {
     if slug.is_empty() { DEFAULT_SLUG.into() } else { slug.into() }
 }
 
-pub fn checkout_path(worktrees_dir: &Path, repo: &Path, branch: &str) -> PathBuf {
+pub(crate) fn checkout_path(worktrees_dir: &Path, repo: &Path, branch: &str) -> PathBuf {
     let name = repo.file_name().unwrap_or(repo.as_os_str());
     worktrees_dir.join(name).join(slug(branch))
 }
 
-pub fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
+pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     if path.exists() {
         return Err(Error::PathExists(path.to_path_buf()));
     }
@@ -53,7 +53,7 @@ pub fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
+pub(crate) fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
     if unlock && !matches!(lock(path), Ok(None)) {
         check(git(repo, [OsStr::new("worktree"), "unlock".as_ref(), path.as_os_str()])?)?;
     }
@@ -65,33 +65,33 @@ pub fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()>
     check(git(repo, args)?).map(drop)
 }
 
-pub fn changed(path: &Path) -> Result<bool> {
+pub(crate) fn changed(path: &Path) -> Result<bool> {
     check(git(path, ["--no-optional-locks", "status", "--porcelain"])?).map(|out| !out.is_empty())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Lock {
-    pub reason: String,
-    pub holder: Option<Holder>,
+pub(crate) struct Lock {
+    pub(crate) reason: String,
+    pub(crate) holder: Option<Holder>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Holder {
+pub(crate) enum Holder {
     Running(i32),
     Gone(i32),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Status {
-    pub changed: bool,
-    pub lock: Option<Lock>,
+pub(crate) struct Status {
+    pub(crate) changed: bool,
+    pub(crate) lock: Option<Lock>,
 }
 
-pub fn status(path: &Path) -> Status {
+pub(crate) fn status(path: &Path) -> Status {
     Status { changed: !matches!(changed(path), Ok(false)), lock: lock(path).ok().flatten() }
 }
 
-pub fn lock(path: &Path) -> Result<Option<Lock>> {
+pub(crate) fn lock(path: &Path) -> Result<Option<Lock>> {
     let out = check(git(path, ["rev-parse", "--absolute-git-dir"])?)?;
     let dir = Path::new(OsStr::from_bytes(out.trim_ascii_end())).join("locked");
     let reason = match std::fs::read_to_string(dir) {
@@ -109,7 +109,7 @@ fn pid_in(reason: &str) -> Option<i32> {
     digits.parse().ok()
 }
 
-pub fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
+pub(crate) fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> Result<Output> {
     command(repo, args).stdin(Stdio::null()).output().map_err(Error::RunGit)
 }
 
@@ -124,7 +124,7 @@ fn command<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(repo: &Path, args: I) -> 
     cmd
 }
 
-pub fn check(out: Output) -> Result<Vec<u8>> {
+pub(crate) fn check(out: Output) -> Result<Vec<u8>> {
     if out.status.success() {
         return Ok(out.stdout);
     }

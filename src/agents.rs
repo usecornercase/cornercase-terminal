@@ -1,9 +1,9 @@
 pub mod activity;
-pub mod awake;
-pub mod context;
-pub mod launch;
+pub(crate) mod awake;
+pub(crate) mod context;
+pub(crate) mod launch;
 pub mod stats;
-pub mod usage;
+pub(crate) mod usage;
 
 use std::ffi::OsStr;
 use std::os::unix::fs::PermissionsExt;
@@ -14,19 +14,19 @@ use serde::{Deserialize, Serialize};
 use crate::config::Config;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentState {
-    pub kind: String,
-    pub conversation: String,
+pub(crate) struct AgentState {
+    pub(crate) kind: String,
+    pub(crate) conversation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mode: Option<String>,
+    pub(crate) mode: Option<String>,
 }
 
-pub const AUTO: &str = "auto";
-pub const CLAUDE: &str = "claude";
-pub const CODEX: &str = "codex";
-pub const GEMINI: &str = "gemini";
-pub const OPENCODE: &str = "opencode";
-pub const DEFAULT_TRUST_PROMPT: &str =
+pub(crate) const AUTO: &str = "auto";
+pub(crate) const CLAUDE: &str = "claude";
+pub(crate) const CODEX: &str = "codex";
+pub(crate) const GEMINI: &str = "gemini";
+pub(crate) const OPENCODE: &str = "opencode";
+pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
 const INPUT_MARK: char = '❯';
@@ -84,9 +84,9 @@ const DEFAULT_MODES: [(&str, ModeTable); 3] = [
     ),
 ];
 
-pub type Mode = (String, Vec<String>);
+pub(crate) type Mode = (String, Vec<String>);
 
-pub fn kinds(config: &Config) -> Vec<String> {
+pub(crate) fn kinds(config: &Config) -> Vec<String> {
     let mut kinds: Vec<String> = KNOWN.iter().map(|(kind, _)| (*kind).to_string()).collect();
     for kind in config.agent_commands.keys() {
         if !kinds.contains(kind) {
@@ -96,7 +96,7 @@ pub fn kinds(config: &Config) -> Vec<String> {
     kinds
 }
 
-pub fn command(config: &Config, kind: &str) -> String {
+pub(crate) fn command(config: &Config, kind: &str) -> String {
     config
         .agent_commands
         .get(kind)
@@ -116,11 +116,11 @@ fn found(program: &str, path: Option<&OsStr>) -> bool {
     path.is_some_and(|path| std::env::split_paths(path).any(|dir| dir.is_absolute() && executable(&dir.join(program))))
 }
 
-pub fn installed(program: &str) -> bool {
+pub(crate) fn installed(program: &str) -> bool {
     found(program, std::env::var_os("PATH").as_deref())
 }
 
-pub fn modes(config: &Config, kind: &str) -> Vec<Mode> {
+pub(crate) fn modes(config: &Config, kind: &str) -> Vec<Mode> {
     let mut modes: Vec<Mode> = DEFAULT_MODES
         .iter()
         .filter(|(k, _)| *k == kind)
@@ -137,7 +137,7 @@ pub fn modes(config: &Config, kind: &str) -> Vec<Mode> {
     modes
 }
 
-pub fn args(config: &Config, kind: &str) -> Vec<String> {
+pub(crate) fn args(config: &Config, kind: &str) -> Vec<String> {
     config.agent_args.get(kind).cloned().unwrap_or_default()
 }
 
@@ -151,7 +151,7 @@ fn longest_first(modes: &[Mode]) -> Vec<&Mode> {
     sorted
 }
 
-pub fn mode_of(kind: &str, args: &[String], modes: &[Mode]) -> Option<String> {
+pub(crate) fn mode_of(kind: &str, args: &[String], modes: &[Mode]) -> Option<String> {
     let args = normalized(kind, args);
     longest_first(modes)
         .into_iter()
@@ -174,7 +174,7 @@ fn normalized(kind: &str, args: &[String]) -> Vec<String> {
         .collect()
 }
 
-pub fn extra_args(kind: &str, args: &[String], modes: &[Mode]) -> Vec<String> {
+pub(crate) fn extra_args(kind: &str, args: &[String], modes: &[Mode]) -> Vec<String> {
     let mut out = normalized(kind, args);
     for (_, run) in longest_first(modes) {
         let run = normalized(kind, run);
@@ -189,19 +189,19 @@ fn mode_args(modes: &[Mode], name: Option<&str>) -> Vec<String> {
     name.and_then(|name| modes.iter().find(|(n, _)| n == name)).map(|(_, args)| args.clone()).unwrap_or_default()
 }
 
-pub fn with_mode(kind: &str, args: &[String], modes: &[Mode], name: Option<&str>) -> Vec<String> {
+pub(crate) fn with_mode(kind: &str, args: &[String], modes: &[Mode], name: Option<&str>) -> Vec<String> {
     [mode_args(modes, name), extra_args(kind, args, modes)].concat()
 }
 
-pub fn with_extra(kind: &str, args: &[String], modes: &[Mode], extra: Vec<String>) -> Vec<String> {
+pub(crate) fn with_extra(kind: &str, args: &[String], modes: &[Mode], extra: Vec<String>) -> Vec<String> {
     [mode_args(modes, mode_of(kind, args, modes).as_deref()), extra].concat()
 }
 
-pub fn is_dangerous(mode: &str) -> bool {
+pub(crate) fn is_dangerous(mode: &str) -> bool {
     mode.to_lowercase().contains("danger")
 }
 
-pub fn split_args(text: &str) -> Vec<String> {
+pub(crate) fn split_args(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current: Option<String> = None;
     let mut quote: Option<char> = None;
@@ -222,7 +222,7 @@ pub fn split_args(text: &str) -> Vec<String> {
     out
 }
 
-pub fn quote(arg: &str) -> String {
+pub(crate) fn quote(arg: &str) -> String {
     let safe = |c: char| c.is_ascii_alphanumeric() || "-_./:@%+=,".contains(c);
     if !arg.is_empty() && arg.chars().all(safe) {
         return arg.to_string();
@@ -230,18 +230,18 @@ pub fn quote(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
-pub fn join_args(args: &[String]) -> String {
+pub(crate) fn join_args(args: &[String]) -> String {
     args.iter().map(|a| quote(a)).collect::<Vec<_>>().join(" ")
 }
 
-pub fn command_line(config: &Config, kind: &str) -> String {
+pub(crate) fn command_line(config: &Config, kind: &str) -> String {
     std::iter::once(quote(&command(config, kind)))
         .chain(args(config, kind).iter().map(|a| quote(a)))
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-pub fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {
+pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {
     let kind = agent.kind.as_str();
     let args = with_mode(kind, &args(config, kind), &modes(config, kind), agent.mode.as_deref());
     let conversation = agent.conversation.clone();
@@ -253,7 +253,7 @@ pub fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {
     Some(std::iter::once(command(config, kind)).chain(line).map(|a| quote(&a)).collect::<Vec<_>>().join(" "))
 }
 
-pub fn resolve(config: &Config, explicit: Option<&str>, running: Option<&str>) -> Option<String> {
+pub(crate) fn resolve(config: &Config, explicit: Option<&str>, running: Option<&str>) -> Option<String> {
     explicit
         .or_else(|| (config.agent != AUTO && !config.agent.trim().is_empty()).then_some(config.agent.as_str()))
         .or(running)
@@ -264,7 +264,7 @@ fn basename(arg: &str) -> &str {
     Path::new(arg).file_name().and_then(|n| n.to_str()).unwrap_or(arg)
 }
 
-pub fn detect(config: &Config, argv: &[String]) -> Option<String> {
+pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
@@ -274,12 +274,12 @@ pub fn detect(config: &Config, argv: &[String]) -> Option<String> {
 }
 
 #[derive(Debug, Default)]
-pub struct TrustPrompt {
+pub(crate) struct TrustPrompt {
     compiled: Option<(String, Option<regex::Regex>)>,
 }
 
 impl TrustPrompt {
-    pub fn regex(&mut self, pattern: &str) -> Option<&regex::Regex> {
+    pub(crate) fn regex(&mut self, pattern: &str) -> Option<&regex::Regex> {
         if self.compiled.as_ref().is_none_or(|(compiled, _)| compiled != pattern) {
             let regex = regex::RegexBuilder::new(pattern).case_insensitive(true).build().ok();
             self.compiled = Some((pattern.to_string(), regex));
@@ -288,16 +288,16 @@ impl TrustPrompt {
     }
 }
 
-pub fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
+pub(crate) fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().filter(|line| !line.trim().is_empty()).collect();
     regex.is_match(&lines[lines.len().saturating_sub(TRUST_LINES)..].join("\n"))
 }
 
-pub fn input_box(agent: &str, screen: &str) -> Option<bool> {
+pub(crate) fn input_box(agent: &str, screen: &str) -> Option<bool> {
     (agent == CLAUDE).then(|| box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
 }
 
-pub fn survey(agent: &str, screen: &str) -> bool {
+pub(crate) fn survey(agent: &str, screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().collect();
     let Some(rule) = box_rule(&lines).filter(|_| agent == CLAUDE) else { return false };
     let above = &lines[..rule];

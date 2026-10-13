@@ -19,24 +19,24 @@ use crate::host::theme::HostTheme;
 use crate::term::keys;
 use crate::term::mouse::{MouseEncoding, MouseMode};
 
-pub type Result<T> = libghostty_vt::error::Result<T>;
-pub type ReplyFn = Box<dyn FnMut(&[u8])>;
+pub(crate) type Result<T> = libghostty_vt::error::Result<T>;
+pub(crate) type ReplyFn = Box<dyn FnMut(&[u8])>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Cell {
-    pub symbol: String,
-    pub style: Style,
+pub(crate) struct Cell {
+    pub(crate) symbol: String,
+    pub(crate) style: Style,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Snapshot {
-    pub rows: Vec<Vec<Cell>>,
-    pub cursor: Option<Position>,
-    pub below: usize,
+pub(crate) struct Snapshot {
+    pub(crate) rows: Vec<Vec<Cell>>,
+    pub(crate) cursor: Option<Position>,
+    pub(crate) below: usize,
 }
 
 impl Snapshot {
-    pub fn contents(&self) -> String {
+    pub(crate) fn contents(&self) -> String {
         self.rows
             .iter()
             .map(|row| row.iter().map(|c| c.symbol.as_str()).collect::<String>().trim_end().to_string())
@@ -45,7 +45,7 @@ impl Snapshot {
     }
 }
 
-pub struct Emulator {
+pub(crate) struct Emulator {
     vt: Terminal<'static, 'static>,
     render: RenderState<'static>,
     rows: RowIterator<'static>,
@@ -56,7 +56,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, mut reply: ReplyFn) -> Result<Self> {
+    pub(crate) fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, mut reply: ReplyFn) -> Result<Self> {
         let mut vt = Terminal::new(Options { cols, rows, max_scrollback: scrollback })?;
         vt.on_pty_write(move |_, bytes| reply(bytes))?;
         let copied = Rc::new(RefCell::new(Vec::new()));
@@ -79,26 +79,26 @@ impl Emulator {
         })
     }
 
-    pub fn take_copied(&mut self) -> Vec<String> {
+    pub(crate) fn take_copied(&mut self) -> Vec<String> {
         std::mem::take(&mut self.copied.borrow_mut())
     }
 
-    pub fn encode_key(&mut self, key: KeyEvent) -> Vec<u8> {
+    pub(crate) fn encode_key(&mut self, key: KeyEvent) -> Vec<u8> {
         self.keys.set_options_from_terminal(&self.vt);
         let kitty = self.vt.kitty_keyboard_flags().unwrap_or(KittyKeyFlags::DISABLED);
         let app_cursor = self.application_cursor();
         keys::encode(key, &mut self.keys, kitty, app_cursor)
     }
 
-    pub fn feed(&mut self, bytes: &[u8]) {
+    pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.vt.vt_write(bytes);
     }
 
-    pub fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
+    pub(crate) fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
         self.vt.resize(cols, rows, 0, 0)
     }
 
-    pub fn size(&self) -> Result<(u16, u16)> {
+    pub(crate) fn size(&self) -> Result<(u16, u16)> {
         Ok((self.vt.rows()?, self.vt.cols()?))
     }
 
@@ -106,41 +106,41 @@ impl Emulator {
         self.vt.mode(mode).unwrap_or(false)
     }
 
-    pub fn application_cursor(&self) -> bool {
+    pub(crate) fn application_cursor(&self) -> bool {
         self.mode(Mode::DECCKM)
     }
 
-    pub fn title(&self) -> String {
+    pub(crate) fn title(&self) -> String {
         self.vt.title().map(str::to_string).unwrap_or_default()
     }
 
-    pub fn bracketed_paste(&self) -> bool {
+    pub(crate) fn bracketed_paste(&self) -> bool {
         self.mode(Mode::BRACKETED_PASTE)
     }
 
-    pub fn alternate_screen(&self) -> bool {
+    pub(crate) fn alternate_screen(&self) -> bool {
         matches!(self.vt.active_screen(), Ok(Screen::Alternate))
     }
 
-    pub fn alt_scroll(&self) -> bool {
+    pub(crate) fn alt_scroll(&self) -> bool {
         self.mode(Mode::ALT_SCROLL)
     }
 
-    pub fn scroll(&mut self, rows: isize) {
+    pub(crate) fn scroll(&mut self, rows: isize) {
         self.vt.scroll_viewport(ScrollViewport::Delta(rows));
     }
 
-    pub fn scroll_to_bottom(&mut self) {
+    pub(crate) fn scroll_to_bottom(&mut self) {
         self.vt.scroll_viewport(ScrollViewport::Bottom);
     }
 
-    pub fn below(&self) -> usize {
+    pub(crate) fn below(&self) -> usize {
         self.vt.scrollbar().map_or(0, |bar| {
             usize::try_from(bar.total.saturating_sub(bar.offset.saturating_add(bar.len))).unwrap_or(usize::MAX)
         })
     }
 
-    pub fn active_contents(&mut self) -> Result<String> {
+    pub(crate) fn active_contents(&mut self) -> Result<String> {
         let scrolled = self.vt.scrollbar().ok().filter(|_| self.below() > 0);
         if scrolled.is_some() {
             self.scroll_to_bottom();
@@ -152,7 +152,7 @@ impl Emulator {
         text
     }
 
-    pub fn mouse_mode(&self) -> MouseMode {
+    pub(crate) fn mouse_mode(&self) -> MouseMode {
         [
             (Mode::ANY_MOUSE, MouseMode::AnyMotion),
             (Mode::BUTTON_MOUSE, MouseMode::ButtonMotion),
@@ -164,7 +164,7 @@ impl Emulator {
         .unwrap_or(MouseMode::None)
     }
 
-    pub fn mouse_encoding(&self) -> MouseEncoding {
+    pub(crate) fn mouse_encoding(&self) -> MouseEncoding {
         if self.mode(Mode::SGR_MOUSE) {
             MouseEncoding::Sgr
         } else if self.mode(Mode::UTF8_MOUSE) {
@@ -174,13 +174,13 @@ impl Emulator {
         }
     }
 
-    pub fn start_selection(&mut self, at: Position) -> Result<()> {
+    pub(crate) fn start_selection(&mut self, at: Position) -> Result<()> {
         self.vt.set_selection(None)?;
         self.anchor = Some(self.vt.track_grid_ref(viewport(at))?);
         Ok(())
     }
 
-    pub fn extend_selection(&mut self, to: Position) -> Result<()> {
+    pub(crate) fn extend_selection(&mut self, to: Position) -> Result<()> {
         let Some(anchor) = &self.anchor else { return Ok(()) };
         let Some(start) = anchor.snapshot(&self.vt)? else { return Ok(()) };
         let end = self.vt.grid_ref(viewport(to))?;
@@ -188,14 +188,14 @@ impl Emulator {
         Ok(())
     }
 
-    pub fn finish_selection(&mut self) -> Result<Option<String>> {
+    pub(crate) fn finish_selection(&mut self) -> Result<Option<String>> {
         self.anchor = None;
         let text = self.vt.format_selection_alloc(None, plain())?.map(|b| String::from_utf8_lossy(&b).into_owned());
         self.vt.set_selection(None)?;
         Ok(text.filter(|t| !t.is_empty()))
     }
 
-    pub fn screen_text(&self) -> Result<String> {
+    pub(crate) fn screen_text(&self) -> Result<String> {
         let (rows, cols) = self.size()?;
         let at = |x, y| self.vt.grid_ref(Point::Active(PointCoordinate { x, y }));
         let selection =
@@ -204,13 +204,13 @@ impl Emulator {
         Ok(tail(&text.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default(), None))
     }
 
-    pub fn last_lines(&self, lines: usize) -> Result<String> {
+    pub(crate) fn last_lines(&self, lines: usize) -> Result<String> {
         let options = FormatterOptions::new().with_format(Format::Plain).with_unwrap(true).with_trim(true);
         let text = Formatter::new(&self.vt, options)?.format_alloc(None)?;
         Ok(tail(&String::from_utf8_lossy(&text), Some(lines)))
     }
 
-    pub fn snapshot(&mut self) -> Result<Snapshot> {
+    pub(crate) fn snapshot(&mut self) -> Result<Snapshot> {
         if self.below() > 0 && self.mouse_mode() != MouseMode::None {
             self.scroll_to_bottom();
         }

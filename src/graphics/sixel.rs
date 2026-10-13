@@ -4,12 +4,12 @@ use image::RgbaImage;
 use super::Picture;
 use super::encode::{Key, flatten, round, sized};
 
-pub const COLOURS: u16 = 256;
-pub const FEWEST: u16 = 64;
-pub const DIFFUSION: f32 = 0.875;
-pub const BAND: u32 = 6;
+pub(crate) const COLOURS: u16 = 256;
+pub(crate) const FEWEST: u16 = 64;
+pub(crate) const DIFFUSION: f32 = 0.875;
+pub(crate) const BAND: u32 = 6;
 
-pub fn image(picture: &Picture, key: &Key, colours: u16, scale: f64) -> Vec<u8> {
+pub(crate) fn image(picture: &Picture, key: &Key, colours: u16, scale: f64) -> Vec<u8> {
     let fit = key.fit;
     let side = |pixels: u32| round(f64::from(pixels) * scale).max(1);
     let (width, height) = bands(side(fit.width), side(fit.height));
@@ -20,7 +20,7 @@ pub fn image(picture: &Picture, key: &Key, colours: u16, scale: f64) -> Vec<u8> 
     encode(image, colours)
 }
 
-pub fn bands(width: u32, height: u32) -> (u32, u32) {
+pub(crate) fn bands(width: u32, height: u32) -> (u32, u32) {
     let whole = height - height % BAND;
     if whole == 0 || whole == height {
         return (width, height);
@@ -28,11 +28,11 @@ pub fn bands(width: u32, height: u32) -> (u32, u32) {
     (round(f64::from(width) * f64::from(whole) / f64::from(height)).max(1), whole)
 }
 
-pub fn colours(registers: u16) -> u16 {
+pub(crate) fn colours(registers: u16) -> u16 {
     if registers == 0 { COLOURS } else { registers.clamp(2, COLOURS) }
 }
 
-pub fn encode(image: RgbaImage, colours: u16) -> Vec<u8> {
+pub(crate) fn encode(image: RgbaImage, colours: u16) -> Vec<u8> {
     let (width, height) = (image.width() as usize, image.height() as usize);
     let options = EncodeOptions { max_colors: colours, diffusion: DIFFUSION, quantize_method: QuantizeMethod::Wu };
     let Ok(text) = SixelImage::from_rgba(image.into_raw(), width, height).encode_with(&options) else {

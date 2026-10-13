@@ -11,7 +11,7 @@ mod token_form;
 mod view;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IssuesHit {
+pub(crate) enum IssuesHit {
     Tab(usize),
     Toggle(usize),
     Item(usize),
@@ -19,14 +19,14 @@ pub enum IssuesHit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Room {
-    pub list_rows: usize,
-    pub detail_rows: usize,
-    pub detail_width: usize,
+pub(crate) struct Room {
+    pub(crate) list_rows: usize,
+    pub(crate) detail_rows: usize,
+    pub(crate) detail_width: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tab {
+pub(crate) enum Tab {
     All,
     One(Source),
 }
@@ -39,19 +39,19 @@ impl Tab {
         }
     }
 
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::All => "all",
             Self::One(source) => source.id(),
         }
     }
 
-    pub fn from_id(id: &str) -> Option<Self> {
+    pub(crate) fn from_id(id: &str) -> Option<Self> {
         std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).find(|t| t.id() == id)
     }
 }
 
-pub fn tabs(names: &[String]) -> Vec<Tab> {
+pub(crate) fn tabs(names: &[String]) -> Vec<Tab> {
     let all = std::iter::once(Tab::All).chain(Source::ALL.map(Tab::One));
     let mut tabs: Vec<Tab> = Vec::new();
     for name in names {
@@ -65,20 +65,20 @@ pub fn tabs(names: &[String]) -> Vec<Tab> {
 }
 
 #[derive(Debug, Default)]
-pub struct Listing {
-    pub issues: Vec<Issue>,
-    pub loading: bool,
-    pub error: Option<String>,
+pub(crate) struct Listing {
+    pub(crate) issues: Vec<Issue>,
+    pub(crate) loading: bool,
+    pub(crate) error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Connection {
-    pub from_env: bool,
-    pub account: Option<Account>,
+pub(crate) struct Connection {
+    pub(crate) from_env: bool,
+    pub(crate) account: Option<Account>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Step {
+pub(crate) enum Step {
     Site,
     Email,
     Workspace,
@@ -87,32 +87,32 @@ pub enum Step {
 }
 
 #[derive(Debug, Default)]
-pub struct TokenForm {
-    pub input: String,
-    pub checking: bool,
-    pub error: Option<String>,
-    pub step: Step,
+pub(crate) struct TokenForm {
+    pub(crate) input: String,
+    pub(crate) checking: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) step: Step,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentStart {
-    pub command: String,
-    pub mode: Option<String>,
+pub(crate) struct AgentStart {
+    pub(crate) command: String,
+    pub(crate) mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Agents {
-    pub kinds: Vec<String>,
-    pub default: Option<String>,
-    pub running: Option<String>,
-    pub chosen: Option<String>,
-    pub starts: HashMap<String, AgentStart>,
-    pub prompt: String,
-    pub submit: bool,
+pub(crate) struct Agents {
+    pub(crate) kinds: Vec<String>,
+    pub(crate) default: Option<String>,
+    pub(crate) running: Option<String>,
+    pub(crate) chosen: Option<String>,
+    pub(crate) starts: HashMap<String, AgentStart>,
+    pub(crate) prompt: String,
+    pub(crate) submit: bool,
 }
 
 impl Agents {
-    pub fn pick(&self) -> Option<String> {
+    pub(crate) fn pick(&self) -> Option<String> {
         self.chosen.clone().or_else(|| self.default.clone()).or_else(|| self.running.clone())
     }
 
@@ -128,42 +128,42 @@ impl Agents {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Place {
-    pub project: u64,
-    pub workspace: Option<u64>,
-    pub label: String,
-    pub worktree: bool,
+pub(crate) struct Place {
+    pub(crate) project: u64,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) label: String,
+    pub(crate) worktree: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Pick {
+pub(crate) enum Pick {
     Agent,
     Place,
     Person(Source, usize),
 }
 
 #[derive(Debug)]
-pub struct Picker {
-    pub pick: Pick,
-    pub search: Search,
+pub(crate) struct Picker {
+    pub(crate) pick: Pick,
+    pub(crate) search: Search,
     pub(super) then_start: bool,
 }
 
-pub struct Choice {
-    pub key: String,
-    pub title: String,
-    pub meta: String,
-    pub who: Option<Who>,
+pub(crate) struct Choice {
+    pub(crate) key: String,
+    pub(crate) title: String,
+    pub(crate) meta: String,
+    pub(crate) who: Option<Who>,
 }
 
 #[derive(Debug)]
-pub enum Screen {
+pub(crate) enum Screen {
     List,
     Detail { issue: Box<Issue>, detail: Option<Result<Detail, String>>, scroll: usize, raw: bool },
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Action {
+pub(crate) enum Action {
     None,
     Close,
     Load(Vec<Source>),
@@ -183,42 +183,42 @@ pub enum Action {
     clippy::struct_excessive_bools,
     reason = "independent facts: git checkout, repo root, closed toggle, starting"
 )]
-pub struct Browser {
-    pub project: u64,
-    pub project_name: String,
-    pub github: bool,
-    pub worktrees: bool,
-    pub tabs: Vec<Tab>,
-    pub tab: usize,
-    pub closed: bool,
-    pub people: People,
-    pub search: Search,
-    pub lists: HashMap<Source, Listing>,
-    pub connections: HashMap<Source, Connection>,
-    pub forms: HashMap<Source, TokenForm>,
-    pub jira_site: String,
-    pub jira_email: String,
-    pub plane_workspace: String,
-    pub screen: Screen,
-    pub starting: bool,
-    pub error: Option<String>,
-    pub notice: Option<String>,
-    pub secrets_path: String,
-    pub agents: Agents,
-    pub picker: Option<Picker>,
-    pub places: Vec<Place>,
-    pub here: usize,
-    pub place: Option<usize>,
-    pub filtering: Option<usize>,
-    pub members: HashMap<Source, Result<Vec<Person>, String>>,
+pub(crate) struct Browser {
+    pub(crate) project: u64,
+    pub(crate) project_name: String,
+    pub(crate) github: bool,
+    pub(crate) worktrees: bool,
+    pub(crate) tabs: Vec<Tab>,
+    pub(crate) tab: usize,
+    pub(crate) closed: bool,
+    pub(crate) people: People,
+    pub(crate) search: Search,
+    pub(crate) lists: HashMap<Source, Listing>,
+    pub(crate) connections: HashMap<Source, Connection>,
+    pub(crate) forms: HashMap<Source, TokenForm>,
+    pub(crate) jira_site: String,
+    pub(crate) jira_email: String,
+    pub(crate) plane_workspace: String,
+    pub(crate) screen: Screen,
+    pub(crate) starting: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) notice: Option<String>,
+    pub(crate) secrets_path: String,
+    pub(crate) agents: Agents,
+    pub(crate) picker: Option<Picker>,
+    pub(crate) places: Vec<Place>,
+    pub(crate) here: usize,
+    pub(crate) place: Option<usize>,
+    pub(crate) filtering: Option<usize>,
+    pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
 }
 
 impl Browser {
-    pub fn current(&self) -> Tab {
+    pub(crate) fn current(&self) -> Tab {
         self.tabs.get(self.tab).copied().unwrap_or(Tab::All)
     }
 
-    pub fn tab_to(&mut self, tab: Tab) {
+    pub(crate) fn tab_to(&mut self, tab: Tab) {
         if let Some(i) = self.tabs.iter().position(|t| *t == tab) {
             self.tab = i;
         }
@@ -228,7 +228,7 @@ impl Browser {
         if source == Source::Github { self.github } else { self.connections.contains_key(&source) }
     }
 
-    pub fn sources(&self) -> Vec<Source> {
+    pub(crate) fn sources(&self) -> Vec<Source> {
         let wanted: Vec<Source> = match self.current() {
             Tab::All => Source::ALL.to_vec(),
             Tab::One(source) => vec![source],
@@ -236,16 +236,16 @@ impl Browser {
         wanted.into_iter().filter(|s| self.can_list(*s)).collect()
     }
 
-    pub fn needs_load(&self) -> Action {
+    pub(crate) fn needs_load(&self) -> Action {
         let missing: Vec<Source> = self.sources().into_iter().filter(|s| !self.lists.contains_key(s)).collect();
         if missing.is_empty() { Action::None } else { Action::Load(missing) }
     }
 
-    pub fn query(&self, source: Source) -> Query {
+    pub(crate) fn query(&self, source: Source) -> Query {
         Query { closed: self.closed, people: self.people.of(source).clone() }
     }
 
-    pub fn loaded(&mut self, source: Source, query: &Query, result: Result<Vec<Issue>, String>) {
+    pub(crate) fn loaded(&mut self, source: Source, query: &Query, result: Result<Vec<Issue>, String>) {
         if *query != self.query(source) {
             return;
         }
@@ -260,17 +260,17 @@ impl Browser {
         }
     }
 
-    pub fn connected(&mut self, source: Source, connection: Connection) {
+    pub(crate) fn connected(&mut self, source: Source, connection: Connection) {
         self.forms.remove(&source);
         self.connections.insert(source, connection);
     }
 
-    pub fn disconnected(&mut self, source: Source) {
+    pub(crate) fn disconnected(&mut self, source: Source) {
         self.connections.remove(&source);
         self.lists.remove(&source);
     }
 
-    pub fn read_done(&mut self, source: Source, key: &str, result: Result<Detail, String>) {
+    pub(crate) fn read_done(&mut self, source: Source, key: &str, result: Result<Detail, String>) {
         if let Screen::Detail { issue, detail, .. } = &mut self.screen
             && issue.source == source
             && issue.key == key
@@ -279,7 +279,7 @@ impl Browser {
         }
     }
 
-    pub fn shown(&self) -> Vec<&Issue> {
+    pub(crate) fn shown(&self) -> Vec<&Issue> {
         let mut issues: Vec<&Issue> =
             self.sources().iter().filter_map(|s| self.lists.get(s)).flat_map(|l| &l.issues).collect();
         if self.current() == Tab::All {

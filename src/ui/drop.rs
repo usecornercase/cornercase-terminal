@@ -7,7 +7,13 @@ use super::sidebar::{SidebarRow, project_rows};
 use super::tree::{TreeRow, TreeShape, tree_layout_rows, tree_rows};
 use super::workspaces::{TabLines, WorkspaceRow, workspace_layout, workspace_rows};
 
-pub fn tree_drop(list: Rect, shape: &TreeShape, scroll: usize, dragged: TreeRow, pos: Position) -> Option<Landing> {
+pub(crate) fn tree_drop(
+    list: Rect,
+    shape: &TreeShape,
+    scroll: usize,
+    dragged: TreeRow,
+    pos: Position,
+) -> Option<Landing> {
     let rows = tree_rows(shape);
     let layout = tree_layout_rows(list, shape, &rows, scroll);
     let zone = layout.zone(pos)?;
@@ -28,7 +34,7 @@ pub fn tree_drop(list: Rect, shape: &TreeShape, scroll: usize, dragged: TreeRow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Spot {
+pub(crate) enum Spot {
     Group(usize),
     Project { group: Option<usize>, before: Option<usize> },
     Workspace(usize),
@@ -45,13 +51,13 @@ impl Spot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Landing {
-    pub at: usize,
-    pub spot: Spot,
+pub(crate) struct Landing {
+    pub(crate) at: usize,
+    pub(crate) spot: Spot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Drag {
+pub(crate) enum Drag {
     Sidebar(SidebarRow, Option<Landing>),
     Workspaces(WorkspaceRow, Option<Landing>),
     Tree(TreeRow, Option<Landing>),
@@ -223,7 +229,7 @@ fn tree_workspace_drop(rows: &[TreeRow], layout: &Rows, zone: Zone, p: usize, w:
     Some(Landing { at, spot: Spot::Workspace(before) })
 }
 
-pub fn sidebar_drop(
+pub(crate) fn sidebar_drop(
     list: Rect,
     pitch: u16,
     rows: &[SidebarRow],
@@ -244,7 +250,7 @@ pub fn sidebar_drop(
     }
 }
 
-pub fn workspace_drop(
+pub(crate) fn workspace_drop(
     list: Rect,
     pitch: u16,
     tabs: &TabLines,

@@ -67,6 +67,7 @@ vt100 = "0.16.2"
 future_incompatible = { level = "warn", priority = -1 }
 nonstandard_style = { level = "deny", priority = -2 }
 unused_qualifications = "warn"
+unreachable_pub = "warn"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

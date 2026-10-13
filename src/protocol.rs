@@ -17,13 +17,13 @@ use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub const VERSION: u32 = 3;
+pub(crate) const VERSION: u32 = 3;
 pub const NESTED_ENV: &str = "CORNERCASE";
-pub const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
+pub(crate) const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum ClientMessage {
+pub(crate) enum ClientMessage {
     KillServer,
     Hello(Box<Hello>),
     Event(Event),
@@ -33,21 +33,21 @@ pub enum ClientMessage {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Hello {
-    pub version: u32,
-    pub build: String,
-    pub cols: u16,
-    pub rows: u16,
-    pub theme: HostTheme,
-    pub notify: Channel,
-    pub terminal: Option<String>,
-    pub pointer: Option<pointer::Terminal>,
-    pub graphics: Support,
-    pub probe: String,
+pub(crate) struct Hello {
+    pub(crate) version: u32,
+    pub(crate) build: String,
+    pub(crate) cols: u16,
+    pub(crate) rows: u16,
+    pub(crate) theme: HostTheme,
+    pub(crate) notify: Channel,
+    pub(crate) terminal: Option<String>,
+    pub(crate) pointer: Option<pointer::Terminal>,
+    pub(crate) graphics: Support,
+    pub(crate) probe: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum ServerMessage {
+pub(crate) enum ServerMessage {
     Rejected(String),
     Frame(Vec<u8>),
     Detached,
@@ -56,7 +56,7 @@ pub enum ServerMessage {
     Response(String),
 }
 
-pub fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {
+pub(crate) fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {
     let body = postcard::to_stdvec(msg).map_err(io::Error::other)?;
     let len = u32::try_from(body.len()).map_err(io::Error::other)?;
     let mut frame = Vec::with_capacity(4 + body.len());
@@ -66,7 +66,7 @@ pub fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {
     w.flush()
 }
 
-pub fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T>> {
+pub(crate) fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T>> {
     let mut len = [0u8; 4];
     match r.read_exact(&mut len) {
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
@@ -81,7 +81,7 @@ pub fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T>> {
     postcard::from_bytes(&body).map(Some).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
-pub fn try_lock(socket: &Path) -> io::Result<Option<File>> {
+pub(crate) fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     let file = OpenOptions::new().create(true).write(true).truncate(false).open(paths::lock(socket))?;
     match flock(&file, FlockOperation::NonBlockingLockExclusive) {
         Ok(()) => Ok(Some(file)),
@@ -90,7 +90,7 @@ pub fn try_lock(socket: &Path) -> io::Result<Option<File>> {
     }
 }
 
-pub fn check_socket_dir(socket: &Path) -> Result<(), Error> {
+pub(crate) fn check_socket_dir(socket: &Path) -> Result<(), Error> {
     let dir = match socket.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         Some(dir) => dir.to_path_buf(),
         None => std::env::current_dir()?,
@@ -124,7 +124,7 @@ pub fn own_uid() -> u32 {
     rustix::process::getuid().as_raw()
 }
 
-pub fn check_peer(stream: &UnixStream, uid: u32) -> Result<(), Error> {
+pub(crate) fn check_peer(stream: &UnixStream, uid: u32) -> Result<(), Error> {
     let peer = process::peer_uid(stream)?;
     if peer == uid { Ok(()) } else { Err(Error::OtherUser(peer)) }
 }

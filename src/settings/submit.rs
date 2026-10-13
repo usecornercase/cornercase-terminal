@@ -5,13 +5,13 @@ use crate::issues::{Secret, Source, jira, plane};
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
 
 impl Settings {
-    pub fn pick_choices(&self) -> Vec<&PickItem> {
+    pub(crate) fn pick_choices(&self) -> Vec<&PickItem> {
         let Some(pick) = &self.pick else { return Vec::new() };
         let needle = pick.search.query().trim().to_lowercase();
         pick.items.iter().filter(|item| item.value.to_lowercase().contains(&needle)).collect()
     }
 
-    pub fn choose(&mut self, index: Option<usize>) -> Action {
+    pub(crate) fn choose(&mut self, index: Option<usize>) -> Action {
         let Some(pick) = &self.pick else { return Action::None };
         let choices = self.pick_choices();
         let i = index.unwrap_or_else(|| pick.search.selected()).min(choices.len().saturating_sub(1));

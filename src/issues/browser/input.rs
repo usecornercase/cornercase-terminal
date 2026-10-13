@@ -5,7 +5,7 @@ use super::{Action, Browser, IssuesHit, Pick, Room, Screen};
 const WHEEL_ROWS: isize = 3;
 
 impl Browser {
-    pub fn key(&mut self, key: KeyEvent, room: Room) -> Action {
+    pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
         if self.starting {
             return Action::None;
         }
@@ -72,7 +72,7 @@ impl Browser {
         Action::None
     }
 
-    pub fn paste(&mut self, text: &str) {
+    pub(crate) fn paste(&mut self, text: &str) {
         if let Some(picker) = &mut self.picker {
             text.chars().filter(|c| !c.is_control()).for_each(|c| picker.search.push(c));
             return;
@@ -92,7 +92,7 @@ impl Browser {
         chars.for_each(|c| self.search.push(c));
     }
 
-    pub fn mouse(&mut self, kind: MouseEventKind, hit: Option<IssuesHit>, room: Room) -> Action {
+    pub(crate) fn mouse(&mut self, kind: MouseEventKind, hit: Option<IssuesHit>, room: Room) -> Action {
         if self.starting {
             return Action::None;
         }

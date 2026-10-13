@@ -5,9 +5,9 @@ use arborium::{GrammarStore, Highlighter};
 use arborium_highlight::{FlatToken, spans_to_flat_tokens};
 use ratatui::style::{Color, Modifier, Style};
 
-pub type Segments = Vec<(String, Style)>;
+pub(crate) type Segments = Vec<(String, Style)>;
 
-pub const MAX_BYTES: usize = 2 << 20;
+pub(crate) const MAX_BYTES: usize = 2 << 20;
 const TAB: &str = "    ";
 const PLAIN: Style = Style::new();
 const NAMES: [(&str, &str); 24] = [
@@ -133,7 +133,7 @@ fn shebang(first: &str) -> Option<&'static str> {
     lookup(&SCRIPTS, program)
 }
 
-pub fn language(path: &Path, first_line: &str) -> Option<&'static str> {
+pub(crate) fn language(path: &Path, first_line: &str) -> Option<&'static str> {
     let name = path.file_name()?.to_str()?;
     let extension = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     let found = lookup(&NAMES, name)
@@ -164,7 +164,7 @@ fn style(tag: &str) -> Style {
     }
 }
 
-pub fn lines(source: &str) -> impl Iterator<Item = (usize, &str)> {
+pub(crate) fn lines(source: &str) -> impl Iterator<Item = (usize, &str)> {
     source.split_inclusive('\n').scan(0, |offset, raw| {
         let start = *offset;
         *offset += raw.len();
@@ -172,7 +172,7 @@ pub fn lines(source: &str) -> impl Iterator<Item = (usize, &str)> {
     })
 }
 
-pub fn expand(text: &str) -> String {
+pub(crate) fn expand(text: &str) -> String {
     text.replace('\t', TAB)
 }
 
@@ -212,7 +212,7 @@ fn split(source: &str, tokens: &[FlatToken]) -> Vec<Segments> {
         .collect()
 }
 
-pub fn highlight(source: &str, language: &str) -> Option<Vec<Segments>> {
+pub(crate) fn highlight(source: &str, language: &str) -> Option<Vec<Segments>> {
     if source.len() > MAX_BYTES {
         return None;
     }

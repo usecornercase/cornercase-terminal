@@ -46,17 +46,17 @@ pub fn sidebar_rows(groups: &[Option<usize>], collapsed: &[bool]) -> Vec<Sidebar
     rows
 }
 
-pub fn active_row(rows: &[SidebarRow], project: usize, group: Option<usize>) -> Option<usize> {
+pub(crate) fn active_row(rows: &[SidebarRow], project: usize, group: Option<usize>) -> Option<usize> {
     let find = |row: SidebarRow| rows.iter().position(|r| *r == row);
     find(SidebarRow::Project(project)).or_else(|| find(SidebarRow::Group(group?)))
 }
 
-pub fn project_rows(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize) -> Rows {
+pub(crate) fn project_rows(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize) -> Rows {
     let heights = rows.iter().map(|r| if matches!(r, SidebarRow::Gap | SidebarRow::Landing) { GAP } else { pitch });
     Rows { list, heights: heights.collect(), button: pitch, scroll }
 }
 
-pub fn entry_row(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, row: SidebarRow) -> Rect {
+pub(crate) fn entry_row(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, row: SidebarRow) -> Rect {
     row_rect(&project_rows(list, pitch, rows, scroll), rows, &row)
 }
 
@@ -69,7 +69,7 @@ pub fn new_project_button(list: Rect, pitch: u16, rows: &[SidebarRow]) -> Rect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SidebarHit {
+pub(crate) enum SidebarHit {
     Select(usize),
     Close(usize),
     Menu(usize),
@@ -79,7 +79,13 @@ pub enum SidebarHit {
     New,
 }
 
-pub fn sidebar_hit(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, pos: Position) -> Option<SidebarHit> {
+pub(crate) fn sidebar_hit(
+    list: Rect,
+    pitch: u16,
+    rows: &[SidebarRow],
+    scroll: usize,
+    pos: Position,
+) -> Option<SidebarHit> {
     if !list.contains(pos) {
         return None;
     }
@@ -100,11 +106,11 @@ pub fn sidebar_hit(list: Rect, pitch: u16, rows: &[SidebarRow], scroll: usize, p
     }
 }
 
-pub struct ProjectEntry {
-    pub name: String,
-    pub workspaces: usize,
-    pub group: Option<usize>,
-    pub status: Option<Status>,
+pub(crate) struct ProjectEntry {
+    pub(crate) name: String,
+    pub(crate) workspaces: usize,
+    pub(crate) group: Option<usize>,
+    pub(crate) status: Option<Status>,
 }
 
 pub(super) fn group_header(group: &GroupEntry, max: usize) -> Span<'static> {

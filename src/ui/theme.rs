@@ -45,7 +45,7 @@ pub(super) fn hover_colour(light: bool) -> Color {
     if light { LIGHT_HOVER } else { DARK_HOVER }
 }
 
-pub fn muted(theme: &HostTheme) -> Color {
+pub(crate) fn muted(theme: &HostTheme) -> Color {
     if theme.muted_is_readable() {
         Color::DarkGray
     } else if theme.is_light() == Some(true) {

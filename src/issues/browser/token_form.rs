@@ -4,7 +4,7 @@ use crate::issues::{Secret, Source, jira, plane};
 const TOKEN_DOTS: usize = 40;
 
 impl Browser {
-    pub fn token_field(&self, source: Source) -> (&'static str, String) {
+    pub(crate) fn token_field(&self, source: Source) -> (&'static str, String) {
         let form = self.forms.get(&source);
         let step = self.form_step(source);
         let typed = form.map_or_else(
@@ -23,7 +23,7 @@ impl Browser {
         }
     }
 
-    pub fn token_form(&self) -> Option<Source> {
+    pub(crate) fn token_form(&self) -> Option<Source> {
         match self.current() {
             Tab::One(source) if source != Source::Github && !self.connections.contains_key(&source) => Some(source),
             _ => None,
@@ -39,7 +39,7 @@ impl Browser {
         })
     }
 
-    pub fn form_step(&self, source: Source) -> Step {
+    pub(crate) fn form_step(&self, source: Source) -> Step {
         match (self.forms.get(&source), source) {
             (Some(form), _) => form.step,
             (None, Source::Jira) => Step::Site,
@@ -48,7 +48,7 @@ impl Browser {
         }
     }
 
-    pub fn token_rejected(&mut self, source: Source, error: String) {
+    pub(crate) fn token_rejected(&mut self, source: Source, error: String) {
         let form = self.form(source);
         form.checking = false;
         form.error = Some(error);

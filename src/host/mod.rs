@@ -1,4 +1,4 @@
 pub mod clipboard;
-pub mod notify;
-pub mod pointer;
-pub mod theme;
+pub(crate) mod notify;
+pub(crate) mod pointer;
+pub(crate) mod theme;

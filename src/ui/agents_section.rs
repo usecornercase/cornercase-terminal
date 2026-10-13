@@ -14,7 +14,7 @@ use super::workspaces::{Details, draw_details};
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
-pub const AGENTS_LABEL: &str = "Agents ›";
+pub(crate) const AGENTS_LABEL: &str = "Agents ›";
 
 const AGENTS_TITLE: &str = "Agents";
 
@@ -24,31 +24,31 @@ const AGENT_LINES: u16 = 2;
 
 const MIN_WORKSPACE_WIDTH: usize = 4;
 
-pub fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
+pub(crate) fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
     Rows { list, heights: vec![pitch.max(AGENT_LINES); agents], button: 0, scroll }
 }
 
-pub fn agent_row(list: Rect, pitch: u16, agents: usize, scroll: usize, i: usize) -> Rect {
+pub(crate) fn agent_row(list: Rect, pitch: u16, agents: usize, scroll: usize, i: usize) -> Rect {
     agent_rows(list, pitch, agents, scroll).item(i)
 }
 
-pub fn agent_hit(list: Rect, pitch: u16, agents: usize, scroll: usize, pos: Position) -> Option<usize> {
+pub(crate) fn agent_hit(list: Rect, pitch: u16, agents: usize, scroll: usize, pos: Position) -> Option<usize> {
     agent_rows(list, pitch, agents, scroll).at(pos)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentEntry {
-    pub status: Option<Status>,
-    pub agent: String,
-    pub project: String,
-    pub workspace: Option<String>,
-    pub details: Details,
-    pub active: bool,
+pub(crate) struct AgentEntry {
+    pub(crate) status: Option<Status>,
+    pub(crate) agent: String,
+    pub(crate) project: String,
+    pub(crate) workspace: Option<String>,
+    pub(crate) details: Details,
+    pub(crate) active: bool,
 }
 
-pub struct AgentsView {
-    pub entries: Vec<AgentEntry>,
-    pub scroll: usize,
+pub(crate) struct AgentsView {
+    pub(crate) entries: Vec<AgentEntry>,
+    pub(crate) scroll: usize,
 }
 
 pub(super) fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas: &Areas) {

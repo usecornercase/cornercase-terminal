@@ -85,7 +85,7 @@ impl App {
         }
     }
 
-    pub fn stats_view(&self, now: SystemTime) -> agents::stats::View {
+    pub(crate) fn stats_view(&self, now: SystemTime) -> agents::stats::View {
         self.agents.stats.view(now)
     }
 }

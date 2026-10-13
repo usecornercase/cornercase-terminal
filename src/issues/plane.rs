@@ -1,4 +1,4 @@
-pub mod html;
+pub(crate) mod html;
 
 use std::collections::HashMap;
 
@@ -9,10 +9,10 @@ use crate::error::{Error, Result};
 use crate::http::{self, Answer, Service, into_json, path_segment, text};
 use crate::time::parse_time;
 
-pub const TOKEN_ENV: &str = "PLANE_API_KEY";
-pub const API_ENV: &str = "CORNERCASE_PLANE_API";
-pub const CLOUD_API: &str = "https://api.plane.so";
-pub const CLOUD_APP: &str = "https://app.plane.so";
+pub(crate) const TOKEN_ENV: &str = "PLANE_API_KEY";
+pub(crate) const API_ENV: &str = "CORNERCASE_PLANE_API";
+pub(crate) const CLOUD_API: &str = "https://api.plane.so";
+pub(crate) const CLOUD_APP: &str = "https://app.plane.so";
 const REJECTED: &str = "Plane rejected the API key";
 const SERVICE: Service = Service { name: "Plane", rejected: REJECTED };
 const PAGE: &str = "100";
@@ -21,15 +21,15 @@ const EXPAND: &str = "state,assignees,labels";
 const OPEN: &str = "backlog,unstarted,started";
 const ORDER: &str = "-updated_at";
 
-pub struct Api {
-    pub base: String,
-    pub app: String,
-    pub slug: String,
-    pub token: String,
-    pub filter: String,
+pub(crate) struct Api {
+    pub(crate) base: String,
+    pub(crate) app: String,
+    pub(crate) slug: String,
+    pub(crate) token: String,
+    pub(crate) filter: String,
 }
 
-pub fn endpoints(url: &str, api: Option<&str>) -> (String, String) {
+pub(crate) fn endpoints(url: &str, api: Option<&str>) -> (String, String) {
     let url = url.trim().trim_end_matches('/');
     if url.is_empty() {
         (api.unwrap_or(CLOUD_API).to_string(), CLOUD_APP.to_string())
@@ -64,13 +64,13 @@ impl Api {
         Ok(rows.cloned().unwrap_or_default())
     }
 
-    pub fn whoami(&self) -> Result<Account> {
+    pub(crate) fn whoami(&self) -> Result<Account> {
         let me = self.me()?;
         self.members()?;
         Ok(Account { handle: display(&me), workspace: self.slug.clone() })
     }
 
-    pub fn people(&self) -> Result<Vec<Person>> {
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
         let mut people: Vec<Person> = self
             .members()?
             .iter()
@@ -82,7 +82,7 @@ impl Api {
         Ok(people)
     }
 
-    pub fn list(&self, query: &Query) -> Result<Listed> {
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         let me = self.me()?;
         let names = names(&self.members()?);
         let account = Account { handle: display(&me), workspace: self.slug.clone() };
@@ -118,7 +118,7 @@ impl Api {
         Ok(Listed { account: Some(account), issues })
     }
 
-    pub fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
         let path = self.workspace_path(&format!("/work-items/{}/", path_segment(key)));
         let node = self.get(&path, &[("expand", EXPAND)], &format!("work item {key} not found"))?;
         let names = names(&self.members().unwrap_or_default());
@@ -241,7 +241,7 @@ fn failure(answer: &Answer) -> Error {
     }
 }
 
-pub fn check_workspace(input: &str) -> std::result::Result<String, &'static str> {
+pub(crate) fn check_workspace(input: &str) -> std::result::Result<String, &'static str> {
     let slug = input.trim().trim_matches('/').to_ascii_lowercase();
     if slug.is_empty() {
         return Err("type your workspace, the part after app.plane.so/, such as acme");
@@ -252,7 +252,7 @@ pub fn check_workspace(input: &str) -> std::result::Result<String, &'static str>
     Ok(slug)
 }
 
-pub fn check_url(input: &str) -> std::result::Result<String, &'static str> {
+pub(crate) fn check_url(input: &str) -> std::result::Result<String, &'static str> {
     let url = input.trim().trim_end_matches('/');
     let host = url.split_once("://").map(|(scheme, rest)| (scheme, rest.split('/').next().unwrap_or_default()));
     match host {
@@ -262,7 +262,7 @@ pub fn check_url(input: &str) -> std::result::Result<String, &'static str> {
     }
 }
 
-pub fn extra_params(filter: &str) -> Vec<(String, String)> {
+pub(crate) fn extra_params(filter: &str) -> Vec<(String, String)> {
     filter
         .trim()
         .trim_start_matches('?')

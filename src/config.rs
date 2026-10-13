@@ -21,9 +21,9 @@ pub enum Sidebar {
 }
 
 impl Sidebar {
-    pub const ALL: [Self; 4] = [Self::SideBySide, Self::ProjectsOnTop, Self::WorkspacesOnTop, Self::Tree];
+    pub(crate) const ALL: [Self; 4] = [Self::SideBySide, Self::ProjectsOnTop, Self::WorkspacesOnTop, Self::Tree];
 
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::SideBySide => "side_by_side",
             Self::ProjectsOnTop => "projects_on_top",
@@ -41,15 +41,15 @@ impl Sidebar {
         }
     }
 
-    pub fn choices() -> Vec<(&'static str, &'static str)> {
+    pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
         Self::ALL.into_iter().map(|s| (s.id(), s.note())).collect()
     }
 
-    pub fn from_setting(setting: &str) -> Self {
+    pub(crate) fn from_setting(setting: &str) -> Self {
         from_setting(&Self::ALL, Self::id, setting)
     }
 
-    pub fn stacked(self) -> bool {
+    pub(crate) fn stacked(self) -> bool {
         self != Self::SideBySide
     }
 }
@@ -59,23 +59,23 @@ fn from_setting<T: Copy + Default>(all: &[T], id: fn(T) -> &'static str, setting
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Tabs {
+pub(crate) enum Tabs {
     #[default]
     Sidebar,
     Top,
 }
 
 impl Tabs {
-    pub const ALL: [Self; 2] = [Self::Sidebar, Self::Top];
+    pub(crate) const ALL: [Self; 2] = [Self::Sidebar, Self::Top];
 
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Sidebar => "sidebar",
             Self::Top => "top",
         }
     }
 
-    pub fn choices() -> Vec<(&'static str, &'static str)> {
+    pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
         let note = |t: Self| match t {
             Self::Sidebar => "under their workspace in the sidebar",
             Self::Top => "in a bar above the pane, only the active workspace's",
@@ -83,56 +83,56 @@ impl Tabs {
         Self::ALL.into_iter().map(|t| (t.id(), note(t))).collect()
     }
 
-    pub fn from_setting(setting: &str) -> Self {
+    pub(crate) fn from_setting(setting: &str) -> Self {
         from_setting(&Self::ALL, Self::id, setting)
     }
 }
 
-pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
-pub const DEFAULT_PORT: u16 = 47681;
-pub const DEFAULT_PROMPT: &str = "{url}";
-pub const DEFAULT_GH: &str = "gh";
-pub const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
-pub const DEFAULT_FETCH_MINUTES: u64 = 5;
+pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
+pub(crate) const DEFAULT_PORT: u16 = 47681;
+pub(crate) const DEFAULT_PROMPT: &str = "{url}";
+pub(crate) const DEFAULT_GH: &str = "gh";
+pub(crate) const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
+pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 #[expect(clippy::struct_excessive_bools, reason = "each switch is its own key in config.json")]
-pub struct Config {
-    pub worktrees_dir: String,
-    pub fetch_minutes: u64,
-    pub issue_tabs: Vec<String>,
-    pub jira_site: String,
-    pub jira_email: String,
-    pub jira_jql: String,
-    pub plane_url: String,
-    pub plane_workspace: String,
-    pub plane_filter: String,
-    pub agent: String,
-    pub agent_args: BTreeMap<String, Vec<String>>,
-    pub agent_modes: BTreeMap<String, BTreeMap<String, Vec<String>>>,
-    pub agent_commands: BTreeMap<String, String>,
-    pub prompt: String,
-    pub submit: bool,
-    pub accept_trust_prompts: bool,
-    pub resume_agents: bool,
-    pub keep_awake: bool,
-    pub trust_prompt_pattern: String,
-    pub gh: String,
-    pub sidebar: String,
-    pub tabs: String,
-    pub agents_section: bool,
-    pub counts: bool,
-    pub todo_dot: bool,
-    pub dim_inactive_panes: bool,
-    pub prefix_key: String,
-    pub model: bool,
-    pub context: bool,
-    pub memory: bool,
-    pub desktop_notifications: String,
-    pub check_updates: bool,
-    pub remote: bool,
-    pub remote_port: u16,
+pub(crate) struct Config {
+    pub(crate) worktrees_dir: String,
+    pub(crate) fetch_minutes: u64,
+    pub(crate) issue_tabs: Vec<String>,
+    pub(crate) jira_site: String,
+    pub(crate) jira_email: String,
+    pub(crate) jira_jql: String,
+    pub(crate) plane_url: String,
+    pub(crate) plane_workspace: String,
+    pub(crate) plane_filter: String,
+    pub(crate) agent: String,
+    pub(crate) agent_args: BTreeMap<String, Vec<String>>,
+    pub(crate) agent_modes: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    pub(crate) agent_commands: BTreeMap<String, String>,
+    pub(crate) prompt: String,
+    pub(crate) submit: bool,
+    pub(crate) accept_trust_prompts: bool,
+    pub(crate) resume_agents: bool,
+    pub(crate) keep_awake: bool,
+    pub(crate) trust_prompt_pattern: String,
+    pub(crate) gh: String,
+    pub(crate) sidebar: String,
+    pub(crate) tabs: String,
+    pub(crate) agents_section: bool,
+    pub(crate) counts: bool,
+    pub(crate) todo_dot: bool,
+    pub(crate) dim_inactive_panes: bool,
+    pub(crate) prefix_key: String,
+    pub(crate) model: bool,
+    pub(crate) context: bool,
+    pub(crate) memory: bool,
+    pub(crate) desktop_notifications: String,
+    pub(crate) check_updates: bool,
+    pub(crate) remote: bool,
+    pub(crate) remote_port: u16,
 }
 
 impl Default for Config {
@@ -177,24 +177,24 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn worktrees_dir(&self, home: Option<&Path>) -> PathBuf {
+    pub(crate) fn worktrees_dir(&self, home: Option<&Path>) -> PathBuf {
         expand_home(&self.worktrees_dir, home)
     }
 
-    pub fn gh(&self, home: Option<&Path>) -> PathBuf {
+    pub(crate) fn gh(&self, home: Option<&Path>) -> PathBuf {
         expand_home(&self.gh, home)
     }
 
-    pub fn prefix(&self) -> Option<Prefix> {
+    pub(crate) fn prefix(&self) -> Option<Prefix> {
         Prefix::parse(&self.prefix_key)
     }
 
-    pub fn fetch_every(&self) -> Option<Duration> {
+    pub(crate) fn fetch_every(&self) -> Option<Duration> {
         (self.fetch_minutes > 0).then(|| Duration::from_secs(self.fetch_minutes.saturating_mul(60)))
     }
 }
 
-pub fn load(path: &Path) -> Config {
+pub(crate) fn load(path: &Path) -> Config {
     let Some(mut value) = std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()) else {
         return Config::default();
     };
@@ -225,11 +225,11 @@ fn migrate(keys: &mut Map<String, Value>) {
     }
 }
 
-pub fn save(path: &Path, config: &Config) -> io::Result<()> {
+pub(crate) fn save(path: &Path, config: &Config) -> io::Result<()> {
     persist::save(path, config)
 }
 
-pub fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {
+pub(crate) fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {
     match (path.strip_prefix('~'), home) {
         (Some(""), Some(home)) => home.to_path_buf(),
         (Some(rest), Some(home)) if rest.starts_with('/') => home.join(rest.trim_start_matches('/')),
@@ -237,7 +237,7 @@ pub fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {
     }
 }
 
-pub fn check_worktrees_dir(input: &str, home: Option<&Path>) -> Result<String, &'static str> {
+pub(crate) fn check_worktrees_dir(input: &str, home: Option<&Path>) -> Result<String, &'static str> {
     let dir = input.trim();
     if dir.is_empty() {
         return Err("the folder is required");
@@ -248,7 +248,7 @@ pub fn check_worktrees_dir(input: &str, home: Option<&Path>) -> Result<String, &
     Ok(dir.to_string())
 }
 
-pub fn check_fetch_minutes(input: &str) -> Result<u64, &'static str> {
+pub(crate) fn check_fetch_minutes(input: &str) -> Result<u64, &'static str> {
     input.trim().parse().map_err(|_| "use a whole number of minutes, 0 turns it off")
 }
 

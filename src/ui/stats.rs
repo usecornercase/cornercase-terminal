@@ -7,7 +7,7 @@ use crate::agents::stats::{self, WEEKS};
 use crate::highlight::markdown;
 
 #[cfg(test)]
-pub fn colour(view: &View, level: u8) -> Color {
+pub(super) fn colour(view: &View, level: u8) -> Color {
     shade(view.line(), view.light, level)
 }
 

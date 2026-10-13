@@ -24,7 +24,7 @@ const SHELL_ICON: &str = "›";
 
 const PROGRAM_ICON: &str = "▸";
 
-pub const ICON_WIDTH: usize = 2;
+pub(crate) const ICON_WIDTH: usize = 2;
 
 const BEHIND_ICON: &str = "↓";
 
@@ -54,7 +54,7 @@ pub struct TabLines {
 }
 
 impl TabLines {
-    pub fn new(lines: Vec<Vec<u16>>, listed: bool) -> Self {
+    pub(crate) fn new(lines: Vec<Vec<u16>>, listed: bool) -> Self {
         let lines = if listed { lines } else { vec![Vec::new(); lines.len()] };
         Self { lines, listed }
     }
@@ -66,7 +66,7 @@ impl From<Vec<Vec<u16>>> for TabLines {
     }
 }
 
-pub fn workspace_rows(tabs: &TabLines) -> Vec<WorkspaceRow> {
+pub(crate) fn workspace_rows(tabs: &TabLines) -> Vec<WorkspaceRow> {
     tabs.lines
         .iter()
         .enumerate()
@@ -93,7 +93,7 @@ fn workspace_rows_layout(list: Rect, pitch: u16, rows: &[WorkspaceRow], tabs: &T
     Rows { list, heights, button: pitch, scroll }
 }
 
-pub fn workspace_layout(list: Rect, pitch: u16, tabs: &TabLines, scroll: usize) -> Rows {
+pub(crate) fn workspace_layout(list: Rect, pitch: u16, tabs: &TabLines, scroll: usize) -> Rows {
     workspace_rows_layout(list, pitch, &workspace_rows(tabs), tabs, scroll)
 }
 
@@ -106,7 +106,7 @@ pub fn workspace_row(list: Rect, pitch: u16, tabs: &TabLines, scroll: usize, row
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceHit {
+pub(crate) enum WorkspaceHit {
     Workspace(usize),
     CloseWorkspace(usize),
     WorkspaceMenu(usize),
@@ -118,7 +118,7 @@ pub enum WorkspaceHit {
 }
 
 impl WorkspaceHit {
-    pub fn workspace(self) -> Option<usize> {
+    pub(crate) fn workspace(self) -> Option<usize> {
         match self {
             Self::Workspace(w)
             | Self::CloseWorkspace(w)
@@ -132,7 +132,13 @@ impl WorkspaceHit {
     }
 }
 
-pub fn workspace_hit(list: Rect, pitch: u16, tabs: &TabLines, scroll: usize, pos: Position) -> Option<WorkspaceHit> {
+pub(crate) fn workspace_hit(
+    list: Rect,
+    pitch: u16,
+    tabs: &TabLines,
+    scroll: usize,
+    pos: Position,
+) -> Option<WorkspaceHit> {
     if !list.contains(pos) {
         return None;
     }
@@ -154,31 +160,31 @@ pub fn workspace_hit(list: Rect, pitch: u16, tabs: &TabLines, scroll: usize, pos
     })
 }
 
-pub struct WorkspaceEntry {
-    pub name: String,
-    pub tabs: Vec<TabEntry>,
-    pub behind: u32,
-    pub removing: bool,
+pub(crate) struct WorkspaceEntry {
+    pub(crate) name: String,
+    pub(crate) tabs: Vec<TabEntry>,
+    pub(crate) behind: u32,
+    pub(crate) removing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TabEntry {
-    pub name: String,
-    pub status: Option<Status>,
-    pub running: bool,
-    pub details: Details,
-    pub others: usize,
+pub(crate) struct TabEntry {
+    pub(crate) name: String,
+    pub(crate) status: Option<Status>,
+    pub(crate) running: bool,
+    pub(crate) details: Details,
+    pub(crate) others: usize,
 }
 
 impl TabEntry {
-    pub fn icon(&self, muted: Color) -> Span<'static> {
+    pub(crate) fn icon(&self, muted: Color) -> Span<'static> {
         match self.status {
             Some(status) => status_icon(muted, status),
             None => Span::styled(if self.running { PROGRAM_ICON } else { SHELL_ICON }, dim(muted)),
         }
     }
 
-    pub fn prefix(&self, muted: Color, bg: Style) -> [Span<'static>; 2] {
+    pub(crate) fn prefix(&self, muted: Color, bg: Style) -> [Span<'static>; 2] {
         let icon = self.icon(muted);
         [Span::styled(icon.content, bg.patch(icon.style)), Span::styled(" ", bg)]
     }
@@ -186,9 +192,9 @@ impl TabEntry {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Details {
-    pub model: Option<String>,
-    pub percent: Option<u16>,
-    pub memory: Option<u64>,
+    pub(crate) model: Option<String>,
+    pub(crate) percent: Option<u16>,
+    pub(crate) memory: Option<u64>,
 }
 
 impl Details {

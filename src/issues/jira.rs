@@ -1,4 +1,4 @@
-pub mod adf;
+pub(crate) mod adf;
 
 use serde_json::Value;
 
@@ -8,8 +8,8 @@ use crate::host::clipboard;
 use crate::http::{self, Answer, Service, path_segment, text};
 use crate::time::parse_time;
 
-pub const TOKEN_ENV: &str = "JIRA_API_TOKEN";
-pub const API_ENV: &str = "CORNERCASE_JIRA_API";
+pub(crate) const TOKEN_ENV: &str = "JIRA_API_TOKEN";
+pub(crate) const API_ENV: &str = "CORNERCASE_JIRA_API";
 const REJECTED: &str = "Jira rejected the token";
 const SERVICE: Service = Service { name: "Jira", rejected: REJECTED };
 const PAGE: usize = 50;
@@ -21,12 +21,12 @@ const OPEN: &str = "statusCategory != Done";
 const ANY: &str = "project IS NOT EMPTY";
 const ORDER: &str = "ORDER BY updated DESC";
 
-pub struct Api {
-    pub base: String,
-    pub site: String,
-    pub email: String,
-    pub token: String,
-    pub jql: String,
+pub(crate) struct Api {
+    pub(crate) base: String,
+    pub(crate) site: String,
+    pub(crate) email: String,
+    pub(crate) token: String,
+    pub(crate) jql: String,
 }
 
 impl Api {
@@ -38,7 +38,7 @@ impl Api {
         http::into_json(answer, missing, failure)
     }
 
-    pub fn whoami(&self) -> Result<Account> {
+    pub(crate) fn whoami(&self) -> Result<Account> {
         let me = self.get("/rest/api/3/myself", &[], &format!("no Jira site at {}", self.site))?;
         let name = text(&me, "/displayName");
         if name.is_empty() && text(&me, "/accountId").is_empty() {
@@ -47,7 +47,7 @@ impl Api {
         Ok(Account { handle: name, workspace: self.site.clone() })
     }
 
-    pub fn people(&self) -> Result<Vec<Person>> {
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
         let users = self.get("/rest/api/3/users/search", &[("maxResults", USERS)], "users not found")?;
         let mut people: Vec<Person> = users
             .as_array()
@@ -65,7 +65,7 @@ impl Api {
         Ok(people)
     }
 
-    pub fn list(&self, query: &Query) -> Result<Listed> {
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         let account = self.whoami()?;
         let jql = jql(query, &self.jql);
         let mut issues = Vec::new();
@@ -87,7 +87,7 @@ impl Api {
         Ok(Listed { account: Some(account), issues })
     }
 
-    pub fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
         let path = format!("/rest/api/3/issue/{}", path_segment(key));
         let node = self.get(&path, &[("fields", VIEW_FIELDS)], &format!("issue {key} not found"))?;
         Ok(self.detail(&node))
@@ -182,7 +182,7 @@ fn failure(answer: &Answer) -> Error {
     }
 }
 
-pub fn check_site(input: &str) -> std::result::Result<String, &'static str> {
+pub(crate) fn check_site(input: &str) -> std::result::Result<String, &'static str> {
     let input = input.trim();
     let without_scheme = input.split_once("://").map_or(input, |(_, rest)| rest);
     let host = without_scheme.split('/').next().unwrap_or_default().trim_end_matches('.').to_ascii_lowercase();
@@ -195,7 +195,7 @@ pub fn check_site(input: &str) -> std::result::Result<String, &'static str> {
     Ok(if host.contains('.') { host } else { format!("{host}.atlassian.net") })
 }
 
-pub fn check_email(input: &str) -> std::result::Result<String, &'static str> {
+pub(crate) fn check_email(input: &str) -> std::result::Result<String, &'static str> {
     let email = input.trim();
     match email.split_once('@') {
         Some((user, domain)) if !user.is_empty() && !domain.is_empty() && !email.contains(char::is_whitespace) => {
@@ -205,7 +205,7 @@ pub fn check_email(input: &str) -> std::result::Result<String, &'static str> {
     }
 }
 
-pub fn jql(query: &Query, extra: &str) -> String {
+pub(crate) fn jql(query: &Query, extra: &str) -> String {
     let mut parts = Vec::new();
     let extra = without_order(extra);
     if !extra.is_empty() {

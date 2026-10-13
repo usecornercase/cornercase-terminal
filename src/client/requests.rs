@@ -18,7 +18,7 @@ pub(crate) fn connect() -> Result<UnixStream> {
     Ok(stream)
 }
 
-pub fn ask(name: &'static str, command: control::Command) -> Result<Value> {
+pub(crate) fn ask(name: &'static str, command: control::Command) -> Result<Value> {
     ask_on(connect()?, name, command)
 }
 
@@ -54,7 +54,7 @@ pub(crate) fn answered(text: &str) -> Result<Value> {
     }
 }
 
-pub fn follow(
+pub(crate) fn follow(
     name: &'static str,
     command: control::Command,
     mut each: impl FnMut(Value) -> Result<bool>,
@@ -76,11 +76,11 @@ pub fn follow(
     }
 }
 
-pub fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
+pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(|e| Error::Control(format!("cannot read the server's answer: {e}")))
 }
 
-pub fn running_now() -> Option<Vec<restart::Running>> {
+pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
     let stream = connect().ok()?;
     stream.set_read_timeout(Some(STATUS_TIMEOUT)).ok()?;
     let value = ask_on(stream, "status", control::Command::Status(control::Status {})).ok()?;

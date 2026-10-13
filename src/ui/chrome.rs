@@ -34,13 +34,13 @@ const TODO_ICON: &str = "☐";
 
 const FILES_ICON: &str = "▤";
 
-pub const TODO_LABEL: &str = "TODO";
+pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
 
-pub struct ChangesButton {
-    pub label: String,
-    pub open: bool,
+pub(crate) struct ChangesButton {
+    pub(crate) label: String,
+    pub(crate) open: bool,
 }
 
 pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {

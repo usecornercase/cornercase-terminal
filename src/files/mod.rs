@@ -1,6 +1,6 @@
-pub mod disk;
-pub mod link;
-pub mod search;
+pub(crate) mod disk;
+pub(crate) mod link;
+pub(crate) mod search;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -11,29 +11,29 @@ use std::time::{Duration, Instant};
 use self::disk::{Content, Entry, Stamp};
 use crate::changes::diff::{Diff, File as Changed, Kind, Status};
 
-pub const LIST_EVERY: Duration = Duration::from_secs(2);
-pub const CHECK_EVERY: Duration = Duration::from_secs(1);
-pub const INDEX_EVERY: Duration = Duration::from_secs(10);
+pub(crate) const LIST_EVERY: Duration = Duration::from_secs(2);
+pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(1);
+pub(crate) const INDEX_EVERY: Duration = Duration::from_secs(10);
 const GIVE_UP_AFTER: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Mode {
+pub(crate) enum Mode {
     #[default]
     Text,
     Name,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Query {
-    pub text: String,
-    pub focused: bool,
-    pub selected: usize,
-    pub scroll: usize,
-    pub enter: bool,
+pub(crate) struct Query {
+    pub(crate) text: String,
+    pub(crate) focused: bool,
+    pub(crate) selected: usize,
+    pub(crate) scroll: usize,
+    pub(crate) enter: bool,
 }
 
 impl Query {
-    pub fn wanted(&self) -> Option<&str> {
+    pub(crate) fn wanted(&self) -> Option<&str> {
         Some(self.text.trim()).filter(|q| !q.is_empty())
     }
 }
@@ -52,32 +52,32 @@ impl<T> Answer<T> {
 }
 
 #[derive(Debug)]
-pub struct Search {
-    pub query: String,
-    pub index: Arc<Vec<String>>,
+pub(crate) struct Search {
+    pub(crate) query: String,
+    pub(crate) index: Arc<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Row {
-    pub path: String,
-    pub name: String,
-    pub depth: u16,
-    pub dir: bool,
-    pub open: bool,
+pub(crate) struct Row {
+    pub(crate) path: String,
+    pub(crate) name: String,
+    pub(crate) depth: u16,
+    pub(crate) dir: bool,
+    pub(crate) open: bool,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Viewer {
-    pub path: String,
-    pub scroll: usize,
-    pub content: Option<Arc<Content>>,
-    pub selection: Option<(u32, u32)>,
-    pub unfolded: HashSet<u32>,
-    pub find: Option<String>,
+pub(crate) struct Viewer {
+    pub(crate) path: String,
+    pub(crate) scroll: usize,
+    pub(crate) content: Option<Arc<Content>>,
+    pub(crate) selection: Option<(u32, u32)>,
+    pub(crate) unfolded: HashSet<u32>,
+    pub(crate) find: Option<String>,
 }
 
 impl Viewer {
-    pub fn selected(&self) -> Option<(u32, u32)> {
+    pub(crate) fn selected(&self) -> Option<(u32, u32)> {
         self.selection.map(|(a, b)| (a.min(b), a.max(b)))
     }
 }
@@ -93,7 +93,7 @@ struct Place {
 }
 
 #[derive(Debug, Default)]
-pub struct Panel {
+pub(crate) struct Panel {
     places: HashMap<u64, Place>,
     listings: HashMap<(u64, String), Arc<Vec<Entry>>>,
     generation: u64,
@@ -110,15 +110,15 @@ pub struct Panel {
     grepping: Option<(u64, String, Arc<AtomicBool>, Instant)>,
 }
 
-pub struct List {
-    pub root: PathBuf,
-    pub folders: Vec<String>,
+pub(crate) struct List {
+    pub(crate) root: PathBuf,
+    pub(crate) folders: Vec<String>,
 }
 
-pub struct Load {
-    pub path: String,
-    pub file: PathBuf,
-    pub previous: Option<Stamp>,
+pub(crate) struct Load {
+    pub(crate) path: String,
+    pub(crate) file: PathBuf,
+    pub(crate) previous: Option<Stamp>,
 }
 
 fn answer<T>(
@@ -141,31 +141,31 @@ fn child(folder: &str, name: &str) -> String {
 }
 
 impl Panel {
-    pub fn scroll(&self, workspace: u64) -> usize {
+    pub(crate) fn scroll(&self, workspace: u64) -> usize {
         self.places.get(&workspace).map_or(0, |p| p.scroll)
     }
 
-    pub fn set_scroll(&mut self, workspace: u64, scroll: usize) {
+    pub(crate) fn set_scroll(&mut self, workspace: u64, scroll: usize) {
         self.places.entry(workspace).or_default().scroll = scroll;
     }
 
-    pub fn last(&self, workspace: u64) -> Option<&str> {
+    pub(crate) fn last(&self, workspace: u64) -> Option<&str> {
         self.places.get(&workspace)?.last.as_deref()
     }
 
-    pub fn viewer(&self, workspace: u64) -> Option<&Viewer> {
+    pub(crate) fn viewer(&self, workspace: u64) -> Option<&Viewer> {
         self.places.get(&workspace)?.viewer.as_ref()
     }
 
-    pub fn viewer_mut(&mut self, workspace: u64) -> Option<&mut Viewer> {
+    pub(crate) fn viewer_mut(&mut self, workspace: u64) -> Option<&mut Viewer> {
         self.places.get_mut(&workspace)?.viewer.as_mut()
     }
 
-    pub fn listed_root(&self, workspace: u64) -> bool {
+    pub(crate) fn listed_root(&self, workspace: u64) -> bool {
         self.listings.contains_key(&(workspace, String::new()))
     }
 
-    pub fn rows(&self, workspace: u64) -> Vec<Row> {
+    pub(crate) fn rows(&self, workspace: u64) -> Vec<Row> {
         let mut rows = Vec::new();
         let expanded = self.places.get(&workspace).map(|p| &p.expanded);
         self.walk(workspace, "", 0, expanded, &mut rows);
@@ -184,17 +184,17 @@ impl Panel {
         }
     }
 
-    pub fn mode(&self, workspace: u64) -> Mode {
+    pub(crate) fn mode(&self, workspace: u64) -> Mode {
         self.places.get(&workspace).map_or_else(Mode::default, |p| p.mode)
     }
 
-    pub fn toggle_mode(&mut self, workspace: u64) {
+    pub(crate) fn toggle_mode(&mut self, workspace: u64) {
         let place = self.places.entry(workspace).or_default();
         place.mode = if place.mode == Mode::Name { Mode::Text } else { Mode::Name };
         place.query = Query { text: std::mem::take(&mut place.query.text), focused: true, ..Query::default() };
     }
 
-    pub fn search(&mut self, workspace: u64, mode: Mode) {
+    pub(crate) fn search(&mut self, workspace: u64, mode: Mode) {
         self.close_file(workspace);
         let place = self.places.entry(workspace).or_default();
         if place.mode != mode {
@@ -204,38 +204,38 @@ impl Panel {
         place.query.focused = true;
     }
 
-    pub fn query(&self, workspace: u64) -> Option<&Query> {
+    pub(crate) fn query(&self, workspace: u64) -> Option<&Query> {
         self.places.get(&workspace).map(|p| &p.query)
     }
 
-    pub fn query_mut(&mut self, workspace: u64) -> &mut Query {
+    pub(crate) fn query_mut(&mut self, workspace: u64) -> &mut Query {
         &mut self.places.entry(workspace).or_default().query
     }
 
-    pub fn searched(&self, workspace: u64) -> Option<&str> {
+    pub(crate) fn searched(&self, workspace: u64) -> Option<&str> {
         self.query(workspace)?.wanted()
     }
 
-    pub fn typing(&self, workspace: u64) -> bool {
+    pub(crate) fn typing(&self, workspace: u64) -> bool {
         self.viewer(workspace).is_none() && self.query(workspace).is_some_and(|q| q.focused)
     }
 
-    pub fn close(&mut self) {
+    pub(crate) fn close(&mut self) {
         self.unfocus();
     }
 
-    pub fn unfocus(&mut self) {
+    pub(crate) fn unfocus(&mut self) {
         for place in self.places.values_mut() {
             place.query.focused = false;
             place.query.enter = false;
         }
     }
 
-    pub fn indexed_files(&self, workspace: u64) -> Option<usize> {
+    pub(crate) fn indexed_files(&self, workspace: u64) -> Option<usize> {
         self.index.get(&workspace).map(|paths| paths.len())
     }
 
-    pub fn searching(&self, workspace: u64) -> bool {
+    pub(crate) fn searching(&self, workspace: u64) -> bool {
         let running = match self.mode(workspace) {
             Mode::Name => self.naming.is_some(),
             Mode::Text => self.grepping.is_some(),
@@ -243,22 +243,22 @@ impl Panel {
         running || !self.index.contains_key(&workspace)
     }
 
-    pub fn answered(&self, workspace: u64) -> Option<&str> {
+    pub(crate) fn answered(&self, workspace: u64) -> Option<&str> {
         match self.mode(workspace) {
             Mode::Name => self.names.get(&workspace).map(|a| a.query.as_str()),
             Mode::Text => self.texts.get(&workspace).map(|a| a.query.as_str()),
         }
     }
 
-    pub fn found_names(&self, workspace: u64) -> Option<(&str, &[search::Name])> {
+    pub(crate) fn found_names(&self, workspace: u64) -> Option<(&str, &[search::Name])> {
         self.names.get(&workspace).map(|a| (a.query.as_str(), a.found.as_slice()))
     }
 
-    pub fn found_text(&self, workspace: u64) -> Option<(&str, &search::Text)> {
+    pub(crate) fn found_text(&self, workspace: u64) -> Option<(&str, &search::Text)> {
         self.texts.get(&workspace).map(|a| (a.query.as_str(), a.found.as_ref()))
     }
 
-    pub fn index_request(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, PathBuf)> {
+    pub(crate) fn index_request(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, PathBuf)> {
         let wanted = self.query(workspace).is_some_and(|q| q.focused || q.wanted().is_some());
         if !wanted || self.indexing.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER) {
             return None;
@@ -273,7 +273,7 @@ impl Panel {
         Some((self.generation, root.to_path_buf()))
     }
 
-    pub fn indexed(&mut self, workspace: u64, generation: u64, paths: Vec<String>) {
+    pub(crate) fn indexed(&mut self, workspace: u64, generation: u64, paths: Vec<String>) {
         if self.indexing.is_some_and(|(g, _)| g == generation) {
             self.indexing = None;
         }
@@ -282,7 +282,7 @@ impl Panel {
         }
     }
 
-    pub fn names_request(&mut self, workspace: u64, now: Instant) -> Option<(u64, Search)> {
+    pub(crate) fn names_request(&mut self, workspace: u64, now: Instant) -> Option<(u64, Search)> {
         if self.mode(workspace) != Mode::Name
             || self.naming.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER)
         {
@@ -298,7 +298,7 @@ impl Panel {
         Some((self.generation, Search { query, index }))
     }
 
-    pub fn named(&mut self, workspace: u64, generation: u64, search: Search, found: Vec<search::Name>) {
+    pub(crate) fn named(&mut self, workspace: u64, generation: u64, search: Search, found: Vec<search::Name>) {
         if self.naming.is_none_or(|(g, _)| g != generation) {
             return;
         }
@@ -306,7 +306,7 @@ impl Panel {
         answer(&mut self.places, &mut self.names, workspace, search, found);
     }
 
-    pub fn grep_request(&mut self, workspace: u64, now: Instant) -> Option<(u64, Search, Arc<AtomicBool>)> {
+    pub(crate) fn grep_request(&mut self, workspace: u64, now: Instant) -> Option<(u64, Search, Arc<AtomicBool>)> {
         if self.mode(workspace) != Mode::Text {
             return None;
         }
@@ -327,7 +327,7 @@ impl Panel {
         Some((self.generation, Search { query, index }, cancel))
     }
 
-    pub fn grepped(&mut self, workspace: u64, generation: u64, search: Search, found: search::Text) {
+    pub(crate) fn grepped(&mut self, workspace: u64, generation: u64, search: Search, found: search::Text) {
         if self.grepping.as_ref().is_none_or(|(g, ..)| *g != generation) {
             return;
         }
@@ -335,7 +335,7 @@ impl Panel {
         answer(&mut self.places, &mut self.texts, workspace, search, found);
     }
 
-    pub fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<String>) {
+    pub(crate) fn open_at(&mut self, workspace: u64, path: &str, lines: (u32, u32), find: Option<String>) {
         self.open_file(workspace, path);
         if let Some(viewer) = self.viewer_mut(workspace) {
             viewer.selection = Some(lines);
@@ -344,28 +344,28 @@ impl Panel {
         }
     }
 
-    pub fn toggle(&mut self, workspace: u64, folder: &str) {
+    pub(crate) fn toggle(&mut self, workspace: u64, folder: &str) {
         let expanded = &mut self.places.entry(workspace).or_default().expanded;
         if !expanded.remove(folder) {
             expanded.insert(folder.to_string());
         }
     }
 
-    pub fn open_file(&mut self, workspace: u64, path: &str) {
+    pub(crate) fn open_file(&mut self, workspace: u64, path: &str) {
         let place = self.places.entry(workspace).or_default();
         place.last = Some(path.to_string());
         place.viewer = Some(Viewer { path: path.to_string(), ..Viewer::default() });
         self.reading = None;
     }
 
-    pub fn close_file(&mut self, workspace: u64) {
+    pub(crate) fn close_file(&mut self, workspace: u64) {
         if let Some(place) = self.places.get_mut(&workspace) {
             place.viewer = None;
         }
         self.reading = None;
     }
 
-    pub fn list(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, List)> {
+    pub(crate) fn list(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, List)> {
         if self.listing.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER) {
             return None;
         }
@@ -383,7 +383,7 @@ impl Panel {
         Some((self.generation, List { root: root.to_path_buf(), folders }))
     }
 
-    pub fn listed(&mut self, workspace: u64, generation: u64, folders: Vec<(String, Option<Vec<Entry>>)>) {
+    pub(crate) fn listed(&mut self, workspace: u64, generation: u64, folders: Vec<(String, Option<Vec<Entry>>)>) {
         if self.listing.is_some_and(|(g, _)| g == generation) {
             self.listing = None;
         }
@@ -403,7 +403,7 @@ impl Panel {
         }
     }
 
-    pub fn load(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, Load)> {
+    pub(crate) fn load(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, Load)> {
         let viewer = self.places.get(&workspace)?.viewer.as_ref()?;
         if self.reading.is_some_and(|(_, at)| now.duration_since(at) < GIVE_UP_AFTER) {
             return None;
@@ -422,7 +422,7 @@ impl Panel {
         Some((self.generation, load))
     }
 
-    pub fn read(&mut self, workspace: u64, generation: u64, path: &str, content: Option<Content>, done: bool) {
+    pub(crate) fn read(&mut self, workspace: u64, generation: u64, path: &str, content: Option<Content>, done: bool) {
         if self.reading.is_none_or(|(g, _)| g != generation) {
             return;
         }
@@ -435,7 +435,7 @@ impl Panel {
         }
     }
 
-    pub fn forget(&mut self, alive: &HashSet<u64>) {
+    pub(crate) fn forget(&mut self, alive: &HashSet<u64>) {
         self.places.retain(|id, _| alive.contains(id));
         self.listings.retain(|(id, _), _| alive.contains(id));
         self.listed.retain(|id, _| alive.contains(id));
@@ -446,7 +446,7 @@ impl Panel {
     }
 }
 
-pub fn statuses(diff: &Diff) -> HashMap<String, Status> {
+pub(crate) fn statuses(diff: &Diff) -> HashMap<String, Status> {
     let mut marks = HashMap::new();
     for file in &diff.files {
         marks.insert(file.path.clone(), file.status);
@@ -464,7 +464,7 @@ pub fn statuses(diff: &Diff) -> HashMap<String, Status> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mark {
+pub(crate) enum Mark {
     Added,
     Modified,
     Deleted,
@@ -472,9 +472,9 @@ pub enum Mark {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Gutter {
+pub(crate) struct Gutter {
     marks: Vec<Option<(Mark, u32)>>,
-    pub removed: BTreeMap<u32, Vec<String>>,
+    pub(crate) removed: BTreeMap<u32, Vec<String>>,
 }
 
 impl Gutter {
@@ -482,11 +482,11 @@ impl Gutter {
         usize::try_from(line).unwrap_or(usize::MAX).wrapping_sub(1)
     }
 
-    pub fn mark(&self, line: u32) -> Option<Mark> {
+    pub(crate) fn mark(&self, line: u32) -> Option<Mark> {
         self.marks.get(Self::index(line)).copied().flatten().map(|(mark, _)| mark)
     }
 
-    pub fn block(&self, line: u32) -> Option<u32> {
+    pub(crate) fn block(&self, line: u32) -> Option<u32> {
         let (_, key) = self.marks.get(Self::index(line)).copied().flatten()?;
         self.removed.contains_key(&key).then_some(key)
     }
@@ -498,7 +498,7 @@ impl Gutter {
     }
 }
 
-pub fn gutter(file: &Changed, lines: usize) -> Gutter {
+pub(crate) fn gutter(file: &Changed, lines: usize) -> Gutter {
     let mut gutter = Gutter { marks: vec![None; lines], removed: BTreeMap::new() };
     if matches!(file.status, Status::Added | Status::Untracked) {
         gutter.marks.iter_mut().zip(1..).for_each(|(m, n)| *m = Some((Mark::Added, n)));
@@ -540,18 +540,18 @@ pub fn gutter(file: &Changed, lines: usize) -> Gutter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Line {
+pub(crate) enum Line {
     Code(u32),
     Removed(u32, usize),
 }
 
-pub struct Lines<'a> {
+pub(crate) struct Lines<'a> {
     count: usize,
     blocks: Vec<(u32, &'a [String])>,
 }
 
 impl<'a> Lines<'a> {
-    pub fn new(count: usize, gutter: Option<&'a Gutter>, unfolded: &HashSet<u32>) -> Self {
+    pub(crate) fn new(count: usize, gutter: Option<&'a Gutter>, unfolded: &HashSet<u32>) -> Self {
         let blocks = gutter
             .map(|g| g.removed.iter().filter(|(key, _)| unfolded.contains(key)).map(|(k, v)| (*k, v.as_slice())))
             .into_iter()
@@ -560,15 +560,15 @@ impl<'a> Lines<'a> {
         Self { count, blocks }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.count + self.blocks.iter().map(|(_, lines)| lines.len()).sum::<usize>()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn at(&self, row: usize) -> Option<Line> {
+    pub(crate) fn at(&self, row: usize) -> Option<Line> {
         let mut extra = 0;
         for (key, lines) in &self.blocks {
             let start = usize::try_from(*key).unwrap_or(usize::MAX).saturating_sub(1) + extra;
@@ -584,11 +584,11 @@ impl<'a> Lines<'a> {
         (line < self.count).then(|| Line::Code(u32::try_from(line + 1).unwrap_or(u32::MAX)))
     }
 
-    pub fn removed(&self, key: u32, k: usize) -> Option<&str> {
+    pub(crate) fn removed(&self, key: u32, k: usize) -> Option<&str> {
         self.blocks.iter().find(|(b, _)| *b == key).and_then(|(_, lines)| lines.get(k)).map(String::as_str)
     }
 
-    pub fn row_of(&self, line: u32) -> usize {
+    pub(crate) fn row_of(&self, line: u32) -> usize {
         let before: usize = self.blocks.iter().filter(|(key, _)| *key <= line).map(|(_, l)| l.len()).sum();
         usize::try_from(line).unwrap_or(usize::MAX).saturating_sub(1) + before
     }

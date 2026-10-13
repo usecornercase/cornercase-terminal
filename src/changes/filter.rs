@@ -1,9 +1,9 @@
 use super::diff::{Diff, File};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Filter {
+pub(crate) struct Filter {
     query: String,
-    pub focused: bool,
+    pub(crate) focused: bool,
 }
 
 impl Default for Filter {
@@ -13,15 +13,15 @@ impl Default for Filter {
 }
 
 impl Filter {
-    pub fn query(&self) -> &str {
+    pub(crate) fn query(&self) -> &str {
         &self.query
     }
 
-    pub fn push(&mut self, c: char) {
+    pub(crate) fn push(&mut self, c: char) {
         self.query.push(c);
     }
 
-    pub fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         self.query.pop();
     }
 }
@@ -50,13 +50,13 @@ impl Pattern {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Query {
+pub(crate) struct Query {
     include: Vec<Pattern>,
     exclude: Vec<Pattern>,
 }
 
 impl Query {
-    pub fn parse(raw: &str) -> Self {
+    pub(crate) fn parse(raw: &str) -> Self {
         let mut query = Self::default();
         for word in raw.split_whitespace() {
             match word.strip_prefix('!') {
@@ -67,14 +67,14 @@ impl Query {
         query
     }
 
-    pub fn keeps(&self, file: &File) -> bool {
+    pub(crate) fn keeps(&self, file: &File) -> bool {
         let paths = [Some(file.path.as_str()), file.old_path.as_deref()];
         let matches = |pattern: &Pattern| paths.iter().flatten().any(|path| pattern.matches(path));
         (self.include.is_empty() || self.include.iter().any(matches)) && !self.exclude.iter().any(matches)
     }
 }
 
-pub fn kept(diff: &Diff, raw: &str) -> Vec<bool> {
+pub(crate) fn kept(diff: &Diff, raw: &str) -> Vec<bool> {
     let query = Query::parse(raw);
     diff.files.iter().map(|f| query.keeps(f)).collect()
 }

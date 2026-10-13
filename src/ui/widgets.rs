@@ -11,7 +11,7 @@ pub(super) fn button_width(label: &str) -> u16 {
     u16::try_from(label.chars().count()).unwrap_or(u16::MAX).saturating_add(2)
 }
 
-pub fn update_button(settings: Rect, label: &str) -> Rect {
+pub(crate) fn update_button(settings: Rect, label: &str) -> Rect {
     let width = button_width(label).min(settings.width);
     Rect { x: settings.right() - width, width, ..settings }
 }

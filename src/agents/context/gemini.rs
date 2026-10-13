@@ -26,17 +26,17 @@ struct Reply {
 
 #[derive(Debug)]
 pub(super) struct Session {
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     id: String,
     tail: Tail,
     replies: Vec<Reply>,
     footer: Option<String>,
     picked: Option<(String, SystemTime)>,
-    pub context: Option<Context>,
-    pub prompted: Option<SystemTime>,
+    pub(crate) context: Option<Context>,
+    pub(crate) prompted: Option<SystemTime>,
     used: bool,
     model: Option<String>,
-    pub counted: Vec<Record>,
+    pub(crate) counted: Vec<Record>,
 }
 
 impl Session {
@@ -56,7 +56,7 @@ impl Session {
         }
     }
 
-    pub fn id(&self) -> Option<&str> {
+    pub(super) fn id(&self) -> Option<&str> {
         self.used.then_some(&self.id)
     }
 

@@ -7,14 +7,14 @@ const MIN_KITTY: (u32, u32, u32) = (0, 31, 0);
 const MIN_FOOT: (u32, u32, u32) = (1, 12, 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Terminal {
+pub(crate) enum Terminal {
     Ghostty,
     Kitty,
     Foot,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Shape {
+pub(crate) enum Shape {
     #[default]
     Default,
     Columns,
@@ -22,7 +22,7 @@ pub enum Shape {
 }
 
 impl Terminal {
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Ghostty => "ghostty",
             Self::Kitty => "kitty",
@@ -30,7 +30,7 @@ impl Terminal {
         }
     }
 
-    pub fn encode(self, shape: Shape) -> Vec<u8> {
+    pub(crate) fn encode(self, shape: Shape) -> Vec<u8> {
         let name = match (shape, self) {
             (Shape::Columns, _) => "ew-resize",
             (Shape::Rows, _) => "ns-resize",
@@ -40,12 +40,12 @@ impl Terminal {
         format!("\x1b]22;{name}\x1b\\").into_bytes()
     }
 
-    pub fn reset(self) -> Vec<u8> {
+    pub(crate) fn reset(self) -> Vec<u8> {
         self.encode(Shape::Default)
     }
 }
 
-pub fn detect(version: Option<&str>, var: impl Fn(&str) -> Option<String>) -> Option<Terminal> {
+pub(crate) fn detect(version: Option<&str>, var: impl Fn(&str) -> Option<String>) -> Option<Terminal> {
     if in_multiplexer(var) {
         return None;
     }

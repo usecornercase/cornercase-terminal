@@ -3,25 +3,25 @@ use rstest::rstest;
 
 use super::*;
 
-pub const RED: Rgba<u8> = Rgba([255, 0, 0, 255]);
-pub const CLEAR: Rgba<u8> = Rgba([0, 0, 0, 0]);
-pub const SIXEL: Protocol = Protocol::Sixel { registers: 256, max: None };
+pub(crate) const RED: Rgba<u8> = Rgba([255, 0, 0, 255]);
+pub(crate) const CLEAR: Rgba<u8> = Rgba([0, 0, 0, 0]);
+pub(crate) const SIXEL: Protocol = Protocol::Sixel { registers: 256, max: None };
 
-pub fn picture(rgba: RgbaImage, format: &'static str) -> Picture {
+pub(crate) fn picture(rgba: RgbaImage, format: &'static str) -> Picture {
     let (width, height) = rgba.dimensions();
     let opaque = rgba.pixels().all(|pixel| pixel[3] == u8::MAX);
     Picture { id: 1, format, width, height, bytes: 0, rgba, opaque }
 }
 
-pub fn cell(width: u16, height: u16) -> CellSize {
+pub(crate) fn cell(width: u16, height: u16) -> CellSize {
     CellSize { width, height }
 }
 
-pub fn key(protocol: Protocol, fit: Fit, background: Option<(u8, u8, u8)>) -> Key {
+pub(crate) fn key(protocol: Protocol, fit: Fit, background: Option<(u8, u8, u8)>) -> Key {
     Key { picture: 1, protocol, tmux: Tmux::None, fit, background, kitty_id: kitty::id(42, 0xf0) }
 }
 
-pub fn noise(width: u32, height: u32) -> RgbaImage {
+pub(crate) fn noise(width: u32, height: u32) -> RgbaImage {
     let mut seed = 0x2545_f491_u32;
     RgbaImage::from_fn(width, height, |_, _| {
         seed ^= seed << 13;
@@ -32,7 +32,7 @@ pub fn noise(width: u32, height: u32) -> RgbaImage {
     })
 }
 
-pub fn photo(width: u32, height: u32) -> RgbaImage {
+pub(crate) fn photo(width: u32, height: u32) -> RgbaImage {
     let grain = noise(width, height);
     RgbaImage::from_fn(width, height, |x, y| {
         let shade = |at: u32, of: u32, grain: u8| u8::try_from(at * 200 / of + u32::from(grain % 24)).unwrap_or(255);
@@ -41,7 +41,7 @@ pub fn photo(width: u32, height: u32) -> RgbaImage {
     })
 }
 
-pub fn image_of(bytes: &[u8]) -> RgbaImage {
+pub(crate) fn image_of(bytes: &[u8]) -> RgbaImage {
     image::load_from_memory(bytes).expect("a picture the terminal can read").into_rgba8()
 }
 

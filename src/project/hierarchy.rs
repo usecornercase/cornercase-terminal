@@ -3,7 +3,7 @@ use std::path::Path;
 use super::{Group, Project, Tab, Workspace};
 use crate::term::Term;
 
-pub trait Hierarchy {
+pub(crate) trait Hierarchy {
     fn project_index(&self, id: u64) -> Option<usize>;
     fn workspace_index(&self, id: u64) -> Option<(usize, usize)>;
     fn workspace_in(&self, project: u64, workspace: u64) -> Option<(usize, usize)>;
@@ -102,11 +102,11 @@ fn find_tab(projects: &[Project], found: impl Fn(&Project, &Workspace, &Tab) -> 
     })
 }
 
-pub fn group_indices(projects: &[Project], groups: &[Group]) -> Vec<Option<usize>> {
+pub(crate) fn group_indices(projects: &[Project], groups: &[Group]) -> Vec<Option<usize>> {
     projects.iter().map(|p| p.group.and_then(|id| groups.iter().position(|g| g.id == id))).collect()
 }
 
-pub fn sidebar_order(projects: &[Project], groups: &[Group]) -> Vec<usize> {
+pub(crate) fn sidebar_order(projects: &[Project], groups: &[Group]) -> Vec<usize> {
     let indices = group_indices(projects, groups);
     let in_group = |group| indices.iter().enumerate().filter_map(move |(p, g)| (*g == group).then_some(p));
     let mut order: Vec<_> = in_group(None).collect();

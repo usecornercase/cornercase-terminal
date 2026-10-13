@@ -21,7 +21,7 @@ pub fn menu_item(menu: Rect, i: usize) -> Rect {
     Rect::new(menu.x + 1, y, menu.width.saturating_sub(2), 1).intersection(menu)
 }
 
-pub fn menu_hit(menu: Rect, items: usize, pos: Position) -> Option<usize> {
+pub(crate) fn menu_hit(menu: Rect, items: usize, pos: Position) -> Option<usize> {
     (0..items).find(|&i| menu_item(menu, i).contains(pos))
 }
 

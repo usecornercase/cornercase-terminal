@@ -1,10 +1,10 @@
 use std::fmt::{self, Display};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub struct Stamp(pub SystemTime);
+pub(crate) struct Stamp(pub SystemTime);
 
 impl Stamp {
-    pub fn parse(text: &str) -> Option<SystemTime> {
+    pub(crate) fn parse(text: &str) -> Option<SystemTime> {
         let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
         let [year, month, day] = numbers(date, '-')?;
         let (clock, fraction) = time.split_once('.').unwrap_or((time, ""));
@@ -58,7 +58,7 @@ fn civil(days: u64) -> (u64, u64, u64) {
     (year, month, day)
 }
 
-pub fn age(secs: i64) -> String {
+pub(crate) fn age(secs: i64) -> String {
     let minutes = secs.max(0) / 60;
     let hours = minutes / 60;
     let days = hours / 24;
@@ -75,7 +75,7 @@ pub fn age(secs: i64) -> String {
     }
 }
 
-pub fn parse_time(text: &str) -> Option<i64> {
+pub(crate) fn parse_time(text: &str) -> Option<i64> {
     let field = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
     let (year, month, day) = (field(0, 4)?, field(5, 7)?, field(8, 10)?);
     let (hour, minute, second) = (field(11, 13)?, field(14, 16)?, field(17, 19)?);
@@ -104,11 +104,11 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
-pub fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
-pub fn date(millis: i64) -> String {
+pub(crate) fn date(millis: i64) -> String {
     let days = millis.div_euclid(86_400_000) + 719_468;
     let era = days.div_euclid(146_097);
     let day_of_era = days - era * 146_097;

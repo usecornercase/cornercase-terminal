@@ -10,18 +10,18 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const DOWNLOAD_LIMIT: u64 = 256 * 1024 * 1024;
 
-pub struct Service {
-    pub name: &'static str,
-    pub rejected: &'static str,
+pub(crate) struct Service {
+    pub(crate) name: &'static str,
+    pub(crate) rejected: &'static str,
 }
 
-pub struct Answer {
-    pub status: u16,
-    pub json: Value,
+pub(crate) struct Answer {
+    pub(crate) status: u16,
+    pub(crate) json: Value,
 }
 
 impl Answer {
-    pub fn ok(&self) -> bool {
+    pub(crate) fn ok(&self) -> bool {
         (200..300).contains(&self.status)
     }
 }
@@ -30,7 +30,7 @@ fn agent(timeout: Duration) -> Agent {
     Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(false).build().into()
 }
 
-pub fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
+pub(crate) fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
     let mut request = agent(TIMEOUT).get(url).header("Accept", "application/json");
     for (key, value) in headers {
         request = request.header(*key, *value);
@@ -38,7 +38,7 @@ pub fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&st
     finish(service, request.query_pairs(query.iter().copied()).call())
 }
 
-pub fn post(service: &Service, url: &str, headers: &[(&str, &str)], body: &Value) -> Result<Answer> {
+pub(crate) fn post(service: &Service, url: &str, headers: &[(&str, &str)], body: &Value) -> Result<Answer> {
     let mut request = agent(TIMEOUT).post(url).header("Accept", "application/json");
     for (key, value) in headers {
         request = request.header(*key, *value);
@@ -46,7 +46,7 @@ pub fn post(service: &Service, url: &str, headers: &[(&str, &str)], body: &Value
     finish(service, request.content_type("application/json").send(body.to_string()))
 }
 
-pub fn download(service: &Service, url: &str) -> Result<Vec<u8>> {
+pub(crate) fn download(service: &Service, url: &str) -> Result<Vec<u8>> {
     let mut response = reached(service, agent(DOWNLOAD_TIMEOUT).get(url).call(), DOWNLOAD_TIMEOUT)?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
@@ -90,7 +90,7 @@ fn finish(service: &Service, result: std::result::Result<Response<ureq::Body>, u
     Ok(Answer { status, json })
 }
 
-pub fn into_json(answer: Answer, missing: &str, failure: impl Fn(&Answer) -> Error) -> Result<Value> {
+pub(crate) fn into_json(answer: Answer, missing: &str, failure: impl Fn(&Answer) -> Error) -> Result<Value> {
     if answer.status == 404 {
         return Err(Error::Api(missing.into()));
     }
@@ -100,16 +100,16 @@ pub fn into_json(answer: Answer, missing: &str, failure: impl Fn(&Answer) -> Err
     Ok(answer.json)
 }
 
-pub fn origin(url: &str) -> &str {
+pub(crate) fn origin(url: &str) -> &str {
     let after_scheme = url.find("://").map_or(0, |i| i + 3);
     url[after_scheme..].find('/').map_or(url, |i| &url[..after_scheme + i])
 }
 
-pub fn text(value: &Value, pointer: &str) -> String {
+pub(crate) fn text(value: &Value, pointer: &str) -> String {
     value.pointer(pointer).and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
-pub fn path_segment(key: &str) -> String {
+pub(crate) fn path_segment(key: &str) -> String {
     key.bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {

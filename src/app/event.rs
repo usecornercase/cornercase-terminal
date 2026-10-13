@@ -11,7 +11,7 @@ use crate::web::tailscale;
 use crate::web::{self};
 
 #[derive(Debug)]
-pub enum AppEvent {
+pub(crate) enum AppEvent {
     Input(Event),
     Output(u64, Vec<u8>),
     Exited(u64),
@@ -28,7 +28,7 @@ pub enum AppEvent {
 }
 
 impl AppEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Input(_) => "input",
             Self::Output(..) => "output",
@@ -63,7 +63,7 @@ impl From<web::Event> for AppEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Start {
+pub(crate) struct Start {
     pub(super) name: String,
     pub(super) spec: launch::Spec,
 }

@@ -27,10 +27,10 @@ struct Shown {
 }
 
 #[derive(Debug, Default)]
-pub struct Graphics {
+pub(super) struct Graphics {
     client: u64,
-    pub support: Support,
-    pub background: Option<(u8, u8, u8)>,
+    pub(crate) support: Support,
+    pub(crate) background: Option<(u8, u8, u8)>,
     slots: [Option<Slot>; 2],
     current: Option<usize>,
     shown: Option<Shown>,
@@ -39,7 +39,7 @@ pub struct Graphics {
     logged: Option<u64>,
 }
 
-pub fn emit(rect: Rect, payload: &[u8]) -> Vec<u8> {
+pub(super) fn emit(rect: Rect, payload: &[u8]) -> Vec<u8> {
     let mut out = BEGIN.to_vec();
     let blank = " ".repeat(usize::from(rect.width));
     for y in rect.top()..rect.bottom() {
@@ -52,11 +52,11 @@ pub fn emit(rect: Rect, payload: &[u8]) -> Vec<u8> {
 }
 
 impl Graphics {
-    pub fn new(client: u64, support: Support, background: Option<(u8, u8, u8)>) -> Self {
+    pub(super) fn new(client: u64, support: Support, background: Option<(u8, u8, u8)>) -> Self {
         Self { client, support, background, ..Self::default() }
     }
 
-    pub fn update(&mut self, support: Support) {
+    pub(super) fn update(&mut self, support: Support) {
         self.support = support;
         self.hold = None;
         self.waiting = false;
@@ -84,34 +84,34 @@ impl Graphics {
         }
     }
 
-    pub fn sight(&self, visible: Rect, picture: Option<u64>) -> Sight {
+    pub(super) fn sight(&self, visible: Rect, picture: Option<u64>) -> Sight {
         let slot = self.slot_for(picture);
         let sent = self.slots[slot].map(|s| s.picture).filter(|p| Some(*p) == picture);
         Sight { support: self.support.clone(), visible, background: self.background, lo: KITTY_LO[slot], sent }
     }
 
-    pub fn watched(&self) -> Option<Rect> {
+    pub(super) fn watched(&self) -> Option<Rect> {
         self.shown.map(|s| s.rect)
     }
 
-    pub fn damaged(&mut self) {
+    pub(super) fn damaged(&mut self) {
         if let Some(shown) = &mut self.shown {
             shown.intact = false;
         }
     }
 
-    pub fn reset(&mut self, now: Instant) {
+    pub(super) fn reset(&mut self, now: Instant) {
         self.damaged();
         if self.support.tmux == Tmux::Wrap {
             self.hold = Some(now + AFTER_RESET);
         }
     }
 
-    pub fn wake(&self, now: Instant) -> Option<Duration> {
+    pub(super) fn wake(&self, now: Instant) -> Option<Duration> {
         self.hold.filter(|_| self.waiting)?.checked_duration_since(now)
     }
 
-    pub fn after(&mut self, picture: Option<u64>, placed: Option<&Placed>, now: Instant) -> Vec<u8> {
+    pub(super) fn after(&mut self, picture: Option<u64>, placed: Option<&Placed>, now: Instant) -> Vec<u8> {
         match self.support.protocol {
             Some(Protocol::Kitty) => self.kitty(picture, placed, now),
             Some(Protocol::Iterm | Protocol::Sixel { .. }) => self.cells(placed),

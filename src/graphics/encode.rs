@@ -7,21 +7,27 @@ use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 
 use super::{CellSize, Picture, Protocol, Tmux, iterm, kitty, sixel, tmux};
 
-pub const DEFAULT_CELL: CellSize = CellSize { width: 8, height: 16 };
-pub const ITERM_ROWS: u16 = 255;
-pub const SIXEL_PIXELS: u32 = 1_200_000;
-pub const BUDGET: usize = tmux::LIMIT;
+pub(crate) const DEFAULT_CELL: CellSize = CellSize { width: 8, height: 16 };
+pub(crate) const ITERM_ROWS: u16 = 255;
+pub(crate) const SIXEL_PIXELS: u32 = 1_200_000;
+pub(crate) const BUDGET: usize = tmux::LIMIT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Fit {
-    pub cols: u16,
-    pub rows: u16,
-    pub width: u32,
-    pub height: u32,
-    pub cell: CellSize,
+pub(crate) struct Fit {
+    pub(crate) cols: u16,
+    pub(crate) rows: u16,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) cell: CellSize,
 }
 
-pub fn fit(width: u32, height: u32, cell: Option<CellSize>, room: (u16, u16), protocol: Protocol) -> Option<Fit> {
+pub(crate) fn fit(
+    width: u32,
+    height: u32,
+    cell: Option<CellSize>,
+    room: (u16, u16),
+    protocol: Protocol,
+) -> Option<Fit> {
     let cell = cell.filter(|cell| cell.width > 0 && cell.height > 0).unwrap_or(DEFAULT_CELL);
     let (cols, rows) = match protocol {
         Protocol::Kitty => (room.0.min(kitty::MAX_CELLS), room.1.min(kitty::MAX_CELLS)),
@@ -51,16 +57,16 @@ pub fn fit(width: u32, height: u32, cell: Option<CellSize>, room: (u16, u16), pr
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Key {
-    pub picture: u64,
-    pub protocol: Protocol,
-    pub tmux: Tmux,
-    pub fit: Fit,
-    pub background: Option<(u8, u8, u8)>,
-    pub kitty_id: u32,
+pub(crate) struct Key {
+    pub(crate) picture: u64,
+    pub(crate) protocol: Protocol,
+    pub(crate) tmux: Tmux,
+    pub(crate) fit: Fit,
+    pub(crate) background: Option<(u8, u8, u8)>,
+    pub(crate) kitty_id: u32,
 }
 
-pub fn encode(picture: &Picture, key: &Key) -> Vec<u8> {
+pub(crate) fn encode(picture: &Picture, key: &Key) -> Vec<u8> {
     match key.protocol {
         Protocol::Kitty => join(&kitty::image(picture, key), key.tmux),
         Protocol::Iterm => {
@@ -198,4 +204,4 @@ fn share(part: usize, whole: usize) -> f64 {
 }
 
 #[cfg(test)]
-pub mod tests;
+pub(crate) mod tests;

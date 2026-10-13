@@ -22,7 +22,7 @@ impl Browser {
         self.needs_load()
     }
 
-    pub fn people_loaded(&mut self, source: Source, result: Result<Vec<Person>, String>) {
+    pub(crate) fn people_loaded(&mut self, source: Source, result: Result<Vec<Person>, String>) {
         self.members.insert(source, result);
     }
 
@@ -56,7 +56,7 @@ impl Browser {
         self.sources()
     }
 
-    pub fn people_rows(&self) -> Vec<(Source, usize)> {
+    pub(crate) fn people_rows(&self) -> Vec<(Source, usize)> {
         self.people_sources().into_iter().flat_map(|s| [(s, 0), (s, 1)]).collect()
     }
 

@@ -6,7 +6,7 @@ use crate::project::group::Group;
 use crate::project::{Project, group_indices};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Kind {
+pub(crate) enum Kind {
     Group,
     Project,
     Workspace,
@@ -14,21 +14,26 @@ pub enum Kind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Goto {
+pub(crate) enum Goto {
     Group(u64),
     Place { project: u64, workspace: Option<u64>, tab: Option<u64> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Candidate {
-    pub kind: Kind,
-    pub goto: Goto,
-    pub name: String,
-    pub context: String,
-    pub keys: Vec<String>,
+pub(crate) struct Candidate {
+    pub(crate) kind: Kind,
+    pub(crate) goto: Goto,
+    pub(crate) name: String,
+    pub(crate) context: String,
+    pub(crate) keys: Vec<String>,
 }
 
-pub fn candidates(groups: &[Group], projects: &[Project], config: &Config, home: Option<&Path>) -> Vec<Candidate> {
+pub(crate) fn candidates(
+    groups: &[Group],
+    projects: &[Project],
+    config: &Config,
+    home: Option<&Path>,
+) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = groups
         .iter()
         .map(|g| Candidate {
@@ -76,7 +81,7 @@ pub fn candidates(groups: &[Group], projects: &[Project], config: &Config, home:
     candidates
 }
 
-pub fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Candidate> {
+pub(crate) fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Candidate> {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
         return Vec::new();
@@ -101,7 +106,7 @@ fn key_rank(key: &str, needle: &str) -> Option<u8> {
     }
 }
 
-pub fn find(haystack: &str, needle: &str) -> Option<(usize, usize)> {
+pub(crate) fn find(haystack: &str, needle: &str) -> Option<(usize, usize)> {
     let fold = |c: char| c.to_lowercase().next().unwrap_or(c);
     let hay: Vec<char> = haystack.chars().map(fold).collect();
     let needle: Vec<char> = needle.trim().chars().map(fold).collect();

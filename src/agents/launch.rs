@@ -15,10 +15,10 @@ const MARKERS: [&str; 5] = ["❯", "›", ">", "▸", "→"];
 const MENU_REACH: usize = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Spec {
-    pub command: String,
-    pub prompt: Option<String>,
-    pub submit: bool,
+pub(crate) struct Spec {
+    pub(crate) command: String,
+    pub(crate) prompt: Option<String>,
+    pub(crate) submit: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,9 +29,9 @@ enum Stage {
 }
 
 #[derive(Debug)]
-pub struct Launch {
-    pub term: u64,
-    pub key: Option<u64>,
+pub(crate) struct Launch {
+    pub(crate) term: u64,
+    pub(crate) key: Option<u64>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -44,23 +44,23 @@ pub struct Launch {
     asked: bool,
 }
 
-pub struct Seen<'a> {
-    pub shell_in_foreground: bool,
-    pub bracketed_paste: bool,
-    pub application_cursor: bool,
-    pub screen: &'a mut dyn FnMut() -> String,
-    pub trust_prompt: &'a dyn Fn(&str) -> bool,
-    pub trust: Trust,
+pub(crate) struct Seen<'a> {
+    pub(crate) shell_in_foreground: bool,
+    pub(crate) bracketed_paste: bool,
+    pub(crate) application_cursor: bool,
+    pub(crate) screen: &'a mut dyn FnMut() -> String,
+    pub(crate) trust_prompt: &'a dyn Fn(&str) -> bool,
+    pub(crate) trust: Trust,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Trust {
+pub(crate) enum Trust {
     LeftToYou,
     Accepted,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Step {
+pub(crate) enum Step {
     Wait,
     Write(Vec<u8>),
     Done(Vec<u8>),
@@ -68,7 +68,7 @@ pub enum Step {
 }
 
 impl Launch {
-    pub fn new(term: u64, spec: Spec, now: Instant) -> Self {
+    pub(crate) fn new(term: u64, spec: Spec, now: Instant) -> Self {
         Self {
             term,
             key: None,
@@ -85,15 +85,15 @@ impl Launch {
         }
     }
 
-    pub fn command(term: u64, command: String, now: Instant) -> Self {
+    pub(crate) fn command(term: u64, command: String, now: Instant) -> Self {
         Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false }, now) }
     }
 
-    pub fn enter(term: u64, now: Instant) -> Self {
+    pub(crate) fn enter(term: u64, now: Instant) -> Self {
         Self { stage: Stage::Submit, ..Self::command(term, String::new(), now) }
     }
 
-    pub fn output(&mut self, now: Instant) {
+    pub(crate) fn output(&mut self, now: Instant) {
         if self.asked {
             self.since = now;
         }
@@ -102,7 +102,7 @@ impl Launch {
         self.asked = false;
     }
 
-    pub fn stage(&self) -> &'static str {
+    pub(crate) fn stage(&self) -> &'static str {
         match self.stage {
             Stage::Shell => "shell",
             Stage::Agent if self.asked => "trust prompt",
@@ -111,7 +111,7 @@ impl Launch {
         }
     }
 
-    pub fn kind(&self) -> &'static str {
+    pub(crate) fn kind(&self) -> &'static str {
         match (self.agent, self.spec.command.is_empty()) {
             (true, _) => "agent",
             (false, false) => "command",
@@ -119,11 +119,11 @@ impl Launch {
         }
     }
 
-    pub fn waits_for_you(&self) -> bool {
+    pub(crate) fn waits_for_you(&self) -> bool {
         self.asked
     }
 
-    pub fn submits(&self) -> bool {
+    pub(crate) fn submits(&self) -> bool {
         self.stage == Stage::Submit
     }
 
@@ -138,7 +138,7 @@ impl Launch {
         self.undrawn = false;
     }
 
-    pub fn step(&mut self, now: Instant, seen: &mut Seen) -> Step {
+    pub(crate) fn step(&mut self, now: Instant, seen: &mut Seen) -> Step {
         match self.stage {
             Stage::Shell => {
                 let ready = self.output.is_some_and(|at| now.duration_since(at) >= SHELL_QUIET)
@@ -220,7 +220,7 @@ fn option_text(line: &str) -> &str {
     line.trim_start_matches(|c: char| c.is_whitespace() || "│┃║|".contains(c))
 }
 
-pub fn answer_keys(screen: &str, application_cursor: bool) -> Vec<u8> {
+pub(crate) fn answer_keys(screen: &str, application_cursor: bool) -> Vec<u8> {
     let lines: Vec<&str> = screen.lines().map(option_text).collect();
     let Some(marked) = lines.iter().position(|l| MARKERS.iter().any(|m| l.starts_with(m))) else {
         return b"\r".to_vec();

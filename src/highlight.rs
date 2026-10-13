@@ -1,5 +1,5 @@
-pub mod markdown;
-pub mod syntax;
+pub(crate) mod markdown;
+pub(crate) mod syntax;
 
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -11,7 +11,7 @@ use syntect::easy::ScopeRangeIterator;
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
-pub type Highlighted = Arc<Vec<Vec<(String, Style)>>>;
+pub(crate) type Highlighted = Arc<Vec<Vec<(String, Style)>>>;
 
 const CACHE_SIZE: usize = 256;
 const MAX_CODE: usize = 50_000;
@@ -86,7 +86,7 @@ fn syntax(token: &str) -> Option<&'static SyntaxReference> {
     set.find_syntax_by_token(token).or_else(|| set.syntaxes().iter().find(|s| s.name.eq_ignore_ascii_case(token)))
 }
 
-pub fn highlight(code: &str, info: &str) -> Option<Highlighted> {
+pub(crate) fn highlight(code: &str, info: &str) -> Option<Highlighted> {
     let token = language_token(info)?;
     if code.len() > MAX_CODE {
         return None;

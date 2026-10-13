@@ -21,7 +21,7 @@ const RESTART_ICON: &str = " ↻ ";
 const TOAST_MARGIN: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToastIcon {
+pub(crate) enum ToastIcon {
     Check,
     Agent(Status),
     Bug,
@@ -29,7 +29,7 @@ pub enum ToastIcon {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToastButton {
+pub(crate) enum ToastButton {
     Undo,
     Cancel,
 }
@@ -44,13 +44,13 @@ impl ToastButton {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Toast<'a> {
-    pub message: &'a str,
-    pub icon: ToastIcon,
-    pub button: Option<ToastButton>,
+pub(crate) struct Toast<'a> {
+    pub(crate) message: &'a str,
+    pub(crate) icon: ToastIcon,
+    pub(crate) button: Option<ToastButton>,
 }
 
-pub fn toast_area(area: Rect, toast: Toast) -> Rect {
+pub(crate) fn toast_area(area: Rect, toast: Toast) -> Rect {
     let button = toast.button.map_or(0, |button| button.label().chars().count() + 3);
     let text = TOAST_ICON.chars().count() + toast.message.chars().count() + 1 + button;
     let width = u16::try_from(text).unwrap_or(u16::MAX).saturating_add(2).min(area.width);
@@ -60,7 +60,7 @@ pub fn toast_area(area: Rect, toast: Toast) -> Rect {
     Rect::new(x, y, width, height)
 }
 
-pub fn toast_button(area: Rect, toast: Toast) -> Rect {
+pub(crate) fn toast_button(area: Rect, toast: Toast) -> Rect {
     let Some(button) = toast.button else { return Rect::default() };
     let r = toast_area(area, toast).inner(Margin::new(1, 1));
     let width = button_width(button.label()).min(r.width);

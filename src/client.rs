@@ -29,17 +29,17 @@ mod requests;
 mod server_process;
 mod window;
 
-pub use requests::{answer, ask, follow, running_now};
+pub(crate) use requests::{answer, ask, follow, running_now};
 pub(crate) use requests::{answered, connect, request};
 pub(crate) use server_process::{connect_or_start, wait_for_exit};
-pub use server_process::{kill_server, restart_server};
+pub(crate) use server_process::{kill_server, restart_server};
 
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
 pub(crate) const RESTART: &str = "Restart it now? [y/N] ";
 const UPDATE_THERE: &str = "Run it there now? [y/N] ";
 const INPUT_POLL: Duration = Duration::from_millis(100);
 
-pub fn run() -> Result<()> {
+pub(crate) fn run() -> Result<()> {
     if std::env::var_os(protocol::NESTED_ENV).is_some() {
         return Err(Error::Nested);
     }
@@ -58,7 +58,7 @@ pub fn run() -> Result<()> {
     }
 }
 
-pub fn remote(remote: &Remote) -> Result<()> {
+pub(crate) fn remote(remote: &Remote) -> Result<()> {
     let target = Target::Remote(remote.clone());
     let host = remote.host();
     let asks = stdin().is_terminal();
@@ -136,7 +136,7 @@ impl Target {
     }
 }
 
-pub struct Link {
+pub(crate) struct Link {
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     guard: Guard,
@@ -161,7 +161,7 @@ impl Link {
         Ok(Self { reader: Box::new(stream.try_clone()?), writer: Box::new(stream), guard: Guard::default() })
     }
 
-    pub fn piped(reader: impl Read + Send + 'static, writer: ChildStdin, child: Child, stderr: Stderr) -> Self {
+    pub(crate) fn piped(reader: impl Read + Send + 'static, writer: ChildStdin, child: Child, stderr: Stderr) -> Self {
         Self {
             reader: Box::new(reader),
             writer: Box::new(writer),

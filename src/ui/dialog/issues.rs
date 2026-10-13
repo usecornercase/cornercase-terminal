@@ -37,16 +37,16 @@ pub(in crate::ui) fn issues_rows(issues: Rect) -> [Rect; 5] {
     [tabs, input, list, note, buttons]
 }
 
-pub fn issues_list(issues: Rect) -> Rect {
+pub(crate) fn issues_list(issues: Rect) -> Rect {
     issues_rows(issues)[2]
 }
 
-pub fn issue_detail(issues: Rect) -> Rect {
+pub(crate) fn issue_detail(issues: Rect) -> Rect {
     let [tabs, _, _, note, _] = issues_rows(issues);
     Rect::new(tabs.x, tabs.y, tabs.width, note.y.saturating_sub(tabs.y))
 }
 
-pub fn issue_tabs(issues: Rect, names: &[&str]) -> Vec<Rect> {
+pub(crate) fn issue_tabs(issues: Rect, names: &[&str]) -> Vec<Rect> {
     tabs_in(issues_rows(issues)[0], names)
 }
 
@@ -54,7 +54,7 @@ fn toggle_width(label: &str) -> u16 {
     button_width(label).saturating_add(4)
 }
 
-pub fn issue_toggles(issues: Rect, labels: &[&str]) -> Vec<Rect> {
+pub(crate) fn issue_toggles(issues: Rect, labels: &[&str]) -> Vec<Rect> {
     right_aligned(issues_rows(issues)[0], labels, toggle_width, 2)
 }
 
@@ -66,11 +66,11 @@ pub(super) fn issue_buttons_in(row: Rect, labels: &[&str]) -> Vec<Rect> {
     right_aligned(row, labels, button_width, 1)
 }
 
-pub fn issue_button_hit(area: Rect, buttons: &[&str], pos: Position) -> Option<usize> {
+pub(crate) fn issue_button_hit(area: Rect, buttons: &[&str], pos: Position) -> Option<usize> {
     issue_buttons(issues_area(area), buttons).iter().position(|r| r.contains(pos))
 }
 
-pub fn issues_hit(
+pub(crate) fn issues_hit(
     area: Rect,
     tabs: &[&str],
     toggles: &[&str],
@@ -97,28 +97,28 @@ pub fn issues_hit(
     (i < items).then_some(IssuesHit::Item(i))
 }
 
-pub struct IssueRow {
-    pub key: String,
-    pub title: String,
-    pub meta: String,
+pub(crate) struct IssueRow {
+    pub(crate) key: String,
+    pub(crate) title: String,
+    pub(crate) meta: String,
 }
 
-pub enum IssuesBody {
+pub(crate) enum IssuesBody {
     List { filter: String, items: Vec<IssueRow>, selected: Option<usize>, scroll: usize, empty: String },
     Token { label: &'static str, input: String, help: Vec<String> },
     Detail { lines: Vec<Line<'static>>, scroll: usize },
 }
 
-pub struct Issues {
-    pub title: String,
-    pub tabs: Vec<&'static str>,
-    pub tab: usize,
-    pub toggles: Vec<String>,
-    pub on: Vec<bool>,
-    pub body: IssuesBody,
-    pub note: Option<Note>,
-    pub hint: String,
-    pub buttons: Vec<&'static str>,
+pub(crate) struct Issues {
+    pub(crate) title: String,
+    pub(crate) tabs: Vec<&'static str>,
+    pub(crate) tab: usize,
+    pub(crate) toggles: Vec<String>,
+    pub(crate) on: Vec<bool>,
+    pub(crate) body: IssuesBody,
+    pub(crate) note: Option<Note>,
+    pub(crate) hint: String,
+    pub(crate) buttons: Vec<&'static str>,
 }
 
 pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {

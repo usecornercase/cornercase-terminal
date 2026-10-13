@@ -8,8 +8,8 @@ use similar::{Algorithm, DiffTag};
 
 use crate::highlight;
 
-pub const MAX_LINES: usize = 3000;
-pub const MAX_UNTRACKED_BYTES: u64 = 1 << 20;
+pub(crate) const MAX_LINES: usize = 3000;
+pub(crate) const MAX_UNTRACKED_BYTES: u64 = 1 << 20;
 const BINARY_PROBE: usize = 8000;
 const TAB: &str = "    ";
 const LOCKFILES: [&str; 16] = [
@@ -32,7 +32,7 @@ const LOCKFILES: [&str; 16] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Status {
+pub(crate) enum Status {
     Modified,
     Added,
     Deleted,
@@ -41,7 +41,7 @@ pub enum Status {
 }
 
 impl Status {
-    pub fn letter(self) -> &'static str {
+    pub(crate) fn letter(self) -> &'static str {
         match self {
             Self::Modified => "M",
             Self::Added | Self::Untracked => "A",
@@ -52,7 +52,7 @@ impl Status {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Fold {
+pub(crate) enum Fold {
     Open,
     Lockfile,
     Binary,
@@ -72,7 +72,7 @@ impl Fold {
         }
     }
 
-    pub fn tag(self) -> Option<&'static str> {
+    pub(crate) fn tag(self) -> Option<&'static str> {
         match self {
             Self::Open => None,
             Self::Lockfile => Some("lockfile"),
@@ -81,29 +81,29 @@ impl Fold {
         }
     }
 
-    pub fn shows_lines(self) -> bool {
+    pub(crate) fn shows_lines(self) -> bool {
         matches!(self, Self::Open | Self::Lockfile)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+pub(crate) enum Kind {
     Context,
     Removed,
     Added,
 }
 
-pub type Segments = Vec<(String, Style)>;
+pub(crate) type Segments = Vec<(String, Style)>;
 type Emphasis = (Vec<Range<usize>>, Vec<Range<usize>>);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Line {
-    pub kind: Kind,
-    pub old: Option<u32>,
-    pub new: Option<u32>,
-    pub text: String,
-    pub syntax: Option<Segments>,
-    pub emphasis: Vec<Range<usize>>,
+pub(crate) struct Line {
+    pub(crate) kind: Kind,
+    pub(crate) old: Option<u32>,
+    pub(crate) new: Option<u32>,
+    pub(crate) text: String,
+    pub(crate) syntax: Option<Segments>,
+    pub(crate) emphasis: Vec<Range<usize>>,
 }
 
 impl Line {
@@ -113,11 +113,11 @@ impl Line {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Hunk {
-    pub old_start: u32,
-    pub new_start: u32,
-    pub context: String,
-    pub lines: Vec<Line>,
+pub(crate) struct Hunk {
+    pub(crate) old_start: u32,
+    pub(crate) new_start: u32,
+    pub(crate) context: String,
+    pub(crate) lines: Vec<Line>,
 }
 
 impl Hunk {
@@ -125,15 +125,15 @@ impl Hunk {
         u32::try_from(self.lines.iter().filter(|l| l.kind != skip).count()).unwrap_or(u32::MAX)
     }
 
-    pub fn old_end(&self) -> u32 {
+    pub(crate) fn old_end(&self) -> u32 {
         self.old_start.saturating_add(self.count(Kind::Added))
     }
 
-    pub fn new_end(&self) -> u32 {
+    pub(crate) fn new_end(&self) -> u32 {
         self.new_start.saturating_add(self.count(Kind::Removed))
     }
 
-    pub fn changed(&self) -> (u32, u32) {
+    pub(crate) fn changed(&self) -> (u32, u32) {
         let added: Vec<u32> = self.lines.iter().filter(|l| l.kind == Kind::Added).filter_map(|l| l.new).collect();
         if let (Some(first), Some(last)) = (added.first(), added.last()) {
             return (*first, *last);
@@ -148,7 +148,7 @@ impl Hunk {
         (new, new)
     }
 
-    pub fn patch(&self) -> String {
+    pub(crate) fn patch(&self) -> String {
         let old = self.count(Kind::Added);
         let new = self.count(Kind::Removed);
         let mut text = format!("@@ -{},{old} +{},{new} @@", self.old_start, self.new_start);
@@ -172,24 +172,24 @@ impl Hunk {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct File {
-    pub path: String,
-    pub old_path: Option<String>,
-    pub status: Status,
-    pub added: usize,
-    pub removed: usize,
-    pub fold: Fold,
-    pub hunks: Vec<Hunk>,
-    pub digest: u64,
-    pub viewed_digest: u64,
+pub(crate) struct File {
+    pub(crate) path: String,
+    pub(crate) old_path: Option<String>,
+    pub(crate) status: Status,
+    pub(crate) added: usize,
+    pub(crate) removed: usize,
+    pub(crate) fold: Fold,
+    pub(crate) hunks: Vec<Hunk>,
+    pub(crate) digest: u64,
+    pub(crate) viewed_digest: u64,
 }
 
 impl File {
-    pub fn lines(&self) -> usize {
+    pub(crate) fn lines(&self) -> usize {
         self.hunks.iter().map(|h| h.lines.len()).sum()
     }
 
-    pub fn label(&self) -> String {
+    pub(crate) fn label(&self) -> String {
         match &self.old_path {
             Some(old) => format!("{old} → {}", self.path),
             None => self.path.clone(),
@@ -198,21 +198,21 @@ impl File {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Diff {
-    pub files: Vec<Arc<File>>,
+pub(crate) struct Diff {
+    pub(crate) files: Vec<Arc<File>>,
 }
 
 impl Diff {
-    pub fn added(&self) -> usize {
+    pub(crate) fn added(&self) -> usize {
         self.files.iter().map(|f| f.added).sum()
     }
 
-    pub fn removed(&self) -> usize {
+    pub(crate) fn removed(&self) -> usize {
         self.files.iter().map(|f| f.removed).sum()
     }
 }
 
-pub fn expand(text: &str) -> String {
+pub(crate) fn expand(text: &str) -> String {
     text.trim_end_matches('\r').replace('\t', TAB)
 }
 
@@ -222,7 +222,7 @@ fn digest(value: impl Hash) -> u64 {
     hasher.finish()
 }
 
-pub fn parse(patch: &str) -> Vec<File> {
+pub(crate) fn parse(patch: &str) -> Vec<File> {
     let mut files = Vec::new();
     let mut section: Vec<&str> = Vec::new();
     for line in patch.lines() {
@@ -358,7 +358,7 @@ fn is_lockfile(path: &str) -> bool {
     Path::new(path).file_name().and_then(|n| n.to_str()).is_some_and(|name| LOCKFILES.contains(&name))
 }
 
-pub fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
+pub(crate) fn untracked(path: &str, size: u64, bytes: Option<&[u8]>) -> File {
     untracked_file(path, size, bytes, true)
 }
 
@@ -392,7 +392,7 @@ pub(super) fn untracked_file(path: &str, size: u64, bytes: Option<&[u8]>, materi
     file
 }
 
-pub fn finish(file: &mut File) {
+pub(crate) fn finish(file: &mut File) {
     if !file.fold.shows_lines() {
         return;
     }
@@ -403,7 +403,7 @@ pub fn finish(file: &mut File) {
     }
 }
 
-pub fn language(path: &str) -> String {
+pub(crate) fn language(path: &str) -> String {
     let path = Path::new(path);
     path.extension().or_else(|| path.file_name()).map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default()
 }

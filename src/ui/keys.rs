@@ -11,11 +11,11 @@ use crate::text::truncate_right;
 const GAP: u16 = 2;
 const KEY_GAP: usize = 2;
 
-pub struct Item {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub group: bool,
-    pub clickable: bool,
+pub(crate) struct Item {
+    pub(crate) key: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) group: bool,
+    pub(crate) clickable: bool,
 }
 
 impl From<&shortcuts::Item> for Item {
@@ -29,10 +29,10 @@ impl From<&shortcuts::Item> for Item {
     }
 }
 
-pub struct Keys {
-    pub title: String,
-    pub items: Vec<Item>,
-    pub hint: String,
+pub(crate) struct Keys {
+    pub(crate) title: String,
+    pub(crate) items: Vec<Item>,
+    pub(crate) hint: String,
 }
 
 impl Keys {
@@ -57,12 +57,12 @@ impl Keys {
     }
 }
 
-pub fn frame(pane: Rect, screen: Rect, keys: &Keys) -> Rect {
+pub(crate) fn frame(pane: Rect, screen: Rect, keys: &Keys) -> Rect {
     let rows = keys.rows(keys.columns(pane.width.saturating_sub(2)));
     if rows.saturating_add(4) <= pane.height { pane } else { screen }
 }
 
-pub fn area(frame: Rect, keys: &Keys) -> Rect {
+pub(crate) fn area(frame: Rect, keys: &Keys) -> Rect {
     let columns = keys.columns(frame.width.saturating_sub(2));
     let rows = keys.rows(columns);
     let cells = columns * keys.cell_width() + (columns - 1) * GAP;
@@ -73,7 +73,7 @@ pub fn area(frame: Rect, keys: &Keys) -> Rect {
     Rect::new(x, frame.bottom() - height, width, height)
 }
 
-pub fn item(menu: Rect, keys: &Keys, i: usize) -> Rect {
+pub(crate) fn item(menu: Rect, keys: &Keys, i: usize) -> Rect {
     let columns = keys.columns(menu.width.saturating_sub(2));
     let rows = usize::from(keys.rows(columns).max(1));
     let (column, row) = (u16::try_from(i / rows).unwrap_or(u16::MAX), u16::try_from(i % rows).unwrap_or(u16::MAX));
@@ -82,11 +82,11 @@ pub fn item(menu: Rect, keys: &Keys, i: usize) -> Rect {
     Rect::new(x, body.y.saturating_add(row), keys.cell_width(), 1).intersection(body)
 }
 
-pub fn hit(menu: Rect, keys: &Keys, pos: Position) -> Option<usize> {
+pub(crate) fn hit(menu: Rect, keys: &Keys, pos: Position) -> Option<usize> {
     (0..keys.items.len()).find(|&i| keys.items[i].clickable && item(menu, keys, i).contains(pos))
 }
 
-pub fn draw(f: &mut Frame, view: &View, keys: &Keys, pane: Rect) {
+pub(crate) fn draw(f: &mut Frame, view: &View, keys: &Keys, pane: Rect) {
     let menu = area(frame(pane, f.area(), keys), keys);
     f.render_widget(Clear, menu);
     f.render_widget(overlay_block(view.muted, &keys.title), menu);

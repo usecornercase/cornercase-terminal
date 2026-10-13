@@ -13,7 +13,7 @@ use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
 use crate::ui::widgets::{hovered, overlay_block, rail};
 
-pub fn settings_area(area: Rect) -> Rect {
+pub(crate) fn settings_area(area: Rect) -> Rect {
     issues_area(area)
 }
 
@@ -30,23 +30,23 @@ fn settings_rows(settings: Rect) -> [Rect; 5] {
     [tabs, body, edit, note, buttons]
 }
 
-pub fn settings_tabs(settings: Rect, names: &[&str]) -> Vec<Rect> {
+pub(crate) fn settings_tabs(settings: Rect, names: &[&str]) -> Vec<Rect> {
     tabs_in(settings_rows(settings)[0], names)
 }
 
-pub fn settings_body(settings: Rect) -> Rect {
+pub(crate) fn settings_body(settings: Rect) -> Rect {
     settings_rows(settings)[1]
 }
 
-pub fn settings_edit(settings: Rect) -> Rect {
+pub(crate) fn settings_edit(settings: Rect) -> Rect {
     settings_rows(settings)[2]
 }
 
-pub fn settings_done(settings: Rect) -> Rect {
+pub(crate) fn settings_done(settings: Rect) -> Rect {
     settings_buttons(settings)[1]
 }
 
-pub fn settings_restart(settings: Rect) -> Rect {
+pub(crate) fn settings_restart(settings: Rect) -> Rect {
     settings_buttons(settings)[0]
 }
 
@@ -56,13 +56,13 @@ fn settings_buttons(settings: Rect) -> [Rect; 2] {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingsLine {
+pub(crate) enum SettingsLine {
     Blank,
     Header(usize),
     Row(usize),
 }
 
-pub fn settings_lines(sections: &[&str]) -> Vec<SettingsLine> {
+pub(crate) fn settings_lines(sections: &[&str]) -> Vec<SettingsLine> {
     let mut lines = Vec::new();
     for (i, section) in sections.iter().enumerate() {
         if !section.is_empty() && (i == 0 || sections[i - 1] != *section) {
@@ -76,14 +76,14 @@ pub fn settings_lines(sections: &[&str]) -> Vec<SettingsLine> {
     lines
 }
 
-pub fn settings_scroll(sections: &[&str], cursor: usize, height: usize) -> usize {
+pub(crate) fn settings_scroll(sections: &[&str], cursor: usize, height: usize) -> usize {
     let lines = settings_lines(sections);
     let at = lines.iter().position(|l| *l == SettingsLine::Row(cursor)).unwrap_or(0);
     let header = at.saturating_sub(1);
     if at < height { 0 } else { (at + 1).saturating_sub(height).min(header) }
 }
 
-pub fn settings_row(area: Rect, sections: &[&str], cursor: usize, row: usize) -> Rect {
+pub(crate) fn settings_row(area: Rect, sections: &[&str], cursor: usize, row: usize) -> Rect {
     let body = settings_body(settings_area(area));
     let scroll = settings_scroll(sections, cursor, usize::from(body.height));
     let Some(line) = settings_lines(sections).iter().position(|l| *l == SettingsLine::Row(row)) else {
@@ -94,23 +94,23 @@ pub fn settings_row(area: Rect, sections: &[&str], cursor: usize, row: usize) ->
     Rect::new(body.x, y, body.width, 1).intersection(body)
 }
 
-pub fn settings_remove(row: Rect) -> Rect {
+pub(crate) fn settings_remove(row: Rect) -> Rect {
     row_close_button(row, 1)
 }
 
-pub fn settings_moves(row: Rect) -> [Rect; 2] {
+pub(crate) fn settings_moves(row: Rect) -> [Rect; 2] {
     let down = Rect::new(row.right().saturating_sub(3), row.y, 3, 1).intersection(row);
     let up = Rect::new(row.right().saturating_sub(6), row.y, 3, 1).intersection(row);
     [up, down]
 }
 
-pub fn settings_pick_list(settings: Rect) -> Rect {
+pub(crate) fn settings_pick_list(settings: Rect) -> Rect {
     let body = settings_body(settings);
     Rect::new(body.x, body.y.saturating_add(2), body.width, body.height.saturating_sub(2))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingsHit {
+pub(crate) enum SettingsHit {
     Tab(usize),
     Row(usize),
     Remove(usize),
@@ -121,16 +121,16 @@ pub enum SettingsHit {
     Restart,
 }
 
-pub struct SettingsLayout<'a> {
-    pub tabs: &'a [&'a str],
-    pub sections: &'a [&'a str],
-    pub removable: &'a [bool],
-    pub movable: &'a [bool],
-    pub cursor: usize,
-    pub pick: Option<(usize, usize)>,
+pub(crate) struct SettingsLayout<'a> {
+    pub(crate) tabs: &'a [&'a str],
+    pub(crate) sections: &'a [&'a str],
+    pub(crate) removable: &'a [bool],
+    pub(crate) movable: &'a [bool],
+    pub(crate) cursor: usize,
+    pub(crate) pick: Option<(usize, usize)>,
 }
 
-pub fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -> Option<SettingsHit> {
+pub(crate) fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -> Option<SettingsHit> {
     let settings = settings_area(area);
     if settings_done(settings).contains(pos) {
         return Some(SettingsHit::Done);
@@ -167,43 +167,43 @@ pub fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -> Optio
     Some(SettingsHit::Row(i))
 }
 
-pub struct SettingsRow {
-    pub section: &'static str,
-    pub label: String,
-    pub value: String,
-    pub note: String,
-    pub dangerous: bool,
-    pub removable: bool,
-    pub movable: bool,
+pub(crate) struct SettingsRow {
+    pub(crate) section: &'static str,
+    pub(crate) label: String,
+    pub(crate) value: String,
+    pub(crate) note: String,
+    pub(crate) dangerous: bool,
+    pub(crate) removable: bool,
+    pub(crate) movable: bool,
 }
 
-pub struct SettingsEdit {
-    pub label: String,
-    pub value: String,
+pub(crate) struct SettingsEdit {
+    pub(crate) label: String,
+    pub(crate) value: String,
 }
 
-pub struct SettingsPick {
-    pub title: String,
-    pub filter: String,
-    pub items: Vec<(String, String, bool)>,
-    pub selected: Option<usize>,
-    pub scroll: usize,
+pub(crate) struct SettingsPick {
+    pub(crate) title: String,
+    pub(crate) filter: String,
+    pub(crate) items: Vec<(String, String, bool)>,
+    pub(crate) selected: Option<usize>,
+    pub(crate) scroll: usize,
 }
 
-pub struct Settings {
-    pub tabs: Vec<&'static str>,
-    pub tab: usize,
-    pub rows: Vec<SettingsRow>,
-    pub cursor: usize,
-    pub edit: Option<SettingsEdit>,
-    pub pick: Option<SettingsPick>,
-    pub note: Option<Note>,
-    pub hint: String,
-    pub submit: &'static str,
+pub(crate) struct Settings {
+    pub(crate) tabs: Vec<&'static str>,
+    pub(crate) tab: usize,
+    pub(crate) rows: Vec<SettingsRow>,
+    pub(crate) cursor: usize,
+    pub(crate) edit: Option<SettingsEdit>,
+    pub(crate) pick: Option<SettingsPick>,
+    pub(crate) note: Option<Note>,
+    pub(crate) hint: String,
+    pub(crate) submit: &'static str,
 }
 
 impl Settings {
-    pub fn sections(&self) -> Vec<&'static str> {
+    pub(crate) fn sections(&self) -> Vec<&'static str> {
         self.rows.iter().map(|r| r.section).collect()
     }
 }

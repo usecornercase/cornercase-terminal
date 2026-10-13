@@ -7,24 +7,24 @@ use std::thread;
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
 
-pub use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid};
+pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid};
 
 const MAX_DESCENDANTS: usize = 256;
 
-pub fn reap(mut child: Child) {
+pub(crate) fn reap(mut child: Child) {
     thread::spawn(move || child.wait());
 }
 
-pub fn stop(mut child: Child) {
+pub(crate) fn stop(mut child: Child) {
     let _ = child.kill();
     reap(child);
 }
 
-pub fn alive(pid: i32) -> bool {
+pub(crate) fn alive(pid: i32) -> bool {
     Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
 }
 
-pub fn descendants(pid: i32) -> Vec<i32> {
+pub(crate) fn descendants(pid: i32) -> Vec<i32> {
     let mut found = children(pid);
     let mut at = 0;
     while at < found.len() && found.len() < MAX_DESCENDANTS {
@@ -79,7 +79,7 @@ fn procenv(buf: &[u8]) -> Vec<(String, String)> {
 mod imp {
     use super::{PathBuf, UnixStream, io, status_footprint, vars};
 
-    pub fn all() -> Vec<i32> {
+    pub(crate) fn all() -> Vec<i32> {
         std::fs::read_dir("/proc")
             .into_iter()
             .flatten()
@@ -87,7 +87,7 @@ mod imp {
             .collect()
     }
 
-    pub fn children(pid: i32) -> Vec<i32> {
+    pub(crate) fn children(pid: i32) -> Vec<i32> {
         let mut pids: Vec<i32> = std::fs::read_dir(format!("/proc/{pid}/task"))
             .into_iter()
             .flatten()
@@ -99,7 +99,7 @@ mod imp {
         pids
     }
 
-    pub fn open_files(pid: i32) -> Vec<PathBuf> {
+    pub(crate) fn open_files(pid: i32) -> Vec<PathBuf> {
         std::fs::read_dir(format!("/proc/{pid}/fd"))
             .into_iter()
             .flatten()
@@ -107,30 +107,30 @@ mod imp {
             .collect()
     }
 
-    pub fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
+    pub(crate) fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
         Ok(rustix::net::sockopt::socket_peercred(socket)?.uid.as_raw())
     }
 
-    pub fn cwd(pid: i32) -> Option<PathBuf> {
+    pub(crate) fn cwd(pid: i32) -> Option<PathBuf> {
         std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
     }
 
-    pub fn name(pid: i32) -> Option<String> {
+    pub(crate) fn name(pid: i32) -> Option<String> {
         let comm = std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?;
         Some(comm.trim().to_string())
     }
 
-    pub fn args(pid: i32) -> Vec<String> {
+    pub(crate) fn args(pid: i32) -> Vec<String> {
         let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
         cmdline.split(|b| *b == 0).filter(|a| !a.is_empty()).map(|a| String::from_utf8_lossy(a).into_owned()).collect()
     }
 
-    pub fn env(pid: i32) -> Vec<(String, String)> {
+    pub(crate) fn env(pid: i32) -> Vec<(String, String)> {
         let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
         vars(environ.split(|b| *b == 0))
     }
 
-    pub fn footprint(pid: i32) -> Option<u64> {
+    pub(crate) fn footprint(pid: i32) -> Option<u64> {
         status_footprint(&std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)
     }
 }
@@ -144,12 +144,12 @@ mod imp {
 
     use super::{PathBuf, UnixStream, io, procargs, procenv};
 
-    pub fn all() -> Vec<i32> {
+    pub(crate) fn all() -> Vec<i32> {
         let count = unsafe { libc::proc_listallpids(null_mut(), 0) };
         listed(usize::try_from(count).unwrap_or(0) + 64, |buffer, size| unsafe { libc::proc_listallpids(buffer, size) })
     }
 
-    pub fn children(pid: i32) -> Vec<i32> {
+    pub(crate) fn children(pid: i32) -> Vec<i32> {
         listed(1024, |buffer, size| unsafe { libc::proc_listchildpids(pid, buffer, size) })
     }
 
@@ -162,7 +162,7 @@ mod imp {
         pids
     }
 
-    pub fn open_files(pid: i32) -> Vec<PathBuf> {
+    pub(crate) fn open_files(pid: i32) -> Vec<PathBuf> {
         std::process::Command::new("/usr/sbin/lsof")
             .args(["-n", "-P", "-a", "-p", &pid.to_string(), "-Fn"])
             .output()
@@ -176,7 +176,7 @@ mod imp {
             .unwrap_or_default()
     }
 
-    pub fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
+    pub(crate) fn peer_uid(socket: &UnixStream) -> io::Result<u32> {
         let (mut uid, mut gid) = (0, 0);
         if unsafe { libc::getpeereid(socket.as_raw_fd(), &raw mut uid, &raw mut gid) } != 0 {
             return Err(io::Error::last_os_error());
@@ -191,20 +191,20 @@ mod imp {
         (read == size).then_some(info)
     }
 
-    pub fn cwd(pid: i32) -> Option<PathBuf> {
+    pub(crate) fn cwd(pid: i32) -> Option<PathBuf> {
         let info: libc::proc_vnodepathinfo = pid_info(pid, libc::PROC_PIDVNODEPATHINFO)?;
         let bytes: Vec<u8> = info.pvi_cdir.vip_path.iter().flatten().map(|c| c.cast_unsigned()).collect();
         let path = CStr::from_bytes_until_nul(&bytes).ok()?;
         (!path.is_empty()).then(|| PathBuf::from(OsStr::from_bytes(path.to_bytes())))
     }
 
-    pub fn footprint(pid: i32) -> Option<u64> {
+    pub(crate) fn footprint(pid: i32) -> Option<u64> {
         let mut info: libc::rusage_info_v0 = unsafe { std::mem::zeroed() };
         let read = unsafe { libc::proc_pid_rusage(pid, libc::RUSAGE_INFO_V0, (&raw mut info).cast()) };
         (read == 0).then_some(info.ri_phys_footprint)
     }
 
-    pub fn name(pid: i32) -> Option<String> {
+    pub(crate) fn name(pid: i32) -> Option<String> {
         let mut buf = [0_u8; 256];
         let len = unsafe { libc::proc_name(pid, buf.as_mut_ptr().cast(), 256) };
         let len = usize::try_from(len).ok().filter(|len| *len > 0)?;
@@ -227,11 +227,11 @@ mod imp {
         Some(buf)
     }
 
-    pub fn args(pid: i32) -> Vec<String> {
+    pub(crate) fn args(pid: i32) -> Vec<String> {
         procargs_buffer(pid).map(|buf| procargs(&buf)).unwrap_or_default()
     }
 
-    pub fn env(pid: i32) -> Vec<(String, String)> {
+    pub(crate) fn env(pid: i32) -> Vec<(String, String)> {
         procargs_buffer(pid).map(|buf| procenv(&buf)).unwrap_or_default()
     }
 }
@@ -240,39 +240,39 @@ mod imp {
 mod imp {
     use super::{PathBuf, UnixStream, io};
 
-    pub fn all() -> Vec<i32> {
+    pub(crate) fn all() -> Vec<i32> {
         Vec::new()
     }
 
-    pub fn children(_pid: i32) -> Vec<i32> {
+    pub(crate) fn children(_pid: i32) -> Vec<i32> {
         Vec::new()
     }
 
-    pub fn open_files(_pid: i32) -> Vec<PathBuf> {
+    pub(crate) fn open_files(_pid: i32) -> Vec<PathBuf> {
         Vec::new()
     }
 
-    pub fn peer_uid(_socket: &UnixStream) -> io::Result<u32> {
+    pub(crate) fn peer_uid(_socket: &UnixStream) -> io::Result<u32> {
         Err(io::ErrorKind::Unsupported.into())
     }
 
-    pub fn cwd(_pid: i32) -> Option<PathBuf> {
+    pub(crate) fn cwd(_pid: i32) -> Option<PathBuf> {
         None
     }
 
-    pub fn name(_pid: i32) -> Option<String> {
+    pub(crate) fn name(_pid: i32) -> Option<String> {
         None
     }
 
-    pub fn args(_pid: i32) -> Vec<String> {
+    pub(crate) fn args(_pid: i32) -> Vec<String> {
         Vec::new()
     }
 
-    pub fn env(_pid: i32) -> Vec<(String, String)> {
+    pub(crate) fn env(_pid: i32) -> Vec<(String, String)> {
         Vec::new()
     }
 
-    pub fn footprint(_pid: i32) -> Option<u64> {
+    pub(crate) fn footprint(_pid: i32) -> Option<u64> {
         None
     }
 }

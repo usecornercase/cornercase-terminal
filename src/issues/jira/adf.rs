@@ -8,7 +8,7 @@ use crate::issues::md::{self, code_span, escape, item_lines, longest_run, one_li
 const INLINE: [&str; 9] =
     ["text", "hardBreak", "mention", "emoji", "inlineCard", "date", "status", "mediaInline", "placeholder"];
 
-pub fn markdown(doc: &Value) -> String {
+pub(crate) fn markdown(doc: &Value) -> String {
     match doc {
         Value::String(text) => text.clone(),
         Value::Object(_) => block(doc).trim_end().to_string(),

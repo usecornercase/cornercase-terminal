@@ -13,13 +13,13 @@ const MAX_BACK: u64 = 64 * 1024 * 1024;
 const CODEX_ASSISTANT: &str = r#""role":"assistant""#;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Said {
-    pub text: String,
-    pub written: Option<String>,
+pub(crate) struct Said {
+    pub(crate) text: String,
+    pub(crate) written: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Record {
+pub(crate) enum Record {
     Claude(PathBuf),
     Codex(PathBuf),
     Gemini(PathBuf),
@@ -27,7 +27,7 @@ pub enum Record {
 }
 
 impl Record {
-    pub fn last_message(&self) -> Result<Option<Said>> {
+    pub(crate) fn last_message(&self) -> Result<Option<Said>> {
         match self {
             Self::Claude(path) => claude(path),
             Self::Codex(path) => codex(path),
@@ -37,12 +37,12 @@ impl Record {
     }
 }
 
-pub fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {
+pub(super) fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {
     let texts: Vec<String> = texts.into_iter().map(|text| text.trim().to_string()).filter(|t| !t.is_empty()).collect();
     (!texts.is_empty()).then(|| texts.join("\n\n"))
 }
 
-pub struct Backwards {
+pub(super) struct Backwards {
     file: File,
     at: u64,
     left: u64,
@@ -52,7 +52,7 @@ pub struct Backwards {
 }
 
 impl Backwards {
-    pub fn open(path: &Path) -> io::Result<Self> {
+    pub(super) fn open(path: &Path) -> io::Result<Self> {
         let file = File::open(path)?;
         let at = file.metadata()?.len();
         Ok(Self { file, at, left: MAX_BACK, carry: Vec::new(), lines: Vec::new(), partial: true })

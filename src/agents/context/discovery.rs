@@ -13,7 +13,7 @@ impl<T> Default for Job<T> {
 }
 
 impl<T: Send + 'static> Job<T> {
-    pub fn take(&mut self) -> Option<T> {
+    pub(super) fn take(&mut self) -> Option<T> {
         let receiver = self.0.take()?;
         match receiver.try_recv() {
             Ok(answer) => Some(answer),
@@ -25,7 +25,7 @@ impl<T: Send + 'static> Job<T> {
         }
     }
 
-    pub fn start(&mut self, work: impl FnOnce() -> T + Send + 'static) {
+    pub(super) fn start(&mut self, work: impl FnOnce() -> T + Send + 'static) {
         if self.0.is_none() {
             let (tx, rx) = mpsc::channel();
             std::thread::spawn(move || {
@@ -35,7 +35,7 @@ impl<T: Send + 'static> Job<T> {
         }
     }
 
-    pub fn running(&self) -> bool {
+    pub(super) fn running(&self) -> bool {
         self.0.is_some()
     }
 }

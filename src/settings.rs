@@ -5,20 +5,20 @@ use crate::config::Config;
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
 
-pub const DONE: &str = "done";
-pub const RESTART: &str = "restart";
+pub(crate) const DONE: &str = "done";
+pub(crate) const RESTART: &str = "restart";
 const TAB_IDS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
 const EXTRA_ARGS: &str = "extra arguments…";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Status {
+pub(crate) enum Status {
     Missing,
     Saved(Option<Account>),
     Env,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Row {
+pub(crate) enum Row {
     Folder,
     Fetch,
     Sidebar,
@@ -51,11 +51,11 @@ pub enum Row {
 }
 
 impl Row {
-    pub fn movable(&self) -> bool {
+    pub(crate) fn movable(&self) -> bool {
         matches!(self, Self::Tab(_))
     }
 
-    pub fn section(&self) -> &'static str {
+    pub(crate) fn section(&self) -> &'static str {
         match self {
             Self::Folder
             | Self::Fetch
@@ -79,7 +79,7 @@ impl Row {
         }
     }
 
-    pub fn page(&self) -> Page {
+    pub(crate) fn page(&self) -> Page {
         match self {
             Self::Folder | Self::Fetch => Page::Worktrees,
             Self::DefaultAgent
@@ -114,7 +114,7 @@ impl Row {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Detail {
+pub(crate) enum Detail {
     Model,
     Context,
     Memory,
@@ -166,7 +166,7 @@ impl Detail {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Page {
+pub(crate) enum Page {
     #[default]
     Worktrees,
     Agents,
@@ -175,9 +175,9 @@ pub enum Page {
 }
 
 impl Page {
-    pub const ALL: [Self; 4] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui];
+    pub(crate) const ALL: [Self; 4] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui];
 
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Worktrees => "Worktrees",
             Self::Agents => "Agents",
@@ -186,19 +186,19 @@ impl Page {
         }
     }
 
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|p| *p == self).unwrap_or(0)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Move {
+pub(crate) enum Move {
     Up,
     Down,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Action {
+pub(crate) enum Action {
     None,
     Close,
     Restart,
@@ -209,54 +209,54 @@ pub enum Action {
 }
 
 #[derive(Debug)]
-pub struct Edit {
-    pub row: Row,
-    pub input: String,
-    pub error: Option<String>,
+pub(crate) struct Edit {
+    pub(crate) row: Row,
+    pub(crate) input: String,
+    pub(crate) error: Option<String>,
 }
 
 #[derive(Debug)]
-pub struct Pick {
-    pub row: Row,
-    pub items: Vec<PickItem>,
-    pub search: Search,
+pub(crate) struct Pick {
+    pub(crate) row: Row,
+    pub(crate) items: Vec<PickItem>,
+    pub(crate) search: Search,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PickItem {
-    pub value: String,
-    pub note: String,
-    pub dangerous: bool,
+pub(crate) struct PickItem {
+    pub(crate) value: String,
+    pub(crate) note: String,
+    pub(crate) dangerous: bool,
 }
 
 #[derive(Debug)]
-pub struct RowText {
-    pub label: String,
-    pub value: String,
-    pub note: String,
-    pub dangerous: bool,
+pub(crate) struct RowText {
+    pub(crate) label: String,
+    pub(crate) value: String,
+    pub(crate) note: String,
+    pub(crate) dangerous: bool,
 }
 
 #[derive(Debug)]
-pub struct Settings {
-    pub config: Config,
-    pub page: Page,
+pub(crate) struct Settings {
+    pub(crate) config: Config,
+    pub(crate) page: Page,
     home: Option<PathBuf>,
-    pub tokens: Vec<(Source, Status)>,
-    pub cursor: usize,
-    pub edit: Option<Edit>,
-    pub pick: Option<Pick>,
+    pub(crate) tokens: Vec<(Source, Status)>,
+    pub(crate) cursor: usize,
+    pub(crate) edit: Option<Edit>,
+    pub(crate) pick: Option<Pick>,
     added: Vec<String>,
-    pub checking: Vec<Source>,
-    pub notice: Option<String>,
-    pub capturing: bool,
-    pub awake: String,
-    pub remote: String,
-    pub browsers: usize,
+    pub(crate) checking: Vec<Source>,
+    pub(crate) notice: Option<String>,
+    pub(crate) capturing: bool,
+    pub(crate) awake: String,
+    pub(crate) remote: String,
+    pub(crate) browsers: usize,
 }
 
 impl Settings {
-    pub fn new(config: Config, home: Option<PathBuf>, tokens: Vec<(Source, Status)>, page: Page) -> Self {
+    pub(crate) fn new(config: Config, home: Option<PathBuf>, tokens: Vec<(Source, Status)>, page: Page) -> Self {
         Self {
             config,
             page,
@@ -275,7 +275,7 @@ impl Settings {
         }
     }
 
-    pub fn busy(&self) -> bool {
+    pub(crate) fn busy(&self) -> bool {
         !self.checking.is_empty()
     }
 
@@ -291,7 +291,7 @@ impl Settings {
         if shown.is_empty() { TAB_IDS.to_vec() } else { shown }
     }
 
-    pub fn listed_kinds(&self) -> Vec<String> {
+    pub(crate) fn listed_kinds(&self) -> Vec<String> {
         let config = &self.config;
         let mut kinds: Vec<String> = Vec::new();
         let default = agents::resolve(config, None, None);
@@ -306,7 +306,7 @@ impl Settings {
         kinds
     }
 
-    pub fn rows(&self) -> Vec<Row> {
+    pub(crate) fn rows(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
         let mut rows = vec![Row::Folder, Row::Fetch];
@@ -345,7 +345,7 @@ impl Settings {
         rows
     }
 
-    pub fn open_page(&mut self, page: Page) {
+    pub(crate) fn open_page(&mut self, page: Page) {
         self.page = page;
         self.cursor = 0;
         self.edit = None;
@@ -374,7 +374,7 @@ impl Settings {
         Action::Save(Box::new(config))
     }
 
-    pub fn select(&mut self, row: usize) {
+    pub(crate) fn select(&mut self, row: usize) {
         if row < self.rows().len() {
             self.cursor = row;
         }

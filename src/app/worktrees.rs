@@ -44,7 +44,7 @@ pub(super) enum Check {
 }
 
 #[derive(Debug)]
-pub enum WorktreeEvent {
+pub(crate) enum WorktreeEvent {
     Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<()>, request: Option<u64> },
@@ -52,7 +52,7 @@ pub enum WorktreeEvent {
 }
 
 impl WorktreeEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Created { .. } => "worktree created",
             Self::Checked { .. } => "worktree checked",

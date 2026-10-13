@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-pub const AUTO: &str = "auto";
-pub const OFF: &str = "off";
+pub(crate) const AUTO: &str = "auto";
+pub(crate) const OFF: &str = "off";
 const TITLE: &str = "cornercase";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Channel {
+pub(crate) enum Channel {
     Osc777,
     Osc9,
     Osc99,
@@ -13,9 +13,9 @@ pub enum Channel {
 }
 
 impl Channel {
-    pub const ALL: [Self; 4] = [Self::Osc777, Self::Osc9, Self::Osc99, Self::Bell];
+    pub(crate) const ALL: [Self; 4] = [Self::Osc777, Self::Osc9, Self::Osc99, Self::Bell];
 
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Osc777 => "osc777",
             Self::Osc9 => "osc9",
@@ -37,7 +37,7 @@ impl Channel {
         }
     }
 
-    pub fn encode(self, text: &str) -> Vec<u8> {
+    pub(crate) fn encode(self, text: &str) -> Vec<u8> {
         let text = clean(text).replace(';', ",");
         match self {
             Self::Osc777 => format!("\x1b]777;notify;{TITLE};{text}\x07"),
@@ -50,34 +50,34 @@ impl Channel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Notification {
-    pub text: String,
-    pub channel: Option<Channel>,
+pub(crate) struct Notification {
+    pub(crate) text: String,
+    pub(crate) channel: Option<Channel>,
 }
 
 impl Notification {
-    pub fn new(text: &str, setting: &str) -> Option<Self> {
+    pub(crate) fn new(text: &str, setting: &str) -> Option<Self> {
         let off = setting.trim().eq_ignore_ascii_case(OFF);
         (!off).then(|| Self { text: text.into(), channel: Channel::from_id(setting) })
     }
 
-    pub fn encode(&self, detected: Channel) -> Vec<u8> {
+    pub(crate) fn encode(&self, detected: Channel) -> Vec<u8> {
         self.channel.unwrap_or(detected).encode(&self.text)
     }
 }
 
-pub fn choices() -> Vec<(&'static str, &'static str)> {
+pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
     let mut choices = vec![(AUTO, "what your terminal understands")];
     choices.extend(Channel::ALL.map(|c| (c.id(), c.note())));
     choices.push((OFF, "only the toast and the marks in cornercase"));
     choices
 }
 
-pub fn clean(text: &str) -> String {
+pub(crate) fn clean(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
 }
 
-pub fn detect(version: Option<&str>, var: impl Fn(&str) -> Option<String>) -> Channel {
+pub(crate) fn detect(version: Option<&str>, var: impl Fn(&str) -> Option<String>) -> Channel {
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
     if set("TMUX") || set("STY") || set("ZELLIJ") {
         return Channel::Bell;

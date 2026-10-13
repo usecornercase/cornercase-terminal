@@ -22,26 +22,26 @@ fn update_rows(update: Rect) -> [Rect; 4] {
     [message, notes, note, buttons]
 }
 
-pub fn update_notes(area: Rect) -> Rect {
+pub(crate) fn update_notes(area: Rect) -> Rect {
     update_rows(picker_area(area))[1]
 }
 
-pub fn update_buttons(area: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
+pub(crate) fn update_buttons(area: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
     buttons_in(update_rows(picker_area(area))[3], submit, cancel)
 }
 
-pub fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
+pub(crate) fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
     scroll.min(lines.saturating_sub(usize::from(update_notes(area).height)))
 }
 
-pub struct Update {
-    pub title: &'static str,
-    pub message: String,
-    pub notes: Vec<Line<'static>>,
-    pub scroll: usize,
-    pub note: Option<Note>,
-    pub submit: &'static str,
-    pub cancel: &'static str,
+pub(crate) struct Update {
+    pub(crate) title: &'static str,
+    pub(crate) message: String,
+    pub(crate) notes: Vec<Line<'static>>,
+    pub(crate) scroll: usize,
+    pub(crate) note: Option<Note>,
+    pub(crate) submit: &'static str,
+    pub(crate) cancel: &'static str,
 }
 
 pub(in crate::ui) fn draw_update(f: &mut Frame, view: &View, update: &Update) {

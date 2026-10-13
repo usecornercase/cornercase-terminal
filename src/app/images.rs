@@ -19,12 +19,12 @@ const PLACEHOLDER: char = '\u{10EEEE}';
 const NOT_PREPARED: &str = "cornercase could not prepare this image for this terminal, see server.log";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sight {
-    pub support: Support,
-    pub visible: Rect,
-    pub background: Option<(u8, u8, u8)>,
-    pub lo: u8,
-    pub sent: Option<u64>,
+pub(crate) struct Sight {
+    pub(crate) support: Support,
+    pub(crate) visible: Rect,
+    pub(crate) background: Option<(u8, u8, u8)>,
+    pub(crate) lo: u8,
+    pub(crate) sent: Option<u64>,
 }
 
 impl Default for Sight {
@@ -40,16 +40,16 @@ impl Default for Sight {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Placed {
-    pub key: Key,
-    pub rect: Rect,
-    pub path: String,
-    pub payload: Option<Arc<Vec<u8>>>,
-    pub drawn: bool,
+pub(crate) struct Placed {
+    pub(crate) key: Key,
+    pub(crate) rect: Rect,
+    pub(crate) path: String,
+    pub(crate) payload: Option<Arc<Vec<u8>>>,
+    pub(crate) drawn: bool,
 }
 
 #[derive(Debug, Default)]
-pub struct Payloads {
+pub(super) struct Payloads {
     ready: VecDeque<(Key, Arc<Vec<u8>>)>,
     failed: VecDeque<Key>,
     running: HashSet<Key>,
@@ -116,7 +116,7 @@ fn own(buf: &mut Buffer, rect: Rect, protocol: Protocol) -> bool {
     owned
 }
 
-pub fn owned(buf: &mut Buffer, mut placed: Placed) -> Placed {
+pub(super) fn owned(buf: &mut Buffer, mut placed: Placed) -> Placed {
     if placed.drawn {
         placed.drawn = own(buf, placed.rect, placed.key.protocol) || placed.key.protocol == Protocol::Kitty;
     }
@@ -124,7 +124,7 @@ pub fn owned(buf: &mut Buffer, mut placed: Placed) -> Placed {
 }
 
 impl App {
-    pub fn picture(&self) -> Option<u64> {
+    pub(crate) fn picture(&self) -> Option<u64> {
         match &self.shown_picture()?.1.body {
             Body::Image(picture) => Some(picture.id),
             _ => None,

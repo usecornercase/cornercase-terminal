@@ -22,7 +22,7 @@ mod branches;
 const CHANGES_LABEL: &str = "Changes";
 
 #[derive(Debug)]
-pub enum ChangesEvent {
+pub(crate) enum ChangesEvent {
     Loaded {
         workspace: u64,
         generation: u64,
@@ -43,7 +43,7 @@ pub enum ChangesEvent {
 }
 
 impl ChangesEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Loaded { .. } => "changes",
             Self::Branches { .. } => "branches",

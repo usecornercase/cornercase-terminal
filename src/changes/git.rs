@@ -29,20 +29,20 @@ const UNTRACKED_READ_BYTES: u64 = 8 << 20;
 const REMOTE_HEAD: &str = "refs/remotes/origin/HEAD";
 
 #[derive(Debug, Clone)]
-pub struct Request {
-    pub dir: PathBuf,
-    pub mode: Mode,
-    pub base: Option<String>,
-    pub last: Option<u64>,
-    pub previous: Vec<Arc<File>>,
-    pub expanded: Option<Vec<String>>,
+pub(crate) struct Request {
+    pub(crate) dir: PathBuf,
+    pub(crate) mode: Mode,
+    pub(crate) base: Option<String>,
+    pub(crate) last: Option<u64>,
+    pub(crate) previous: Vec<Arc<File>>,
+    pub(crate) expanded: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
-pub struct Loaded {
-    pub base: Option<String>,
-    pub digest: u64,
-    pub diff: Option<Diff>,
+pub(crate) struct Loaded {
+    pub(crate) base: Option<String>,
+    pub(crate) digest: u64,
+    pub(crate) diff: Option<Diff>,
 }
 
 pub(super) fn run(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
@@ -55,7 +55,7 @@ fn text(dir: &Path, args: &[&str]) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-pub fn default_base(dir: &Path) -> Option<String> {
+pub(crate) fn default_base(dir: &Path) -> Option<String> {
     if let Some(head) = text(dir, &["symbolic-ref", "--quiet", REMOTE_HEAD]) {
         return Some(head.strip_prefix("refs/remotes/").unwrap_or(&head).to_string());
     }
@@ -65,7 +65,7 @@ pub fn default_base(dir: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-pub fn branches(dir: &Path) -> Vec<String> {
+pub(crate) fn branches(dir: &Path) -> Vec<String> {
     let Some(refs) = text(dir, &["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"]) else {
         return Vec::new();
     };
@@ -88,9 +88,9 @@ fn merge_base(dir: &Path, base: &str) -> Result<String> {
 
 #[derive(Hash)]
 pub(super) struct Untracked {
-    pub path: String,
-    pub size: u64,
-    pub bytes: Option<Vec<u8>>,
+    pub(crate) path: String,
+    pub(crate) size: u64,
+    pub(crate) bytes: Option<Vec<u8>>,
     modified: Option<SystemTime>,
 }
 
@@ -128,7 +128,7 @@ fn read(path: &Path) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-pub fn load(request: &Request) -> Result<Loaded> {
+pub(crate) fn load(request: &Request) -> Result<Loaded> {
     if let Some(expanded) = &request.expanded {
         return super::summary::load(request, expanded);
     }
@@ -208,7 +208,7 @@ pub(super) fn patch(dir: &Path, from: &str, paths: &[&str]) -> Result<Vec<u8>> {
     run(dir, &args)
 }
 
-pub fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>> {
+pub(crate) fn new_side(dir: &Path, mode: Mode, path: &str) -> Option<Vec<String>> {
     let bytes = match mode {
         Mode::Commits => run(dir, &["show", &format!("HEAD:./{path}")]).ok()?,
         Mode::Uncommitted | Mode::All => read(&dir.join(path))?,

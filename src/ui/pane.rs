@@ -29,14 +29,14 @@ const WELCOME_HINT: &str = " opens a folder";
 const LOGO: [(&str, &str); 6] =
     [("   █████████", ""), ("▄▄▄▀▀▀▀▀▀▀▀▀", ""), ("███", ""), ("███   ", "██"), ("███   ", "██"), ("███   ", "▀▀")];
 
-pub struct TabView {
-    pub layout: Node<usize>,
-    pub screens: Vec<Snapshot>,
-    pub active: usize,
-    pub dim_inactive: bool,
-    pub dragging: Option<Vec<bool>>,
-    pub link: Option<(u16, Range<u16>)>,
-    pub landing: Option<(Rect, Place)>,
+pub(crate) struct TabView {
+    pub(crate) layout: Node<usize>,
+    pub(crate) screens: Vec<Snapshot>,
+    pub(crate) active: usize,
+    pub(crate) dim_inactive: bool,
+    pub(crate) dragging: Option<Vec<bool>>,
+    pub(crate) link: Option<(u16, Range<u16>)>,
+    pub(crate) landing: Option<(Rect, Place)>,
 }
 
 fn draw_centered(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>) {
@@ -96,11 +96,11 @@ pub(super) fn wordmark() -> Vec<Span<'static>> {
     vec![Span::styled("c", mark), Span::styled("ornercase", Style::default().add_modifier(Modifier::BOLD))]
 }
 
-pub fn scrollback_label(below: usize) -> String {
+pub(crate) fn scrollback_label(below: usize) -> String {
     format!(" ↓ {below} more ")
 }
 
-pub fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
+pub(crate) fn scrollback_badge(pane: Rect, below: usize) -> Option<Rect> {
     if below == 0 || pane.height == 0 {
         return None;
     }

@@ -1,7 +1,7 @@
-pub mod diff;
-pub mod every;
-pub mod filter;
-pub mod git;
+pub(crate) mod diff;
+pub(crate) mod every;
+pub(crate) mod filter;
+pub(crate) mod git;
 mod summary;
 
 use std::collections::{HashMap, HashSet};
@@ -25,7 +25,7 @@ const AUTO_FOLD_LINES: usize = 500;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Mode {
+pub(crate) enum Mode {
     #[default]
     Uncommitted,
     Commits,
@@ -33,9 +33,9 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub const ALL: [Self; 3] = [Self::Uncommitted, Self::Commits, Self::All];
+    pub(crate) const ALL: [Self; 3] = [Self::Uncommitted, Self::Commits, Self::All];
 
-    pub fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Uncommitted => "Uncommitted",
             Self::Commits => "Commits",
@@ -46,36 +46,36 @@ impl Mode {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Scope {
+pub(crate) enum Scope {
     #[default]
     Project,
     Every,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GapLine {
-    pub old: u32,
-    pub new: u32,
-    pub text: String,
-    pub syntax: Option<Segments>,
+pub(crate) struct GapLine {
+    pub(crate) old: u32,
+    pub(crate) new: u32,
+    pub(crate) text: String,
+    pub(crate) syntax: Option<Segments>,
 }
 
 #[derive(Debug)]
-pub struct Model {
-    pub mode: Mode,
-    pub base: Option<String>,
-    pub label: Option<String>,
-    pub result: std::result::Result<Arc<Diff>, String>,
-    pub digest: Option<u64>,
-    pub at: Instant,
+pub(crate) struct Model {
+    pub(crate) mode: Mode,
+    pub(crate) base: Option<String>,
+    pub(crate) label: Option<String>,
+    pub(crate) result: std::result::Result<Arc<Diff>, String>,
+    pub(crate) digest: Option<u64>,
+    pub(crate) at: Instant,
 }
 
 impl Model {
-    pub fn diff(&self) -> Option<&Arc<Diff>> {
+    pub(crate) fn diff(&self) -> Option<&Arc<Diff>> {
         self.result.as_ref().ok()
     }
 
-    pub fn live(&self, now: Instant) -> bool {
+    pub(crate) fn live(&self, now: Instant) -> bool {
         self.result.is_ok() && now.duration_since(self.at) < LIVE_FOR
     }
 }
@@ -87,24 +87,24 @@ struct FileKey {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Body {
+pub(crate) enum Body {
     Loading,
     Failed(String),
     Ready(Arc<Diff>),
 }
 
 #[derive(Debug, Default)]
-pub struct Panel {
-    pub watched: bool,
-    pub mode: Mode,
-    pub scope: Scope,
-    pub scroll: usize,
-    pub workspace: Option<u64>,
-    pub filter: Option<filter::Filter>,
+pub(crate) struct Panel {
+    pub(crate) watched: bool,
+    pub(crate) mode: Mode,
+    pub(crate) scope: Scope,
+    pub(crate) scroll: usize,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) filter: Option<filter::Filter>,
     models: HashMap<u64, Model>,
     summaries: HashMap<u64, Model>,
     every_folded: HashMap<FileKey, bool>,
-    pub headers: HashSet<u64>,
+    pub(crate) headers: HashSet<u64>,
     next: usize,
     summary_requested: HashMap<u64, Instant>,
     folded: HashMap<FileKey, bool>,
@@ -115,10 +115,10 @@ pub struct Panel {
     requested: HashMap<u64, Instant>,
 }
 
-pub struct Checkout {
-    pub workspace: u64,
-    pub dir: PathBuf,
-    pub base: Option<String>,
+pub(crate) struct Checkout {
+    pub(crate) workspace: u64,
+    pub(crate) dir: PathBuf,
+    pub(crate) base: Option<String>,
 }
 
 fn key(workspace: u64, file: &File) -> FileKey {
@@ -126,11 +126,11 @@ fn key(workspace: u64, file: &File) -> FileKey {
 }
 
 impl Panel {
-    pub fn model(&self, workspace: u64, base: Option<&str>) -> Option<&Model> {
+    pub(crate) fn model(&self, workspace: u64, base: Option<&str>) -> Option<&Model> {
         self.models.get(&workspace).filter(|m| m.mode == self.mode && m.base.as_deref() == base)
     }
 
-    pub fn request(&mut self, target: &Checkout, now: Instant) -> Option<(u64, git::Request)> {
+    pub(crate) fn request(&mut self, target: &Checkout, now: Instant) -> Option<(u64, git::Request)> {
         if self.busy(now) {
             return None;
         }
@@ -154,7 +154,13 @@ impl Panel {
         Some((self.generation, request))
     }
 
-    pub fn loaded(&mut self, workspace: u64, generation: u64, request: &git::Request, result: Result<git::Loaded>) {
+    pub(crate) fn loaded(
+        &mut self,
+        workspace: u64,
+        generation: u64,
+        request: &git::Request,
+        result: Result<git::Loaded>,
+    ) {
         if self.loading.is_some_and(|(w, g, _)| (w, g) == (workspace, generation)) {
             self.loading = None;
         }
@@ -195,18 +201,22 @@ impl Panel {
         models.insert(workspace, model);
     }
 
-    pub fn summary(&self, workspace: u64) -> Option<&Model> {
+    pub(crate) fn summary(&self, workspace: u64) -> Option<&Model> {
         self.summaries.get(&workspace)
     }
 
-    pub fn set_scope(&mut self, scope: Scope) {
+    pub(crate) fn set_scope(&mut self, scope: Scope) {
         if self.scope != scope {
             self.scope = scope;
             self.scroll = 0;
         }
     }
 
-    pub fn request_every(&mut self, targets: &[(Checkout, bool)], now: Instant) -> Option<(u64, u64, git::Request)> {
+    pub(crate) fn request_every(
+        &mut self,
+        targets: &[(Checkout, bool)],
+        now: Instant,
+    ) -> Option<(u64, u64, git::Request)> {
         if self.busy(now) || targets.is_empty() {
             return None;
         }
@@ -242,7 +252,7 @@ impl Panel {
         None
     }
 
-    pub fn invalidate_summary(&mut self, workspace: u64) {
+    pub(crate) fn invalidate_summary(&mut self, workspace: u64) {
         self.summary_requested.remove(&workspace);
     }
 
@@ -250,7 +260,7 @@ impl Panel {
         self.loading.is_some_and(|(_, _, at)| now.duration_since(at) < GIVE_UP_AFTER)
     }
 
-    pub fn forget(&mut self, workspace: u64) {
+    pub(crate) fn forget(&mut self, workspace: u64) {
         self.models.remove(&workspace);
         self.summaries.remove(&workspace);
         self.requested.remove(&workspace);
@@ -265,28 +275,28 @@ impl Panel {
         }
     }
 
-    pub fn toggle_header(&mut self, id: u64) {
+    pub(crate) fn toggle_header(&mut self, id: u64) {
         if !self.headers.remove(&id) {
             self.headers.insert(id);
         }
     }
 
-    pub fn label(&self, workspace: u64) -> Option<String> {
+    pub(crate) fn label(&self, workspace: u64) -> Option<String> {
         self.models.get(&workspace).filter(|m| m.mode != Mode::Uncommitted).and_then(|m| m.label.clone())
     }
 
-    pub fn set_mode(&mut self, mode: Mode) {
+    pub(crate) fn set_mode(&mut self, mode: Mode) {
         if self.mode != mode {
             self.mode = mode;
             self.scroll = 0;
         }
     }
 
-    pub fn viewed(&self, workspace: u64, file: &File) -> bool {
+    pub(crate) fn viewed(&self, workspace: u64, file: &File) -> bool {
         self.viewed.get(&key(workspace, file)) == Some(&file.viewed_digest)
     }
 
-    pub fn toggle_viewed(&mut self, workspace: u64, file: &File) {
+    pub(crate) fn toggle_viewed(&mut self, workspace: u64, file: &File) {
         let key = key(workspace, file);
         if self.viewed.get(&key) == Some(&file.viewed_digest) {
             self.viewed.remove(&key);
@@ -308,26 +318,26 @@ impl Panel {
             || big
     }
 
-    pub fn folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {
+    pub(crate) fn folded(&self, workspace: u64, diff: &Diff, file: &File) -> bool {
         if !file.fold.shows_lines() {
             return true;
         }
         self.folds().get(&key(workspace, file)).copied().unwrap_or_else(|| self.auto_folded(workspace, diff, file))
     }
 
-    pub fn toggle_fold(&mut self, workspace: u64, diff: &Diff, file: &File) {
+    pub(crate) fn toggle_fold(&mut self, workspace: u64, diff: &Diff, file: &File) {
         let folded = self.folded(workspace, diff, file);
         self.folds_mut().insert(key(workspace, file), !folded);
         self.invalidate_summary(workspace);
     }
 
-    pub fn close(&mut self) {
+    pub(crate) fn close(&mut self) {
         if let Some(filter) = &mut self.filter {
             filter.focused = false;
         }
     }
 
-    pub fn fold_all(&mut self, workspace: u64, diff: &Diff) {
+    pub(crate) fn fold_all(&mut self, workspace: u64, diff: &Diff) {
         let fold = diff.files.iter().any(|f| !self.folded(workspace, diff, f));
         for file in &diff.files {
             self.folds_mut().insert(key(workspace, file), fold);
@@ -342,22 +352,22 @@ impl Panel {
         if self.scope == Scope::Every { &mut self.every_folded } else { &mut self.folded }
     }
 
-    pub fn set_fold(&mut self, workspace: u64, file: &File, folded: bool) {
+    pub(crate) fn set_fold(&mut self, workspace: u64, file: &File, folded: bool) {
         self.folds_mut().insert(key(workspace, file), folded);
         self.invalidate_summary(workspace);
     }
 
-    pub fn gap(&self, workspace: u64, file: &File, hunk: usize) -> Option<&Arc<Vec<GapLine>>> {
+    pub(crate) fn gap(&self, workspace: u64, file: &File, hunk: usize) -> Option<&Arc<Vec<GapLine>>> {
         self.gaps.get(&(key(workspace, file), file.digest, hunk))
     }
 
-    pub fn set_gap(&mut self, workspace: u64, file: &File, hunk: usize, lines: Vec<GapLine>) {
+    pub(crate) fn set_gap(&mut self, workspace: u64, file: &File, hunk: usize, lines: Vec<GapLine>) {
         self.gaps.retain(|(k, digest, _), _| k.workspace != workspace || k.path != file.path || *digest == file.digest);
         self.gaps.insert((key(workspace, file), file.digest, hunk), Arc::new(lines));
     }
 }
 
-pub fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<GapLine> {
+pub(crate) fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<GapLine> {
     let (Some(before), Some(after)) = (hunk.checked_sub(1).and_then(|h| file.hunks.get(h)), file.hunks.get(hunk))
     else {
         return Vec::new();
@@ -381,15 +391,15 @@ pub fn gap_lines(file: &File, hunk: usize, new_side: &[String]) -> Vec<GapLine> 
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Tints {
-    pub removed: Option<Color>,
-    pub added: Option<Color>,
-    pub removed_word: Color,
-    pub added_word: Color,
+pub(crate) struct Tints {
+    pub(crate) removed: Option<Color>,
+    pub(crate) added: Option<Color>,
+    pub(crate) removed_word: Color,
+    pub(crate) added_word: Color,
 }
 
 impl Tints {
-    pub fn of(theme: &HostTheme) -> Self {
+    pub(crate) fn of(theme: &HostTheme) -> Self {
         let light = theme.is_light() == Some(true);
         let Some(bg) = theme.background.filter(|_| theme.truecolor) else {
             return if light {
@@ -427,8 +437,8 @@ fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> Color {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchPicker {
-    pub workspace: u64,
+pub(crate) struct BranchPicker {
+    pub(crate) workspace: u64,
     branches: Vec<String>,
     default: Option<String>,
     current: Option<String>,
@@ -437,19 +447,19 @@ pub struct BranchPicker {
 }
 
 impl BranchPicker {
-    pub fn new(workspace: u64, branches: Vec<String>, default: Option<String>, current: Option<String>) -> Self {
+    pub(crate) fn new(workspace: u64, branches: Vec<String>, default: Option<String>, current: Option<String>) -> Self {
         let mut picker =
             Self { workspace, branches, default, current, filter: String::new(), cursor: Cursor::default() };
         picker.cursor.selected = picker.current.as_ref().and_then(|c| picker.items().iter().position(|b| b == c));
         picker
     }
 
-    pub fn items(&self) -> Vec<&str> {
+    pub(crate) fn items(&self) -> Vec<&str> {
         let filter = self.filter.to_lowercase();
         self.branches.iter().map(String::as_str).filter(|b| b.to_lowercase().contains(&filter)).collect()
     }
 
-    pub fn tag(&self, branch: &str) -> Option<&'static str> {
+    pub(crate) fn tag(&self, branch: &str) -> Option<&'static str> {
         if self.current.as_deref() == Some(branch) {
             Some("current")
         } else if self.default.as_deref() == Some(branch) {
@@ -459,28 +469,28 @@ impl BranchPicker {
         }
     }
 
-    pub fn filter(&self) -> &str {
+    pub(crate) fn filter(&self) -> &str {
         &self.filter
     }
 
-    pub fn selected(&self) -> Option<usize> {
+    pub(crate) fn selected(&self) -> Option<usize> {
         self.cursor.selected
     }
 
-    pub fn scroll(&self) -> usize {
+    pub(crate) fn scroll(&self) -> usize {
         self.cursor.scroll
     }
 
-    pub fn default(&self) -> Option<&str> {
+    pub(crate) fn default(&self) -> Option<&str> {
         self.default.as_deref()
     }
 
-    pub fn push(&mut self, c: char) {
+    pub(crate) fn push(&mut self, c: char) {
         self.filter.push(c);
         self.reset();
     }
 
-    pub fn pop(&mut self) {
+    pub(crate) fn pop(&mut self) {
         self.filter.pop();
         self.reset();
     }
@@ -490,17 +500,17 @@ impl BranchPicker {
         self.cursor = Cursor { selected, scroll: 0 };
     }
 
-    pub fn move_selection(&mut self, delta: isize, rows: usize) {
+    pub(crate) fn move_selection(&mut self, delta: isize, rows: usize) {
         let len = self.items().len();
         self.cursor.move_by(delta, len, rows);
     }
 
-    pub fn scroll_by(&mut self, delta: isize, rows: usize) {
+    pub(crate) fn scroll_by(&mut self, delta: isize, rows: usize) {
         let len = self.items().len();
         self.cursor.scroll_by(delta, len, rows);
     }
 
-    pub fn chosen(&self, index: Option<usize>) -> Option<String> {
+    pub(crate) fn chosen(&self, index: Option<usize>) -> Option<String> {
         let items = self.items();
         index
             .or(self.cursor.selected)

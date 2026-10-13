@@ -19,7 +19,7 @@ use crate::highlight::markdown;
 use crate::highlight::syntax::Segments;
 use crate::text::{truncate_left, truncate_right};
 
-pub const LABEL: &str = "Files";
+pub(crate) const LABEL: &str = "Files";
 const HEADER_ROWS: u16 = 3;
 const BACK_WIDTH: u16 = 3;
 const LOADING: &str = "reading files…";
@@ -35,85 +35,85 @@ const NAME_ICON: &str = "▤";
 const UNREADABLE: &str = "cannot read this image";
 const LIT: Style = Style::new().fg(Color::Black).bg(Color::Yellow);
 const IMAGE_ACTIONS: [Action; 2] = [Action::Ask, Action::Copy];
-pub const MARKER: &str = "\u{10FFFD}";
+pub(crate) const MARKER: &str = "\u{10FFFD}";
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct View {
-    pub root: String,
-    pub bar: Bar,
-    pub screen: Screen,
-    pub light: bool,
-    pub muted: Color,
-    pub tint: Option<Color>,
+pub(crate) struct View {
+    pub(crate) root: String,
+    pub(crate) bar: Bar,
+    pub(crate) screen: Screen,
+    pub(crate) light: bool,
+    pub(crate) muted: Color,
+    pub(crate) tint: Option<Color>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Screen {
+pub(crate) enum Screen {
     Tree(TreeView),
     Search(SearchView),
     File(FileView),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Bar {
-    pub query: String,
-    pub focused: bool,
-    pub mode: Mode,
+pub(crate) struct Bar {
+    pub(crate) query: String,
+    pub(crate) focused: bool,
+    pub(crate) mode: Mode,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SearchView {
-    pub rows: Vec<Found>,
-    pub note: String,
-    pub selected: Option<usize>,
-    pub scroll: usize,
+pub(crate) struct SearchView {
+    pub(crate) rows: Vec<Found>,
+    pub(crate) note: String,
+    pub(crate) selected: Option<usize>,
+    pub(crate) scroll: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Found {
+pub(crate) enum Found {
     Name { path: String, indices: Vec<u32> },
     File { path: String, count: usize },
     Line { path: String, number: u32, text: String, ranges: Vec<Range<usize>> },
 }
 
 impl Found {
-    pub fn selectable(&self) -> bool {
+    pub(crate) fn selectable(&self) -> bool {
         !matches!(self, Self::File { .. })
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TreeView {
-    pub rows: Vec<TreeRow>,
-    pub scroll: usize,
-    pub last: Option<String>,
-    pub loading: bool,
+pub(crate) struct TreeView {
+    pub(crate) rows: Vec<TreeRow>,
+    pub(crate) scroll: usize,
+    pub(crate) last: Option<String>,
+    pub(crate) loading: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TreeRow {
-    pub name: String,
-    pub path: String,
-    pub depth: u16,
-    pub dir: bool,
-    pub open: bool,
-    pub status: Option<Status>,
+pub(crate) struct TreeRow {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) depth: u16,
+    pub(crate) dir: bool,
+    pub(crate) open: bool,
+    pub(crate) status: Option<Status>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FileView {
-    pub path: String,
-    pub content: Option<Arc<Content>>,
-    pub gutter: Option<Gutter>,
-    pub unfolded: HashSet<u32>,
-    pub scroll: usize,
-    pub selection: Option<(u32, u32)>,
-    pub find: Option<String>,
-    pub image: Option<Image>,
+pub(crate) struct FileView {
+    pub(crate) path: String,
+    pub(crate) content: Option<Arc<Content>>,
+    pub(crate) gutter: Option<Gutter>,
+    pub(crate) unfolded: HashSet<u32>,
+    pub(crate) scroll: usize,
+    pub(crate) selection: Option<(u32, u32)>,
+    pub(crate) find: Option<String>,
+    pub(crate) image: Option<Image>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Image {
+pub(crate) enum Image {
     Placeholders { id: u32, rect: Rect },
     Markers(Rect),
     Message(Vec<String>),
@@ -121,7 +121,7 @@ pub enum Image {
 }
 
 impl FileView {
-    pub fn is_image(&self) -> bool {
+    pub(crate) fn is_image(&self) -> bool {
         self.content.as_ref().is_some_and(|c| c.is_image())
     }
 
@@ -147,7 +147,7 @@ impl FileView {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hit {
+pub(crate) enum Hit {
     Close,
     Mode,
     Field,
@@ -161,13 +161,13 @@ pub enum Hit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Parts {
-    pub title: Rect,
-    pub info: Rect,
-    pub body: Rect,
+pub(crate) struct Parts {
+    pub(crate) title: Rect,
+    pub(crate) info: Rect,
+    pub(crate) body: Rect,
 }
 
-pub fn parts(area: Rect) -> Parts {
+pub(crate) fn parts(area: Rect) -> Parts {
     let row = |y: u16| Rect::new(area.x + 1, y, area.width.saturating_sub(2), 1).intersection(area);
     let top = area.y.saturating_add(HEADER_ROWS).min(area.bottom());
     Parts {
@@ -177,37 +177,37 @@ pub fn parts(area: Rect) -> Parts {
     }
 }
 
-pub fn action(area: Rect, file: &FileView, action: Action) -> Rect {
+pub(crate) fn action(area: Rect, file: &FileView, action: Action) -> Rect {
     file.actions(parts(area).info).into_iter().find(|(a, _)| *a == action).map_or_else(Rect::default, |(_, r)| r)
 }
 
-pub fn image_room(area: Rect, visible: Rect) -> Rect {
+pub(crate) fn image_room(area: Rect, visible: Rect) -> Rect {
     let body = parts(area).body;
     let room = Rect::new(body.x + 1, body.y, body.width.saturating_sub(2), body.height).intersection(visible);
     let last = visible.bottom().saturating_sub(1);
     Rect { height: room.height.min(last.saturating_sub(room.y)), ..room }
 }
 
-pub fn image_rect(room: Rect, cols: u16, rows: u16) -> Rect {
+pub(crate) fn image_rect(room: Rect, cols: u16, rows: u16) -> Rect {
     let (cols, rows) = (cols.min(room.width), rows.min(room.height));
     Rect::new(room.x + (room.width - cols) / 2, room.y, cols, rows)
 }
 
-pub fn field(area: Rect) -> Rect {
+pub(crate) fn field(area: Rect) -> Rect {
     parts(area).info
 }
 
-pub fn mode_button(area: Rect) -> Rect {
+pub(crate) fn mode_button(area: Rect) -> Rect {
     let row = field(area);
     Rect::new(row.right().saturating_sub(BACK_WIDTH), row.y, BACK_WIDTH, 1).intersection(row)
 }
 
-pub fn clear(area: Rect) -> Rect {
+pub(crate) fn clear(area: Rect) -> Rect {
     let mode = mode_button(area);
     Rect::new(mode.x.saturating_sub(BACK_WIDTH), mode.y, BACK_WIDTH, 1).intersection(field(area))
 }
 
-pub fn back(area: Rect) -> Rect {
+pub(crate) fn back(area: Rect) -> Rect {
     let title = parts(area).title;
     Rect { width: BACK_WIDTH.min(title.width), ..title }
 }
@@ -229,7 +229,7 @@ fn first(area: Rect, view: &View) -> usize {
     scroll.min(max_scroll(area, view))
 }
 
-pub fn max_scroll(area: Rect, view: &View) -> usize {
+pub(crate) fn max_scroll(area: Rect, view: &View) -> usize {
     rows(view).saturating_sub(usize::from(parts(area).body.height))
 }
 
@@ -242,7 +242,7 @@ fn mark_cell(area: Rect, file: &FileView) -> u16 {
     area.x + 2 + file.digits()
 }
 
-pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
+pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
     }
@@ -281,7 +281,7 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     }
 }
 
-pub fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
+pub(crate) fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
     let Screen::File(file) = &view.screen else { return None };
     let body = parts(area).body;
     if body.is_empty() {
@@ -296,14 +296,14 @@ pub fn line_near(area: Rect, view: &View, y: u16) -> Option<u32> {
     })
 }
 
-pub fn row_of(view: &View, line: u32) -> usize {
+pub(crate) fn row_of(view: &View, line: u32) -> usize {
     match &view.screen {
         Screen::File(file) => file.lines().row_of(line),
         Screen::Tree(_) | Screen::Search(_) => 0,
     }
 }
 
-pub fn shown_rows(area: Rect) -> usize {
+pub(crate) fn shown_rows(area: Rect) -> usize {
     usize::from(parts(area).body.height)
 }
 
@@ -316,7 +316,7 @@ fn status_colour(status: Status) -> Color {
     }
 }
 
-pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
+pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let buf = f.buffer_mut();
     let p = parts(area);
     let mut cursor = None;
@@ -546,7 +546,7 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     }
 }
 
-pub fn size(bytes: u64) -> String {
+pub(crate) fn size(bytes: u64) -> String {
     const KB: u64 = 1 << 10;
     const MB: u64 = 1 << 20;
     match bytes {

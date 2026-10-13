@@ -50,7 +50,7 @@ struct Credits {
     balance: Option<String>,
 }
 
-pub fn requests() -> String {
+pub(super) fn requests() -> String {
     let client = json!({"name": "cornercase", "version": crate::version::CURRENT});
     let initialize = json!({"id": INITIALIZE, "method": "initialize", "params": {"clientInfo": client}});
     let initialized = json!({"method": "initialized"});
@@ -95,7 +95,7 @@ fn credits(credits: &Credits) -> Option<String> {
     credits.balance.as_ref().filter(|_| credits.available).map(|balance| format!("credits: {balance}"))
 }
 
-pub fn parse(result: Value) -> Result<Report> {
+pub(super) fn parse(result: Value) -> Result<Report> {
     let body: Body = serde_json::from_value(result).map_err(|e| Error::Usage(format!("unexpected answer: {e}")))?;
     let windows = windows(&body);
     Ok(Report {
@@ -107,7 +107,7 @@ pub fn parse(result: Value) -> Result<Report> {
     })
 }
 
-pub fn answer(line: &str) -> Option<Result<Report>> {
+pub(super) fn answer(line: &str) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     if message.get("method").is_some() {
         return None;
@@ -123,11 +123,11 @@ pub fn answer(line: &str) -> Option<Result<Report>> {
     (id == USAGE_REQUEST).then(|| parse(message["result"].clone()))
 }
 
-pub fn command(program: &str) -> Command {
+pub(super) fn command(program: &str) -> Command {
     let mut cmd = Command::new(program);
     cmd.args(ARGS);
     cmd
 }
 
 #[cfg(test)]
-pub mod tests;
+pub(crate) mod tests;

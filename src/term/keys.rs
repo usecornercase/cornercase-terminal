@@ -26,7 +26,7 @@ const NAMED: [(&str, KeyCode); 20] = [
     ("insert", KeyCode::Insert),
 ];
 
-pub fn named(name: &str) -> Option<KeyEvent> {
+pub(crate) fn named(name: &str) -> Option<KeyEvent> {
     let mut mods = KeyModifiers::NONE;
     let mut rest = name;
     while let Some((prefix, modifier)) = MODIFIERS.iter().find(|(prefix, _)| {
@@ -58,7 +58,7 @@ fn function(name: &str) -> Option<KeyCode> {
     (1..=12).contains(&n).then_some(KeyCode::F(n))
 }
 
-pub fn encode(event: KeyEvent, encoder: &mut Encoder<'_>, kitty: KittyKeyFlags, app_cursor: bool) -> Vec<u8> {
+pub(crate) fn encode(event: KeyEvent, encoder: &mut Encoder<'_>, kitty: KittyKeyFlags, app_cursor: bool) -> Vec<u8> {
     if prefers_legacy(&event, kitty) {
         return legacy(event, app_cursor);
     }

@@ -1,4 +1,4 @@
-pub fn item_lines(marker: &str, body: &str) -> String {
+pub(crate) fn item_lines(marker: &str, body: &str) -> String {
     let pad = " ".repeat(marker.chars().count());
     let mut lines = body.lines();
     let first = format!("{marker}{}", lines.next().unwrap_or_default());
@@ -10,14 +10,14 @@ pub fn item_lines(marker: &str, body: &str) -> String {
         .to_string()
 }
 
-pub fn prefix_lines(prefix: &str, empty: &str, text: &str) -> String {
+pub(crate) fn prefix_lines(prefix: &str, empty: &str, text: &str) -> String {
     text.lines()
         .map(|line| if line.is_empty() { empty.to_string() } else { format!("{prefix}{line}") })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-pub fn grid(rows: &[Vec<String>]) -> String {
+pub(crate) fn grid(rows: &[Vec<String>]) -> String {
     let width = rows.iter().map(Vec::len).max().unwrap_or(0);
     if width == 0 {
         return String::new();
@@ -31,17 +31,17 @@ pub fn grid(rows: &[Vec<String>]) -> String {
     lines.join("\n")
 }
 
-pub fn one_line(text: &str) -> String {
+pub(crate) fn one_line(text: &str) -> String {
     text.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ")
 }
 
-pub fn code_span(text: &str) -> String {
+pub(crate) fn code_span(text: &str) -> String {
     let ticks = "`".repeat(longest_run(text, '`') + 1);
     let pad = if text.starts_with('`') || text.ends_with('`') { " " } else { "" };
     format!("{ticks}{pad}{text}{pad}{ticks}")
 }
 
-pub fn longest_run(text: &str, c: char) -> usize {
+pub(crate) fn longest_run(text: &str, c: char) -> usize {
     let (mut longest, mut run) = (0, 0);
     for ch in text.chars() {
         run = if ch == c { run + 1 } else { 0 };
@@ -50,7 +50,7 @@ pub fn longest_run(text: &str, c: char) -> usize {
     longest
 }
 
-pub fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     for (i, &c) in chars.iter().enumerate() {

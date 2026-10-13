@@ -10,36 +10,36 @@ use crate::term::Term;
 
 pub mod group;
 mod hierarchy;
-pub mod picker;
-pub mod search;
+pub(crate) mod picker;
+pub(crate) mod search;
 pub mod split;
-pub mod vscode;
+pub(crate) mod vscode;
 
-pub use group::Group;
-pub use hierarchy::{Hierarchy, group_indices, sidebar_order};
+pub(crate) use group::Group;
+pub(crate) use hierarchy::{Hierarchy, group_indices, sidebar_order};
 
-pub struct Landing {
-    pub area: Rect,
-    pub place: Place,
-    pub layout: Node<u64>,
+pub(crate) struct Landing {
+    pub(crate) area: Rect,
+    pub(crate) place: Place,
+    pub(crate) layout: Node<u64>,
 }
 
-pub struct Tab {
-    pub id: u64,
-    pub name: Option<String>,
-    pub panes: Vec<Term>,
-    pub active: usize,
-    pub layout: Node<u64>,
-    pub right_clicks: Vec<u64>,
+pub(crate) struct Tab {
+    pub(crate) id: u64,
+    pub(crate) name: Option<String>,
+    pub(crate) panes: Vec<Term>,
+    pub(crate) active: usize,
+    pub(crate) layout: Node<u64>,
+    pub(crate) right_clicks: Vec<u64>,
 }
 
 impl Tab {
-    pub fn new(id: u64, name: Option<String>, term: Term) -> Self {
+    pub(crate) fn new(id: u64, name: Option<String>, term: Term) -> Self {
         let layout = Node::Leaf(term.id);
         Self { id, name, panes: vec![term], active: 0, layout, right_clicks: Vec::new() }
     }
 
-    pub fn restored(id: u64, name: Option<String>, panes: Vec<Term>, layout: Option<&Node<usize>>) -> Self {
+    pub(crate) fn restored(id: u64, name: Option<String>, panes: Vec<Term>, layout: Option<&Node<usize>>) -> Self {
         let ids: Vec<u64> = panes.iter().map(|t| t.id).collect();
         let mapped = layout.and_then(|l| l.map(&|i| ids.get(i).copied()));
         let layout = match mapped {
@@ -49,32 +49,32 @@ impl Tab {
         Self { id, name, panes, active: 0, layout, right_clicks: Vec::new() }
     }
 
-    pub fn index_of(&self, pane: u64) -> Option<usize> {
+    pub(crate) fn index_of(&self, pane: u64) -> Option<usize> {
         self.panes.iter().position(|t| t.id == pane)
     }
 
-    pub fn pane_by(&self, id: u64) -> Option<&Term> {
+    pub(crate) fn pane_by(&self, id: u64) -> Option<&Term> {
         self.panes.get(self.index_of(id)?)
     }
 
-    pub fn pane_by_mut(&mut self, id: u64) -> Option<&mut Term> {
+    pub(crate) fn pane_by_mut(&mut self, id: u64) -> Option<&mut Term> {
         let i = self.index_of(id)?;
         self.panes.get_mut(i)
     }
 
-    pub fn layout_by_index(&self) -> Option<Node<usize>> {
+    pub(crate) fn layout_by_index(&self) -> Option<Node<usize>> {
         self.layout.map(&|id| self.index_of(id))
     }
 
-    pub fn pane(&self) -> Option<&Term> {
+    pub(crate) fn pane(&self) -> Option<&Term> {
         self.panes.get(self.active)
     }
 
-    pub fn pane_mut(&mut self) -> Option<&mut Term> {
+    pub(crate) fn pane_mut(&mut self) -> Option<&mut Term> {
         self.panes.get_mut(self.active)
     }
 
-    pub fn label(&self, config: &Config) -> String {
+    pub(crate) fn label(&self, config: &Config) -> String {
         self.name.clone().or_else(|| self.first().and_then(|t| t.program(config))).unwrap_or_else(|| "?".into())
     }
 
@@ -83,45 +83,45 @@ impl Tab {
         self.panes.iter().find(|t| t.id == first).or_else(|| self.panes.first())
     }
 
-    pub fn others(&self) -> usize {
+    pub(crate) fn others(&self) -> usize {
         self.panes.len().saturating_sub(1)
     }
 
-    pub fn status(&self) -> Option<Status> {
+    pub(crate) fn status(&self) -> Option<Status> {
         self.panes.iter().filter_map(|t| t.agent.status()).max()
     }
 
-    pub fn context(&self) -> Option<&Context> {
+    pub(crate) fn context(&self) -> Option<&Context> {
         self.pane().and_then(|t| t.context.context()).or_else(|| self.panes.iter().find_map(|t| t.context.context()))
     }
 
-    pub fn running(&self) -> bool {
+    pub(crate) fn running(&self) -> bool {
         self.panes.iter().any(|t| !t.shell_in_foreground())
     }
 
-    pub fn memory(&self) -> Option<u64> {
+    pub(crate) fn memory(&self) -> Option<u64> {
         self.panes.iter().filter_map(|t| t.memory.bytes()).reduce(u64::saturating_add)
     }
 
-    pub fn focus(&mut self, id: u64) {
+    pub(crate) fn focus(&mut self, id: u64) {
         if let Some(i) = self.panes.iter().position(|t| t.id == id) {
             self.active = i;
         }
     }
 
-    pub fn shown(&self, area: Rect) -> Vec<(u64, Rect)> {
+    pub(crate) fn shown(&self, area: Rect) -> Vec<(u64, Rect)> {
         self.pane().map(|t| self.layout.visible(area, t.id)).unwrap_or_default()
     }
 
-    pub fn rect(&self, area: Rect, id: u64) -> Option<Rect> {
+    pub(crate) fn rect(&self, area: Rect, id: u64) -> Option<Rect> {
         self.layout.pane(area, self.pane()?.id, id)
     }
 
-    pub fn pane_at(&self, area: Rect, pos: Position) -> Option<u64> {
+    pub(crate) fn pane_at(&self, area: Rect, pos: Position) -> Option<u64> {
         self.layout.pane_at(area, self.pane()?.id, pos)
     }
 
-    pub fn landing(&self, area: Rect, pane: u64, pos: Position) -> Option<Landing> {
+    pub(crate) fn landing(&self, area: Rect, pane: u64, pos: Position) -> Option<Landing> {
         let target = self.pane_at(area, pos).filter(|t| *t != pane)?;
         let rect = self.rect(area, target)?;
         let place = Place::at(rect, pos);
@@ -129,11 +129,11 @@ impl Tab {
         Some(Landing { area: place.area(rect), place, layout })
     }
 
-    pub fn can_split(&self, area: Rect, id: u64, dir: Dir) -> bool {
+    pub(crate) fn can_split(&self, area: Rect, id: u64, dir: Dir) -> bool {
         self.layout.has_room(area) && self.rect(area, id).is_some_and(|r| split::fits(r, dir))
     }
 
-    pub fn split(&mut self, target: u64, dir: Dir, term: Term, focus: bool) {
+    pub(crate) fn split(&mut self, target: u64, dir: Dir, term: Term, focus: bool) {
         if self.layout.split(target, dir, term.id) {
             self.panes.push(term);
             if focus {
@@ -142,11 +142,11 @@ impl Tab {
         }
     }
 
-    pub fn right_clicks_to_pane(&self, id: u64) -> bool {
+    pub(crate) fn right_clicks_to_pane(&self, id: u64) -> bool {
         self.right_clicks.contains(&id)
     }
 
-    pub fn toggle_right_clicks(&mut self, id: u64) {
+    pub(crate) fn toggle_right_clicks(&mut self, id: u64) {
         if let Some(i) = self.right_clicks.iter().position(|p| *p == id) {
             self.right_clicks.remove(i);
         } else {
@@ -176,28 +176,28 @@ fn is_permutation(found: &[u64], expected: &[u64]) -> bool {
     found == expected
 }
 
-pub struct Workspace {
-    pub id: u64,
-    pub path: PathBuf,
-    pub name: Option<String>,
-    pub worktree: bool,
-    pub tabs: Vec<Tab>,
-    pub active: usize,
-    pub phase: Phase,
-    pub behind: u32,
-    pub base: Option<String>,
-    pub collapsed: bool,
+pub(crate) struct Workspace {
+    pub(crate) id: u64,
+    pub(crate) path: PathBuf,
+    pub(crate) name: Option<String>,
+    pub(crate) worktree: bool,
+    pub(crate) tabs: Vec<Tab>,
+    pub(crate) active: usize,
+    pub(crate) phase: Phase,
+    pub(crate) behind: u32,
+    pub(crate) base: Option<String>,
+    pub(crate) collapsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Phase {
+pub(crate) enum Phase {
     Open,
     Removing(String),
     Closing,
 }
 
 impl Workspace {
-    pub fn new(id: u64, path: PathBuf, name: Option<String>, worktree: bool) -> Self {
+    pub(crate) fn new(id: u64, path: PathBuf, name: Option<String>, worktree: bool) -> Self {
         Self {
             id,
             path,
@@ -212,50 +212,50 @@ impl Workspace {
         }
     }
 
-    pub fn open(&self) -> bool {
+    pub(crate) fn open(&self) -> bool {
         self.phase == Phase::Open
     }
 
-    pub fn closing(&self) -> bool {
+    pub(crate) fn closing(&self) -> bool {
         self.phase == Phase::Closing
     }
 
-    pub fn removing(&self) -> bool {
+    pub(crate) fn removing(&self) -> bool {
         matches!(self.phase, Phase::Removing(_))
     }
 
-    pub fn start_removing(&mut self) {
+    pub(crate) fn start_removing(&mut self) {
         self.phase = Phase::Removing(self.label());
     }
 
-    pub fn index_of(&self, tab: u64) -> Option<usize> {
+    pub(crate) fn index_of(&self, tab: u64) -> Option<usize> {
         self.tabs.iter().position(|t| t.id == tab)
     }
 
-    pub fn tab(&self) -> Option<&Tab> {
+    pub(crate) fn tab(&self) -> Option<&Tab> {
         self.tabs.get(self.active)
     }
 
-    pub fn tab_mut(&mut self) -> Option<&mut Tab> {
+    pub(crate) fn tab_mut(&mut self) -> Option<&mut Tab> {
         self.tabs.get_mut(self.active)
     }
 
-    pub fn terms(&self) -> impl Iterator<Item = &Term> {
+    pub(crate) fn terms(&self) -> impl Iterator<Item = &Term> {
         self.tabs.iter().flat_map(|t| &t.panes)
     }
 
-    pub fn terms_mut(&mut self) -> impl Iterator<Item = &mut Term> {
+    pub(crate) fn terms_mut(&mut self) -> impl Iterator<Item = &mut Term> {
         self.tabs.iter_mut().flat_map(|t| &mut t.panes)
     }
 
-    pub fn label(&self) -> String {
+    pub(crate) fn label(&self) -> String {
         if let Phase::Removing(label) = &self.phase {
             return label.clone();
         }
         self.name.clone().or_else(|| crate::git::branch(&self.path)).unwrap_or_else(|| "default".into())
     }
 
-    pub fn remove_term(&mut self, id: u64) -> bool {
+    pub(crate) fn remove_term(&mut self, id: u64) -> bool {
         let Some(t) = self.tabs.iter().position(|tab| tab.panes.iter().any(|p| p.id == id)) else { return false };
         let tab = &mut self.tabs[t];
         tab.remove(id);
@@ -266,54 +266,54 @@ impl Workspace {
         true
     }
 
-    pub fn kill(&mut self) {
+    pub(crate) fn kill(&mut self) {
         for term in self.terms_mut() {
             term.kill();
         }
     }
 }
 
-pub struct Project {
-    pub id: u64,
-    pub path: PathBuf,
-    pub name: Option<String>,
-    pub group: Option<u64>,
-    pub workspaces: Vec<Workspace>,
-    pub active: usize,
-    pub closing: bool,
-    pub collapsed: bool,
+pub(crate) struct Project {
+    pub(crate) id: u64,
+    pub(crate) path: PathBuf,
+    pub(crate) name: Option<String>,
+    pub(crate) group: Option<u64>,
+    pub(crate) workspaces: Vec<Workspace>,
+    pub(crate) active: usize,
+    pub(crate) closing: bool,
+    pub(crate) collapsed: bool,
 }
 
 impl Project {
-    pub fn new(id: u64, path: PathBuf, name: Option<String>) -> Self {
+    pub(crate) fn new(id: u64, path: PathBuf, name: Option<String>) -> Self {
         Self { id, path, name, group: None, workspaces: Vec::new(), active: 0, closing: false, collapsed: false }
     }
 
-    pub fn index_of(&self, workspace: u64) -> Option<usize> {
+    pub(crate) fn index_of(&self, workspace: u64) -> Option<usize> {
         self.workspaces.iter().position(|w| w.id == workspace)
     }
 
-    pub fn label(&self, home: Option<&Path>) -> String {
+    pub(crate) fn label(&self, home: Option<&Path>) -> String {
         self.name.clone().unwrap_or_else(|| crate::text::folder_name(&self.path, home))
     }
 
-    pub fn workspace(&self) -> Option<&Workspace> {
+    pub(crate) fn workspace(&self) -> Option<&Workspace> {
         self.workspaces.get(self.active)
     }
 
-    pub fn workspace_mut(&mut self) -> Option<&mut Workspace> {
+    pub(crate) fn workspace_mut(&mut self) -> Option<&mut Workspace> {
         self.workspaces.get_mut(self.active)
     }
 
-    pub fn terms_mut(&mut self) -> impl Iterator<Item = &mut Term> {
+    pub(crate) fn terms_mut(&mut self) -> impl Iterator<Item = &mut Term> {
         self.workspaces.iter_mut().flat_map(Workspace::terms_mut)
     }
 
-    pub fn has_terms(&self) -> bool {
+    pub(crate) fn has_terms(&self) -> bool {
         self.workspaces.iter().any(|w| w.terms().next().is_some())
     }
 
-    pub fn remove_term(&mut self, id: u64) -> bool {
+    pub(crate) fn remove_term(&mut self, id: u64) -> bool {
         let Some(w) = self.workspaces.iter_mut().position(|w| w.remove_term(id)) else { return false };
         if self.workspaces[w].closing() && self.workspaces[w].tabs.is_empty() {
             self.remove_workspace(w);
@@ -321,7 +321,7 @@ impl Project {
         true
     }
 
-    pub fn step_off(&mut self, w: usize) {
+    pub(crate) fn step_off(&mut self, w: usize) {
         if self.active != w {
             return;
         }
@@ -331,25 +331,25 @@ impl Project {
         }
     }
 
-    pub fn remove_workspace(&mut self, w: usize) {
+    pub(crate) fn remove_workspace(&mut self, w: usize) {
         self.workspaces.remove(w);
         shift_active(&mut self.active, w);
     }
 
-    pub fn kill(&mut self) {
+    pub(crate) fn kill(&mut self) {
         for term in self.terms_mut() {
             term.kill();
         }
     }
 }
 
-pub fn shift_active(active: &mut usize, removed: usize) {
+pub(crate) fn shift_active(active: &mut usize, removed: usize) {
     if *active >= removed && *active > 0 {
         *active -= 1;
     }
 }
 
-pub fn move_before<T>(items: &mut Vec<T>, from: usize, before: usize, active: Option<&mut usize>) {
+pub(crate) fn move_before<T>(items: &mut Vec<T>, from: usize, before: usize, active: Option<&mut usize>) {
     let to = if before > from { before - 1 } else { before };
     if from >= items.len() || to >= items.len() || to == from {
         return;

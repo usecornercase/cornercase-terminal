@@ -13,8 +13,8 @@ use crate::changes::diff::{Diff, File, Kind, Line, Segments, Status};
 use crate::changes::every::Header;
 use crate::changes::{GapLine, Mode, Scope, Tints};
 
-pub const DEFAULT_WIDTH: u16 = 64;
-pub const MIN_WIDTH: u16 = 36;
+pub(crate) const DEFAULT_WIDTH: u16 = 64;
+pub(crate) const MIN_WIDTH: u16 = 36;
 const HEADER_ROWS: u16 = 4;
 const FOOTER_ROWS: u16 = 2;
 const BAR_CELLS: usize = 8;
@@ -28,14 +28,14 @@ const NO_FILE_MATCHES: &str = "no file matches";
 const BUTTON_WIDTH: u16 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
+pub(crate) enum Action {
     Open,
     Ask,
     Copy,
 }
 
 impl Action {
-    pub const ALL: [Self; 3] = [Self::Open, Self::Ask, Self::Copy];
+    pub(crate) const ALL: [Self; 3] = [Self::Open, Self::Ask, Self::Copy];
 
     pub(super) fn label(self) -> &'static str {
         match self {
@@ -47,30 +47,30 @@ impl Action {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct View {
-    pub scope: Scope,
-    pub project: String,
-    pub owners: Vec<u64>,
-    pub headers: Vec<Header>,
-    pub mode: Mode,
-    pub base: Option<String>,
-    pub body: Body,
-    pub folded: Vec<bool>,
-    pub viewed: Vec<bool>,
-    pub gaps: HashMap<(usize, usize), Arc<Vec<GapLine>>>,
-    pub scroll: usize,
-    pub live: bool,
-    pub light: bool,
-    pub muted: Color,
-    pub tints: Tints,
-    pub filter: Option<FilterView>,
+pub(crate) struct View {
+    pub(crate) scope: Scope,
+    pub(crate) project: String,
+    pub(crate) owners: Vec<u64>,
+    pub(crate) headers: Vec<Header>,
+    pub(crate) mode: Mode,
+    pub(crate) base: Option<String>,
+    pub(crate) body: Body,
+    pub(crate) folded: Vec<bool>,
+    pub(crate) viewed: Vec<bool>,
+    pub(crate) gaps: HashMap<(usize, usize), Arc<Vec<GapLine>>>,
+    pub(crate) scroll: usize,
+    pub(crate) live: bool,
+    pub(crate) light: bool,
+    pub(crate) muted: Color,
+    pub(crate) tints: Tints,
+    pub(crate) filter: Option<FilterView>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FilterView {
-    pub query: String,
-    pub focused: bool,
-    pub kept: Vec<bool>,
+pub(crate) struct FilterView {
+    pub(crate) query: String,
+    pub(crate) focused: bool,
+    pub(crate) kept: Vec<bool>,
 }
 
 impl FilterView {
@@ -102,7 +102,7 @@ impl View {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Row {
+pub(crate) enum Row {
     Header(usize),
     File(usize),
     Gap(usize, usize),
@@ -117,7 +117,7 @@ fn gap_size(file: &File, hunk: usize) -> u32 {
     file.hunks.get(hunk).map_or(0, |after| after.new_start.saturating_sub(before.new_end()))
 }
 
-pub fn rows(view: &View) -> Vec<Row> {
+pub(crate) fn rows(view: &View) -> Vec<Row> {
     let Some(diff) = view.diff() else { return Vec::new() };
     let mut rows = Vec::new();
     let first: Vec<_> = view
@@ -158,17 +158,17 @@ pub fn rows(view: &View) -> Vec<Row> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Parts {
-    pub scope: Rect,
-    pub tabs: Rect,
-    pub field: Rect,
-    pub summary: Rect,
-    pub body: Rect,
-    pub separator: Rect,
-    pub footer: Rect,
+pub(crate) struct Parts {
+    pub(crate) scope: Rect,
+    pub(crate) tabs: Rect,
+    pub(crate) field: Rect,
+    pub(crate) summary: Rect,
+    pub(crate) body: Rect,
+    pub(crate) separator: Rect,
+    pub(crate) footer: Rect,
 }
 
-pub fn parts(area: Rect, view: &View) -> Parts {
+pub(crate) fn parts(area: Rect, view: &View) -> Parts {
     let inner = Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area };
     let row = |y: u16| Rect::new(inner.x, y, inner.width, 1).intersection(area);
     let field = u16::from(view.filter.is_some());
@@ -193,7 +193,7 @@ fn tab_row(area: Rect) -> Rect {
     Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1).intersection(area)
 }
 
-pub fn tabs(area: Rect) -> Vec<(Mode, Rect)> {
+pub(crate) fn tabs(area: Rect) -> Vec<(Mode, Rect)> {
     let row = tab_row(Rect { y: area.y.saturating_add(1), height: area.height.saturating_sub(1), ..area });
     let mut x = row.x;
     Mode::ALL
@@ -207,7 +207,7 @@ pub fn tabs(area: Rect) -> Vec<(Mode, Rect)> {
         .collect()
 }
 
-pub fn scopes(area: Rect, view: &View) -> [(Scope, Rect, String); 2] {
+pub(crate) fn scopes(area: Rect, view: &View) -> [(Scope, Rect, String); 2] {
     let row = parts(area, view).scope;
     let end = filter_button(area).x;
     let every = " Every project ".to_string();
@@ -219,17 +219,17 @@ pub fn scopes(area: Rect, view: &View) -> [(Scope, Rect, String); 2] {
     [(Scope::Project, first, project), (Scope::Every, second, every)]
 }
 
-pub fn close(area: Rect) -> Rect {
+pub(crate) fn close(area: Rect) -> Rect {
     let row = tab_row(area);
     Rect::new(row.right().saturating_sub(BUTTON_WIDTH), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
-pub fn filter_button(area: Rect) -> Rect {
+pub(crate) fn filter_button(area: Rect) -> Rect {
     let row = tab_row(area);
     Rect::new(close(area).x.saturating_sub(BUTTON_WIDTH), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
-pub fn clear_filter(area: Rect, view: &View) -> Rect {
+pub(crate) fn clear_filter(area: Rect, view: &View) -> Rect {
     let row = parts(area, view).field;
     Rect::new(row.right().saturating_sub(BUTTON_WIDTH), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
@@ -238,7 +238,7 @@ fn base_label(view: &View) -> String {
     format!("vs {} ▾", view.base.as_deref().unwrap_or("…"))
 }
 
-pub fn base(area: Rect, view: &View) -> Rect {
+pub(crate) fn base(area: Rect, view: &View) -> Rect {
     if view.scope == Scope::Every || view.mode == Mode::Uncommitted {
         return Rect::default();
     }
@@ -251,7 +251,7 @@ fn fold_label(view: &View) -> &'static str {
     if view.all_folded() { EXPAND_ALL } else { COLLAPSE_ALL }
 }
 
-pub fn fold_all(area: Rect, view: &View) -> Rect {
+pub(crate) fn fold_all(area: Rect, view: &View) -> Rect {
     if !view.foldable() {
         return Rect::default();
     }
@@ -259,7 +259,7 @@ pub fn fold_all(area: Rect, view: &View) -> Rect {
     Rect::new(row.x, row.y, width(fold_label(view)) + 2, 1).intersection(row)
 }
 
-pub fn max_scroll(area: Rect, view: &View) -> usize {
+pub(crate) fn max_scroll(area: Rect, view: &View) -> usize {
     rows(view).len().saturating_sub(usize::from(parts(area, view).body.height))
 }
 
@@ -274,7 +274,7 @@ fn visible(area: Rect, view: &View) -> Vec<(Row, Rect)> {
         .collect()
 }
 
-pub fn actions(row: Rect) -> Vec<(Action, Rect)> {
+pub(crate) fn actions(row: Rect) -> Vec<(Action, Rect)> {
     buttons(row, &Action::ALL)
 }
 
@@ -300,7 +300,7 @@ fn viewed_cell(row: Rect) -> Rect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hit {
+pub(crate) enum Hit {
     Scope(Scope),
     Header(usize),
     Mode(Mode),
@@ -316,7 +316,7 @@ pub enum Hit {
     Action(usize, usize, Action),
 }
 
-pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
+pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
     }
@@ -360,7 +360,7 @@ fn cut(text: &str, room: usize) -> String {
     crate::text::truncate_right(text, room)
 }
 
-pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
+pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let buf = f.buffer_mut();
     let p = parts(area, view);
     draw_tabs(buf, area, view, hover);

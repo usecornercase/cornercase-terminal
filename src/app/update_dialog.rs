@@ -51,13 +51,13 @@ pub(super) enum UpdateStep {
 }
 
 #[derive(Debug)]
-pub enum UpdateEvent {
+pub(crate) enum UpdateEvent {
     Checked(Result<Option<Release>>),
     Installed(Result<()>),
 }
 
 impl UpdateEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Checked(_) => "update checked",
             Self::Installed(_) => "updated",

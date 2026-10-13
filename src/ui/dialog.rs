@@ -35,7 +35,7 @@ const FORM_PADDING: u16 = 1;
 
 pub(super) const INPUT_PROMPT: &str = "› ";
 
-pub const CANCEL_LABEL: &str = "cancel";
+pub(crate) const CANCEL_LABEL: &str = "cancel";
 
 pub(super) fn form_inner(form: Rect) -> Rect {
     Block::bordered().inner(form).inner(Margin::new(FORM_PADDING, 0))
@@ -94,12 +94,12 @@ fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Note {
+pub(crate) enum Note {
     Error(String),
     Busy(&'static str),
 }
 
-pub enum Overlay {
+pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String> },
     Form(Form),
     GroupStyle(GroupEntry),
@@ -115,11 +115,11 @@ pub enum Overlay {
 }
 
 impl Overlay {
-    pub fn is_modal(&self) -> bool {
+    pub(crate) fn is_modal(&self) -> bool {
         !matches!(self, Self::Menu { .. } | Self::Search(_) | Self::Keys(_))
     }
 
-    pub fn area(&self, area: Rect) -> Option<Rect> {
+    pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),

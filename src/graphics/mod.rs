@@ -1,42 +1,42 @@
 use serde::{Deserialize, Serialize};
 
-pub mod decode;
-pub mod detect;
-pub mod encode;
-pub mod iterm;
-pub mod kitty;
-pub mod sixel;
-pub mod tmux;
+pub(crate) mod decode;
+pub(crate) mod detect;
+pub(crate) mod encode;
+pub(crate) mod iterm;
+pub(crate) mod kitty;
+pub(crate) mod sixel;
+pub(crate) mod tmux;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Support {
-    pub protocol: Option<Protocol>,
-    pub missing: Option<Missing>,
-    pub cell: Option<CellSize>,
-    pub tmux: Tmux,
-    pub id_hi: u8,
+pub(crate) struct Support {
+    pub(crate) protocol: Option<Protocol>,
+    pub(crate) missing: Option<Missing>,
+    pub(crate) cell: Option<CellSize>,
+    pub(crate) tmux: Tmux,
+    pub(crate) id_hi: u8,
 }
 
-pub const KITTY_LO: [u8; 2] = [0xf0, 0xf1];
+pub(crate) const KITTY_LO: [u8; 2] = [0xf0, 0xf1];
 const CAN: &str = "Ghostty, kitty, WezTerm, iTerm2, Konsole and foot can show them";
 const PASSTHROUGH: &str = "add set -g allow-passthrough on to ~/.tmux.conf (or ~/.config/tmux/tmux.conf), run tmux \
      source-file on that file, then start cornercase again";
 const ALL: &str = "all instead of on (tmux 3.4 or later) also lets images arrive while this window is hidden";
 
 impl Support {
-    pub fn images(&self) -> &'static str {
+    pub(crate) fn images(&self) -> &'static str {
         self.protocol.map_or("none", Protocol::id)
     }
 
-    pub fn cell_size(&self) -> String {
+    pub(crate) fn cell_size(&self) -> String {
         self.cell.map_or_else(|| "unknown".into(), |cell| cell.to_string())
     }
 
-    pub fn why_not(&self) -> &'static str {
+    pub(crate) fn why_not(&self) -> &'static str {
         self.missing.as_ref().map_or("-", Missing::id)
     }
 
-    pub fn forget(&self) -> Vec<u8> {
+    pub(crate) fn forget(&self) -> Vec<u8> {
         if self.protocol != Some(Protocol::Kitty) {
             return Vec::new();
         }
@@ -51,14 +51,14 @@ impl Support {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Protocol {
+pub(crate) enum Protocol {
     Kitty,
     Iterm,
     Sixel { registers: u16, max: Option<(u32, u32)> },
 }
 
 impl Protocol {
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Kitty => "kitty",
             Self::Iterm => "iterm",
@@ -68,14 +68,14 @@ impl Protocol {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Tmux {
+pub(crate) enum Tmux {
     #[default]
     None,
     Wrap,
 }
 
 impl Tmux {
-    pub fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Wrap => "wrap",
@@ -84,9 +84,9 @@ impl Tmux {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct CellSize {
-    pub width: u16,
-    pub height: u16,
+pub(crate) struct CellSize {
+    pub(crate) width: u16,
+    pub(crate) height: u16,
 }
 
 impl std::fmt::Display for CellSize {
@@ -96,7 +96,7 @@ impl std::fmt::Display for CellSize {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Missing {
+pub(crate) enum Missing {
     Off,
     Unknown { name: Option<String> },
     Cannot { name: String },
@@ -121,7 +121,7 @@ pub enum Missing {
 }
 
 impl Missing {
-    pub fn id(&self) -> &'static str {
+    pub(crate) fn id(&self) -> &'static str {
         match self {
             Self::Off => "off",
             Self::Unknown { .. } => "unknown",
@@ -147,7 +147,7 @@ impl Missing {
         }
     }
 
-    pub fn lines(&self) -> Vec<String> {
+    pub(crate) fn lines(&self) -> Vec<String> {
         match self {
             Self::Off => vec![
                 "images are turned off in this window".into(),
@@ -273,12 +273,12 @@ impl Missing {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Picture {
-    pub id: u64,
-    pub format: &'static str,
-    pub width: u32,
-    pub height: u32,
-    pub bytes: u64,
-    pub rgba: image::RgbaImage,
-    pub opaque: bool,
+pub(crate) struct Picture {
+    pub(crate) id: u64,
+    pub(crate) format: &'static str,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) bytes: u64,
+    pub(crate) rgba: image::RgbaImage,
+    pub(crate) opaque: bool,
 }

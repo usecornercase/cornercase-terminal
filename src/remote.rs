@@ -31,9 +31,9 @@ const ALIVE: [&str; 6] = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCount
 const BATCH: [&str; 2] = ["-o", "BatchMode=yes"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Remote {
-    pub destination: String,
-    pub command: Option<String>,
+pub(crate) struct Remote {
+    pub(crate) destination: String,
+    pub(crate) command: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,10 +43,10 @@ struct Banner {
 }
 
 #[derive(Clone, Default)]
-pub struct Stderr(Arc<Mutex<VecDeque<String>>>);
+pub(crate) struct Stderr(Arc<Mutex<VecDeque<String>>>);
 
 impl Stderr {
-    pub fn last(&self) -> Option<String> {
+    pub(crate) fn last(&self) -> Option<String> {
         self.0.lock().back().cloned()
     }
 
@@ -76,11 +76,11 @@ impl Stderr {
     }
 }
 
-pub struct Piped {
-    pub reader: BufReader<ChildStdout>,
-    pub writer: ChildStdin,
-    pub child: Child,
-    pub stderr: Stderr,
+pub(crate) struct Piped {
+    pub(crate) reader: BufReader<ChildStdout>,
+    pub(crate) writer: ChildStdin,
+    pub(crate) child: Child,
+    pub(crate) stderr: Stderr,
 }
 
 enum Found {
@@ -90,11 +90,11 @@ enum Found {
 }
 
 impl Remote {
-    pub fn host(&self) -> &str {
+    pub(crate) fn host(&self) -> &str {
         &self.destination
     }
 
-    pub fn connect(&self, again: bool) -> Result<Piped> {
+    pub(crate) fn connect(&self, again: bool) -> Result<Piped> {
         let mut child = Command::new(SSH)
             .args(self.ssh_args(again, false, "proxy"))
             .stdin(Stdio::piped())
@@ -131,11 +131,11 @@ impl Remote {
         }
     }
 
-    pub fn kill_server(&self) -> Result<bool> {
+    pub(crate) fn kill_server(&self) -> Result<bool> {
         self.run(false, "kill-server")
     }
 
-    pub fn update(&self) -> Result<bool> {
+    pub(crate) fn update(&self) -> Result<bool> {
         self.run(true, "update")
     }
 
@@ -189,11 +189,11 @@ impl Remote {
     }
 }
 
-pub fn fatal(error: &Error) -> bool {
+pub(crate) fn fatal(error: &Error) -> bool {
     !matches!(error, Error::Ssh { .. })
 }
 
-pub fn reason(error: &Error) -> String {
+pub(crate) fn reason(error: &Error) -> String {
     match error {
         Error::Ssh { reason, .. } => reason.clone(),
         error => error.to_string(),
@@ -239,7 +239,7 @@ fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
     }
 }
 
-pub fn proxy(connect: impl FnOnce(&Path) -> Result<UnixStream>) -> Result<()> {
+pub(crate) fn proxy(connect: impl FnOnce(&Path) -> Result<UnixStream>) -> Result<()> {
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;

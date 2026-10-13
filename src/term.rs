@@ -1,7 +1,7 @@
-pub mod emulator;
-pub mod keys;
-pub mod memory;
-pub mod mouse;
+pub(crate) mod emulator;
+pub(crate) mod keys;
+pub(crate) mod memory;
+pub(crate) mod mouse;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -31,7 +31,7 @@ const NOT_A_SCRIPT: [&str; 6] = ["-e", "--eval", "-p", "--print", "-c", "-m"];
 const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
 
-pub const MAX_QUEUED: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_QUEUED: usize = 16 * 1024 * 1024;
 
 #[derive(Clone)]
 struct Writer {
@@ -39,19 +39,19 @@ struct Writer {
     queued: Arc<AtomicUsize>,
 }
 
-pub struct Term {
-    pub id: u64,
-    pub emulator: Emulator,
-    pub agent: activity::Pane,
-    pub context: context::Pane,
-    pub memory: memory::Pane,
-    pub resume: Option<AgentState>,
-    pub resuming: Option<Instant>,
-    pub output_at: Instant,
-    pub input_at: Option<Instant>,
-    pub submitted: Option<Instant>,
-    pub input_seen: Option<i32>,
-    pub job: Option<Job>,
+pub(crate) struct Term {
+    pub(crate) id: u64,
+    pub(crate) emulator: Emulator,
+    pub(crate) agent: activity::Pane,
+    pub(crate) context: context::Pane,
+    pub(crate) memory: memory::Pane,
+    pub(crate) resume: Option<AgentState>,
+    pub(crate) resuming: Option<Instant>,
+    pub(crate) output_at: Instant,
+    pub(crate) input_at: Option<Instant>,
+    pub(crate) submitted: Option<Instant>,
+    pub(crate) input_seen: Option<i32>,
+    pub(crate) job: Option<Job>,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -60,26 +60,26 @@ pub struct Term {
 }
 
 #[derive(Debug)]
-pub enum Event {
+pub(crate) enum Event {
     Output(u64, Vec<u8>),
     Exited(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Job {
-    pub pid: i32,
-    pub program: String,
+pub(crate) struct Job {
+    pub(crate) pid: i32,
+    pub(crate) program: String,
 }
 
-pub struct SpawnOptions<'a> {
-    pub id: u64,
-    pub shell: &'a str,
-    pub args: &'a [String],
-    pub env: &'a [(String, String)],
-    pub rows: u16,
-    pub cols: u16,
-    pub cwd: Option<PathBuf>,
-    pub theme: &'a HostTheme,
+pub(crate) struct SpawnOptions<'a> {
+    pub(crate) id: u64,
+    pub(crate) shell: &'a str,
+    pub(crate) args: &'a [String],
+    pub(crate) env: &'a [(String, String)],
+    pub(crate) rows: u16,
+    pub(crate) cols: u16,
+    pub(crate) cwd: Option<PathBuf>,
+    pub(crate) theme: &'a HostTheme,
 }
 
 fn pty_size(rows: u16, cols: u16) -> PtySize {
@@ -87,7 +87,7 @@ fn pty_size(rows: u16, cols: u16) -> PtySize {
 }
 
 impl Term {
-    pub fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
+    pub(crate) fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
         let SpawnOptions { id, shell, args, env, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
 
@@ -141,17 +141,17 @@ impl Term {
         })
     }
 
-    pub fn feed(&mut self, bytes: &[u8]) {
+    pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.output_at = Instant::now();
         self.emulator.feed(bytes);
     }
 
-    pub fn write(&mut self, bytes: &[u8]) -> bool {
+    pub(crate) fn write(&mut self, bytes: &[u8]) -> bool {
         self.input_at = Some(Instant::now());
         write_to(&self.writer, bytes)
     }
 
-    pub fn paste(&mut self, text: &str) -> bool {
+    pub(crate) fn paste(&mut self, text: &str) -> bool {
         if self.emulator.bracketed_paste() {
             self.write(bracketed(text).as_bytes())
         } else {
@@ -159,7 +159,7 @@ impl Term {
         }
     }
 
-    pub fn resize(&mut self, rows: u16, cols: u16) {
+    pub(crate) fn resize(&mut self, rows: u16, cols: u16) {
         if self.size == (rows, cols) || rows == 0 || cols == 0 {
             return;
         }
@@ -168,25 +168,25 @@ impl Term {
         let _ = self.emulator.resize(rows, cols);
     }
 
-    pub fn foreground_pid(&self) -> Option<i32> {
+    pub(crate) fn foreground_pid(&self) -> Option<i32> {
         self.master.process_group_leader().filter(|pid| process::alive(*pid)).or_else(|| self.shell_pid())
     }
 
-    pub fn shell_pid(&self) -> Option<i32> {
+    pub(crate) fn shell_pid(&self) -> Option<i32> {
         self.child.process_id().and_then(|pid| i32::try_from(pid).ok())
     }
 
-    pub fn cwd(&self) -> Option<PathBuf> {
+    pub(crate) fn cwd(&self) -> Option<PathBuf> {
         process::cwd(self.foreground_pid()?)
     }
 
-    pub fn program(&self, config: &Config) -> Option<String> {
+    pub(crate) fn program(&self, config: &Config) -> Option<String> {
         let pid = self.foreground_pid()?;
         let name = process::name(pid)?;
         Some(program(config, &name, &process::args(pid)))
     }
 
-    pub fn current_job(&self, config: &Config) -> Option<Job> {
+    pub(crate) fn current_job(&self, config: &Config) -> Option<Job> {
         if self.shell_in_foreground() {
             return None;
         }
@@ -195,16 +195,16 @@ impl Term {
         Some(Job { pid, program: program(config, &name, &process::args(pid)) })
     }
 
-    pub fn shell_in_foreground(&self) -> bool {
+    pub(crate) fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
         self.interactive && shell.is_some() && self.foreground_pid() == shell
     }
 
-    pub fn dialog(&self) -> bool {
+    pub(crate) fn dialog(&self) -> bool {
         self.seen_agent_screen().is_some_and(|(agent, screen)| agents::input_box(agent, &screen) == Some(false))
     }
 
-    pub fn survey(&self) -> bool {
+    pub(crate) fn survey(&self) -> bool {
         self.seen_agent_screen().is_some_and(|(agent, screen)| agents::survey(agent, &screen))
     }
 
@@ -213,20 +213,20 @@ impl Term {
         (self.foreground_pid() == Some(seen)).then(|| (agent, self.emulator.screen_text().unwrap_or_default()))
     }
 
-    pub fn foreground_args(&self) -> Vec<String> {
+    pub(crate) fn foreground_args(&self) -> Vec<String> {
         self.foreground_pid().map(process::args).unwrap_or_default()
     }
 
-    pub fn exited(&mut self) -> bool {
+    pub(crate) fn exited(&mut self) -> bool {
         self.exit_status().is_some()
     }
 
-    pub fn exit_status(&mut self) -> Option<String> {
+    pub(crate) fn exit_status(&mut self) -> Option<String> {
         let status = self.child.try_wait().ok()??;
         Some(status.signal().map_or_else(|| status.exit_code().to_string(), str::to_owned))
     }
 
-    pub fn kill(&mut self) {
+    pub(crate) fn kill(&mut self) {
         if !self.exited() {
             let _ = self.child.kill();
         }
@@ -245,11 +245,11 @@ impl Drop for Term {
     }
 }
 
-pub fn bracketed(text: &str) -> String {
+pub(crate) fn bracketed(text: &str) -> String {
     format!("{PASTE_START}{}{PASTE_END}", text.replace(PASTE_END, ""))
 }
 
-pub fn program(config: &Config, name: &str, argv: &[String]) -> String {
+pub(crate) fn program(config: &Config, name: &str, argv: &[String]) -> String {
     let name = if name == NODE_MAIN_THREAD { "node" } else { name };
     let interpreter = INTERPRETERS.contains(&name);
     let considered = if interpreter { argv } else { argv.get(..1).unwrap_or_default() };

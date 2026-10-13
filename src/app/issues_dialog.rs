@@ -79,7 +79,7 @@ impl Apis {
 }
 
 #[derive(Debug)]
-pub enum IssueEvent {
+pub(crate) enum IssueEvent {
     Listed { project: u64, source: Source, epoch: u64, query: Query, result: Result<Listed> },
     Read { source: Source, epoch: u64, key: String, result: Result<Detail> },
     TokenChecked { source: Source, epoch: u64, token: Secret, result: Result<Account> },
@@ -87,7 +87,7 @@ pub enum IssueEvent {
 }
 
 impl IssueEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Listed { .. } => "issues loaded",
             Self::Read { .. } => "issue read",

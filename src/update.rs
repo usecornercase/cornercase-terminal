@@ -1,4 +1,4 @@
-pub mod restart;
+pub(crate) mod restart;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -17,10 +17,11 @@ use crate::text::hex;
 use crate::version::newer;
 
 pub const LATEST_ENV: &str = "CORNERCASE_RELEASES_URL";
-pub const DEFAULT_LATEST: &str = "https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest";
-pub const INSTALLER: &str = "curl -fsSL https://usecornercase.dev/install.sh | sh";
-pub const BREW: &str = "brew update && brew upgrade cornercase";
-pub const CHECK_EVERY: Duration = Duration::from_hours(1);
+pub(crate) const DEFAULT_LATEST: &str =
+    "https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest";
+pub(crate) const INSTALLER: &str = "curl -fsSL https://usecornercase.dev/install.sh | sh";
+pub(crate) const BREW: &str = "brew update && brew upgrade cornercase";
+pub(crate) const CHECK_EVERY: Duration = Duration::from_hours(1);
 const SERVICE: Service = Service { name: "GitHub", rejected: "GitHub refused the update check" };
 const BINARY: &str = "cornercase";
 const BREW_DIRS: [&str; 3] = ["/Cellar/", "/homebrew/", "/linuxbrew/"];
@@ -28,9 +29,9 @@ const NOTES_HEADING: &str = "## Release Notes";
 const CHANGELOG: &str = "CHANGELOG.md";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Release {
-    pub version: String,
-    pub notes: Vec<(String, String)>,
+pub(crate) struct Release {
+    pub(crate) version: String,
+    pub(crate) notes: Vec<(String, String)>,
     assets: Vec<(String, String)>,
 }
 
@@ -45,30 +46,30 @@ impl Release {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Install {
+pub(crate) enum Install {
     Replace(PathBuf),
     Command(&'static str),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Outcome {
+pub(crate) enum Outcome {
     UpToDate,
     Updated(String),
     Manual(String, &'static str),
 }
 
 #[derive(Debug)]
-pub struct Updates {
-    pub enabled: bool,
-    pub url: String,
-    pub install: Install,
-    pub checked: Option<Instant>,
-    pub available: Option<Release>,
-    pub installed: bool,
+pub(crate) struct Updates {
+    pub(crate) enabled: bool,
+    pub(crate) url: String,
+    pub(crate) install: Install,
+    pub(crate) checked: Option<Instant>,
+    pub(crate) available: Option<Release>,
+    pub(crate) installed: bool,
 }
 
 impl Updates {
-    pub fn from_env() -> Self {
+    pub(crate) fn from_env() -> Self {
         let exe = std::env::current_exe().and_then(fs::canonicalize).ok();
         Self {
             enabled: !cfg!(debug_assertions),
@@ -80,12 +81,12 @@ impl Updates {
         }
     }
 
-    pub fn due(&self, now: Instant) -> bool {
+    pub(crate) fn due(&self, now: Instant) -> bool {
         self.enabled && self.checked.is_none_or(|at| now.duration_since(at) >= CHECK_EVERY)
     }
 }
 
-pub fn release(json: &Value) -> Option<Release> {
+pub(crate) fn release(json: &Value) -> Option<Release> {
     let version = json.get("tag_name")?.as_str()?.trim_start_matches('v').to_string();
     let assets = json
         .get("assets")?
@@ -106,7 +107,7 @@ fn notes(body: &str) -> String {
     after[..end].trim().to_string()
 }
 
-pub fn with_changelog(mut release: Release, current: &str) -> Release {
+pub(crate) fn with_changelog(mut release: Release, current: &str) -> Release {
     let changelog = release.asset(CHANGELOG).and_then(|url| http::download(&SERVICE, url));
     if let Ok(changelog) = changelog {
         let notes = changelog_notes(&String::from_utf8_lossy(&changelog), current, &release.version);
@@ -131,7 +132,7 @@ fn changelog_notes(changelog: &str, current: &str, latest: &str) -> Vec<(String,
         .collect()
 }
 
-pub fn check(url: &str, current: &str) -> Result<Option<Release>> {
+pub(crate) fn check(url: &str, current: &str) -> Result<Option<Release>> {
     let answer = http::get(&SERVICE, url, &[], &[("User-Agent", BINARY)])?;
     if !answer.ok() {
         return Err(Error::Api(format!("GitHub answered {} to the update check", answer.status)));
@@ -150,7 +151,7 @@ pub fn target() -> Option<&'static str> {
     }
 }
 
-pub fn install(exe: &Path, target: Option<&str>) -> Install {
+pub(crate) fn install(exe: &Path, target: Option<&str>) -> Install {
     let path = exe.to_string_lossy();
     if BREW_DIRS.iter().any(|dir| path.contains(dir)) {
         return Install::Command(BREW);
@@ -162,7 +163,7 @@ pub fn install(exe: &Path, target: Option<&str>) -> Install {
     Install::Replace(exe.to_path_buf())
 }
 
-pub fn install_latest(url: &str, current: &str, install: &Install, target: Option<&str>) -> Result<Outcome> {
+pub(crate) fn install_latest(url: &str, current: &str, install: &Install, target: Option<&str>) -> Result<Outcome> {
     let Some(release) = check(url, current)? else { return Ok(Outcome::UpToDate) };
     match (install, target) {
         (Install::Replace(exe), Some(target)) => {
@@ -174,14 +175,14 @@ pub fn install_latest(url: &str, current: &str, install: &Install, target: Optio
     }
 }
 
-pub fn update(release: &Release, target: &str, exe: &Path) -> Result<()> {
+pub(crate) fn update(release: &Release, target: &str, exe: &Path) -> Result<()> {
     let name = format!("{BINARY}-{target}.tar.gz");
     let archive = http::download(&SERVICE, release.asset(&name)?)?;
     let sums = http::download(&SERVICE, release.asset(&format!("{name}.sha256"))?)?;
     replace(&archive, &String::from_utf8_lossy(&sums), &release.version, exe)
 }
 
-pub fn replace(archive: &[u8], sums: &str, version: &str, exe: &Path) -> Result<()> {
+pub(crate) fn replace(archive: &[u8], sums: &str, version: &str, exe: &Path) -> Result<()> {
     verify(archive, sums)?;
     let dir = exe.parent().ok_or_else(|| Error::Api(format!("`{}` has no folder", exe.display())))?;
     let staging = dir.join(format!(".{BINARY}-update-{}", std::process::id()));

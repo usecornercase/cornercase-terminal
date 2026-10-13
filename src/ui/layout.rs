@@ -47,7 +47,7 @@ pub(super) fn stack_room(column: Rect) -> Rect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Nav {
+pub(crate) enum Nav {
     Projects,
     Workspaces,
     Agents,
@@ -55,40 +55,40 @@ pub enum Nav {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Areas {
-    pub pitch: u16,
-    pub tree: bool,
+    pub(crate) pitch: u16,
+    pub(crate) tree: bool,
     pub bar: Rect,
     pub search: Rect,
-    pub search_button: Rect,
+    pub(crate) search_button: Rect,
     pub back: Rect,
-    pub sidebar: Rect,
+    pub(crate) sidebar: Rect,
     pub title: Rect,
     pub list: Rect,
-    pub separator: Rect,
-    pub settings: Rect,
-    pub usage: Rect,
+    pub(crate) separator: Rect,
+    pub(crate) settings: Rect,
+    pub(crate) usage: Rect,
     pub quit: Rect,
-    pub workspaces: Rect,
-    pub workspaces_title: Rect,
+    pub(crate) workspaces: Rect,
+    pub(crate) workspaces_title: Rect,
     pub workspaces_list: Rect,
-    pub workspaces_separator: Rect,
+    pub(crate) workspaces_separator: Rect,
     pub issues: Rect,
-    pub results: Rect,
+    pub(crate) results: Rect,
     pub pane: Rect,
     pub projects_border: Rect,
-    pub workspaces_border: Rect,
-    pub stack_border: Rect,
-    pub agents: Rect,
-    pub agents_title: Rect,
-    pub agents_list: Rect,
-    pub agents_border: Rect,
-    pub agents_button: Rect,
+    pub(crate) workspaces_border: Rect,
+    pub(crate) stack_border: Rect,
+    pub(crate) agents: Rect,
+    pub(crate) agents_title: Rect,
+    pub(crate) agents_list: Rect,
+    pub(crate) agents_border: Rect,
+    pub(crate) agents_button: Rect,
     pub changes: Rect,
-    pub changes_border: Rect,
-    pub changes_button: Rect,
+    pub(crate) changes_border: Rect,
+    pub(crate) changes_button: Rect,
     pub todo_button: Rect,
-    pub files_button: Rect,
-    pub tab_bar: Rect,
+    pub(crate) files_button: Rect,
+    pub(crate) tab_bar: Rect,
 }
 
 impl Areas {
@@ -102,24 +102,24 @@ impl Areas {
         }
     }
 
-    pub fn border_hit(&self, pos: Position) -> Option<Border> {
+    pub(crate) fn border_hit(&self, pos: Position) -> Option<Border> {
         [Border::Projects, Border::Workspaces, Border::Stack, Border::Agents, Border::Changes]
             .into_iter()
             .find(|&b| self.border(b).contains(pos))
     }
 
-    pub fn compact(&self) -> bool {
+    pub(crate) fn compact(&self) -> bool {
         !self.bar.is_empty()
     }
 
-    pub fn todo_dot(&self) -> Option<Rect> {
+    pub(crate) fn todo_dot(&self) -> Option<Rect> {
         let r = self.todo_button;
         let x = r.x.checked_sub(1).filter(|&x| !self.compact() && x > self.files_button.right())?;
         Some(Rect { x, width: 1, ..r })
     }
 
     #[must_use]
-    pub fn with_tab_bar(self, shown: bool) -> Self {
+    pub(crate) fn with_tab_bar(self, shown: bool) -> Self {
         if !shown || self.compact() {
             return self;
         }
@@ -129,7 +129,7 @@ impl Areas {
     }
 
     #[must_use]
-    pub fn shown(self, nav: Option<Nav>) -> Self {
+    pub(crate) fn shown(self, nav: Option<Nav>) -> Self {
         if !self.compact() {
             return self;
         }
@@ -218,7 +218,7 @@ pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) 
     full_layout(area, widths, changes, sidebar, false)
 }
 
-pub fn full_layout(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar, agents: bool) -> Areas {
+pub(crate) fn full_layout(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar, agents: bool) -> Areas {
     if area.width < COMPACT_WIDTH {
         return compact_layout(area, changes, agents);
     }
@@ -459,6 +459,6 @@ pub fn changes_button(issues: Rect, label: &str) -> Rect {
     Rect { x: issues.right().saturating_sub(width + 1), width, ..issues }.intersection(issues)
 }
 
-pub fn files_button(row: Rect) -> Rect {
+pub(crate) fn files_button(row: Rect) -> Rect {
     Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
 }

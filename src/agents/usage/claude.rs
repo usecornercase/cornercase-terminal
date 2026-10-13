@@ -20,7 +20,7 @@ const ARGS: [&str; 9] = [
     "--verbose",
 ];
 const USAGE_REQUEST: &str = "usage";
-pub const REQUESTS: &str = concat!(
+pub(super) const REQUESTS: &str = concat!(
     r#"{"type":"control_request","request_id":"initialize","request":{"subtype":"initialize"}}"#,
     "\n",
     r#"{"type":"control_request","request_id":"usage","request":{"subtype":"get_usage"}}"#,
@@ -138,7 +138,7 @@ fn extra(spend: &Spend) -> Option<String> {
     })
 }
 
-pub fn parse(body: Value) -> Result<Report> {
+pub(super) fn parse(body: Value) -> Result<Report> {
     let unexpected = |e: &dyn std::fmt::Display| Error::Usage(format!("unexpected answer: {e}"));
     let body: Body = serde_json::from_value(body).map_err(|e| unexpected(&e))?;
     let limits = match (body.rate_limits_available, body.rate_limits) {
@@ -155,7 +155,7 @@ pub fn parse(body: Value) -> Result<Report> {
     })
 }
 
-pub fn answer(line: &str) -> Option<Result<Report>> {
+pub(super) fn answer(line: &str) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     let response = message.get("response").filter(|_| message["type"] == "control_response")?;
     if response["request_id"] != USAGE_REQUEST {
@@ -168,7 +168,7 @@ pub fn answer(line: &str) -> Option<Result<Report>> {
     Some(Err(Error::Usage(error.to_string())))
 }
 
-pub fn command(program: &str) -> Command {
+pub(super) fn command(program: &str) -> Command {
     let mut cmd = Command::new(program);
     cmd.args(ARGS);
     for key in activity::CLAUDE_SESSION_ENV {
@@ -178,4 +178,4 @@ pub fn command(program: &str) -> Command {
 }
 
 #[cfg(test)]
-pub mod tests;
+pub(crate) mod tests;

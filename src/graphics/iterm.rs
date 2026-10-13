@@ -4,7 +4,7 @@ use image::{Rgba, RgbaImage, imageops};
 use super::Picture;
 use super::encode::{Key, flatten, jpeg, png, round, sized};
 
-pub fn image(picture: &Picture, key: &Key, scale: f64) -> Vec<u8> {
+pub(crate) fn image(picture: &Picture, key: &Key, scale: f64) -> Vec<u8> {
     let fit = key.fit;
     let side = |pixels: u32| round(f64::from(pixels) * scale).max(1);
     let canvas_width = side(u32::from(fit.cols) * u32::from(fit.cell.width));
@@ -38,7 +38,7 @@ fn payload(canvas: &RgbaImage, opaque: bool, lossy: bool) -> Vec<u8> {
     if png.len() > 2 * jpeg.len() { jpeg } else { png }
 }
 
-pub fn file(data: &[u8], cols: u16, rows: u16) -> Vec<u8> {
+pub(crate) fn file(data: &[u8], cols: u16, rows: u16) -> Vec<u8> {
     let size = data.len();
     let data = STANDARD.encode(data);
     format!("\x1b]1337;File=inline=1;size={size};width={cols};height={rows};doNotMoveCursor=1:{data}\x07").into_bytes()

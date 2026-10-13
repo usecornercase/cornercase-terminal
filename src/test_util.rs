@@ -11,16 +11,16 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-pub const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
+pub(crate) const SHORTCUT_MEMBER: &str = r#"{"mention_name":"ana","workspace2":{"url_slug":"acme"}}"#;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 
-pub fn wait_until(what: &str, cond: impl FnMut() -> bool) {
+pub(crate) fn wait_until(what: &str, cond: impl FnMut() -> bool) {
     wait_until_within(what, TIMEOUT, cond);
 }
 
-pub fn wait_until_within(what: &str, timeout: Duration, mut cond: impl FnMut() -> bool) {
+pub(crate) fn wait_until_within(what: &str, timeout: Duration, mut cond: impl FnMut() -> bool) {
     let deadline = Instant::now() + timeout;
     while !cond() {
         assert!(Instant::now() < deadline, "timed out waiting for: {what}");
@@ -28,17 +28,17 @@ pub fn wait_until_within(what: &str, timeout: Duration, mut cond: impl FnMut() -
     }
 }
 
-pub fn this_pid() -> i32 {
+pub(crate) fn this_pid() -> i32 {
     i32::try_from(std::process::id()).expect("pid fits in i32")
 }
 
-pub fn exited_pid() -> i32 {
+pub(crate) fn exited_pid() -> i32 {
     let mut child = std::process::Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().expect("spawn sh");
     child.wait().expect("wait for sh");
     i32::try_from(child.id()).expect("pid fits in i32")
 }
 
-pub fn spawn_term(
+pub(crate) fn spawn_term(
     id: u64,
     args: &[String],
     cwd: Option<PathBuf>,
@@ -57,10 +57,10 @@ pub fn spawn_term(
     (crate::term::Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
 }
 
-pub struct TempDir(PathBuf);
+pub(crate) struct TempDir(PathBuf);
 
 impl TempDir {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("cornercase-test-{}-{n}", std::process::id()));
@@ -68,7 +68,7 @@ impl TempDir {
         Self(dir.canonicalize().expect("canonicalize temp dir"))
     }
 
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.0
     }
 }
@@ -79,13 +79,13 @@ impl Drop for TempDir {
     }
 }
 
-pub struct Locked {
+pub(crate) struct Locked {
     path: PathBuf,
     _dir: TempDir,
 }
 
 impl Locked {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let dir = TempDir::new();
         let path = dir.path().join("locked");
         std::fs::create_dir(&path).expect("create the locked folder");
@@ -96,7 +96,7 @@ impl Locked {
         locked
     }
 
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 }
@@ -107,18 +107,18 @@ impl Drop for Locked {
     }
 }
 
-pub struct Sleeper(std::process::Child);
+pub(crate) struct Sleeper(std::process::Child);
 
 impl Sleeper {
-    pub fn with_env(vars: &[(&str, &str)]) -> Self {
+    pub(crate) fn with_env(vars: &[(&str, &str)]) -> Self {
         Self::named(Path::new("/bin/sleep"), &std::env::temp_dir(), vars)
     }
 
-    pub fn named(name: &Path, dir: &Path, vars: &[(&str, &str)]) -> Self {
+    pub(crate) fn named(name: &Path, dir: &Path, vars: &[(&str, &str)]) -> Self {
         Self::spawn(name, dir, vars, std::process::Stdio::inherit())
     }
 
-    pub fn holding(name: &Path, dir: &Path, vars: &[(&str, &str)], file: &Path) -> Self {
+    pub(crate) fn holding(name: &Path, dir: &Path, vars: &[(&str, &str)], file: &Path) -> Self {
         Self::spawn(name, dir, vars, std::fs::File::open(file).expect("open the file to hold").into())
     }
 
@@ -140,11 +140,11 @@ impl Sleeper {
         sleeper
     }
 
-    pub fn pid(&self) -> i32 {
+    pub(crate) fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
 
-    pub fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
@@ -156,10 +156,10 @@ impl Drop for Sleeper {
     }
 }
 
-pub struct Family(std::process::Child);
+pub(crate) struct Family(std::process::Child);
 
 impl Family {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let child = std::process::Command::new("/bin/sh")
             .arg("-c")
             .arg("/bin/sh -c '/bin/sleep 30; :'; :")
@@ -173,15 +173,15 @@ impl Family {
         family
     }
 
-    pub fn pid(&self) -> i32 {
+    pub(crate) fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
 
-    pub fn child(&self) -> Option<i32> {
+    pub(crate) fn child(&self) -> Option<i32> {
         crate::process::children(self.pid()).first().copied()
     }
 
-    pub fn grandchild(&self) -> Option<i32> {
+    pub(crate) fn grandchild(&self) -> Option<i32> {
         crate::process::children(self.child()?).first().copied()
     }
 }
@@ -196,11 +196,11 @@ impl Drop for Family {
     }
 }
 
-pub fn is_sh(name: &str) -> bool {
+pub(crate) fn is_sh(name: &str) -> bool {
     matches!(name, "sh" | "bash" | "dash")
 }
 
-pub fn write_executable(path: &Path, contents: &str) {
+pub(crate) fn write_executable(path: &Path, contents: &str) {
     let mut child = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg("cat > \"$1\" && chmod 755 \"$1\"")
@@ -230,14 +230,14 @@ fn signal(dir: &Path, name: &str, contents: &str) {
     std::fs::rename(next, dir.join(name)).expect("put the signal in place");
 }
 
-pub struct FakeClaude {
+pub(crate) struct FakeClaude {
     dir: TempDir,
     _bin: TempDir,
     script: PathBuf,
 }
 
 impl FakeClaude {
-    pub const WORKING: &str = r#"#!/bin/sh
+    pub(crate) const WORKING: &str = r#"#!/bin/sh
 s="$1/sessions/$$.json"
 printf '{"pid":%s,"status":"busy"}' $$ > "$s"
 while [ -d "$1" ] && [ ! -e "$1/finish" ]; do sleep 0.02; done
@@ -246,9 +246,9 @@ while [ -d "$1" ] && [ ! -e "$1/quit" ]; do sleep 0.02; done
 rm -f "$s"
 "#;
 
-    pub const SILENT: &str = "#!/bin/sh\nwhile [ -d \"$1\" ] && [ ! -e \"$1/quit\" ]; do sleep 0.02; done\n";
+    pub(crate) const SILENT: &str = "#!/bin/sh\nwhile [ -d \"$1\" ] && [ ! -e \"$1/quit\" ]; do sleep 0.02; done\n";
 
-    pub const ANSWERING: &str = r#"#!/bin/sh
+    pub(crate) const ANSWERING: &str = r#"#!/bin/sh
 p=$(printf '%s' "$PWD" | tr -c 'a-zA-Z0-9' '-')
 mkdir -p "$1/projects/$p"
 printf '{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":2,"cache_creation_input_tokens":15655,"cache_read_input_tokens":149954}}}\n' > "$1/projects/$p/s1.jsonl"
@@ -257,7 +257,7 @@ while [ -d "$1" ] && [ ! -e "$1/quit" ]; do sleep 0.02; done
 rm -f "$1/sessions/$$.json"
 "#;
 
-    pub const CONTROL: &str = r#"#!/bin/sh
+    pub(crate) const CONTROL: &str = r#"#!/bin/sh
 d="$1"; s="$d/sessions/$$.json"; t="$d/projects/$(printf %s "$PWD" | tr -c 'A-Za-z0-9' '-')"
 mkdir -p "$t"
 state() { printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$s"; }
@@ -286,11 +286,11 @@ done
 rm -f "$s"
 "#;
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::running(Self::WORKING)
     }
 
-    pub fn running(script: &str) -> Self {
+    pub(crate) fn running(script: &str) -> Self {
         let (dir, bin) = (TempDir::new(), TempDir::new());
         std::fs::create_dir(dir.path().join("sessions")).expect("create the sessions folder");
         let path = bin.path().join("claude");
@@ -298,25 +298,25 @@ rm -f "$s"
         Self { dir, _bin: bin, script: path }
     }
 
-    pub fn dir(&self) -> &Path {
+    pub(crate) fn dir(&self) -> &Path {
         self.dir.path()
     }
 
-    pub fn script(&self) -> &Path {
+    pub(crate) fn script(&self) -> &Path {
         &self.script
     }
 
-    pub fn command_line(&self, args: &str) -> String {
+    pub(crate) fn command_line(&self, args: &str) -> String {
         let unset =
             format!("env -u {} -u {}", crate::agents::context::NO_LONG_ENV, crate::agents::context::NO_COMPACT_ENV);
         format!("{unset} {} {} {args}", self.script().display(), self.dir().display())
     }
 
-    pub fn signal(&self, name: &str) {
+    pub(crate) fn signal(&self, name: &str) {
         std::fs::write(self.dir().join(name), "").expect("write the signal");
     }
 
-    pub fn report(&self, pid: i32, status: &str) {
+    pub(crate) fn report(&self, pid: i32, status: &str) {
         let next = self.dir().join("next.json");
         std::fs::write(&next, format!(r#"{{"pid":{pid},"status":"{status}"}}"#)).expect("write the session");
         let session = self.dir().join("sessions").join(format!("{pid}.json"));
@@ -324,15 +324,15 @@ rm -f "$s"
     }
 }
 
-pub struct FakeCodex {
-    pub dir: TempDir,
-    pub home: PathBuf,
-    pub script: PathBuf,
-    pub rollout: PathBuf,
+pub(crate) struct FakeCodex {
+    pub(crate) dir: TempDir,
+    pub(crate) home: PathBuf,
+    pub(crate) script: PathBuf,
+    pub(crate) rollout: PathBuf,
 }
 
 impl FakeCodex {
-    pub fn new(id: &str, model: &str, wrapper: bool) -> Self {
+    pub(crate) fn new(id: &str, model: &str, wrapper: bool) -> Self {
         let dir = TempDir::new();
         let sessions = dir.path().join("sessions/2026/10/05");
         std::fs::create_dir_all(&sessions).expect("create sessions");
@@ -371,7 +371,7 @@ done
         Self { dir, home, script, rollout }
     }
 
-    pub fn args(&self) -> Vec<PathBuf> {
+    pub(crate) fn args(&self) -> Vec<PathBuf> {
         let mut args = Vec::new();
         if self.script.extension().is_some_and(|e| e == "js") {
             args.push(self.dir.path().join("codex"));
@@ -380,7 +380,7 @@ done
         args
     }
 
-    pub fn command_line(&self) -> String {
+    pub(crate) fn command_line(&self) -> String {
         let args: Vec<String> =
             std::iter::once(self.script.clone()).chain(self.args()).map(|p| p.to_string_lossy().into_owned()).collect();
         format!(
@@ -390,15 +390,15 @@ done
         )
     }
 
-    pub fn signal(&self, name: &str, contents: &str) {
+    pub(crate) fn signal(&self, name: &str, contents: &str) {
         signal(self.dir.path(), name, contents);
     }
 
-    pub fn append(&self, text: &str) {
+    pub(crate) fn append(&self, text: &str) {
         append(&self.rollout, text);
     }
 
-    pub fn serve(&self, cwd: &Path) -> Running {
+    pub(crate) fn serve(&self, cwd: &Path) -> Running {
         let text = std::fs::read_to_string(&self.rollout).expect("read rollout");
         std::fs::write(&self.rollout, text.replace("/tmp/project", &cwd.to_string_lossy())).expect("session folder");
         let script = self.dir.path().join("daemon/codex");
@@ -418,19 +418,19 @@ done
         daemon
     }
 
-    pub fn agent(&self, cwd: &Path) -> Sleeper {
+    pub(crate) fn agent(&self, cwd: &Path) -> Sleeper {
         Sleeper::named(&self.dir.path().join("agent/codex"), cwd, &[("CODEX_HOME", &self.home.to_string_lossy())])
     }
 }
 
-pub struct Running(std::process::Child);
+pub(crate) struct Running(std::process::Child);
 
 impl Running {
-    pub fn spawn(command: &mut std::process::Command) -> Self {
+    pub(crate) fn spawn(command: &mut std::process::Command) -> Self {
         Self(command.spawn().expect("spawn a fake"))
     }
 
-    pub fn pid(&self) -> i32 {
+    pub(crate) fn pid(&self) -> i32 {
         i32::try_from(self.0.id()).expect("pid fits in i32")
     }
 }
@@ -448,16 +448,16 @@ impl Drop for FakeCodex {
     }
 }
 
-pub struct FakeGemini {
-    pub dir: TempDir,
-    pub script: PathBuf,
-    pub session: PathBuf,
+pub(crate) struct FakeGemini {
+    pub(crate) dir: TempDir,
+    pub(crate) script: PathBuf,
+    pub(crate) session: PathBuf,
 }
 
 impl FakeGemini {
-    pub const ID: &str = "00000000-0000-4000-8000-000000000001";
+    pub(crate) const ID: &str = "00000000-0000-4000-8000-000000000001";
 
-    pub fn new(cwd: &Path) -> Self {
+    pub(crate) fn new(cwd: &Path) -> Self {
         let dir = TempDir::new();
         let project = dir.path().join(".gemini/tmp/project");
         std::fs::create_dir_all(project.join("chats")).expect("create Gemini chats");
@@ -492,7 +492,7 @@ done
         Self { dir, script, session }
     }
 
-    pub fn command_line(&self) -> String {
+    pub(crate) fn command_line(&self) -> String {
         let args = [&self.script, &self.session, self.dir.path()].map(|p| p.to_string_lossy().into_owned());
         format!(
             "env GEMINI_CLI_HOME={} {}",
@@ -501,16 +501,16 @@ done
         )
     }
 
-    pub fn signal(&self, title: &str) {
+    pub(crate) fn signal(&self, title: &str) {
         signal(self.dir.path(), "title", title);
     }
 
-    pub fn append(&self, text: &str) {
+    pub(crate) fn append(&self, text: &str) {
         let file = append(&self.session, text);
         file.set_modified(std::time::SystemTime::now()).expect("set the write time");
     }
 
-    pub fn start(&self, cwd: &Path) -> Sleeper {
+    pub(crate) fn start(&self, cwd: &Path) -> Sleeper {
         Sleeper::named(&self.script, cwd, &[("GEMINI_CLI_HOME", &self.dir.path().to_string_lossy())])
     }
 }
@@ -521,16 +521,16 @@ impl Drop for FakeGemini {
     }
 }
 
-pub struct FakeOpencode {
-    pub dir: TempDir,
-    pub script: PathBuf,
-    pub database: PathBuf,
+pub(crate) struct FakeOpencode {
+    pub(crate) dir: TempDir,
+    pub(crate) script: PathBuf,
+    pub(crate) database: PathBuf,
 }
 
 impl FakeOpencode {
-    pub const SESSION: &str = "ses_fake";
+    pub(crate) const SESSION: &str = "ses_fake";
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let dir = TempDir::new();
         let data = dir.path().join("data/opencode");
         let cache = dir.path().join("cache/opencode");
@@ -558,7 +558,7 @@ impl FakeOpencode {
         Self { dir, script, database }
     }
 
-    pub fn command_line(&self) -> String {
+    pub(crate) fn command_line(&self) -> String {
         let quote = |path: &Path| crate::agents::quote(&path.to_string_lossy());
         format!(
             "env XDG_CACHE_HOME={} {} {} {}",
@@ -569,12 +569,12 @@ impl FakeOpencode {
         )
     }
 
-    pub fn start(&self, cwd: &Path) -> Sleeper {
+    pub(crate) fn start(&self, cwd: &Path) -> Sleeper {
         let cache = self.dir.path().join("cache");
         Sleeper::holding(&self.script, cwd, &[("XDG_CACHE_HOME", &cache.to_string_lossy())], &self.database)
     }
 
-    pub fn write(&self, session: &str, cwd: &Path, messages: &str) {
+    pub(crate) fn write(&self, session: &str, cwd: &Path, messages: &str) {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("time").as_millis();
         let now = i64::try_from(now).expect("milliseconds");
         let db = rusqlite::Connection::open(&self.database).expect("open the database");
@@ -599,7 +599,7 @@ impl FakeOpencode {
         }
     }
 
-    pub fn parts(&self, session: &str, message: &str, parts: &str) {
+    pub(crate) fn parts(&self, session: &str, message: &str, parts: &str) {
         let db = rusqlite::Connection::open(&self.database).expect("open the database");
         for data in parts.lines().filter(|line| !line.trim().is_empty()) {
             let count: i64 = db.query_row("SELECT COUNT(*) FROM part", [], |r| r.get(0)).expect("count parts");
@@ -612,7 +612,7 @@ impl FakeOpencode {
         }
     }
 
-    pub fn quit(&self) {
+    pub(crate) fn quit(&self) {
         std::fs::write(self.dir.path().join("quit"), "").expect("signal fake opencode");
     }
 }
@@ -623,13 +623,13 @@ impl Drop for FakeOpencode {
     }
 }
 
-pub fn fake_gh(dir: &Path, script: &str) -> PathBuf {
+pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
     let path = dir.join("gh");
     write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
     path
 }
 
-pub fn git(dir: &Path, args: &[&str]) {
+pub(crate) fn git(dir: &Path, args: &[&str]) {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -640,7 +640,7 @@ pub fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
 }
 
-pub fn git_repo(files: &[(&str, &str)]) -> TempDir {
+pub(crate) fn git_repo(files: &[(&str, &str)]) -> TempDir {
     let repo = TempDir::new();
     git(repo.path(), &["init", "--quiet"]);
     for (name, contents) in files {
@@ -655,21 +655,21 @@ pub fn git_repo(files: &[(&str, &str)]) -> TempDir {
     repo
 }
 
-pub fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
+pub(crate) fn clone_of(remote: &Path) -> (TempDir, PathBuf) {
     let dir = TempDir::new();
     git(dir.path(), &["clone", "--quiet", &remote.display().to_string(), "clone"]);
     let path = dir.path().join("clone");
     (dir, path)
 }
 
-pub struct FakeHttp {
+pub(crate) struct FakeHttp {
     addr: std::net::SocketAddr,
     requests: std::sync::Arc<parking_lot::Mutex<Vec<String>>>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl FakeHttp {
-    pub fn start<B: Into<Vec<u8>>>(routes: Vec<(&'static str, u16, B)>) -> Self {
+    pub(crate) fn start<B: Into<Vec<u8>>>(routes: Vec<(&'static str, u16, B)>) -> Self {
         let routes: Vec<(&'static str, u16, Vec<u8>)> = routes.into_iter().map(|(k, s, b)| (k, s, b.into())).collect();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake http");
         let addr = listener.local_addr().expect("fake http address");
@@ -706,15 +706,15 @@ impl FakeHttp {
         Self { addr, requests, stop }
     }
 
-    pub fn url(&self) -> String {
+    pub(crate) fn url(&self) -> String {
         format!("http://{}", self.addr)
     }
 
-    pub fn request(&self, i: usize) -> String {
+    pub(crate) fn request(&self, i: usize) -> String {
         self.requests.lock().get(i).cloned().unwrap_or_default()
     }
 
-    pub fn requests(&self) -> Vec<String> {
+    pub(crate) fn requests(&self) -> Vec<String> {
         self.requests.lock().clone()
     }
 }
@@ -746,7 +746,7 @@ fn read_request(stream: &mut std::net::TcpStream) -> String {
     String::from_utf8_lossy(&data).into_owned()
 }
 
-pub fn decoded(request: &str) -> String {
+pub(crate) fn decoded(request: &str) -> String {
     let line = request.lines().next().unwrap_or_default().replace('+', " ");
     let mut out = Vec::new();
     let bytes = line.as_bytes();

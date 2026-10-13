@@ -4,20 +4,20 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::Clear;
 
 mod agents_section;
-pub mod changes;
+pub(crate) mod changes;
 mod chrome;
 mod dialog;
 mod drop;
-pub mod files;
-pub mod keys;
+pub(crate) mod files;
+pub(crate) mod keys;
 mod layout;
 mod pane;
-pub mod remote;
-pub mod remote_access;
+pub(crate) mod remote;
+pub(crate) mod remote_access;
 mod rows;
 mod sidebar;
 mod stats;
-pub mod tab_bar;
+pub(crate) mod tab_bar;
 mod theme;
 mod toast;
 pub mod todo;
@@ -26,51 +26,49 @@ mod widgets;
 mod widths;
 mod workspaces;
 
-pub use agents_section::{AGENTS_LABEL, AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
-pub use chrome::{ChangesButton, TODO_LABEL};
-pub use dialog::form::{
-    Confirm, Form, FormHit, Toggle, form_area, form_buttons, form_extra_button, form_hit, form_toggle,
+pub(crate) use agents_section::{AGENTS_LABEL, AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
+pub(crate) use chrome::{ChangesButton, TODO_LABEL};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_extra_button, form_hit, form_toggle};
+pub use dialog::form::{form_area, form_buttons};
+pub(crate) use dialog::group_style::{StyleHit, style_colour, style_done, style_hit, style_icon};
+pub(crate) use dialog::issues::{
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_detail, issue_tabs, issue_toggles, issues_hit, issues_list,
 };
-pub use dialog::group_style::{StyleHit, style_colour, style_done, style_hit, style_icon};
-pub use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons, issue_detail, issue_tabs, issue_toggles,
-    issues_area, issues_hit, issues_list,
-};
-pub use dialog::menu::{menu_area, menu_hit, menu_item};
-pub use dialog::picker::{
-    Entry, Picker, PickerHit, list_item_at, picker_area, picker_buttons, picker_hit, picker_item, picker_list,
-};
-pub use dialog::search::{ResultRow, Search, result_hit, result_item, results_list};
-pub use dialog::settings::{
+pub use dialog::issues::{issue_buttons, issues_area};
+pub(crate) use dialog::menu::menu_hit;
+pub use dialog::menu::{menu_area, menu_item};
+pub(crate) use dialog::picker::{Entry, Picker, PickerHit, list_item_at, picker_hit, picker_list};
+pub use dialog::picker::{picker_area, picker_buttons, picker_item};
+pub(crate) use dialog::search::{ResultRow, Search, result_hit, result_item, results_list};
+pub(crate) use dialog::settings::{
     Settings, SettingsEdit, SettingsHit, SettingsLayout, SettingsLine, SettingsPick, SettingsRow, settings_area,
     settings_body, settings_done, settings_edit, settings_hit, settings_lines, settings_moves, settings_pick_list,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
-pub use dialog::update::{Update, update_buttons, update_notes, update_scroll};
-pub use dialog::usage::{Usage, UsageSection, UsageWindow, usage_area, usage_done, usage_share, usage_tabs};
-pub use dialog::{CANCEL_LABEL, Note, Overlay};
-pub use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
-pub use layout::{
-    Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, Nav, changes_button, files_button, full_layout, layout, layout_with,
-};
-pub use pane::{TabView, scrollback_badge, scrollback_label};
-pub use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
-pub use rows::{ROW_MENU_ICON, Rows, more_above, row_close_button, row_menu_button};
-pub use sidebar::{
-    NEW_BUTTON, ProjectEntry, SidebarHit, SidebarRow, active_row, close_button, entry_row, new_project_button,
-    project_rows, sidebar_hit, sidebar_rows,
-};
-pub use theme::muted;
-pub use toast::{Toast, ToastButton, ToastIcon, toast_area, toast_button};
-pub use tree::{
+pub(crate) use dialog::update::{Update, update_buttons, update_notes, update_scroll};
+pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_area, usage_done, usage_share, usage_tabs};
+pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
+pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
+pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
+pub(crate) use layout::{Nav, files_button, full_layout};
+pub(crate) use pane::{TabView, scrollback_badge, scrollback_label};
+pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
+pub use rows::row_close_button;
+pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above, row_menu_button};
+pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
+pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
+pub(crate) use theme::muted;
+pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_area, toast_button};
+pub(crate) use tree::{
     ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_arrow, tree_close,
     tree_hit, tree_layout_rows, tree_row, tree_rows,
 };
-pub use widgets::update_button;
-pub use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, SIDEBAR_WIDTH, WORKSPACES_WIDTH};
-pub use workspaces::{
-    Details, ICON_WIDTH, TabEntry, TabLines, WorkspaceEntry, WorkspaceHit, WorkspaceRow, new_workspace_button,
-    workspace_hit, workspace_layout, workspace_row, workspace_rows,
+pub(crate) use widgets::update_button;
+pub use widths::SIDEBAR_WIDTH;
+pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
+pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
+pub(crate) use workspaces::{
+    ICON_WIDTH, TabEntry, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout, workspace_rows,
 };
 
 use crate::agents::activity::Status;
@@ -105,51 +103,51 @@ use widgets::{
 use workspaces::{draw_details, draw_workspaces};
 
 #[expect(clippy::struct_excessive_bools, reason = "each flag is a state or a setting the drawing follows")]
-pub struct View<'a> {
-    pub groups: Vec<GroupEntry>,
-    pub projects: Vec<ProjectEntry>,
-    pub active: usize,
-    pub projects_scroll: usize,
-    pub has_project: bool,
-    pub workspaces: Vec<WorkspaceEntry>,
-    pub active_workspace: usize,
-    pub active_tab: Option<usize>,
-    pub workspaces_scroll: usize,
-    pub issues: bool,
-    pub hover: Option<Position>,
-    pub widths: Widths,
-    pub sidebar: Sidebar,
-    pub resizing: Option<Border>,
-    pub light: bool,
-    pub muted: Color,
-    pub tab: Option<TabView>,
-    pub overlay: Option<Overlay>,
-    pub toast: Option<Toast<'a>>,
-    pub nav: Option<Nav>,
-    pub update: Option<String>,
-    pub remote: Option<bool>,
-    pub changes: Option<changes::View>,
-    pub changes_button: Option<ChangesButton>,
-    pub todo: Option<todo::View>,
-    pub todo_dot: bool,
-    pub todo_pending: bool,
-    pub files: Option<files::View>,
-    pub attention: Option<Status>,
-    pub drag: Option<Drag>,
-    pub tree: Option<TreeView>,
-    pub agents: Option<AgentsView>,
-    pub counts: bool,
-    pub tab_bar: Option<tab_bar::TabBar>,
+pub(crate) struct View<'a> {
+    pub(crate) groups: Vec<GroupEntry>,
+    pub(crate) projects: Vec<ProjectEntry>,
+    pub(crate) active: usize,
+    pub(crate) projects_scroll: usize,
+    pub(crate) has_project: bool,
+    pub(crate) workspaces: Vec<WorkspaceEntry>,
+    pub(crate) active_workspace: usize,
+    pub(crate) active_tab: Option<usize>,
+    pub(crate) workspaces_scroll: usize,
+    pub(crate) issues: bool,
+    pub(crate) hover: Option<Position>,
+    pub(crate) widths: Widths,
+    pub(crate) sidebar: Sidebar,
+    pub(crate) resizing: Option<Border>,
+    pub(crate) light: bool,
+    pub(crate) muted: Color,
+    pub(crate) tab: Option<TabView>,
+    pub(crate) overlay: Option<Overlay>,
+    pub(crate) toast: Option<Toast<'a>>,
+    pub(crate) nav: Option<Nav>,
+    pub(crate) update: Option<String>,
+    pub(crate) remote: Option<bool>,
+    pub(crate) changes: Option<changes::View>,
+    pub(crate) changes_button: Option<ChangesButton>,
+    pub(crate) todo: Option<todo::View>,
+    pub(crate) todo_dot: bool,
+    pub(crate) todo_pending: bool,
+    pub(crate) files: Option<files::View>,
+    pub(crate) attention: Option<Status>,
+    pub(crate) drag: Option<Drag>,
+    pub(crate) tree: Option<TreeView>,
+    pub(crate) agents: Option<AgentsView>,
+    pub(crate) counts: bool,
+    pub(crate) tab_bar: Option<tab_bar::TabBar>,
 }
 
 impl View<'_> {
-    pub fn sidebar_rows(&self) -> Vec<SidebarRow> {
+    pub(crate) fn sidebar_rows(&self) -> Vec<SidebarRow> {
         let groups: Vec<Option<usize>> = self.projects.iter().map(|p| p.group).collect();
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.collapsed).collect();
         sidebar_rows(&groups, &collapsed)
     }
 
-    pub fn tab_lines(&self) -> TabLines {
+    pub(crate) fn tab_lines(&self) -> TabLines {
         let lines = self.workspaces.iter().map(|w| w.tabs.iter().map(|t| t.details.lines()).collect()).collect();
         TabLines::new(lines, self.tab_bar.is_none())
     }
@@ -214,7 +212,7 @@ impl View<'_> {
     }
 }
 
-pub fn draw(f: &mut Frame, view: &View) {
+pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
     let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some())
         .with_tab_bar(view.tab_bar.is_some())

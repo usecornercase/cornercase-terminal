@@ -159,7 +159,7 @@ fn parse(text: &str) -> Result<Request, String> {
 }
 
 impl App {
-    pub fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
+    pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
         self.requests.open.push(client);
         let request = parse(text);
         match &request {
@@ -180,11 +180,11 @@ impl App {
         }
     }
 
-    pub fn take_answers(&mut self) -> Vec<(u64, String)> {
+    pub(crate) fn take_answers(&mut self) -> Vec<(u64, String)> {
         std::mem::take(&mut self.requests.answers)
     }
 
-    pub fn answer_lost_requests(&mut self) {
+    pub(crate) fn answer_lost_requests(&mut self) {
         let Requests { pending, open, .. } = &self.requests;
         let lost: Vec<u64> =
             open.iter().copied().filter(|client| pending.iter().all(|p| p.client != Some(*client))).collect();
@@ -193,7 +193,7 @@ impl App {
         }
     }
 
-    pub fn forget(&mut self, client: u64) {
+    pub(crate) fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             log::info!(

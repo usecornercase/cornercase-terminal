@@ -20,15 +20,15 @@ const STATUSES: [(Status, &str); 4] = [
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Running {
-    pub program: String,
-    pub place: String,
-    pub agent: Option<String>,
-    pub status: Option<String>,
-    pub resumes: bool,
+pub(crate) struct Running {
+    pub(crate) program: String,
+    pub(crate) place: String,
+    pub(crate) agent: Option<String>,
+    pub(crate) status: Option<String>,
+    pub(crate) resumes: bool,
 }
 
-pub fn from_report(report: &Report) -> Vec<Running> {
+pub(crate) fn from_report(report: &Report) -> Vec<Running> {
     let mut running = Vec::new();
     for project in &report.projects {
         for workspace in &project.workspaces {
@@ -55,7 +55,7 @@ fn busy(pane: &PaneInfo) -> bool {
     }
 }
 
-pub fn confirmation(running: Option<&[Running]>) -> String {
+pub(crate) fn confirmation(running: Option<&[Running]>) -> String {
     let Some(running) = running else { return format!("{STOPS} {COMES_BACK}") };
     if running.is_empty() {
         return format!("{NOTHING} {COMES_BACK}");
@@ -71,7 +71,7 @@ pub fn confirmation(running: Option<&[Running]>) -> String {
     }
 }
 
-pub fn stopped(running: &[Running]) -> Option<String> {
+pub(crate) fn stopped(running: &[Running]) -> Option<String> {
     let counted: Vec<String> = parts(running).into_iter().map(|(counted, _)| counted).collect();
     (!counted.is_empty()).then(|| format!("stopped {}", counted.join(" and ")))
 }

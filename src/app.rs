@@ -94,9 +94,9 @@ mod usage_dialog;
 mod view;
 mod worktrees;
 
-pub use event::{AppEvent, Start};
-pub use events::Streamed;
-pub use images::{Placed, Sight};
+pub(crate) use event::{AppEvent, Start};
+pub(crate) use events::Streamed;
+pub(crate) use images::{Placed, Sight};
 
 #[derive(Default)]
 struct Outbox {
@@ -106,7 +106,7 @@ struct Outbox {
     restart: bool,
 }
 
-pub struct App {
+pub(crate) struct App {
     upstream: Upstream,
     scroll: Scrolls,
     outbox: Outbox,
@@ -153,7 +153,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
+    pub(crate) fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
         let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
@@ -204,11 +204,11 @@ impl App {
         }
     }
 
-    pub fn take_detach(&mut self) -> bool {
+    pub(crate) fn take_detach(&mut self) -> bool {
         std::mem::take(&mut self.outbox.detach)
     }
 
-    pub fn take_restart(&mut self) -> Option<PathBuf> {
+    pub(crate) fn take_restart(&mut self) -> Option<PathBuf> {
         if !std::mem::take(&mut self.outbox.restart) {
             return None;
         }
@@ -218,15 +218,15 @@ impl App {
         })
     }
 
-    pub fn set_theme(&mut self, theme: HostTheme) {
+    pub(crate) fn set_theme(&mut self, theme: HostTheme) {
         self.theme = theme;
     }
 
-    pub fn report_bug(&mut self) {
+    pub(crate) fn report_bug(&mut self) {
         self.toast = Some(Toast::new(Error::Bug.to_string(), ui::ToastIcon::Bug));
     }
 
-    pub fn reset_interaction(&mut self) {
+    pub(crate) fn reset_interaction(&mut self) {
         self.overlay = None;
         self.nav = None;
         self.hover = None;
@@ -238,7 +238,7 @@ impl App {
         }
     }
 
-    pub fn pointer(&self, area: Rect) -> pointer::Shape {
+    pub(crate) fn pointer(&self, area: Rect) -> pointer::Shape {
         let areas = self.layout(area).shown(self.nav);
         let border = |border: ui::Border| match border {
             ui::Border::Stack | ui::Border::Agents => pointer::Shape::Rows,
@@ -277,7 +277,7 @@ impl App {
             .map_or(pointer::Shape::Default, |d| divider(d.dir))
     }
 
-    pub fn resize(&mut self, area: Rect) {
+    pub(crate) fn resize(&mut self, area: Rect) {
         let pane = self.layout(area).pane;
         let tabs = self.projects.tabs_mut();
         for tab in tabs {
@@ -289,26 +289,26 @@ impl App {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.projects.is_empty()
     }
 
-    pub fn has_terms(&self) -> bool {
+    pub(crate) fn has_terms(&self) -> bool {
         self.projects.iter().any(Project::has_terms)
     }
 
-    pub fn open_here(&mut self, area: Rect) -> Result<()> {
+    pub(crate) fn open_here(&mut self, area: Rect) -> Result<()> {
         let here = std::env::current_dir().ok().or_else(|| self.home.clone()).unwrap_or_else(|| PathBuf::from("/"));
         self.open_project(here, area)
     }
 
-    pub fn tick(&self, now: Instant) -> Option<Duration> {
+    pub(crate) fn tick(&self, now: Instant) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         [drag, launch, self.next_request(now)].into_iter().flatten().min()
     }
 
-    pub fn refresh(&mut self, now: Instant) {
+    pub(crate) fn refresh(&mut self, now: Instant) {
         self.reap();
         if self.overlay.as_ref().is_some_and(Overlay::lists_running)
             && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
@@ -333,11 +333,11 @@ impl App {
         self.count_behind(now);
     }
 
-    pub fn shows(&self, pane: u64) -> bool {
+    pub(crate) fn shows(&self, pane: u64) -> bool {
         self.nav.is_none() && self.tab().is_some_and(|t| t.index_of(pane).is_some())
     }
 
-    pub fn state(&self) -> State {
+    pub(crate) fn state(&self) -> State {
         let projects = self
             .projects
             .iter()
@@ -372,7 +372,7 @@ impl App {
         }
     }
 
-    pub fn restore(&mut self, saved: &State, area: Rect) -> bool {
+    pub(crate) fn restore(&mut self, saved: &State, area: Rect) -> bool {
         self.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
             self.changes.mode = changes.mode;
@@ -431,7 +431,7 @@ impl App {
         missed.is_empty()
     }
 
-    pub fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
+    pub(crate) fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
             AppEvent::Input(event) => self.handle_input(event, area)?,
             AppEvent::Output(id, bytes) => self.output(id, &bytes),
@@ -472,35 +472,35 @@ impl App {
         }
     }
 
-    pub fn set_issue_cache(&mut self, path: PathBuf) {
+    pub(crate) fn set_issue_cache(&mut self, path: PathBuf) {
         self.issues.cache = IssueCache::new(Some(path));
     }
 
-    pub fn set_todos(&mut self, todos: Todos) {
+    pub(crate) fn set_todos(&mut self, todos: Todos) {
         self.todos = todos;
     }
 
-    pub fn todos_saved(&self) -> todo::Saved {
+    pub(crate) fn todos_saved(&self) -> todo::Saved {
         self.todos.saved()
     }
 
-    pub fn take_host_writes(&mut self) -> Vec<Vec<u8>> {
+    pub(crate) fn take_host_writes(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.outbox.host_writes)
     }
 
-    pub fn take_notifications(&mut self) -> Vec<Notification> {
+    pub(crate) fn take_notifications(&mut self) -> Vec<Notification> {
         std::mem::take(&mut self.outbox.notifications)
     }
 
-    pub fn set_stats(&mut self, stats: agents::stats::Stats) {
+    pub(crate) fn set_stats(&mut self, stats: agents::stats::Stats) {
         self.agents.stats = stats;
     }
 
-    pub fn stats(&self) -> &agents::stats::Stats {
+    pub(crate) fn stats(&self) -> &agents::stats::Stats {
         &self.agents.stats
     }
 
-    pub fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
+    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
         self.follow(f.area());
         if !self.drawn.compact() {
             self.nav = None;

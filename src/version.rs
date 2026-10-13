@@ -2,7 +2,7 @@ use std::time::UNIX_EPOCH;
 
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 
-pub fn build_id() -> String {
+pub(crate) fn build_id() -> String {
     std::env::current_exe()
         .and_then(|exe| exe.metadata())
         .and_then(|meta| meta.modified())
@@ -11,7 +11,7 @@ pub fn build_id() -> String {
         .map_or_else(|| "unknown".into(), |since| since.as_nanos().to_string())
 }
 
-pub fn newer(latest: &str, current: &str) -> bool {
+pub(crate) fn newer(latest: &str, current: &str) -> bool {
     matches!((parse(latest), parse(current)), (Some(l), Some(c)) if l > c)
 }
 

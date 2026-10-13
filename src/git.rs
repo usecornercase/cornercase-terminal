@@ -1,11 +1,11 @@
-pub mod upstream;
-pub mod worktree;
+pub(crate) mod upstream;
+pub(crate) mod worktree;
 
 use std::path::{Path, PathBuf};
 
 const SHORT_SHA_LEN: usize = 7;
 
-pub fn branch(dir: &Path) -> Option<String> {
+pub(crate) fn branch(dir: &Path) -> Option<String> {
     let head = std::fs::read_to_string(git_dir(dir)?.join("HEAD")).ok()?;
     let head = head.trim();
     if let Some(reference) = head.strip_prefix("ref:") {
@@ -15,16 +15,16 @@ pub fn branch(dir: &Path) -> Option<String> {
     head.get(..SHORT_SHA_LEN).map(str::to_string)
 }
 
-pub fn main_worktree(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn main_worktree(dir: &Path) -> Option<PathBuf> {
     let root = dir.ancestors().find(|d| d.join(".git").exists())?;
     root.join(".git").is_dir().then(|| root.to_path_buf())
 }
 
-pub fn is_repo_root(dir: &Path) -> bool {
+pub(crate) fn is_repo_root(dir: &Path) -> bool {
     dir.join(".git").is_dir()
 }
 
-pub fn linked_worktrees(repo: &Path) -> Vec<PathBuf> {
+pub(crate) fn linked_worktrees(repo: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(repo.join(".git").join("worktrees")) else { return Vec::new() };
     let mut worktrees: Vec<PathBuf> = entries
         .flatten()

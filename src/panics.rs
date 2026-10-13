@@ -13,15 +13,15 @@ use crate::time::Stamp;
 #[cfg(not(panic = "unwind"))]
 compile_error!("the server contains panics with catch_unwind, so cornercase must be built with panic = \"unwind\"");
 
-pub fn contain<T>(step: impl FnOnce() -> T) -> Option<T> {
+pub(crate) fn contain<T>(step: impl FnOnce() -> T) -> Option<T> {
     panic::catch_unwind(AssertUnwindSafe(step)).ok()
 }
 
-pub fn job<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
+pub(crate) fn job<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
     contain(work).unwrap_or(Err(Error::Bug))
 }
 
-pub fn log_to_stderr() {
+pub(crate) fn log_to_stderr() {
     let reports = Mutex::new(Reports::default());
     panic::set_hook(Box::new(move |info| {
         let thread = thread::current();

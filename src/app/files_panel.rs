@@ -30,7 +30,7 @@ fn plural(n: usize, what: &str) -> String {
 }
 
 #[derive(Debug)]
-pub enum FilesEvent {
+pub(crate) enum FilesEvent {
     Listed { workspace: u64, generation: u64, folders: Vec<(String, Option<Vec<disk::Entry>>)> },
     Read { workspace: u64, generation: u64, path: String, content: Option<disk::Content>, done: bool },
     Indexed { workspace: u64, generation: u64, paths: Vec<String> },
@@ -39,7 +39,7 @@ pub enum FilesEvent {
 }
 
 impl FilesEvent {
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Listed { .. } => "files listed",
             Self::Read { .. } => "file read",

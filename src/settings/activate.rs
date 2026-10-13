@@ -14,7 +14,7 @@ impl Settings {
         self.save(config, notice.into())
     }
 
-    pub fn activate(&mut self) -> Action {
+    pub(crate) fn activate(&mut self) -> Action {
         let Some(row) = self.row() else { return Action::None };
         self.notice = None;
         match row {

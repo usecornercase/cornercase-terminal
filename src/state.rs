@@ -10,107 +10,107 @@ use crate::project::split::Node;
 use crate::project::{Project, Tab, Workspace};
 use crate::term::Term;
 
-pub const VERSION: u32 = 5;
+pub(crate) const VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Widths {
-    pub projects: u16,
-    pub workspaces: u16,
+    pub(crate) projects: u16,
+    pub(crate) workspaces: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub changes: Option<u16>,
+    pub(crate) changes: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stack: Option<u16>,
+    pub(crate) stack: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agents: Option<u16>,
+    pub(crate) agents: Option<u16>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct State {
-    pub version: u32,
+pub(crate) struct State {
+    pub(crate) version: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub groups: Vec<GroupEntry>,
-    pub projects: Vec<ProjectState>,
-    pub active: usize,
+    pub(crate) groups: Vec<GroupEntry>,
+    pub(crate) projects: Vec<ProjectState>,
+    pub(crate) active: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub widths: Option<Widths>,
+    pub(crate) widths: Option<Widths>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub issues: Option<IssuesState>,
+    pub(crate) issues: Option<IssuesState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub changes: Option<ChangesState>,
+    pub(crate) changes: Option<ChangesState>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub todo: bool,
+    pub(crate) todo: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub files: bool,
+    pub(crate) files: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChangesState {
+pub(crate) struct ChangesState {
     #[serde(default)]
-    pub open: bool,
+    pub(crate) open: bool,
     #[serde(default)]
-    pub mode: Mode,
+    pub(crate) mode: Mode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scope: Option<Scope>,
+    pub(crate) scope: Option<Scope>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IssuesState {
+pub(crate) struct IssuesState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tab: Option<String>,
+    pub(crate) tab: Option<String>,
     #[serde(default)]
-    pub closed: bool,
+    pub(crate) closed: bool,
     #[serde(default)]
-    pub people: People,
+    pub(crate) people: People,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjectState {
-    pub path: PathBuf,
+pub(crate) struct ProjectState {
+    pub(crate) path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group: Option<usize>,
-    pub workspaces: Vec<WorkspaceState>,
+    pub(crate) group: Option<usize>,
+    pub(crate) workspaces: Vec<WorkspaceState>,
     #[serde(default)]
-    pub active: usize,
+    pub(crate) active: usize,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub collapsed: bool,
+    pub(crate) collapsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WorkspaceState {
-    pub path: PathBuf,
+pub(crate) struct WorkspaceState {
+    pub(crate) path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[serde(default)]
-    pub worktree: bool,
-    pub tabs: Vec<TabState>,
+    pub(crate) worktree: bool,
+    pub(crate) tabs: Vec<TabState>,
     #[serde(default)]
-    pub active: usize,
+    pub(crate) active: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base: Option<String>,
+    pub(crate) base: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub collapsed: bool,
+    pub(crate) collapsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TabState {
+pub(crate) struct TabState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    pub panes: Vec<PaneState>,
+    pub(crate) name: Option<String>,
+    pub(crate) panes: Vec<PaneState>,
     #[serde(default)]
-    pub active: usize,
+    pub(crate) active: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub layout: Option<Node<usize>>,
+    pub(crate) layout: Option<Node<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PaneState {
-    pub cwd: Option<PathBuf>,
+pub(crate) struct PaneState {
+    pub(crate) cwd: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub right_clicks: bool,
+    pub(crate) right_clicks: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<AgentState>,
+    pub(crate) agent: Option<AgentState>,
 }
 
 impl WorkspaceState {
@@ -126,7 +126,7 @@ impl WorkspaceState {
 }
 
 impl ProjectState {
-    pub fn of(project: &Project, group: Option<usize>) -> Self {
+    pub(crate) fn of(project: &Project, group: Option<usize>) -> Self {
         Self {
             path: project.path.clone(),
             name: project.name.clone(),
@@ -139,7 +139,7 @@ impl ProjectState {
 }
 
 impl ProjectState {
-    pub fn restore(&self, id: u64, path: PathBuf, group: Option<u64>, workspaces: Vec<Workspace>) -> Project {
+    pub(crate) fn restore(&self, id: u64, path: PathBuf, group: Option<u64>, workspaces: Vec<Workspace>) -> Project {
         let mut project = Project::new(id, path, self.name.clone());
         project.group = group;
         project.collapsed = self.collapsed;
@@ -150,7 +150,7 @@ impl ProjectState {
 }
 
 impl WorkspaceState {
-    pub fn restore(&self, id: u64, path: PathBuf, tabs: Vec<Tab>) -> Workspace {
+    pub(crate) fn restore(&self, id: u64, path: PathBuf, tabs: Vec<Tab>) -> Workspace {
         let mut workspace = Workspace::new(id, path, self.name.clone(), self.worktree);
         workspace.base.clone_from(&self.base);
         workspace.collapsed = self.collapsed;
@@ -161,7 +161,7 @@ impl WorkspaceState {
 }
 
 impl TabState {
-    pub fn restore(&self, id: u64, panes: Vec<Term>) -> Tab {
+    pub(crate) fn restore(&self, id: u64, panes: Vec<Term>) -> Tab {
         let mut tab = Tab::restored(id, self.name.clone(), panes, self.layout.as_ref());
         tab.active = self.active.min(tab.panes.len() - 1);
         tab.right_clicks =
@@ -171,7 +171,7 @@ impl TabState {
 }
 
 impl WorkspaceState {
-    pub fn of(workspace: &Workspace) -> Self {
+    pub(crate) fn of(workspace: &Workspace) -> Self {
         Self {
             path: workspace.path.clone(),
             name: workspace.name.clone(),
@@ -185,7 +185,7 @@ impl WorkspaceState {
 }
 
 impl TabState {
-    pub fn of(tab: &Tab) -> Self {
+    pub(crate) fn of(tab: &Tab) -> Self {
         Self {
             name: tab.name.clone(),
             panes: tab
@@ -293,7 +293,7 @@ impl From<V1State> for V2State {
     }
 }
 
-pub fn load(path: &Path) -> Option<State> {
+pub(crate) fn load(path: &Path) -> Option<State> {
     let text = std::fs::read_to_string(path).ok()?;
     match serde_json::from_str::<Versioned>(&text).ok()?.version {
         VERSION => serde_json::from_str(&text).ok(),

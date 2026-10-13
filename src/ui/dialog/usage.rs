@@ -15,7 +15,7 @@ use crate::ui::widgets::{overlay_block, update_button};
 
 const USAGE_BAR: &str = "━";
 
-pub fn usage_area(area: Rect, usage: &Usage) -> Rect {
+pub(crate) fn usage_area(area: Rect, usage: &Usage) -> Rect {
     let width = if area.width < 49 { area.width } else { area.width.saturating_sub(2) }.min(FORM_WIDTH);
     let body = usage_inner(Rect::new(0, 0, width, 3)).width;
     let lines = u16::try_from(
@@ -39,38 +39,38 @@ pub(in crate::ui) fn usage_rows(usage: Rect) -> [Rect; 3] {
     [tabs, body, buttons]
 }
 
-pub fn usage_tabs(area: Rect, usage: &Usage) -> Vec<Rect> {
+pub(crate) fn usage_tabs(area: Rect, usage: &Usage) -> Vec<Rect> {
     tabs_in(usage_rows(usage_area(area, usage))[0], &crate::agents::usage::Page::NAMES)
 }
 
-pub fn usage_share(area: Rect, usage: &Usage) -> Rect {
+pub(crate) fn usage_share(area: Rect, usage: &Usage) -> Rect {
     buttons_in(usage_rows(usage_area(area, usage))[2], "share", crate::settings::DONE)[0]
 }
 
-pub fn usage_done(area: Rect, usage: &Usage) -> Rect {
+pub(crate) fn usage_done(area: Rect, usage: &Usage) -> Rect {
     update_button(usage_rows(usage_area(area, usage))[2], crate::settings::DONE)
 }
 
-pub struct UsageWindow {
-    pub label: String,
-    pub percent: u16,
-    pub severity: Severity,
-    pub resets: String,
+pub(crate) struct UsageWindow {
+    pub(crate) label: String,
+    pub(crate) percent: u16,
+    pub(crate) severity: Severity,
+    pub(crate) resets: String,
 }
 
-pub struct UsageSection {
-    pub title: String,
-    pub status: String,
-    pub error: Option<String>,
-    pub windows: Vec<UsageWindow>,
-    pub empty: Option<&'static str>,
-    pub extra: Option<String>,
+pub(crate) struct UsageSection {
+    pub(crate) title: String,
+    pub(crate) status: String,
+    pub(crate) error: Option<String>,
+    pub(crate) windows: Vec<UsageWindow>,
+    pub(crate) empty: Option<&'static str>,
+    pub(crate) extra: Option<String>,
 }
 
-pub struct Usage {
-    pub page: crate::agents::usage::Page,
-    pub stats: crate::agents::stats::View,
-    pub sections: Vec<UsageSection>,
+pub(crate) struct Usage {
+    pub(crate) page: crate::agents::usage::Page,
+    pub(crate) stats: crate::agents::stats::View,
+    pub(crate) sections: Vec<UsageSection>,
 }
 
 fn usage_section_lines(

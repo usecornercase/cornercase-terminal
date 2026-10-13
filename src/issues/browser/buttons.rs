@@ -87,15 +87,15 @@ impl Browser {
         buttons
     }
 
-    pub fn labels(&self) -> Vec<&'static str> {
+    pub(crate) fn labels(&self) -> Vec<&'static str> {
         self.buttons().into_iter().map(Button::label).collect()
     }
 
-    pub fn tab_names(&self) -> Vec<&'static str> {
+    pub(crate) fn tab_names(&self) -> Vec<&'static str> {
         self.tabs.iter().map(|t| t.name()).collect()
     }
 
-    pub fn toggles(&self) -> (Vec<String>, Vec<bool>) {
+    pub(crate) fn toggles(&self) -> (Vec<String>, Vec<bool>) {
         let label = self.people_label();
         let filtered = label != "people";
         (vec!["closed".into(), label], vec![self.closed, filtered])
@@ -219,7 +219,7 @@ impl Browser {
         !self.needs_place(issue) && self.agents.pick().is_some()
     }
 
-    pub fn place_for(&self, issue: &Issue) -> Option<&Place> {
+    pub(crate) fn place_for(&self, issue: &Issue) -> Option<&Place> {
         (issue.source != Source::Github).then(|| self.places.get(self.place.unwrap_or(self.here))).flatten()
     }
 }

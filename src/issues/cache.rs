@@ -9,11 +9,11 @@ const VERSION: u32 = 1;
 const MAX_LISTS: usize = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Key {
-    pub source: Source,
+pub(crate) struct Key {
+    pub(crate) source: Source,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project: Option<PathBuf>,
-    pub query: Query,
+    pub(crate) project: Option<PathBuf>,
+    pub(crate) query: Query,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,14 +29,14 @@ struct Entry {
 }
 
 #[derive(Debug, Default)]
-pub struct Cache {
+pub(crate) struct Cache {
     path: Option<PathBuf>,
     loaded: bool,
     lists: Vec<Entry>,
 }
 
 impl Cache {
-    pub fn new(path: Option<PathBuf>) -> Self {
+    pub(crate) fn new(path: Option<PathBuf>) -> Self {
         Self { path, loaded: false, lists: Vec::new() }
     }
 
@@ -63,12 +63,12 @@ impl Cache {
         }
     }
 
-    pub fn get(&mut self, key: &Key) -> Option<Vec<Issue>> {
+    pub(crate) fn get(&mut self, key: &Key) -> Option<Vec<Issue>> {
         self.load();
         self.lists.iter().find(|e| e.key == *key).map(|e| e.issues.clone())
     }
 
-    pub fn put(&mut self, key: Key, issues: Vec<Issue>) {
+    pub(crate) fn put(&mut self, key: Key, issues: Vec<Issue>) {
         self.load();
         self.lists.retain(|e| e.key != key);
         self.lists.insert(0, Entry { key, issues });
@@ -76,7 +76,7 @@ impl Cache {
         self.save();
     }
 
-    pub fn forget(&mut self, source: Source) {
+    pub(crate) fn forget(&mut self, source: Source) {
         self.load();
         self.lists.retain(|e| e.key.source != source);
         self.save();

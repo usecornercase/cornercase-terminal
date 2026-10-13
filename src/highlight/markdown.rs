@@ -15,7 +15,7 @@ const CELL_SEPARATOR: &str = " │ ";
 
 type Segment = (String, Style);
 
-pub fn render(source: &str, width: usize) -> Vec<Line<'static>> {
+pub(crate) fn render(source: &str, width: usize) -> Vec<Line<'static>> {
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
     let mut renderer = Renderer::new(width.max(MIN_WIDTH));
     for event in Parser::new_ext(source, options) {
@@ -24,7 +24,7 @@ pub fn render(source: &str, width: usize) -> Vec<Line<'static>> {
     renderer.finish()
 }
 
-pub fn warm(source: &str) {
+pub(crate) fn warm(source: &str) {
     let mut code: Option<(String, String)> = None;
     for event in Parser::new_ext(source, Options::empty()) {
         match event {
@@ -44,11 +44,11 @@ pub fn warm(source: &str) {
     }
 }
 
-pub fn wrap_text(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
+pub(crate) fn wrap_text(text: &str, style: Style, width: usize) -> Vec<Line<'static>> {
     wrap_segments(&[(text.to_string(), style)], width)
 }
 
-pub fn wrap_segments(segments: &[(String, Style)], width: usize) -> Vec<Line<'static>> {
+pub(crate) fn wrap_segments(segments: &[(String, Style)], width: usize) -> Vec<Line<'static>> {
     wrap(segments, width.max(MIN_WIDTH), Vec::new(), &[])
 }
 

@@ -15,27 +15,27 @@ use super::widgets::{button_style, draw_button, draw_title};
 use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TreeShape {
-    pub groups: Vec<bool>,
-    pub projects: Vec<ProjectShape>,
-    pub tab_bar: bool,
+pub(crate) struct TreeShape {
+    pub(crate) groups: Vec<bool>,
+    pub(crate) projects: Vec<ProjectShape>,
+    pub(crate) tab_bar: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ProjectShape {
-    pub group: Option<usize>,
-    pub collapsed: bool,
-    pub workspaces: Vec<WorkspaceShape>,
+pub(crate) struct ProjectShape {
+    pub(crate) group: Option<usize>,
+    pub(crate) collapsed: bool,
+    pub(crate) workspaces: Vec<WorkspaceShape>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WorkspaceShape {
-    pub collapsed: bool,
-    pub tabs: Vec<u16>,
+pub(crate) struct WorkspaceShape {
+    pub(crate) collapsed: bool,
+    pub(crate) tabs: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TreeRow {
+pub(crate) enum TreeRow {
     Gap,
     Group(usize),
     Project(usize),
@@ -47,7 +47,7 @@ pub enum TreeRow {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TreeHit {
+pub(crate) enum TreeHit {
     Fold(TreeRow),
     Select(TreeRow),
     Close(TreeRow),
@@ -67,7 +67,7 @@ impl TreeRow {
 }
 
 impl TreeHit {
-    pub fn workspace(self) -> Option<(usize, usize)> {
+    pub(crate) fn workspace(self) -> Option<(usize, usize)> {
         match self {
             Self::Fold(row) | Self::Select(row) | Self::Close(row) | Self::Menu(row) => row.workspace(),
             Self::NewTab(p, w) => Some((p, w)),
@@ -76,7 +76,7 @@ impl TreeHit {
     }
 }
 
-pub fn tree_rows(shape: &TreeShape) -> Vec<TreeRow> {
+pub(crate) fn tree_rows(shape: &TreeShape) -> Vec<TreeRow> {
     let groups: Vec<Option<usize>> = shape.projects.iter().map(|p| p.group).collect();
     let mut rows = Vec::new();
     for row in sidebar_rows(&groups, &shape.groups) {
@@ -139,24 +139,28 @@ fn arrow_in(r: Rect, shape: &TreeShape, row: TreeRow) -> Rect {
     }
 }
 
-pub fn tree_layout_rows(list: Rect, shape: &TreeShape, rows: &[TreeRow], scroll: usize) -> Rows {
+pub(crate) fn tree_layout_rows(list: Rect, shape: &TreeShape, rows: &[TreeRow], scroll: usize) -> Rows {
     Rows { list, heights: rows.iter().map(|r| tree_height(shape, *r)).collect(), button: 1, scroll }
 }
 
-pub fn tree_row(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
+pub(crate) fn tree_row(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
     let rows = tree_rows(shape);
     row_rect(&tree_layout_rows(list, shape, &rows, scroll), &rows, &row)
 }
 
-pub fn tree_arrow(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
+pub(crate) fn tree_arrow(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
     arrow_in(tree_row(list, shape, scroll, row), shape, row)
 }
 
-pub fn tree_close(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
+pub(crate) fn tree_close(list: Rect, shape: &TreeShape, scroll: usize, row: TreeRow) -> Rect {
     row_close_button(tree_row(list, shape, scroll, row), 1)
 }
 
-pub fn tree_active_row(rows: &[TreeRow], shape: &TreeShape, active: (usize, usize, Option<usize>)) -> Option<usize> {
+pub(crate) fn tree_active_row(
+    rows: &[TreeRow],
+    shape: &TreeShape,
+    active: (usize, usize, Option<usize>),
+) -> Option<usize> {
     let (p, w, t) = active;
     let find = |row: TreeRow| rows.iter().position(|r| *r == row);
     t.and_then(|t| find(TreeRow::Tab(p, w, t)))
@@ -165,7 +169,7 @@ pub fn tree_active_row(rows: &[TreeRow], shape: &TreeShape, active: (usize, usiz
         .or_else(|| find(TreeRow::Group(shape.projects.get(p)?.group?)))
 }
 
-pub fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Position) -> Option<TreeHit> {
+pub(crate) fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Position) -> Option<TreeHit> {
     if !list.contains(pos) {
         return None;
     }
@@ -189,9 +193,9 @@ pub fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Position) -> 
     })
 }
 
-pub struct TreeView {
-    pub shape: TreeShape,
-    pub workspaces: Vec<Vec<WorkspaceEntry>>,
+pub(crate) struct TreeView {
+    pub(crate) shape: TreeShape,
+    pub(crate) workspaces: Vec<Vec<WorkspaceEntry>>,
 }
 
 fn tree_landing_indent(shape: &TreeShape, dragged: TreeRow, spot: Spot) -> u16 {

@@ -15,11 +15,11 @@ mod auth;
 mod bridge;
 mod http;
 mod page;
-pub mod tailscale;
+pub(crate) mod tailscale;
 
 use http::{Request, Response};
 
-pub const PAIR_PATH: &str = "/pair";
+pub(crate) const PAIR_PATH: &str = "/pair";
 const MAX_CONNECTIONS: usize = 32;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
 const COOKIE_AGE: u64 = 365 * 24 * 60 * 60;
@@ -27,7 +27,7 @@ const ACCEPT_POLL: Duration = Duration::from_millis(50);
 const REBIND_FOR: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Event {
+pub(crate) enum Event {
     Paired,
     Browsers(usize),
 }
@@ -83,13 +83,13 @@ struct Listening {
     thread: thread::JoinHandle<()>,
 }
 
-pub struct Web {
+pub(crate) struct Web {
     context: Context,
     listening: Option<Listening>,
 }
 
 impl Web {
-    pub fn new<E: From<Event> + Send + 'static>(devices: PathBuf, socket: PathBuf, notify: Sender<E>) -> Self {
+    pub(crate) fn new<E: From<Event> + Send + 'static>(devices: PathBuf, socket: PathBuf, notify: Sender<E>) -> Self {
         let shared = Shared {
             pairing: None,
             devices: auth::Devices::load(devices),
@@ -103,7 +103,7 @@ impl Web {
         Self { context, listening: None }
     }
 
-    pub fn listen(&mut self, port: u16) -> io::Result<()> {
+    pub(crate) fn listen(&mut self, port: u16) -> io::Result<()> {
         if self.listening.as_ref().is_some_and(|l| l.port == port) {
             return Ok(());
         }
@@ -118,7 +118,7 @@ impl Web {
         Ok(())
     }
 
-    pub fn close(&mut self) {
+    pub(crate) fn close(&mut self) {
         let Some(listening) = self.listening.take() else { return };
         listening.stop.store(true, Ordering::SeqCst);
         let _ = listening.thread.join();
@@ -127,34 +127,34 @@ impl Web {
         log::info!("web", "stopped listening", port = listening.port);
     }
 
-    pub fn listening(&self) -> Option<u16> {
+    pub(crate) fn listening(&self) -> Option<u16> {
         self.listening.as_ref().map(|l| l.port)
     }
 
-    pub fn set_owner(&self, owner: Option<String>) {
+    pub(crate) fn set_owner(&self, owner: Option<String>) {
         self.context.shared.lock().owner = owner;
     }
 
-    pub fn pair(&self, now: Instant) -> io::Result<String> {
+    pub(crate) fn pair(&self, now: Instant) -> io::Result<String> {
         let pairing = auth::Pairing::new(now)?;
         let token = pairing.token.clone();
         self.context.shared.lock().pairing = Some(pairing);
         Ok(token)
     }
 
-    pub fn unpair(&self) {
+    pub(crate) fn unpair(&self) {
         self.context.shared.lock().pairing = None;
     }
 
-    pub fn browsers(&self) -> usize {
+    pub(crate) fn browsers(&self) -> usize {
         self.context.shared.lock().browsers
     }
 
-    pub fn paired(&self) -> usize {
+    pub(crate) fn paired(&self) -> usize {
         self.context.shared.lock().devices.len()
     }
 
-    pub fn forget(&self) -> io::Result<()> {
+    pub(crate) fn forget(&self) -> io::Result<()> {
         self.context.shared.lock().devices.clear()?;
         self.disconnect_all();
         log::info!("web", "paired browsers forgotten");

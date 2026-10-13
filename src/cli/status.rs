@@ -23,7 +23,7 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-pub fn render(report: &Report, home: Option<&Path>) -> String {
+pub(crate) fn render(report: &Report, home: Option<&Path>) -> String {
     let mut lines = Vec::new();
     for project in report.loose() {
         project_lines(&mut lines, report, project, 0, home);
@@ -38,7 +38,7 @@ pub fn render(report: &Report, home: Option<&Path>) -> String {
     lines.into_iter().map(|line| line + "\n").collect()
 }
 
-pub fn pane_table(rows: &[PaneRow]) -> Result<String> {
+pub(crate) fn pane_table(rows: &[PaneRow]) -> Result<String> {
     let mut text = PaneRow::COLUMNS.join("\t") + "\n";
     for row in rows {
         let value = serde_json::to_value(row).map_err(|e| Error::Control(e.to_string()))?;

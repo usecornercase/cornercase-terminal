@@ -1,43 +1,43 @@
 pub mod error;
-pub mod http;
-pub mod list;
-pub mod log;
-pub mod panics;
+pub(crate) mod http;
+pub(crate) mod list;
+pub(crate) mod log;
+pub(crate) mod panics;
 pub mod paths;
-pub mod persist;
-pub mod process;
-pub mod text;
-pub mod time;
+pub(crate) mod persist;
+pub(crate) mod process;
+pub(crate) mod text;
+pub(crate) mod time;
 pub mod version;
 
 pub mod agents;
-pub mod changes;
+pub(crate) mod changes;
 pub mod config;
-pub mod files;
-pub mod git;
-pub mod graphics;
-pub mod highlight;
+pub(crate) mod files;
+pub(crate) mod git;
+pub(crate) mod graphics;
+pub(crate) mod highlight;
 pub mod host;
-pub mod issues;
+pub(crate) mod issues;
 pub mod project;
-pub mod settings;
-pub mod shortcuts;
+pub(crate) mod settings;
+pub(crate) mod shortcuts;
 pub mod state;
-pub mod term;
-pub mod todo;
+pub(crate) mod term;
+pub(crate) mod todo;
 pub mod update;
 
 pub mod ui;
 
-pub mod app;
+pub(crate) mod app;
 
 pub mod cli;
-pub mod client;
+pub(crate) mod client;
 pub mod control;
 pub mod protocol;
-pub mod remote;
-pub mod server;
-pub mod web;
+pub(crate) mod remote;
+pub(crate) mod server;
+pub(crate) mod web;
 
 #[cfg(test)]
 mod test_util;

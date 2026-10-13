@@ -16,15 +16,15 @@ fn results_rows(results: Rect) -> [Rect; 2] {
     [list, hint]
 }
 
-pub fn results_list(results: Rect) -> Rect {
+pub(crate) fn results_list(results: Rect) -> Rect {
     results_rows(results)[0]
 }
 
-pub fn result_item(results: Rect, items: usize, scroll: usize, i: usize) -> Rect {
+pub(crate) fn result_item(results: Rect, items: usize, scroll: usize, i: usize) -> Rect {
     list_item(results_list(results), items, scroll, i)
 }
 
-pub fn result_hit(results: Rect, items: usize, scroll: usize, pos: Position) -> Option<usize> {
+pub(crate) fn result_hit(results: Rect, items: usize, scroll: usize, pos: Position) -> Option<usize> {
     let list = results_list(results);
     if !list.contains(pos) {
         return None;
@@ -33,17 +33,17 @@ pub fn result_hit(results: Rect, items: usize, scroll: usize, pos: Position) -> 
     (i < items).then_some(i)
 }
 
-pub struct ResultRow {
-    pub name: String,
-    pub context: String,
+pub(crate) struct ResultRow {
+    pub(crate) name: String,
+    pub(crate) context: String,
 }
 
-pub struct Search {
-    pub query: String,
-    pub results: Vec<ResultRow>,
-    pub selected: usize,
-    pub scroll: usize,
-    pub hint: String,
+pub(crate) struct Search {
+    pub(crate) query: String,
+    pub(crate) results: Vec<ResultRow>,
+    pub(crate) selected: usize,
+    pub(crate) scroll: usize,
+    pub(crate) hint: String,
 }
 
 impl Search {

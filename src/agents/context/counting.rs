@@ -8,9 +8,9 @@ const CONVERSATIONS: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Record {
-    pub at: SystemTime,
-    pub id: String,
-    pub usage: Usage,
+    pub(crate) at: SystemTime,
+    pub(crate) id: String,
+    pub(crate) usage: Usage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,7 @@ fn retain<T>(map: &mut HashMap<String, T>, time: impl Fn(&T) -> SystemTime) -> O
 }
 
 impl Ledger {
-    pub fn apply(&mut self, conversation: &str, since: SystemTime, records: impl IntoIterator<Item = Record>) {
+    pub(super) fn apply(&mut self, conversation: &str, since: SystemTime, records: impl IntoIterator<Item = Record>) {
         let mut records = records.into_iter().peekable();
         if records.peek().is_none() {
             return;
@@ -158,7 +158,7 @@ impl Ledger {
             }
         }
     }
-    pub fn take(&mut self) -> Counted {
+    pub(super) fn take(&mut self) -> Counted {
         std::mem::take(&mut self.counted)
     }
 }

@@ -10,12 +10,12 @@ use crate::agents::activity::Status;
 use crate::persist;
 use crate::time::Stamp;
 
-pub const WEEKS: usize = 26;
-pub const BLOCKS: usize = WEEKS * 7;
+pub(crate) const WEEKS: usize = 26;
+pub(crate) const BLOCKS: usize = WEEKS * 7;
 const RETAIN: u64 = (BLOCKS as u64 + 1) * 24;
-pub const SHARE_BASE: &str = "https://usecornercase.dev/stats/";
-pub const EMPTY: &str = "nothing counted yet: agents running in cornercase count from now on";
-pub const LABELS: [&str; 9] = [
+pub(crate) const SHARE_BASE: &str = "https://usecornercase.dev/stats/";
+pub(crate) const EMPTY: &str = "nothing counted yet: agents running in cornercase count from now on";
+pub(crate) const LABELS: [&str; 9] = [
     "agents started",
     "prompts",
     "turns",
@@ -36,11 +36,11 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Self; 4] = [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode];
-    pub fn of(name: &str) -> Option<Self> {
+    pub(crate) const ALL: [Self; 4] = [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode];
+    pub(crate) fn of(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
     }
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
@@ -64,7 +64,7 @@ pub struct Tokens {
 
 impl Tokens {
     #[must_use]
-    pub fn difference(self, before: Self) -> Self {
+    pub(crate) fn difference(self, before: Self) -> Self {
         Self {
             input: self.input.saturating_sub(before.input),
             out: self.out.saturating_sub(before.out),
@@ -72,13 +72,13 @@ impl Tokens {
             cache_write: self.cache_write.saturating_sub(before.cache_write),
         }
     }
-    pub fn decreased(self, before: Self) -> bool {
+    pub(crate) fn decreased(self, before: Self) -> bool {
         self.input < before.input
             || self.out < before.out
             || self.cache_read < before.cache_read
             || self.cache_write < before.cache_write
     }
-    pub fn is_empty(self) -> bool {
+    pub(crate) fn is_empty(self) -> bool {
         self == Self::default()
     }
 }
@@ -90,7 +90,7 @@ pub struct Counted {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Counts {
+pub(crate) struct Counts {
     agents: u64,
     prompts: u64,
     turns: u64,
@@ -131,7 +131,7 @@ impl Counts {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Bucket {
+pub(crate) struct Bucket {
     by_agent: [Counts; 4],
     busy_ms: u64,
     most_at_once: u64,
@@ -170,10 +170,10 @@ type Hour = (u64, [[u64; 9]; 4], u64, u64);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Saved {
-    pub version: u32,
-    pub since: u64,
-    pub total: Bucket,
-    pub hours: Vec<Hour>,
+    pub(crate) version: u32,
+    pub(crate) since: u64,
+    pub(crate) total: Bucket,
+    pub(crate) hours: Vec<Hour>,
 }
 
 #[derive(Debug)]
@@ -188,13 +188,13 @@ pub struct Stats {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Sample {
-    pub pane: u64,
-    pub kind: Kind,
-    pub pid: i32,
-    pub status: Option<Status>,
-    pub background: bool,
-    pub resuming: bool,
+pub(crate) struct Sample {
+    pub(crate) pane: u64,
+    pub(crate) kind: Kind,
+    pub(crate) pid: i32,
+    pub(crate) status: Option<Status>,
+    pub(crate) background: bool,
+    pub(crate) resuming: bool,
 }
 
 impl Sample {
@@ -232,7 +232,7 @@ impl Stats {
             pruned_hour: None,
         }
     }
-    pub fn revision(&self) -> u64 {
+    pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
     fn add(&mut self, at: SystemTime, kind: Kind, counts: Counts) {
@@ -250,7 +250,7 @@ impl Stats {
             }
         }
     }
-    pub fn sample(&mut self, now: SystemTime, elapsed: Duration, samples: &[Sample]) {
+    pub(crate) fn sample(&mut self, now: SystemTime, elapsed: Duration, samples: &[Sample]) {
         let ms = u64::try_from(elapsed.min(Duration::from_secs(2)).as_millis()).unwrap_or(2_000);
         let mut simultaneous = 0;
         let mut busy = false;
@@ -307,7 +307,7 @@ impl Stats {
                 .collect(),
         }
     }
-    pub fn prune(&mut self, now: SystemTime) {
+    pub(crate) fn prune(&mut self, now: SystemTime) {
         let current = hour(now);
         if self.pruned_hour == Some(current) {
             return;
@@ -328,10 +328,10 @@ impl Stats {
         }
         bucket
     }
-    pub fn days(&self, now: SystemTime) -> u64 {
+    pub(crate) fn days(&self, now: SystemTime) -> u64 {
         now.duration_since(self.since).unwrap_or_default().as_secs() / 86_400
     }
-    pub fn view(&self, now: SystemTime) -> View {
+    pub(crate) fn view(&self, now: SystemTime) -> View {
         let blocks: Vec<Block> = (0..BLOCKS)
             .map(|i| {
                 let offset = i as u64 * 24;
@@ -359,7 +359,7 @@ impl Stats {
     }
 }
 
-pub fn load(path: &Path, now: SystemTime) -> Stats {
+pub(crate) fn load(path: &Path, now: SystemTime) -> Stats {
     let mut stats = Stats::new(now);
     if let Some(saved) = std::fs::read(path)
         .ok()
@@ -385,17 +385,17 @@ pub fn save(path: &Path, saved: &Saved) -> std::io::Result<()> {
 }
 
 #[derive(Debug)]
-pub struct Saver {
+pub(crate) struct Saver {
     path: PathBuf,
     revision: u64,
     dirty: Option<Instant>,
 }
 
 impl Saver {
-    pub fn new(path: PathBuf, revision: u64) -> Self {
+    pub(crate) fn new(path: PathBuf, revision: u64) -> Self {
         Self { path, revision, dirty: None }
     }
-    pub fn observe(&mut self, stats: &Stats, wall: SystemTime, now: Instant) -> std::io::Result<bool> {
+    pub(crate) fn observe(&mut self, stats: &Stats, wall: SystemTime, now: Instant) -> std::io::Result<bool> {
         if stats.revision() == self.revision {
             return Ok(false);
         }
@@ -406,7 +406,7 @@ impl Saver {
         self.flush(stats, wall)?;
         Ok(true)
     }
-    pub fn flush(&mut self, stats: &Stats, wall: SystemTime) -> std::io::Result<()> {
+    pub(crate) fn flush(&mut self, stats: &Stats, wall: SystemTime) -> std::io::Result<()> {
         if stats.revision() != self.revision {
             save(&self.path, &stats.saved(wall))?;
             self.revision = stats.revision();
@@ -417,13 +417,13 @@ impl Saver {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Metrics {
-    pub agents: u64,
-    pub prompts: u64,
-    pub turns: u64,
-    pub agent_seconds: f64,
-    pub waited_seconds: f64,
-    pub tokens: Tokens,
+pub(crate) struct Metrics {
+    pub(crate) agents: u64,
+    pub(crate) prompts: u64,
+    pub(crate) turns: u64,
+    pub(crate) agent_seconds: f64,
+    pub(crate) waited_seconds: f64,
+    pub(crate) tokens: Tokens,
 }
 impl From<Counts> for Metrics {
     fn from(c: Counts) -> Self {
@@ -438,26 +438,26 @@ impl From<Counts> for Metrics {
     }
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Window {
+pub(crate) struct Window {
     #[serde(flatten)]
-    pub counts: Metrics,
-    pub busy_seconds: f64,
-    pub most_at_once: u64,
-    pub by_agent: BTreeMap<String, Metrics>,
+    pub(crate) counts: Metrics,
+    pub(crate) busy_seconds: f64,
+    pub(crate) most_at_once: u64,
+    pub(crate) by_agent: BTreeMap<String, Metrics>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Block {
-    pub agent_seconds: f64,
+pub(crate) struct Block {
+    pub(crate) agent_seconds: f64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct View {
-    pub since: String,
-    pub windows: BTreeMap<String, Window>,
-    pub blocks: Vec<Block>,
+pub(crate) struct View {
+    pub(crate) since: String,
+    pub(crate) windows: BTreeMap<String, Window>,
+    pub(crate) blocks: Vec<Block>,
     #[serde(skip)]
-    pub days: u64,
+    pub(crate) days: u64,
     #[serde(skip)]
-    pub empty: bool,
+    pub(crate) empty: bool,
 }
 impl Default for View {
     fn default() -> Self {
@@ -466,7 +466,7 @@ impl Default for View {
 }
 
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "nonnegative durations are bounded to u64")]
-pub fn duration(secs: f64) -> String {
+pub(crate) fn duration(secs: f64) -> String {
     let minutes = (secs.max(0.0) / 60.0) as u64;
     let (h, m) = (minutes / 60, minutes % 60);
     if h == 0 {
@@ -488,7 +488,7 @@ fn abbreviated(n: u64, units: &[(u64, &str)]) -> String {
     n.to_string()
 }
 #[expect(clippy::cast_precision_loss, reason = "display abbreviations do not require exact large integers")]
-pub fn count(n: u64) -> String {
+pub(crate) fn count(n: u64) -> String {
     if n < 10_000 {
         n.to_string()
     } else if n < 1_000_000 {
@@ -497,12 +497,12 @@ pub fn count(n: u64) -> String {
         abbreviated(n, &[(1_000_000_000, "B"), (1_000_000, "M")])
     }
 }
-pub fn tokens(n: u64) -> String {
+pub(crate) fn tokens(n: u64) -> String {
     abbreviated(n, &[(1_000_000_000, "B"), (1_000_000, "M"), (1_000, "k")])
 }
 
 impl View {
-    pub fn headline(&self, short: bool) -> String {
+    pub(crate) fn headline(&self, short: bool) -> String {
         let w = &self.windows["24h"];
         if w.busy_seconds < 60.0 {
             return "no agent worked in the last 24 h".into();
@@ -516,7 +516,7 @@ impl View {
             duration(w.busy_seconds)
         )
     }
-    pub fn columns(&self) -> [[String; 9]; 3] {
+    pub(crate) fn columns(&self) -> [[String; 9]; 3] {
         ["24h", "7d", "total"].map(|key| {
             let w = &self.windows[key];
             let c = &w.counts;
@@ -533,7 +533,7 @@ impl View {
             ]
         })
     }
-    pub fn levels(&self, weeks: usize) -> Vec<Option<u8>> {
+    pub(crate) fn levels(&self, weeks: usize) -> Vec<Option<u8>> {
         let shown = weeks.min(WEEKS) * 7;
         let days = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX).min(shown);
         let mut positive: Vec<f64> =
@@ -553,7 +553,7 @@ impl View {
             })
             .collect()
     }
-    pub fn text(&self) -> String {
+    pub(crate) fn text(&self) -> String {
         let mut out = self.headline(false);
         out.push_str("\n\n");
         let _ = writeln!(out, "{:18} {:>10} {:>10} {:>10}", "", "24 h", "7 days", "total");
@@ -580,7 +580,7 @@ impl View {
             write!(out, "last 26 weeks, one block per 24 h, the newest bottom right · counting for {} days", self.days);
         out
     }
-    pub fn share_link(&self) -> String {
+    pub(crate) fn share_link(&self) -> String {
         let mut link = format!("{SHARE_BASE}#v1");
         for (key, name) in [("24h", "24h"), ("7d", "7d"), ("total", "all")] {
             let w = &self.windows[key];

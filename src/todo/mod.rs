@@ -1,4 +1,4 @@
-pub mod editor;
+pub(crate) mod editor;
 
 use std::path::Path;
 
@@ -6,57 +6,57 @@ use serde::{Deserialize, Serialize};
 
 use editor::Editor;
 
-pub const VERSION: u32 = 1;
+pub(crate) const VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Item {
-    pub id: u64,
-    pub text: String,
-    pub done: bool,
+pub(crate) struct Item {
+    pub(crate) id: u64,
+    pub(crate) text: String,
+    pub(crate) done: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Removed(Vec<(usize, Item)>);
+pub(crate) struct Removed(Vec<(usize, Item)>);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Todos {
+pub(crate) struct Todos {
     items: Vec<Item>,
     next_id: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Saved {
-    pub version: u32,
+pub(crate) struct Saved {
+    pub(crate) version: u32,
     #[serde(default)]
-    pub items: Vec<SavedItem>,
+    pub(crate) items: Vec<SavedItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SavedItem {
-    pub text: String,
+pub(crate) struct SavedItem {
+    pub(crate) text: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub done: bool,
+    pub(crate) done: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Panel {
-    pub scroll: usize,
-    pub field: Option<Field>,
+pub(crate) struct Panel {
+    pub(crate) scroll: usize,
+    pub(crate) field: Option<Field>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Field {
-    pub item: Option<u64>,
-    pub editor: Editor,
+pub(crate) struct Field {
+    pub(crate) item: Option<u64>,
+    pub(crate) editor: Editor,
 }
 
-pub fn clean(text: &str) -> Option<String> {
+pub(crate) fn clean(text: &str) -> Option<String> {
     let text: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_string())
 }
 
-pub fn load(path: &Path) -> Todos {
+pub(crate) fn load(path: &Path) -> Todos {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|text| serde_json::from_str::<Saved>(&text).ok())
@@ -66,11 +66,11 @@ pub fn load(path: &Path) -> Todos {
 }
 
 impl Todos {
-    pub fn items(&self) -> &[Item] {
+    pub(crate) fn items(&self) -> &[Item] {
         &self.items
     }
 
-    pub fn pending(&self) -> usize {
+    pub(crate) fn pending(&self) -> usize {
         self.items.iter().take_while(|i| !i.done).count()
     }
 
@@ -78,7 +78,7 @@ impl Todos {
         self.items.iter().position(|i| i.id == id)
     }
 
-    pub fn item(&self, id: u64) -> Option<&Item> {
+    pub(crate) fn item(&self, id: u64) -> Option<&Item> {
         self.items.iter().find(|i| i.id == id)
     }
 
@@ -87,7 +87,7 @@ impl Todos {
         self.next_id
     }
 
-    pub fn add(&mut self, text: &str) -> Option<u64> {
+    pub(crate) fn add(&mut self, text: &str) -> Option<u64> {
         let text = clean(text)?;
         let id = self.take_id();
         let at = self.pending();
@@ -95,13 +95,13 @@ impl Todos {
         Some(id)
     }
 
-    pub fn edit(&mut self, id: u64, text: &str) -> bool {
+    pub(crate) fn edit(&mut self, id: u64, text: &str) -> bool {
         let (Some(text), Some(i)) = (clean(text), self.find(id)) else { return false };
         self.items[i].text = text;
         true
     }
 
-    pub fn toggle(&mut self, id: u64) {
+    pub(crate) fn toggle(&mut self, id: u64) {
         let Some(i) = self.find(id) else { return };
         let mut item = self.items.remove(i);
         item.done = !item.done;
@@ -109,26 +109,26 @@ impl Todos {
         self.items.insert(at, item);
     }
 
-    pub fn move_before(&mut self, id: u64, before: usize) {
+    pub(crate) fn move_before(&mut self, id: u64, before: usize) {
         let Some(from) = self.find(id) else { return };
         let split = self.pending();
         let (low, high) = if self.items[from].done { (split, self.items.len()) } else { (0, split) };
         crate::project::move_before(&mut self.items, from, before.clamp(low, high), None);
     }
 
-    pub fn remove(&mut self, id: u64) -> Option<Removed> {
+    pub(crate) fn remove(&mut self, id: u64) -> Option<Removed> {
         let i = self.find(id)?;
         Some(Removed(vec![(i, self.items.remove(i))]))
     }
 
-    pub fn clear_done(&mut self) -> Option<Removed> {
+    pub(crate) fn clear_done(&mut self) -> Option<Removed> {
         let split = self.pending();
         let done: Vec<(usize, Item)> =
             self.items.drain(split..).enumerate().map(|(i, item)| (split + i, item)).collect();
         (!done.is_empty()).then_some(Removed(done))
     }
 
-    pub fn restore(&mut self, removed: Removed) {
+    pub(crate) fn restore(&mut self, removed: Removed) {
         for (at, item) in removed.0 {
             let split = self.pending();
             let at = if item.done { at.clamp(split, self.items.len()) } else { at.min(split) };
@@ -136,18 +136,18 @@ impl Todos {
         }
     }
 
-    pub fn saved(&self) -> Saved {
+    pub(crate) fn saved(&self) -> Saved {
         let items = self.items.iter().map(|i| SavedItem { text: i.text.clone(), done: i.done }).collect();
         Saved { version: VERSION, items }
     }
 }
 
 impl Removed {
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }

@@ -22,17 +22,17 @@ const MESSAGES: i64 = 200;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Session {
-    pub turn: bool,
-    pub context: Option<Context>,
-    pub prompted: Option<SystemTime>,
-    pub place: Option<Place>,
-    pub counted: Vec<Record>,
+    pub(crate) turn: bool,
+    pub(crate) context: Option<Context>,
+    pub(crate) prompted: Option<SystemTime>,
+    pub(crate) place: Option<Place>,
+    pub(crate) counted: Vec<Record>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Place {
-    pub database: PathBuf,
-    pub id: String,
+    pub(crate) database: PathBuf,
+    pub(crate) id: String,
 }
 
 #[derive(Debug, Default)]

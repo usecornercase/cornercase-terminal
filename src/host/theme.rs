@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::graphics::CellSize;
 use crate::graphics::detect::{self, Replies};
 
-pub const PALETTE_LEN: usize = 256;
+pub(crate) const PALETTE_LEN: usize = 256;
 const THEMED_COLORS: usize = 16;
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
@@ -16,11 +16,11 @@ const MIN_MUTED_CONTRAST: f64 = 2.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "WireTheme", into = "WireTheme")]
-pub struct HostTheme {
-    pub foreground: Option<RgbColor>,
-    pub background: Option<RgbColor>,
-    pub palette: [Option<RgbColor>; PALETTE_LEN],
-    pub truecolor: bool,
+pub(crate) struct HostTheme {
+    pub(crate) foreground: Option<RgbColor>,
+    pub(crate) background: Option<RgbColor>,
+    pub(crate) palette: [Option<RgbColor>; PALETTE_LEN],
+    pub(crate) truecolor: bool,
 }
 
 impl Default for HostTheme {
@@ -69,7 +69,7 @@ impl From<WireTheme> for HostTheme {
 }
 
 impl HostTheme {
-    pub fn query(kitty: bool) -> String {
+    pub(crate) fn query(kitty: bool) -> String {
         let mut query = String::from(if kitty { detect::KITTY_QUERY } else { "" });
         query.push_str("\x1b[16t\x1b[?1;1;0S\x1b[?2;1;0S\x1b]10;?\x1b\\\x1b]11;?\x1b\\");
         for i in 0..THEMED_COLORS {
@@ -79,11 +79,11 @@ impl HostTheme {
         query
     }
 
-    pub fn is_light(&self) -> Option<bool> {
+    pub(crate) fn is_light(&self) -> Option<bool> {
         self.background.map(|c| u32::from(c.r) * 299 + u32::from(c.g) * 587 + u32::from(c.b) * 114 >= LIGHT_LUMINANCE)
     }
 
-    pub fn muted_is_readable(&self) -> bool {
+    pub(crate) fn muted_is_readable(&self) -> bool {
         self.background
             .is_none_or(|bg| self.palette[BRIGHT_BLACK].is_some_and(|c| contrast(c, bg) >= MIN_MUTED_CONTRAST))
     }
@@ -106,7 +106,7 @@ impl HostTheme {
 }
 
 #[derive(Debug, Default)]
-pub struct ThemeProbe {
+pub(crate) struct ThemeProbe {
     pending: Vec<u8>,
     theme: HostTheme,
     replies: Replies,
@@ -114,7 +114,7 @@ pub struct ThemeProbe {
 }
 
 impl ThemeProbe {
-    pub fn feed(&mut self, bytes: &[u8]) {
+    pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.pending.extend_from_slice(bytes);
         let mut start = 0;
         while !self.done && start < self.pending.len() {
@@ -168,11 +168,11 @@ impl ThemeProbe {
         }
     }
 
-    pub fn is_done(&self) -> bool {
+    pub(crate) fn is_done(&self) -> bool {
         self.done
     }
 
-    pub fn finish(self) -> (HostTheme, Replies) {
+    pub(crate) fn finish(self) -> (HostTheme, Replies) {
         (self.theme, self.replies)
     }
 }

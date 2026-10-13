@@ -17,7 +17,7 @@ mod jsonl;
 mod message;
 mod opencode;
 
-pub use message::{Record, Said};
+pub(crate) use message::{Record, Said};
 
 use counting::{Ledger, Record as CountRecord, Usage as CountUsage};
 use discovery::Job;
@@ -36,18 +36,18 @@ const SHELL_INPUT: &str = "<bash-input>";
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
 const MODEL_FLAG: &str = "--model";
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
-pub const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
+pub(crate) const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
 const MAX_TOKENS_ENV: &str = "CLAUDE_CODE_MAX_CONTEXT_TOKENS";
-pub const NO_COMPACT_ENV: &str = "DISABLE_COMPACT";
+pub(crate) const NO_COMPACT_ENV: &str = "DISABLE_COMPACT";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context {
-    pub model: String,
-    pub percent: Option<u16>,
+pub(crate) struct Context {
+    pub(crate) model: String,
+    pub(crate) percent: Option<u16>,
 }
 
 #[derive(Debug, Default)]
-pub struct Pane {
+pub(crate) struct Pane {
     transcript: Option<Transcript>,
     shown: Option<Context>,
     codex: Option<codex::Rollout>,
@@ -73,19 +73,19 @@ impl Pane {
         }
     }
 
-    pub fn kind(&self) -> Option<&'static str> {
+    pub(crate) fn kind(&self) -> Option<&'static str> {
         self.kind
     }
 
-    pub fn agent(&self) -> Option<(i32, SystemTime)> {
+    pub(crate) fn agent(&self) -> Option<(i32, SystemTime)> {
         self.agent
     }
 
-    pub fn take_counted(&mut self) -> agents::stats::Counted {
+    pub(crate) fn take_counted(&mut self) -> agents::stats::Counted {
         self.ledger.take()
     }
 
-    pub fn update_codex(&mut self, pid: i32) {
+    pub(crate) fn update_codex(&mut self, pid: i32) {
         self.follow(pid, agents::CODEX);
         if let Some(found) = self.finding.take()
             && found.as_ref() != self.codex.as_ref().map(|r| &r.path)
@@ -106,7 +106,7 @@ impl Pane {
         }
     }
 
-    pub fn update_opencode(&mut self, pid: i32) {
+    pub(crate) fn update_opencode(&mut self, pid: i32) {
         self.follow(pid, agents::OPENCODE);
         if let Some((mut found, models)) = self.looking.take() {
             if let Some(session) = &mut found
@@ -128,7 +128,7 @@ impl Pane {
         }
     }
 
-    pub fn update_gemini(&mut self, pid: i32, screen: &str) {
+    pub(crate) fn update_gemini(&mut self, pid: i32, screen: &str) {
         self.follow(pid, agents::GEMINI);
         if let Some(mut found) = self.reading.take() {
             if let Some(session) = &mut found
@@ -150,7 +150,7 @@ impl Pane {
         }
     }
 
-    pub fn update(&mut self, dir: Option<&Path>, claude: Option<&Claude>) {
+    pub(crate) fn update(&mut self, dir: Option<&Path>, claude: Option<&Claude>) {
         if let Some(claude) = claude {
             self.follow(claude.pid, agents::CLAUDE);
         }
@@ -199,23 +199,23 @@ impl Pane {
         }
     }
 
-    pub fn context(&self) -> Option<&Context> {
+    pub(crate) fn context(&self) -> Option<&Context> {
         self.shown.as_ref()
     }
 
-    pub fn prompted(&self) -> Option<SystemTime> {
+    pub(crate) fn prompted(&self) -> Option<SystemTime> {
         self.prompted
     }
 
-    pub fn codex_turn(&self) -> bool {
+    pub(crate) fn codex_turn(&self) -> bool {
         self.codex.as_ref().is_some_and(codex::Rollout::turn)
     }
 
-    pub fn opencode_turn(&self) -> Option<bool> {
+    pub(crate) fn opencode_turn(&self) -> Option<bool> {
         self.opencode.as_ref().map(|session| session.turn)
     }
 
-    pub fn record_for(&self, agent: &str) -> Option<Record> {
+    pub(crate) fn record_for(&self, agent: &str) -> Option<Record> {
         Some(match agent {
             agents::CLAUDE => Record::Claude(self.transcript.as_ref()?.path.clone()),
             agents::CODEX => Record::Codex(self.codex.as_ref()?.path.clone()),
@@ -228,7 +228,7 @@ impl Pane {
         })
     }
 
-    pub fn conversation(&self) -> Option<&str> {
+    pub(crate) fn conversation(&self) -> Option<&str> {
         let claude = self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str());
         claude.or_else(|| self.codex.as_ref()?.id()).or_else(|| self.gemini_record.as_ref()?.1.as_deref())
     }

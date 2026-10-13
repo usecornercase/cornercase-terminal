@@ -11,14 +11,14 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::time::Stamp;
 
-pub const LEVEL_ENV: &str = "CORNERCASE_LOG";
-pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
-pub const SLOW: Duration = Duration::from_secs(1);
+pub(crate) const LEVEL_ENV: &str = "CORNERCASE_LOG";
+pub(crate) const MAX_BYTES: u64 = 8 * 1024 * 1024;
+pub(crate) const SLOW: Duration = Duration::from_secs(1);
 const QUEUE: usize = 4096;
-pub const PRIVATE: u32 = 0o600;
+pub(crate) const PRIVATE: u32 = 0o600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Level {
+pub(crate) enum Level {
     Error,
     Warn,
     Info,
@@ -35,7 +35,7 @@ impl Level {
         }
     }
 
-    pub fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         match text.trim().to_ascii_lowercase().as_str() {
             "error" => Some(Self::Error),
             "warn" | "warning" => Some(Self::Warn),
@@ -54,17 +54,17 @@ struct Logger {
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
-pub fn rotated(path: &Path) -> PathBuf {
+pub(crate) fn rotated(path: &Path) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(".1");
     name.into()
 }
 
-pub fn level_from_env() -> Level {
+pub(crate) fn level_from_env() -> Level {
     std::env::var(LEVEL_ENV).ok().and_then(|text| Level::parse(&text)).unwrap_or(Level::Info)
 }
 
-pub fn start(path: &Path, level: Level) -> io::Result<()> {
+pub(crate) fn start(path: &Path, level: Level) -> io::Result<()> {
     let mut sink = Sink::open(path.to_path_buf(), MAX_BYTES, true)?;
     let (lines, rx) = mpsc::sync_channel(QUEUE);
     thread::Builder::new().name("log".into()).spawn(move || sink.drain(&rx))?;
@@ -72,18 +72,18 @@ pub fn start(path: &Path, level: Level) -> io::Result<()> {
     Ok(())
 }
 
-pub fn enabled(level: Level) -> bool {
+pub(crate) fn enabled(level: Level) -> bool {
     LOGGER.get().is_some_and(|logger| level <= logger.level)
 }
 
-pub fn write(level: Level, target: &str, message: &str, fields: &[(&str, &dyn Display)]) {
+pub(crate) fn write(level: Level, target: &str, message: &str, fields: &[(&str, &dyn Display)]) {
     let Some(logger) = LOGGER.get().filter(|logger| level <= logger.level) else { return };
     if logger.lines.try_send(line(SystemTime::now(), level, target, message, fields)).is_err() {
         logger.dropped.fetch_add(1, Ordering::Relaxed);
     }
 }
 
-pub fn write_fields(level: Level, target: &str, message: &str, fields: &[(&str, String)]) {
+pub(crate) fn write_fields(level: Level, target: &str, message: &str, fields: &[(&str, String)]) {
     if enabled(level) {
         let fields: Vec<(&str, &dyn Display)> =
             fields.iter().map(|(key, value)| (*key, value as &dyn Display)).collect();
@@ -91,7 +91,13 @@ pub fn write_fields(level: Level, target: &str, message: &str, fields: &[(&str, 
     }
 }
 
-pub fn line(at: SystemTime, level: Level, target: &str, message: &str, fields: &[(&str, &dyn Display)]) -> String {
+pub(crate) fn line(
+    at: SystemTime,
+    level: Level,
+    target: &str,
+    message: &str,
+    fields: &[(&str, &dyn Display)],
+) -> String {
     let mut out = String::with_capacity(96);
     let _ = write!(out, "{} {:<5} {target}: {message}", Stamp(at), level.name());
     for (key, value) in fields {
@@ -111,7 +117,7 @@ fn quote(out: &mut String, value: &str) {
     }
 }
 
-pub struct Job {
+pub(crate) struct Job {
     level: Level,
     target: &'static str,
     what: &'static str,
@@ -120,35 +126,35 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn new(level: Level, target: &'static str, what: &'static str) -> Self {
+    pub(crate) fn new(level: Level, target: &'static str, what: &'static str) -> Self {
         Self { level, target, what, fields: Vec::new(), started: Instant::now() }
     }
 
     #[must_use]
-    pub fn with(mut self, key: &'static str, value: impl Display) -> Self {
+    pub(crate) fn with(mut self, key: &'static str, value: impl Display) -> Self {
         if LOGGER.get().is_some() {
             self.fields.push((key, value.to_string()));
         }
         self
     }
 
-    pub fn note(&mut self, key: &'static str, value: impl Display) {
+    pub(crate) fn note(&mut self, key: &'static str, value: impl Display) {
         if LOGGER.get().is_some() {
             self.fields.push((key, value.to_string()));
         }
     }
 
     #[must_use]
-    pub fn begin(self) -> Self {
+    pub(crate) fn begin(self) -> Self {
         self.log(self.level, "started", &[]);
         Self { started: Instant::now(), ..self }
     }
 
-    pub fn done(self) {
+    pub(crate) fn done(self) {
         self.end(None);
     }
 
-    pub fn finish<T, E: Display>(self, result: &Result<T, E>) {
+    pub(crate) fn finish<T, E: Display>(self, result: &Result<T, E>) {
         match result {
             Ok(_) => self.end(None),
             Err(e) => self.end(Some(e)),
@@ -244,7 +250,7 @@ fn note_line(level: Level, message: &str) -> String {
     line(SystemTime::now(), level, "log", message, &[])
 }
 
-pub fn tail(path: &Path, lines: usize) -> io::Result<String> {
+pub(crate) fn tail(path: &Path, lines: usize) -> io::Result<String> {
     let current = std::fs::read(path)?;
     let mut text = String::from_utf8_lossy(&current).into_owned();
     if text.lines().count() < lines
@@ -256,21 +262,21 @@ pub fn tail(path: &Path, lines: usize) -> io::Result<String> {
     Ok(text.lines().skip(skip).flat_map(|line| [line, "\n"]).collect())
 }
 
-pub struct Follower {
+pub(crate) struct Follower {
     path: PathBuf,
     file: File,
     inode: u64,
 }
 
 impl Follower {
-    pub fn at_end(path: &Path) -> io::Result<Self> {
+    pub(crate) fn at_end(path: &Path) -> io::Result<Self> {
         let mut file = File::open(path)?;
         let inode = file.metadata()?.ino();
         file.seek(SeekFrom::End(0))?;
         Ok(Self { path: path.to_path_buf(), file, inode })
     }
 
-    pub fn read(&mut self) -> io::Result<Vec<u8>> {
+    pub(crate) fn read(&mut self) -> io::Result<Vec<u8>> {
         let mut new = Vec::new();
         self.file.read_to_end(&mut new)?;
         let Ok(meta) = std::fs::metadata(&self.path) else { return Ok(new) };

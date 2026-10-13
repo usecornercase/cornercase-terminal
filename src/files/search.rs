@@ -15,13 +15,13 @@ use parking_lot::Mutex;
 
 use crate::highlight::syntax;
 
-pub const MAX_FILES: usize = 200_000;
-pub const MAX_NAMES: usize = 200;
-pub const MAX_MATCHES: usize = 1000;
+pub(crate) const MAX_FILES: usize = 200_000;
+pub(crate) const MAX_NAMES: usize = 200;
+pub(crate) const MAX_MATCHES: usize = 1000;
 const MAX_LINE: usize = 400;
 const MAX_THREADS: usize = 8;
 
-pub fn index(root: &Path) -> Vec<String> {
+pub(crate) fn index(root: &Path) -> Vec<String> {
     let (tx, rx) = mpsc::channel();
     let count = AtomicUsize::new(0);
     let walk = WalkBuilder::new(root).hidden(false).filter_entry(|e| e.file_name() != ".git").build_parallel();
@@ -45,12 +45,12 @@ pub fn index(root: &Path) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Name {
-    pub path: String,
-    pub indices: Vec<u32>,
+pub(crate) struct Name {
+    pub(crate) path: String,
+    pub(crate) indices: Vec<u32>,
 }
 
-pub fn names(paths: &[String], query: &str) -> Vec<Name> {
+pub(crate) fn names(paths: &[String], query: &str) -> Vec<Name> {
     let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
     let mut matcher = Fuzzy::new(Config::DEFAULT.match_paths());
     let mut buf = Vec::new();
@@ -80,23 +80,23 @@ pub fn names(paths: &[String], query: &str) -> Vec<Name> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Line {
-    pub number: u32,
-    pub text: String,
-    pub ranges: Vec<Range<usize>>,
+pub(crate) struct Line {
+    pub(crate) number: u32,
+    pub(crate) text: String,
+    pub(crate) ranges: Vec<Range<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Found {
-    pub path: String,
-    pub lines: Vec<Line>,
+pub(crate) struct Found {
+    pub(crate) path: String,
+    pub(crate) lines: Vec<Line>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Text {
-    pub files: Vec<Found>,
-    pub matches: usize,
-    pub capped: bool,
+pub(crate) struct Text {
+    pub(crate) files: Vec<Found>,
+    pub(crate) matches: usize,
+    pub(crate) capped: bool,
 }
 
 fn matcher(query: &str) -> Option<RegexMatcher> {
@@ -118,7 +118,7 @@ fn line(matcher: &RegexMatcher, number: u64, raw: &str) -> Line {
     Line { number: u32::try_from(number).unwrap_or(u32::MAX), text, ranges }
 }
 
-pub fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> Text {
+pub(crate) fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> Text {
     let threads = std::thread::available_parallelism().map_or(4, NonZero::get).min(MAX_THREADS);
     text_on(root, paths, query, cancel, threads)
 }
@@ -158,7 +158,7 @@ fn text_on(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool, thre
     Text { files, matches, capped: seen.into_inner() > MAX_MATCHES }
 }
 
-pub fn occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
+pub(crate) fn occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
     if query.is_empty() {
         return Vec::new();
     }

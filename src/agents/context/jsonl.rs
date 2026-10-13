@@ -21,17 +21,17 @@ pub(super) struct Tail {
 }
 
 pub(super) struct Batch {
-    pub reset: bool,
-    pub skipped: bool,
-    pub bytes: Vec<u8>,
+    pub(crate) reset: bool,
+    pub(crate) skipped: bool,
+    pub(crate) bytes: Vec<u8>,
 }
 
 impl Tail {
-    pub fn read(&mut self, path: &Path) -> std::io::Result<Batch> {
+    pub(super) fn read(&mut self, path: &Path) -> std::io::Result<Batch> {
         self.read_since(path, None)
     }
 
-    pub fn read_since(&mut self, path: &Path, since: Option<SystemTime>) -> std::io::Result<Batch> {
+    pub(super) fn read_since(&mut self, path: &Path, since: Option<SystemTime>) -> std::io::Result<Batch> {
         let info = std::fs::metadata(path)?;
         let stamp = (info.ino(), info.len(), info.modified()?);
         let reset = self.stamp.is_some_and(|s| s.0 != stamp.0 || stamp.1 < s.1 || (stamp.1 == s.1 && stamp.2 != s.2));

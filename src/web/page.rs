@@ -1,9 +1,9 @@
 use super::http::Response;
 
-pub const INDEX: &str = include_str!("assets/index.html");
-pub const NOT_PAIRED: &str = include_str!("assets/not-paired.html");
-pub const EXPIRED: &str = include_str!("assets/expired.html");
-pub const OTHER_USER: &str = include_str!("assets/other-user.html");
+pub(super) const INDEX: &str = include_str!("assets/index.html");
+pub(super) const NOT_PAIRED: &str = include_str!("assets/not-paired.html");
+pub(super) const EXPIRED: &str = include_str!("assets/expired.html");
+pub(super) const OTHER_USER: &str = include_str!("assets/other-user.html");
 
 const ASSETS: &[(&str, &str, &str)] = &[
     ("/app.js", "text/javascript; charset=utf-8", include_str!("assets/app.js")),
@@ -14,7 +14,7 @@ const ASSETS: &[(&str, &str, &str)] = &[
     ("/xterm-LICENSE.txt", "text/plain; charset=utf-8", include_str!("assets/xterm-LICENSE.txt")),
 ];
 
-pub fn asset(path: &str) -> Option<Response> {
+pub(super) fn asset(path: &str) -> Option<Response> {
     ASSETS.iter().find(|(name, _, _)| *name == path).map(|(_, kind, body)| Response::new("200 OK", kind, *body))
 }
 

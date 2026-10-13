@@ -21,7 +21,7 @@ const COMPACT_MENU_WIDTH: u16 = 4;
 
 pub(super) const MIN_MENU_ROW_WIDTH: u16 = 20;
 
-pub const ROW_MENU_ICON: &str = "⋯";
+pub(crate) const ROW_MENU_ICON: &str = "⋯";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rows {
@@ -58,7 +58,7 @@ impl Rows {
         (first..self.heights.len()).take_while(|&i| self.height(first..i + 1) <= room).last().map_or(first, |i| i + 1)
     }
 
-    pub fn item(&self, i: usize) -> Rect {
+    pub(crate) fn item(&self, i: usize) -> Rect {
         let first = self.first();
         if !(first..self.end()).contains(&i) {
             return Rect::default();
@@ -67,20 +67,20 @@ impl Rows {
         Rect::new(self.list.x, u16::try_from(y).unwrap_or(u16::MAX), self.list.width, self.heights[i])
     }
 
-    pub fn at(&self, pos: Position) -> Option<usize> {
+    pub(crate) fn at(&self, pos: Position) -> Option<usize> {
         (self.first()..self.end()).find(|&i| self.item(i).contains(pos))
     }
 
-    pub fn hidden(&self) -> (Range<usize>, Range<usize>) {
+    pub(crate) fn hidden(&self) -> (Range<usize>, Range<usize>) {
         (0..self.first(), self.end()..self.heights.len())
     }
 
-    pub fn scrolled(&self, delta: isize) -> usize {
+    pub(crate) fn scrolled(&self, delta: isize) -> usize {
         let max = self.fitting_before(self.heights.len());
         self.scroll.min(max).saturating_add_signed(delta).min(max)
     }
 
-    pub fn reveal(&self, i: usize) -> usize {
+    pub(crate) fn reveal(&self, i: usize) -> usize {
         let first = self.first();
         if i >= self.heights.len() || (first..self.end()).contains(&i) {
             first
@@ -99,11 +99,11 @@ impl Rows {
         Rect::new(self.list.x, y, self.list.width, self.button)
     }
 
-    pub fn more_below(&self) -> Rect {
+    pub(crate) fn more_below(&self) -> Rect {
         Rect::new(self.list.x, self.list.y.saturating_add(self.room()), self.list.width, 1).intersection(self.list)
     }
 
-    pub fn edge(&self, pos: Position) -> Option<isize> {
+    pub(crate) fn edge(&self, pos: Position) -> Option<isize> {
         let (above, below) = self.hidden();
         let y = self.list.y.saturating_add(self.room());
         let bottom = Rect { y, height: self.list.bottom().saturating_sub(y), ..self.list };
@@ -135,7 +135,7 @@ impl Rows {
     }
 }
 
-pub fn more_above(list: Rect) -> Rect {
+pub(crate) fn more_above(list: Rect) -> Rect {
     if list.y < GAP { Rect::default() } else { Rect::new(list.x, list.y - GAP, list.width, 1) }
 }
 
@@ -148,7 +148,7 @@ pub fn row_close_button(row: Rect, pitch: u16) -> Rect {
     Rect::new(row.right().saturating_sub(width), row.y, width.min(row.width), pitch.min(row.height))
 }
 
-pub fn row_menu_button(row: Rect, pitch: u16) -> Rect {
+pub(crate) fn row_menu_button(row: Rect, pitch: u16) -> Rect {
     let close = row_close_button(row, pitch);
     let width = match pitch {
         _ if row.width < MIN_MENU_ROW_WIDTH => 0,

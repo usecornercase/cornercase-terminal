@@ -4,17 +4,17 @@ use crate::config::expand_home;
 use crate::term::emulator::Cell;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Link {
-    pub start: u16,
-    pub end: u16,
-    pub path: String,
-    pub lines: Option<(u32, u32)>,
+pub(crate) struct Link {
+    pub(crate) start: u16,
+    pub(crate) end: u16,
+    pub(crate) path: String,
+    pub(crate) lines: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Target {
-    pub path: String,
-    pub lines: Option<(u32, u32)>,
+pub(crate) struct Target {
+    pub(crate) path: String,
+    pub(crate) lines: Option<(u32, u32)>,
 }
 
 const TRAILING: [char; 5] = ['.', ',', ':', ';', '#'];
@@ -53,7 +53,7 @@ fn split(token: &str) -> (&str, Option<(u32, u32)>) {
     }
 }
 
-pub fn at(row: &[Cell], col: u16) -> Option<Link> {
+pub(crate) fn at(row: &[Cell], col: u16) -> Option<Link> {
     let col = usize::from(col);
     if !row.get(col).is_some_and(|c| path_char(&c.symbol)) {
         return None;
@@ -76,7 +76,7 @@ pub fn at(row: &[Cell], col: u16) -> Option<Link> {
     Some(Link { start: column(start), end: column(end), path: path.to_string(), lines })
 }
 
-pub fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option<&Path>) -> Option<Target> {
+pub(crate) fn resolve(link: &Link, cwd: Option<&Path>, root: &Path, home: Option<&Path>) -> Option<Target> {
     let root = root.canonicalize().ok()?;
     let given = expand_home(&link.path, home);
     let candidates: Vec<PathBuf> = if given.is_absolute() {

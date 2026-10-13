@@ -13,25 +13,25 @@ use crate::graphics::Picture;
 use crate::graphics::decode;
 use crate::highlight::syntax::{self, Segments};
 
-pub const MAX_ENTRIES: usize = 10_000;
-pub const MAX_BYTES: u64 = 8 << 20;
-pub const MAX_IMAGE_BYTES: u64 = 32 << 20;
+pub(crate) const MAX_ENTRIES: usize = 10_000;
+pub(crate) const MAX_BYTES: u64 = 8 << 20;
+pub(crate) const MAX_IMAGE_BYTES: u64 = 32 << 20;
 const BINARY_PROBE: usize = 8000;
 const SNIFF_BYTES: u64 = 64;
 
 static PICTURES: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Entry {
-    pub name: String,
-    pub dir: bool,
+pub(crate) struct Entry {
+    pub(crate) name: String,
+    pub(crate) dir: bool,
 }
 
 fn order(a: &Entry, b: &Entry) -> Ordering {
     b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())).then_with(|| a.name.cmp(&b.name))
 }
 
-pub fn list(root: &Path, folder: &str) -> io::Result<Vec<Entry>> {
+pub(crate) fn list(root: &Path, folder: &str) -> io::Result<Vec<Entry>> {
     let dir = if folder.is_empty() { root.to_path_buf() } else { root.join(folder) };
     if !dir.is_dir() {
         return Err(io::Error::from(io::ErrorKind::NotFound));
@@ -49,7 +49,7 @@ pub fn list(root: &Path, folder: &str) -> io::Result<Vec<Entry>> {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Stamp {
+pub(crate) struct Stamp {
     modified: Option<SystemTime>,
     len: u64,
     found: bool,
@@ -58,7 +58,7 @@ pub struct Stamp {
 const GONE: Stamp = Stamp { modified: None, len: 0, found: false };
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Body {
+pub(crate) enum Body {
     Text { lines: Vec<String>, styles: Option<Vec<Segments>> },
     Image(Arc<Picture>),
     Unreadable { format: &'static str, bytes: u64, reason: String },
@@ -68,25 +68,25 @@ pub enum Body {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Content {
-    pub stamp: Stamp,
-    pub language: Option<&'static str>,
-    pub body: Body,
+pub(crate) struct Content {
+    pub(crate) stamp: Stamp,
+    pub(crate) language: Option<&'static str>,
+    pub(crate) body: Body,
 }
 
 impl Content {
-    pub fn is_image(&self) -> bool {
+    pub(crate) fn is_image(&self) -> bool {
         matches!(self.body, Body::Image(_) | Body::Unreadable { .. })
     }
 
-    pub fn lines(&self) -> &[String] {
+    pub(crate) fn lines(&self) -> &[String] {
         match &self.body {
             Body::Text { lines, .. } => lines,
             _ => &[],
         }
     }
 
-    pub fn styles(&self) -> Option<&[Segments]> {
+    pub(crate) fn styles(&self) -> Option<&[Segments]> {
         match &self.body {
             Body::Text { styles, .. } => styles.as_deref(),
             _ => None,
@@ -94,12 +94,12 @@ impl Content {
     }
 }
 
-pub struct Read {
-    pub content: Content,
-    pub source: Option<String>,
+pub(crate) struct Read {
+    pub(crate) content: Content,
+    pub(crate) source: Option<String>,
 }
 
-pub fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
+pub(crate) fn read(path: &Path, previous: Option<Stamp>) -> Option<Read> {
     let meta = fs::metadata(path).ok();
     let stamp =
         meta.as_ref().map_or(GONE, |meta| Stamp { modified: meta.modified().ok(), len: meta.len(), found: true });
@@ -154,7 +154,7 @@ fn image(format: &'static str, bytes: &[u8]) -> Body {
     }
 }
 
-pub fn highlighted(read: Read) -> Option<Content> {
+pub(crate) fn highlighted(read: Read) -> Option<Content> {
     let (Some(language), Some(source)) = (read.content.language, read.source.as_deref()) else { return None };
     let styles = syntax::highlight(source, language)?;
     let Body::Text { lines, .. } = read.content.body else { return None };

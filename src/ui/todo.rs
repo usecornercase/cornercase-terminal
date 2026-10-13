@@ -6,7 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use super::{GAP, Rows, Zone, action_style, dim, draw_close, hovered_at as hovered, more_above, put};
 use crate::todo::editor::{Editor, wrap};
 
-pub const TEXT_X: u16 = 5;
+pub(crate) const TEXT_X: u16 = 5;
 const BUTTONS: u16 = 4;
 const BUTTON_WIDTH: u16 = 3;
 const TITLE: &str = "TODO";
@@ -28,14 +28,14 @@ pub struct View {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
-    pub id: u64,
-    pub text: String,
-    pub done: bool,
-    pub editing: Option<Editor>,
+    pub(crate) id: u64,
+    pub(crate) text: String,
+    pub(crate) done: bool,
+    pub(crate) editing: Option<Editor>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Hit {
+pub(crate) enum Hit {
     Close,
     ClearDone,
     Add,
@@ -68,12 +68,12 @@ fn header(area: Rect) -> Rect {
     Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1).intersection(area)
 }
 
-pub fn close(area: Rect) -> Rect {
+pub(crate) fn close(area: Rect) -> Rect {
     let row = header(area);
     Rect::new(row.right().saturating_sub(BUTTON_WIDTH), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
-pub fn clear_done(area: Rect, view: &View) -> Rect {
+pub(crate) fn clear_done(area: Rect, view: &View) -> Rect {
     if view.pending() == view.items.len() {
         return Rect::default();
     }
@@ -82,7 +82,7 @@ pub fn clear_done(area: Rect, view: &View) -> Rect {
     Rect::new(close(area).x.saturating_sub(w + 1), row.y, w, 1).intersection(row)
 }
 
-pub fn text_width(area: Rect) -> usize {
+pub(crate) fn text_width(area: Rect) -> usize {
     usize::from(area.width.saturating_sub(TEXT_X + BUTTONS).max(1))
 }
 
@@ -95,19 +95,19 @@ pub fn rows(area: Rect, view: &View) -> Rows {
     Rows { list, heights, button, scroll: view.scroll }
 }
 
-pub fn check(row: Rect) -> Rect {
+pub(crate) fn check(row: Rect) -> Rect {
     Rect::new(row.x + 1, row.y, 3, 1).intersection(row)
 }
 
-pub fn delete(row: Rect) -> Rect {
+pub(crate) fn delete(row: Rect) -> Rect {
     Rect::new(row.right().saturating_sub(BUTTONS), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
-pub fn spot(r: Rect, pos: Position) -> (usize, usize) {
+pub(crate) fn spot(r: Rect, pos: Position) -> (usize, usize) {
     (usize::from(pos.y.saturating_sub(r.y)), usize::from(pos.x.saturating_sub(r.x + TEXT_X)))
 }
 
-pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
+pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     if close(area).contains(pos) {
         return Some(Hit::Close);
     }
@@ -134,7 +134,7 @@ pub fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     })
 }
 
-pub fn drop(area: Rect, view: &View, dragged: u64, pos: Position) -> Option<usize> {
+pub(crate) fn drop(area: Rect, view: &View, dragged: u64, pos: Position) -> Option<usize> {
     let from = view.items.iter().position(|i| i.id == dragged)?;
     let layout = rows(area, view);
     let before = match layout.zone(pos)? {
@@ -147,7 +147,7 @@ pub fn drop(area: Rect, view: &View, dragged: u64, pos: Position) -> Option<usiz
     Some(if view.items[from].done { before.clamp(split, view.items.len()) } else { before.min(split) })
 }
 
-pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
+pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let hover = hover.filter(|_| view.drag.is_none());
     draw_header(f.buffer_mut(), area, view, hover);
     let width = text_width(area);

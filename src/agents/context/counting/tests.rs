@@ -2,10 +2,10 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use super::*;
 
-pub fn since() -> SystemTime {
+pub(crate) fn since() -> SystemTime {
     crate::time::Stamp::parse("2026-10-10T12:00:01.000Z").expect("time")
 }
-pub fn sum(counted: Counted) -> (usize, Tokens) {
+pub(crate) fn sum(counted: Counted) -> (usize, Tokens) {
     let mut sum = Tokens::default();
     for (_, t) in counted.tokens {
         sum.input += t.input;

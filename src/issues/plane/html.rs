@@ -41,7 +41,7 @@ impl Element {
     }
 }
 
-pub fn markdown(html: &str) -> String {
+pub(crate) fn markdown(html: &str) -> String {
     blocks(&parse(html), "\n\n").trim().to_string()
 }
 

@@ -12,11 +12,11 @@ use crate::process::reap;
 use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::{log, paths};
 
-pub fn kill_server() -> Result<bool> {
+pub(crate) fn kill_server() -> Result<bool> {
     Ok(stop_server(&ClientMessage::KillServer)?.is_some())
 }
 
-pub fn restart_server() -> Result<bool> {
+pub(crate) fn restart_server() -> Result<bool> {
     match stop_server(&ClientMessage::Restart)? {
         Some(true) => kill_server(),
         answer => Ok(answer.is_some()),

@@ -12,7 +12,7 @@ impl Settings {
         ("keep awake".into(), value.into(), self.awake.clone(), false)
     }
 
-    pub fn row_text(&self, row: &Row) -> RowText {
+    pub(crate) fn row_text(&self, row: &Row) -> RowText {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
             Row::Folder => (
@@ -133,7 +133,7 @@ impl Settings {
         ("prefix key".into(), value, note, clash.is_some())
     }
 
-    pub fn edit_field(&self) -> Option<(String, String)> {
+    pub(crate) fn edit_field(&self) -> Option<(String, String)> {
         self.edit.as_ref().map(|edit| {
             let token = matches!(edit.row, Row::Token(_));
             let label = match &edit.row {
@@ -154,7 +154,7 @@ impl Settings {
         })
     }
 
-    pub fn pick_title(&self) -> String {
+    pub(crate) fn pick_title(&self) -> String {
         let Some(pick) = &self.pick else { return String::new() };
         match &pick.row {
             Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
@@ -166,13 +166,13 @@ impl Settings {
         }
     }
 
-    pub fn pick_selected(&self) -> Option<usize> {
+    pub(crate) fn pick_selected(&self) -> Option<usize> {
         let pick = self.pick.as_ref()?;
         let choices = self.pick_choices();
         choices.len().checked_sub(1).map(|last| pick.search.selected().min(last))
     }
 
-    pub fn hint(&self) -> String {
+    pub(crate) fn hint(&self) -> String {
         self.notice.clone().unwrap_or_else(|| {
             if self.capturing {
                 "press the keys you want · backspace turns them off · esc cancels".into()

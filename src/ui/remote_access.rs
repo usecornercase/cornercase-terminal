@@ -8,21 +8,21 @@ use ratatui::widgets::{Clear, Paragraph};
 use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block, update_button};
 use crate::highlight::markdown;
 
-pub const TITLE: &str = "Remote";
-pub const LABEL: &str = "Remote";
+pub(crate) const TITLE: &str = "Remote";
+pub(crate) const LABEL: &str = "Remote";
 const LIT: &str = " ●";
 const QUIET: usize = 4;
 const DARK: Color = Color::Indexed(16);
 const LIGHT: Color = Color::Indexed(231);
 const TOO_SMALL: &str = "make this window larger to show the code";
 
-pub struct RemoteAccess {
-    pub url: Option<String>,
-    pub code: Vec<Line<'static>>,
-    pub lines: Vec<String>,
+pub(crate) struct RemoteAccess {
+    pub(crate) url: Option<String>,
+    pub(crate) code: Vec<Line<'static>>,
+    pub(crate) lines: Vec<String>,
 }
 
-pub fn button(usage: Rect, connected: bool) -> Rect {
+pub(crate) fn button(usage: Rect, connected: bool) -> Rect {
     let label = if connected { format!("{LABEL}{LIT}") } else { LABEL.into() };
     let width = u16::try_from(label.chars().count()).unwrap_or(u16::MAX).saturating_add(2);
     let room = usage.width.saturating_sub(super::button_width(super::USAGE_LABEL) + 2);
@@ -32,7 +32,7 @@ pub fn button(usage: Rect, connected: bool) -> Rect {
     Rect { x: usage.right() - width - 1, width, ..usage }
 }
 
-pub fn draw_button(f: &mut Frame, view: &View, r: Rect, connected: bool) {
+pub(crate) fn draw_button(f: &mut Frame, view: &View, r: Rect, connected: bool) {
     if r.is_empty() {
         return;
     }
@@ -51,7 +51,7 @@ fn modules(url: &str) -> Option<(usize, Vec<bool>)> {
     Some((width, code.to_colors().into_iter().map(|m| m == Module::Dark).collect()))
 }
 
-pub fn code(url: &str) -> Vec<Line<'static>> {
+pub(crate) fn code(url: &str) -> Vec<Line<'static>> {
     let Some((width, dark)) = modules(url) else { return Vec::new() };
     let side = width + 2 * QUIET;
     let at = |x: usize, y: usize| {
@@ -102,7 +102,7 @@ fn body(remote: &RemoteAccess, width: u16, room: u16, muted: Color) -> Vec<Line<
     lines
 }
 
-pub fn area(screen: Rect, remote: &RemoteAccess) -> Rect {
+pub(crate) fn area(screen: Rect, remote: &RemoteAccess) -> Rect {
     let width = screen.width.saturating_sub(4).min(FORM_WIDTH);
     let inner = form_inner(Rect::new(0, 0, width, 3)).width;
     let room = screen.height.saturating_sub(4);
@@ -115,11 +115,11 @@ fn rows(r: Rect) -> [Rect; 3] {
     Layout::vertical([Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)]).areas(form_inner(r))
 }
 
-pub fn done(screen: Rect, remote: &RemoteAccess) -> Rect {
+pub(crate) fn done(screen: Rect, remote: &RemoteAccess) -> Rect {
     update_button(rows(area(screen, remote))[2], crate::settings::DONE)
 }
 
-pub fn draw(f: &mut Frame, view: &View, remote: &RemoteAccess) {
+pub(crate) fn draw(f: &mut Frame, view: &View, remote: &RemoteAccess) {
     let r = area(f.area(), remote);
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, TITLE), r);

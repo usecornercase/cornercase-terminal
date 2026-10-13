@@ -3,17 +3,17 @@ use std::time::{Duration, Instant};
 
 use crate::process;
 
-pub const MEASURE_EVERY: Duration = Duration::from_secs(2);
+pub(crate) const MEASURE_EVERY: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Default)]
-pub struct Pane {
+pub(crate) struct Pane {
     bytes: Option<u64>,
     measured: Option<Instant>,
     measuring: Option<Receiver<Option<u64>>>,
 }
 
 impl Pane {
-    pub fn update(&mut self, pid: i32, now: Instant) {
+    pub(crate) fn update(&mut self, pid: i32, now: Instant) {
         match self.measuring.as_ref().map(Receiver::try_recv) {
             Some(Ok(bytes)) => {
                 self.measuring = None;
@@ -30,7 +30,7 @@ impl Pane {
         }
     }
 
-    pub fn bytes(&self) -> Option<u64> {
+    pub(crate) fn bytes(&self) -> Option<u64> {
         self.bytes
     }
 }

@@ -6,17 +6,17 @@ fn load(path: &Path) -> BTreeMap<String, String> {
     std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
 }
 
-pub fn read(path: &Path, key: &str) -> Option<String> {
+pub(crate) fn read(path: &Path, key: &str) -> Option<String> {
     load(path).remove(key).map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }
 
-pub fn write(path: &Path, key: &str, value: &str) -> io::Result<()> {
+pub(crate) fn write(path: &Path, key: &str, value: &str) -> io::Result<()> {
     let mut secrets = load(path);
     secrets.insert(key.into(), value.trim().into());
     store(path, &secrets)
 }
 
-pub fn remove(path: &Path, key: &str) -> io::Result<()> {
+pub(crate) fn remove(path: &Path, key: &str) -> io::Result<()> {
     let mut secrets = load(path);
     if secrets.remove(key).is_none() {
         return Ok(());

@@ -7,26 +7,26 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-pub const HTTPS_PORT: u16 = 8443;
-pub const ADMIN_DNS: &str = "https://login.tailscale.com/admin/dns";
+pub(crate) const HTTPS_PORT: u16 = 8443;
+pub(crate) const ADMIN_DNS: &str = "https://login.tailscale.com/admin/dns";
 const APP_BINARY: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
 const TIMEOUT: Duration = Duration::from_secs(15);
 const POLL: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Node {
-    pub host: String,
-    pub login: String,
+pub(crate) struct Node {
+    pub(crate) host: String,
+    pub(crate) login: String,
 }
 
 impl Node {
-    pub fn url(&self) -> String {
+    pub(crate) fn url(&self) -> String {
         format!("https://{}:{HTTPS_PORT}", self.host)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Problem {
+pub(crate) enum Problem {
     NotInstalled,
     NotConnected(String),
     NoHttps,
@@ -44,7 +44,7 @@ impl fmt::Display for Problem {
     }
 }
 
-pub fn binary() -> Option<PathBuf> {
+pub(crate) fn binary() -> Option<PathBuf> {
     let on_path = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
@@ -53,7 +53,7 @@ pub fn binary() -> Option<PathBuf> {
     on_path.or_else(|| Some(PathBuf::from(APP_BINARY)).filter(|app| app.is_file()))
 }
 
-pub fn start(program: &Path, local_port: u16) -> Result<Node, Problem> {
+pub(crate) fn start(program: &Path, local_port: u16) -> Result<Node, Problem> {
     let node = status(program)?;
     let target = format!("http://127.0.0.1:{local_port}");
     let https = format!("--https={HTTPS_PORT}");
@@ -61,17 +61,17 @@ pub fn start(program: &Path, local_port: u16) -> Result<Node, Problem> {
     Ok(node)
 }
 
-pub fn stop(program: &Path) -> Result<(), Problem> {
+pub(crate) fn stop(program: &Path) -> Result<(), Problem> {
     let https = format!("--https={HTTPS_PORT}");
     run(program, &["serve", &https, "off"]).map(|_| ())
 }
 
-pub fn status(program: &Path) -> Result<Node, Problem> {
+pub(crate) fn status(program: &Path) -> Result<Node, Problem> {
     let output = run(program, &["status", "--json"])?;
     parse_status(&String::from_utf8_lossy(&output.stdout))
 }
 
-pub fn parse_status(text: &str) -> Result<Node, Problem> {
+pub(crate) fn parse_status(text: &str) -> Result<Node, Problem> {
     let status: Value =
         serde_json::from_str(text).map_err(|e| Problem::Failed(format!("unexpected status output: {e}")))?;
     let state = status["BackendState"].as_str().unwrap_or("unknown");

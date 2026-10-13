@@ -33,7 +33,7 @@ pub(in crate::ui) fn picker_rows(picker: Rect) -> [Rect; 4] {
     [input, list, note, buttons]
 }
 
-pub fn picker_list(picker: Rect) -> Rect {
+pub(crate) fn picker_list(picker: Rect) -> Rect {
     picker_rows(picker)[1]
 }
 
@@ -45,18 +45,18 @@ pub fn picker_item(picker: Rect, items: usize, scroll: usize, i: usize) -> Rect 
     list_item(picker_list(picker), items, scroll, i)
 }
 
-pub fn list_item_at(list_box: Rect, items: usize, scroll: usize, i: usize) -> Position {
+pub(crate) fn list_item_at(list_box: Rect, items: usize, scroll: usize, i: usize) -> Position {
     list_item(picker_list(list_box), items, scroll, i).as_position()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PickerHit {
+pub(crate) enum PickerHit {
     Item(usize),
     Submit,
     Cancel,
 }
 
-pub fn picker_hit(area: Rect, submit: &str, items: usize, scroll: usize, pos: Position) -> Option<PickerHit> {
+pub(crate) fn picker_hit(area: Rect, submit: &str, items: usize, scroll: usize, pos: Position) -> Option<PickerHit> {
     list_box_hit(picker_area(area), submit, items, scroll, pos)
 }
 
@@ -76,22 +76,22 @@ fn list_box_hit(picker: Rect, submit: &str, items: usize, scroll: usize, pos: Po
     (i < items).then_some(PickerHit::Item(i))
 }
 
-pub struct Picker {
-    pub title: &'static str,
-    pub path: String,
-    pub filter: String,
-    pub items: Vec<Entry>,
-    pub selected: Option<usize>,
-    pub scroll: usize,
-    pub hint: String,
-    pub error: Option<String>,
-    pub submit: &'static str,
-    pub empty: &'static str,
+pub(crate) struct Picker {
+    pub(crate) title: &'static str,
+    pub(crate) path: String,
+    pub(crate) filter: String,
+    pub(crate) items: Vec<Entry>,
+    pub(crate) selected: Option<usize>,
+    pub(crate) scroll: usize,
+    pub(crate) hint: String,
+    pub(crate) error: Option<String>,
+    pub(crate) submit: &'static str,
+    pub(crate) empty: &'static str,
 }
 
-pub struct Entry {
-    pub name: String,
-    pub branch: Option<String>,
+pub(crate) struct Entry {
+    pub(crate) name: String,
+    pub(crate) branch: Option<String>,
 }
 
 pub(in crate::ui) fn draw_picker(f: &mut Frame, view: &View, picker: &Picker) {

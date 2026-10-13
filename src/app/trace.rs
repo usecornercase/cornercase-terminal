@@ -251,7 +251,7 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 }
 
 impl App {
-    pub fn trace(&mut self) {
+    pub(crate) fn trace(&mut self) {
         let logged = log::enabled(Level::Info);
         if logged || self.events.listening() {
             self.publish(logged);

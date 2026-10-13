@@ -7,7 +7,7 @@ use crate::issues::{Detail, Issue, branch};
 use crate::time;
 
 impl Browser {
-    pub fn start_hint(&self, issue: &Issue) -> String {
+    pub(crate) fn start_hint(&self, issue: &Issue) -> String {
         match self.place_for(issue) {
             Some(place) if place.worktree => format!("in its own worktree, on {}, in {}", branch(issue), place.label),
             Some(place) => format!("in a new tab in {}", place.label),
@@ -54,7 +54,7 @@ impl Browser {
         ]
     }
 
-    pub fn detail_lines(&self, room: Room) -> Vec<Line<'static>> {
+    pub(crate) fn detail_lines(&self, room: Room) -> Vec<Line<'static>> {
         let Screen::Detail { issue, detail, raw, .. } = &self.screen else { return Vec::new() };
         let width = room.detail_width;
         let start = self.start_lines(issue);
@@ -76,7 +76,7 @@ fn raw_lines(text: &str, width: usize) -> Vec<Line<'static>> {
         .collect()
 }
 
-pub fn detail_lines(
+pub(super) fn detail_lines(
     issue: &Issue,
     detail: Option<&Detail>,
     width: usize,

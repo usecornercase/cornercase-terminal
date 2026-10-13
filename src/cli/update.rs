@@ -18,12 +18,12 @@ const STOPPED_INSTEAD: &str = "the cornercase server was stopped before every ag
 const INSIDE: &str = "This terminal is one of them, so it closes too.";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum When {
+pub(super) enum When {
     Now,
     Idle { timeout: Option<f64> },
 }
 
-pub fn update(check_only: bool, yes: bool, when: When) -> Result<bool> {
+pub(super) fn update(check_only: bool, yes: bool, when: When) -> Result<bool> {
     let url = std::env::var(update::LATEST_ENV).ok();
     if cfg!(debug_assertions) && url.is_none() {
         return Err(Error::DevelopmentBuild);
@@ -73,7 +73,7 @@ fn offer_restart(yes: bool, when: When) -> Result<()> {
     Ok(())
 }
 
-pub fn restart(yes: bool, when: When) -> Result<()> {
+pub(super) fn restart(yes: bool, when: When) -> Result<()> {
     if !server_running()? {
         eprintln!("no cornercase server is running");
     } else if !restart_if_confirmed(None, yes, when)? {

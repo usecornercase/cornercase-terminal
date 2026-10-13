@@ -1,9 +1,9 @@
 use ratatui::layout::{Position, Rect};
 use serde::{Deserialize, Serialize};
 
-pub const HALF: f32 = 0.5;
-pub const MIN_COLS: u16 = 10;
-pub const MIN_ROWS: u16 = 3;
+pub(crate) const HALF: f32 = 0.5;
+pub(crate) const MIN_COLS: u16 = 10;
+pub(crate) const MIN_ROWS: u16 = 3;
 const PADDING: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,7 +14,7 @@ pub enum Dir {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Place {
+pub(crate) enum Place {
     Swap,
     Left,
     Right,
@@ -23,7 +23,7 @@ pub enum Place {
 }
 
 impl Place {
-    pub fn at(pane: Rect, pos: Position) -> Self {
+    pub(crate) fn at(pane: Rect, pos: Position) -> Self {
         let (w, h) = (u32::from(pane.width.max(1)), u32::from(pane.height.max(1)));
         let x = u32::from(pos.x.saturating_sub(pane.x)) * 2 + 1;
         let y = u32::from(pos.y.saturating_sub(pane.y)) * 2 + 1;
@@ -39,7 +39,7 @@ impl Place {
         edges.into_iter().min_by_key(|(_, d)| *d).map_or(Self::Swap, |(place, _)| place)
     }
 
-    pub fn area(self, pane: Rect) -> Rect {
+    pub(crate) fn area(self, pane: Rect) -> Rect {
         let (w, h) = (pane.width / 2, pane.height / 2);
         match self {
             Self::Swap => pane,
@@ -61,7 +61,7 @@ impl Place {
     }
 }
 
-pub fn beside<T: Copy + PartialEq>(panes: &[(T, Rect)], from: T, side: Place) -> Option<T> {
+pub(crate) fn beside<T: Copy + PartialEq>(panes: &[(T, Rect)], from: T, side: Place) -> Option<T> {
     let (_, at) = *panes.iter().find(|(id, _)| *id == from)?;
     let across = |r: Rect| match side {
         Place::Left | Place::Right => (r.y, r.bottom()),
@@ -95,9 +95,9 @@ pub enum Node<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Divider {
-    pub path: Vec<bool>,
-    pub dir: Dir,
-    pub area: Rect,
+    pub(crate) path: Vec<bool>,
+    pub(crate) dir: Dir,
+    pub(crate) area: Rect,
     pub line: Rect,
     min: (u16, u16),
 }
@@ -125,7 +125,7 @@ fn span(area: Rect, dir: Dir) -> (u16, u16) {
 }
 
 impl Divider {
-    pub fn grab(&self) -> Rect {
+    pub(crate) fn grab(&self) -> Rect {
         match self.dir {
             Dir::Right => Rect { width: self.line.width + PADDING, ..self.line }.intersection(self.area),
             Dir::Down => self.line,
@@ -170,7 +170,7 @@ fn bounds(room: u16, (first, second): (u16, u16)) -> (u16, u16) {
     if first.saturating_add(second) <= room { (first, room - second) } else { (1, room - 1) }
 }
 
-pub fn ratio_at(divider: &Divider, pos: Position) -> f32 {
+pub(crate) fn ratio_at(divider: &Divider, pos: Position) -> f32 {
     let (start, at) = match divider.dir {
         Dir::Right => (divider.area.x, pos.x),
         Dir::Down => (divider.area.y, pos.y),
@@ -185,19 +185,19 @@ pub fn ratio_at(divider: &Divider, pos: Position) -> f32 {
     f32::from(first) / f32::from(room)
 }
 
-pub fn fits(area: Rect, dir: Dir) -> bool {
+pub(crate) fn fits(area: Rect, dir: Dir) -> bool {
     let (total, gap) = span(area, dir);
     total - gap >= leaf_min(dir) * 2
 }
 
 impl<T: Copy + PartialEq> Node<T> {
-    pub fn ids(&self) -> Vec<T> {
+    pub(crate) fn ids(&self) -> Vec<T> {
         let mut ids = Vec::new();
         self.collect_ids(&mut ids);
         ids
     }
 
-    pub fn first(&self) -> T {
+    pub(crate) fn first(&self) -> T {
         match self {
             Self::Leaf(id) => *id,
             Self::Split { first, .. } => first.first(),
@@ -245,20 +245,20 @@ impl<T: Copy + PartialEq> Node<T> {
         }
     }
 
-    pub fn has_room(&self, area: Rect) -> bool {
+    pub(crate) fn has_room(&self, area: Rect) -> bool {
         matches!(self, Self::Leaf(_))
             || (area.width >= self.min_size(Dir::Right) && area.height >= self.min_size(Dir::Down))
     }
 
-    pub fn visible(&self, area: Rect, active: T) -> Vec<(T, Rect)> {
+    pub(crate) fn visible(&self, area: Rect, active: T) -> Vec<(T, Rect)> {
         if self.has_room(area) { self.panes(area) } else { vec![(active, area)] }
     }
 
-    pub fn pane(&self, area: Rect, active: T, id: T) -> Option<Rect> {
+    pub(crate) fn pane(&self, area: Rect, active: T, id: T) -> Option<Rect> {
         self.visible(area, active).into_iter().find(|(p, _)| *p == id).map(|(_, r)| r)
     }
 
-    pub fn pane_at(&self, area: Rect, active: T, pos: Position) -> Option<T> {
+    pub(crate) fn pane_at(&self, area: Rect, active: T, pos: Position) -> Option<T> {
         self.visible(area, active).into_iter().find(|(_, r)| r.contains(pos)).map(|(id, _)| id)
     }
 
@@ -283,7 +283,7 @@ impl<T: Copy + PartialEq> Node<T> {
         path.pop();
     }
 
-    pub fn divider_at(&self, area: Rect, pos: Position) -> Option<Divider> {
+    pub(crate) fn divider_at(&self, area: Rect, pos: Position) -> Option<Divider> {
         self.dividers(area).into_iter().find(|d| d.grab().contains(pos))
     }
 
@@ -310,7 +310,7 @@ impl<T: Copy + PartialEq> Node<T> {
         }
     }
 
-    pub fn moved(&self, pane: T, target: T, place: Place) -> Option<Self> {
+    pub(crate) fn moved(&self, pane: T, target: T, place: Place) -> Option<Self> {
         let ids = self.ids();
         if pane == target || !ids.contains(&pane) || !ids.contains(&target) {
             return None;
@@ -338,7 +338,7 @@ impl<T: Copy + PartialEq> Node<T> {
         }
     }
 
-    pub fn remove(&mut self, target: T) -> Option<T> {
+    pub(crate) fn remove(&mut self, target: T) -> Option<T> {
         let Self::Split { first, second, .. } = self else { return None };
         let (kept, neighbour) = if **first == Self::Leaf(target) {
             (std::mem::replace(second.as_mut(), Self::Leaf(target)), true)
@@ -353,7 +353,7 @@ impl<T: Copy + PartialEq> Node<T> {
         near
     }
 
-    pub fn set_ratio(&mut self, path: &[bool], value: f32) -> bool {
+    pub(crate) fn set_ratio(&mut self, path: &[bool], value: f32) -> bool {
         match (self, path.split_first()) {
             (Self::Split { ratio, .. }, None) => {
                 *ratio = value;
@@ -370,7 +370,7 @@ impl<T: Copy + PartialEq> Node<T> {
         }
     }
 
-    pub fn map<U>(&self, f: &impl Fn(T) -> Option<U>) -> Option<Node<U>> {
+    pub(crate) fn map<U>(&self, f: &impl Fn(T) -> Option<U>) -> Option<Node<U>> {
         Some(match self {
             Self::Leaf(id) => Node::Leaf(f(*id)?),
             Self::Split { dir, ratio, first, second } => Node::Split {
@@ -383,7 +383,7 @@ impl<T: Copy + PartialEq> Node<T> {
     }
 }
 
-pub fn row<T: Copy>(ids: &[T]) -> Option<Node<T>> {
+pub(crate) fn row<T: Copy>(ids: &[T]) -> Option<Node<T>> {
     let (last, rest) = ids.split_last()?;
     let mut node = Node::Leaf(*last);
     for (i, id) in rest.iter().enumerate().rev() {
