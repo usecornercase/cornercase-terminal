@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.75
+
+- No changes in the app. The source files moved into folders by domain.
+
 ## 0.12.74
 
 - No changes in the app. The search, the Every project view and the saved session build their data outside App.
