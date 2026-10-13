@@ -4,59 +4,13 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::WHEEL_ROWS;
 use super::overlay::Overlay;
-use crate::git;
 use crate::list::Search;
-use crate::search::{self, Candidate, Goto, Kind};
+use crate::search::{self, Candidate};
 use crate::ui::{self};
 
 impl App {
     pub(super) fn search_candidates(&self) -> Vec<Candidate> {
-        let mut candidates: Vec<Candidate> = self
-            .groups
-            .iter()
-            .map(|g| Candidate {
-                kind: Kind::Group,
-                goto: Goto::Group(g.id),
-                name: g.entry.label(),
-                context: String::new(),
-                keys: vec![g.entry.name.clone()],
-            })
-            .collect();
-        for (p, group) in self.projects.iter().zip(crate::project::group_indices(&self.projects, &self.groups)) {
-            let project = self.project_label(p);
-            let place = |workspace, tab| Goto::Place { project: p.id, workspace, tab };
-            candidates.push(Candidate {
-                kind: Kind::Project,
-                goto: place(None, None),
-                name: project.clone(),
-                context: group.map(|g| self.groups[g].entry.name.clone()).unwrap_or_default(),
-                keys: vec![project.clone()],
-            });
-            for w in p.workspaces.iter().filter(|w| w.open()) {
-                let label = w.label();
-                let mut keys = vec![label.clone()];
-                keys.extend(w.name.as_ref().and_then(|_| git::branch(&w.path)));
-                let goto = place(Some(w.id), None);
-                candidates.push(Candidate {
-                    kind: Kind::Workspace,
-                    goto,
-                    name: label.clone(),
-                    context: project.clone(),
-                    keys: keys.clone(),
-                });
-                for t in &w.tabs {
-                    let name = t.label(&self.config);
-                    candidates.push(Candidate {
-                        kind: Kind::Tab,
-                        goto: place(Some(w.id), Some(t.id)),
-                        context: format!("{project} › {label}"),
-                        keys: std::iter::once(name.clone()).chain(keys.iter().cloned()).collect(),
-                        name,
-                    });
-                }
-            }
-        }
-        candidates
+        search::candidates(&self.groups, &self.projects, &self.config, self.home.as_deref())
     }
 
     pub(super) fn search_results(&self, query: &str) -> Vec<Candidate> {
