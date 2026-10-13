@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::layout::{Position, Rect};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, plane, sort_by_updated};
+use super::{
+    self as issues, Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, plane,
+    sort_by_updated,
+};
 use crate::list::Search;
 use crate::markdown;
 use crate::time;
@@ -17,6 +19,13 @@ pub enum IssuesHit {
     Toggle(usize),
     Item(usize),
     Button(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Room {
+    pub list_rows: usize,
+    pub detail_rows: usize,
+    pub detail_width: usize,
 }
 
 const WHEEL_ROWS: isize = 3;
@@ -147,11 +156,11 @@ pub struct Picker {
     then_start: bool,
 }
 
-struct Choice {
-    key: String,
-    title: String,
-    meta: String,
-    who: Option<Who>,
+pub struct Choice {
+    pub key: String,
+    pub title: String,
+    pub meta: String,
+    pub who: Option<Who>,
 }
 
 #[derive(Debug)]
@@ -265,7 +274,26 @@ impl Browser {
         }
     }
 
-    fn token_form(&self) -> Option<Source> {
+    pub fn token_field(&self, source: Source) -> (&'static str, String) {
+        let form = self.forms.get(&source);
+        let step = self.form_step(source);
+        let typed = form.map_or_else(
+            || match step {
+                Step::Site => self.jira_site.clone(),
+                Step::Workspace => self.plane_workspace.clone(),
+                _ => String::new(),
+            },
+            |f| f.input.clone(),
+        );
+        match step {
+            Step::Site => ("site", typed),
+            Step::Email => ("email", typed),
+            Step::Workspace => ("workspace", typed),
+            Step::Token => (source.token_name(), "•".repeat(typed.chars().count().min(TOKEN_DOTS))),
+        }
+    }
+
+    pub fn token_form(&self) -> Option<Source> {
         match self.current() {
             Tab::One(source) if source != Source::Github && !self.connections.contains_key(&source) => Some(source),
             _ => None,
@@ -322,7 +350,7 @@ impl Browser {
         })
     }
 
-    fn form_step(&self, source: Source) -> Step {
+    pub fn form_step(&self, source: Source) -> Step {
         match (self.forms.get(&source), source) {
             (Some(form), _) => form.step,
             (None, Source::Jira) => Step::Site,
@@ -408,16 +436,12 @@ impl Browser {
         buttons
     }
 
-    fn labels(&self) -> Vec<&'static str> {
+    pub fn labels(&self) -> Vec<&'static str> {
         self.buttons().into_iter().map(Button::label).collect()
     }
 
-    fn tab_names(&self) -> Vec<&'static str> {
+    pub fn tab_names(&self) -> Vec<&'static str> {
         self.tabs.iter().map(|t| t.name()).collect()
-    }
-
-    fn rows(area: Rect) -> usize {
-        usize::from(ui::issues_list(ui::issues_area(area)).height)
     }
 
     fn switch(&mut self, delta: isize) -> Action {
@@ -442,7 +466,7 @@ impl Browser {
         self.sources()
     }
 
-    fn people_rows(&self) -> Vec<(Source, usize)> {
+    pub fn people_rows(&self) -> Vec<(Source, usize)> {
         self.people_sources().into_iter().flat_map(|s| [(s, 0), (s, 1)]).collect()
     }
 
@@ -492,7 +516,7 @@ impl Browser {
         }
     }
 
-    fn toggles(&self) -> (Vec<String>, Vec<bool>) {
+    pub fn toggles(&self) -> (Vec<String>, Vec<bool>) {
         let label = self.people_label();
         let filtered = label != "people";
         (vec!["closed".into(), label], vec![self.closed, filtered])
@@ -628,7 +652,7 @@ impl Browser {
         choices
     }
 
-    fn choices(&self) -> Vec<Choice> {
+    pub fn choices(&self) -> Vec<Choice> {
         let Some(picker) = &self.picker else { return Vec::new() };
         let needle = picker.search.query().trim().to_lowercase();
         let all: Vec<Choice> = match picker.pick {
@@ -690,8 +714,8 @@ impl Browser {
         }
     }
 
-    fn picker_key(&mut self, key: KeyEvent, area: Rect) -> Action {
-        let rows = Self::rows(area);
+    fn picker_key(&mut self, key: KeyEvent, room: Room) -> Action {
+        let rows = room.list_rows;
         let count = self.choices().len();
         let Some(picker) = &mut self.picker else { return Action::None };
         match key.code {
@@ -788,25 +812,21 @@ impl Browser {
         };
     }
 
-    fn detail_rows(area: Rect) -> usize {
-        usize::from(ui::issue_detail(ui::issues_area(area)).height)
-    }
-
-    fn scroll_detail(&mut self, delta: isize, area: Rect) {
-        let max = self.detail_lines(area).len().saturating_sub(Self::detail_rows(area));
+    fn scroll_detail(&mut self, delta: isize, room: Room) {
+        let max = self.detail_lines(room).len().saturating_sub(room.detail_rows);
         if let Screen::Detail { scroll, .. } = &mut self.screen {
             *scroll = (*scroll).min(max).saturating_add_signed(delta).min(max);
         }
     }
 
-    pub fn key(&mut self, key: KeyEvent, area: Rect) -> Action {
+    pub fn key(&mut self, key: KeyEvent, room: Room) -> Action {
         if self.starting {
             return Action::None;
         }
         self.notice = None;
-        let page = isize::try_from(Self::detail_rows(area)).unwrap_or(1).max(1);
+        let page = isize::try_from(room.detail_rows).unwrap_or(1).max(1);
         if self.picker.is_some() {
-            return self.picker_key(key, area);
+            return self.picker_key(key, room);
         }
         if self.filtering.is_some() {
             return self.people_key(key);
@@ -818,12 +838,12 @@ impl Browser {
                     let issue = (**issue).clone();
                     return self.start(issue);
                 }
-                KeyCode::Up => self.scroll_detail(-1, area),
-                KeyCode::Down => self.scroll_detail(1, area),
-                KeyCode::PageUp => self.scroll_detail(-page, area),
-                KeyCode::PageDown | KeyCode::Char(' ') => self.scroll_detail(page, area),
-                KeyCode::Home => self.scroll_detail(isize::MIN / 2, area),
-                KeyCode::End => self.scroll_detail(isize::MAX / 2, area),
+                KeyCode::Up => self.scroll_detail(-1, room),
+                KeyCode::Down => self.scroll_detail(1, room),
+                KeyCode::PageUp => self.scroll_detail(-page, room),
+                KeyCode::PageDown | KeyCode::Char(' ') => self.scroll_detail(page, room),
+                KeyCode::Home => self.scroll_detail(isize::MIN / 2, room),
+                KeyCode::End => self.scroll_detail(isize::MAX / 2, room),
                 _ => {}
             }
             return Action::None;
@@ -851,7 +871,7 @@ impl Browser {
             }
             return Action::None;
         }
-        let rows = Self::rows(area);
+        let rows = room.list_rows;
         let shown = self.shown().len();
         match key.code {
             KeyCode::Enter => return self.selected().map_or(Action::None, |issue| self.read(issue)),
@@ -886,50 +906,44 @@ impl Browser {
         chars.for_each(|c| self.search.push(c));
     }
 
-    pub fn mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Action {
+    pub fn mouse(&mut self, kind: MouseEventKind, hit: Option<IssuesHit>, room: Room) -> Action {
         if self.starting {
             return Action::None;
         }
-        if matches!(ev.kind, MouseEventKind::Down(_)) {
+        if matches!(kind, MouseEventKind::Down(_)) {
             self.notice = None;
         }
-        let labels = self.labels();
-        let (toggle_labels, _) = self.toggles();
-        let toggles: Vec<&str> = toggle_labels.iter().map(String::as_str).collect();
         if self.picker.is_some() || self.filtering.is_some() {
-            let rows = Self::rows(area);
+            let rows = room.list_rows;
             let count = if self.picker.is_some() { self.choices().len() } else { self.people_rows().len() };
-            let scroll = self.picker.as_ref().map_or(0, |p| p.search.scroll());
-            match ev.kind {
+            match kind {
                 MouseEventKind::ScrollUp => {
                     self.picker.iter_mut().for_each(|p| p.search.scroll_by(-WHEEL_ROWS, count, rows));
                 }
                 MouseEventKind::ScrollDown => {
                     self.picker.iter_mut().for_each(|p| p.search.scroll_by(WHEEL_ROWS, count, rows));
                 }
-                MouseEventKind::Down(MouseButton::Left) => {
-                    match ui::issues_hit(area, &self.tab_names(), &toggles, &labels, count, scroll, pos) {
-                        Some(IssuesHit::Item(i)) if self.picker.is_some() => return self.choose(Some(i)),
-                        Some(IssuesHit::Item(i)) => {
-                            self.filtering = Some(i);
-                            if let Some((source, field)) = self.people_rows().get(i).copied() {
-                                self.open_picker(Pick::Person(source, field), false);
-                            }
+                MouseEventKind::Down(MouseButton::Left) => match hit {
+                    Some(IssuesHit::Item(i)) if self.picker.is_some() => return self.choose(Some(i)),
+                    Some(IssuesHit::Item(i)) => {
+                        self.filtering = Some(i);
+                        if let Some((source, field)) = self.people_rows().get(i).copied() {
+                            self.open_picker(Pick::Person(source, field), false);
                         }
-                        Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
-                        _ => {}
                     }
-                }
+                    Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                    _ => {}
+                },
                 _ => {}
             }
             return Action::None;
         }
         if matches!(self.screen, Screen::Detail { .. }) {
-            match ev.kind {
-                MouseEventKind::ScrollUp => self.scroll_detail(-WHEEL_ROWS, area),
-                MouseEventKind::ScrollDown => self.scroll_detail(WHEEL_ROWS, area),
+            match kind {
+                MouseEventKind::ScrollUp => self.scroll_detail(-WHEEL_ROWS, room),
+                MouseEventKind::ScrollDown => self.scroll_detail(WHEEL_ROWS, room),
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if let Some(i) = ui::issue_button_hit(area, &labels, pos) {
+                    if let Some(IssuesHit::Button(i)) = hit {
                         return self.press(self.buttons()[i]);
                     }
                 }
@@ -937,35 +951,32 @@ impl Browser {
             }
             return Action::None;
         }
-        let rows = Self::rows(area);
+        let rows = room.list_rows;
         let shown = if self.token_form().is_some() { 0 } else { self.shown().len() };
-        match ev.kind {
+        match kind {
             MouseEventKind::ScrollUp => self.search.scroll_by(-WHEEL_ROWS, shown, rows),
             MouseEventKind::ScrollDown => self.search.scroll_by(WHEEL_ROWS, shown, rows),
-            MouseEventKind::Down(MouseButton::Left) => {
-                let hit = ui::issues_hit(area, &self.tab_names(), &toggles, &labels, shown, self.search.scroll(), pos);
-                match hit {
-                    Some(IssuesHit::Tab(i)) => {
-                        self.tab = i;
-                        self.search.reset();
-                        return self.needs_load();
-                    }
-                    Some(IssuesHit::Toggle(i)) => return self.toggle(i),
-                    Some(IssuesHit::Item(i)) => {
-                        if let Some(issue) = self.shown().get(i).map(|issue| (*issue).clone()) {
-                            return self.read(issue);
-                        }
-                    }
-                    Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
-                    None => {}
+            MouseEventKind::Down(MouseButton::Left) => match hit {
+                Some(IssuesHit::Tab(i)) => {
+                    self.tab = i;
+                    self.search.reset();
+                    return self.needs_load();
                 }
-            }
+                Some(IssuesHit::Toggle(i)) => return self.toggle(i),
+                Some(IssuesHit::Item(i)) => {
+                    if let Some(issue) = self.shown().get(i).map(|issue| (*issue).clone()) {
+                        return self.read(issue);
+                    }
+                }
+                Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                None => {}
+            },
             _ => {}
         }
         Action::None
     }
 
-    fn start_hint(&self, issue: &Issue) -> String {
+    pub fn start_hint(&self, issue: &Issue) -> String {
         match self.place_for(issue) {
             Some(place) if place.worktree => format!("in its own worktree, on {}, in {}", branch(issue), place.label),
             Some(place) => format!("in a new tab in {}", place.label),
@@ -1012,231 +1023,220 @@ impl Browser {
         ]
     }
 
-    fn detail_lines(&self, area: Rect) -> Vec<Line<'static>> {
+    pub fn detail_lines(&self, room: Room) -> Vec<Line<'static>> {
         let Screen::Detail { issue, detail, raw, .. } = &self.screen else { return Vec::new() };
-        let width = usize::from(ui::issue_detail(ui::issues_area(area)).width);
+        let width = room.detail_width;
         let start = self.start_lines(issue);
         detail_lines(issue, detail.as_ref().and_then(|d| d.as_ref().ok()), width, time::now(), *raw, start)
     }
+}
 
-    fn picker_view(&self) -> (ui::IssuesBody, Option<ui::Note>, String) {
-        let picker = self.picker.as_ref();
-        let choices = self.choices();
-        let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
-        let items = choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta }).collect();
-        let body = ui::IssuesBody::List {
-            filter: picker.map(|p| p.search.query().to_string()).unwrap_or_default(),
-            items,
-            selected,
-            scroll: picker.map_or(0, |p| p.search.scroll()),
-            empty: "nothing matches".into(),
-        };
-        let (hint, note) = match picker.map(|p| p.pick) {
-            Some(Pick::Place) => {
-                ("where should it be worked on? a repository gets a worktree, others a new tab".to_string(), None)
-            }
-            Some(Pick::Person(source, field)) => {
-                let note = match self.members.get(&source) {
-                    None => Some(ui::Note::Busy("loading people…")),
-                    Some(Err(e)) => Some(ui::Note::Error(e.clone())),
-                    Some(Ok(_)) => None,
-                };
-                (
-                    format!(
-                        "{} {}: anyone, you, or someone else · type to find them",
-                        source.name(),
-                        source.people_fields()[field]
-                    ),
-                    note,
-                )
-            }
-            _ => ("which agent should take it? settings set how each one starts".to_string(), None),
-        };
-        (body, note, hint)
-    }
-
-    fn people_view(&self) -> (ui::IssuesBody, Option<ui::Note>, String) {
-        let rows = self.people_rows();
-        let items = rows
-            .iter()
-            .map(|(source, field)| ui::IssueRow {
-                key: format!("{} {}", source.name(), source.people_fields()[*field]),
-                title: self.people.of(*source)[*field].describe(),
-                meta: String::new(),
-            })
-            .collect();
-        let body = ui::IssuesBody::List {
-            filter: String::new(),
-            items,
-            selected: self.filtering.map(|c| c.min(rows.len().saturating_sub(1))),
-            scroll: 0,
-            empty: "nothing to filter here".into(),
-        };
-        (body, None, "enter picks a person · the filter goes into each tracker's search and is remembered".into())
-    }
-
-    pub fn view(&self, area: Rect, now: i64) -> ui::Overlay {
-        let (body, note, hint) = match &self.screen {
-            _ if self.picker.is_some() => self.picker_view(),
-            _ if self.filtering.is_some() => self.people_view(),
-            Screen::Detail { detail, scroll, .. } => {
-                let lines = self.detail_lines(area);
-                let rows = Self::detail_rows(area);
-                let scroll = (*scroll).min(lines.len().saturating_sub(rows));
-                let note = match detail {
-                    None => Some(ui::Note::Busy("loading…")),
-                    Some(Err(e)) => Some(ui::Note::Error(e.clone())),
-                    Some(Ok(_)) => None,
-                };
-                let more = if lines.len() > rows {
-                    format!(" · lines {}-{} of {}", scroll + 1, (scroll + rows).min(lines.len()), lines.len())
-                } else {
-                    String::new()
-                };
-                let hint = format!("enter starts it{more}");
-                (ui::IssuesBody::Detail { lines, scroll }, note, hint)
-            }
-            Screen::List => match self.token_form() {
-                Some(source) => self.token_view(source),
-                None => self.list_view(now),
-            },
-        };
-        let hint = self.notice.clone().unwrap_or(hint);
-        let (toggles, on) = self.toggles();
-        let note = if self.starting {
-            Some(ui::Note::Busy("starting…"))
-        } else if let Some(e) = &self.error {
-            Some(ui::Note::Error(e.clone()))
-        } else {
-            note
-        };
-        ui::Overlay::Issues(ui::Issues {
-            title: format!("Issues · {}", self.project_name),
-            tabs: self.tab_names(),
-            tab: self.tab,
-            toggles,
-            on,
-            body,
-            note,
-            hint,
-            buttons: self.labels(),
-        })
-    }
-
-    fn token_view(&self, source: Source) -> (ui::IssuesBody, Option<ui::Note>, String) {
-        let form = self.forms.get(&source);
-        let step = self.form_step(source);
-        let typed = form.map_or_else(
-            || match step {
-                Step::Site => self.jira_site.clone(),
-                Step::Workspace => self.plane_workspace.clone(),
-                _ => String::new(),
-            },
-            |f| f.input.clone(),
-        );
-        let mut help = vec![format!("Connect {}.", source.name()), String::new()];
-        let (label, input) = match step {
-            Step::Site => {
-                help.push("Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.".into());
-                ("site", typed)
-            }
-            Step::Email => {
-                help.push("Type the email you sign in to Atlassian with and press Enter.".into());
-                ("email", typed)
-            }
-            Step::Workspace => {
-                help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
-                help.push("Then press Enter.".into());
-                ("workspace", typed)
-            }
-            Step::Token => {
-                match source {
-                    Source::Jira => help
-                        .extend([format!("Signing in to {} as {}.", self.jira_site, self.jira_email), String::new()]),
-                    Source::Plane => {
-                        let line = format!("Connecting to the Plane workspace {}.", self.plane_workspace);
-                        help.extend([line, String::new()]);
-                    }
-                    _ => {}
-                }
-                help.push(source.token_help().into());
-                (source.token_name(), "•".repeat(typed.chars().count().min(TOKEN_DOTS)))
-            }
-        };
-        match (step, source.token_env()) {
-            (Step::Token, Some(env)) => {
-                help.push(String::new());
-                help.push(format!(
-                    "It is saved in {} (only you can read it); you can also paste it in settings. {env}, when set, \
-                     takes precedence.",
-                    self.secrets_path
-                ));
-            }
-            _ if source == Source::Plane => {
-                help.extend([String::new(), "The workspace is saved in your settings.".into()]);
-            }
-            _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
+fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let picker = browser.picker.as_ref();
+    let choices = browser.choices();
+    let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
+    let items = choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta }).collect();
+    let body = ui::IssuesBody::List {
+        filter: picker.map(|p| p.search.query().to_string()).unwrap_or_default(),
+        items,
+        selected,
+        scroll: picker.map_or(0, |p| p.search.scroll()),
+        empty: "nothing matches".into(),
+    };
+    let (hint, note) = match picker.map(|p| p.pick) {
+        Some(Pick::Place) => {
+            ("where should it be worked on? a repository gets a worktree, others a new tab".to_string(), None)
         }
-        let note = match form {
-            Some(f) if f.checking => Some(ui::Note::Busy("checking…")),
-            Some(TokenForm { error: Some(e), .. }) => Some(ui::Note::Error(e.clone())),
-            _ => None,
-        };
-        (ui::IssuesBody::Token { label, input, help }, note, String::new())
-    }
+        Some(Pick::Person(source, field)) => {
+            let note = match browser.members.get(&source) {
+                None => Some(ui::Note::Busy("loading people…")),
+                Some(Err(e)) => Some(ui::Note::Error(e.clone())),
+                Some(Ok(_)) => None,
+            };
+            (
+                format!(
+                    "{} {}: anyone, you, or someone else · type to find them",
+                    source.name(),
+                    source.people_fields()[field]
+                ),
+                note,
+            )
+        }
+        _ => ("which agent should take it? settings set how each one starts".to_string(), None),
+    };
+    (body, note, hint)
+}
 
-    fn list_view(&self, now: i64) -> (ui::IssuesBody, Option<ui::Note>, String) {
-        let shown = self.shown();
-        let selected = shown.len().checked_sub(1).map(|last| self.search.selected().min(last));
-        let listings: Vec<(Source, &Listing)> =
-            self.sources().into_iter().filter_map(|s| self.lists.get(&s).map(|l| (s, l))).collect();
-        let loading = listings.iter().any(|(_, l)| l.loading);
-        let error = listings.iter().find_map(|(s, l)| {
-            l.error.as_ref().map(|e| if self.current() == Tab::All { format!("{}: {e}", s.name()) } else { e.clone() })
-        });
-        let empty = if !self.search.query().trim().is_empty() {
-            "no matches".to_string()
-        } else if loading || error.is_some() {
-            String::new()
-        } else if self.current() == Tab::One(Source::Github) && !self.github {
-            "this project is not in a git repository".into()
-        } else if self.sources().is_empty() {
-            "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
-        } else if self.closed {
-            "no issues".into()
-        } else {
-            "no open issues".into()
-        };
-        let note = match error {
-            Some(e) => Some(ui::Note::Error(e)),
-            None if loading && shown.is_empty() => Some(ui::Note::Busy("loading…")),
-            None => None,
-        };
-        let account = match self.current() {
-            Tab::One(source) => self.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
-            Tab::All => None,
-        };
-        let action =
-            selected.map(|i| format!("enter reads {} · start works on it {}", shown[i].key, self.start_hint(shown[i])));
-        let refreshing = (loading && !shown.is_empty()).then(|| "refreshing…".to_string());
-        let hint = refreshing.into_iter().chain(account).chain(action).collect::<Vec<_>>().join(" · ");
-        let items = shown
-            .iter()
-            .map(|issue| ui::IssueRow {
-                key: issue.key.clone(),
-                title: issue.title.clone(),
-                meta: super::meta(issue, now),
-            })
-            .collect();
-        let body = ui::IssuesBody::List {
-            filter: self.search.query().to_string(),
-            items,
-            selected,
-            scroll: self.search.scroll(),
-            empty,
-        };
-        (body, note, hint)
+fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let rows = browser.people_rows();
+    let items = rows
+        .iter()
+        .map(|(source, field)| ui::IssueRow {
+            key: format!("{} {}", source.name(), source.people_fields()[*field]),
+            title: browser.people.of(*source)[*field].describe(),
+            meta: String::new(),
+        })
+        .collect();
+    let body = ui::IssuesBody::List {
+        filter: String::new(),
+        items,
+        selected: browser.filtering.map(|c| c.min(rows.len().saturating_sub(1))),
+        scroll: 0,
+        empty: "nothing to filter here".into(),
+    };
+    (body, None, "enter picks a person · the filter goes into each tracker's search and is remembered".into())
+}
+
+pub fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
+    let (body, note, hint) = match &browser.screen {
+        _ if browser.picker.is_some() => picker_view(browser),
+        _ if browser.filtering.is_some() => people_view(browser),
+        Screen::Detail { detail, scroll, .. } => {
+            let lines = browser.detail_lines(room);
+            let rows = room.detail_rows;
+            let scroll = (*scroll).min(lines.len().saturating_sub(rows));
+            let note = match detail {
+                None => Some(ui::Note::Busy("loading…")),
+                Some(Err(e)) => Some(ui::Note::Error(e.clone())),
+                Some(Ok(_)) => None,
+            };
+            let more = if lines.len() > rows {
+                format!(" · lines {}-{} of {}", scroll + 1, (scroll + rows).min(lines.len()), lines.len())
+            } else {
+                String::new()
+            };
+            let hint = format!("enter starts it{more}");
+            (ui::IssuesBody::Detail { lines, scroll }, note, hint)
+        }
+        Screen::List => match browser.token_form() {
+            Some(source) => token_view(browser, source),
+            None => list_view(browser, now),
+        },
+    };
+    let hint = browser.notice.clone().unwrap_or(hint);
+    let (toggles, on) = browser.toggles();
+    let note = if browser.starting {
+        Some(ui::Note::Busy("starting…"))
+    } else if let Some(e) = &browser.error {
+        Some(ui::Note::Error(e.clone()))
+    } else {
+        note
+    };
+    ui::Overlay::Issues(ui::Issues {
+        title: format!("Issues · {}", browser.project_name),
+        tabs: browser.tab_names(),
+        tab: browser.tab,
+        toggles,
+        on,
+        body,
+        note,
+        hint,
+        buttons: browser.labels(),
+    })
+}
+
+fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let form = browser.forms.get(&source);
+    let step = browser.form_step(source);
+    let (label, input) = browser.token_field(source);
+    let mut help = vec![format!("Connect {}.", source.name()), String::new()];
+    match step {
+        Step::Site => {
+            help.push("Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.".into());
+        }
+        Step::Email => {
+            help.push("Type the email you sign in to Atlassian with and press Enter.".into());
+        }
+        Step::Workspace => {
+            help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
+            help.push("Then press Enter.".into());
+        }
+        Step::Token => {
+            match source {
+                Source::Jira => help
+                    .extend([format!("Signing in to {} as {}.", browser.jira_site, browser.jira_email), String::new()]),
+                Source::Plane => {
+                    let line = format!("Connecting to the Plane workspace {}.", browser.plane_workspace);
+                    help.extend([line, String::new()]);
+                }
+                _ => {}
+            }
+            help.push(source.token_help().into());
+        }
     }
+    match (step, source.token_env()) {
+        (Step::Token, Some(env)) => {
+            help.push(String::new());
+            help.push(format!(
+                "It is saved in {} (only you can read it); you can also paste it in settings. {env}, when set, \
+                 takes precedence.",
+                browser.secrets_path
+            ));
+        }
+        _ if source == Source::Plane => {
+            help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
+        _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
+    }
+    let note = match form {
+        Some(f) if f.checking => Some(ui::Note::Busy("checking…")),
+        Some(TokenForm { error: Some(e), .. }) => Some(ui::Note::Error(e.clone())),
+        _ => None,
+    };
+    (ui::IssuesBody::Token { label, input, help }, note, String::new())
+}
+
+fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let shown = browser.shown();
+    let selected = shown.len().checked_sub(1).map(|last| browser.search.selected().min(last));
+    let listings: Vec<(Source, &Listing)> =
+        browser.sources().into_iter().filter_map(|s| browser.lists.get(&s).map(|l| (s, l))).collect();
+    let loading = listings.iter().any(|(_, l)| l.loading);
+    let error = listings.iter().find_map(|(s, l)| {
+        l.error.as_ref().map(|e| if browser.current() == Tab::All { format!("{}: {e}", s.name()) } else { e.clone() })
+    });
+    let empty = if !browser.search.query().trim().is_empty() {
+        "no matches".to_string()
+    } else if loading || error.is_some() {
+        String::new()
+    } else if browser.current() == Tab::One(Source::Github) && !browser.github {
+        "this project is not in a git repository".into()
+    } else if browser.sources().is_empty() {
+        "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
+    } else if browser.closed {
+        "no issues".into()
+    } else {
+        "no open issues".into()
+    };
+    let note = match error {
+        Some(e) => Some(ui::Note::Error(e)),
+        None if loading && shown.is_empty() => Some(ui::Note::Busy("loading…")),
+        None => None,
+    };
+    let account = match browser.current() {
+        Tab::One(source) => browser.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
+        Tab::All => None,
+    };
+    let action =
+        selected.map(|i| format!("enter reads {} · start works on it {}", shown[i].key, browser.start_hint(shown[i])));
+    let refreshing = (loading && !shown.is_empty()).then(|| "refreshing…".to_string());
+    let hint = refreshing.into_iter().chain(account).chain(action).collect::<Vec<_>>().join(" · ");
+    let items = shown
+        .iter()
+        .map(|issue| ui::IssueRow {
+            key: issue.key.clone(),
+            title: issue.title.clone(),
+            meta: issues::meta(issue, now),
+        })
+        .collect();
+    let body = ui::IssuesBody::List {
+        filter: browser.search.query().to_string(),
+        items,
+        selected,
+        scroll: browser.search.scroll(),
+        empty,
+    };
+    (body, note, hint)
 }
 
 fn raw_lines(text: &str, width: usize) -> Vec<Line<'static>> {
@@ -1298,4 +1298,4 @@ pub fn detail_lines(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

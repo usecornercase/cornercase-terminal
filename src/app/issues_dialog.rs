@@ -12,7 +12,7 @@ use crate::clipboard;
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
 use crate::git;
-use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen};
+use crate::issues::browser::{self, Action, Browser, Connection, IssuesHit, Place, Room, Screen};
 use crate::issues::cache::Key as CacheKey;
 use crate::issues::{
     self, Account, Client, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
@@ -23,6 +23,8 @@ use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::panics;
 use crate::secrets;
+use crate::time;
+use crate::ui;
 
 pub(super) struct Apis {
     pub(super) shortcut: String,
@@ -467,13 +469,26 @@ impl App {
 
     pub(super) fn issues_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        let action = b.key(key, area);
+        let action = b.key(key, room(area));
         self.act(action, area)
     }
 
     pub(super) fn issues_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        let action = b.mouse(ev, pos, area);
+        let room = room(area);
+        let ui::Overlay::Issues(view) = browser::view(b, room, time::now()) else { return Ok(()) };
+        let hit = match &view.body {
+            ui::IssuesBody::Detail { .. } => ui::issue_button_hit(area, &view.buttons, pos).map(IssuesHit::Button),
+            body => {
+                let (items, scroll) = match body {
+                    ui::IssuesBody::List { items, scroll, .. } => (items.len(), *scroll),
+                    _ => (0, b.search.scroll()),
+                };
+                let toggles: Vec<&str> = view.toggles.iter().map(String::as_str).collect();
+                ui::issues_hit(area, &view.tabs, &toggles, &view.buttons, items, scroll, pos)
+            }
+        };
+        let action = b.mouse(ev.kind, hit, room);
         self.act(action, area)
     }
 
@@ -524,6 +539,17 @@ impl App {
             b.error = None;
         }
         Ok(())
+    }
+}
+
+pub(super) fn room(area: Rect) -> Room {
+    let issues = ui::issues_area(area);
+    let list = ui::issues_list(issues);
+    let detail = ui::issue_detail(issues);
+    Room {
+        list_rows: usize::from(list.height),
+        detail_rows: usize::from(detail.height),
+        detail_width: usize::from(detail.width),
     }
 }
 

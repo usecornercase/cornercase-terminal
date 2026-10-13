@@ -12,7 +12,7 @@ use super::worktrees::Check;
 use crate::changes::BranchPicker;
 use crate::clipboard;
 use crate::error::Result;
-use crate::issues::browser::Browser;
+use crate::issues::browser::{self, Browser};
 use crate::list::Search;
 use crate::picker::Picker;
 use crate::settings::Settings;
@@ -320,7 +320,7 @@ impl App {
             }),
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
-            Overlay::Issues(b) => b.view(area, time::now()),
+            Overlay::Issues(b) => browser::view(b, super::issues_dialog::room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),
