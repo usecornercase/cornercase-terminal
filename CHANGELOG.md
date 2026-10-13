@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. Each supported agent now has one reader for its conversation and activity.
 
+## 0.12.81
+
+- No changes in the app. The saved agent stats file can now hold any number of agents: a file with fewer or more is read instead of discarded.
+
 ## 0.12.80
 
 - No changes in the app. Supported agents now share one identity, with each agent’s rules kept in its own folder.

@@ -109,16 +109,29 @@ impl Counts {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Bucket {
-    by_agent: [Counts; 4],
+    #[serde(deserialize_with = "fitted")]
+    by_agent: Vec<Counts>,
     busy_ms: u64,
     most_at_once: u64,
 }
 
+fn fitted<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<Counts>, D::Error> {
+    let mut counts = Vec::<Counts>::deserialize(deserializer)?;
+    counts.resize(Known::ALL.len(), Counts::default());
+    Ok(counts)
+}
+
+impl Default for Bucket {
+    fn default() -> Self {
+        Self { by_agent: vec![Counts::default(); Known::ALL.len()], busy_ms: 0, most_at_once: 0 }
+    }
+}
+
 impl Bucket {
     fn add(&mut self, other: &Self) {
-        for (a, b) in self.by_agent.iter_mut().zip(other.by_agent) {
+        for (a, b) in self.by_agent.iter_mut().zip(other.by_agent.iter().copied()) {
             a.add(b);
         }
         self.busy_ms = self.busy_ms.saturating_add(other.busy_ms);
@@ -126,7 +139,7 @@ impl Bucket {
     }
     fn counts(&self) -> Counts {
         let mut counts = Counts::default();
-        for a in self.by_agent {
+        for a in self.by_agent.iter().copied() {
             counts.add(a);
         }
         counts
@@ -145,7 +158,7 @@ impl Bucket {
     }
 }
 
-type Hour = (u64, [[u64; 9]; 4], u64, u64);
+type Hour = (u64, Vec<[u64; 9]>, u64, u64);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Saved {
@@ -282,7 +295,14 @@ impl Stats {
             hours: self
                 .hours
                 .range(oldest..)
-                .map(|(&at, bucket)| (at, bucket.by_agent.map(Counts::packed), bucket.busy_ms, bucket.most_at_once))
+                .map(|(&at, bucket)| {
+                    (
+                        at,
+                        bucket.by_agent.iter().copied().map(Counts::packed).collect(),
+                        bucket.busy_ms,
+                        bucket.most_at_once,
+                    )
+                })
                 .collect(),
         }
     }
@@ -352,7 +372,9 @@ pub(crate) fn load(path: &Path, now: SystemTime) -> Stats {
             .hours
             .into_iter()
             .map(|(at, agents, busy_ms, most_at_once)| {
-                (at, Bucket { by_agent: agents.map(Counts::unpacked), busy_ms, most_at_once })
+                let mut by_agent: Vec<Counts> = agents.into_iter().map(Counts::unpacked).collect();
+                by_agent.resize(Known::ALL.len(), Counts::default());
+                (at, Bucket { by_agent, busy_ms, most_at_once })
             })
             .collect();
         stats.prune(now);
