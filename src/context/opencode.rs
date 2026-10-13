@@ -142,8 +142,11 @@ fn is_opencode(pid: i32) -> bool {
 }
 
 fn shared(holder: i32, database: &Path, cwd: &Path) -> bool {
-    process::all().into_iter().any(|other| {
+    let others = process::all();
+    let family = process::descendants(holder);
+    others.into_iter().any(|other| {
         other != holder
+            && !family.contains(&other)
             && is_opencode(other)
             && folder(other).as_deref() == Some(cwd)
             && process::open_files(other).iter().any(|path| path == database)
