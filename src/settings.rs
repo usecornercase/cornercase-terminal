@@ -8,7 +8,6 @@ use crate::issues::{Account, Secret, Source, jira, plane};
 use crate::list::Search;
 use crate::notify;
 use crate::shortcuts::Prefix;
-use crate::ui;
 
 const RESUME_NOTE: &str = "Claude Code, Codex and Gemini, in their tabs";
 pub const DONE: &str = "done";
@@ -1083,51 +1082,6 @@ impl Settings {
                 "enter changes the selected setting · tab or ←→ switches tabs · every change is saved at once".into()
             }
         })
-    }
-}
-
-pub fn settings_view(settings: &Settings) -> ui::Settings {
-    let rows: Vec<ui::SettingsRow> = settings
-        .rows()
-        .iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let text = settings.row_text(row);
-            ui::SettingsRow {
-                section: row.section(),
-                label: text.label,
-                value: text.value,
-                note: text.note,
-                dangerous: text.dangerous,
-                removable: settings.removable(i).is_some(),
-                movable: row.movable(),
-            }
-        })
-        .collect();
-    let edit = settings.edit_field().map(|(label, value)| ui::SettingsEdit { label, value });
-    let pick = settings.pick.as_ref().map(|pick| {
-        let choices = settings.pick_choices();
-        ui::SettingsPick {
-            title: settings.pick_title(),
-            filter: pick.search.query().to_string(),
-            items: choices.iter().map(|item| (item.value.clone(), item.note.clone(), item.dangerous)).collect(),
-            selected: settings.pick_selected(),
-            scroll: pick.search.scroll(),
-        }
-    });
-    let error = settings.edit.as_ref().and_then(|e| e.error.clone());
-    let note = if settings.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
-    let hint = settings.hint();
-    ui::Settings {
-        tabs: Page::ALL.iter().map(|p| p.name()).collect(),
-        tab: settings.page.index(),
-        rows,
-        cursor: settings.cursor,
-        edit,
-        pick,
-        note,
-        hint,
-        submit: DONE,
     }
 }
 
