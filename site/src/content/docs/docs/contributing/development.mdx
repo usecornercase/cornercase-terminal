@@ -67,7 +67,7 @@ npx -y jscpd@4.3.0         # copy-paste detector
 - **Where tests live:** the tests of `foo.rs` (or `foo/mod.rs`) go in `foo/tests.rs`, and a file over 1,000 lines keeps its helpers and puts each group in `foo/tests/<group>.rs`. They stay child modules, so they reach private items.
 - **UI tests** render a `View` into ratatui's `TestBackend`: `insta` snapshots for layouts, cell styles for things like hover colours.
 - **Terminal and app tests** spawn real `/bin/sh` PTYs, never your own shell, and wait with `test_util::wait_until`, never with sleeps.
-- **End-to-end tests** in `tests/e2e.rs` run the real binary in a PTY, parse its output with `vt100`, and send raw bytes and SGR mouse sequences. Each test gets its own server through a `Session`, which runs `kill-server` when dropped. Wait for output that proves the previous step finished before sending the next one.
+- **End-to-end tests** in `tests/e2e/` run the real binary in a PTY, parse its output with `vt100`, and send raw bytes and SGR mouse sequences. Each test gets its own server through a `Session`, which runs `kill-server` when dropped. Wait for output that proves the previous step finished before sending the next one.
 - Nothing calls the real `gh`, Shortcut, Linear, Jira or Plane: tests use `fake_gh`, `FakeHttp` and a fake agent script. A test added as a safety net must fail without the code it protects.
 
 ### Snapshots
@@ -92,7 +92,7 @@ Delete the snapshots of tests you renamed or removed by hand.
 - **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
 
 <Aside type="caution" title="Two rules that are easy to break">
-**Mouse first**: keys go to the program in the pane, and `e2e::ctrl_b_reaches_the_shell` guards it. The only shortcuts live in the menu behind the optional prefix key (`src/shortcuts.rs`), off by default. Please don't add others, or a default prefix, without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.
+**Mouse first**: keys go to the program in the pane, and `e2e::input::ctrl_b_reaches_the_shell` guards it. The only shortcuts live in the menu behind the optional prefix key (`src/shortcuts.rs`), off by default. Please don't add others, or a default prefix, without discussing it in an issue. **The server owns the shells**: the client only writes frames, so behaviour belongs in `App`, not in `client.rs`.
 </Aside>
 
 ## Pull requests
