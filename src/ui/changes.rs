@@ -8,7 +8,9 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
+pub use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Kind, Line, Segments, Status};
+pub use crate::changes::every::Header;
 use crate::changes::{GapLine, Mode, Scope, Tints};
 
 pub const DEFAULT_WIDTH: u16 = 64;
@@ -45,13 +47,6 @@ impl Action {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Body {
-    Loading,
-    Failed(String),
-    Ready(Arc<Diff>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct View {
     pub scope: Scope,
     pub project: String,
@@ -69,15 +64,6 @@ pub struct View {
     pub muted: Color,
     pub tints: Tints,
     pub filter: Option<FilterView>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Header {
-    pub id: u64,
-    pub label: String,
-    pub files: Range<usize>,
-    pub workspace: bool,
-    pub folded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

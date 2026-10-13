@@ -1,4 +1,5 @@
 pub mod diff;
+pub mod every;
 pub mod filter;
 pub mod git;
 mod summary;
@@ -83,6 +84,13 @@ impl Model {
 struct FileKey {
     workspace: u64,
     path: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Body {
+    Loading,
+    Failed(String),
+    Ready(Arc<Diff>),
 }
 
 #[derive(Debug, Default)]
