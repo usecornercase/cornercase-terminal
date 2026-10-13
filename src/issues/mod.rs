@@ -1,7 +1,6 @@
 pub mod browser;
 pub mod cache;
 pub mod github;
-pub mod http;
 pub mod jira;
 pub mod linear;
 pub mod md;

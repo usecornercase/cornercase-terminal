@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-use super::http::{self, Service, text};
 use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body};
 use crate::error::{Error, Result};
+use crate::http::{self, Service, text};
 
 pub const TOKEN_ENV: &str = "LINEAR_API_KEY";
 pub const API_ENV: &str = "CORNERCASE_LINEAR_API";

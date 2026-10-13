@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::time::date;
 
-use crate::issues::http::text;
+use crate::http::text;
 use crate::issues::md::{self, code_span, escape, item_lines, longest_run, one_line, prefix_lines};
 
 const INLINE: [&str; 9] =

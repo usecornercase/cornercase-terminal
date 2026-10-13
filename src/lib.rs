@@ -16,6 +16,7 @@ pub mod git;
 pub mod graphics;
 pub mod highlight;
 pub mod host_theme;
+pub mod http;
 pub mod issues;
 pub mod keys;
 pub mod launch;

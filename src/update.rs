@@ -9,7 +9,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
-use crate::issues::http::{self, Service};
+use crate::http::{self, Service};
 use crate::text::hex;
 
 pub use crate::version::CURRENT;

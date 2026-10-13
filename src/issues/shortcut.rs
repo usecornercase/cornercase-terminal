@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use super::http::{self, Service, text};
 use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body};
 use crate::error::{Error, Result};
+use crate::http::{self, Service, text};
 
 pub const TOKEN_ENV: &str = "SHORTCUT_API_TOKEN";
 pub const API_ENV: &str = "CORNERCASE_SHORTCUT_API";

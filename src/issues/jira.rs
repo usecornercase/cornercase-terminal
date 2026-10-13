@@ -2,10 +2,10 @@ pub mod adf;
 
 use serde_json::Value;
 
-use super::http::{self, Answer, Service, path_segment, text};
 use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body};
 use crate::clipboard;
 use crate::error::{Error, Result};
+use crate::http::{self, Answer, Service, path_segment, text};
 use crate::time::parse_time;
 
 pub const TOKEN_ENV: &str = "JIRA_API_TOKEN";
