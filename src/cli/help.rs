@@ -88,7 +88,8 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode or Grok Build has
 recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have
 been submitted` when it records none: read the pane before sending it again. A working Codex,
-Gemini or Grok Build holds a prompt until it takes it, so the command returns then. Gemini local
+Gemini or Grok Build holds a prompt until it takes it, so the command returns then. Grok Build
+queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
 slash commands, ? help and ! shell input, and Grok Build's / and ! commands, return after Enter
 without confirming a prompt record. In other programs it returns once Enter is pressed.
 
@@ -139,9 +140,9 @@ pub(super) const WAIT_HELP: &str =
 whose turn is over while a background shell it started still runs counts as working, since it
 wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then
 prints how it ended (idle, done, waiting, working, shell or quiet), or the line that matched.
-Waiting for an agent needs Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane. Gemini status
-needs its dynamic window title. A timeout exits with 1 and does not prove that the agent missed
-what you sent: read the pane before sending it again.
+Waiting for an agent needs Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane.
+Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
+agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
 one of them meets it and prints one line, its id and how it ended; --all returns once every one has

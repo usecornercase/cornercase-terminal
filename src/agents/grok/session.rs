@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -5,14 +6,17 @@ use serde_json::Value;
 
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::{self, Usage};
+use crate::agents::context::jsonl::{self, Tail};
 use crate::agents::context::message::{self, Said};
-use crate::agents::context::{self, Context, jsonl};
+use crate::agents::context::{self, Context};
 use crate::agents::stats::Tokens;
 use crate::error::Result;
 use crate::process;
 use crate::time::Stamp;
 
 const ASKS: [&str; 2] = ["ask_user_question", "exit_plan_mode"];
+const TAIL_BYTES: u64 = 1024 * 1024;
+const TURNS: usize = 64;
 
 #[derive(Debug)]
 pub(in crate::agents) struct Session {
@@ -25,15 +29,44 @@ pub(in crate::agents) struct Session {
     pub(in crate::agents) extras: Vec<(String, Vec<counting::Record>)>,
     pub(in crate::agents) prompted: Option<SystemTime>,
     pub(in crate::agents) resumable: bool,
+    events: Tail,
+    updates: Tail,
+    chat: Tail,
+    start: Start,
+    phase: String,
+    pending: HashMap<String, u32>,
+    asks: u32,
+    turns: Vec<Turn>,
+    primary: bool,
+    compact: Option<SystemTime>,
+    newest: Option<Reply>,
+    seen_model: Option<String>,
+    seen_window: u64,
+    boundary: Option<SystemTime>,
+    window: u64,
+    model: Option<String>,
+    signals_used: u64,
+    signals_model: Option<String>,
+    pending_chunks: VecDeque<Chunk>,
+    waiting_humans: u32,
+    seen_prompts: HashSet<String>,
+    children: Vec<Child>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Start {
+    New,
+    Seen,
+}
+
+#[derive(Debug)]
 struct Turn {
     at: SystemTime,
     model: Option<String>,
-    number: Option<u64>,
     primary: bool,
 }
 
+#[derive(Debug)]
 struct Reply {
     at: SystemTime,
     id: String,
@@ -44,11 +77,34 @@ struct Reply {
     primary: bool,
 }
 
+#[derive(Debug)]
+struct Chunk {
+    at: SystemTime,
+    id: String,
+    primary: bool,
+}
+
+#[derive(Debug)]
+struct Child {
+    path: PathBuf,
+    tail: Tail,
+}
+
+#[cfg(test)]
 pub(in crate::agents) fn look(pid: i32) -> Option<Session> {
+    follow(pid, None)
+}
+
+pub(in crate::agents) fn follow(pid: i32, previous: Option<Session>) -> Option<Session> {
     let home = grok_home(pid)?;
     let (id, cwd) = row(&home, pid)?;
     let dir = locate(&home, &id, &cwd)?;
-    Some(read_session(&dir, &id))
+    let mut session = match previous {
+        Some(prev) if prev.id == id && prev.path == dir => prev,
+        _ => Session::open(dir, id),
+    };
+    session.refresh();
+    Some(session)
 }
 
 pub(in crate::agents) fn encode_path(path: &str) -> String {
@@ -80,7 +136,386 @@ pub(in crate::agents) fn last_message(dir: &Path) -> Result<Option<Said>> {
         }
     }
     let Some(text) = text else { return Ok(None) };
-    Ok(Some(Said { text, written: written(dir) }))
+    Ok(Some(Said { text: text.clone(), written: written(dir, &text) }))
+}
+
+impl Session {
+    fn open(path: PathBuf, id: String) -> Self {
+        Self {
+            path,
+            id,
+            activity: Activity::Idle,
+            turn_open: false,
+            context: None,
+            counted: Vec::new(),
+            extras: Vec::new(),
+            prompted: None,
+            resumable: false,
+            events: Tail::default(),
+            updates: Tail::default(),
+            chat: Tail::default(),
+            start: Start::New,
+            phase: String::new(),
+            pending: HashMap::new(),
+            asks: 0,
+            turns: Vec::new(),
+            primary: true,
+            compact: None,
+            newest: None,
+            seen_model: None,
+            seen_window: 0,
+            boundary: None,
+            window: 0,
+            model: None,
+            signals_used: 0,
+            signals_model: None,
+            pending_chunks: VecDeque::new(),
+            waiting_humans: 0,
+            seen_prompts: HashSet::new(),
+            children: Vec::new(),
+        }
+    }
+
+    fn refresh(&mut self) {
+        let opening = self.start == Start::New;
+        self.start = Start::Seen;
+        self.read_events(opening);
+        let partial = opening && self.prompts_outside_tail();
+        let replayed = self.read_updates(partial) || self.read_chat(partial);
+        if partial || replayed {
+            self.pending_chunks.clear();
+            self.waiting_humans = 0;
+            self.recover_prompt();
+        }
+        if opening {
+            self.recover_resumable();
+        }
+        self.note_model();
+        self.context = self.model.clone().map(|model| Context { model, percent: self.occupancy() });
+        self.activity = self.activity_of();
+        self.read_children();
+    }
+
+    fn prompts_outside_tail(&self) -> bool {
+        exceeds(&self.path.join("updates.jsonl")) || exceeds(&self.path.join("chat_history.jsonl"))
+    }
+
+    fn read_events(&mut self, opening: bool) {
+        let path = self.path.join("events.jsonl");
+        let Some(batch) = read_tail(&mut self.events, &path) else { return };
+        if opening || batch.reset {
+            self.turn_open = false;
+            self.phase.clear();
+            self.pending.clear();
+            self.asks = 0;
+            self.turns.clear();
+            self.primary = true;
+            if let Some(life) = newest_life(&path) {
+                self.turn_open = life.open;
+                self.primary = life.primary;
+            }
+        }
+        for event in lines_of(&batch.bytes) {
+            self.apply_event(&event);
+        }
+    }
+
+    fn read_updates(&mut self, partial: bool) -> bool {
+        let path = self.path.join("updates.jsonl");
+        let Some(batch) = read_tail(&mut self.updates, &path) else { return false };
+        let replay = batch.reset && exceeds(&path);
+        if batch.reset {
+            self.clear_prompts();
+            self.compact = None;
+            self.newest = None;
+        }
+        for update in lines_of(&batch.bytes) {
+            self.apply_update(&update, partial || replay);
+        }
+        replay
+    }
+
+    fn read_chat(&mut self, partial: bool) -> bool {
+        let path = self.path.join("chat_history.jsonl");
+        let Some(batch) = read_tail(&mut self.chat, &path) else { return false };
+        let replay = batch.reset && exceeds(&path);
+        if batch.reset {
+            self.pending_chunks.clear();
+            self.waiting_humans = 0;
+            self.resumable = false;
+        }
+        for line in lines_of(&batch.bytes) {
+            self.apply_chat(&line, partial || replay);
+        }
+        replay
+    }
+
+    fn apply_event(&mut self, event: &Value) {
+        match event["type"].as_str() {
+            Some("turn_started") => {
+                self.turn_open = true;
+                self.phase.clear();
+                self.pending.clear();
+                self.asks = 0;
+                self.primary = is_primary(event);
+                if let Some(at) = event_time(event) {
+                    self.turns.push(Turn {
+                        at,
+                        model: event["model_id"].as_str().map(str::to_string),
+                        primary: self.primary,
+                    });
+                    if self.turns.len() > TURNS {
+                        self.turns.remove(0);
+                    }
+                }
+            }
+            Some("turn_ended") => {
+                self.turn_open = false;
+                self.phase.clear();
+                self.pending.clear();
+                self.asks = 0;
+                self.primary = true;
+            }
+            Some("phase_changed") => self.phase = event["phase"].as_str().unwrap_or_default().to_string(),
+            Some("permission_requested") => *self.pending.entry(tool_name(event)).or_insert(0) += 1,
+            Some("permission_resolved") => {
+                let name = tool_name(event);
+                if let Some(left) = self.pending.get_mut(&name) {
+                    *left = left.saturating_sub(1);
+                }
+            }
+            Some("tool_started") if asks_you(event) => self.asks = self.asks.saturating_add(1),
+            Some("tool_completed") if asks_you(event) => self.asks = self.asks.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    fn apply_update(&mut self, update: &Value, skip_prompts: bool) {
+        let body = &update["params"]["update"];
+        let at = unix_time(&update["timestamp"]);
+        match body["sessionUpdate"].as_str() {
+            Some("auto_compact_completed" | "compaction_checkpoint") => self.compact = self.compact.max(at),
+            Some("turn_completed") => {
+                let Some(at) = at else { return };
+                let reply = self.reply(body, at);
+                if !reply.tokens.is_empty() {
+                    let record = token_record(&reply);
+                    if reply.primary {
+                        self.counted.push(record);
+                    } else {
+                        self.push_extra(format!("{}/side", self.id), record);
+                    }
+                }
+                self.newest = Some(reply);
+            }
+            Some("user_message_chunk") if !skip_prompts => self.note_chunk(update, body),
+            _ => {}
+        }
+    }
+
+    fn apply_chat(&mut self, line: &Value, skip_prompts: bool) {
+        if line["synthetic_reason"].as_str() == Some("compaction_meta") {
+            self.resumable = true;
+        }
+        if kind_of(line) == Some("assistant") && line["content"].is_string() {
+            self.resumable = true;
+        }
+        if skip_prompts || kind_of(line) != Some("user") || line.get("synthetic_reason").is_some() {
+            return;
+        }
+        if line["prompt_index"].as_u64().is_none() {
+            return;
+        }
+        self.resumable = true;
+        if let Some(chunk) = self.pending_chunks.pop_front() {
+            self.emit_prompt(chunk);
+        } else {
+            self.waiting_humans = self.waiting_humans.saturating_add(1);
+        }
+    }
+
+    fn note_chunk(&mut self, update: &Value, body: &Value) {
+        let text = body["content"]["text"].as_str().unwrap_or_default();
+        if reminder(text) || body["_meta"]["promptIndex"].as_u64().is_none() {
+            return;
+        }
+        let Some(chunk) = chunk_of(update, self.primary) else { return };
+        if self.waiting_humans > 0 {
+            self.waiting_humans -= 1;
+            self.emit_prompt(chunk);
+        } else {
+            self.pending_chunks.push_back(chunk);
+        }
+    }
+
+    fn emit_prompt(&mut self, chunk: Chunk) {
+        if !chunk.primary || !self.seen_prompts.insert(chunk.id.clone()) {
+            return;
+        }
+        self.counted.push(counting::Record { at: chunk.at, id: chunk.id, usage: Usage::Prompt });
+        self.prompted = self.prompted.max(Some(chunk.at));
+    }
+
+    fn clear_prompts(&mut self) {
+        self.pending_chunks.clear();
+        self.waiting_humans = 0;
+        self.seen_prompts.clear();
+        self.prompted = None;
+    }
+
+    fn reply(&self, body: &Value, at: SystemTime) -> Reply {
+        let usage = &body["usage"];
+        let input_total = usage["inputTokens"].as_u64().unwrap_or(0);
+        let cached = usage["cachedReadTokens"].as_u64().unwrap_or(0);
+        let turn = self.turns.iter().rev().find(|turn| turn.at <= at);
+        Reply {
+            at,
+            id: body["prompt_id"].as_str().map_or_else(|| Stamp(at).to_string(), str::to_string),
+            tokens: Tokens {
+                input: input_total.saturating_sub(cached),
+                out: usage["outputTokens"].as_u64().unwrap_or(0),
+                cache_read: cached,
+                cache_write: usage["cacheCreationTokens"].as_u64().unwrap_or(0),
+            },
+            input_total,
+            calls: usage["modelCalls"].as_u64(),
+            model: turn.and_then(|turn| turn.model.clone()),
+            primary: turn.is_none_or(|turn| turn.primary),
+        }
+    }
+
+    fn note_model(&mut self) {
+        let summary = json_file(&self.path.join("summary.json"));
+        let signals = json_file(&self.path.join("signals.json"));
+        let model = summary["current_model_id"]
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| self.turns.iter().rev().find_map(|turn| turn.model.clone()));
+        let window = signals["contextWindowTokens"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .or_else(|| summary["context_window"].as_u64())
+            .unwrap_or(0);
+        if let Some(model) = model.clone()
+            && self.seen_model.as_ref().is_some_and(|seen| seen != &model || self.seen_window != window)
+        {
+            self.boundary = Some(SystemTime::now());
+        }
+        if model.is_some() {
+            self.seen_model.clone_from(&model);
+            self.seen_window = window;
+        }
+        self.model = model;
+        self.window = window;
+        self.signals_used = signals["contextTokensUsed"].as_u64().unwrap_or(0);
+        self.signals_model = signals["primaryModelId"].as_str().map(str::to_string);
+    }
+
+    fn occupancy(&self) -> Option<u16> {
+        if self.window == 0 {
+            return None;
+        }
+        let model = self.model.as_deref()?;
+        if let Some(reply) = &self.newest {
+            let fresh = self.compact.is_none_or(|cut| reply.at > cut);
+            let after = self.boundary.is_none_or(|cut| reply.at > cut);
+            let same = reply.model.as_deref().is_none_or(|id| id == model);
+            let one = reply.calls.is_some_and(|calls| calls <= 1) && reply.input_total <= self.window;
+            return (fresh && after && same && one).then(|| context::percent(reply.input_total, self.window));
+        }
+        if self.boundary.is_some() || self.compact.is_some() {
+            return None;
+        }
+        if self.signals_model.as_deref().is_some_and(|id| id != model) {
+            return None;
+        }
+        (self.signals_used > 0 && self.signals_used <= self.window)
+            .then(|| context::percent(self.signals_used, self.window))
+    }
+
+    fn activity_of(&self) -> Activity {
+        if !self.turn_open {
+            Activity::Idle
+        } else if self.phase == "permission_prompt" || self.pending.values().any(|left| *left > 0) || self.asks > 0 {
+            Activity::Waiting
+        } else {
+            Activity::Working
+        }
+    }
+
+    fn recover_prompt(&mut self) {
+        let Some(chunk) = newest_chunk(&self.path.join("updates.jsonl"), self.primary) else { return };
+        if !newest_human(&self.path.join("chat_history.jsonl")) {
+            return;
+        }
+        self.pending_chunks.retain(|item| item.id != chunk.id);
+        self.emit_prompt(chunk);
+        self.resumable = true;
+    }
+
+    fn recover_resumable(&mut self) {
+        if self.resumable {
+            return;
+        }
+        let Some(lines) = message::lines(&self.path.join("chat_history.jsonl")).ok().flatten() else { return };
+        for line in lines {
+            let Ok(line) = line else { continue };
+            let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
+            if entry["synthetic_reason"].as_str() == Some("compaction_meta")
+                || (kind_of(&entry) == Some("assistant") && entry["content"].is_string())
+                || (kind_of(&entry) == Some("user")
+                    && entry.get("synthetic_reason").is_none()
+                    && entry["prompt_index"].as_u64().is_some())
+            {
+                self.resumable = true;
+                return;
+            }
+        }
+    }
+
+    fn read_children(&mut self) {
+        let Ok(entries) = std::fs::read_dir(&self.path) else { return };
+        let mut dirs: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir() && path.join("updates.jsonl").is_file())
+            .collect();
+        dirs.sort();
+        let mut next = Vec::new();
+        for path in dirs {
+            let mut child = self.take_child(&path);
+            let updates = path.join("updates.jsonl");
+            if let Some(batch) = read_tail(&mut child.tail, &updates) {
+                for update in lines_of(&batch.bytes) {
+                    if let Some(record) = child_token(&update) {
+                        self.push_extra(path.to_string_lossy().into_owned(), record);
+                    }
+                }
+            }
+            next.push(child);
+        }
+        self.children = next;
+    }
+
+    fn take_child(&mut self, path: &Path) -> Child {
+        self.children.iter().position(|child| child.path == path).map_or_else(
+            || Child { path: path.to_path_buf(), tail: Tail::default() },
+            |at| self.children.swap_remove(at),
+        )
+    }
+
+    fn push_extra(&mut self, id: String, record: counting::Record) {
+        if let Some((_, records)) = self.extras.iter_mut().find(|(key, _)| key == &id) {
+            records.push(record);
+        } else {
+            self.extras.push((id, vec![record]));
+        }
+    }
+}
+
+struct Life {
+    open: bool,
+    primary: bool,
 }
 
 fn grok_home(pid: i32) -> Option<PathBuf> {
@@ -154,274 +589,119 @@ fn summary_cwd(dir: &Path) -> Option<String> {
     summary["info"]["cwd"].as_str().map(str::to_string)
 }
 
-fn read_session(dir: &Path, id: &str) -> Session {
-    let events = values(&dir.join("events.jsonl"));
-    let updates = values(&dir.join("updates.jsonl"));
-    let chat = values(&dir.join("chat_history.jsonl"));
-    let summary = json_file(&dir.join("summary.json"));
-    let signals = json_file(&dir.join("signals.json"));
-    let (activity, turn_open, turns) = fold(&events);
-    let (replies, compact) = replies_of(&updates, &turns);
-    let (mut counted, prompted, resumable) = prompts(&chat, &turns, &updates);
-    let mut extras = side_records(id, &replies);
-    extras.extend(child_records(dir));
-    for reply in &replies {
-        if reply.primary && !reply.tokens.is_empty() {
-            counted.push(token_record(reply));
-        }
-    }
-    Session {
-        path: dir.to_path_buf(),
-        id: id.to_string(),
-        activity,
-        turn_open,
-        context: context_of(&summary, &signals, &turns, &replies, compact),
-        counted,
-        extras,
-        prompted,
-        resumable,
-    }
+fn read_tail(tail: &mut Tail, path: &Path) -> Option<jsonl::Batch> {
+    tail.read(path).ok()
 }
 
-fn fold(events: &[Value]) -> (Activity, bool, Vec<Turn>) {
-    let mut turn_open = false;
-    let mut phase = String::new();
-    let mut unresolved = false;
-    let mut asks = 0_u32;
-    let mut turns = Vec::new();
-    for event in events {
-        match event["type"].as_str() {
-            Some("turn_started") => {
-                turn_open = true;
-                phase.clear();
-                unresolved = false;
-                asks = 0;
-                if let Some(at) = event_time(event) {
-                    turns.push(Turn {
-                        at,
-                        model: event["model_id"].as_str().map(str::to_string),
-                        number: event["turn_number"].as_u64(),
-                        primary: event["session_relationship"].as_str().is_none_or(|kind| kind == "primary"),
-                    });
-                }
-            }
-            Some("turn_ended") => {
-                turn_open = false;
-                phase.clear();
-                unresolved = false;
-                asks = 0;
-            }
-            Some("phase_changed") => phase = event["phase"].as_str().unwrap_or_default().to_string(),
-            Some("permission_requested") => unresolved = true,
-            Some("permission_resolved") => unresolved = false,
-            Some("tool_started") if asks_you(event) => asks = asks.saturating_add(1),
-            Some("tool_completed") if asks_you(event) => asks = asks.saturating_sub(1),
+fn lines_of(bytes: &[u8]) -> Vec<Value> {
+    bytes
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| serde_json::from_slice(line).ok())
+        .collect()
+}
+
+fn exceeds(path: &Path) -> bool {
+    std::fs::metadata(path).is_ok_and(|info| info.len() > TAIL_BYTES)
+}
+
+fn newest_life(path: &Path) -> Option<Life> {
+    let lines = message::lines(path).ok()??;
+    for line in lines {
+        let Ok(line) = line else { continue };
+        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
+        match entry["type"].as_str() {
+            Some("turn_started") => return Some(Life { open: true, primary: is_primary(&entry) }),
+            Some("turn_ended") => return Some(Life { open: false, primary: true }),
             _ => {}
         }
     }
-    let activity = if !turn_open {
-        Activity::Idle
-    } else if phase == "permission_prompt" || unresolved || asks > 0 {
-        Activity::Waiting
-    } else {
-        Activity::Working
-    };
-    (activity, turn_open, turns)
+    None
 }
 
-fn asks_you(event: &Value) -> bool {
-    event["tool_name"].as_str().is_some_and(|name| ASKS.contains(&name))
-}
-
-fn replies_of(updates: &[Value], turns: &[Turn]) -> (Vec<Reply>, Option<SystemTime>) {
-    let mut compact = None;
-    let mut found = Vec::new();
-    for update in updates {
-        let body = &update["params"]["update"];
-        let at = unix_time(&update["timestamp"]);
-        match body["sessionUpdate"].as_str() {
-            Some("auto_compact_completed" | "compaction_checkpoint") => compact = compact.max(at),
-            Some("turn_completed") => {
-                let Some(at) = at else { continue };
-                found.push(reply(body, at, turns));
-            }
-            _ => {}
+fn newest_human(path: &Path) -> bool {
+    let Some(lines) = message::lines(path).ok().flatten() else { return false };
+    for line in lines {
+        let Ok(line) = line else { continue };
+        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
+        if kind_of(&entry) == Some("user")
+            && entry.get("synthetic_reason").is_none()
+            && entry["prompt_index"].as_u64().is_some()
+        {
+            return true;
         }
     }
-    (found, compact)
+    false
 }
 
-fn reply(body: &Value, at: SystemTime, turns: &[Turn]) -> Reply {
+fn newest_chunk(path: &Path, primary: bool) -> Option<Chunk> {
+    let lines = message::lines(path).ok()??;
+    for line in lines {
+        let Ok(line) = line else { continue };
+        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
+        let body = &entry["params"]["update"];
+        if body["sessionUpdate"].as_str() != Some("user_message_chunk") {
+            continue;
+        }
+        let text = body["content"]["text"].as_str().unwrap_or_default();
+        if reminder(text) || body["_meta"]["promptIndex"].as_u64().is_none() {
+            continue;
+        }
+        return chunk_of(&entry, primary);
+    }
+    None
+}
+
+fn chunk_of(update: &Value, primary: bool) -> Option<Chunk> {
+    let body = &update["params"]["update"];
+    let index = body["_meta"]["promptIndex"].as_u64()?;
+    let at = millis(update).or_else(|| unix_time(&update["timestamp"]))?;
+    let id = event_id(update).unwrap_or_else(|| fallback_id(update, index));
+    Some(Chunk { at, id, primary })
+}
+
+fn child_token(update: &Value) -> Option<counting::Record> {
+    let body = &update["params"]["update"];
+    if body["sessionUpdate"].as_str() != Some("turn_completed") {
+        return None;
+    }
+    let at = unix_time(&update["timestamp"])?;
     let usage = &body["usage"];
     let input_total = usage["inputTokens"].as_u64().unwrap_or(0);
     let cached = usage["cachedReadTokens"].as_u64().unwrap_or(0);
-    let turn = turns.iter().rev().find(|turn| turn.at <= at);
-    Reply {
-        at,
-        id: body["prompt_id"].as_str().map_or_else(|| Stamp(at).to_string(), str::to_string),
-        tokens: Tokens {
-            input: input_total.saturating_sub(cached),
-            out: usage["outputTokens"].as_u64().unwrap_or(0),
-            cache_read: cached,
-            cache_write: usage["cacheCreationTokens"].as_u64().unwrap_or(0),
-        },
-        input_total,
-        calls: usage["modelCalls"].as_u64(),
-        model: turn.and_then(|turn| turn.model.clone()),
-        primary: turn.is_none_or(|turn| turn.primary),
-    }
-}
-
-fn context_of(
-    summary: &Value,
-    signals: &Value,
-    turns: &[Turn],
-    replies: &[Reply],
-    compact: Option<SystemTime>,
-) -> Option<Context> {
-    let model = summary["current_model_id"]
-        .as_str()
-        .map(str::to_string)
-        .or_else(|| turns.iter().rev().find_map(|turn| turn.model.clone()))?;
-    let window = signals["contextWindowTokens"]
-        .as_u64()
-        .filter(|n| *n > 0)
-        .or_else(|| summary["context_window"].as_u64())
-        .unwrap_or(0);
-    Some(Context { model: model.clone(), percent: occupancy(&model, window, replies, compact, signals) })
-}
-
-fn occupancy(model: &str, window: u64, replies: &[Reply], compact: Option<SystemTime>, signals: &Value) -> Option<u16> {
-    if window == 0 {
-        return None;
-    }
-    let fresh = |at: SystemTime| compact.is_none_or(|cut| at > cut);
-    let same = |reply: &Reply| reply.model.as_deref().is_none_or(|id| id == model);
-    if let Some(reply) = replies.iter().rev().find(|reply| {
-        fresh(reply.at) && same(reply) && reply.calls.is_some_and(|calls| calls <= 1) && reply.input_total <= window
-    }) {
-        return Some(context::percent(reply.input_total, window));
-    }
-    let newest = replies.last();
-    let invalidated = match newest {
-        Some(reply) => !fresh(reply.at) || reply.model.as_deref().is_some_and(|id| id != model),
-        None => compact.is_some(),
+    let tokens = Tokens {
+        input: input_total.saturating_sub(cached),
+        out: usage["outputTokens"].as_u64().unwrap_or(0),
+        cache_read: cached,
+        cache_write: usage["cacheCreationTokens"].as_u64().unwrap_or(0),
     };
-    if invalidated {
+    if tokens.is_empty() {
         return None;
     }
-    let used = signals["contextTokensUsed"].as_u64().unwrap_or(0);
-    (used > 0 && used <= window).then(|| context::percent(used, window))
-}
-
-fn prompts(chat: &[Value], turns: &[Turn], updates: &[Value]) -> (Vec<counting::Record>, Option<SystemTime>, bool) {
-    let chunks = chunk_times(updates);
-    let mut records = Vec::new();
-    let mut resumable = false;
-    for line in chat {
-        if line["synthetic_reason"].as_str() == Some("compaction_meta") {
-            resumable = true;
-        }
-        if kind_of(line) == Some("assistant") && line["content"].is_string() {
-            resumable = true;
-        }
-        if kind_of(line) != Some("user") || line.get("synthetic_reason").is_some() {
-            continue;
-        }
-        let Some(index) = line["prompt_index"].as_u64() else { continue };
-        resumable = true;
-        let Some(at) = prompt_time(index, turns, &chunks) else { continue };
-        records.push(counting::Record { at, id: format!("prompt-{index}"), usage: Usage::Prompt });
-    }
-    let prompted = records.iter().map(|record| record.at).max();
-    (records, prompted, resumable)
-}
-
-fn chunk_times(updates: &[Value]) -> Vec<(Option<u64>, SystemTime)> {
-    updates
-        .iter()
-        .filter(|update| update["params"]["update"]["sessionUpdate"] == "user_message_chunk")
-        .filter_map(|update| {
-            let at = unix_time(&update["timestamp"])?;
-            let index = update["params"]["update"]["_meta"]["promptIndex"].as_u64();
-            Some((index, at))
-        })
-        .collect()
-}
-
-fn prompt_time(index: u64, turns: &[Turn], chunks: &[(Option<u64>, SystemTime)]) -> Option<SystemTime> {
-    turns
-        .iter()
-        .find(|turn| turn.primary && turn.number == Some(index))
-        .map(|turn| turn.at)
-        .or_else(|| chunks.iter().find(|(n, _)| *n == Some(index)).map(|(_, at)| *at))
-        .or_else(|| chunks.get(usize::try_from(index).ok()?).map(|(_, at)| *at))
-}
-
-fn side_records(id: &str, replies: &[Reply]) -> Vec<(String, Vec<counting::Record>)> {
-    let records: Vec<_> =
-        replies.iter().filter(|reply| !reply.primary && !reply.tokens.is_empty()).map(token_record).collect();
-    if records.is_empty() { Vec::new() } else { vec![(format!("{id}/side"), records)] }
-}
-
-fn child_records(dir: &Path) -> Vec<(String, Vec<counting::Record>)> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
-    entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            if !path.is_dir() || !path.join("updates.jsonl").is_file() {
-                return None;
-            }
-            let (replies, _) = replies_of(&values(&path.join("updates.jsonl")), &[]);
-            let records: Vec<_> = replies.iter().filter(|reply| !reply.tokens.is_empty()).map(token_record).collect();
-            (!records.is_empty()).then(|| (path.to_string_lossy().into_owned(), records))
-        })
-        .collect()
+    let id = body["prompt_id"].as_str().map_or_else(|| Stamp(at).to_string(), str::to_string);
+    Some(counting::Record { at, id, usage: Usage::Completed(tokens) })
 }
 
 fn token_record(reply: &Reply) -> counting::Record {
     counting::Record { at: reply.at, id: reply.id.clone(), usage: Usage::Completed(reply.tokens) }
 }
 
-fn written(dir: &Path) -> Option<String> {
-    let updates = newest_update(&dir.join("updates.jsonl"), "agent_message_chunk");
-    let ended = newest_event(&dir.join("events.jsonl"));
-    updates.max(ended).map(|at| Stamp(at).to_string())
-}
-
-fn newest_update(path: &Path, kind: &str) -> Option<SystemTime> {
-    let lines = message::lines(path).ok()??;
+fn written(dir: &Path, text: &str) -> Option<String> {
+    let path = dir.join("updates.jsonl");
+    let lines = message::lines(&path).ok()??;
     for line in lines {
         let Ok(line) = line else { continue };
         let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
-        if entry["params"]["update"]["sessionUpdate"].as_str() == Some(kind) {
-            return unix_time(&entry["timestamp"]);
+        let body = &entry["params"]["update"];
+        if body["sessionUpdate"].as_str() != Some("agent_message_chunk") {
+            continue;
         }
+        if body["content"]["text"].as_str().map(str::trim) != Some(text) {
+            continue;
+        }
+        return millis(&entry).or_else(|| unix_time(&entry["timestamp"])).map(|at| Stamp(at).to_string());
     }
     None
-}
-
-fn newest_event(path: &Path) -> Option<SystemTime> {
-    let lines = message::lines(path).ok()??;
-    for line in lines {
-        let Ok(line) = line else { continue };
-        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
-        if entry["type"].as_str() == Some("turn_ended") {
-            return event_time(&entry);
-        }
-    }
-    None
-}
-
-fn values(path: &Path) -> Vec<Value> {
-    let Ok(batch) = jsonl::Tail::default().read(path) else { return Vec::new() };
-    batch
-        .bytes
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| serde_json::from_slice(line).ok())
-        .collect()
 }
 
 fn json_file(path: &Path) -> Value {
@@ -430,6 +710,42 @@ fn json_file(path: &Path) -> Value {
 
 fn kind_of(entry: &Value) -> Option<&str> {
     entry["type"].as_str().or_else(|| entry["role"].as_str())
+}
+
+fn is_primary(event: &Value) -> bool {
+    event["session_relationship"].as_str().is_none_or(|kind| kind == "primary")
+}
+
+fn asks_you(event: &Value) -> bool {
+    event["tool_name"].as_str().is_some_and(|name| ASKS.contains(&name))
+}
+
+fn tool_name(event: &Value) -> String {
+    event["tool_name"].as_str().unwrap_or_default().to_string()
+}
+
+fn reminder(text: &str) -> bool {
+    text.contains("<system-reminder>") || text.contains("<user_info>")
+}
+
+fn event_id(update: &Value) -> Option<String> {
+    update["params"]["_meta"]["eventId"]
+        .as_str()
+        .or_else(|| update["params"]["update"]["_meta"]["eventId"].as_str())
+        .map(str::to_string)
+}
+
+fn fallback_id(update: &Value, index: u64) -> String {
+    let stamp =
+        update["params"]["_meta"]["agentTimestampMs"].as_u64().or_else(|| update["timestamp"].as_u64()).unwrap_or(0);
+    format!("prompt-{stamp}-{index}")
+}
+
+fn millis(update: &Value) -> Option<SystemTime> {
+    let ms = update["params"]["_meta"]["agentTimestampMs"]
+        .as_u64()
+        .or_else(|| update["params"]["update"]["_meta"]["agentTimestampMs"].as_u64())?;
+    UNIX_EPOCH.checked_add(Duration::from_millis(ms))
 }
 
 fn event_time(entry: &Value) -> Option<SystemTime> {

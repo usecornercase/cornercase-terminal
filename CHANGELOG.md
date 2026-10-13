@@ -6,7 +6,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 - Grok Build is followed like the other agents. A tab shows when it is working, when it needs you and when it has finished, plus the model and how full its context is.
 - After a restart, a Grok Build pane comes back with `grok --resume`.
-- `send`, `read --last-message` and `wait` work with it. A prompt typed while it works waits, and `/` and `!` are local commands.
+- `send`, `read --last-message` and `wait` work with it. A prompt typed while it works waits. Pressing Enter again sends that prompt now and cancels the turn. `/` and `!` are local commands.
 
 ## 0.12.83
 

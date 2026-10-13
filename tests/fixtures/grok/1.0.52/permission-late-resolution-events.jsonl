@@ -1,0 +1,5 @@
+{"ts": "2026-10-13T21:10:01.000Z", "type": "turn_started"}
+{"ts": "2026-10-13T21:10:02.000Z", "type": "permission_requested", "tool_name": "write"}
+{"ts": "2026-10-13T21:10:03.000Z", "type": "permission_requested", "tool_name": "run_terminal_command"}
+{"ts": "2026-10-13T21:10:04.000Z", "type": "permission_resolved", "tool_name": "write"}
+{"ts": "2026-10-13T21:10:05.000Z", "type": "phase_changed", "phase": "tool_execution"}

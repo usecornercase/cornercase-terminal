@@ -432,6 +432,7 @@ export const AGENTS: [string, string][] = [
   ['codex', 'codex'],
   ['gemini', 'gemini'],
   ['opencode', 'opencode'],
+  ['grok', 'grok'],
   ['cursor', 'cursor-agent'],
   ['copilot', 'copilot'],
   ['amp', 'amp'],
@@ -460,6 +461,11 @@ export const MODES: Record<string, [string, string][]> = {
     ['auto edit', '--approval-mode auto_edit'],
     ['plan', '--approval-mode plan'],
     ['yolo (dangerous)', '--yolo'],
+  ],
+  grok: [
+    ['accept edits', '--permission-mode acceptEdits'],
+    ['auto', '--permission-mode auto'],
+    ['always approve (dangerous)', '--always-approve'],
   ],
 };
 

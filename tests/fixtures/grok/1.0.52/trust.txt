@@ -1,0 +1,8 @@
+Do you trust the contents of this directory?
+/home/user/project
+
+Grok Build may run or modify contents in this directory,
+posing security risks.
+
+Yes, proceed                 y
+No, quit                     n

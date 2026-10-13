@@ -1,15 +1,16 @@
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::json;
 
 use super::*;
-use crate::agents::Known;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::{Usage, tests::sum};
 use crate::agents::context::{Context, Look, Pane, tests::pane_look};
 use crate::agents::stats::Tokens;
+use crate::agents::{DEFAULT_TRUST_PROMPT, Known, TrustPrompt, asks_trust};
 use crate::test_util::{Sleeper, TempDir, fixture, wait_until};
+use crate::time::Stamp;
 
 fn home_with(files: &[(&str, &str)]) -> (TempDir, PathBuf) {
     let home = TempDir::new();
@@ -113,30 +114,20 @@ fn a_finished_turn_is_idle_with_its_model_and_one_call_of_context() {
 }
 
 #[test]
-fn permission_and_a_question_wait_and_a_finished_turn_does_not() {
-    let events = r#"{"ts":"2026-10-13T21:10:21.697Z","type":"turn_started","turn_number":0,"model_id":"grok-4.7","session_relationship":"primary"}
-{"ts":"2026-10-13T21:14:00.562Z","type":"phase_changed","phase":"permission_prompt"}
-{"ts":"2026-10-13T21:14:00.562Z","type":"permission_requested","tool_name":"write"}
-"#;
-    let (home, cwd) = home_with(&[("events.jsonl", events), ("summary.json", r#"{"current_model_id":"grok-4.7"}"#)]);
-    let (sleeper, found) = seen(home.path(), &cwd);
-    assert_eq!(found.activity, Activity::Waiting);
-    let asked = r#"{"ts":"2026-10-13T21:15:05.647Z","type":"permission_resolved","tool_name":"write","decision":"allow","wait_ms":1}
-{"ts":"2026-10-13T21:15:05.647Z","type":"phase_changed","phase":"tool_execution"}
-{"ts":"2026-10-13T21:15:05.700Z","type":"tool_started","tool_name":"ask_user_question"}
-{"ts":"2026-10-13T21:15:05.764Z","type":"permission_resolved","tool_name":"ask_user_question","decision":"allow","wait_ms":0}
-"#;
-    std::fs::write(found.path.join("events.jsonl"), format!("{events}{asked}")).expect("events");
-    assert_eq!(session::look(sleeper.pid()).expect("asked").activity, Activity::Waiting);
-    std::fs::write(
-        found.path.join("events.jsonl"),
-        format!(
-            "{events}{asked}{{\"ts\":\"2026-10-13T21:15:54.437Z\",\"type\":\"turn_ended\",\"outcome\":\"cancelled\"}}\n"
-        ),
-    )
-    .expect("ended");
-    let ended = session::look(sleeper.pid()).expect("ended");
-    assert_eq!((ended.activity, ended.turn_open), (Activity::Idle, false));
+fn permission_a_question_and_a_cancelled_turn_come_from_the_session() {
+    assert_eq!(activity_of(fixture!("grok/1.0.52/working-events.jsonl")), Activity::Working);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/permission-events.jsonl")), Activity::Waiting);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/question-events.jsonl")), Activity::Waiting);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/question-answered-events.jsonl")), Activity::Working);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/plan-open-events.jsonl")), Activity::Waiting);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/plan-continued-events.jsonl")), Activity::Working);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/permission-late-resolution-events.jsonl")), Activity::Waiting);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/cancelled-events.jsonl")), Activity::Idle);
+}
+
+fn activity_of(events: &str) -> Activity {
+    let (home, cwd) = home_with(&[("events.jsonl", events)]);
+    seen(home.path(), &cwd).1.activity
 }
 
 #[test]
@@ -219,9 +210,145 @@ fn a_side_turn_and_a_child_session_add_tokens_without_prompts() {
     std::fs::create_dir_all(&child).expect("child");
     std::fs::write(child.join("updates.jsonl"), updates).expect("child updates");
     let (_sleeper, found) = seen(home.path(), &cwd);
-    assert_eq!(prompt_count(&found), 1);
+    assert_eq!(prompt_count(&found), 0);
+    assert!(found.prompted.is_none());
     assert_eq!(tokens_of(&found).out, 10);
     assert_eq!(found.extras.len(), 2);
+}
+
+#[test]
+fn repeated_indexes_confirm_the_later_submission() {
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", fixture!("grok/1.0.52/repeated-prompt-index-events.jsonl")),
+        ("updates.jsonl", fixture!("grok/1.0.52/repeated-prompt-index-updates.jsonl")),
+        ("chat_history.jsonl", fixture!("grok/1.0.52/repeated-prompt-index-chat_history.jsonl")),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    let mut times: Vec<_> =
+        found.counted.iter().filter(|record| record.usage == Usage::Prompt).map(|record| record.at).collect();
+    times.sort();
+    assert_eq!(times.len(), 3);
+    assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
+    let since = times[0] + Duration::from_millis(1);
+    assert!(found.prompted.is_some_and(|at| at >= since));
+    assert!(times[0] < since);
+}
+
+#[test]
+fn a_later_multi_call_hides_the_older_one_call_percentage() {
+    let (home, cwd) = home_with(&[
+        ("updates.jsonl", fixture!("grok/1.0.52/old-single-call-context-updates.jsonl")),
+        ("signals.json", fixture!("grok/1.0.52/old-single-call-context-signals.json")),
+        ("summary.json", fixture!("grok/1.0.52/summary.json")),
+        ("events.jsonl", fixture!("grok/1.0.52/events.jsonl")),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    assert_eq!(found.context.as_ref().map(|ctx| ctx.percent), Some(None));
+}
+
+#[test]
+fn switching_the_model_away_and_back_does_not_restore_the_percentage() {
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", fixture!("grok/1.0.52/model-switch-away-and-back-events.jsonl")),
+        ("updates.jsonl", fixture!("grok/1.0.52/model-switch-away-and-back-updates.jsonl")),
+        ("summary.json", fixture!("grok/1.0.52/model-switch-away-and-back-summary.json")),
+        ("signals.json", fixture!("grok/1.0.52/model-switch-away-and-back-signals.json")),
+    ]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(found.context.as_ref().map(|ctx| ctx.percent), Some(None));
+    let first = fixture!("grok/1.0.52/model-switch-away-and-back-updates.jsonl").lines().next().expect("reply");
+    std::fs::write(found.path.join("updates.jsonl"), format!("{first}\n")).expect("first reply");
+    std::fs::write(found.path.join("summary.json"), r#"{"current_model_id":"grok-4.7","context_window":256000}"#)
+        .expect("model");
+    let shown = session::follow(sleeper.pid(), Some(found)).expect("first model");
+    assert_eq!(shown.context, Some(Context { model: "grok-4.7".into(), percent: Some(8) }));
+    std::fs::write(shown.path.join("summary.json"), r#"{"current_model_id":"grok-4.6","context_window":256000}"#)
+        .expect("away");
+    let away = session::follow(sleeper.pid(), Some(shown)).expect("away");
+    assert_eq!(away.context, Some(Context { model: "grok-4.6".into(), percent: None }));
+    std::fs::write(away.path.join("summary.json"), r#"{"current_model_id":"grok-4.7","context_window":256000}"#)
+        .expect("back");
+    let back = session::follow(sleeper.pid(), Some(away)).expect("back");
+    assert_eq!(back.context, Some(Context { model: "grok-4.7".into(), percent: None }));
+}
+
+#[test]
+fn a_cancelled_turn_without_text_keeps_the_earlier_answer_time() {
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", fixture!("grok/1.0.52/last-message-after-cancel-events.jsonl")),
+        ("updates.jsonl", fixture!("grok/1.0.52/last-message-after-cancel-updates.jsonl")),
+        ("chat_history.jsonl", fixture!("grok/1.0.52/last-message-after-cancel-chat_history.jsonl")),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    let said = session::last_message(&found.path).expect("read").expect("message");
+    assert_eq!(said.text, "old assistant");
+    let written = UNIX_EPOCH + Duration::from_secs(1_791_925_808);
+    assert_eq!(said.written.as_deref(), Some(Stamp(written).to_string().as_str()));
+}
+
+#[test]
+fn an_open_turn_behind_a_megabyte_reads_as_working() {
+    let (home, cwd) = home_with(&[("events.jsonl", fixture!("grok/1.0.52/working-events.jsonl"))]);
+    let path = session_dir(home.path(), &cwd).join("events.jsonl");
+    grow_past_a_megabyte(&path);
+    assert_eq!(seen(home.path(), &cwd).1.activity, Activity::Working);
+}
+
+#[test]
+fn a_watched_turn_stays_open_after_it_grows_past_a_megabyte() {
+    let (home, cwd) = home_with(&[("events.jsonl", fixture!("grok/1.0.52/working-events.jsonl"))]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(found.activity, Activity::Working);
+    let path = found.path.join("events.jsonl");
+    grow_past_a_megabyte(&path);
+    std::fs::write(
+        &path,
+        format!(
+            "{}{{\"ts\":\"2026-10-13T21:16:00.000Z\",\"type\":\"permission_requested\",\"tool_name\":\"write\"}}\n",
+            std::fs::read_to_string(&path).expect("events")
+        ),
+    )
+    .expect("permission");
+    let waiting = session::follow(sleeper.pid(), Some(found)).expect("grown");
+    assert_eq!(waiting.activity, Activity::Waiting);
+    std::fs::write(
+        waiting.path.join("events.jsonl"),
+        format!(
+            "{}{{\"ts\":\"2026-10-13T21:16:30.000Z\",\"type\":\"turn_ended\",\"outcome\":\"cancelled\",\"cancellation_context\":{{\"trigger\":\"ctrl_c\"}}}}\n",
+            std::fs::read_to_string(waiting.path.join("events.jsonl")).expect("events")
+        ),
+    )
+    .expect("cancel");
+    let cancelled = session::follow(sleeper.pid(), Some(waiting)).expect("cancelled");
+    assert_eq!(cancelled.activity, Activity::Idle);
+    std::fs::write(
+        cancelled.path.join("events.jsonl"),
+        format!(
+            "{}{{\"ts\":\"2026-10-13T21:17:00.000Z\",\"type\":\"turn_started\",\"model_id\":\"grok-4.7\",\"session_relationship\":\"primary\"}}\n{{\"ts\":\"2026-10-13T21:17:05.000Z\",\"type\":\"turn_ended\",\"outcome\":\"completed\"}}\n",
+            std::fs::read_to_string(cancelled.path.join("events.jsonl")).expect("events")
+        ),
+    )
+    .expect("later");
+    let later = session::follow(sleeper.pid(), Some(cancelled)).expect("later");
+    assert_eq!((later.activity, later.turn_open), (Activity::Idle, false));
+}
+
+fn grow_past_a_megabyte(path: &Path) {
+    let mut body = std::fs::read(path).expect("events");
+    let line = b"{\"ts\":\"2026-10-13T21:10:22.100Z\",\"type\":\"phase_changed\",\"phase\":\"streaming_text\"}\n";
+    while body.len() <= 1024 * 1024 {
+        body.extend_from_slice(line);
+    }
+    std::fs::write(path, body).expect("grow");
+}
+
+#[test]
+fn the_trust_screen_matches_the_default_prompt() {
+    let mut trust = TrustPrompt::default();
+    let pattern = trust.regex(DEFAULT_TRUST_PROMPT).expect("pattern");
+    assert!(asks_trust(pattern, fixture!("grok/1.0.52/trust.txt")));
+    let row: serde_json::Value = serde_json::from_str(fixture!("grok/1.0.52/active_sessions.json")).expect("row");
+    assert_eq!(row[0]["cwd"], "/home/user/project");
 }
 
 #[test]

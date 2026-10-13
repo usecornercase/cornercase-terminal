@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use crate::agents::activity::Activity;
@@ -57,9 +58,19 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
     text.trim_start().starts_with(['/', '!'])
 }
 
+#[derive(Debug)]
+struct Held {
+    path: PathBuf,
+    id: String,
+    activity: Activity,
+    turn_open: bool,
+    resumable: bool,
+}
+
 #[derive(Debug, Default)]
 pub(in crate::agents) struct Reader {
-    session: Option<session::Session>,
+    session: Option<Box<session::Session>>,
+    held: Option<Held>,
     reading: Job<Option<session::Session>>,
 }
 
@@ -80,35 +91,40 @@ impl Reader {
                 }
                 shown.clone_from(&session.context);
                 prompted = session.prompted;
-                self.session = Some(session);
+                self.held = Some(Held {
+                    path: session.path.clone(),
+                    id: session.id.clone(),
+                    activity: session.activity,
+                    turn_open: session.turn_open,
+                    resumable: session.resumable,
+                });
+                self.session = Some(Box::new(session));
             } else {
                 *shown = None;
                 self.session = None;
+                self.held = None;
             }
         }
         if !self.reading.running() {
             let pid = look.pid;
-            self.reading.start(move || session::look(pid));
+            let previous = self.session.take().map(|session| *session);
+            self.reading.start(move || session::follow(pid, previous));
         }
         prompted
     }
 
     pub(in crate::agents) fn activity(&self, title: &str) -> Option<Activity> {
-        let session = self.session.as_ref()?;
-        if session.turn_open && title.contains("Action Required") {
-            Some(Activity::Waiting)
-        } else {
-            Some(session.activity)
-        }
+        let held = self.held.as_ref()?;
+        if held.turn_open && title.contains("Action Required") { Some(Activity::Waiting) } else { Some(held.activity) }
     }
 
     pub(in crate::agents) fn record(&self) -> Option<Record> {
-        self.session.as_ref().map(|session| Record::Grok(session.path.clone()))
+        self.held.as_ref().map(|held| Record::Grok(held.path.clone()))
     }
 
     pub(in crate::agents) fn conversation(&self) -> Option<&str> {
-        let session = self.session.as_ref()?;
-        session.resumable.then_some(session.id.as_str())
+        let held = self.held.as_ref()?;
+        held.resumable.then_some(held.id.as_str())
     }
 }
 

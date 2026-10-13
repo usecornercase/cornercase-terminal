@@ -49,6 +49,7 @@ export const AGENT_KINDS: Record<string, string> = {
   codex: 'codex',
   gemini: 'gemini',
   opencode: 'opencode',
+  grok: 'grok',
   'cursor-agent': 'cursor',
   copilot: 'copilot',
   amp: 'amp',

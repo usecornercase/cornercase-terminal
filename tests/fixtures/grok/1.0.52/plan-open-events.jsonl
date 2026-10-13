@@ -1,0 +1,15 @@
+{"ts":"2026-10-13T22:55:16.293Z","session_relationship":"primary","model_id":"grok-4.7","turn_number":0,"type":"turn_started","session_id":"11111111-1111-4111-8111-111111111111"}
+{"ts":"2026-10-13T22:55:16.425Z","type":"loop_started"}
+{"phase":"waiting_for_model","ts":"2026-10-13T22:55:16.439Z","type":"phase_changed"}
+{"ts":"2026-10-13T22:55:20.333Z","type":"first_token"}
+{"phase":"streaming_text","ts":"2026-10-13T22:55:20.333Z","type":"phase_changed"}
+{"phase":"tool_execution","ts":"2026-10-13T22:55:20.362Z","type":"phase_changed"}
+{"ts":"2026-10-13T22:55:20.362Z","tool_name":"enter_plan_mode","type":"tool_started"}
+{"phase":"permission_prompt","ts":"2026-10-13T22:55:20.488Z","type":"phase_changed"}
+{"ts":"2026-10-13T22:55:20.488Z","tool_name":"enter_plan_mode","type":"permission_requested"}
+{"ts":"2026-10-13T22:55:20.488Z","decision":"allow","tool_name":"enter_plan_mode","type":"permission_resolved","wait_ms":0}
+{"phase":"tool_execution","ts":"2026-10-13T22:55:20.488Z","type":"phase_changed"}
+{"ts":"2026-10-13T22:55:20.488Z","tool_name":"list_dir","type":"tool_started"}
+{"phase":"permission_prompt","ts":"2026-10-13T22:55:20.603Z","type":"phase_changed"}
+{"ts":"2026-10-13T22:55:20.603Z","tool_name":"list_dir","type":"permission_requested"}
+{"ts":"2026-10-13T22:55:20.603Z","decision":"allow","tool_name":"list_dir","type":"permission_resolved","wait_ms":0}

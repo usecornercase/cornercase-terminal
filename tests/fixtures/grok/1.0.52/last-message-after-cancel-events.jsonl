@@ -1,0 +1,4 @@
+{"ts": "2026-10-13T21:10:01.000Z", "type": "turn_started"}
+{"ts": "2026-10-13T21:10:10.000Z", "type": "turn_ended"}
+{"ts": "2026-10-13T21:10:20.000Z", "type": "turn_started"}
+{"ts": "2026-10-13T21:10:30.000Z", "type": "turn_ended", "outcome": "cancelled"}
