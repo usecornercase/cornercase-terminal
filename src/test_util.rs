@@ -38,6 +38,25 @@ pub fn exited_pid() -> i32 {
     i32::try_from(child.id()).expect("pid fits in i32")
 }
 
+pub fn spawn_term(
+    id: u64,
+    args: &[String],
+    cwd: Option<PathBuf>,
+) -> (crate::term::Term, std::sync::mpsc::Receiver<crate::term::Event>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let opts = crate::term::SpawnOptions {
+        id,
+        shell: "/bin/sh",
+        args,
+        env: &[],
+        rows: 24,
+        cols: 80,
+        cwd,
+        theme: &crate::host_theme::HostTheme::default(),
+    };
+    (crate::term::Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
+}
+
 pub struct TempDir(PathBuf);
 
 impl TempDir {

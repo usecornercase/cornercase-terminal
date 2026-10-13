@@ -14,10 +14,7 @@ fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
 }
 
 fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
-    let (tx, rx) = mpsc::channel();
-    let opts =
-        SpawnOptions { id: 1, shell: "/bin/sh", args, env: &[], rows: 24, cols: 80, cwd, theme: &HostTheme::default() };
-    (Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
+    crate::test_util::spawn_term(1, args, cwd)
 }
 
 fn spawn_sh() -> (Term, Receiver<Event>) {

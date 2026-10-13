@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::layout::{Position, Rect};
 
@@ -9,8 +9,10 @@ use crate::split::{self, Dir, Node, Place};
 use crate::term::Term;
 
 pub mod group;
+mod hierarchy;
 
 pub use group::Group;
+pub use hierarchy::{Hierarchy, group_indices, sidebar_order};
 
 pub struct Landing {
     pub area: Rect,
@@ -41,6 +43,23 @@ impl Tab {
             _ => split::row(&ids).unwrap_or(Node::Leaf(0)),
         };
         Self { id, name, panes, active: 0, layout, right_clicks: Vec::new() }
+    }
+
+    pub fn index_of(&self, pane: u64) -> Option<usize> {
+        self.panes.iter().position(|t| t.id == pane)
+    }
+
+    pub fn pane_by(&self, id: u64) -> Option<&Term> {
+        self.panes.get(self.index_of(id)?)
+    }
+
+    pub fn pane_by_mut(&mut self, id: u64) -> Option<&mut Term> {
+        let i = self.index_of(id)?;
+        self.panes.get_mut(i)
+    }
+
+    pub fn layout_by_index(&self) -> Option<Node<usize>> {
+        self.layout.map(&|id| self.index_of(id))
     }
 
     pub fn pane(&self) -> Option<&Term> {
@@ -205,6 +224,10 @@ impl Workspace {
         self.phase = Phase::Removing(self.label());
     }
 
+    pub fn index_of(&self, tab: u64) -> Option<usize> {
+        self.tabs.iter().position(|t| t.id == tab)
+    }
+
     pub fn tab(&self) -> Option<&Tab> {
         self.tabs.get(self.active)
     }
@@ -260,6 +283,14 @@ pub struct Project {
 impl Project {
     pub fn new(id: u64, path: PathBuf, name: Option<String>) -> Self {
         Self { id, path, name, group: None, workspaces: Vec::new(), active: 0, closing: false, collapsed: false }
+    }
+
+    pub fn index_of(&self, workspace: u64) -> Option<usize> {
+        self.workspaces.iter().position(|w| w.id == workspace)
+    }
+
+    pub fn label(&self, home: Option<&Path>) -> String {
+        self.name.clone().unwrap_or_else(|| crate::text::folder_name(&self.path, home))
     }
 
     pub fn workspace(&self) -> Option<&Workspace> {
