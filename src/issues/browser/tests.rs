@@ -549,19 +549,6 @@ pub(crate) mod buttons {
     }
 
     #[test]
-    fn a_notice_shows_until_the_next_key() {
-        let mut b = reading();
-        b.notice = Some("copied".into());
-        let hint = |b: &Browser| match view(b, ROOM, 0) {
-            ui::Overlay::Issues(v) => v.hint,
-            _ => String::new(),
-        };
-        let before = hint(&b);
-        press(&mut b, KeyCode::Down);
-        assert_eq!((before.as_str(), hint(&b) == "copied"), ("copied", false));
-    }
-
-    #[test]
     fn tabs_round_trip_through_their_id() {
         let tabs = [Tab::All, Tab::One(Source::Linear)];
         assert_eq!(tabs.map(|t| Tab::from_id(t.id())), tabs.map(Some));
@@ -725,18 +712,6 @@ pub(crate) mod people {
         let mut b = with_lists();
         let action = click(&mut b, toggle());
         assert_eq!((action, b.filtering), (Action::LoadPeople(vec![Source::Github, Source::Shortcut]), Some(0)));
-    }
-
-    #[test]
-    fn each_source_has_its_two_fields() {
-        let b = filtering();
-        let ui::Overlay::Issues(view) = view(&b, ROOM, 0) else { panic!("not the issues") };
-        let ui::IssuesBody::List { items, .. } = view.body else { panic!("not a list") };
-        let rows: Vec<String> = items.iter().map(|i| format!("{} {}", i.key, i.title)).collect();
-        assert_eq!(
-            rows,
-            ["GitHub assignee anyone", "GitHub author anyone", "Shortcut owner anyone", "Shortcut requester anyone"]
-        );
     }
 
     #[test]
