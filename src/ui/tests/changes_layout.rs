@@ -36,7 +36,7 @@ fn with_panel() -> View<'static> {
         headers: Vec::new(),
         mode: crate::changes::Mode::Uncommitted,
         base: None,
-        body: changes::Body::Loading,
+        body: crate::changes::Body::Loading,
         folded: Vec::new(),
         viewed: Vec::new(),
         gaps: HashMap::new(),

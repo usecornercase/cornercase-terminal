@@ -8,9 +8,9 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
-pub use crate::changes::Body;
+use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Kind, Line, Segments, Status};
-pub use crate::changes::every::Header;
+use crate::changes::every::Header;
 use crate::changes::{GapLine, Mode, Scope, Tints};
 
 pub const DEFAULT_WIDTH: u16 = 64;

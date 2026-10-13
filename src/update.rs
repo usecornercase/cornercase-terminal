@@ -14,8 +14,6 @@ use crate::error::{Error, Result};
 use crate::http::{self, Service};
 use crate::text::hex;
 
-pub use crate::version::CURRENT;
-
 use crate::version::newer;
 
 pub const LATEST_ENV: &str = "CORNERCASE_RELEASES_URL";

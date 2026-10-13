@@ -1,4 +1,5 @@
 use super::*;
+use crate::issues::browser::IssuesHit;
 
 const TABS: [&str; 4] = ["All", "GitHub", "Shortcut", "Linear"];
 const TOGGLES: [&str; 2] = ["closed", "mine"];

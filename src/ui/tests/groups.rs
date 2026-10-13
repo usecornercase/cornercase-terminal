@@ -1,4 +1,5 @@
 use super::*;
+use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES};
 
 const TALL: u16 = 22;
 

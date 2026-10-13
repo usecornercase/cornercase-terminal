@@ -74,11 +74,9 @@ pub use workspaces::{
 };
 
 use crate::agents::activity::Status;
-
-pub use crate::config::{Sidebar, Tabs};
-pub use crate::issues::browser::IssuesHit;
-pub use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES, GroupEntry};
-pub use crate::state::Widths;
+use crate::config::Sidebar;
+use crate::project::group::GroupEntry;
+use crate::state::Widths;
 
 use agents_section::draw_agents;
 use chrome::{

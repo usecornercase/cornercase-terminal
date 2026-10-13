@@ -17,8 +17,6 @@ use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
 
-pub use crate::paths::SOCKET_ENV;
-
 pub const VERSION: u32 = 3;
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
@@ -102,7 +100,7 @@ pub fn check_socket_dir(socket: &Path) -> Result<(), Error> {
     let kind = meta.file_type();
     match unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()) {
         Some(reason) => {
-            Err(Error::UnsafeSocketDir { path: dir, reason, custom: std::env::var_os(SOCKET_ENV).is_some() })
+            Err(Error::UnsafeSocketDir { path: dir, reason, custom: std::env::var_os(paths::SOCKET_ENV).is_some() })
         }
         None => Ok(()),
     }
