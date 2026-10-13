@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.69
+
+- No changes in the app. Its state is grouped by concern.
+
 ## 0.12.68
 
 - No changes in the app. Background job answers are grouped by domain.
