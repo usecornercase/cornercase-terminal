@@ -109,3 +109,6 @@ pub fn group(
     };
     (body, owners, headers)
 }
+
+#[cfg(test)]
+mod tests;
