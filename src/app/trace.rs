@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use super::{App, Toast};
 use crate::control::{self, Ids, What};
 use crate::log::{self, Level};
-use crate::project::Phase;
+use crate::project::{Hierarchy, Phase};
 use crate::term::Term;
 use crate::ui;
 
@@ -312,13 +312,15 @@ impl App {
                 }
             }
             Kind::Project => {
-                if let Some(project) = self.projects.iter().find(|p| p.id == key.id) {
+                if let Some(p) = self.projects.project_index(key.id) {
+                    let project = &self.projects[p];
                     fields.push(("path", project.path.display().to_string()));
                     fields.extend(project.name.clone().map(|name| ("name", name)));
                 }
             }
             Kind::Workspace => {
-                if let Some(workspace) = self.projects.iter().flat_map(|p| &p.workspaces).find(|w| w.id == key.id) {
+                if let Some((p, w)) = self.projects.workspace_index(key.id) {
+                    let workspace = &self.projects[p].workspaces[w];
                     fields.push(("path", workspace.path.display().to_string()));
                     fields.push(("label", workspace.label()));
                     fields.push(("worktree", workspace.worktree.to_string()));

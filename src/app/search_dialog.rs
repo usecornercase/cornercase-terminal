@@ -22,7 +22,7 @@ impl App {
                 keys: vec![g.entry.name.clone()],
             })
             .collect();
-        for (p, group) in self.projects.iter().zip(self.project_groups()) {
+        for (p, group) in self.projects.iter().zip(crate::project::group_indices(&self.projects, &self.groups)) {
             let project = self.project_label(p);
             let place = |workspace, tab| Goto::Place { project: p.id, workspace, tab };
             candidates.push(Candidate {

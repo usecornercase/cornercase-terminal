@@ -18,7 +18,7 @@ mod tree;
 impl App {
     pub(super) fn sidebar_rows(&self) -> Vec<SidebarRow> {
         let collapsed: Vec<bool> = self.groups.iter().map(|g| g.entry.collapsed).collect();
-        ui::sidebar_rows(&self.project_groups(), &collapsed)
+        ui::sidebar_rows(&crate::project::group_indices(&self.projects, &self.groups), &collapsed)
     }
 
     pub(super) fn active_row(&self, sidebar: &[SidebarRow]) -> Option<usize> {

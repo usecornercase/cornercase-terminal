@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use super::App;
 use crate::control;
 use crate::error::Result;
-use crate::project::{Project, Tab, Workspace};
+use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::protocol;
 use crate::split::Dir;
 use crate::term::{SpawnOptions, Term};
@@ -73,17 +73,12 @@ impl App {
     }
 
     pub(super) fn split_pane(&mut self, pane: u64, dir: Dir, area: Rect, focus: bool) -> Result<Option<u64>> {
-        let Some((path, tab)) = self.tab_with_pane(pane) else { return Ok(None) };
-        let cwd = tab
-            .panes
-            .iter()
-            .find(|t| t.id == pane)
-            .and_then(Term::cwd)
-            .filter(|dir| dir.is_dir())
-            .unwrap_or_else(|| path.to_path_buf());
+        let Some((path, tab)) = self.projects.tab_with_pane(pane) else { return Ok(None) };
+        let cwd =
+            tab.pane_by(pane).and_then(Term::cwd).filter(|dir| dir.is_dir()).unwrap_or_else(|| path.to_path_buf());
         let term = self.spawn(area, cwd)?;
         let id = term.id;
-        if let Some((_, tab)) = self.tab_with_pane(pane) {
+        if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {
             tab.split(pane, dir, term, focus);
         }
         self.resize(area);

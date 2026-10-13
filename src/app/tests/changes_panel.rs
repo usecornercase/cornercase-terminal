@@ -175,7 +175,9 @@ mod every_project {
             "closed" => app.drop_workspace(project, workspace),
             "removed" => {
                 assert!(app.start_removal(project, workspace, true, false, None));
-                pump_until(&mut app, &rx, "the worktree is removed", |a| a.workspace_position(workspace).is_none());
+                pump_until(&mut app, &rx, "the worktree is removed", |a| {
+                    a.projects.workspace_index(workspace).is_none()
+                });
             }
             _ => {
                 git(repo.path(), &["worktree", "remove", "--force", path.to_str().expect("path")]);

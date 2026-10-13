@@ -3,6 +3,7 @@ use crate::app::menus::Target;
 use crate::app::{App, Toast};
 use crate::control::{self, Done, Item, TodoItem, TodoList};
 use crate::notify::{self, Notification};
+use crate::project::Hierarchy;
 use crate::ui;
 
 impl App {
@@ -13,15 +14,15 @@ impl App {
                 Target::Group(id)
             }
             Some(Item::Project(id)) => {
-                self.project_index(id).ok_or_else(|| none("project", id))?;
+                self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 Target::Project(id)
             }
             Some(Item::Workspace(id)) => {
                 let (p, _) = self.usable_workspace(id)?;
                 Target::Workspace(self.projects[p].id, id)
             }
-            Some(Item::Tab(id)) => self.tab_target(self.locate_tab(id)).ok_or_else(|| none("tab", id))?,
-            Some(Item::Pane(id)) => self.tab_target(self.locate(id)).ok_or_else(|| none("pane", id))?,
+            Some(Item::Tab(id)) => self.tab_target(self.projects.tab_index(id)).ok_or_else(|| none("tab", id))?,
+            Some(Item::Pane(id)) => self.tab_target(self.projects.tab_of_pane(id)).ok_or_else(|| none("pane", id))?,
             None => {
                 let here = self.here(caller);
                 let found = here.project.zip(here.workspace).zip(here.tab).map(|((p, w), t)| (p, w, t));

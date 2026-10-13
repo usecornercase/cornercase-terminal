@@ -1,10 +1,8 @@
-use std::path::Path;
-
 use super::App;
 use super::menus::Target;
 use super::overlay::Overlay;
 use crate::log::{self};
-use crate::project::{Group, Phase, Project, Tab, Workspace, group, shift_active};
+use crate::project::{Group, Hierarchy, Phase, Project, Tab, Workspace, group, shift_active};
 use crate::search::Goto;
 use crate::term::Term;
 use crate::ui::{self};
@@ -40,23 +38,6 @@ impl App {
         self.tab_mut().and_then(Tab::pane_mut)
     }
 
-    pub(super) fn tab_with_pane(&mut self, pane: u64) -> Option<(&Path, &mut Tab)> {
-        self.projects.iter_mut().flat_map(|p| &mut p.workspaces).find_map(|w| {
-            let tab = w.tabs.iter_mut().find(|t| t.panes.iter().any(|term| term.id == pane))?;
-            Some((w.path.as_path(), tab))
-        })
-    }
-
-    pub(super) fn project_index(&self, id: u64) -> Option<usize> {
-        self.projects.iter().position(|p| p.id == id)
-    }
-
-    pub(super) fn workspace_index(&self, project: u64, workspace: u64) -> Option<(usize, usize)> {
-        let p = self.project_index(project)?;
-        let w = self.projects[p].workspaces.iter().position(|w| w.id == workspace)?;
-        Some((p, w))
-    }
-
     pub(super) fn group_index(&self, id: u64) -> Option<usize> {
         self.groups.iter().position(|g| g.id == id)
     }
@@ -69,16 +50,12 @@ impl App {
         self.groups.iter_mut().find(|g| g.id == id).map(|g| &mut g.entry)
     }
 
-    pub(super) fn project_groups(&self) -> Vec<Option<usize>> {
-        self.projects.iter().map(|p| p.group.and_then(|id| self.group_index(id))).collect()
-    }
-
     pub(super) fn project_label(&self, project: &Project) -> String {
-        project.name.clone().unwrap_or_else(|| crate::text::folder_name(&project.path, self.home.as_deref()))
+        project.label(self.home.as_deref())
     }
 
     pub(super) fn remove(&mut self, id: u64) {
-        if let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
+        if let Some(term) = self.projects.pane_by_mut(id) {
             let status = term.exit_status().unwrap_or_else(|| "unknown".into());
             log::info!("app", "shell exited", pane = id, status = status);
         }
@@ -93,16 +70,19 @@ impl App {
 
     fn closing_gone(&self) -> bool {
         match self.overlay {
-            Some(Overlay::CloseProject { project }) => self.project_index(project).is_none(),
-            Some(Overlay::CloseWorkspace { project, workspace }) => self.workspace_index(project, workspace).is_none(),
-            Some(Overlay::CloseTab { project, workspace, tab }) => self.tab_index(project, workspace, tab).is_none(),
+            Some(Overlay::CloseProject { project }) => self.projects.project_index(project).is_none(),
+            Some(Overlay::CloseWorkspace { project, workspace }) => {
+                self.projects.workspace_in(project, workspace).is_none()
+            }
+            Some(Overlay::CloseTab { project, workspace, tab }) => {
+                self.projects.tab_in(project, workspace, tab).is_none()
+            }
             _ => false,
         }
     }
 
     pub(super) fn reap(&mut self) {
-        let exited: Vec<u64> =
-            self.projects.iter_mut().flat_map(Project::terms_mut).filter_map(|t| t.exited().then_some(t.id)).collect();
+        let exited: Vec<u64> = self.projects.terms_mut().filter_map(|t| t.exited().then_some(t.id)).collect();
         for id in exited {
             self.remove(id);
         }
@@ -129,7 +109,7 @@ impl App {
     }
 
     pub(super) fn close_project(&mut self, id: u64) {
-        let Some(p) = self.project_index(id) else { return };
+        let Some(p) = self.projects.project_index(id) else { return };
         self.forget_project_changes(p);
         let project = &mut self.projects[p];
         project.closing = true;
@@ -142,12 +122,12 @@ impl App {
     pub(super) fn toggle_fold(&mut self, target: Target) {
         match target {
             Target::Project(id) => {
-                if let Some(p) = self.project_index(id) {
+                if let Some(p) = self.projects.project_index(id) {
                     self.projects[p].collapsed = !self.projects[p].collapsed;
                 }
             }
             Target::Workspace(project, workspace) => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
+                if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
                     let workspace = &mut self.projects[p].workspaces[w];
                     workspace.collapsed = !workspace.collapsed;
                 }
@@ -166,21 +146,15 @@ impl App {
         let group = group.and_then(|g| self.groups.get(g)).map(|g| g.id);
         let before = before.and_then(|q| self.projects.get(q)).map(|q| q.id);
         let active = self.project().map(|p| p.id);
-        let Some(p) = self.project_index(id) else { return };
+        let Some(p) = self.projects.project_index(id) else { return };
         let mut project = self.projects.remove(p);
         project.group = group;
         self.cancel_pending_group_deletion(group, project.closing);
-        let at = before.and_then(|q| self.project_index(q)).unwrap_or_else(|| {
+        let at = before.and_then(|q| self.projects.project_index(q)).unwrap_or_else(|| {
             self.projects.iter().rposition(|p| p.group == group).map_or(self.projects.len(), |i| i + 1)
         });
         self.projects.insert(at, project);
-        self.active = active.and_then(|id| self.project_index(id)).unwrap_or(0);
-    }
-
-    pub(super) fn tab_index(&self, project: u64, workspace: u64, tab: u64) -> Option<(usize, usize, usize)> {
-        let (p, w) = self.workspace_index(project, workspace)?;
-        let t = self.projects[p].workspaces[w].tabs.iter().position(|t| t.id == tab)?;
-        Some((p, w, t))
+        self.active = active.and_then(|id| self.projects.project_index(id)).unwrap_or(0);
     }
 
     pub(super) fn close_workspace(&mut self, p: usize, w: usize) {
@@ -203,13 +177,13 @@ impl App {
             }
             Goto::Place { project, workspace, tab } => (project, workspace, tab),
         };
-        let Some(p) = self.project_index(project) else { return };
+        let Some(p) = self.projects.project_index(project) else { return };
         self.active = p;
         let project = &mut self.projects[p];
-        if let Some(w) = workspace.and_then(|id| project.workspaces.iter().position(|w| w.id == id)) {
+        if let Some(w) = workspace.and_then(|id| project.index_of(id)) {
             project.active = w;
             let workspace = &mut project.workspaces[w];
-            if let Some(t) = tab.and_then(|id| workspace.tabs.iter().position(|t| t.id == id)) {
+            if let Some(t) = tab.and_then(|id| workspace.index_of(id)) {
                 workspace.active = t;
             }
         }
@@ -219,13 +193,13 @@ impl App {
     pub(super) fn current_name(&self, target: Target) -> Option<String> {
         match target {
             Target::Group(id) => self.group(id).map(|g| g.name.clone()),
-            Target::Project(id) => self.project_index(id).map(|p| self.project_label(&self.projects[p])),
+            Target::Project(id) => self.projects.project_index(id).map(|p| self.project_label(&self.projects[p])),
             Target::Workspace(project, workspace) => {
-                self.workspace_index(project, workspace).map(|(p, w)| self.projects[p].workspaces[w].label())
+                self.projects.workspace_in(project, workspace).map(|(p, w)| self.projects[p].workspaces[w].label())
             }
             Target::Tab(project, workspace, tab) => {
-                let (p, w) = self.workspace_index(project, workspace)?;
-                self.projects[p].workspaces[w].tabs.iter().find(|t| t.id == tab).map(|t| t.label(&self.config))
+                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
+                Some(self.projects[p].workspaces[w].tabs[t].label(&self.config))
             }
         }
     }
@@ -241,20 +215,18 @@ impl App {
                 }
             }
             Target::Project(id) => {
-                if let Some(p) = self.project_index(id) {
+                if let Some(p) = self.projects.project_index(id) {
                     self.projects[p].name = name;
                 }
             }
             Target::Workspace(project, workspace) => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
+                if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
                     self.projects[p].workspaces[w].name = name;
                 }
             }
             Target::Tab(project, workspace, tab) => {
-                if let Some((p, w)) = self.workspace_index(project, workspace)
-                    && let Some(t) = self.projects[p].workspaces[w].tabs.iter_mut().find(|t| t.id == tab)
-                {
-                    t.name = name;
+                if let Some((p, w, t)) = self.projects.tab_in(project, workspace, tab) {
+                    self.projects[p].workspaces[w].tabs[t].name = name;
                 }
             }
         }
@@ -302,7 +274,7 @@ impl App {
     }
 
     pub(super) fn drop_workspace(&mut self, project: u64, workspace: u64) {
-        let Some((p, w)) = self.workspace_index(project, workspace) else { return };
+        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         self.changes.forget(workspace);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.phase = Phase::Closing;
@@ -310,12 +282,5 @@ impl App {
         if workspace.tabs.is_empty() {
             self.projects[p].remove_workspace(w);
         }
-    }
-
-    pub(super) fn workspace_position(&self, id: u64) -> Option<(usize, usize)> {
-        self.projects
-            .iter()
-            .enumerate()
-            .find_map(|(p, project)| project.workspaces.iter().position(|w| w.id == id).map(|w| (p, w)))
     }
 }

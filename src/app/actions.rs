@@ -7,7 +7,7 @@ use crate::agents;
 use crate::changes::Checkout;
 use crate::clipboard;
 use crate::error::Result;
-use crate::project::Tab;
+use crate::project::{Hierarchy, Tab};
 use crate::search::Goto;
 use crate::term::{SpawnOptions, Term};
 use crate::ui::{self};
@@ -20,7 +20,7 @@ const EDIT_SCRIPT: &str = "exec ${VISUAL:-${EDITOR:-vi}} \"+$1\" \"$2\"";
 
 impl App {
     pub(super) fn open_in_editor(&mut self, target: &Checkout, path: &str, line: u32, area: Rect) -> Result<()> {
-        let Some((p, w)) = self.workspace_position(target.workspace) else { return Ok(()) };
+        let Some((p, w)) = self.projects.workspace_index(target.workspace) else { return Ok(()) };
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
         let file = target.dir.join(path).display().to_string();
@@ -47,7 +47,7 @@ impl App {
     }
 
     pub(super) fn ask_agent(&mut self, workspace: u64, text: &str) {
-        let Some((p, w)) = self.workspace_position(workspace) else { return };
+        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
         let ws = &self.projects[p].workspaces[w];
         let tabs = std::iter::once(ws.active).chain(0..ws.tabs.len()).filter(|&t| t < ws.tabs.len());
         let found = tabs.into_iter().find_map(|t| {
@@ -64,7 +64,7 @@ impl App {
             return;
         };
         let tab = &mut self.projects[p].workspaces[w].tabs[t];
-        let sent = tab.panes.iter_mut().find(|term| term.id == id).is_some_and(|term| {
+        let sent = tab.pane_by_mut(id).is_some_and(|term| {
             term.emulator.scroll_to_bottom();
             term.paste(text)
         });

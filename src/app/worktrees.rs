@@ -13,7 +13,7 @@ use crate::error::Result;
 use crate::git;
 use crate::launch::Launch;
 use crate::log::{Job, Level};
-use crate::project::{Phase, Tab, Workspace};
+use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::ui::{self};
 use crate::upstream;
 use crate::worktree;
@@ -90,14 +90,14 @@ impl App {
 
     pub(super) fn count_behind(&mut self, now: Instant) {
         let Some(fetch_every) = self.config.fetch_every() else {
-            self.projects.iter_mut().flat_map(|p| &mut p.workspaces).for_each(|w| w.behind = 0);
+            self.projects.workspaces_mut().for_each(|w| w.behind = 0);
             return;
         };
         if self.upstream.counted.is_some_and(|at| now.duration_since(at) < COUNT_BEHIND_EVERY) {
             return;
         }
         self.upstream.counted = Some(now);
-        self.upstream.fetched.retain(|id, _| self.projects.iter().any(|p| p.id == *id));
+        self.upstream.fetched.retain(|id, _| self.projects.project_index(*id).is_some());
         for project in &self.projects {
             let workspaces: Vec<(u64, PathBuf)> = project
                 .workspaces
@@ -131,10 +131,11 @@ impl App {
         if self.config.fetch_every().is_none() {
             return;
         }
-        let Some(p) = self.projects.iter_mut().find(|p| p.id == project) else { return };
+        let Some(p) = self.projects.project_index(project) else { return };
+        let p = &mut self.projects[p];
         for (id, n) in behind {
-            if let Some(w) = p.workspaces.iter_mut().find(|w| w.id == *id) {
-                w.behind = *n;
+            if let Some(w) = p.index_of(*id) {
+                p.workspaces[w].behind = *n;
             }
         }
     }
@@ -187,7 +188,7 @@ impl App {
         area: Rect,
     ) -> Result<()> {
         let name = input.trim().to_string();
-        let Some(p) = self.project_index(project) else { return Ok(()) };
+        let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         if name.is_empty() {
             let error = Some("the name is required".into());
             self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false });
@@ -234,7 +235,7 @@ impl App {
         if matches!(self.overlay, Some(Overlay::NewWorkspace { .. } | Overlay::Issues(_))) {
             self.overlay = None;
         }
-        let Some(p) = self.project_index(project) else { return Ok(()) };
+        let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         let w = self.worktree_workspace(p, path);
         self.open_workspace(p, w, start, area)
     }
@@ -328,7 +329,7 @@ impl App {
         unlock: bool,
         request: Option<u64>,
     ) -> bool {
-        let Some((p, w)) = self.workspace_index(project, workspace) else { return false };
+        let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return false };
         let target = &mut self.projects[p].workspaces[w];
         if !target.open() {
             return false;
@@ -358,7 +359,7 @@ impl App {
     }
 
     pub(super) fn settle_removal(&mut self, project: u64, workspace: u64, removed: bool) -> Option<String> {
-        let (p, w) = self.workspace_index(project, workspace)?;
+        let (p, w) = self.projects.workspace_in(project, workspace)?;
         let name = self.projects[p].workspaces[w].label();
         if removed {
             self.drop_workspace(project, workspace);
@@ -377,7 +378,8 @@ impl App {
         submit: &'static str,
     ) -> ui::Overlay {
         let (label, path) = self
-            .workspace_index(project, workspace)
+            .projects
+            .workspace_in(project, workspace)
             .map(|(p, w)| {
                 let ws = &self.projects[p].workspaces[w];
                 (ws.label(), crate::text::display_path(&ws.path, self.home.as_deref()))

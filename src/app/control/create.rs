@@ -11,6 +11,7 @@ use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
 use crate::launch::{self, Launch};
+use crate::project::Hierarchy;
 use crate::split::Dir;
 
 pub(super) struct Then {
@@ -49,7 +50,7 @@ impl App {
         let area = sized(area)?;
         let name = name_of(Some(new.name)).ok_or("the workspace needs a name")?;
         let p = match new.project {
-            Some(id) => self.project_index(id).ok_or_else(|| none("project", id))?,
+            Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
             None => self.here(caller).project.ok_or(NO_PROJECT)?,
         };
         if new.worktree {
@@ -103,7 +104,7 @@ impl App {
     ) -> Handled {
         let area = sized(area)?;
         let pane = self.target(caller, split.pane, None)?;
-        let (p, w, t) = self.locate(pane).ok_or_else(|| none("pane", pane))?;
+        let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
         if !self.projects[p].workspaces[w].tabs[t].can_split(self.layout(area).pane, pane, dir) {
             return Err(format!("pane {pane} is too small to split {way}"));
@@ -137,7 +138,7 @@ impl App {
             self.usable_workspace(id)?
         } else if let Some(branch) = start.worktree.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
             let p = self.here(caller).project.ok_or(NO_PROJECT)?;
-            let open = self.workspace_on(p, branch).and_then(|id| self.workspace_position(id));
+            let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
                 let then = Then { start: Some((spec, name)), wait, focus: start.focus };
                 return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
@@ -169,7 +170,7 @@ impl App {
                 ))
             };
         }
-        let running = self.here(caller).pane.and_then(|id| self.pane_by(id));
+        let running = self.here(caller).pane.and_then(|id| self.projects.pane_by(id));
         let running = running.and_then(|term| agents::detect(&self.config, &term.foreground_args()));
         agents::resolve(&self.config, None, running.as_deref()).ok_or_else(|| NO_AGENT.to_string())
     }
@@ -221,7 +222,7 @@ impl App {
     ) -> Result<bool, String> {
         let path = result.map_err(|e| e.to_string())?;
         let path = path.canonicalize().unwrap_or(path);
-        let p = self.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
+        let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
         let w = self.worktree_workspace(p, path);
         let launch = match then.start {
             Some((spec, name)) => {

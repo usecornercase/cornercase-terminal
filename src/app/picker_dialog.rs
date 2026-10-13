@@ -10,6 +10,7 @@ use super::toast::Toast;
 use crate::error::Result;
 use crate::log::{self};
 use crate::picker::Picker;
+use crate::project::Hierarchy;
 use crate::ui::{self, PickerHit};
 use crate::vscode;
 
@@ -89,7 +90,7 @@ impl App {
         if opened.is_empty() && existing.is_none() {
             self.delete_group(group);
         }
-        if let Some(i) = opened.first().and_then(|&id| self.project_index(id)) {
+        if let Some(i) = opened.first().and_then(|&id| self.projects.project_index(id)) {
             self.active = i;
         }
         let name = self.group(group).map_or(workspace.name, |g| g.name.clone());

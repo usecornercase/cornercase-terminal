@@ -17,6 +17,7 @@ use crate::error::Result;
 use crate::issues::browser::Browser;
 use crate::list::Search;
 use crate::picker::Picker;
+use crate::project::Hierarchy;
 use crate::settings::Settings;
 use crate::shortcuts::Group as KeysGroup;
 use crate::time;
@@ -255,7 +256,8 @@ impl App {
                 submit: CREATE_SUBMIT,
             }),
             Overlay::NewWorkspace { project, input, worktree, error, creating } => {
-                let repo = self.project_index(*project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
+                let repo =
+                    self.projects.project_index(*project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
                 let path = if *worktree == Some(true) {
                     worktree::checkout_path(&self.config.worktrees_dir(home), &repo, input.trim())
                 } else {

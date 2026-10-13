@@ -8,6 +8,7 @@ use crate::activity::{self, Status};
 use crate::agents;
 use crate::app::App;
 use crate::control::{self, Done, Ids, Until};
+use crate::project::Hierarchy;
 use crate::term::Term;
 
 pub(super) enum Condition {
@@ -175,7 +176,7 @@ impl App {
         }
         if let Stage::Several { all, parts } = &mut pending.stage {
             for part in parts.iter_mut().filter(|part| part.done.ended.is_none()) {
-                if self.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
+                if self.projects.pane_by(part.done.ids.pane.unwrap_or_default()).is_none() {
                     part.done.ended = Some("closed".into());
                 } else if let Some(Err(message)) = self.advance(part, launched, now) {
                     return Some(Err(message));
@@ -202,7 +203,7 @@ impl App {
     }
 
     fn not_started(&self, pane: u64) -> String {
-        if self.pane_by(pane).is_none() {
+        if self.projects.pane_by(pane).is_none() {
             format!("pane {pane} closed before it was ready")
         } else {
             format!(
@@ -228,7 +229,7 @@ impl App {
             Stage::Watch(watch) => watch,
         };
         let pane = watch.pane;
-        let Some(term) = self.pane_by(pane) else { return format!("pane {pane} closed") };
+        let Some(term) = self.projects.pane_by(pane) else { return format!("pane {pane} closed") };
         match &watch.until {
             Condition::Text(re) => format!("no line on the screen of pane {pane} matches `{re}`"),
             Condition::Quiet(_) => format!("pane {pane} kept writing"),
@@ -244,14 +245,15 @@ impl App {
     }
 
     fn unrecorded(&self, pane: u64) -> String {
-        let holding = self.pane_by(pane).is_some_and(|term| holds_prompts(term.agent.agent(), term.agent.status()));
+        let holding =
+            self.projects.pane_by(pane).is_some_and(|term| holds_prompts(term.agent.agent(), term.agent.status()));
         let why = if holding { ": this agent queues a prompt sent while it works until its next step" } else { "" };
         format!("the agent in pane {pane} has not recorded the prompt yet{why}")
     }
 
     fn confirmation(&self, confirm: &mut Confirm, now: Instant) -> Option<Result<(), String>> {
         let pane = confirm.pane;
-        let Some(term) = self.pane_by(pane) else { return Some(Err(format!("pane {pane} closed"))) };
+        let Some(term) = self.projects.pane_by(pane) else { return Some(Err(format!("pane {pane} closed"))) };
         if term.context.prompted().is_some_and(|at| at >= confirm.since) {
             return Some(Ok(()));
         }
@@ -263,7 +265,7 @@ impl App {
 
     fn verdict(&self, watch: &mut Watch, now: Instant) -> Verdict {
         let pane = watch.pane;
-        let Some(term) = self.pane_by(pane) else { return Verdict::Failed(format!("pane {pane} closed")) };
+        let Some(term) = self.projects.pane_by(pane) else { return Verdict::Failed(format!("pane {pane} closed")) };
         let quiet = now.saturating_duration_since(term.output_at);
         if !term.shell_in_foreground() {
             watch.left = Some(now);
@@ -336,7 +338,7 @@ impl App {
     }
 
     fn due(&self, watch: &Watch) -> impl Iterator<Item = Instant> {
-        let quiet = self.pane_by(watch.pane).and_then(|term| match watch.until {
+        let quiet = self.projects.pane_by(watch.pane).and_then(|term| match watch.until {
             Condition::Quiet(quiet) => term.output_at.checked_add(quiet),
             Condition::Shell => term.output_at.checked_add(watch.settles(term)),
             Condition::Text(_) => watch.next_look(term),
@@ -346,13 +348,13 @@ impl App {
     }
 
     fn watch(&self, pane: u64, until: Condition, now: Instant) -> Watch {
-        let submitted = self.pane_by(pane).and_then(|term| term.submitted);
+        let submitted = self.projects.pane_by(pane).and_then(|term| term.submitted);
         let recent = submitted.filter(|at| now.saturating_duration_since(*at) < STARTS_WITHIN);
         Watch { pane, since: recent.filter(|_| until.ends_on_idle()), until, checked: None, left: None }
     }
 
     pub(super) fn can_wait(&self, caller: Option<u64>, pane: u64, until: &Condition) -> Result<(), String> {
-        let term = self.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         if until.needs_agent()
             && let Err(agent) = self.watched_agent(term)
         {

@@ -4,13 +4,13 @@ use crate::awake;
 use crate::control::{self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 use crate::git;
 use crate::log::{self, Level};
-use crate::project::{Tab, Workspace};
+use crate::project::{Hierarchy, Tab, Workspace};
 use crate::term::Term;
 use crate::version;
 
 impl App {
     pub(in crate::app) fn report(&self, caller: Option<u64>) -> Report {
-        let caller = caller.filter(|id| self.locate(*id).is_some());
+        let caller = caller.filter(|id| self.projects.tab_of_pane(*id).is_some());
         let tab_info = |t: usize, tab: &Tab, active: usize| TabInfo {
             id: tab.id,
             name: tab.label(&self.config),
@@ -92,7 +92,7 @@ impl App {
     }
 
     pub(super) fn events_request(&mut self, client: u64, events: control::Events) -> Handled {
-        if let Some(pane) = events.panes.iter().find(|pane| self.locate(**pane).is_none()) {
+        if let Some(pane) = events.panes.iter().find(|pane| self.projects.tab_of_pane(**pane).is_none()) {
             return Err(none("pane", *pane));
         }
         self.publish(log::enabled(Level::Info));

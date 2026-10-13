@@ -24,6 +24,7 @@ use crate::launch::{self};
 use crate::list::Search;
 use crate::log::{self, Job, Level};
 use crate::markdown;
+use crate::project::Hierarchy;
 use crate::secrets;
 use crate::time;
 use crate::ui;
@@ -176,7 +177,7 @@ impl App {
     fn client(&self, source: Source, project: u64) -> Option<Client> {
         match source {
             Source::Github => {
-                let dir = self.projects.get(self.project_index(project)?)?.path.clone();
+                let dir = self.projects.get(self.projects.project_index(project)?)?.path.clone();
                 Some(Client::Github { gh: self.config.gh(self.home.as_deref()), dir })
             }
             Source::Shortcut => {
@@ -343,7 +344,7 @@ impl App {
 
     pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
         let project = (source == Source::Github)
-            .then(|| self.project_index(project).map(|p| self.projects[p].path.clone()))
+            .then(|| self.projects.project_index(project).map(|p| self.projects[p].path.clone()))
             .flatten();
         CacheKey { source, project, query: query.clone() }
     }
@@ -582,7 +583,7 @@ impl App {
     fn start_issue(&mut self, issue: &Issue, agent: &str, place: Option<Place>, area: Rect) -> Result<()> {
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
-        let Some(p) = self.project_index(project) else {
+        let Some(p) = self.projects.project_index(project) else {
             self.overlay = None;
             return Ok(());
         };
@@ -612,7 +613,7 @@ impl App {
         if in_a_tab {
             self.overlay = None;
             let workspace = place.and_then(|place| place.workspace);
-            let w = workspace.and_then(|id| self.projects[p].workspaces.iter().position(|w| w.id == id));
+            let w = workspace.and_then(|id| self.projects[p].index_of(id));
             return self.open_tab_with(p, w, start, area);
         }
         let open = self.projects[p].workspaces.iter().position(|w| git::branch(&w.path).as_deref() == Some(&branch));

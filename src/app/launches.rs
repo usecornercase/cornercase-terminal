@@ -8,7 +8,7 @@ use crate::agents;
 use crate::error::Result;
 use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self};
-use crate::project::Project;
+use crate::project::Hierarchy;
 
 pub(super) const LAUNCH_EVERY: Duration = Duration::from_millis(100);
 
@@ -22,7 +22,7 @@ impl App {
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
         let mut finished = Vec::new();
         for (i, launch) in self.agents.launches.iter_mut().enumerate() {
-            let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == launch.term) else {
+            let Some(term) = self.projects.pane_by_mut(launch.term) else {
                 finished.push((i, false));
                 continue;
             };

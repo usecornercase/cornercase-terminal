@@ -46,7 +46,7 @@ fn a_worktree_opens_with_a_tab_and_leaves_the_window_as_it_is() {
 fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
     ask(app, None, worktree("feat/x"));
     let id = done(answered(app, rx, "git makes the worktree")).ids.workspace.expect("the workspace");
-    let (p, w) = app.workspace_position(id).expect("it");
+    let (p, w) = app.projects.workspace_index(id).expect("it");
     (id, app.projects[p].workspaces[w].path.clone())
 }
 
@@ -62,7 +62,7 @@ fn removing_it_deletes_the_checkout() {
     ask(&mut app, None, remove(id));
     done(answered(&mut app, &rx, "git removes the worktree"));
 
-    pump_until(&mut app, &rx, "the workspace goes", |a| a.workspace_position(id).is_none());
+    pump_until(&mut app, &rx, "the workspace goes", |a| a.projects.workspace_index(id).is_none());
     assert!(!path.exists());
 }
 
@@ -107,7 +107,7 @@ fn a_worktree_with_changes_is_refused_before_anything_stops() {
     ask(&mut app, None, remove(id));
     let message = error(answered(&mut app, &rx, "git status answers"));
 
-    let (p, w) = app.workspace_position(id).expect("it stays");
+    let (p, w) = app.projects.workspace_index(id).expect("it stays");
     let workspace = &app.projects[p].workspaces[w];
     assert!(message.contains("--force"), "{message}");
     assert_eq!((workspace.removing(), workspace.tabs.len(), path.exists()), (false, 1, true));
@@ -122,7 +122,7 @@ fn lock(repo: &Path, path: &Path) {
 }
 
 fn untouched(app: &App, id: u64, path: &Path) -> bool {
-    let (p, w) = app.workspace_position(id).expect("it stays");
+    let (p, w) = app.projects.workspace_index(id).expect("it stays");
     let workspace = &app.projects[p].workspaces[w];
     workspace.open() && !workspace.tabs.is_empty() && path.exists()
 }

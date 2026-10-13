@@ -13,7 +13,7 @@ use crate::search::Goto;
 use crate::shortcuts::{self, Action, Group, Step};
 use crate::split::{self, Place};
 use crate::todo::Field;
-use crate::ui::{self, SidebarRow, keys};
+use crate::ui::{self, keys};
 
 const NO_AGENT_WAITS: &str = "no agent needs you";
 const NO_ROOM: &str = "no room to split this pane";
@@ -182,10 +182,8 @@ impl App {
     }
 
     fn step_project(&mut self, delta: isize) {
-        let unfolded = vec![false; self.groups.len()];
-        let order: Vec<usize> = ui::sidebar_rows(&self.project_groups(), &unfolded)
+        let order: Vec<usize> = crate::project::sidebar_order(&self.projects, &self.groups)
             .into_iter()
-            .filter_map(|row| if let SidebarRow::Project(p) = row { Some(p) } else { None })
             .filter(|&p| !self.projects[p].closing)
             .collect();
         let at = order.iter().position(|&p| p == self.active).unwrap_or(0);

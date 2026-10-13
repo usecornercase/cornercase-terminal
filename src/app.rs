@@ -30,7 +30,7 @@ use crate::launch::Launch;
 use crate::notify::Notification;
 use crate::paths;
 use crate::pointer;
-use crate::project::{Group, Project, Tab, group};
+use crate::project::{Group, Hierarchy, Project, Tab, group};
 #[cfg(test)]
 use crate::restart;
 use crate::settings::Page;
@@ -279,10 +279,10 @@ impl App {
 
     pub fn resize(&mut self, area: Rect) {
         let pane = self.layout(area).pane;
-        let tabs = self.projects.iter_mut().flat_map(|p| &mut p.workspaces).flat_map(|w| &mut w.tabs);
+        let tabs = self.projects.tabs_mut();
         for tab in tabs {
             for (id, r) in tab.shown(pane) {
-                if let Some(term) = tab.panes.iter_mut().find(|t| t.id == id) {
+                if let Some(term) = tab.pane_by_mut(id) {
                     term.resize(r.height.max(1), r.width.max(1));
                 }
             }
@@ -334,14 +334,14 @@ impl App {
     }
 
     pub fn shows(&self, pane: u64) -> bool {
-        self.nav.is_none() && self.tab().is_some_and(|t| t.panes.iter().any(|p| p.id == pane))
+        self.nav.is_none() && self.tab().is_some_and(|t| t.index_of(pane).is_some())
     }
 
     pub fn state(&self) -> State {
         let projects = self
             .projects
             .iter()
-            .zip(self.project_groups())
+            .zip(crate::project::group_indices(&self.projects, &self.groups))
             .map(|(p, group)| ProjectState {
                 path: p.path.clone(),
                 name: p.name.clone(),
@@ -369,9 +369,7 @@ impl App {
                                     })
                                     .collect(),
                                 active: t.active,
-                                layout: (t.panes.len() > 1)
-                                    .then(|| t.layout.map(&|id| t.panes.iter().position(|term| term.id == id)))
-                                    .flatten(),
+                                layout: (t.panes.len() > 1).then(|| t.layout_by_index()).flatten(),
                             })
                             .collect(),
                         active: w.active,
@@ -495,7 +493,7 @@ impl App {
         for launch in self.agents.launches.iter_mut().filter(|l| l.term == id) {
             launch.output(Instant::now());
         }
-        if let Some(t) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
+        if let Some(t) = self.projects.pane_by_mut(id) {
             t.feed(bytes);
             for text in t.emulator.take_copied() {
                 copy(&mut self.outbox.host_writes, &mut self.toast, &text);
@@ -539,7 +537,7 @@ impl App {
         let projects = self
             .projects
             .iter()
-            .zip(self.project_groups())
+            .zip(crate::project::group_indices(&self.projects, &self.groups))
             .map(|(p, group)| ui::ProjectEntry {
                 name: self.project_label(p),
                 workspaces: p.workspaces.len(),
@@ -573,7 +571,7 @@ impl App {
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
         let home = self.home.clone();
         let tab = self.tab_mut().and_then(|tab| {
-            let layout = tab.layout.map(&|id| tab.panes.iter().position(|t| t.id == id))?;
+            let layout = tab.layout_by_index()?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
             let dragging = dragging.filter(|(id, _)| *id == tab.id).map(|(_, path)| path);
             let link = pointer
@@ -583,7 +581,7 @@ impl App {
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();
-        let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
+        let tabs = self.projects.tabs();
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
         let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
         let drag = moved.and_then(|(d, pos)| match d.target {

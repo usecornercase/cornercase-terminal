@@ -13,6 +13,7 @@ use crate::error;
 use crate::keys;
 use crate::launch::Launch;
 use crate::log::{Job, Level};
+use crate::project::Hierarchy;
 use crate::term;
 
 fn not_reading(pane: u64) -> String {
@@ -49,7 +50,7 @@ impl App {
     ) -> Handled {
         let pane = self.target(caller, send.pane, send.tab)?;
         let timeout = deadline(send.timeout, now)?;
-        let term = self.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         if term.agent.status() == Some(Status::Waiting) {
             return Err(format!(
                 "the agent in pane {pane} is waiting for an answer to a question or a permission prompt, and what \
@@ -82,7 +83,7 @@ impl App {
             return Err("nothing to send: give a text, - to read it from stdin, or --enter".into());
         }
         if let Some(text) = &text
-            && let Some(term) = self.pane_by_mut(pane)
+            && let Some(term) = self.projects.pane_by_mut(pane)
             && !term.paste(text)
         {
             return Err(not_reading(pane));
@@ -104,7 +105,7 @@ impl App {
         if events.is_empty() {
             return Err("no keys given".into());
         }
-        let term = self.pane_by_mut(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.pane_by_mut(pane).ok_or_else(|| none("pane", pane))?;
         let enter = events.iter().any(|key| key.code == KeyCode::Enter);
         let bytes: Vec<u8> = events.into_iter().flat_map(|key| term.emulator.encode_key(key)).collect();
         if !term.write(&bytes) {
@@ -118,7 +119,7 @@ impl App {
 
     pub(super) fn read_request(&self, caller: Option<u64>, read: &control::Read) -> Handled {
         let pane = self.target(caller, read.pane, read.tab)?;
-        let term = self.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         let text = match read.lines {
             Some(lines) => term.emulator.last_lines(lines),
             None => term.emulator.screen_text(),
@@ -134,7 +135,7 @@ impl App {
         last: &control::LastMessage,
     ) -> Handled {
         let pane = self.target(caller, last.pane, last.tab)?;
-        let term = self.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
         let running = term.agent.agent().map(str::to_string);
         let agent = match running.or_else(|| agents::detect(&self.config, &term.foreground_args())) {
             Some(agent) if WATCHED.contains(&agent.as_str()) => agent,
@@ -171,7 +172,7 @@ impl App {
             Ok(Some(message)) => {
                 pending.done.text = Some(message.text);
                 pending.done.written = message.written;
-                pending.done.turn_over = self.pane_by(pane).and_then(|term| turn_over(&term.agent));
+                pending.done.turn_over = self.projects.pane_by(pane).and_then(|term| turn_over(&term.agent));
                 Ok(json(&pending.done))
             }
             Ok(None) => Err(format!("the {agent} agent in pane {pane} has not written a message yet")),

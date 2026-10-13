@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 use crate::app::App;
 use crate::app::menus::Target;
 use crate::error::Result;
+use crate::project::Hierarchy;
 use crate::ui::{self};
 
 impl App {
@@ -26,8 +27,12 @@ impl App {
 
     pub(in crate::app) fn tree_shape(&self) -> ui::TreeShape {
         let groups = self.groups.iter().map(|g| g.entry.collapsed).collect();
-        let projects =
-            self.projects.iter().zip(self.project_groups()).zip(self.tree_open()).map(|((p, group), open)| {
+        let projects = self
+            .projects
+            .iter()
+            .zip(crate::project::group_indices(&self.projects, &self.groups))
+            .zip(self.tree_open())
+            .map(|((p, group), open)| {
                 let workspaces = p.workspaces.iter().map(|w| ui::WorkspaceShape {
                     collapsed: w.collapsed,
                     tabs: if open && !w.collapsed {
@@ -67,14 +72,13 @@ impl App {
     pub(in crate::app) fn tree_row_of(&self, target: Target) -> Option<ui::TreeRow> {
         Some(match target {
             Target::Group(id) => ui::TreeRow::Group(self.group_index(id)?),
-            Target::Project(id) => ui::TreeRow::Project(self.project_index(id)?),
+            Target::Project(id) => ui::TreeRow::Project(self.projects.project_index(id)?),
             Target::Workspace(project, workspace) => {
-                let (p, w) = self.workspace_index(project, workspace)?;
+                let (p, w) = self.projects.workspace_in(project, workspace)?;
                 ui::TreeRow::Workspace(p, w)
             }
             Target::Tab(project, workspace, tab) => {
-                let (p, w) = self.workspace_index(project, workspace)?;
-                let t = self.projects[p].workspaces[w].tabs.iter().position(|t| t.id == tab)?;
+                let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
                 ui::TreeRow::Tab(p, w, t)
             }
         })

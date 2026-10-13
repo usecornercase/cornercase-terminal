@@ -2,6 +2,7 @@ use super::{Handled, Pending, Stage, json, none};
 use crate::app::App;
 use crate::control::{self, Done, Item};
 use crate::error;
+use crate::project::Hierarchy;
 use crate::term::Term;
 use crate::worktree;
 
@@ -15,9 +16,9 @@ pub(super) fn shell_quote(path: &str) -> String {
 impl App {
     pub(super) fn close_request(&mut self, client: u64, close: &control::Close) -> Handled {
         match close.item {
-            Item::Pane(id) => self.pane_by_mut(id).ok_or_else(|| none("pane", id))?.kill(),
+            Item::Pane(id) => self.projects.pane_by_mut(id).ok_or_else(|| none("pane", id))?.kill(),
             Item::Tab(id) => {
-                let (p, w, t) = self.locate_tab(id).ok_or_else(|| none("tab", id))?;
+                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
                 self.projects[p].workspaces[w].tabs[t].panes.iter_mut().for_each(Term::kill);
             }
             Item::Workspace(id) => {
@@ -46,7 +47,7 @@ impl App {
                 }
             }
             Item::Project(id) => {
-                self.project_index(id).ok_or_else(|| none("project", id))?;
+                self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 self.close_project(id);
             }
             Item::Group(id) => return Err(format!("group {id} cannot be closed; close its projects")),
@@ -80,7 +81,8 @@ impl App {
 
     fn locked(&self, workspace: u64, lock: &worktree::Lock) -> String {
         let path = self
-            .workspace_position(workspace)
+            .projects
+            .workspace_index(workspace)
             .map(|(p, w)| self.projects[p].workspaces[w].path.display().to_string())
             .unwrap_or_default();
         let reason = if lock.reason.is_empty() { String::new() } else { format!(" ({})", lock.reason) };

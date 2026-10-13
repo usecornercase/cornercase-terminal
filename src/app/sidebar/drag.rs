@@ -11,7 +11,7 @@ use crate::app::interaction::Grab;
 use crate::app::interaction::RowDrag;
 use crate::app::menus::Target;
 use crate::log::{self};
-use crate::project::move_before;
+use crate::project::{Hierarchy, move_before};
 use crate::search::Goto;
 use crate::ui::{self, SidebarRow, WorkspaceRow};
 
@@ -62,7 +62,7 @@ impl App {
                 }
             }
             Target::Project(id) => {
-                if let Some(p) = self.project_index(id) {
+                if let Some(p) = self.projects.project_index(id) {
                     self.active = p;
                     self.nav = self.nav.map(|_| ui::Nav::Workspaces);
                     self.unfold_focus();

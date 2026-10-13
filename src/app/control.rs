@@ -20,7 +20,7 @@ use crate::error;
 use crate::git;
 use crate::launch::Launch;
 use crate::log::{self, Level};
-use crate::project::{Phase, Project, Tab, Workspace};
+use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::search::Goto;
 use crate::term::Term;
 use crate::version;
@@ -287,14 +287,6 @@ impl App {
         None
     }
 
-    fn pane_by(&self, id: u64) -> Option<&Term> {
-        self.projects.iter().flat_map(|p| &p.workspaces).flat_map(Workspace::terms).find(|t| t.id == id)
-    }
-
-    fn pane_by_mut(&mut self, id: u64) -> Option<&mut Term> {
-        self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id)
-    }
-
     fn runs_agent(&self, term: &Term) -> bool {
         term.agent.status().is_some() || agents::detect(&self.config, &term.foreground_args()).is_some()
     }
@@ -309,27 +301,9 @@ impl App {
         }
     }
 
-    fn locate(&self, pane: u64) -> Option<(usize, usize, usize)> {
-        self.find_tab(|tab| tab.panes.iter().any(|t| t.id == pane))
-    }
-
-    fn locate_tab(&self, id: u64) -> Option<(usize, usize, usize)> {
-        self.find_tab(|tab| tab.id == id)
-    }
-
-    fn find_tab(&self, found: impl Fn(&Tab) -> bool) -> Option<(usize, usize, usize)> {
-        self.projects.iter().enumerate().find_map(|(p, project)| {
-            project
-                .workspaces
-                .iter()
-                .enumerate()
-                .find_map(|(w, workspace)| workspace.tabs.iter().position(&found).map(|t| (p, w, t)))
-        })
-    }
-
     fn here(&self, caller: Option<u64>) -> Here {
         if let Some(pane) = caller
-            && let Some((p, w, t)) = self.locate(pane)
+            && let Some((p, w, t)) = self.projects.tab_of_pane(pane)
         {
             return Here { project: Some(p), workspace: Some(w), tab: Some(t), pane: Some(pane) };
         }
@@ -370,10 +344,10 @@ impl App {
 
     fn target(&self, caller: Option<u64>, pane: Option<u64>, tab: Option<u64>) -> Result<u64, String> {
         if let Some(id) = pane {
-            return self.locate(id).map(|_| id).ok_or_else(|| none("pane", id));
+            return self.projects.tab_of_pane(id).map(|_| id).ok_or_else(|| none("pane", id));
         }
         if let Some(id) = tab {
-            let (p, w, t) = self.locate_tab(id).ok_or_else(|| none("tab", id))?;
+            let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
             let tab = &self.projects[p].workspaces[w].tabs[t];
             let agent = std::iter::once(tab.active)
                 .chain(0..tab.panes.len())
@@ -395,7 +369,7 @@ impl App {
                 Goto::Group(id)
             }
             Item::Project(id) => {
-                let p = self.project_index(id).ok_or_else(|| none("project", id))?;
+                let p = self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 place(self, p, None, None)
             }
             Item::Workspace(id) => {
@@ -403,11 +377,11 @@ impl App {
                 place(self, p, Some(w), None)
             }
             Item::Tab(id) => {
-                let (p, w, t) = self.locate_tab(id).ok_or_else(|| none("tab", id))?;
+                let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
                 place(self, p, Some(w), Some(t))
             }
             Item::Pane(id) => {
-                let (p, w, t) = self.locate(id).ok_or_else(|| none("pane", id))?;
+                let (p, w, t) = self.projects.tab_of_pane(id).ok_or_else(|| none("pane", id))?;
                 self.projects[p].workspaces[w].tabs[t].focus(id);
                 place(self, p, Some(w), Some(t))
             }
@@ -417,7 +391,7 @@ impl App {
     }
 
     fn usable_workspace(&self, id: u64) -> Result<(usize, usize), String> {
-        let (p, w) = self.workspace_position(id).ok_or_else(|| none("workspace", id))?;
+        let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
         match self.projects[p].workspaces[w].phase {
             Phase::Open => Ok((p, w)),
             Phase::Removing(_) => Err(format!("workspace {id} is being removed")),

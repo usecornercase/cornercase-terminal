@@ -4,6 +4,7 @@ use super::App;
 use super::overlay::Overlay;
 use crate::error::Result;
 use crate::log::{self};
+use crate::project::Hierarchy;
 use crate::split::Dir;
 use crate::ui::{self};
 
@@ -104,7 +105,7 @@ impl App {
                 self.overlay = self.current_name(target).map(|input| Overlay::Rename { target, input });
             }
             MenuAction::MoveToGroup(project) => {
-                let Some(p) = self.project_index(project) else { return Ok(()) };
+                let Some(p) = self.projects.project_index(project) else { return Ok(()) };
                 let current = self.projects[p].group;
                 let mut actions: Vec<MenuAction> = self
                     .groups
@@ -118,7 +119,7 @@ impl App {
                 self.overlay = Some(Overlay::Menu { at, actions });
             }
             MenuAction::SetGroup(project, group) => {
-                if let Some(p) = self.project_index(project) {
+                if let Some(p) = self.projects.project_index(project) {
                     self.projects[p].group = group;
                     self.cancel_pending_group_deletion(group, self.projects[p].closing);
                 }

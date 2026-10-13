@@ -5,6 +5,7 @@ use super::App;
 use super::menus::PaneAction;
 use super::overlay::Overlay;
 use crate::error::Result;
+use crate::project::Hierarchy;
 use crate::ui::{self};
 
 pub(super) const KEEP_PROJECTS_SUBMIT: &str = "keep projects";
@@ -113,13 +114,13 @@ impl App {
                 None
             }
             Overlay::CloseWorkspace { project, workspace } => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
+                if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
                     self.close_workspace(p, w);
                 }
                 None
             }
             Overlay::CloseTab { project, workspace, tab } => {
-                if let Some((p, w, t)) = self.tab_index(project, workspace, tab) {
+                if let Some((p, w, t)) = self.projects.tab_in(project, workspace, tab) {
                     self.close_tab(p, w, t);
                 }
                 None
@@ -159,30 +160,25 @@ impl App {
     }
 
     pub(super) fn close_project_message(&self, id: u64) -> Option<String> {
-        let project = &self.projects[self.project_index(id)?];
+        let project = &self.projects[self.projects.project_index(id)?];
         let stopped = stopped_tabs(project.workspaces.iter().map(|w| w.tabs.len()).sum());
         Some(format!("Close the project {}?{stopped} Folders and worktrees stay on disk.", self.project_label(project)))
     }
 
     pub(super) fn close_workspace_message(&self, project: u64, workspace: u64) -> Option<String> {
-        let (p, w) = self.workspace_index(project, workspace)?;
+        let (p, w) = self.projects.workspace_in(project, workspace)?;
         let workspace = &self.projects[p].workspaces[w];
         Some(format!("Close the workspace {}?{}", workspace.label(), stopped_tabs(workspace.tabs.len())))
     }
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
-        let (p, w, t) = self.tab_index(project, workspace, tab)?;
+        let (p, w, t) = self.projects.tab_in(project, workspace, tab)?;
         let name = self.projects[p].workspaces[w].tabs[t].label(&self.config);
         Some(format!("Close the tab {name}? The programs running in it are stopped."))
     }
 
     pub(super) fn close_pane_message(&self, pane: u64) -> Option<String> {
-        let term = self
-            .projects
-            .iter()
-            .flat_map(|p| &p.workspaces)
-            .flat_map(|w| &w.tabs)
-            .find_map(|t| t.panes.iter().find(|term| term.id == pane))?;
+        let term = self.projects.pane_by(pane)?;
         let name = term.program(&self.config).unwrap_or_else(|| "?".into());
         Some(format!("Close the pane running {name}? What runs in it is stopped."))
     }
