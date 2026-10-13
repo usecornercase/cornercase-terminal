@@ -92,14 +92,14 @@ impl Agent {
         }
     }
 
-    fn title(self) -> &'static str {
+    pub fn title(self) -> &'static str {
         match self {
             Self::Claude => "Claude Code",
             Self::Codex => "Codex",
         }
     }
 
-    fn no_limits(self) -> &'static str {
+    pub fn no_limits(self) -> &'static str {
         match self {
             Self::Claude => "no plan limits for this account (API key, Bedrock or Vertex)",
             Self::Codex => "no plan limits for this account",
@@ -181,7 +181,7 @@ pub fn probe(agent: Agent, program: &str, timeout: Duration) -> Result<Report> {
     }
 }
 
-fn until(secs: i64) -> String {
+pub fn until(secs: i64) -> String {
     let minutes = (secs.max(0) + 59) / 60;
     let (days, hours, minutes) = (minutes / 1_440, minutes / 60 % 24, minutes % 60);
     if days > 0 {
@@ -193,7 +193,7 @@ fn until(secs: i64) -> String {
     }
 }
 
-fn updated(secs: u64) -> String {
+pub fn updated(secs: u64) -> String {
     if secs < 60 {
         "updated just now".into()
     } else {
@@ -202,7 +202,7 @@ fn updated(secs: u64) -> String {
 }
 
 #[derive(Debug, Default)]
-struct Probe {
+pub struct Probe {
     last: Option<(Report, Instant)>,
     loading: bool,
     error: Option<String>,
@@ -225,32 +225,43 @@ impl Probe {
             Err(e) => self.error = Some(e.to_string()),
         }
     }
+    pub fn last(&self) -> Option<&(Report, Instant)> {
+        self.last.as_ref()
+    }
 
-    fn section(&self, agent: Agent, now: Instant, clock: i64) -> ui::UsageSection {
-        let report = self.last.as_ref().map(|(r, _)| r);
-        let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
-        let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
-        let status = if self.loading {
-            "loading…".into()
-        } else {
-            self.last.as_ref().map(|(_, at)| updated(now.duration_since(*at).as_secs())).unwrap_or_default()
-        };
-        ui::UsageSection {
-            title: format!("{}{plan}", agent.title()),
-            status,
-            error: self.error.as_ref().map(|e| format!("usage unavailable: {e}")),
-            windows: windows
-                .iter()
-                .map(|w| ui::UsageWindow {
-                    label: w.label.clone(),
-                    percent: w.percent,
-                    severity: w.severity,
-                    resets: w.resets_at.map(|at| until(at - clock)).unwrap_or_default(),
-                })
-                .collect(),
-            empty: report.and_then(|r| r.notice.or_else(|| (!r.limited).then(|| agent.no_limits()))),
-            extra: report.and_then(|r| r.extra.clone()),
-        }
+    pub fn loading(&self) -> bool {
+        self.loading
+    }
+
+    pub fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+}
+
+pub fn section(agent: Agent, probe: &Probe, now: Instant, clock: i64) -> ui::UsageSection {
+    let report = probe.last().map(|(r, _)| r);
+    let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
+    let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
+    let status = if probe.loading() {
+        "loading…".into()
+    } else {
+        probe.last().map(|(_, at)| updated(now.duration_since(*at).as_secs())).unwrap_or_default()
+    };
+    ui::UsageSection {
+        title: format!("{}{plan}", agent.title()),
+        status,
+        error: probe.error().map(|e| format!("usage unavailable: {e}")),
+        windows: windows
+            .iter()
+            .map(|w| ui::UsageWindow {
+                label: w.label.clone(),
+                percent: w.percent,
+                severity: w.severity,
+                resets: w.resets_at.map(|at| until(at - clock)).unwrap_or_default(),
+            })
+            .collect(),
+        empty: report.and_then(|r| r.notice.or_else(|| (!r.limited).then(|| agent.no_limits()))),
+        extra: report.and_then(|r| r.extra.clone()),
     }
 }
 
@@ -270,12 +281,16 @@ impl State {
         self.probes[agent.index()].answered(result, now);
     }
 
-    pub fn view(&self, now: Instant, clock: i64) -> ui::Usage {
-        ui::Usage {
-            page: Page::Limits,
-            stats: crate::stats::View::default(),
-            sections: self.shown.iter().map(|&agent| self.probes[agent.index()].section(agent, now, clock)).collect(),
-        }
+    pub fn shown(&self) -> impl Iterator<Item = (Agent, &Probe)> {
+        self.shown.iter().map(|&agent| (agent, &self.probes[agent.index()]))
+    }
+}
+
+pub fn view(state: &State, now: Instant, clock: i64) -> ui::Usage {
+    ui::Usage {
+        page: Page::Limits,
+        stats: crate::stats::View::default(),
+        sections: state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect(),
     }
 }
 
