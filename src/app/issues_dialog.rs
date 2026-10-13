@@ -18,10 +18,10 @@ use crate::issues::{
     self, Account, Client, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self};
+use crate::list::Search;
 use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::panics;
-use crate::search::Search;
 use crate::secrets;
 
 pub(super) struct Apis {

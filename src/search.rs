@@ -1,5 +1,3 @@
-use crate::picker::Cursor;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
     Group,
@@ -56,59 +54,6 @@ pub fn find(haystack: &str, needle: &str) -> Option<(usize, usize)> {
         return None;
     }
     (0..=hay.len() - needle.len()).find(|&i| hay[i..i + needle.len()] == needle[..]).map(|i| (i, i + needle.len()))
-}
-
-#[derive(Debug, Default)]
-pub struct Search {
-    query: String,
-    selected: usize,
-    scroll: usize,
-}
-
-impl Search {
-    pub fn query(&self) -> &str {
-        &self.query
-    }
-
-    pub fn selected(&self) -> usize {
-        self.selected
-    }
-
-    pub fn scroll(&self) -> usize {
-        self.scroll
-    }
-
-    pub fn push(&mut self, c: char) {
-        self.query.push(c);
-        self.reset();
-    }
-
-    pub fn pop(&mut self) {
-        self.query.pop();
-        self.reset();
-    }
-
-    pub fn reset(&mut self) {
-        self.selected = 0;
-        self.scroll = 0;
-    }
-
-    pub fn select(&mut self, i: usize) {
-        self.selected = i;
-    }
-
-    pub fn move_selection(&mut self, delta: isize, len: usize, rows: usize) {
-        let Some(last) = len.checked_sub(1) else { return };
-        let mut cursor = Cursor { selected: Some(self.selected.min(last)), scroll: self.scroll };
-        cursor.move_by(delta, len, rows);
-        (self.selected, self.scroll) = (cursor.selected.unwrap_or(0), cursor.scroll);
-    }
-
-    pub fn scroll_by(&mut self, delta: isize, len: usize, rows: usize) {
-        let mut cursor = Cursor { selected: None, scroll: self.scroll };
-        cursor.scroll_by(delta, len, rows);
-        self.scroll = cursor.scroll;
-    }
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
-use crate::search::Search;
+use crate::list::Search;
 use crate::ui::{self};
 
 pub(super) const WHEEL_ROWS: isize = 3;

@@ -5,8 +5,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::agents;
 use crate::config::{self, Config};
 use crate::issues::{Account, Secret, Source, jira, plane};
+use crate::list::Search;
 use crate::notify;
-use crate::search::Search;
 use crate::shortcuts::Prefix;
 use crate::ui;
 

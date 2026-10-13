@@ -1,6 +1,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::list::Cursor;
 use crate::{git, vscode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,34 +197,6 @@ fn entries(dir: &Path) -> io::Result<Vec<Item>> {
             .then_with(|| a.name.cmp(&b.name))
     });
     Ok(entries)
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Cursor {
-    pub selected: Option<usize>,
-    pub scroll: usize,
-}
-
-impl Cursor {
-    pub fn move_by(&mut self, delta: isize, len: usize, rows: usize) {
-        let Some(last) = len.checked_sub(1) else { return };
-        let i = match self.selected {
-            Some(i) => i.saturating_add_signed(delta).min(last),
-            None if delta < 0 => last,
-            None => 0,
-        };
-        self.selected = Some(i);
-        if i < self.scroll {
-            self.scroll = i;
-        } else if rows > 0 && i >= self.scroll + rows {
-            self.scroll = i + 1 - rows;
-        }
-    }
-
-    pub fn scroll_by(&mut self, delta: isize, len: usize, rows: usize) {
-        let max = len.saturating_sub(rows);
-        self.scroll = self.scroll.min(max).saturating_add_signed(delta).min(max);
-    }
 }
 
 #[cfg(test)]

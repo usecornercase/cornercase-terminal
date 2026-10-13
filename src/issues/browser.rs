@@ -6,8 +6,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, branch, jira, plane, sort_by_updated};
+use crate::list::Search;
 use crate::markdown;
-use crate::search::Search;
 use crate::time;
 use crate::ui::{self, IssuesHit};
 
