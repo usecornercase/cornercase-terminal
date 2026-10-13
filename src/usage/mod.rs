@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 use crate::agents;
 use crate::error::{Error, Result};
 use crate::time;
-use crate::ui;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Page {
@@ -238,33 +237,6 @@ impl Probe {
     }
 }
 
-pub fn section(agent: Agent, probe: &Probe, now: Instant, clock: i64) -> ui::UsageSection {
-    let report = probe.last().map(|(r, _)| r);
-    let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
-    let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
-    let status = if probe.loading() {
-        "loading…".into()
-    } else {
-        probe.last().map(|(_, at)| updated(now.duration_since(*at).as_secs())).unwrap_or_default()
-    };
-    ui::UsageSection {
-        title: format!("{}{plan}", agent.title()),
-        status,
-        error: probe.error().map(|e| format!("usage unavailable: {e}")),
-        windows: windows
-            .iter()
-            .map(|w| ui::UsageWindow {
-                label: w.label.clone(),
-                percent: w.percent,
-                severity: w.severity,
-                resets: w.resets_at.map(|at| until(at - clock)).unwrap_or_default(),
-            })
-            .collect(),
-        empty: report.and_then(|r| r.notice.or_else(|| (!r.limited).then(|| agent.no_limits()))),
-        extra: report.and_then(|r| r.extra.clone()),
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct State {
     shown: Vec<Agent>,
@@ -286,13 +258,10 @@ impl State {
     }
 }
 
-pub fn view(state: &State, now: Instant, clock: i64) -> ui::Usage {
-    ui::Usage {
-        page: Page::Limits,
-        stats: crate::stats::View::default(),
-        sections: state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect(),
-    }
-}
+#[cfg(test)]
+pub(crate) use claude::tests as claude_tests;
+#[cfg(test)]
+pub(crate) use codex::tests as codex_tests;
 
 #[cfg(test)]
 mod tests;
