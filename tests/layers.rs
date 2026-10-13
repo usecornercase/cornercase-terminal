@@ -16,14 +16,8 @@ const UI_EXCEPTIONS: &[&str] = &[
     "src/state.rs",
     "src/usage/mod.rs",
 ];
-const LONG_FILES: &[&str] = &[
-    "src/app/control.rs",
-    "src/cli.rs",
-    "src/client.rs",
-    "src/issues/browser.rs",
-    "src/settings.rs",
-    "tests/e2e.rs",
-];
+const LONG_FILES: &[&str] =
+    &["src/app/control.rs", "src/cli.rs", "src/client.rs", "src/issues/browser.rs", "src/settings.rs", "tests/e2e.rs"];
 
 struct Source {
     path: PathBuf,
