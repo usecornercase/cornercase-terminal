@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::error::{Error, Result};
+use crate::process::reap;
 use crate::protocol::{self, ClientMessage, ServerMessage};
 use crate::{log, paths};
 
@@ -82,15 +83,6 @@ fn start_server(log: &Path) -> io::Result<Child> {
         .stdout(log.try_clone()?)
         .stderr(log)
         .spawn()
-}
-
-pub(crate) fn reap(mut child: Child) {
-    thread::spawn(move || child.wait());
-}
-
-pub(crate) fn stop(mut child: Child) {
-    let _ = child.kill();
-    reap(child);
 }
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(5);
 const SERVER_EXIT_TIMEOUT: Duration = Duration::from_secs(5);

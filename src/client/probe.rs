@@ -7,12 +7,11 @@ use std::time::{Duration, Instant};
 
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 
-use super::server_process::stop;
 use super::{Host, write_out};
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::graphics::{self, Support};
 use crate::host_theme::{HostTheme, ThemeProbe};
-use crate::pointer;
+use crate::{pointer, process};
 
 fn truecolor() -> bool {
     std::env::var("COLORTERM").is_ok_and(|v| matches!(v.as_str(), "truecolor" | "24bit"))
@@ -45,7 +44,7 @@ pub(super) fn probe_host() -> Host {
             _ => probe_outer(started, round_trip, &mut probe_timed_out),
         });
     } else if let Some(child) = tmux_check {
-        stop(child);
+        process::stop(child);
     }
     let graphics = Support { id_hi: id_hi(), ..detect::decide(&facts, env) };
     let mut probe = format!("{} ms={}", facts.summary(), started.elapsed().as_millis());
@@ -135,7 +134,7 @@ pub(super) fn finish_tmux_check(mut child: Child, tty: Option<&str>) -> Option<O
             }
             Ok(None) if Instant::now() < deadline => thread::sleep(TMUX_CHECK_POLL),
             Ok(None) => {
-                stop(child);
+                process::stop(child);
                 return None;
             }
             Ok(Some(_)) | Err(_) => return None,

@@ -10,9 +10,9 @@ use parking_lot::Mutex;
 
 use crate::client::{self, Link};
 use crate::error::{Error, Result};
-use crate::paths;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
+use crate::{paths, process};
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -106,12 +106,12 @@ impl Remote {
             Found::Banner(banner) => match self.check(&banner) {
                 Ok(()) => Ok(Link::piped(reader, input, child, stderr)),
                 Err(e) => {
-                    client::stop(child);
+                    process::stop(child);
                     Err(e)
                 }
             },
             Found::Garbage => {
-                client::stop(child);
+                process::stop(child);
                 Err(Error::Ssh { host: self.destination.clone(), reason: GARBAGE.into() })
             }
             Found::Ended => {
