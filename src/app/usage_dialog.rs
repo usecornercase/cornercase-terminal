@@ -7,7 +7,6 @@ use super::event::AppEvent;
 use super::overlay::Overlay;
 use crate::agents;
 use crate::log::{Job, Level};
-use crate::panics;
 use crate::time;
 use crate::ui;
 use crate::usage;
@@ -28,13 +27,13 @@ impl App {
         let shown = if installed.is_empty() { usage::Agent::ALL.to_vec() } else { installed };
         for agent in self.usage.start(shown) {
             let command = agents::command(&self.config, agent.kind());
-            let (timeout, tx) = (self.usage_timeout, self.tx.clone());
-            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.kind()).begin();
-            std::thread::spawn(move || {
-                let result = panics::job(|| usage::probe(agent, &command, timeout));
-                job.finish(&result);
-                let _ = tx.send(AppEvent::Usage(agent, result));
-            });
+            let timeout = self.usage_timeout;
+            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.kind());
+            self.spawn_job(
+                job,
+                move || usage::probe(agent, &command, timeout),
+                move |result, _| Some(AppEvent::Usage(agent, result)),
+            );
         }
     }
 

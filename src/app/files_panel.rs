@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -51,16 +52,13 @@ impl App {
         self.changes.watched = shown;
         let Some((workspace, root)) = self.files_target().filter(|_| shown) else { return };
         if let Some((generation, list)) = self.files.list(workspace, &root, now) {
-            let tx = self.tx.clone();
             let job = Job::new(Level::Debug, "files", "list").with("workspace", workspace);
-            let job = job.with("folders", list.folders.len()).begin();
-            std::thread::spawn(move || {
-                let folders = panics::contain(|| {
-                    list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect()
-                });
-                job.done();
-                let folders = folders.unwrap_or_default();
-                let _ = tx.send(AppEvent::FilesListed { workspace, generation, folders });
+            let job = job.with("folders", list.folders.len());
+            let listing = move || {
+                Ok(list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect())
+            };
+            self.spawn_job(job, listing, move |folders, _| {
+                Some(AppEvent::FilesListed { workspace, generation, folders: folders.unwrap_or_default() })
             });
         }
         if let Some((generation, load)) = self.files.load(workspace, &root, now) {
@@ -102,32 +100,43 @@ impl App {
 
     fn refresh_search(&mut self, workspace: u64, root: &Path, now: Instant) {
         if let Some((generation, root)) = self.files.index_request(workspace, root, now) {
-            let tx = self.tx.clone();
-            let job = Job::new(Level::Debug, "files", "index").with("workspace", workspace).begin();
-            std::thread::spawn(move || {
-                let paths = panics::contain(|| search::index(&root)).unwrap_or_default();
-                job.with("files", paths.len()).done();
-                let _ = tx.send(AppEvent::FilesIndexed { workspace, generation, paths });
-            });
+            let job = Job::new(Level::Debug, "files", "index").with("workspace", workspace);
+            self.spawn_job(
+                job,
+                move || Ok(search::index(&root)),
+                move |paths, job| {
+                    let paths = paths.unwrap_or_default();
+                    job.note("files", paths.len());
+                    Some(AppEvent::FilesIndexed { workspace, generation, paths })
+                },
+            );
         }
         if let Some((generation, search)) = self.files.names_request(workspace, now) {
-            let tx = self.tx.clone();
-            let job = Job::new(Level::Debug, "files", "name search").with("workspace", workspace).begin();
-            std::thread::spawn(move || {
-                let found = panics::contain(|| search::names(&search.index, &search.query)).unwrap_or_default();
-                job.with("found", found.len()).done();
-                let _ = tx.send(AppEvent::NamesFound { workspace, generation, search, found });
-            });
+            let job = Job::new(Level::Debug, "files", "name search").with("workspace", workspace);
+            let (index, query) = (Arc::clone(&search.index), search.query.clone());
+            self.spawn_job(
+                job,
+                move || Ok(search::names(&index, &query)),
+                move |found, job| {
+                    let found = found.unwrap_or_default();
+                    job.note("found", found.len());
+                    Some(AppEvent::NamesFound { workspace, generation, search, found })
+                },
+            );
         }
         if let Some((generation, search, cancel)) = self.files.grep_request(workspace, now) {
-            let (tx, root) = (self.tx.clone(), root.to_path_buf());
-            let job = Job::new(Level::Debug, "files", "text search").with("workspace", workspace).begin();
-            std::thread::spawn(move || {
-                let found =
-                    panics::contain(|| search::text(&root, &search.index, &search.query, &cancel)).unwrap_or_default();
-                job.with("capped", found.capped).done();
-                let _ = tx.send(AppEvent::TextFound { workspace, generation, search, found });
-            });
+            let root = root.to_path_buf();
+            let job = Job::new(Level::Debug, "files", "text search").with("workspace", workspace);
+            let (index, query) = (Arc::clone(&search.index), search.query.clone());
+            self.spawn_job(
+                job,
+                move || Ok(search::text(&root, &index, &query, &cancel)),
+                move |found, job| {
+                    let found = found.unwrap_or_default();
+                    job.note("capped", found.capped);
+                    Some(AppEvent::TextFound { workspace, generation, search, found })
+                },
+            );
         }
     }
 

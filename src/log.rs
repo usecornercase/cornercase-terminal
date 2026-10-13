@@ -132,6 +132,12 @@ impl Job {
         self
     }
 
+    pub fn note(&mut self, key: &'static str, value: impl Display) {
+        if LOGGER.get().is_some() {
+            self.fields.push((key, value.to_string()));
+        }
+    }
+
     #[must_use]
     pub fn begin(self) -> Self {
         self.log(self.level, "started", &[]);

@@ -177,4 +177,11 @@ mod job {
         let job = Job::new(Level::Info, "git", "fetch").with("repo", "/tmp/a");
         assert_eq!(job.fields.len(), 0);
     }
+
+    #[test]
+    fn keeps_no_notes_while_nothing_logs() {
+        let mut job = Job::new(Level::Info, "git", "fetch");
+        job.note("files", 3);
+        assert_eq!(job.fields.len(), 0);
+    }
 }

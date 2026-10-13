@@ -10,7 +10,6 @@ use crate::files::disk::Body;
 use crate::graphics::encode::{self, Key};
 use crate::graphics::{Missing, Picture, Protocol, Support, kitty};
 use crate::log::{self, Job, Level};
-use crate::panics;
 use crate::ui::files::{self as panel, Image, MARKER, Screen, View};
 
 const MAX_PAYLOADS: usize = 8;
@@ -190,20 +189,21 @@ impl App {
             return Some(payload);
         }
         if self.images.start(*key) {
-            let (tx, key, picture) = (self.tx.clone(), *key, Arc::clone(picture));
+            let (key, picture) = (*key, Arc::clone(picture));
             let (cols, rows) = (key.fit.cols, key.fit.rows);
             let job = Job::new(Level::Debug, "images", "encode")
                 .with("path", path)
                 .with("protocol", key.protocol.id())
                 .with("cols", cols)
-                .with("rows", rows)
-                .begin();
-            std::thread::spawn(move || {
-                let result = panics::job(|| Ok(encode::encode(&picture, &key)));
-                let bytes = result.as_ref().map_or(0, Vec::len);
-                job.with("bytes", bytes).finish(&result);
-                let _ = tx.send(AppEvent::Encoded { key, result });
-            });
+                .with("rows", rows);
+            self.spawn_job(
+                job,
+                move || Ok(encode::encode(&picture, &key)),
+                move |result, job| {
+                    job.note("bytes", result.as_ref().map_or(0, Vec::len));
+                    Some(AppEvent::Encoded { key, result })
+                },
+            );
         }
         None
     }

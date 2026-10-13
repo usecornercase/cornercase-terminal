@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::git;
 use crate::launch::Launch;
 use crate::log::{Job, Level};
-use crate::panics;
 use crate::project::{Phase, Tab, Workspace};
 use crate::ui::{self};
 use crate::upstream;
@@ -61,14 +60,17 @@ impl App {
             if fetch {
                 self.fetched.insert(project.id, now);
             }
-            let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
-            let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch).begin();
-            std::thread::spawn(move || {
-                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch));
-                job.done();
-                let behind = behind.unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
-                let _ = tx.send(AppEvent::Behind { project: id, behind });
-            });
+            let (id, repo) = (project.id, project.path.clone());
+            let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch);
+            let checking = workspaces.clone();
+            self.spawn_job(
+                job,
+                move || Ok(upstream::check(&repo, &checking, fetch)),
+                move |behind, _| {
+                    let behind = behind.unwrap_or_else(|_| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
+                    Some(AppEvent::Behind { project: id, behind })
+                },
+            );
         }
     }
 
@@ -114,15 +116,15 @@ impl App {
 
     pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {
         let project = &self.projects[p];
-        let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
+        let (id, repo) = (project.id, project.path.clone());
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
-        let job = job.with("path", path.display()).with("issue", start.is_some()).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| worktree::create(&repo, &branch, &path).map(|()| path));
-            job.finish(&result);
-            let _ = tx.send(AppEvent::WorktreeCreated { project: id, result, start, request });
-        });
+        let job = job.with("path", path.display()).with("issue", start.is_some());
+        self.spawn_job(
+            job,
+            move || worktree::create(&repo, &branch, &path).map(|()| path),
+            move |result, _| Some(AppEvent::WorktreeCreated { project: id, result, start, request }),
+        );
     }
 
     pub(super) fn create_workspace(
@@ -222,15 +224,18 @@ impl App {
     pub(super) fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
         let project = &self.projects[p];
         let (id, workspace) = (project.id, project.workspaces[w].id);
-        let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
-        let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace).begin();
-        std::thread::spawn(move || {
-            let status = panics::job(|| Ok(worktree::status(&path)));
-            let job = job.with("changed", status.as_ref().map_or(true, |s| s.changed));
-            job.with("locked", status.as_ref().is_ok_and(|s| s.lock.is_some())).finish(&status);
-            let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
-            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, status, request });
-        });
+        let path = project.workspaces[w].path.clone();
+        let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace);
+        self.spawn_job(
+            job,
+            move || Ok(worktree::status(&path)),
+            move |status, job| {
+                job.note("changed", status.as_ref().map_or(true, |s| s.changed));
+                job.note("locked", status.as_ref().is_ok_and(|s| s.lock.is_some()));
+                let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
+                Some(AppEvent::WorktreeChecked { project: id, workspace, status, request })
+            },
+        );
     }
 
     pub(super) fn confirm_removal(
@@ -280,15 +285,14 @@ impl App {
         target.kill();
         self.changes.forget(workspace);
         self.projects[p].step_off(w);
-        let (repo, path, tx) =
-            (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
+        let (repo, path) = (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone());
         let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
-        let job = job.with("force", force).with("unlock", unlock).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| worktree::remove(&repo, &path, force, unlock));
-            job.finish(&result);
-            let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
-        });
+        let job = job.with("force", force).with("unlock", unlock);
+        self.spawn_job(
+            job,
+            move || worktree::remove(&repo, &path, force, unlock),
+            move |result, _| Some(AppEvent::WorktreeRemoved { project, workspace, result, request }),
+        );
         true
     }
 

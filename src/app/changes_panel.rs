@@ -13,7 +13,6 @@ use crate::changes::{self, Checkout, Tints};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
-use crate::panics;
 use crate::ui::changes::{self as panel, Action as HunkAction, Hit as PanelHit};
 use crate::ui::{self, SidebarRow};
 
@@ -46,14 +45,14 @@ impl App {
             })
         };
         let Some((workspace, generation, request)) = request else { return };
-        let tx = self.tx.clone();
         let kind = if request.expanded.is_some() { "summary" } else { "diff" };
-        let job = Job::new(Level::Debug, "changes", kind).with("workspace", workspace).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| changes::git::load(&request));
-            job.finish(&result);
-            let _ = tx.send(AppEvent::Changes { workspace, generation, request: Box::new(request), result });
-        });
+        let job = Job::new(Level::Debug, "changes", kind).with("workspace", workspace);
+        let loading = request.clone();
+        self.spawn_job(
+            job,
+            move || changes::git::load(&loading),
+            move |result, _| Some(AppEvent::Changes { workspace, generation, request: Box::new(request), result }),
+        );
     }
 
     pub(super) fn changes_label(&self) -> Option<String> {
@@ -346,15 +345,18 @@ impl App {
             }
             Some(PanelHit::Gap(_, h)) => {
                 if let Some((target, f)) = selected {
-                    let (tx, mode, workspace, dir) = (self.tx.clone(), view.mode, target.workspace, target.dir);
-                    let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace).begin();
-                    std::thread::spawn(move || {
-                        let new_side = changes::git::new_side(&dir, mode, &f.path);
-                        job.done();
-                        let Some(new_side) = new_side else { return };
-                        let lines = changes::gap_lines(&f, h, &new_side);
-                        let _ = tx.send(AppEvent::Gap { workspace, file: f, hunk: h, lines });
-                    });
+                    let (mode, workspace, dir) = (view.mode, target.workspace, target.dir);
+                    let job = Job::new(Level::Debug, "changes", "unchanged lines").with("workspace", workspace);
+                    let path = f.path.clone();
+                    self.spawn_job(
+                        job,
+                        move || Ok(changes::git::new_side(&dir, mode, &path)),
+                        move |new_side, _| {
+                            let new_side = new_side.ok().flatten()?;
+                            let lines = changes::gap_lines(&f, h, &new_side);
+                            Some(AppEvent::Gap { workspace, file: f, hunk: h, lines })
+                        },
+                    );
                 }
             }
             Some(PanelHit::Action(_, h, action)) => {

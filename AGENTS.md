@@ -100,7 +100,7 @@ src/project.rs    Project > Workspace > Tab > panes, labels, removal, moving; pr
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state, new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
 src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)
-                  input.rs (keys, mouse and paste), interaction.rs (drags and timing), layout.rs (focus and side panels), view.rs (View entries)
+                  input.rs (keys, mouse and paste), interaction.rs (drags and timing), jobs.rs (`spawn_job`, the one way to start a background job), layout.rs (focus and side panels), view.rs (View entries)
                   hierarchy.rs (lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)
                   sidebar.rs (lists, row menus and agents section), sidebar/drag.rs (row drags), sidebar/tree.rs, tab_bar.rs, panes.rs (pane mouse, scrollback, selection and dividers), links.rs (paths in panes)
                   agent_watch.rs (status, stats samples, notifications and keeping awake), launches.rs (typing into agents), worktrees.rs (creating, checking, removing and upstream counts), actions.rs (editor and agent actions)

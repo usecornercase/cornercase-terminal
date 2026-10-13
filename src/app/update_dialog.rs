@@ -14,7 +14,6 @@ use super::toast::copy;
 use crate::error::Result;
 use crate::log::{self, Job, Level};
 use crate::markdown;
-use crate::panics;
 use crate::restart;
 use crate::ui::{self};
 use crate::update::{self, Install, Release};
@@ -45,16 +44,13 @@ impl App {
             return;
         }
         self.updates.checked = Some(now);
-        let (url, tx) = (self.updates.url.clone(), self.tx.clone());
-        let job = Job::new(Level::Info, "update", "check").begin();
-        std::thread::spawn(move || {
-            let found = panics::job(|| {
-                let found = update::check(&url, version::CURRENT)?;
-                Ok(found.map(|release| update::with_changelog(release, version::CURRENT)))
-            });
-            job.finish(&found);
-            let _ = tx.send(AppEvent::UpdateChecked(found));
-        });
+        let url = self.updates.url.clone();
+        let check = move || {
+            let found = update::check(&url, version::CURRENT)?;
+            Ok(found.map(|release| update::with_changelog(release, version::CURRENT)))
+        };
+        let job = Job::new(Level::Info, "update", "check");
+        self.spawn_job(job, check, |found, _| Some(AppEvent::UpdateChecked(found)));
     }
 
     pub(super) fn update_checked(&mut self, result: Result<Option<Release>>) {
@@ -145,13 +141,12 @@ impl App {
                 else {
                     return None;
                 };
-                let tx = self.tx.clone();
-                let job = Job::new(Level::Info, "update", "install").with("version", &release.version).begin();
-                std::thread::spawn(move || {
-                    let result = panics::job(|| update::update(&release, target, &exe));
-                    job.finish(&result);
-                    let _ = tx.send(AppEvent::Updated(result));
-                });
+                let job = Job::new(Level::Info, "update", "install").with("version", &release.version);
+                self.spawn_job(
+                    job,
+                    move || update::update(&release, target, &exe),
+                    |result, _| Some(AppEvent::Updated(result)),
+                );
                 Some(Overlay::Update(UpdateStep::Updating))
             }
             UpdateStep::Installed => {

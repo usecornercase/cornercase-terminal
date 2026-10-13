@@ -21,7 +21,6 @@ use crate::launch::{self};
 use crate::list::Search;
 use crate::log::{self, Job, Level};
 use crate::markdown;
-use crate::panics;
 use crate::secrets;
 
 pub(super) struct Apis {
@@ -270,13 +269,13 @@ impl App {
     fn load_people(&mut self, source: Source) {
         let Some(project) = self.browser_project() else { return };
         let Some(client) = self.client(source, project) else { return };
-        let (tx, epoch) = (self.tx.clone(), self.epoch(source));
-        let job = Job::new(Level::Info, "issues", "people").with("source", source.name()).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| client.people());
-            job.finish(&result);
-            let _ = tx.send(AppEvent::PeopleLoaded { project, source, epoch, result });
-        });
+        let epoch = self.epoch(source);
+        let job = Job::new(Level::Info, "issues", "people").with("source", source.name());
+        self.spawn_job(
+            job,
+            move || client.people(),
+            move |result, _| Some(AppEvent::PeopleLoaded { project, source, epoch, result }),
+        );
     }
 
     pub(super) fn people_loaded(&mut self, project: u64, source: Source, result: Result<Vec<Person>>) {
@@ -307,14 +306,14 @@ impl App {
             b.loaded(source, &query, Err(format!("{} is not connected", source.name())));
             return;
         };
-        let (tx, epoch) = (self.tx.clone(), self.epoch(source));
-        let job =
-            Job::new(Level::Info, "issues", "list").with("source", source.name()).with("project", project).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| client.list(&query));
-            job.finish(&result);
-            let _ = tx.send(AppEvent::IssuesLoaded { project, source, epoch, query, result });
-        });
+        let epoch = self.epoch(source);
+        let job = Job::new(Level::Info, "issues", "list").with("source", source.name()).with("project", project);
+        let listing = query.clone();
+        self.spawn_job(
+            job,
+            move || client.list(&listing),
+            move |result, _| Some(AppEvent::IssuesLoaded { project, source, epoch, query, result }),
+        );
     }
 
     pub(super) fn issues_loaded(&mut self, project: u64, source: Source, query: &Query, result: Result<Listed>) {
@@ -344,20 +343,17 @@ impl App {
             }
             return;
         };
-        let (tx, epoch) = (self.tx.clone(), self.epoch(issue.source));
+        let epoch = self.epoch(issue.source);
         let job = Job::new(Level::Info, "issues", "read").with("source", issue.source.name()).with("key", &issue.key);
-        let job = job.begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| {
-                let detail = client.read(&issue)?;
-                std::iter::once(&detail.body).chain(detail.comments.iter().map(|c| &c.body)).for_each(|body| {
-                    markdown::warm(body);
-                });
-                Ok(detail)
+        let (source, key) = (issue.source, issue.key.clone());
+        let read = move || {
+            let detail = client.read(&issue)?;
+            std::iter::once(&detail.body).chain(detail.comments.iter().map(|c| &c.body)).for_each(|body| {
+                markdown::warm(body);
             });
-            job.finish(&result);
-            let _ = tx.send(AppEvent::IssueRead { source: issue.source, epoch, key: issue.key, result });
-        });
+            Ok(detail)
+        };
+        self.spawn_job(job, read, move |result, _| Some(AppEvent::IssueRead { source, epoch, key, result }));
     }
 
     fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
@@ -407,13 +403,13 @@ impl App {
                 return;
             }
         };
-        let (tx, epoch) = (self.tx.clone(), self.epoch(source));
-        let job = Job::new(Level::Info, "issues", "token check").with("source", source.name()).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| client.whoami());
-            job.finish(&result);
-            let _ = tx.send(AppEvent::TokenChecked { source, epoch, token, result });
-        });
+        let epoch = self.epoch(source);
+        let job = Job::new(Level::Info, "issues", "token check").with("source", source.name());
+        self.spawn_job(
+            job,
+            move || client.whoami(),
+            move |result, _| Some(AppEvent::TokenChecked { source, epoch, token, result }),
+        );
     }
 
     pub(super) fn token_checked(

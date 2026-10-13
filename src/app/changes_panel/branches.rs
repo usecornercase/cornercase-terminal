@@ -13,14 +13,16 @@ const COMPARE_SUBMIT: &str = "compare";
 
 impl App {
     pub(in crate::app) fn open_branches(&mut self, target: &Checkout) {
-        let (tx, workspace, dir) = (self.tx.clone(), target.workspace, target.dir.clone());
-        let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace).begin();
-        std::thread::spawn(move || {
-            let branches = changes::git::branches(&dir);
-            let default = changes::git::default_base(&dir);
-            job.done();
-            let _ = tx.send(AppEvent::Branches { workspace, branches, default });
-        });
+        let (workspace, dir) = (target.workspace, target.dir.clone());
+        let job = Job::new(Level::Debug, "changes", "branches").with("workspace", workspace);
+        self.spawn_job(
+            job,
+            move || Ok((changes::git::branches(&dir), changes::git::default_base(&dir))),
+            move |result, _| {
+                let (branches, default) = result.ok()?;
+                Some(AppEvent::Branches { workspace, branches, default })
+            },
+        );
     }
 
     pub(in crate::app) fn branches_listed(&mut self, workspace: u64, branches: Vec<String>, default: Option<String>) {

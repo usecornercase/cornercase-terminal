@@ -13,7 +13,6 @@ use crate::error;
 use crate::keys;
 use crate::launch::Launch;
 use crate::log::{Job, Level};
-use crate::panics;
 use crate::term;
 
 fn not_reading(pane: u64) -> String {
@@ -150,13 +149,15 @@ impl App {
         };
         let record = term.context.record_for(&agent).ok_or_else(|| unfound(pane, &agent))?;
         let key = self.requests.key();
-        let tx = self.tx.clone();
-        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", &agent).begin();
-        std::thread::spawn(move || {
-            let result = panics::job(|| record.last_message());
-            job.with("found", result.as_ref().is_ok_and(Option::is_some)).finish(&result);
-            let _ = tx.send(AppEvent::LastMessage { request: key, result });
-        });
+        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", &agent);
+        self.spawn_job(
+            job,
+            move || record.last_message(),
+            move |result, job| {
+                job.note("found", result.as_ref().is_ok_and(Option::is_some));
+                Some(AppEvent::LastMessage { request: key, result })
+            },
+        );
         let done = Done { agent: Some(agent), ..pane_ids(pane) };
         self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
         Ok(None)

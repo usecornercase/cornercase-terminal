@@ -61,6 +61,7 @@ mod images;
 mod input;
 mod interaction;
 mod issues_dialog;
+mod jobs;
 mod launches;
 mod layout;
 mod links;
