@@ -43,7 +43,7 @@ fn whoami_sends_the_email_and_token_and_names_the_site() {
     let account = api(&server, "").whoami().expect("whoami");
 
     assert_eq!(account, Account { handle: "Ana Pérez".into(), workspace: "acme.atlassian.net".into() });
-    let basic = clipboard::base64(b"ana@acme.dev:t0k");
+    let basic = STANDARD.encode(b"ana@acme.dev:t0k");
     assert!(server.request(0).to_lowercase().contains(&format!("authorization: basic {}", basic.to_lowercase())));
 }
 

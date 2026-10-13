@@ -1,3 +1,5 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+
 use super::*;
 use crate::issues::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
@@ -640,7 +642,7 @@ mod jira {
         assert_eq!(shown(&s.app), ["SHOP-482"]);
         assert_eq!((config.jira_site.as_str(), config.jira_email.as_str()), ("acme.atlassian.net", "ana@acme.dev"));
         assert_eq!(secrets::read(&secrets_file(&s), "jira_api_token").as_deref(), Some("t0k"));
-        let basic = clipboard::base64(b"ana@acme.dev:t0k").to_lowercase();
+        let basic = STANDARD.encode(b"ana@acme.dev:t0k").to_lowercase();
         assert!(server.request(0).to_lowercase().contains(&format!("authorization: basic {basic}")));
     }
 
