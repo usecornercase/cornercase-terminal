@@ -511,7 +511,7 @@ impl App {
             log::info!("telegram", "away", by = by.name());
         }
         let (status, keyboard) = self.status_message();
-        self.say(format!("{AWAY_HTML}\n\n{status}"), keyboard, None, None);
+        self.say_long(&format!("{AWAY_HTML}\n\n{}", notices::AGENTS), status, keyboard, None);
         if by != By::Telegram {
             self.toast = Some(Toast::new(AWAY, ui::ToastIcon::Check));
         }

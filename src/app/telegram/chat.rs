@@ -68,8 +68,8 @@ impl App {
     fn telegram_command(&mut self, word: &str, message: &Message, area: Rect) {
         match word {
             "status" => {
-                let (html, keyboard) = self.status_message();
-                self.say(html, keyboard, None, None);
+                let (status, keyboard) = self.status_message();
+                self.say_long(super::notices::AGENTS, status, keyboard, None);
             }
             "new" => self.new_draft(None, area),
             "away" => {

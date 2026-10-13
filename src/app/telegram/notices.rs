@@ -18,6 +18,8 @@ const SCREEN: usize = 40;
 const MOST_LISTED: usize = 25;
 const LABEL: usize = 40;
 const PLACE: usize = 120;
+const MODEL: usize = 40;
+pub(super) const AGENTS: &str = "<b>Agents</b>";
 const WORKING: &str = "working";
 const WAITING: &str = "waiting";
 
@@ -187,15 +189,15 @@ impl App {
         self.say(html, keyboard, Some(Route::Pane(pane)), None);
     }
 
-    pub(super) fn status_message(&self) -> (String, Keyboard) {
-        let mut lines = vec!["<b>Agents</b>".to_string()];
+    pub(super) fn status_message(&self) -> (Vec<String>, Keyboard) {
+        let mut lines = Vec::new();
         let mut keyboard: Keyboard = Vec::new();
         let panes = self.agent_panes();
         for &pane in panes.iter().take(MOST_LISTED) {
             let Some(agent) = self.agent_at(pane) else { continue };
             let details = self.projects.pane_by(pane).and_then(|term| term.context.context()).map(|c| {
                 let percent = c.percent.map(|p| format!(" · {p}%")).unwrap_or_default();
-                format!(" · {}{percent}", c.model)
+                format!(" · {}{percent}", truncate_right(&c.model, MODEL))
             });
             lines.push(format!(
                 "{} {} · {}{}",
@@ -222,6 +224,6 @@ impl App {
             "Away is off: /away to get messages here.".into()
         });
         keyboard.push(vec![self.telegram.tap("+ new agent", &Tap::New)]);
-        (lines.join("\n"), keyboard)
+        (html::lines(&lines), keyboard)
     }
 }

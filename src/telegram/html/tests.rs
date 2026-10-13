@@ -64,6 +64,25 @@ mod markdown {
     }
 }
 
+mod lists {
+    use super::*;
+
+    #[test]
+    fn lines_are_packed_into_messages_under_the_limit() {
+        let lines: Vec<String> = (0..60).map(|i| format!("<b>{i}</b> {}", "x".repeat(150))).collect();
+
+        let messages = lines_of(&lines);
+
+        assert_eq!(messages.len(), 3);
+        assert!(messages.iter().all(|m| length(&plain(m)) <= LIMIT));
+        assert_eq!(messages.concat().matches("<b>").count(), 60);
+    }
+
+    fn lines_of(lines: &[String]) -> Vec<String> {
+        super::lines(lines)
+    }
+}
+
 mod screens {
     use super::*;
 

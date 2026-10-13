@@ -66,6 +66,22 @@ pub(crate) fn tail(text: &str, limit: usize) -> String {
     kept.join("\n")
 }
 
+pub(crate) fn lines(lines: &[String]) -> Vec<String> {
+    let mut messages: Vec<(String, usize)> = Vec::new();
+    for line in lines {
+        let size = length(&plain(line));
+        match messages.last_mut() {
+            Some((message, used)) if *used + 1 + size <= LIMIT => {
+                message.push('\n');
+                message.push_str(line);
+                *used += 1 + size;
+            }
+            _ => messages.push((line.clone(), size)),
+        }
+    }
+    messages.into_iter().map(|(message, _)| message).collect()
+}
+
 pub(crate) fn markdown(source: &str) -> Vec<String> {
     pack(blocks(source))
 }
