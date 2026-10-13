@@ -1,13 +1,9 @@
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 
-use crate::agents::claude::message::claude;
-use crate::agents::codex::message::codex;
-use crate::agents::gemini::session as gemini;
-use crate::agents::opencode::database as opencode;
 use crate::error::{Error, Result};
 
 const CHUNK: u64 = 256 * 1024;
@@ -17,25 +13,6 @@ const MAX_BACK: u64 = 64 * 1024 * 1024;
 pub(crate) struct Said {
     pub(crate) text: String,
     pub(crate) written: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Record {
-    Claude(PathBuf),
-    Codex(PathBuf),
-    Gemini(PathBuf),
-    Opencode { database: PathBuf, session: String },
-}
-
-impl Record {
-    pub(crate) fn last_message(&self) -> Result<Option<Said>> {
-        match self {
-            Self::Claude(path) => claude(path),
-            Self::Codex(path) => codex(path),
-            Self::Gemini(path) => gemini::last_message(path),
-            Self::Opencode { database, session } => opencode::last_message(database, session),
-        }
-    }
 }
 
 pub(in crate::agents) fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {

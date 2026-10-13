@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::PathBuf;
 
 use super::*;
 use crate::test_util::TempDir;

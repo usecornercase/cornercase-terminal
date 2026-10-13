@@ -2,18 +2,21 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::agents::claude::Claude;
+use crate::agents::claude::message::claude;
 use crate::agents::claude::transcript::{Limits, Subagents, Transcript, transcript_path};
+use crate::agents::codex::message::codex;
 use crate::agents::codex::rollout as codex;
 use crate::agents::gemini::session as gemini;
 use crate::agents::opencode::database as opencode;
 use crate::agents::{self, Known};
+use crate::error::Result;
 
 pub(in crate::agents) mod counting;
 pub(in crate::agents) mod discovery;
 pub(in crate::agents) mod jsonl;
 pub(in crate::agents) mod message;
 
-pub(crate) use message::{Record, Said};
+pub(crate) use message::Said;
 
 use counting::Ledger;
 use discovery::Job;
@@ -24,6 +27,25 @@ const TAIL: u64 = 1024 * 1024;
 pub(crate) struct Context {
     pub(crate) model: String,
     pub(crate) percent: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Record {
+    Claude(PathBuf),
+    Codex(PathBuf),
+    Gemini(PathBuf),
+    Opencode { database: PathBuf, session: String },
+}
+
+impl Record {
+    pub(crate) fn last_message(&self) -> Result<Option<Said>> {
+        match self {
+            Self::Claude(path) => claude(path),
+            Self::Codex(path) => codex(path),
+            Self::Gemini(path) => gemini::last_message(path),
+            Self::Opencode { database, session } => opencode::last_message(database, session),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
