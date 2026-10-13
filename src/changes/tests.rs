@@ -49,14 +49,14 @@ mod refresh {
 
     #[test]
     fn waits_a_second_while_open_and_three_while_closed() {
-        let mut panel = Panel { open: true, ..Panel::default() };
+        let mut panel = Panel { watched: true, ..Panel::default() };
         let now = Instant::now();
         let (generation, request) = panel.request(&target(1), now).expect("first");
         panel.loaded(1, generation, &request, Ok(loaded(Some(Diff::default()), 7)));
         assert!(panel.request(&target(1), now + Duration::from_millis(500)).is_none());
         let (generation, request) = panel.request(&target(1), now + OPEN_EVERY).expect("open");
         panel.loaded(1, generation, &request, Ok(loaded(None, 7)));
-        panel.open = false;
+        panel.watched = false;
         assert!(panel.request(&target(1), now + OPEN_EVERY * 2).is_none());
         assert!(panel.request(&target(1), now + OPEN_EVERY + CLOSED_EVERY).is_some());
     }
@@ -193,7 +193,7 @@ mod every_project {
 
     #[test]
     fn summaries_take_turns_in_one_slot_and_wait_three_seconds() {
-        let mut panel = Panel { open: true, scope: Scope::Every, ..Panel::default() };
+        let mut panel = Panel { watched: true, scope: Scope::Every, ..Panel::default() };
         let targets = [(target(1), false), (target(2), false)];
         let now = Instant::now();
         let (ws, generation, request) = panel.request_every(&targets, now).expect("first");
@@ -210,7 +210,7 @@ mod every_project {
 
     #[test]
     fn unfolding_requests_a_patch_and_header_folding_stops_reading_it() {
-        let mut panel = Panel { open: true, scope: Scope::Every, ..Panel::default() };
+        let mut panel = Panel { watched: true, scope: Scope::Every, ..Panel::default() };
         let now = Instant::now();
         let targets = [(target(1), false)];
         let d = diff(vec![file("a", 1, 1)]);

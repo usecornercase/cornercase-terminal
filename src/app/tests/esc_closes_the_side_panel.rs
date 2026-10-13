@@ -2,13 +2,6 @@ use rstest::rstest;
 
 use super::*;
 
-#[derive(Clone, Copy, Debug)]
-enum Side {
-    Changes,
-    Files,
-    Todo,
-}
-
 fn with_cat() -> (App, Receiver<AppEvent>, TempDir) {
     let repo = git_repo(&[("a.txt", "one\n")]);
     let (mut app, rx) = app_in(repo.path(), no_config());
@@ -119,14 +112,14 @@ fn without_a_panel_esc_reaches_the_pane() {
 fn a_changes_panel_that_is_not_shown_leaves_esc_to_the_pane() {
     let plain = TempDir::new();
     let (mut app, rx) = app_in(plain.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     type_line(&mut app, "echo cat-\"\"starts; cat -v");
     shows(&mut app, &rx, "cat-starts");
     esc(&mut app);
     type_text(&mut app, "b");
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     shows(&mut app, &rx, "^[b");
-    assert!(app.changes.open);
+    assert_eq!(app.side, Some(Side::Changes));
 }
 
 #[test]

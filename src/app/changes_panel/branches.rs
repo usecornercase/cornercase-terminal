@@ -5,6 +5,7 @@ use crate::app::App;
 use crate::app::changes_panel::ChangesEvent;
 use crate::app::event::AppEvent;
 use crate::app::input::WHEEL_ROWS;
+use crate::app::layout::Side;
 use crate::app::overlay::Overlay;
 use crate::changes::{self, BranchPicker, Checkout};
 use crate::log::{Job, Level};
@@ -29,7 +30,7 @@ impl App {
     pub(in crate::app) fn branches_listed(&mut self, workspace: u64, branches: Vec<String>, default: Option<String>) {
         let Some(target) = self.changes_target().filter(|t| t.workspace == workspace) else { return };
         if self.overlay.is_some()
-            || !self.changes.open
+            || self.side != Some(Side::Changes)
             || self.changes.scope == changes::Scope::Every
             || self.changes.mode == changes::Mode::Uncommitted
         {

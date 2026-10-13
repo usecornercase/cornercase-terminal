@@ -44,7 +44,10 @@ fn restoring_multiple_panels_prefers_files_then_todo_then_changes(
 
     assert!(app.restore(&saved, AREA));
 
-    assert_eq!((app.changes.open, app.todo.open, app.files.open), expected);
+    assert_eq!(
+        (app.side == Some(Side::Changes), app.side == Some(Side::Todo), app.side == Some(Side::Files)),
+        expected
+    );
     let again = app.state();
     assert_eq!((again.changes.is_some_and(|changes| changes.open), again.todo, again.files), expected);
 }

@@ -11,7 +11,7 @@ mod every_project {
     }
 
     fn loaded_every(app: &mut App, rx: &Receiver<AppEvent>) {
-        app.changes.open = true;
+        app.side = Some(Side::Changes);
         app.changes.set_scope(changes::Scope::Every);
         app.refresh_changes(Instant::now());
         pump_until(app, rx, "every workspace has a summary", |a| {
@@ -250,7 +250,7 @@ mod every_project {
         assert_eq!(app.active, 0);
         assert_eq!(app.term().expect("visible agent").id, agent_pane);
         assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
+        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
         app.term_mut().expect("visible agent").write(b"\r");
         wait_until("the owning agent receives the reference", || {
             std::fs::read_to_string(second.path().join("got")).is_ok_and(|s| s == "b.txt:1 ")
@@ -271,7 +271,7 @@ mod every_project {
         assert_eq!(app.projects[0].workspace().expect("owning workspace").active, 1);
         assert_eq!(app.term().expect("visible editor").cwd(), Some(second.path().to_path_buf()));
         assert!(!app.projects[0].collapsed && !app.projects[0].workspaces[0].collapsed);
-        assert!(app.changes.open && app.changes.scope == changes::Scope::Every);
+        assert!(app.side == Some(Side::Changes) && app.changes.scope == changes::Scope::Every);
     }
 }
 
@@ -299,7 +299,7 @@ fn exec_agent(app: &mut App, agent: &Path) {
 fn open_changes() -> (TempDir, App, Receiver<AppEvent>) {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     (repo, app, rx)
 }
@@ -350,7 +350,10 @@ fn the_button_opens_the_panel_and_narrows_the_pane() {
     let pos = button(&app);
     click(&mut app, pos);
     let shown = app.layout(AREA);
-    assert_eq!((app.changes.open, shown.pane.width < before, shown.changes.is_empty()), (true, true, false));
+    assert_eq!(
+        (app.side == Some(Side::Changes), shown.pane.width < before, shown.changes.is_empty()),
+        (true, true, false)
+    );
 }
 
 #[test]
@@ -366,7 +369,7 @@ fn the_panel_shows_the_changed_file() {
 fn clicking_a_tab_changes_what_is_compared() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     let (_, commits) = panel::tabs(panel_area(&app))[1];
     click(&mut app, commits.as_position());
     refresh_until_loaded(&mut app, &rx);
@@ -379,7 +382,7 @@ fn the_picked_base_is_kept_for_the_workspace() {
     let repo = repo_with_edit();
     git(repo.path(), &["branch", "release"]);
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     app.changes.set_mode(changes::Mode::All);
     refresh_until_loaded(&mut app, &rx);
     let view = app.panel_view().expect("panel");
@@ -395,11 +398,11 @@ fn the_picked_base_is_kept_for_the_workspace() {
 fn branches_that_arrive_after_the_panel_closes_are_dropped() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     app.changes.set_mode(changes::Mode::Commits);
     let target = app.changes_target().expect("target");
     app.open_branches(&target);
-    app.changes.open = false;
+    app.side = None;
     loop {
         let ev = rx.recv_timeout(Duration::from_secs(5)).expect("the branches arrive");
         let branches = matches!(ev, AppEvent::Changes(ChangesEvent::Branches { .. }));
@@ -415,7 +418,7 @@ fn branches_that_arrive_after_the_panel_closes_are_dropped() {
 fn picking_the_default_branch_forgets_the_choice() {
     let repo = repo_with_edit();
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     app.changes.set_mode(changes::Mode::All);
     app.projects[0].workspaces[0].base = Some("old".into());
     let target = app.changes_target().expect("target");
@@ -432,7 +435,7 @@ fn unchanged_lines_open_from_a_thread() {
     let edited = lines.replace("line 2\n", "LINE 2\n").replace("line 19\n", "LINE 19\n");
     std::fs::write(repo.path().join("a.txt"), edited).expect("edit");
     let (mut app, rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     refresh_until_loaded(&mut app, &rx);
     let view = app.panel_view().expect("panel");
     let gap = panel::rows(&view).iter().position(|r| matches!(r, panel::Row::Gap(0, 1))).expect("a gap");
@@ -450,12 +453,12 @@ fn unchanged_lines_open_from_a_thread() {
 fn the_panel_is_saved_and_restored() {
     let repo = repo_with_edit();
     let (mut app, _rx) = app_in(repo.path(), no_config());
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     app.changes.set_mode(changes::Mode::Commits);
     let saved = app.state();
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
-    assert_eq!((restored.changes.open, restored.changes.mode), (true, changes::Mode::Commits));
+    assert_eq!((restored.side == Some(Side::Changes), restored.changes.mode), (true, changes::Mode::Commits));
 }
 
 #[test]
@@ -518,7 +521,7 @@ fn without_an_agent_the_reference_is_copied() {
 }
 
 fn open_filter(app: &mut App, rx: &Receiver<AppEvent>) {
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     refresh_until_loaded(app, rx);
     click(app, panel::filter_button(panel_area(app)).as_position());
 }
@@ -593,7 +596,7 @@ fn closing_the_panel_gives_the_keys_back() {
     open_filter(&mut app, &rx);
     let close = panel::close(panel_area(&app)).as_position();
     click(&mut app, close);
-    app.changes.open = true;
+    app.side = Some(Side::Changes);
     assert!(!app.filtering());
 }
 

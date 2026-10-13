@@ -103,7 +103,7 @@ fn the_button_opens_the_tree_beside_the_pane() {
     let (mut app, _rx) = app_in(repo.path(), no_config());
     let before = app.layout(AREA).pane.width;
     open(&mut app);
-    assert_eq!((app.files.open, app.layout(AREA).pane.width < before), (true, true));
+    assert_eq!((app.side == Some(Side::Files), app.layout(AREA).pane.width < before), (true, true));
 }
 
 #[test]
@@ -113,12 +113,12 @@ fn the_files_todo_and_changes_panels_take_turns() {
     open(&mut app);
     let todo = app.layout(AREA).todo_button.as_position();
     click(&mut app, todo);
-    assert_eq!((app.files.open, app.todo.open), (false, true));
+    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (false, true));
     open(&mut app);
-    assert_eq!((app.files.open, app.todo.open), (true, false));
+    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Todo)), (true, false));
     let changes = ui::changes_button(app.layout(AREA).issues, &app.changes_label().expect("a changes button"));
     click(&mut app, changes.as_position());
-    assert_eq!((app.files.open, app.changes.open), (false, true));
+    assert_eq!((app.side == Some(Side::Files), app.side == Some(Side::Changes)), (false, true));
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn the_compact_bar_has_a_button_too() {
     let repo = repo();
     let (mut app, _rx) = app_in(repo.path(), no_config());
     click_in(&mut app, ui::layout(small, ui::Widths::default()).files_button.as_position(), small);
-    assert!(app.files.open);
+    assert_eq!(app.side, Some(Side::Files));
 }
 
 #[test]
@@ -345,7 +345,10 @@ fn the_open_panel_is_saved() {
     assert!(saved.files);
     let (mut restored, _rx) = empty_app();
     restored.restore(&saved, AREA);
-    assert_eq!((restored.files.open, restored.todo.open, restored.changes.open), (true, false, false));
+    assert_eq!(
+        (restored.side == Some(Side::Files), restored.side == Some(Side::Todo), restored.side == Some(Side::Changes)),
+        (true, false, false)
+    );
 }
 
 mod images {

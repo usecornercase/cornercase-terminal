@@ -71,14 +71,14 @@ fn the_button_opens_the_list_beside_the_pane() {
     let (mut app, _rx, _dirs) = app_with(1);
     let before = app.layout(AREA).pane.width;
     open(&mut app);
-    assert_eq!((app.todo.open, app.layout(AREA).pane.width < before), (true, true));
+    assert_eq!((app.side == Some(Side::Todo), app.layout(AREA).pane.width < before), (true, true));
 }
 
 #[test]
 fn the_close_button_hides_the_panel() {
     let (mut app, _rx, _dirs) = opened();
     tap(&mut app, |a| panel::close(panel_area(a)));
-    assert!(!app.todo.open);
+    assert_ne!(app.side, Some(Side::Todo));
 }
 
 #[test]
@@ -87,9 +87,9 @@ fn the_todo_and_changes_panels_take_turns() {
     let (mut app, _rx) = app_in(repo.path(), no_config());
     open(&mut app);
     tap(&mut app, |a| ui::changes_button(a.layout(AREA).issues, &a.changes_label().expect("changes")));
-    assert_eq!((app.todo.open, app.changes.open), (false, true));
+    assert_eq!((app.side == Some(Side::Todo), app.side == Some(Side::Changes)), (false, true));
     open(&mut app);
-    assert_eq!((app.todo.open, app.changes.open), (true, false));
+    assert_eq!((app.side == Some(Side::Todo), app.side == Some(Side::Changes)), (true, false));
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn the_compact_bar_has_a_button_too() {
     let small = Rect { width: 80, ..AREA };
     let (mut app, _rx, _dirs) = app_with(1);
     click_in(&mut app, ui::layout(small, ui::Widths::default()).todo_button.as_position(), small);
-    assert!(app.todo.open);
+    assert_eq!(app.side, Some(Side::Todo));
 }
 
 #[test]
@@ -226,10 +226,10 @@ fn clearing_done_items_can_be_undone() {
 }
 
 fn todo_button(app: &mut App) -> String {
-    let open = std::mem::replace(&mut app.todo.open, false);
+    let side = app.side.take();
     let r = app.layout(AREA).todo_button;
     let t = render(app, AREA);
-    app.todo.open = open;
+    app.side = side;
     (r.x - 2..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect()
 }
 
@@ -284,5 +284,5 @@ fn the_panel_and_the_list_come_back_after_a_restart() {
     let (mut back, _rx2) = empty_app();
     back.set_todos(Todos::from(saved));
     back.restore(&state, AREA);
-    assert_eq!((state.todo, back.todo.open, texts(&back)), (true, true, vec!["a".into()]));
+    assert_eq!((state.todo, back.side == Some(Side::Todo), texts(&back)), (true, true, vec!["a".into()]));
 }
