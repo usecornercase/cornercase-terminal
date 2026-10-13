@@ -7,7 +7,7 @@ use std::{
 const LEAVES: &[&str] =
     &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
 
-const APP_EXCEPTIONS: &[&str] = &["src/term.rs", "src/web/mod.rs"];
+const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[
     "src/config.rs",
     "src/issues/browser.rs",

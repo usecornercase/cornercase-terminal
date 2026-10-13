@@ -13,6 +13,7 @@ use crate::shortcuts::Prefix;
 use crate::ui;
 
 pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
+pub const DEFAULT_PORT: u16 = 47681;
 pub const DEFAULT_PROMPT: &str = "{url}";
 pub const DEFAULT_GH: &str = "gh";
 pub const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
@@ -94,7 +95,7 @@ impl Default for Config {
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
             remote: false,
-            remote_port: crate::web::DEFAULT_PORT,
+            remote_port: DEFAULT_PORT,
         }
     }
 }

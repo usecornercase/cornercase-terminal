@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
-use crate::app::AppEvent;
 use crate::log;
 
 mod auth;
@@ -19,7 +18,6 @@ mod page;
 
 use http::{Request, Response};
 
-pub const DEFAULT_PORT: u16 = 47681;
 pub const PAIR_PATH: &str = "/pair";
 const MAX_CONNECTIONS: usize = 32;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
@@ -46,13 +44,13 @@ struct Shared {
 struct Context {
     shared: Arc<Mutex<Shared>>,
     socket: PathBuf,
-    notify: Sender<AppEvent>,
+    notify: Arc<dyn Fn(Event) + Send + Sync>,
     open: Arc<AtomicUsize>,
 }
 
 impl Context {
     fn tell(&self, event: Event) {
-        let _ = self.notify.send(AppEvent::Web(event));
+        (self.notify)(event);
     }
 
     fn register(&self, stream: &TcpStream) -> Option<u64> {
@@ -90,7 +88,7 @@ pub struct Web {
 }
 
 impl Web {
-    pub fn new(devices: PathBuf, socket: PathBuf, notify: Sender<AppEvent>) -> Self {
+    pub fn new<E: From<Event> + Send + 'static>(devices: PathBuf, socket: PathBuf, notify: Sender<E>) -> Self {
         let shared = Shared {
             pairing: None,
             devices: auth::Devices::load(devices),
@@ -99,6 +97,7 @@ impl Web {
             connections: Vec::new(),
             next: 0,
         };
+        let notify: Arc<dyn Fn(Event) + Send + Sync> = Arc::new(move |event| _ = notify.send(E::from(event)));
         let context = Context { shared: Arc::new(Mutex::new(shared)), socket, notify, open: Arc::default() };
         Self { context, listening: None }
     }
