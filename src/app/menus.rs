@@ -119,7 +119,7 @@ impl App {
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
-            MenuAction::Away if !self.telegram.paired() => "set up Telegram…".into(),
+            MenuAction::Away if !self.telegram.ready() => "set up Telegram…".into(),
             MenuAction::Away if self.telegram.away => "stop messaging on Telegram".into(),
             MenuAction::Away => "continue on Telegram".into(),
         }

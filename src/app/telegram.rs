@@ -25,6 +25,7 @@ pub(in crate::app) const CLIENTS: u64 = 1 << 62;
 const ROUTES: usize = 256;
 const RECENT: i64 = 60;
 const NOT_PAIRED: &str = "Telegram is not set up: pair a phone in Settings › Remote";
+const REFUSED: &str = "Telegram refused the bot token: paste it again in Settings › Remote";
 const AWAY: &str = "away: agents message you on Telegram";
 const BACK: &str = "back: agents no longer message you on Telegram";
 const AWAY_HTML: &str = "<b>Away</b>: I'll message you here when an agent needs you or finishes, until you send \
@@ -158,6 +159,10 @@ impl Telegram {
 
     pub(super) fn paired(&self) -> bool {
         self.chat().is_some()
+    }
+
+    pub(super) fn ready(&self) -> bool {
+        self.paired() && self.phase != Phase::Rejected
     }
 
     pub(super) fn bot(&self) -> Option<&str> {
@@ -498,7 +503,7 @@ impl App {
     }
 
     pub(super) fn toggle_away(&mut self) {
-        if !self.telegram.paired() {
+        if !self.telegram.ready() {
             self.open_settings_on(&settings::Row::TelegramBot);
         } else if self.telegram.away {
             self.come_back(By::Window);
@@ -510,6 +515,9 @@ impl App {
     pub(super) fn go_away(&mut self, by: By) -> Result<(), String> {
         if !self.telegram.paired() {
             return Err(NOT_PAIRED.into());
+        }
+        if self.telegram.phase == Phase::Rejected {
+            return Err(REFUSED.into());
         }
         if !self.telegram.away {
             self.telegram.away = true;

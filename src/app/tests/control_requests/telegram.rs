@@ -236,6 +236,21 @@ mod away {
     }
 
     #[test]
+    fn a_refused_token_turns_nothing_on_and_leads_to_the_bot_row() {
+        let (mut app, _rx) = app();
+        let _phone = Phone::paired(&mut app);
+        let refused = AppEvent::Telegram(TelegramEvent::Link(LinkEvent::Rejected(1)));
+        app.handle_event(refused, AREA).expect("the refusal is handled");
+
+        let message = error(now(&mut app, None, Command::Away(wire::Away { off: false })));
+        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        let labels = menu_labels(&app);
+
+        assert!(message.starts_with("Telegram refused the bot token") && !app.telegram.away, "{message}");
+        assert_eq!(labels[1], "set up Telegram…");
+    }
+
+    #[test]
     fn back_from_the_phone_stops_the_messages() {
         let (mut app, _rx) = app();
         let mut phone = Phone::paired(&mut app);
