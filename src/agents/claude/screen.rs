@@ -1,0 +1,48 @@
+use crate::agents::CLAUDE;
+
+const INPUT_MARK: char = '❯';
+const RULE: char = '─';
+const RULE_MIN: usize = 8;
+const SURVEY_OPTIONS: [&str; 2] =
+    ["1: Bad    2: Fine   3: Good   0: Dismiss", "1: Bad    2: Fine   3: Good   4: Unsure 0: Dismiss"];
+const SURVEY_BULLET: &str = "● ";
+const SURVEY_INDENT: &str = "  ";
+const SURVEY_GAP: usize = 3;
+const SURVEY_QUESTION_LINES: usize = 4;
+
+pub(crate) fn input_box(agent: &str, screen: &str) -> Option<bool> {
+    (agent == CLAUDE).then(|| box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
+}
+
+pub(crate) fn survey(agent: &str, screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().collect();
+    let Some(rule) = box_rule(&lines).filter(|_| agent == CLAUDE) else { return false };
+    let above = &lines[..rule];
+    let Some(gap) = above.iter().rev().take(SURVEY_GAP).position(|line| survey_options(line)) else { return false };
+    let question = &above[..above.len() - 1 - gap];
+    question
+        .iter()
+        .rev()
+        .take(SURVEY_QUESTION_LINES)
+        .find(|line| !survey_indented(line))
+        .is_some_and(|line| line.starts_with(SURVEY_BULLET))
+}
+
+fn box_rule(lines: &[&str]) -> Option<usize> {
+    let rule = |line: &str| {
+        let line = line.trim();
+        line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
+    };
+    lines.windows(2).rposition(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK))
+}
+
+fn survey_options(line: &str) -> bool {
+    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| SURVEY_OPTIONS.contains(&rest.trim_end()))
+}
+
+fn survey_indented(line: &str) -> bool {
+    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| rest.starts_with(|c: char| !c.is_whitespace()))
+}
+
+#[cfg(test)]
+mod tests;

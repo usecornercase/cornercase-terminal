@@ -1,7 +1,11 @@
-pub mod activity;
+pub(crate) mod activity;
 pub(crate) mod awake;
+pub mod claude;
+pub(crate) mod codex;
 pub(crate) mod context;
+pub(crate) mod gemini;
 pub(crate) mod launch;
+pub(crate) mod opencode;
 pub mod stats;
 pub(crate) mod usage;
 
@@ -29,15 +33,6 @@ pub(crate) const OPENCODE: &str = "opencode";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
-const INPUT_MARK: char = '❯';
-const RULE: char = '─';
-const RULE_MIN: usize = 8;
-const SURVEY_OPTIONS: [&str; 2] =
-    ["1: Bad    2: Fine   3: Good   0: Dismiss", "1: Bad    2: Fine   3: Good   4: Unsure 0: Dismiss"];
-const SURVEY_BULLET: &str = "● ";
-const SURVEY_INDENT: &str = "  ";
-const SURVEY_GAP: usize = 3;
-const SURVEY_QUESTION_LINES: usize = 4;
 const KNOWN: [(&str, &str); 14] = [
     (CLAUDE, "claude"),
     (CODEX, "codex"),
@@ -291,40 +286,6 @@ impl TrustPrompt {
 pub(crate) fn asks_trust(regex: &regex::Regex, screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().filter(|line| !line.trim().is_empty()).collect();
     regex.is_match(&lines[lines.len().saturating_sub(TRUST_LINES)..].join("\n"))
-}
-
-pub(crate) fn input_box(agent: &str, screen: &str) -> Option<bool> {
-    (agent == CLAUDE).then(|| box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
-}
-
-pub(crate) fn survey(agent: &str, screen: &str) -> bool {
-    let lines: Vec<&str> = screen.lines().collect();
-    let Some(rule) = box_rule(&lines).filter(|_| agent == CLAUDE) else { return false };
-    let above = &lines[..rule];
-    let Some(gap) = above.iter().rev().take(SURVEY_GAP).position(|line| survey_options(line)) else { return false };
-    let question = &above[..above.len() - 1 - gap];
-    question
-        .iter()
-        .rev()
-        .take(SURVEY_QUESTION_LINES)
-        .find(|line| !survey_indented(line))
-        .is_some_and(|line| line.starts_with(SURVEY_BULLET))
-}
-
-fn box_rule(lines: &[&str]) -> Option<usize> {
-    let rule = |line: &str| {
-        let line = line.trim();
-        line.chars().count() >= RULE_MIN && line.chars().all(|c| c == RULE)
-    };
-    lines.windows(2).rposition(|pair| rule(pair[0]) && pair[1].starts_with(INPUT_MARK))
-}
-
-fn survey_options(line: &str) -> bool {
-    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| SURVEY_OPTIONS.contains(&rest.trim_end()))
-}
-
-fn survey_indented(line: &str) -> bool {
-    line.strip_prefix(SURVEY_INDENT).is_some_and(|rest| rest.starts_with(|c: char| !c.is_whitespace()))
 }
 
 #[cfg(test)]

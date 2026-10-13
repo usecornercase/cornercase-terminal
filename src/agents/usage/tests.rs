@@ -1,6 +1,8 @@
 use rstest::rstest;
 
 use super::*;
+use crate::agents::claude::usage::tests as claude_tests;
+use crate::agents::codex::usage::tests as codex_tests;
 use crate::test_util::{TempDir, write_executable};
 
 #[rstest]
@@ -22,8 +24,8 @@ fn fake(name: &str, script: &str) -> (TempDir, String) {
 }
 
 #[rstest]
-#[case::claude(Agent::Claude, 2, claude::tests::RECORDED, claude::tests::report)]
-#[case::codex(Agent::Codex, 3, codex::tests::RECORDED, codex::tests::report)]
+#[case::claude(Agent::Claude, 2, claude_tests::RECORDED, claude_tests::report)]
+#[case::codex(Agent::Codex, 3, codex_tests::RECORDED, codex_tests::report)]
 fn the_probe_answers_after_reading_the_requests(
     #[case] agent: Agent,
     #[case] requests: usize,

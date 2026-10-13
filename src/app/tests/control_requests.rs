@@ -1,8 +1,9 @@
 use serde_json::Value;
 
 use super::*;
+use crate::agents::claude::fake::FakeClaude;
 use crate::control::{self as wire, Command, Done, Item, Report, Response, Until};
-use crate::test_util::{FakeClaude, write_executable};
+use crate::test_util::write_executable;
 
 fn wait_after_typing(app: &mut App, rx: &Receiver<AppEvent>) -> Instant {
     let id = done(answered(app, rx, "the command is typed")).ids.pane.expect("the pane");

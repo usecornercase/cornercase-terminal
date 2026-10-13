@@ -6,8 +6,9 @@ use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents;
 use crate::agents::AgentState;
-use crate::agents::activity::{self, Claude, Session};
+use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
+use crate::agents::claude::{Claude, Session};
 use crate::agents::launch::Launch;
 use crate::config::Config;
 use crate::host::notify::{self, Notification};
@@ -32,7 +33,7 @@ impl AgentRuntime {
         Self {
             launches: Vec::new(),
             trust_prompt: agents::TrustPrompt::default(),
-            claude_dir: activity::claude_dir(home),
+            claude_dir: agents::claude::claude_dir(home),
             watched: None,
             awake: Awake::new(awake::tools()),
             stats: agents::stats::Stats::new(SystemTime::now()),
@@ -190,7 +191,8 @@ fn agent_in(
             term.context.update(dir, Some(&claude));
             remember(config, term, Some((&agent, &claude.args)), now);
             if term.input_seen != Some(pid)
-                && agents::input_box(&agent, &term.emulator.screen_text().unwrap_or_default()) == Some(true)
+                && agents::claude::screen::input_box(&agent, &term.emulator.screen_text().unwrap_or_default())
+                    == Some(true)
             {
                 term.input_seen = Some(pid);
             }
@@ -199,17 +201,17 @@ fn agent_in(
         (Some(pid), Some(agent)) if agent == agents::CODEX => {
             term.context.update_codex(pid);
             remember(config, term, Some((&agent, &args)), now);
-            Some((agent, activity::codex(&term.emulator.title(), term.context.codex_turn())))
+            Some((agent, agents::codex::codex(&term.emulator.title(), term.context.codex_turn())))
         }
         (Some(pid), Some(agent)) if agent == agents::GEMINI => {
             term.context.update_gemini(pid, &term.emulator.screen_text().unwrap_or_default());
             remember(config, term, Some((&agent, &args)), now);
-            activity::gemini(&term.emulator.title()).map(|state| (agent, state))
+            agents::gemini::gemini(&term.emulator.title()).map(|state| (agent, state))
         }
         (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
             term.context.update_opencode(pid);
             remember(config, term, Some((&agent, &args)), now);
-            term.context.opencode_turn().map(|turn| (agent, activity::opencode(turn)))
+            term.context.opencode_turn().map(|turn| (agent, agents::opencode::opencode(turn)))
         }
         _ => {
             term.context.update(dir, None);

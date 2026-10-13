@@ -7,14 +7,14 @@ const REMEMBER: usize = 512;
 const CONVERSATIONS: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Record {
+pub(in crate::agents) struct Record {
     pub(crate) at: SystemTime,
     pub(crate) id: String,
     pub(crate) usage: Usage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Usage {
+pub(in crate::agents) enum Usage {
     Prompt,
     Tokens(Tokens),
     Completed(Tokens),
@@ -41,7 +41,7 @@ struct Forgotten {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Ledger {
+pub(in crate::agents) struct Ledger {
     conversations: HashMap<String, Conversation>,
     counted: Counted,
     forgotten: HashMap<String, Forgotten>,
@@ -58,7 +58,12 @@ fn retain<T>(map: &mut HashMap<String, T>, time: impl Fn(&T) -> SystemTime) -> O
 }
 
 impl Ledger {
-    pub(super) fn apply(&mut self, conversation: &str, since: SystemTime, records: impl IntoIterator<Item = Record>) {
+    pub(in crate::agents) fn apply(
+        &mut self,
+        conversation: &str,
+        since: SystemTime,
+        records: impl IntoIterator<Item = Record>,
+    ) {
         let mut records = records.into_iter().peekable();
         if records.peek().is_none() {
             return;
@@ -158,16 +163,22 @@ impl Ledger {
             }
         }
     }
-    pub(super) fn take(&mut self) -> Counted {
+    pub(in crate::agents) fn take(&mut self) -> Counted {
         std::mem::take(&mut self.counted)
     }
 }
 
-pub(super) fn timestamp(entry: &serde_json::Value) -> Option<SystemTime> {
+pub(in crate::agents) fn timestamp(entry: &serde_json::Value) -> Option<SystemTime> {
     entry["timestamp"].as_str().and_then(crate::time::Stamp::parse)
 }
 
-pub(super) fn tokens(value: &serde_json::Value, input: &str, output: &str, read: &str, write: &str) -> Tokens {
+pub(in crate::agents) fn tokens(
+    value: &serde_json::Value,
+    input: &str,
+    output: &str,
+    read: &str,
+    write: &str,
+) -> Tokens {
     Tokens {
         input: value[input].as_u64().unwrap_or(0),
         out: value[output].as_u64().unwrap_or(0),
@@ -177,4 +188,4 @@ pub(super) fn tokens(value: &serde_json::Value, input: &str, output: &str, read:
 }
 
 #[cfg(test)]
-pub(super) mod tests;
+pub(in crate::agents) mod tests;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_util::FakeGemini;
+use crate::agents::gemini::fake::FakeGemini;
 
 struct Running {
     app: App,

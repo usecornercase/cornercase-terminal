@@ -1,8 +1,8 @@
 use rstest::rstest;
 use serde_json::json;
 
-use super::super::Severity;
 use super::*;
+use crate::agents::usage::Severity;
 
 pub(crate) const RECORDED: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"session":{"total_cost_usd":0},"subscription_type":"team","rate_limits_available":true,"rate_limits":{"five_hour":{"utilization":7,"resets_at":"2026-10-04T13:59:59.953605+00:00"},"seven_day":{"utilization":74,"resets_at":"2026-10-04T15:59:59.953630+00:00"},"extra_usage":{"is_enabled":false},"limits":[{"kind":"session","group":"session","percent":7,"severity":"normal","resets_at":"2026-10-04T13:59:59.953605+00:00","scope":null,"is_active":false},{"kind":"weekly_all","group":"weekly","percent":74,"severity":"normal","resets_at":"2026-10-04T15:59:59.953630+00:00","scope":null,"is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"severity":"normal","resets_at":"2026-10-04T16:00:00+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}],"spend":{"used":{"amount_minor":0,"currency":"USD","exponent":2},"limit":null,"percent":0,"severity":"normal","enabled":false}},"behaviors":{}}}}"#;
 
@@ -116,7 +116,7 @@ fn an_error_response_carries_its_message() {
 fn the_probe_drops_claude_session_variables() {
     let cmd = command("claude");
     let removed: Vec<_> = cmd.get_envs().filter(|(_, v)| v.is_none()).map(|(k, _)| k.to_owned()).collect();
-    let mut expected: Vec<_> = activity::CLAUDE_SESSION_ENV.map(std::ffi::OsString::from).to_vec();
+    let mut expected: Vec<_> = crate::agents::claude::CLAUDE_SESSION_ENV.map(std::ffi::OsString::from).to_vec();
     expected.sort();
     assert_eq!(removed, expected);
 }

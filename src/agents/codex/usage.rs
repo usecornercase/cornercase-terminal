@@ -4,7 +4,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Report, Window, window};
+use crate::agents::usage::{Report, Window, window};
 use crate::error::{Error, Result};
 
 const ARGS: [&str; 1] = ["app-server"];
@@ -50,7 +50,7 @@ struct Credits {
     balance: Option<String>,
 }
 
-pub(super) fn requests() -> String {
+pub(in crate::agents) fn requests() -> String {
     let client = json!({"name": "cornercase", "version": crate::version::CURRENT});
     let initialize = json!({"id": INITIALIZE, "method": "initialize", "params": {"clientInfo": client}});
     let initialized = json!({"method": "initialized"});
@@ -107,7 +107,7 @@ pub(super) fn parse(result: Value) -> Result<Report> {
     })
 }
 
-pub(super) fn answer(line: &str) -> Option<Result<Report>> {
+pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     if message.get("method").is_some() {
         return None;
@@ -123,7 +123,7 @@ pub(super) fn answer(line: &str) -> Option<Result<Report>> {
     (id == USAGE_REQUEST).then(|| parse(message["result"].clone()))
 }
 
-pub(super) fn command(program: &str) -> Command {
+pub(in crate::agents) fn command(program: &str) -> Command {
     let mut cmd = Command::new(program);
     cmd.args(ARGS);
     cmd

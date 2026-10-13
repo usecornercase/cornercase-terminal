@@ -1,12 +1,11 @@
-mod claude;
-mod codex;
-
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::agents;
+use crate::agents::claude::usage as claude;
+use crate::agents::codex::usage as codex;
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -118,7 +117,12 @@ fn whole(percent: Option<f64>) -> u16 {
     percent.unwrap_or(0.0).clamp(0.0, 999.0).round() as u16
 }
 
-fn window(label: String, percent: Option<f64>, severity: Option<&str>, resets_at: Option<i64>) -> Window {
+pub(in crate::agents) fn window(
+    label: String,
+    percent: Option<f64>,
+    severity: Option<&str>,
+    resets_at: Option<i64>,
+) -> Window {
     let percent = whole(percent);
     Window { label, percent, severity: Severity::parse(severity, percent), resets_at }
 }
@@ -257,11 +261,6 @@ impl State {
         self.shown.iter().map(|&agent| (agent, &self.probes[agent.index()]))
     }
 }
-
-#[cfg(test)]
-pub(crate) use claude::tests as claude_tests;
-#[cfg(test)]
-pub(crate) use codex::tests as codex_tests;
 
 #[cfg(test)]
 mod tests;

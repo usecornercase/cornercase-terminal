@@ -2,15 +2,16 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
 use serde_json::Value;
 
-use super::{ASSISTANT, SYNTHETIC, gemini, opencode};
+use crate::agents::claude::message::claude;
+use crate::agents::codex::message::codex;
+use crate::agents::gemini::session as gemini;
+use crate::agents::opencode::database as opencode;
 use crate::error::{Error, Result};
 
 const CHUNK: u64 = 256 * 1024;
 const MAX_BACK: u64 = 64 * 1024 * 1024;
-const CODEX_ASSISTANT: &str = r#""role":"assistant""#;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Said {
@@ -37,12 +38,12 @@ impl Record {
     }
 }
 
-pub(super) fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {
+pub(in crate::agents) fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {
     let texts: Vec<String> = texts.into_iter().map(|text| text.trim().to_string()).filter(|t| !t.is_empty()).collect();
     (!texts.is_empty()).then(|| texts.join("\n\n"))
 }
 
-pub(super) struct Backwards {
+pub(in crate::agents) struct Backwards {
     file: File,
     at: u64,
     left: u64,
@@ -52,7 +53,7 @@ pub(super) struct Backwards {
 }
 
 impl Backwards {
-    pub(super) fn open(path: &Path) -> io::Result<Self> {
+    pub(in crate::agents) fn open(path: &Path) -> io::Result<Self> {
         let file = File::open(path)?;
         let at = file.metadata()?.len();
         Ok(Self { file, at, left: MAX_BACK, carry: Vec::new(), lines: Vec::new(), partial: true })
@@ -99,11 +100,11 @@ impl Iterator for Backwards {
     }
 }
 
-fn unreadable(path: &Path, e: &io::Error) -> Error {
+pub(in crate::agents) fn unreadable(path: &Path, e: &io::Error) -> Error {
     Error::Record { path: path.to_path_buf(), cause: e.to_string() }
 }
 
-fn lines(path: &Path) -> Result<Option<Backwards>> {
+pub(in crate::agents) fn lines(path: &Path) -> Result<Option<Backwards>> {
     match Backwards::open(path) {
         Ok(lines) => Ok(Some(lines)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -111,49 +112,7 @@ fn lines(path: &Path) -> Result<Option<Backwards>> {
     }
 }
 
-#[derive(Deserialize)]
-struct Entry {
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    #[serde(rename = "isSidechain")]
-    sidechain: Option<bool>,
-    #[serde(rename = "isApiErrorMessage")]
-    api_error: Option<bool>,
-    timestamp: Option<String>,
-    message: Option<Body>,
-}
-
-#[derive(Deserialize)]
-struct Body {
-    id: Option<String>,
-    model: Option<String>,
-    content: Option<Value>,
-}
-
-struct Reply {
-    id: Option<String>,
-    texts: Vec<String>,
-    written: Option<String>,
-}
-
-impl Reply {
-    fn claude(line: &[u8]) -> Option<Self> {
-        let line = std::str::from_utf8(line).ok().filter(|line| line.contains(ASSISTANT))?;
-        let entry: Entry = serde_json::from_str(line).ok()?;
-        let body = entry.message.filter(|_| entry.kind.as_deref() == Some("assistant"))?;
-        let synthetic = body.model.as_deref() == Some(SYNTHETIC) && entry.api_error != Some(true);
-        if entry.sidechain == Some(true) || synthetic {
-            return None;
-        }
-        Some(Self { id: body.id, texts: texts(body.content.as_ref(), "text"), written: entry.timestamp })
-    }
-
-    fn message(self) -> Option<Said> {
-        Some(Said { text: joined(self.texts)?, written: self.written })
-    }
-}
-
-fn texts(content: Option<&Value>, kind: &str) -> Vec<String> {
+pub(in crate::agents) fn texts(content: Option<&Value>, kind: &str) -> Vec<String> {
     match content {
         Some(Value::String(text)) => vec![text.clone()],
         Some(Value::Array(blocks)) => blocks
@@ -165,45 +124,5 @@ fn texts(content: Option<&Value>, kind: &str) -> Vec<String> {
     }
 }
 
-fn claude(path: &Path) -> Result<Option<Said>> {
-    let Some(lines) = lines(path)? else { return Ok(None) };
-    let mut newest: Option<Reply> = None;
-    for line in lines {
-        let line = line.map_err(|e| unreadable(path, &e))?;
-        let Some(reply) = Reply::claude(&line) else { continue };
-        match &mut newest {
-            None if joined(reply.texts.iter().cloned()).is_some() => newest = Some(reply),
-            None => {}
-            Some(found) if found.id.is_some() && found.id == reply.id => {
-                found.texts.splice(0..0, reply.texts);
-            }
-            Some(_) => break,
-        }
-    }
-    Ok(newest.and_then(Reply::message))
-}
-
-fn codex(path: &Path) -> Result<Option<Said>> {
-    let Some(lines) = lines(path)? else { return Ok(None) };
-    for line in lines {
-        let line = line.map_err(|e| unreadable(path, &e))?;
-        if let Some(message) = codex_message(&line) {
-            return Ok(Some(message));
-        }
-    }
-    Ok(None)
-}
-
-fn codex_message(line: &[u8]) -> Option<Said> {
-    let line = std::str::from_utf8(line).ok().filter(|line| line.contains(CODEX_ASSISTANT))?;
-    let entry: Value = serde_json::from_str(line).ok()?;
-    let payload = entry.get("payload")?;
-    let reply = entry.get("type")?.as_str()? == "response_item"
-        && payload.get("type")?.as_str()? == "message"
-        && payload.get("role")?.as_str()? == "assistant";
-    let text = joined(texts(payload.get("content").filter(|_| reply), "output_text"))?;
-    Some(Said { text, written: entry.get("timestamp").and_then(Value::as_str).map(str::to_string) })
-}
-
 #[cfg(test)]
-mod tests;
+pub(in crate::agents) mod tests;

@@ -3,14 +3,14 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
-use super::counting::{self, Record, Usage};
-use super::discovery::{self, folder};
-use super::jsonl::{Tail, head};
-use super::{Context, percent};
+use crate::agents::context::counting::{self, Record, Usage};
+use crate::agents::context::discovery::{self, folder};
+use crate::agents::context::jsonl::{Tail, head};
+use crate::agents::context::{Context, percent};
 use crate::process;
 use crate::time::Stamp;
 
-pub(super) fn rollout_path(pid: i32, since: SystemTime) -> Option<PathBuf> {
+pub(in crate::agents) fn rollout_path(pid: i32, since: SystemTime) -> Option<PathBuf> {
     let mut pids = vec![pid];
     let mut paths = Vec::new();
     let mut at = 0;
@@ -103,7 +103,7 @@ fn metadata(path: &Path) -> Option<(String, Option<PathBuf>)> {
 }
 
 #[derive(Debug)]
-pub(super) struct Rollout {
+pub(in crate::agents) struct Rollout {
     pub(crate) path: PathBuf,
     tail: Tail,
     id: Option<String>,
@@ -115,7 +115,7 @@ pub(super) struct Rollout {
 }
 
 impl Rollout {
-    pub(super) fn new(path: PathBuf) -> Self {
+    pub(in crate::agents) fn new(path: PathBuf) -> Self {
         Self {
             path,
             tail: Tail::default(),
@@ -128,23 +128,23 @@ impl Rollout {
         }
     }
 
-    pub(super) fn context(&self) -> Option<Context> {
+    pub(in crate::agents) fn context(&self) -> Option<Context> {
         Some(Context { model: self.model.clone()?, percent: self.percent })
     }
 
-    pub(super) fn turn(&self) -> bool {
+    pub(in crate::agents) fn turn(&self) -> bool {
         self.turn
     }
 
-    pub(super) fn prompted(&self) -> Option<SystemTime> {
+    pub(in crate::agents) fn prompted(&self) -> Option<SystemTime> {
         self.prompted
     }
 
-    pub(super) fn id(&self) -> Option<&str> {
+    pub(in crate::agents) fn id(&self) -> Option<&str> {
         self.id.as_deref()
     }
 
-    pub(super) fn update(&mut self) {
+    pub(in crate::agents) fn update(&mut self) {
         if self.read_file().is_none() {
             *self = Self::new(std::mem::take(&mut self.path));
         }

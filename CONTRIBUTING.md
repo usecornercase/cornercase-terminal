@@ -47,7 +47,7 @@ UI changes usually change a snapshot. `cargo test` then writes its `.snap.new` i
 - No `unwrap()` outside tests. Errors use `crate::error::Error`.
 - Tests are named as sentences (`close_button_closes_its_entry`) and test one behaviour each. A test added as a safety net must fail without the code it protects.
 
-- **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
+- **Where code goes** is in the Code layout section of `DESIGN.md`: by domain, with tests in files of their own and at most 1,000 lines per file. Agent-specific rules, readers, probes and test fakes live in `src/agents/{claude,codex,gemini,opencode}/`; shared agent infrastructure stays in `src/agents/` and `src/agents/context/`. `cargo test` checks the imports and sizes through `tests/layers.rs`; its exception lists only shrink.
 - **`pub` only for what `src/main.rs` or the end-to-end tests use**; everything else is `pub(crate)` or narrower. The `unreachable_pub` lint enforces it, so the compiler's `dead_code` warnings then point at code nothing uses: delete it, or put it under `#[cfg(test)]` when only tests use it.
 
 ## Pull requests

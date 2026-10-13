@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 use rstest::rstest;
 
 use super::sections;
-use crate::agents::usage::{self, Agent, Report, State};
+use crate::agents::claude::usage::tests as claude_tests;
+use crate::agents::codex::usage::tests as codex_tests;
+use crate::agents::usage::{Agent, Report, State};
 use crate::error::Error;
 use crate::time;
 use crate::ui;
@@ -23,7 +25,7 @@ fn the_view_shows_loading_then_the_windows_and_their_age() {
     let loading = sections(&state, now, CLOCK);
     assert_eq!((loading[0].windows.len(), loading[0].status.as_str()), (0, "loading…"));
 
-    state.answered(Agent::Claude, Ok(usage::claude_tests::report(usage::claude_tests::RECORDED)), now);
+    state.answered(Agent::Claude, Ok(claude_tests::report(claude_tests::RECORDED)), now);
     let clock = time::parse_time("2026-10-04T11:46:59").expect("a time");
     let view = sections(&state, now + Duration::from_secs(120), clock);
     let section = &view[0];
@@ -47,7 +49,7 @@ fn each_shown_agent_gets_its_own_section() {
     let mut state = State::default();
     let now = Instant::now();
     assert_eq!(state.start(Agent::ALL.to_vec()), Agent::ALL);
-    state.answered(Agent::Codex, Ok(usage::codex_tests::report(usage::codex_tests::RECORDED)), now);
+    state.answered(Agent::Codex, Ok(codex_tests::report(codex_tests::RECORDED)), now);
     let view = sections(&state, now, 1_791_218_970 - 3_600);
     let found: Vec<(&str, &str, usize)> =
         view.iter().map(|s| (s.title.as_str(), s.status.as_str(), s.windows.len())).collect();
@@ -68,7 +70,7 @@ fn a_failure_keeps_the_last_answer() {
     let mut state = State::default();
     let now = Instant::now();
     state.start(vec![Agent::Claude]);
-    state.answered(Agent::Claude, Ok(usage::claude_tests::report(usage::claude_tests::RECORDED)), now);
+    state.answered(Agent::Claude, Ok(claude_tests::report(claude_tests::RECORDED)), now);
     state.start(vec![Agent::Claude]);
     state.answered(Agent::Claude, Err(Error::Usage("claude did not answer in time".into())), now);
     let section = &sections(&state, now, CLOCK)[0];
@@ -92,7 +94,7 @@ fn an_account_without_limits_says_so(#[case] agent: Agent, #[case] expected: &st
 fn a_codex_without_a_login_says_how_to_sign_in_without_an_error() {
     let mut state = State::default();
     state.start(vec![Agent::Codex]);
-    let signed_out = usage::codex_tests::report(usage::codex_tests::SIGNED_OUT);
+    let signed_out = codex_tests::report(codex_tests::SIGNED_OUT);
     state.answered(Agent::Codex, Ok(signed_out), Instant::now());
     let section = &sections(&state, Instant::now(), CLOCK)[0];
     assert_eq!(

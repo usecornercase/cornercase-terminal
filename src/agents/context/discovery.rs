@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver};
 use crate::process;
 
 #[derive(Debug)]
-pub(super) struct Job<T>(Option<Receiver<T>>);
+pub(in crate::agents) struct Job<T>(Option<Receiver<T>>);
 
 impl<T> Default for Job<T> {
     fn default() -> Self {
@@ -13,7 +13,7 @@ impl<T> Default for Job<T> {
 }
 
 impl<T: Send + 'static> Job<T> {
-    pub(super) fn take(&mut self) -> Option<T> {
+    pub(in crate::agents) fn take(&mut self) -> Option<T> {
         let receiver = self.0.take()?;
         match receiver.try_recv() {
             Ok(answer) => Some(answer),
@@ -25,7 +25,7 @@ impl<T: Send + 'static> Job<T> {
         }
     }
 
-    pub(super) fn start(&mut self, work: impl FnOnce() -> T + Send + 'static) {
+    pub(in crate::agents) fn start(&mut self, work: impl FnOnce() -> T + Send + 'static) {
         if self.0.is_none() {
             let (tx, rx) = mpsc::channel();
             std::thread::spawn(move || {
@@ -35,16 +35,16 @@ impl<T: Send + 'static> Job<T> {
         }
     }
 
-    pub(super) fn running(&self) -> bool {
+    pub(in crate::agents) fn running(&self) -> bool {
         self.0.is_some()
     }
 }
 
-pub(super) fn folder(pid: i32) -> Option<PathBuf> {
+pub(in crate::agents) fn folder(pid: i32) -> Option<PathBuf> {
     process::cwd(pid)?.canonicalize().ok()
 }
 
-pub(super) fn home(pid: i32, variable: &str, suffix: &str, default: &str) -> Option<PathBuf> {
+pub(in crate::agents) fn home(pid: i32, variable: &str, suffix: &str, default: &str) -> Option<PathBuf> {
     let env = process::env(pid);
     let var = |name| env.iter().find(|(key, value)| key == name && !value.is_empty()).map(|(_, v)| PathBuf::from(v));
     let path = var(variable).map(|home| home.join(suffix)).or_else(|| var("HOME").map(|p| p.join(default)))?;
@@ -52,7 +52,7 @@ pub(super) fn home(pid: i32, variable: &str, suffix: &str, default: &str) -> Opt
     path.canonicalize().ok()
 }
 
-pub(super) fn named(args: &[String], name: &str) -> bool {
+pub(in crate::agents) fn named(args: &[String], name: &str) -> bool {
     let script = args
         .first()
         .filter(|arg| Path::new(arg).file_name().is_some_and(|n| n == "node"))

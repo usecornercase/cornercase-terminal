@@ -4,7 +4,8 @@ use std::time::UNIX_EPOCH;
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{FakeGemini, TempDir};
+use crate::agents::gemini::fake::FakeGemini;
+use crate::test_util::TempDir;
 
 const INITIAL: &str = crate::test_util::fixture!("gemini/0.63.0/initial.jsonl");
 const PROMPT: &str = crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl");

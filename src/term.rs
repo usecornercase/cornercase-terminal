@@ -94,7 +94,7 @@ impl Term {
         let mut cmd = CommandBuilder::new(shell);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
-        for key in activity::CLAUDE_SESSION_ENV {
+        for key in agents::claude::CLAUDE_SESSION_ENV {
             cmd.env_remove(key);
         }
         for (key, value) in env {
@@ -201,11 +201,12 @@ impl Term {
     }
 
     pub(crate) fn dialog(&self) -> bool {
-        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::input_box(agent, &screen) == Some(false))
+        self.seen_agent_screen()
+            .is_some_and(|(agent, screen)| agents::claude::screen::input_box(agent, &screen) == Some(false))
     }
 
     pub(crate) fn survey(&self) -> bool {
-        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::survey(agent, &screen))
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::claude::screen::survey(agent, &screen))
     }
 
     fn seen_agent_screen(&self) -> Option<(&str, String)> {

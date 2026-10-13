@@ -3,8 +3,9 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
+use crate::agents::codex::fake::FakeCodex;
 use crate::agents::context::Pane;
-use crate::test_util::{FakeCodex, Running, Sleeper, TempDir, wait_until, write_executable};
+use crate::test_util::{Running, Sleeper, TempDir, wait_until, write_executable};
 
 const ID: &str = "019a1234-5678-7000-8000-000000000001";
 const CONTEXT: &str = crate::test_util::fixture!("codex/0.160.0/context.jsonl");

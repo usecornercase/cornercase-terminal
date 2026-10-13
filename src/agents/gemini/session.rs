@@ -4,11 +4,11 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
-use super::counting::{self, Record, Usage};
-use super::discovery::{folder, home, named};
-use super::jsonl::{Tail, head};
-use super::message::{self, Backwards, Said};
-use super::{Context, percent};
+use crate::agents::context::counting::{self, Record, Usage};
+use crate::agents::context::discovery::{folder, home, named};
+use crate::agents::context::jsonl::{Tail, head};
+use crate::agents::context::message::{self, Backwards, Said};
+use crate::agents::context::{Context, percent};
 use crate::error::{Error, Result};
 use crate::process;
 use crate::time::Stamp;
@@ -25,7 +25,7 @@ struct Reply {
 }
 
 #[derive(Debug)]
-pub(super) struct Session {
+pub(in crate::agents) struct Session {
     pub(crate) path: PathBuf,
     id: String,
     tail: Tail,
@@ -56,7 +56,7 @@ impl Session {
         }
     }
 
-    pub(super) fn id(&self) -> Option<&str> {
+    pub(in crate::agents) fn id(&self) -> Option<&str> {
         self.used.then_some(&self.id)
     }
 
@@ -181,7 +181,12 @@ fn counted(entry: &Value) -> Option<Record> {
     Some(Record { at, id, usage })
 }
 
-pub(super) fn look(pid: i32, since: SystemTime, previous: Option<Session>, footer: Option<String>) -> Option<Session> {
+pub(in crate::agents) fn look(
+    pid: i32,
+    since: SystemTime,
+    previous: Option<Session>,
+    footer: Option<String>,
+) -> Option<Session> {
     look_among(pid, since, previous, footer, process::all)
 }
 
@@ -266,7 +271,7 @@ fn prompt(entry: &Value) -> bool {
         })
 }
 
-pub(super) fn last_message(path: &Path) -> Result<Option<Said>> {
+pub(in crate::agents) fn last_message(path: &Path) -> Result<Option<Said>> {
     let failed = |e: std::io::Error| Error::Record { path: path.to_path_buf(), cause: e.to_string() };
     let lines = match Backwards::open(path) {
         Ok(lines) => lines,
@@ -300,7 +305,7 @@ fn said(entry: &Value, seen: &mut HashSet<String>) -> Option<Said> {
     Some(Said { text: text(&entry["content"])?, written: entry["timestamp"].as_str().map(str::to_string) })
 }
 
-pub(super) fn footer_model(screen: &str) -> Option<String> {
+pub(in crate::agents) fn footer_model(screen: &str) -> Option<String> {
     let lines: Vec<&str> = screen.lines().rev().take(6).collect();
     for rows in lines.windows(2) {
         let header = footer_cells(rows[1]);

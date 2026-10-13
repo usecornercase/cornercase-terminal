@@ -2,8 +2,12 @@ use rstest::rstest;
 
 use super::*;
 use crate::agents::activity::Status;
+use crate::agents::claude::fake::FakeClaude;
+use crate::agents::codex::fake::FakeCodex;
+use crate::agents::gemini::fake::FakeGemini;
+use crate::agents::opencode::fake::FakeOpencode;
 use crate::config;
-use crate::test_util::{FakeClaude, FakeCodex, FakeGemini, FakeOpencode, write_executable};
+use crate::test_util::write_executable;
 
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
     let (mut app, rx, dirs) = app_with(1);

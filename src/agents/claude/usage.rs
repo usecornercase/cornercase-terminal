@@ -3,8 +3,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{Report, Window, window};
-use crate::agents::activity;
+use crate::agents::usage::{Report, Window, window};
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -20,7 +19,7 @@ const ARGS: [&str; 9] = [
     "--verbose",
 ];
 const USAGE_REQUEST: &str = "usage";
-pub(super) const REQUESTS: &str = concat!(
+pub(in crate::agents) const REQUESTS: &str = concat!(
     r#"{"type":"control_request","request_id":"initialize","request":{"subtype":"initialize"}}"#,
     "\n",
     r#"{"type":"control_request","request_id":"usage","request":{"subtype":"get_usage"}}"#,
@@ -155,7 +154,7 @@ pub(super) fn parse(body: Value) -> Result<Report> {
     })
 }
 
-pub(super) fn answer(line: &str) -> Option<Result<Report>> {
+pub(in crate::agents) fn answer(line: &str) -> Option<Result<Report>> {
     let message: Value = serde_json::from_str(line).ok()?;
     let response = message.get("response").filter(|_| message["type"] == "control_response")?;
     if response["request_id"] != USAGE_REQUEST {
@@ -168,10 +167,10 @@ pub(super) fn answer(line: &str) -> Option<Result<Report>> {
     Some(Err(Error::Usage(error.to_string())))
 }
 
-pub(super) fn command(program: &str) -> Command {
+pub(in crate::agents) fn command(program: &str) -> Command {
     let mut cmd = Command::new(program);
     cmd.args(ARGS);
-    for key in activity::CLAUDE_SESSION_ENV {
+    for key in crate::agents::claude::CLAUDE_SESSION_ENV {
         cmd.env_remove(key);
     }
     cmd

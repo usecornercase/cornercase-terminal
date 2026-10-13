@@ -8,10 +8,10 @@ use rusqlite::{Connection, OpenFlags, params};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::counting::{Record, Usage};
-use super::discovery::{folder, named};
-use super::message::{self, Said};
-use super::{Context, percent};
+use crate::agents::context::counting::{Record, Usage};
+use crate::agents::context::discovery::{folder, named};
+use crate::agents::context::message::{self, Said};
+use crate::agents::context::{Context, percent};
 use crate::error::{self, Error};
 use crate::process;
 use crate::time::Stamp;
@@ -21,7 +21,7 @@ const BUSY_FOR: Duration = Duration::from_millis(100);
 const MESSAGES: i64 = 200;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(super) struct Session {
+pub(in crate::agents) struct Session {
     pub(crate) turn: bool,
     pub(crate) context: Option<Context>,
     pub(crate) prompted: Option<SystemTime>,
@@ -30,13 +30,13 @@ pub(super) struct Session {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Place {
+pub(in crate::agents) struct Place {
     pub(crate) database: PathBuf,
     pub(crate) id: String,
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Models {
+pub(in crate::agents) struct Models {
     last: Option<(Key, Option<Model>)>,
 }
 
@@ -92,7 +92,7 @@ fn read_model(path: &Path, provider: &str, model: &str) -> Option<Model> {
     })
 }
 
-pub(super) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<Session> {
+pub(in crate::agents) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<Session> {
     let (holder, database) = database(pid)?;
     let cwd = folder(holder)?;
     if shared(holder, &database, &cwd) {
@@ -258,7 +258,7 @@ struct Part {
     synthetic: Option<bool>,
 }
 
-pub(super) fn last_message(database: &Path, session: &str) -> error::Result<Option<Said>> {
+pub(in crate::agents) fn last_message(database: &Path, session: &str) -> error::Result<Option<Said>> {
     let failed = |e: rusqlite::Error| Error::Record { path: database.to_path_buf(), cause: e.to_string() };
     let connection = open(database).map_err(failed)?;
     let mut messages = connection

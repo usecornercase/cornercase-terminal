@@ -2,7 +2,8 @@ use rstest::rstest;
 
 use super::*;
 use crate::agents::context::Pane;
-use crate::test_util::{FakeOpencode, Sleeper, TempDir, wait_until};
+use crate::agents::opencode::fake::FakeOpencode;
+use crate::test_util::{Sleeper, TempDir, wait_until};
 
 const REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
 const WORKING: &str = crate::test_util::fixture!("opencode/1.18.35/working.jsonl");

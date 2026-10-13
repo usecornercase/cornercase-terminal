@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cornercase::agents::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
+use cornercase::agents::claude::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
 use cornercase::config;
 use cornercase::control::{PANE_ENV, PaneInfo, PaneRow, PaneRows, Report};
 use cornercase::paths::SOCKET_ENV;
