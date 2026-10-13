@@ -30,6 +30,7 @@ use crate::pointer;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state::{self, Saver};
 use crate::todo;
+use crate::version;
 
 mod images;
 
@@ -306,8 +307,8 @@ pub fn run() -> Result<()> {
     log::info!(
         "server",
         "started",
-        version = crate::update::CURRENT,
-        build = protocol::build_id(),
+        version = version::CURRENT,
+        build = version::build_id(),
         pid = std::process::id(),
         os = std::env::consts::OS,
         arch = std::env::consts::ARCH,
@@ -423,7 +424,7 @@ impl Server {
             next_client: 1,
             uses: 0,
             started: false,
-            build: protocol::build_id(),
+            build: version::build_id(),
             saver: Saver::new(session.clone(), None),
             session,
             todo_saver,

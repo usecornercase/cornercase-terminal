@@ -128,5 +128,5 @@ fn an_unknown_command_names_the_version_of_the_server() {
     app.request(CLIENT, r#"{"command": "teleport", "args": {}}"#, Some(AREA), Instant::now());
 
     let message = error(answers(&mut app).remove(0));
-    assert!(message.contains("has no `teleport` command") && message.contains(update::CURRENT), "{message}");
+    assert!(message.contains("has no `teleport` command") && message.contains(version::CURRENT), "{message}");
 }

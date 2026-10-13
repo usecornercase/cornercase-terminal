@@ -3,7 +3,6 @@ use std::io::{self, Read, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
 
 use crossterm::event::Event;
 use rustix::fs::{FlockOperation, flock};
@@ -143,15 +142,6 @@ pub fn own_uid() -> u32 {
 pub fn check_peer(stream: &UnixStream, uid: u32) -> Result<(), Error> {
     let peer = process::peer_uid(stream)?;
     if peer == uid { Ok(()) } else { Err(Error::OtherUser(peer)) }
-}
-
-pub fn build_id() -> String {
-    std::env::current_exe()
-        .and_then(|exe| exe.metadata())
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .map_or_else(|| "unknown".into(), |since| since.as_nanos().to_string())
 }
 
 #[cfg(test)]

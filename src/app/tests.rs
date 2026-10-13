@@ -65,6 +65,7 @@ use crate::ui::SidebarRow;
 use crate::ui::WorkspaceRow;
 use crate::ui::changes::{self as panel, Action as HunkAction};
 use crate::update::{self, Release};
+use crate::version;
 
 fn drain(app: &mut App, rx: &Receiver<AppEvent>) {
     drain_in(app, rx, AREA);

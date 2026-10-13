@@ -51,7 +51,7 @@ struct Credits {
 }
 
 pub fn requests() -> String {
-    let client = json!({"name": "cornercase", "version": env!("CARGO_PKG_VERSION")});
+    let client = json!({"name": "cornercase", "version": crate::version::CURRENT});
     let initialize = json!({"id": INITIALIZE, "method": "initialize", "params": {"clientInfo": client}});
     let initialized = json!({"method": "initialized"});
     let read = json!({"id": USAGE_REQUEST, "method": "account/rateLimits/read", "params": {"excludeResetCreditDetails": true}});

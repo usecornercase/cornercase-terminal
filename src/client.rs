@@ -40,7 +40,8 @@ use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::remote::{self, Remote, Stderr};
 use crate::restart;
 use crate::ui::remote::{self as notice, Notice};
-use crate::update::{self, CURRENT, Install, Outcome};
+use crate::update::{self, Install, Outcome};
+use crate::version::{self, CURRENT};
 
 pub(crate) mod input;
 
@@ -703,7 +704,7 @@ impl Window<'_> {
         let Link { reader, writer, guard } = link;
         let size = self.terminal.size()?;
         let out = spawn_writer(writer);
-        let (version, build) = (protocol::VERSION, protocol::build_id());
+        let (version, build) = (protocol::VERSION, version::build_id());
         let (theme, notify, terminal) = (self.theme.clone(), self.notify, self.name.clone());
         let (pointer, graphics, probe) = (self.pointer, self.graphics.clone(), self.probe.clone());
         let (cols, rows) = (size.width, size.height);

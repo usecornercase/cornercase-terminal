@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_util::TempDir;
+use crate::version;
 
 mod lock {
     use super::*;
@@ -101,7 +102,7 @@ mod a_bug {
     ) -> Client {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let _ = server.handle(ServerEvent::Accepted(ours));
-        let (version, build, theme) = (protocol::VERSION, protocol::build_id(), HostTheme::default());
+        let (version, build, theme) = (protocol::VERSION, version::build_id(), HostTheme::default());
         let (notify, probe) = (Channel::Bell, String::new());
         let hello =
             Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, pointer, graphics, probe };

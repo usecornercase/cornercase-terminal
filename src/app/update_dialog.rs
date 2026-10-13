@@ -18,6 +18,7 @@ use crate::panics;
 use crate::restart;
 use crate::ui::{self};
 use crate::update::{self, Install, Release};
+use crate::version;
 
 pub(super) const UPDATE_AVAILABLE: &str = "a new cornercase is out";
 
@@ -48,8 +49,8 @@ impl App {
         let job = Job::new(Level::Info, "update", "check").begin();
         std::thread::spawn(move || {
             let found = panics::job(|| {
-                let found = update::check(&url, update::CURRENT)?;
-                Ok(found.map(|release| update::with_changelog(release, update::CURRENT)))
+                let found = update::check(&url, version::CURRENT)?;
+                Ok(found.map(|release| update::with_changelog(release, version::CURRENT)))
             });
             job.finish(&found);
             let _ = tx.send(AppEvent::UpdateChecked(found));
@@ -182,7 +183,7 @@ impl App {
 
     pub(super) fn update_view(&self, step: &UpdateStep, area: Rect) -> ui::Overlay {
         let version = self.updates.available.as_ref().map_or("", |r| r.version.as_str());
-        let current = update::CURRENT;
+        let current = version::CURRENT;
         let message = match step {
             UpdateStep::Installed => format!("cornercase {version} is installed. Restart to use it."),
             UpdateStep::Manual(command) => {

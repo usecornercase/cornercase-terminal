@@ -30,7 +30,7 @@ use crate::search::Goto;
 use crate::split::Dir;
 use crate::term::{self, Term};
 use crate::ui;
-use crate::update;
+use crate::version;
 use crate::worktree;
 
 const STARTS_WITHIN: Duration = Duration::from_secs(10);
@@ -308,7 +308,7 @@ fn pane_ids(pane: u64) -> Done {
 fn parse(text: &str) -> Result<Request, String> {
     let value: Value = serde_json::from_str(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let name = control::command_name(&value).unwrap_or_default().to_string();
-    let server = update::CURRENT;
+    let server = version::CURRENT;
     if !Command::NAMES.contains(&name.as_str()) {
         return Err(control::unknown_command(&name));
     }
@@ -901,7 +901,7 @@ impl App {
             collapsed: g.entry.collapsed,
         });
         Report {
-            version: update::CURRENT.to_string(),
+            version: version::CURRENT.to_string(),
             caller,
             shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
             groups: groups.collect(),

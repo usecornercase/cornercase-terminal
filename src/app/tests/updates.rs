@@ -249,7 +249,7 @@ fn a_later_release_replaces_the_one_shown_and_says_so_again() {
 fn the_dialog_shows_the_changelog_of_every_version_since_this_one() {
     let changelog = format!(
         "# Changelog\n\n## 9.0.0\n\n- Newest.\n\n## 8.0.0\n\n- Skipped one.\n\n## {}\n\n- This one.\n",
-        update::CURRENT
+        version::CURRENT
     );
     let files = FakeHttp::start(vec![("GET /CHANGELOG.md", 200, changelog)]);
     let latest = serde_json::json!({"tag_name": "v9.0.0", "assets": [

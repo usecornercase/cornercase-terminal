@@ -19,6 +19,7 @@ use crate::host_theme::{HostTheme, PALETTE_LEN};
 use crate::log;
 use crate::notify::Channel;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::version;
 
 const POLL: Duration = Duration::from_millis(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -86,7 +87,7 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
     let (cols, rows) = size(cols, rows);
     Hello {
         version: protocol::VERSION,
-        build: protocol::build_id(),
+        build: version::build_id(),
         cols,
         rows,
         theme: host_theme(theme),
@@ -294,7 +295,7 @@ mod tests {
     fn the_hello_carries_this_build_and_no_images() {
         let hello = hello(48, 0, &Theme::default());
 
-        assert_eq!((hello.build, hello.cols, hello.rows), (protocol::build_id(), 48, 1));
+        assert_eq!((hello.build, hello.cols, hello.rows), (version::build_id(), 48, 1));
         assert_eq!(size(u16::MAX, u16::MAX), (MAX_COLS, MAX_ROWS));
         assert!(hello.graphics.protocol.is_none());
     }

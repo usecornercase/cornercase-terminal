@@ -83,12 +83,12 @@ pub enum Error {
     RemoteTooOld(String),
     #[error(
         "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` there",
-        crate::update::CURRENT
+        crate::version::CURRENT
     )]
     RemoteOlder { host: String, there: String },
     #[error(
         "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` here",
-        crate::update::CURRENT
+        crate::version::CURRENT
     )]
     RemoteNewer { host: String, there: String },
     #[error(transparent)]

@@ -768,7 +768,7 @@ pub struct TodoItem {
 pub fn unknown_command(name: &str) -> String {
     format!(
         "the running cornercase server ({}) has no `{name}` command; update cornercase and restart the server",
-        crate::update::CURRENT
+        crate::version::CURRENT
     )
 }
 

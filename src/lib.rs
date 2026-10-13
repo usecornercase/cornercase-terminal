@@ -48,6 +48,7 @@ pub mod ui;
 pub mod update;
 pub mod upstream;
 pub mod usage;
+pub mod version;
 pub mod vscode;
 pub mod web;
 pub mod worktree;

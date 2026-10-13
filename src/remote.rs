@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use crate::client::{self, Link};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage};
-use crate::update::{self, CURRENT};
+use crate::version::{self, CURRENT};
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -156,7 +156,7 @@ impl Remote {
             return Ok(());
         }
         let (host, there) = (self.destination.clone(), banner.release.clone());
-        if update::newer(&there, CURRENT) {
+        if version::newer(&there, CURRENT) {
             Err(Error::RemoteNewer { host, there })
         } else {
             Err(Error::RemoteOlder { host, there })
@@ -240,7 +240,7 @@ pub fn proxy() -> Result<()> {
     let stream = client::connect_or_start(&path)?;
     protocol::check_peer(&stream, protocol::own_uid())?;
     let mut to_server = stream.try_clone()?;
-    protocol::send(&mut to_server, &rebuilt(first, protocol::build_id()))?;
+    protocol::send(&mut to_server, &rebuilt(first, version::build_id()))?;
     thread::spawn(move || {
         let _ = io::copy(&mut io::stdin().lock(), &mut to_server);
         let _ = to_server.shutdown(Shutdown::Write);
