@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::changes::{Mode, Scope};
 use crate::issues::People;
 use crate::project::group::GroupEntry;
+use crate::project::{Project, Tab, Workspace};
 use crate::split::Node;
 
 pub use crate::agents::AgentState;
@@ -121,6 +122,52 @@ impl WorkspaceState {
             layout: None,
         });
         Self { path, name: None, worktree: false, tabs: tabs.collect(), active, base: None, collapsed: false }
+    }
+}
+
+impl ProjectState {
+    pub fn of(project: &Project, group: Option<usize>) -> Self {
+        Self {
+            path: project.path.clone(),
+            name: project.name.clone(),
+            group,
+            workspaces: project.workspaces.iter().map(WorkspaceState::of).collect(),
+            active: project.active,
+            collapsed: project.collapsed,
+        }
+    }
+}
+
+impl WorkspaceState {
+    pub fn of(workspace: &Workspace) -> Self {
+        Self {
+            path: workspace.path.clone(),
+            name: workspace.name.clone(),
+            worktree: workspace.worktree,
+            base: workspace.base.clone(),
+            tabs: workspace.tabs.iter().map(TabState::of).collect(),
+            active: workspace.active,
+            collapsed: workspace.collapsed,
+        }
+    }
+}
+
+impl TabState {
+    pub fn of(tab: &Tab) -> Self {
+        Self {
+            name: tab.name.clone(),
+            panes: tab
+                .panes
+                .iter()
+                .map(|term| PaneState {
+                    cwd: term.cwd(),
+                    right_clicks: tab.right_clicks_to_pane(term.id),
+                    agent: term.resume.clone(),
+                })
+                .collect(),
+            active: tab.active,
+            layout: (tab.panes.len() > 1).then(|| tab.layout_by_index()).flatten(),
+        }
     }
 }
 

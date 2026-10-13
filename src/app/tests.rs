@@ -60,7 +60,7 @@ use crate::project::{Phase, Workspace};
 use crate::search::{Goto, Kind};
 use crate::settings::{Settings, Status};
 use crate::split::{self};
-use crate::state::AgentState;
+use crate::state::{AgentState, PaneState, TabState, WorkspaceState};
 use crate::term::Term;
 use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
 use crate::ui::SidebarRow;
