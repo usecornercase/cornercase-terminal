@@ -14,7 +14,8 @@ impl Stamp {
             return None;
         }
         let nanos = format!("{fraction:0<9}").parse().ok()?;
-        let days = u64::try_from(days_from_civil(i64::try_from(year).ok()?, month.cast_signed(), day.cast_signed())).ok()?;
+        let days =
+            u64::try_from(days_from_civil(i64::try_from(year).ok()?, month.cast_signed(), day.cast_signed())).ok()?;
         let secs = days.checked_mul(86_400)?.checked_add(hour * 3600 + minute * 60 + second)?;
         UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
     }

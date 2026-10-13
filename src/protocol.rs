@@ -99,9 +99,7 @@ pub(crate) fn check_socket_dir(socket: &Path) -> Result<(), Error> {
     let meta = std::fs::symlink_metadata(&dir)?;
     let kind = meta.file_type();
     match unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()) {
-        Some(reason) => {
-            Err(Error::UnsafeSocketDir { path: dir, reason, custom: paths::custom_socket().is_some() })
-        }
+        Some(reason) => Err(Error::UnsafeSocketDir { path: dir, reason, custom: paths::custom_socket().is_some() }),
         None => Ok(()),
     }
 }
