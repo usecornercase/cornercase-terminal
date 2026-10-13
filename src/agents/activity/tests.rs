@@ -185,6 +185,29 @@ mod notice {
     }
 }
 
+mod spinner {
+    use super::*;
+
+    #[test]
+    fn steps_once_a_tenth_of_a_second_and_wraps() {
+        let frames: Vec<&str> =
+            (0..12).map(|i| SPINNER[usize::from(spin_frame(SPIN_EVERY * u32::try_from(i).expect("step")))]).collect();
+        assert_eq!(frames, ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋", "⠙"]);
+    }
+
+    #[test]
+    fn the_next_wake_lands_on_a_frame_and_is_never_immediate() {
+        let waits: Vec<Duration> = (0..SPIN_EVERY.as_millis())
+            .map(|ms| spin_wait(Duration::from_millis(u64::try_from(ms).expect("ms"))))
+            .collect();
+        assert!(waits.iter().all(|wait| !wait.is_zero() && *wait <= SPIN_EVERY));
+        assert_eq!(
+            (spin_wait(Duration::ZERO), spin_wait(Duration::from_millis(40)), spin_wait(SPIN_EVERY)),
+            (SPIN_EVERY, Duration::from_millis(60), SPIN_EVERY)
+        );
+    }
+}
+
 mod rollup {
     use super::*;
 

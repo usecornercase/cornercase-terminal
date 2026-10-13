@@ -86,7 +86,7 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     let bg = view.row_background(r, entry.active);
     let mut line = vec![marker(entry.active)];
     if let Some(status) = entry.status {
-        line.extend([status_icon(view.muted, status), Span::raw(" ")]);
+        line.extend([status_icon(view.muted, status, view.spin), Span::raw(" ")]);
     }
     let indent = line.iter().map(Span::width).sum::<usize>();
     let room = usize::from(r.width).saturating_sub(indent + 1);

@@ -178,8 +178,11 @@ pub(super) fn draw_group(f: &mut Frame, view: &View, g: usize, band: Band) {
     } else {
         String::new()
     };
-    let badge =
-        group.collapsed.then(|| group_attention(view, g)).flatten().map(|status| status_icon(view.muted, status));
+    let badge = group
+        .collapsed
+        .then(|| group_attention(view, g))
+        .flatten()
+        .map(|status| status_icon(view.muted, status, view.spin));
     let room = band.room().saturating_sub(2);
     let used = 2 + count.chars().count();
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(used));
@@ -205,7 +208,7 @@ pub(super) fn draw_project_band(f: &mut Frame, view: &View, band: Band, p: usize
     };
     let count = if summary && view.counts { format!(" ({})", entry.workspaces) } else { String::new() };
     let room = band.room();
-    let badge = entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status));
+    let badge = entry.status.filter(|_| summary).map(|status| status_icon(view.muted, status, view.spin));
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(count.chars().count()));
     let max = room.saturating_sub(count.chars().count() + marks.reserved());
     let name = truncate_right(&entry.name, max);

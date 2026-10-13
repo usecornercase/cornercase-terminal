@@ -254,7 +254,7 @@ impl Client {
         let sight = self.graphics.sight(Rect::new(0, 0, cols, rows), picture);
         screen.backend_mut().watched = self.graphics.watched();
         let mut placed = None;
-        let _ = screen.draw(|f| placed = app.draw(f, &sight));
+        let _ = screen.draw(|f| placed = app.draw(f, &sight, now));
         if std::mem::take(&mut screen.backend_mut().damaged) {
             self.graphics.damaged();
         }

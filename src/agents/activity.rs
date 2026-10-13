@@ -6,6 +6,8 @@ use crate::agents::Known;
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 const NOTIFY_AFTER: Duration = Duration::from_secs(1);
 pub(crate) const SHELL: &str = "shell";
+pub(crate) const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+pub(crate) const SPIN_EVERY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Activity {
@@ -40,6 +42,19 @@ impl Status {
 
 pub(crate) fn attention(statuses: impl IntoIterator<Item = Option<Status>>) -> Option<Status> {
     statuses.into_iter().flatten().filter(|s| s.needs_you()).max()
+}
+
+pub(crate) fn spin_frame(elapsed: Duration) -> u8 {
+    let step = SPIN_EVERY.as_millis();
+    let steps = elapsed.as_millis() / step;
+    let index = steps % u128::from(u8::try_from(SPINNER.len()).unwrap_or(1));
+    u8::try_from(index).unwrap_or(0)
+}
+
+pub(crate) fn spin_wait(elapsed: Duration) -> Duration {
+    let step = SPIN_EVERY.as_millis();
+    let left = step - elapsed.as_millis() % step;
+    Duration::from_millis(u64::try_from(left).unwrap_or(100))
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

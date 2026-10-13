@@ -1,7 +1,7 @@
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
-use crate::agents::activity::Status;
+use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::host::theme::HostTheme;
 
@@ -55,10 +55,13 @@ pub(crate) fn muted(theme: &HostTheme) -> Color {
     }
 }
 
-pub(super) fn status_icon(muted: Color, status: Status) -> Span<'static> {
+pub(super) fn status_icon(muted: Color, status: Status, frame: u8) -> Span<'static> {
     let (glyph, style) = match status {
         Status::Idle => ("○", Style::default().fg(muted)),
-        Status::Working => ("◐", Style::default().fg(Color::Yellow)),
+        Status::Working => {
+            let index = usize::from(frame) % activity::SPINNER.len();
+            (activity::SPINNER[index], Style::default().fg(Color::Yellow))
+        }
         Status::Done => ("✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Status::Waiting => ("!", Style::default().fg(WAITING_COLOR).add_modifier(Modifier::BOLD)),
     };

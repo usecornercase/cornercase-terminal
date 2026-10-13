@@ -7,7 +7,7 @@ expression: render(&with_agents()).backend()
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ shop (1)              !      │  login        ! ↓2      │                                          "
-"  api (1)               ✓      │▌ ├ ◐ claude             │                                          "
+"  api (1)               ✓      │▌ ├ ⠋ claude             │                                          "
 "                               │  ├ ! claude             │                                          "
 "  ▸ ● work (2)          !      │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "

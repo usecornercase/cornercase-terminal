@@ -177,15 +177,15 @@ pub(crate) struct TabEntry {
 }
 
 impl TabEntry {
-    pub(crate) fn icon(&self, muted: Color) -> Span<'static> {
+    pub(crate) fn icon(&self, muted: Color, frame: u8) -> Span<'static> {
         match self.status {
-            Some(status) => status_icon(muted, status),
+            Some(status) => status_icon(muted, status, frame),
             None => Span::styled(if self.running { PROGRAM_ICON } else { SHELL_ICON }, dim(muted)),
         }
     }
 
-    pub(crate) fn prefix(&self, muted: Color, bg: Style) -> [Span<'static>; 2] {
-        let icon = self.icon(muted);
+    pub(crate) fn prefix(&self, muted: Color, bg: Style, frame: u8) -> [Span<'static>; 2] {
+        let icon = self.icon(muted, frame);
         [Span::styled(icon.content, bg.patch(icon.style)), Span::styled(" ", bg)]
     }
 }
@@ -343,7 +343,7 @@ pub(super) fn draw_workspace_band(
         let badge = badge
             .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
             .flatten()
-            .map(|status| status_icon(view.muted, status));
+            .map(|status| status_icon(view.muted, status, view.spin));
         let behind = Some(entry.behind)
             .filter(|n| *n > 0)
             .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
@@ -374,7 +374,7 @@ pub(super) fn draw_tab_band(f: &mut Frame, view: &View, band: Band, tab: &TabEnt
     };
     let used = name.chars().count();
     let mut line = band.lead;
-    line.extend(tab.prefix(view.muted, Style::default()));
+    line.extend(tab.prefix(view.muted, Style::default(), view.spin));
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, max);
     draw_band(f, band.r, Line::from(line), band.bg);

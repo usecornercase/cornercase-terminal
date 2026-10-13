@@ -123,7 +123,7 @@ When Claude Code, Codex, Gemini CLI or opencode runs in a tab, an icon before th
 
 | Icon | Means |
 | --- | --- |
-| `◐` yellow | The agent is working. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
+| `⠋` yellow | The agent is working. The mark steps through `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, about ten times a second. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
 | `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex and Gemini CLI only. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
@@ -135,7 +135,7 @@ cornercase reads what each agent reports about itself. Nothing is installed and 
 - **Claude Code**: the small file it keeps for each running session in `~/.claude/sessions` (or in `$CLAUDE_CONFIG_DIR/sessions`), the same one `claude agents --json` reads. Without that file, for example with an older Claude Code, cornercase falls back to the title Claude gives the terminal, which only tells working from idle.
 - **Codex**: the title Codex gives the terminal, which starts with a spinner while it works and with `[ ! ] Action Required` while it waits for an approval, and the session's rollout file (the one behind the [context line](#how-full-the-context-is)), which records when each turn starts and ends. If you take the activity out of Codex's terminal title (its `/title` setting), the tab still shows working and finished, but not `!`. Verified against Codex CLI 0.160.0.
 - **Gemini CLI**: its dynamic terminal title, `✦` or `⏲` while working, `✋` when action is required, `◇` when ready. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled: a fixed or hidden title gives no status or notifications. The session file cannot reliably distinguish working from finished.
-- **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows `◐` and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
+- **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows the spinner and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
 
 A tab without one of these agents shows its shell instead, in grey, so every tab's name starts in the same column:
 

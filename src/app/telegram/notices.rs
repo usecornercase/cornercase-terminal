@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use super::{Asked, Route};
 use crate::agents::Known;
-use crate::agents::activity::{SHELL, Status};
+use crate::agents::activity::{SHELL, SPINNER, Status};
 use crate::app::App;
 use crate::control::{Command, LastMessage};
 use crate::project::Hierarchy;
@@ -46,7 +46,7 @@ pub(super) fn icon(status: Option<Status>) -> &'static str {
     match status {
         Some(Status::Waiting) => "!",
         Some(Status::Done) => "✓",
-        Some(Status::Working) => "◐",
+        Some(Status::Working) => SPINNER[0],
         Some(Status::Idle) | None => "○",
     }
 }

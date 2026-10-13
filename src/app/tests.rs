@@ -84,14 +84,14 @@ fn drain_in(app: &mut App, rx: &Receiver<AppEvent>, area: Rect) {
 
 fn render(app: &mut App, area: Rect) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("test backend");
-    terminal.draw(|f| _ = app.draw(f, &Sight::default())).expect("draw");
+    terminal.draw(|f| _ = app.draw(f, &Sight::default(), Instant::now())).expect("draw");
     terminal
 }
 
 fn render_frame(app: &mut App, area: Rect, sight: &Sight) -> (Buffer, Option<Placed>) {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).expect("terminal");
     let mut placed = None;
-    let buffer = terminal.draw(|f| placed = app.draw(f, sight)).expect("draw").buffer.clone();
+    let buffer = terminal.draw(|f| placed = app.draw(f, sight, Instant::now())).expect("draw").buffer.clone();
     (buffer, placed)
 }
 

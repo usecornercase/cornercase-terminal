@@ -140,7 +140,7 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let icon = Rect { width: COMPACT_BUTTON_WIDTH.min(menu.width), ..menu };
     let lit = view.nav.is_some() || sidebar_hovered(view, menu);
     let style = if lit { pressed } else { surface.fg(Color::Cyan) };
-    draw_band(f, icon, menu_label(view.muted, view.attention, icon.width, style, lit), style);
+    draw_band(f, icon, menu_label(view.muted, view.attention, view.spin, icon.width, style, lit), style);
     let crumbs = Rect { x: icon.right() + 2, width: menu.width.saturating_sub(icon.width + 2), ..middle(menu) };
     f.render_widget(Paragraph::new(Line::from(breadcrumb(view, usize::from(crumbs.width)))), crumbs);
     let r = areas.search_button;
@@ -228,11 +228,18 @@ fn todo_icon(pending: bool, width: u16, style: Style) -> Line<'static> {
     ))
 }
 
-fn menu_label(muted: Color, attention: Option<Status>, width: u16, style: Style, lit: bool) -> Line<'static> {
+fn menu_label(
+    muted: Color,
+    attention: Option<Status>,
+    frame: u8,
+    width: u16,
+    style: Style,
+    lit: bool,
+) -> Line<'static> {
     let Some(status) = attention else { return Line::from(Span::styled(centered(MENU_ICON, width), style)) };
     let width = usize::from(width);
     let left = width.saturating_sub(1) / 2;
-    let badge = status_icon(muted, status);
+    let badge = status_icon(muted, status, frame);
     let badge = if lit { Span::styled(badge.content, style) } else { badge };
     Line::from(vec![
         Span::styled(format!("{}{MENU_ICON} ", " ".repeat(left)), style),

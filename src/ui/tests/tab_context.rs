@@ -206,7 +206,7 @@ fn a_compact_band_shows_it_on_its_last_row() {
         (r.height, line(&t, r, 1), line(&t, r, 2)),
         (
             COMPACT_PITCH,
-            format!("▌ ├ ◐ claude{}{ROW_MENU_ICON}  ×", " ".repeat(usize::from(SMALL.width) - 18)),
+            format!("▌ ├ ⠋ claude{}{ROW_MENU_ICON}  ×", " ".repeat(usize::from(SMALL.width) - 18)),
             "▌ │   Opus 5.5 · 17%".into()
         )
     );

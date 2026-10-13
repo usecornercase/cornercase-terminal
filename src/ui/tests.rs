@@ -65,6 +65,7 @@ fn view(names: &[&str]) -> View<'static> {
         todo_pending: false,
         files: None,
         attention: None,
+        spin: 0,
         drag: None,
         tree: None,
         agents: None,

@@ -137,6 +137,7 @@ pub(crate) struct App {
     theme: HostTheme,
     tx: Sender<AppEvent>,
     synced: Option<Instant>,
+    booted: Instant,
     settings_page: Page,
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
@@ -190,6 +191,7 @@ impl App {
             theme,
             tx,
             synced: None,
+            booted: Instant::now(),
             settings_page: Page::default(),
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
@@ -310,7 +312,12 @@ impl App {
     pub(crate) fn tick(&self, now: Instant) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
-        [drag, launch, self.next_request(now)].into_iter().flatten().min()
+        let spin = self.agent_working().then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
+        [drag, launch, spin, self.next_request(now)].into_iter().flatten().min()
+    }
+
+    fn agent_working(&self) -> bool {
+        self.projects.tabs().any(|tab| tab.status() == Some(activity::Status::Working))
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
@@ -508,7 +515,7 @@ impl App {
         &self.agents.stats
     }
 
-    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight) -> Option<Placed> {
+    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
         self.follow(f.area());
         if !self.drawn.compact() {
             self.nav = None;
@@ -552,6 +559,8 @@ impl App {
         let visible = self.visible_tab();
         let tabs = self.projects.tabs();
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
+        let elapsed = now.saturating_duration_since(self.booted);
+        let spin = if self.agent_working() { activity::spin_frame(elapsed) } else { 0 };
         let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
         let drag = moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
@@ -594,6 +603,7 @@ impl App {
             todo_pending: self.todos.pending() > 0,
             files,
             attention,
+            spin,
             drag,
             tab_bar: (!self.drawn.tab_bar.is_empty()).then(|| self.tab_bar_view()),
         };
