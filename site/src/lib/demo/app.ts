@@ -85,6 +85,8 @@ import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, pla
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
+const NOT_PAIRED = 'Telegram is not set up: pair a phone in Settings › Agents › Telegram';
+
 export interface SettingsRow {
   id: string;
   section: string;
@@ -2209,6 +2211,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
+    else if (a.kind === 'away') this.bug(NOT_PAIRED);
     else if (a.kind === 'quit') this.quit();
   }
 
@@ -2268,6 +2271,9 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
+      const bot = c.telegram ? '@cornercase_bot' : 'not set';
+      rows.push({ id: 'telegram', section: 'Telegram', label: 'bot', value: bot, note: c.telegram ? 'connected' : 'make a bot with @BotFather and paste its token here' });
+      if (c.telegram) rows.push({ id: 'telegram-phone', section: 'Telegram', label: 'phone', value: 'not paired', note: 'enter shows a code to scan with your phone' });
       return rows;
     }
     if (page === 2) {
@@ -2397,6 +2403,10 @@ export class App {
       const listed = this.listedKinds();
       const items = AGENTS.filter(([k]) => !listed.includes(k)).map(([k, bin]) => ({ value: k, note: bin }));
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
+    } else if (row.id === 'telegram') {
+      o.edit = { row: row.id, label: 'Telegram bot token, from @BotFather', input: '', token: true };
+    } else if (row.id === 'telegram-phone') {
+      o.notice = 'pairing needs a real cornercase and your phone';
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;
@@ -2528,6 +2538,18 @@ export class App {
         this.config.fetchMinutes = Number(v);
         o.edit = undefined;
         o.notice = this.config.fetchMinutes ? `branches are fetched every ${this.config.fetchMinutes} min` : 'branches are not fetched: commits to pull are not shown';
+      }
+    } else if (edit.row === 'telegram') {
+      if (!edit.input.trim()) edit.error = "paste the bot's token first";
+      else {
+        o.busy = 'checking…';
+        this.after(900, () => {
+          o.busy = undefined;
+          o.edit = undefined;
+          this.config.telegram = true;
+          o.notice = 'bot @cornercase_bot is ready: pair your phone in the row below';
+          this.dirty();
+        });
       }
     } else if (edit.row.startsWith('token:')) {
       const source = edit.row.slice(6) as Remote;

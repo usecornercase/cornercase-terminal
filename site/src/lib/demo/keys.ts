@@ -31,6 +31,7 @@ export type KeysAction =
   | { kind: 'todo' }
   | { kind: 'settings' }
   | { kind: 'usage' }
+  | { kind: 'away' }
   | { kind: 'quit' };
 
 export type KeysStep = { run: KeysAction } | { open: KeysGroup };
@@ -67,6 +68,7 @@ const ROOT: KeysItem[] = [
   run('t', 'todo', { kind: 'todo' }),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
+  run('o', 'away on Telegram', { kind: 'away' }),
   run('q', 'quit', { kind: 'quit' }),
 ];
 

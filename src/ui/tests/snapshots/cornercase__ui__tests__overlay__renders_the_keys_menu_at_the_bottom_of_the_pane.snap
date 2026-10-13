@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/overlay.rs
-assertion_line: 7106
 expression: "render(&with(Overlay::Keys(keys_menu()))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -16,8 +15,8 @@ expression: "render(&with(Overlay::Keys(keys_menu()))).backend()"
 "     │ ]     next workspace          |     split right             t     todo                 │     "
 "     │ [     previous workspace      -     split down              ,     settings             │     "
 "     │ }     next project            x     close pane              u     usage                │     "
-"     │ {     previous project        r     rename tab              q     quit                 │     "
-" ────│ ←↑↓→  pane on that side       f     find…                                              │     "
+"     │ {     previous project        r     rename tab              o     away on Telegram     │     "
+" ────│ ←↑↓→  pane on that side       f     find…                   q     quit                 │     "
 "  Set│                                                                                        │     "
 "  Usa│ esc closes · ctrl+] twice types it in the pane                                         │     "
 "  Qui╰────────────────────────────────────────────────────────────────────────────────────────╯     "

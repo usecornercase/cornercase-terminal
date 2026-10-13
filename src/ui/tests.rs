@@ -58,6 +58,7 @@ fn view(names: &[&str]) -> View<'static> {
         nav: None,
         update: None,
         remote: None,
+        away: None,
         changes: None,
         changes_button: None,
         todo: None,

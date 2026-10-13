@@ -46,6 +46,12 @@ pub(crate) fn post(service: &Service, url: &str, headers: &[(&str, &str)], body:
     finish(service, request.content_type("application/json").send(body.to_string()))
 }
 
+pub(crate) fn post_within(service: &Service, url: &str, body: &Value, timeout: Duration) -> Result<Answer> {
+    let request = agent(timeout).post(url).header("Accept", "application/json").content_type("application/json");
+    let mut response = reached(service, request.send(body.to_string()), timeout)?;
+    read(service, &mut response)
+}
+
 pub(crate) fn download(service: &Service, url: &str) -> Result<Vec<u8>> {
     let mut response = reached(service, agent(DOWNLOAD_TIMEOUT).get(url).call(), DOWNLOAD_TIMEOUT)?;
     let status = response.status().as_u16();
@@ -82,6 +88,11 @@ fn finish(service: &Service, result: std::result::Result<Response<ureq::Body>, u
     if status == 429 {
         return Err(Error::Api(format!("{} rate limit reached, try again in a minute", service.name)));
     }
+    read(service, &mut response)
+}
+
+fn read(service: &Service, response: &mut Response<ureq::Body>) -> Result<Answer> {
+    let status = response.status().as_u16();
     let text = response
         .body_mut()
         .read_to_string()

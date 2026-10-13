@@ -137,7 +137,10 @@ impl App {
         let (p, w) = if let Some(id) = start.workspace {
             self.usable_workspace(id)?
         } else if let Some(branch) = start.worktree.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
-            let p = self.here(caller).project.ok_or(NO_PROJECT)?;
+            let p = match start.project {
+                Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
+                None => self.here(caller).project.ok_or(NO_PROJECT)?,
+            };
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
                 let then = Then { start: Some((spec, name)), wait, focus: start.focus };

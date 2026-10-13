@@ -16,6 +16,7 @@ use serde_json::Value;
 use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
+use crate::app::telegram::CLIENTS as TELEGRAM_CLIENTS;
 use crate::control::{self, Command, Done, Ids, Item, Request, Response};
 use crate::error;
 use crate::git;
@@ -158,8 +159,18 @@ fn parse(text: &str) -> Result<Request, String> {
 
 impl App {
     pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
+        self.run_request(client, parse(text), text.len(), area, now);
+    }
+
+    pub(in crate::app) fn run_request(
+        &mut self,
+        client: u64,
+        request: Result<Request, String>,
+        bytes: usize,
+        area: Option<Rect>,
+        now: Instant,
+    ) {
         self.requests.open.push(client);
-        let request = parse(text);
         match &request {
             Ok(request) => {
                 let command = request.command.name();
@@ -169,7 +180,7 @@ impl App {
                 fields.extend(request.command.fields());
                 log::write_fields(Level::Info, "control", command, &fields);
             }
-            Err(_) => log::warning!("control", "unreadable request", client = client, bytes = text.len()),
+            Err(_) => log::warning!("control", "unreadable request", client = client, bytes = bytes),
         }
         match request.and_then(|request| self.handle_request(client, request, area, now)) {
             Ok(Some(value)) => self.answer(Some(client), Ok(value)),
@@ -234,6 +245,10 @@ impl App {
                 }
             }
         }
+        if client >= TELEGRAM_CLIENTS {
+            self.telegram_answered(client, reply);
+            return;
+        }
         let response = match reply {
             Ok(value) => Response::Ok(value),
             Err(message) => Response::Error(message),
@@ -266,6 +281,7 @@ impl App {
             Command::Events(events) => self.events_request(client, events),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
+            Command::Away(away) => self.away_request(away.off),
         }
     }
 

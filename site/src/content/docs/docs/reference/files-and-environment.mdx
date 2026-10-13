@@ -11,8 +11,9 @@ import { Aside } from '@astrojs/starlight/components';
 | --- | --- | --- |
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place. | `~/.local/bin/` with the install script; Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
-| `secrets.json` | Shortcut, Linear, Jira and Plane tokens typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
+| `secrets.json` | Shortcut, Linear, Jira and Plane tokens and the [Telegram](../../guides/telegram/) bot's token, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
+| `telegram.json` | The [Telegram](../../guides/telegram/) bot's name and the chat paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
 | `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
@@ -36,6 +37,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Socket, lock and log | `/tmp/cc-demo/server.sock`, `server.lock`, `server.log` |
 | Settings and tokens | `/tmp/cc-demo/config.json`, `secrets.json` |
 | Paired browsers | `/tmp/cc-demo/browsers.json` |
+| Telegram bot and chat | `/tmp/cc-demo/telegram.json` |
 | Session | `/tmp/cc-demo/server.json` |
 | Issue cache | `/tmp/cc-demo/issues.json` |
 | TODO list | `/tmp/cc-demo/todos.json` |

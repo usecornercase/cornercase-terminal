@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE,
-    KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP,
-    REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE,
+    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP,
+    OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP, SPLIT_HELP,
+    START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -103,6 +103,11 @@ pub(crate) enum Control {
     Focus(FocusArgs),
     #[command(about = "Show a message in the window, with a desktop notification", after_help = NOTIFY_HELP)]
     Notify(NotifyArgs),
+    #[command(
+        about = "Have agents message you on Telegram when they need you or finish, until you type in a window",
+        after_help = AWAY_HELP
+    )]
+    Away(AwayArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
@@ -402,6 +407,12 @@ pub(crate) struct RenameArgs {
     pub(crate) renamed: Renamed,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AwayArgs {
+    #[arg(long, help = "Stop: agents no longer message you on Telegram")]
+    pub(crate) off: bool,
 }
 
 #[derive(Debug, Args)]

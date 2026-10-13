@@ -18,6 +18,7 @@ fn with(overlay: Overlay) -> View<'static> {
 
 fn remote_access(url: Option<&str>) -> RemoteAccess {
     RemoteAccess {
+        title: remote_access::TITLE,
         url: url.map(String::from),
         code: url.map(remote_access::code).unwrap_or_default(),
         lines: vec![
@@ -63,6 +64,17 @@ fn hovering_the_remote_button_leaves_usage_unlit() {
     let t = render(&view);
     let cells = (t.backend().buffer()[(remote.x, remote.y)].bg, t.backend().buffer()[(usage.x, usage.y)].bg);
     assert_eq!(cells, (Color::Cyan, Color::Reset));
+}
+
+#[test]
+fn the_away_button_sits_right_of_quit_and_lights_green_while_away() {
+    let quit = layout(AREA, Widths::default()).quit;
+    let away = away_button(quit, true);
+    let view = View { away: Some(true), hover: Some(away.as_position()), ..view(&["cornercase"]) };
+    let t = render(&view);
+    let dot = t.backend().buffer()[(away.right() - 2, away.y)].clone();
+    let cells = (t.backend().buffer()[(away.x, away.y)].bg, t.backend().buffer()[(quit.x, quit.y)].bg);
+    assert_eq!((dot.symbol(), dot.fg, cells), ("●", Color::Green, (Color::Cyan, Color::Reset)));
 }
 
 #[test]

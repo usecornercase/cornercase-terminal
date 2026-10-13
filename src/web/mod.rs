@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 
 use crate::log;
 
-mod auth;
+pub(crate) mod auth;
 mod bridge;
 mod http;
 mod page;

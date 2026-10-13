@@ -48,6 +48,8 @@ pub(crate) enum Row {
     Browsers,
     Kind(String),
     AddAgent,
+    TelegramBot,
+    TelegramChat,
 }
 
 impl Row {
@@ -70,6 +72,7 @@ impl Row {
             | Self::Updates
             | Self::Prefix => "",
             Self::Remote | Self::Browsers => "Remote",
+            Self::TelegramBot | Self::TelegramChat => "Telegram",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(_) => "Accounts",
@@ -88,7 +91,9 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
-            | Self::AddAgent => Page::Agents,
+            | Self::AddAgent
+            | Self::TelegramBot
+            | Self::TelegramChat => Page::Agents,
             Self::Token(_)
             | Self::JiraSite
             | Self::JiraEmail
@@ -206,6 +211,18 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     RemoveToken(Source),
     ForgetBrowsers,
+    CheckTelegram(Secret),
+    RemoveTelegram,
+    PairTelegram,
+    ForgetTelegram,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Telegram {
+    pub(crate) bot: Option<String>,
+    pub(crate) chat: Option<String>,
+    pub(crate) note: String,
+    pub(crate) checking: bool,
 }
 
 #[derive(Debug)]
@@ -253,6 +270,7 @@ pub(crate) struct Settings {
     pub(crate) awake: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
+    pub(crate) telegram: Telegram,
 }
 
 impl Settings {
@@ -272,11 +290,12 @@ impl Settings {
             awake: String::new(),
             remote: String::new(),
             browsers: 0,
+            telegram: Telegram::default(),
         }
     }
 
     pub(crate) fn busy(&self) -> bool {
-        !self.checking.is_empty()
+        !self.checking.is_empty() || self.telegram.checking
     }
 
     fn shown_tabs(&self) -> Vec<&'static str> {
@@ -322,8 +341,12 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
+        rows.push(Row::AddAgent);
+        rows.push(Row::TelegramBot);
+        if self.telegram.bot.is_some() {
+            rows.push(Row::TelegramChat);
+        }
         rows.extend([
-            Row::AddAgent,
             Row::Sidebar,
             Row::Tabs,
             Row::AgentsSection,

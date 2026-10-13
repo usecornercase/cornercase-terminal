@@ -62,6 +62,7 @@ pub(crate) enum Command {
     LastMessage(LastMessage),
     RestartWhenIdle(RestartWhenIdle),
     Stats(Stats),
+    Away(Away),
 }
 
 impl Command {
@@ -87,6 +88,7 @@ impl Command {
             Self::LastMessage(_) => 17,
             Self::RestartWhenIdle(_) => 18,
             Self::Stats(_) => 19,
+            Self::Away(_) => 20,
         }]
     }
 
@@ -111,6 +113,7 @@ impl Command {
             }
             Self::Start(start) => {
                 fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
+                fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
                 fields.maybe("timeout", start.timeout).add("focus", start.focus);
@@ -165,11 +168,14 @@ impl Command {
             Self::RestartWhenIdle(restart) => {
                 fields.maybe("timeout", restart.timeout);
             }
+            Self::Away(away) => {
+                fields.add("off", away.off);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 20] = [
+    pub(crate) const NAMES: [&str; 21] = [
         "status",
         "open",
         "new-workspace",
@@ -190,6 +196,7 @@ impl Command {
         "last-message",
         "restart-when-idle",
         "stats",
+        "away",
     ];
 }
 
@@ -266,6 +273,7 @@ pub(crate) struct Split {
 #[serde(default)]
 pub(crate) struct Start {
     pub(crate) agent: Option<String>,
+    pub(crate) project: Option<u64>,
     pub(crate) worktree: Option<String>,
     pub(crate) workspace: Option<u64>,
     pub(crate) name: Option<String>,
@@ -380,6 +388,12 @@ pub(crate) struct Focus {
 #[serde(default)]
 pub(crate) struct Notify {
     pub(crate) text: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Away {
+    pub(crate) off: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

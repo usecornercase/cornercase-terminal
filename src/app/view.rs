@@ -1,9 +1,23 @@
 use super::App;
+use crate::agents::activity;
 use crate::agents::context::Context;
 use crate::project::{Tab, Workspace};
 use crate::ui::{self};
 
 impl App {
+    pub(super) fn project_entries(&self) -> Vec<ui::ProjectEntry> {
+        self.projects
+            .iter()
+            .zip(crate::project::group_indices(&self.projects, &self.groups))
+            .map(|(p, group)| ui::ProjectEntry {
+                name: self.project_label(p),
+                workspaces: p.workspaces.len(),
+                group,
+                status: activity::attention(p.workspaces.iter().flat_map(|w| &w.tabs).map(Tab::status)),
+            })
+            .collect()
+    }
+
     pub(super) fn tab_details(&self, tab: &Tab) -> ui::Details {
         self.details(tab.context(), tab.memory())
     }

@@ -143,6 +143,11 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
+            Action::Away => {
+                if let Err(why) = self.go_away(super::telegram::By::Window) {
+                    self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
+                }
+            }
             Action::Quit => self.outbox.detach = true,
         }
         Ok(())

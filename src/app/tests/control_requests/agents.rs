@@ -16,63 +16,6 @@ fn finish_working(agent: &mut Agent, id: u64) -> Vec<Response> {
     early
 }
 
-struct Agent {
-    app: App,
-    rx: Receiver<AppEvent>,
-    fake: FakeClaude,
-    _config: TempDir,
-    _project: TempDir,
-}
-
-impl Agent {
-    fn new() -> Self {
-        let (config, project) = (TempDir::new(), TempDir::new());
-        let fake = FakeClaude::running(FakeClaude::CONTROL);
-        let settings = Config {
-            agent_commands: [("claude".to_string(), fake.script().display().to_string())].into(),
-            agent_args: [("claude".to_string(), vec![fake.dir().display().to_string()])].into(),
-            ..Config::default()
-        };
-        let config_path = write_config(config.path(), &settings);
-        let (mut app, rx) = app_in(project.path(), config_path);
-        app.agents.claude_dir = Some(fake.dir().to_path_buf());
-        Self { app, rx, fake, _config: config, _project: project }
-    }
-
-    fn start(&mut self, prompt: Option<&str>) -> u64 {
-        let start = wire::Start {
-            agent: Some("claude".into()),
-            name: Some("fixer".into()),
-            prompt: prompt.map(str::to_string),
-            ..wire::Start::default()
-        };
-        ask(&mut self.app, None, Command::Start(start));
-        let started = done(answered(&mut self.app, &self.rx, "the agent is ready"));
-        started.ids.pane.expect("the agent's pane")
-    }
-
-    fn finish(&self) {
-        self.fake.signal("finish");
-    }
-
-    fn until(&mut self, what: &str, cond: impl Fn(&App) -> bool) {
-        let (app, rx) = (&mut self.app, &self.rx);
-        pump_until(app, rx, what, |a| cond(a));
-    }
-
-    fn refreshing(&mut self, what: &str, cond: impl Fn(&App) -> bool) {
-        refreshing(&mut self.app, &self.rx, what, cond);
-    }
-
-    fn status(&self, id: u64) -> Option<activity::Status> {
-        pane(&self.app, id).agent.status()
-    }
-
-    fn answered(&mut self, what: &str) -> Response {
-        answered(&mut self.app, &self.rx, what)
-    }
-}
-
 mod work_stats {
     use super::*;
 
@@ -347,22 +290,6 @@ fn send_refuses_an_agent_waiting_for_an_answer() {
 
 fn last_message(pane: u64) -> Command {
     Command::LastMessage(wire::LastMessage { pane: Some(pane), tab: None })
-}
-
-impl Agent {
-    fn transcript(&mut self, id: u64, lines: &[&str]) {
-        let (app, rx) = (&mut self.app, &self.rx);
-        refreshing(app, rx, "the pane knows its conversation", |a| {
-            pane(a, id).context.record_for(crate::agents::Known::Claude).is_some()
-        });
-        let Some(context::Record::Claude(path)) = pane(&self.app, id).context.record_for(crate::agents::Known::Claude)
-        else {
-            panic!("not a transcript")
-        };
-        let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path).expect("open the transcript");
-        let text: String = lines.iter().flat_map(|line| [*line, "\n"]).collect();
-        std::io::Write::write_all(&mut file, text.as_bytes()).expect("write the transcript");
-    }
 }
 
 #[test]

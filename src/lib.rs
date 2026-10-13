@@ -23,6 +23,7 @@ pub mod project;
 pub(crate) mod settings;
 pub(crate) mod shortcuts;
 pub mod state;
+pub(crate) mod telegram;
 pub(crate) mod term;
 pub(crate) mod todo;
 pub mod update;

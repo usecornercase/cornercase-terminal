@@ -1,0 +1,91 @@
+---
+title: On Telegram
+description: Leave the computer and keep working with your agents from Telegram. While you are away, an agent that needs you or finishes messages you there, and what you reply goes to it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When you leave the computer, cornercase can carry on in a Telegram chat. While you are **away**, every agent that needs you or finishes its turn sends you a message: its question with buttons to answer it, or what it wrote. You reply to that message, and your reply goes to that agent. From the same chat you can list your agents, look at their screens, stop one or start a new one.
+
+It works on mobile data and needs nothing on the phone but Telegram. To see the whole window instead, use [From your phone](../phone/).
+
+## What you need
+
+- **A Telegram account**, on your phone.
+- **A bot of your own.** In Telegram, open a chat with [@BotFather](https://t.me/BotFather), send `/newbot`, pick a name and a username ending in `bot`, and copy the token it gives you (something like `123456789:AAH…`). The bot is yours alone: cornercase talks to Telegram as that bot, and only to the chat you pair.
+
+cornercase runs no server for this: your computer asks Telegram for new messages and sends the agents' messages itself, over HTTPS. Nothing on your computer is reachable from the internet.
+
+## Set it up
+
+1. In **Settings › Agents**, under **Telegram**, select **bot**, press `Enter`, paste the token and press `Enter`. cornercase checks it with Telegram and shows the bot's name, such as `@my_cornercase_bot`.
+2. Select **phone** and press `Enter`. A dialog shows a QR code and the same link as text.
+3. Scan the code with your phone's camera. It opens the bot in Telegram: tap **Start**.
+4. The dialog closes, `Telegram connected` shows, and the bot says hello in the chat.
+
+The code works once and for ten minutes, and stops working as soon as you close the dialog. Once paired, the bot listens only to that chat.
+
+## Go away
+
+When you leave, turn on **away** in any of these ways:
+
+- click **`Away`**, at the right of **`Quit`** at the bottom of the sidebar (it shows once a phone is paired);
+- press `o` in the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts);
+- run [`cornercase away`](../scripts-and-agents/#away-on-telegram);
+- send `/away` to the bot, if you left without it.
+
+The bot then sends the list of your agents, and **`Away`** shows a green **`●`**. **Typing in a cornercase window turns it off**: a key, a paste, a click or the wheel, in any window, a phone's browser included. So does `/back` in the chat or `cornercase away --off`. The bot tells you either way.
+
+## What you get
+
+- **An agent needs you** (a permission prompt, a question): `! claude needs you · web-shop › dark-mode`, the last lines of its screen, and a button for each option it shows (`1 · Yes`, `2 · Yes, and don't ask again`…), plus **esc** and **screen**. A tap presses that key in its pane, as if you had typed it, and the option buttons go away.
+- **An agent finishes its turn**: `✓ claude finished · web-shop › dark-mode` and the last thing it wrote, read from its own conversation (not its screen), with its bold, lists, code and links. A long message comes in several, at most four; the rest stays in cornercase. When a Claude Code turn ends with a command still running in the background (a dev server), it says `ended its turn · a background shell still runs`.
+
+A message is sent once per change, after the agent held it for a second, and only while you are away. This works with the agents whose state cornercase reads: Claude Code, Codex, Gemini CLI and opencode (opencode never says that it waits for you, see [Agents](../../reference/agents/)).
+
+## Answer
+
+**Reply** to one of the bot's messages (swipe it, or long-press and **Reply**) and what you write goes to that agent, with `Enter`. A 👍 on your message says the agent took it; otherwise the bot answers why not.
+
+A message that replies to nothing goes to your only agent, or, with several, the bot asks **Which agent is this for?** with a button per agent.
+
+The bot doesn't type a message where it would do something else:
+
+- an agent waiting for an answer gets the buttons again: a reply would answer its question;
+- Claude Code's feedback survey gets a **dismiss the survey** button, since a digit would rate the session;
+- an agent showing a panel or a dialog instead of its input box gets **screen** and **esc**.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `/status` | Every agent, in sidebar order, with what it is doing, its model and context. Each one has buttons: **✎** to write to it (the bot asks for the message), **screen** for its last lines, **esc** to stop its turn. **+ new agent** starts one. |
+| `/new` | Starts an agent: the bot asks for the project, then the workspace or **+ new worktree** (and the branch's name), then the agent if the [default one](../../reference/agents/) is `auto`, then the prompt. The agent opens in a new tab, as with [`cornercase start`](../scripts-and-agents/), and the window stays where it was. |
+| `/away` | Turns away on from the phone. |
+| `/back` | Turns it off: the bot stops messaging you. |
+
+Telegram shows them in its menu (the `/` button). A button from before the server restarted is refused, since the ids it carries may name other panes now: send `/status` for fresh ones.
+
+## Change or forget
+
+- **Another phone or account**: pair it from the **phone** row; it replaces the previous chat.
+- **Forget the phone**: select **phone** and press `Backspace`. The bot stops listening to it.
+- **Remove the bot**: select **bot** and press `Backspace`. The token is deleted and cornercase stops talking to Telegram. Setting another bot forgets the paired chat.
+
+## Privacy and security
+
+- Only the paired chat is heard, and only from the person who paired it; everything else is ignored. A group cannot be paired.
+- The token lives in `secrets.json`, and the bot's name and the paired chat in `telegram.json`, both next to `config.json` and readable only by you (see [Files](../../reference/files-and-environment/)).
+- `server.log` says when a message or a tap came in and what kind it was, never its text, nor the token.
+- **What agents write goes through Telegram.** Chats with bots are not end-to-end encrypted, so Telegram's servers store the messages: questions, answers, the screens you ask for, file paths and code. Don't use it for work you can't send there.
+
+<Aside type="caution">
+Whoever can write in that Telegram chat can type into your agents, as if at your keyboard. Keep your Telegram account locked, and forget the phone if you lose it.
+</Aside>
+
+## Limits
+
+- The computer must be awake and the cornercase server running. [Keep awake](../../reference/agents/#keep-the-computer-awake) keeps it awake while an agent works.
+- Away is not saved: after a server restart it is off until you turn it on again.
+- One chat per computer. A bot can be read by one program at a time: give each computer its own bot, or the bot row says that another program reads its messages.
+- Pictures from the agents are not sent, and Telegram's topics are not used: one chat holds every agent, and replies say which one.

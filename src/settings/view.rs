@@ -12,6 +12,18 @@ impl Settings {
         ("keep awake".into(), value.into(), self.awake.clone(), false)
     }
 
+    fn telegram_row(&self, row: &Row) -> (String, String, String, bool) {
+        if *row == Row::TelegramBot {
+            let note = if self.telegram.checking { "checking…".into() } else { self.telegram.note.clone() };
+            return ("bot".into(), self.telegram.bot.clone().unwrap_or_else(|| "not set".into()), note, false);
+        }
+        let (value, note) = match &self.telegram.chat {
+            Some(chat) => (chat.clone(), "agents message it while you are away · enter pairs another"),
+            None => ("not paired".into(), "enter shows a code to scan with your phone"),
+        };
+        ("phone".into(), value, note.into(), false)
+    }
+
     pub(crate) fn row_text(&self, row: &Row) -> RowText {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
@@ -103,6 +115,7 @@ impl Settings {
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
+            Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
         };
         RowText { label, value, note, dangerous }
     }
@@ -135,7 +148,7 @@ impl Settings {
 
     pub(crate) fn edit_field(&self) -> Option<(String, String)> {
         self.edit.as_ref().map(|edit| {
-            let token = matches!(edit.row, Row::Token(_));
+            let token = matches!(edit.row, Row::Token(_) | Row::TelegramBot);
             let label = match &edit.row {
                 Row::Folder => "worktrees folder".to_string(),
                 Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
@@ -147,6 +160,7 @@ impl Settings {
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
+                Row::TelegramBot => "Telegram bot token, from @BotFather".to_string(),
                 _ => String::new(),
             };
             let value = if token { "•".repeat(edit.input.chars().count()) } else { edit.input.clone() };

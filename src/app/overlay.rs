@@ -64,6 +64,7 @@ pub(super) enum Overlay {
     Restart,
     Usage,
     Remote,
+    Telegram,
     Branches(BranchPicker),
     Keys(Option<KeysGroup>),
 }
@@ -89,6 +90,7 @@ impl Overlay {
             Self::Update(_) => "update",
             Self::Usage => "usage",
             Self::Remote => "remote",
+            Self::Telegram => "telegram",
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
             Self::Keys(_) => "keys",
@@ -160,6 +162,7 @@ impl App {
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
+            Some(Overlay::Telegram) => self.telegram_mouse(ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(
@@ -205,6 +208,7 @@ impl App {
             Overlay::Restart => self.restart_view(area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
+            Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
         })
     }

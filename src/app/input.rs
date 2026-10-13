@@ -263,6 +263,7 @@ impl App {
     fn footer_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
         let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
         let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
+        let away = self.away_button().is_some_and(|on| ui::away_button(areas.quit, on).contains(pos));
         let hit = update || remote || [areas.quit, areas.usage, areas.settings].iter().any(|r| r.contains(pos));
         if hit && left {
             self.nav = None;
@@ -270,6 +271,8 @@ impl App {
                 self.open_update();
             } else if remote {
                 self.open_remote();
+            } else if away {
+                let _ = self.go_away(super::telegram::By::Window);
             } else if areas.quit.contains(pos) {
                 self.outbox.detach = true;
             } else if areas.usage.contains(pos) {

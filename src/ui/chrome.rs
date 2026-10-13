@@ -9,6 +9,7 @@ use super::files;
 use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
 use super::pane::wordmark;
 use super::remote_access;
+use super::telegram;
 use super::theme::status_icon;
 use super::widgets::{
     button_style, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered, update_button,
@@ -27,6 +28,8 @@ pub(super) const BACK_LABEL: &str = "‹ Projects";
 pub(super) const ISSUES_LABEL: &str = "Issues";
 
 pub(super) const USAGE_LABEL: &str = "Usage";
+
+pub(super) const QUIT_LABEL: &str = "Quit";
 
 const CHANGES_ICON: &str = "±";
 
@@ -62,7 +65,15 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         }
     }
     draw_usage_button(f, view, usage);
-    draw_quit_button(f, view, areas.quit);
+    let mut quit = areas.quit;
+    if let Some(on) = view.away {
+        let r = telegram::away_button(areas.quit, on);
+        telegram::draw_away(f, view, r, on);
+        if !r.is_empty() {
+            quit.width = r.x - quit.x;
+        }
+    }
+    draw_quit_button(f, view, quit);
 }
 
 pub(super) fn draw_column_border(f: &mut Frame, colour: Color, r: Rect) {
@@ -253,5 +264,5 @@ fn draw_usage_button(f: &mut Frame, view: &View, r: Rect) {
 
 fn draw_quit_button(f: &mut Frame, view: &View, r: Rect) {
     let style = button_style(view, r, Style::default().fg(view.muted), Color::Red);
-    draw_button(f, r, " ", "Quit", style);
+    draw_button(f, r, " ", QUIT_LABEL, style);
 }

@@ -68,10 +68,30 @@ impl Settings {
         self.save(Config { issue_tabs: names, ..self.config.clone() }, notice)
     }
 
-    pub(crate) fn removable(&self, row: usize) -> Option<Source> {
+    pub(crate) fn removal(&self, row: usize) -> Option<Action> {
         match self.rows().get(row) {
-            Some(Row::Token(source)) if matches!(self.status(*source), Some(Status::Saved(_))) => Some(*source),
+            Some(Row::Token(source)) if matches!(self.status(*source), Some(Status::Saved(_))) => {
+                Some(Action::RemoveToken(*source))
+            }
+            Some(Row::TelegramBot) if self.telegram.bot.is_some() => Some(Action::RemoveTelegram),
+            Some(Row::TelegramChat) if self.telegram.chat.is_some() => Some(Action::ForgetTelegram),
             _ => None,
+        }
+    }
+
+    pub(crate) fn telegram_checked(&mut self, result: Result<String, String>, paired: bool) {
+        self.telegram.checking = false;
+        match result {
+            Ok(name) => {
+                self.edit = None;
+                let next = if paired { "" } else { ": pair your phone in the row below" };
+                self.notice = Some(format!("bot @{name} is ready{next}"));
+            }
+            Err(e) => {
+                if let Some(edit) = &mut self.edit {
+                    edit.error = Some(e);
+                }
+            }
         }
     }
 }

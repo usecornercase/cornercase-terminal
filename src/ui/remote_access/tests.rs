@@ -14,7 +14,7 @@ fn the_code_is_square_with_a_quiet_zone() {
 
 #[test]
 fn a_window_too_short_shows_the_address_instead_of_the_code() {
-    let remote = RemoteAccess { url: Some(URL.into()), code: code(URL), lines: vec!["hint".into()] };
+    let remote = RemoteAccess { title: TITLE, url: Some(URL.into()), code: code(URL), lines: vec!["hint".into()] };
 
     let short = body(&remote, 60, 10, Color::Reset);
     let tall = body(&remote, 100, 40, Color::Reset);

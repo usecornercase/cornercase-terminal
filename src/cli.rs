@@ -187,6 +187,16 @@ fn run_control(command: Control) -> Result<bool> {
             let text = notify.text.join(" ");
             ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
         }
+        Control::Away(away) => {
+            let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
+            let on = value.get("away").and_then(Value::as_bool) == Some(true);
+            let line = if on {
+                "away: agents message you on Telegram until you type in a window\n"
+            } else {
+                "back: agents no longer message you on Telegram\n"
+            };
+            print_out(line)
+        }
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
     }?;
@@ -243,6 +253,7 @@ fn run_start(start: StartArgs) -> Result<()> {
     };
     let request = control::Start {
         agent: start.agent,
+        project: None,
         worktree: start.worktree,
         workspace: start.workspace,
         name: start.name,

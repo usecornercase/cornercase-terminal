@@ -225,6 +225,6 @@ impl App {
             (Phase::Failed(why), _) => (None, vec![why.clone(), "fix it, then open Remote again".into()]),
         };
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();
-        ui::RemoteAccess { url, code, lines }
+        ui::RemoteAccess { title: ui::remote_access::TITLE, url, code, lines }
     }
 }

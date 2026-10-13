@@ -13,7 +13,7 @@ const TOKEN_BYTES: usize = 16;
 const SECRET_BYTES: usize = 32;
 const VERSION: u32 = 1;
 
-pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
+pub(crate) fn random_hex(bytes: usize) -> io::Result<String> {
     let mut buf = vec![0u8; bytes];
     std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
     Ok(hex(&buf))
@@ -28,17 +28,17 @@ fn same(a: &str, b: &str) -> bool {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct Pairing {
+pub(crate) struct Pairing {
     pub(crate) token: String,
     until: Instant,
 }
 
 impl Pairing {
-    pub(super) fn new(now: Instant) -> io::Result<Self> {
+    pub(crate) fn new(now: Instant) -> io::Result<Self> {
         Ok(Self { token: random_hex(TOKEN_BYTES)?, until: now + PAIRING_FOR })
     }
 
-    pub(super) fn accepts(&self, token: &str, now: Instant) -> bool {
+    pub(crate) fn accepts(&self, token: &str, now: Instant) -> bool {
         now < self.until && same(&self.token, token)
     }
 }

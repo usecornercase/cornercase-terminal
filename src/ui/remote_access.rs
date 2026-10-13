@@ -5,6 +5,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
+use super::widgets::button_width;
 use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block, update_button};
 use crate::highlight::markdown;
 
@@ -17,32 +18,41 @@ const LIGHT: Color = Color::Indexed(231);
 const TOO_SMALL: &str = "make this window larger to show the code";
 
 pub(crate) struct RemoteAccess {
+    pub(crate) title: &'static str,
     pub(crate) url: Option<String>,
     pub(crate) code: Vec<Line<'static>>,
     pub(crate) lines: Vec<String>,
 }
 
-pub(crate) fn button(usage: Rect, connected: bool) -> Rect {
-    let label = if connected { format!("{LABEL}{LIT}") } else { LABEL.into() };
-    let width = u16::try_from(label.chars().count()).unwrap_or(u16::MAX).saturating_add(2);
-    let room = usage.width.saturating_sub(super::button_width(super::USAGE_LABEL) + 2);
+pub(super) fn corner(row: Rect, label: &str, lit: bool, beside: &str) -> Rect {
+    let text = if lit { format!("{label}{LIT}") } else { label.into() };
+    let width = button_width(&text);
+    let room = row.width.saturating_sub(button_width(beside) + 2);
     if width > room {
         return Rect::default();
     }
-    Rect { x: usage.right() - width - 1, width, ..usage }
+    Rect { x: row.right() - width - 1, width, ..row }
 }
 
-pub(crate) fn draw_button(f: &mut Frame, view: &View, r: Rect, connected: bool) {
+pub(super) fn draw_corner(f: &mut Frame, view: &View, r: Rect, label: &str, lit: bool) {
     if r.is_empty() {
         return;
     }
     let style = super::button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
-    let mut spans = vec![Span::styled(format!(" {LABEL}"), style)];
-    if connected {
+    let mut spans = vec![Span::styled(format!(" {label}"), style)];
+    if lit {
         spans.push(Span::styled(LIT, style.fg(Color::Green)));
     }
     spans.push(Span::styled(" ", style));
     f.render_widget(Paragraph::new(Line::from(spans)), super::middle(r));
+}
+
+pub(crate) fn button(usage: Rect, connected: bool) -> Rect {
+    corner(usage, LABEL, connected, super::USAGE_LABEL)
+}
+
+pub(crate) fn draw_button(f: &mut Frame, view: &View, r: Rect, connected: bool) {
+    draw_corner(f, view, r, LABEL, connected);
 }
 
 fn modules(url: &str) -> Option<(usize, Vec<bool>)> {
@@ -122,7 +132,7 @@ pub(crate) fn done(screen: Rect, remote: &RemoteAccess) -> Rect {
 pub(crate) fn draw(f: &mut Frame, view: &View, remote: &RemoteAccess) {
     let r = area(f.area(), remote);
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, TITLE), r);
+    f.render_widget(overlay_block(view.muted, remote.title), r);
     let [text, _, _] = rows(r);
     let room = f.area().height.saturating_sub(4);
     f.render_widget(Paragraph::new(body(remote, text.width, room, view.muted)), text);
