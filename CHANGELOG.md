@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.72
+
+- No changes in the app. Each overlay's view, submission and mouse handling run through their own methods.
+
 ## 0.12.70
 
 - No changes in the app. It keeps one drag at a time.
