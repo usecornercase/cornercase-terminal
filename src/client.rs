@@ -21,7 +21,7 @@ use crate::graphics::Support;
 use crate::graphics::detect::Facts;
 use crate::host_theme::HostTheme;
 use crate::remote::{Remote, Stderr};
-use crate::{paths, pointer, protocol, restart};
+use crate::{paths, pointer, process, protocol, restart};
 
 pub(crate) mod input;
 mod probe;
@@ -31,7 +31,7 @@ mod window;
 
 pub use requests::{answer, ask, follow, running_now};
 pub(crate) use requests::{answered, connect, request};
-pub(crate) use server_process::{connect_or_start, stop, wait_for_exit};
+pub(crate) use server_process::{connect_or_start, wait_for_exit};
 pub use server_process::{kill_server, restart_server};
 
 const OTHER_BUILD: &str = "The running cornercase server comes from another build; cornercase was probably updated.";
@@ -117,7 +117,10 @@ impl Target {
                 protocol::check_peer(&stream, protocol::own_uid())?;
                 Link::socket(stream)
             }
-            Self::Remote(remote) => remote.connect(again),
+            Self::Remote(remote) => {
+                let piped = remote.connect(again)?;
+                Ok(Link::piped(piped.reader, piped.writer, piped.child, piped.stderr))
+            }
         }
     }
 
@@ -148,7 +151,7 @@ struct Guard {
 impl Drop for Guard {
     fn drop(&mut self) {
         if let Some(child) = self.child.take() {
-            stop(child);
+            process::stop(child);
         }
     }
 }

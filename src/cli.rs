@@ -68,7 +68,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Logs(args) => return print_logs(&args),
         Command::Stats(args) => return print_stats(&args),
         Command::Server => server::run()?,
-        Command::Proxy => remote::proxy()?,
+        Command::Proxy => remote::proxy(client::connect_or_start)?,
     }
     Ok(true)
 }

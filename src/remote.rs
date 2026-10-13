@@ -1,18 +1,19 @@
 use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::Shutdown;
-use std::process::{ChildStderr, Command, ExitStatus, Stdio};
+use std::os::unix::net::UnixStream;
+use std::path::Path;
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
 use parking_lot::Mutex;
 
-use crate::client::{self, Link};
 use crate::error::{Error, Result};
-use crate::paths;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
+use crate::{paths, process};
 
 const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
@@ -75,6 +76,13 @@ impl Stderr {
     }
 }
 
+pub struct Piped {
+    pub reader: BufReader<ChildStdout>,
+    pub writer: ChildStdin,
+    pub child: Child,
+    pub stderr: Stderr,
+}
+
 enum Found {
     Banner(Banner),
     Ended,
@@ -86,7 +94,7 @@ impl Remote {
         &self.destination
     }
 
-    pub fn connect(&self, again: bool) -> Result<Link> {
+    pub fn connect(&self, again: bool) -> Result<Piped> {
         let mut child = Command::new(SSH)
             .args(self.ssh_args(again, false, "proxy"))
             .stdin(Stdio::piped())
@@ -104,14 +112,14 @@ impl Remote {
         let mut reader = BufReader::new(output);
         match read_banner(&mut reader) {
             Found::Banner(banner) => match self.check(&banner) {
-                Ok(()) => Ok(Link::piped(reader, input, child, stderr)),
+                Ok(()) => Ok(Piped { reader, writer: input, child, stderr }),
                 Err(e) => {
-                    client::stop(child);
+                    process::stop(child);
                     Err(e)
                 }
             },
             Found::Garbage => {
-                client::stop(child);
+                process::stop(child);
                 Err(Error::Ssh { host: self.destination.clone(), reason: GARBAGE.into() })
             }
             Found::Ended => {
@@ -231,14 +239,14 @@ fn rebuilt(message: ClientMessage, build: String) -> ClientMessage {
     }
 }
 
-pub fn proxy() -> Result<()> {
+pub fn proxy(connect: impl FnOnce(&Path) -> Result<UnixStream>) -> Result<()> {
     let mut out = io::stdout().lock();
     writeln!(out, "{}", banner())?;
     out.flush()?;
     let Some(first) = protocol::recv::<ClientMessage>(&mut io::stdin().lock())? else { return Ok(()) };
     let path = paths::socket();
     protocol::check_socket_dir(&path)?;
-    let stream = client::connect_or_start(&path)?;
+    let stream = connect(&path)?;
     protocol::check_peer(&stream, protocol::own_uid())?;
     let mut to_server = stream.try_clone()?;
     protocol::send(&mut to_server, &rebuilt(first, version::build_id()))?;

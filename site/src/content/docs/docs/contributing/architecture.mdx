@@ -101,7 +101,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `keys.rs`, `mouse.rs` | Key and mouse encoding for programs. |
 | `host_theme.rs` | Asking the outer terminal for its colours and its name. |
 | `notify.rs` | Desktop notifications through the outer terminal: which escape sequence each terminal understands, and how it is written. |
-| `process.rs` | A process's cwd, name, arguments, environment, children and memory footprint, per platform. |
+| `process.rs` | A process's cwd, name, arguments, environment, children and memory footprint, per platform; it also stops and reaps a child. |
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
 | `worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
 | `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane (REST, with an HTML to Markdown converter), the browser state and the on-disk cache. `browser.rs` takes sizes and hits; `app/issues_dialog.rs` builds and hit-tests its UI view. |

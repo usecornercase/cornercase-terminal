@@ -1,6 +1,8 @@
 use std::io;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
+use std::process::Child;
+use std::thread;
 
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
@@ -8,6 +10,15 @@ use rustix::process::{Pid, test_kill_process};
 pub use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid};
 
 const MAX_DESCENDANTS: usize = 256;
+
+pub fn reap(mut child: Child) {
+    thread::spawn(move || child.wait());
+}
+
+pub fn stop(mut child: Child) {
+    let _ = child.kill();
+    reap(child);
+}
 
 pub fn alive(pid: i32) -> bool {
     Pid::from_raw(pid).is_some_and(|pid| !matches!(test_kill_process(pid), Err(Errno::SRCH)))
