@@ -1,11 +1,14 @@
 use std::time::{Instant, SystemTime};
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::event::AppEvent;
 use super::overlay::Overlay;
+use super::toast::Toast;
 use crate::agents;
+use crate::clipboard;
 use crate::log::{Job, Level};
 use crate::time;
 use crate::ui;
@@ -62,6 +65,23 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Esc => self.overlay = None,
             _ => {}
+        }
+    }
+
+    pub(super) fn usage_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
+        if ev.kind != MouseEventKind::Down(MouseButton::Left) {
+            return;
+        }
+        let view = self.usage_view();
+        if ui::usage_done(area, &view).contains(pos) {
+            self.overlay = None;
+        } else if let Some(i) = ui::usage_tabs(area, &view).iter().position(|r| r.contains(pos)) {
+            self.switch_usage(if i == 0 { usage::Page::Limits } else { usage::Page::Stats });
+        } else if view.page == usage::Page::Stats && !view.stats.empty && ui::usage_share(area, &view).contains(pos) {
+            self.outbox
+                .host_writes
+                .push(clipboard::osc52(&crate::stats::share_link(&self.agents.stats, SystemTime::now())));
+            self.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
         }
     }
 

@@ -1,3 +1,4 @@
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
@@ -78,6 +79,23 @@ pub(super) enum MenuAction {
 }
 
 impl App {
+    pub(super) fn menu_view(&self, at: Position, actions: &[MenuAction]) -> ui::Overlay {
+        ui::Overlay::Menu { at, items: self.menu_labels(actions) }
+    }
+
+    pub(super) fn menu_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
+        let MouseEventKind::Down(button) = ev.kind else { return Ok(()) };
+        let Some(Overlay::Menu { at, actions }) = &self.overlay else { return Ok(()) };
+        let at = *at;
+        let menu = ui::menu_area(area, at, &self.menu_labels(actions));
+        let picked = ui::menu_hit(menu, actions.len(), pos).map(|i| actions[i]);
+        self.overlay = None;
+        if let (MouseButton::Left, Some(action)) = (button, picked) {
+            return self.menu_action(action, at, area);
+        }
+        Ok(())
+    }
+
     pub(super) fn menu_labels(&self, actions: &[MenuAction]) -> Vec<String> {
         actions.iter().map(|&a| self.menu_label(a)).collect()
     }

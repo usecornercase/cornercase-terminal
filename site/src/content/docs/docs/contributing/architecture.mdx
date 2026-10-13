@@ -44,6 +44,8 @@ Each client has its own writer thread, so a slow client never blocks the loop. A
 
 `App::drag` holds one `Drag` variant from `app/interaction.rs`: `Border`, `Divider`, `Row`, `Pane`, `Selection`, `Link` or `Lines`. A text selection can carry a pending path press; a press held for a program that reads the mouse uses `Link` and keeps the path underlined. A file-line drag holds its workspace, path and anchor and ends on the next mouse event if that file is no longer shown. Starting a drag replaces the previous one. Exhaustive matches keep dispatch, pointer shapes, hover and drawing consistent. `Esc` and the prefix key end border, divider, row and pane drags; text and file-line selections continue.
 
+Each dialog is an `Overlay` variant whose view, submission and mouse dispatch arms call one method or return a plain value. Forms and closing confirmations live in `app/dialogs.rs`, with a shared confirmation builder; menu clicks live in `app/menus.rs`, usage clicks and sharing in `app/usage_dialog.rs`, and remote clicks in `app/remote_access.rs`. Mouse dispatch borrows the overlay and checks a left press outside before calling its handler. Menus close on any press and act only on a left one; forms act only on left presses. Submission takes the current overlay and installs the handler's returned successor, keeping busy overlays unchanged. Adding a dialog adds its variant, its own file under `app/` and one line per dispatcher.
+
 ## Protocol
 
 `protocol.rs` frames messages with a little-endian length prefix and encodes them with `postcard`; messages over 64 MiB are refused.

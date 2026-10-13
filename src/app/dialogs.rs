@@ -2,16 +2,96 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::menus::PaneAction;
-use super::overlay::Overlay;
+use super::menus::{PaneAction, Target};
+use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
 use crate::error::Result;
-use crate::ui::{self};
+use crate::ui::{self, FormHit};
+use crate::worktree;
 
 pub(super) const KEEP_PROJECTS_SUBMIT: &str = "keep projects";
 
 pub(super) const CLOSE_PROJECTS_SUBMIT: &str = "close projects";
 
+const NEW_GROUP_HINT: &str = "right-click a project or its ⋯ to move it into the group";
+
+const WORKTREE_TOGGLE: &str = "with its own worktree";
+
 impl App {
+    pub(super) fn new_group_view(input: &str) -> ui::Overlay {
+        ui::Overlay::Form(ui::Form {
+            title: "New group",
+            label: "name",
+            value: input.into(),
+            hint: NEW_GROUP_HINT.into(),
+            toggle: None,
+            note: None,
+            submit: CREATE_SUBMIT,
+        })
+    }
+
+    pub(super) fn new_workspace_view(
+        &self,
+        project: u64,
+        input: &str,
+        worktree: Option<bool>,
+        error: Option<&str>,
+        creating: bool,
+    ) -> ui::Overlay {
+        let home = self.home.as_deref();
+        let repo = self.project_index(project).map(|p| self.projects[p].path.clone()).unwrap_or_default();
+        let path = if worktree == Some(true) {
+            worktree::checkout_path(&self.config.worktrees_dir(home), &repo, input.trim())
+        } else {
+            repo
+        };
+        ui::Overlay::Form(ui::Form {
+            title: "New workspace",
+            label: "name",
+            value: input.into(),
+            hint: format!("in {}", crate::text::display_path(&path, home)),
+            toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
+            note: if creating { Some(ui::Note::Busy("creating…")) } else { error.map(|e| ui::Note::Error(e.into())) },
+            submit: CREATE_SUBMIT,
+        })
+    }
+
+    pub(super) fn rename_view(target: Target, input: &str) -> ui::Overlay {
+        ui::Overlay::Form(ui::Form {
+            title: target.rename_title(),
+            label: "name",
+            value: input.into(),
+            hint: target.rename_hint().into(),
+            toggle: None,
+            note: None,
+            submit: RENAME_SUBMIT,
+        })
+    }
+
+    pub(super) fn group_style_view(&self, group: u64) -> Option<ui::Overlay> {
+        Some(ui::Overlay::GroupStyle(self.group(group)?.clone()))
+    }
+
+    pub(super) fn delete_group_view(&self, group: u64) -> Option<ui::Overlay> {
+        let (submit, extra) = self.dialog_labels(&Overlay::DeleteGroup { group });
+        Some(confirm_view("Delete group", self.delete_group_message(group)?, submit, extra))
+    }
+
+    pub(super) fn close_project_view(&self, project: u64) -> Option<ui::Overlay> {
+        Some(confirm_view("Close project", self.close_project_message(project)?, CLOSE_SUBMIT, None))
+    }
+
+    pub(super) fn close_workspace_view(&self, project: u64, workspace: u64) -> Option<ui::Overlay> {
+        Some(confirm_view("Close workspace", self.close_workspace_message(project, workspace)?, CLOSE_SUBMIT, None))
+    }
+
+    pub(super) fn close_tab_view(&self, project: u64, workspace: u64, tab: u64) -> Option<ui::Overlay> {
+        Some(confirm_view("Close tab", self.close_tab_message(project, workspace, tab)?, CLOSE_SUBMIT, None))
+    }
+
+    pub(super) fn close_pane_view(&self, pane: u64) -> Option<ui::Overlay> {
+        Some(confirm_view("Close pane", self.close_pane_message(pane)?, CLOSE_SUBMIT, None))
+    }
+
     pub(super) fn outside_dialog(&self, pos: Position, area: Rect) -> bool {
         let Some(overlay) = &self.overlay else { return false };
         self.overlay_view(overlay, area).and_then(|o| o.area(area)).is_some_and(|r| !r.contains(pos))
@@ -78,6 +158,22 @@ impl App {
         Ok(())
     }
 
+    pub(super) fn form_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
+        if ev.kind != MouseEventKind::Down(MouseButton::Left) {
+            return Ok(());
+        }
+        let Some(overlay) = &self.overlay else { return Ok(()) };
+        let (submit, extra) = self.dialog_labels(overlay);
+        match ui::form_hit(area, submit, extra, pos) {
+            Some(FormHit::Submit) => self.submit_form(area)?,
+            Some(FormHit::Extra) => self.submit_extra(),
+            Some(FormHit::Cancel) => self.cancel_form(),
+            Some(FormHit::Toggle) => self.toggle_worktree(),
+            None => {}
+        }
+        Ok(())
+    }
+
     pub(super) fn cancel_form(&mut self) {
         if !self.overlay.as_ref().is_some_and(Overlay::busy) {
             self.overlay = None;
@@ -88,54 +184,65 @@ impl App {
         let Some(overlay) = self.overlay.take() else { return Ok(()) };
         self.overlay = match overlay {
             Overlay::NewWorkspace { project, input, worktree, creating: false, .. } => {
-                return self.create_workspace(project, input, worktree, area);
+                self.create_workspace(project, input, worktree, area)?
             }
-            Overlay::Rename { target, input } => {
-                let name = input.trim();
-                self.rename(target, (!name.is_empty()).then(|| name.to_string()));
-                None
-            }
+            Overlay::Rename { target, input } => self.submit_rename(target, &input),
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
-            Overlay::NewGroup { input } => {
-                self.add_group(input.trim().to_string());
-                None
-            }
+            Overlay::NewGroup { input } => self.submit_new_group(&input),
             Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }
-            Overlay::DeleteGroup { group } => {
-                self.delete_group(group);
-                None
-            }
-            Overlay::CloseProject { project } => {
-                self.close_project(project);
-                None
-            }
-            Overlay::CloseWorkspace { project, workspace } => {
-                if let Some((p, w)) = self.workspace_index(project, workspace) {
-                    self.close_workspace(p, w);
-                }
-                None
-            }
-            Overlay::CloseTab { project, workspace, tab } => {
-                if let Some((p, w, t)) = self.tab_index(project, workspace, tab) {
-                    self.close_tab(p, w, t);
-                }
-                None
-            }
-            Overlay::ClosePane { pane } => {
-                self.pane_action(pane, PaneAction::Close, area)?;
-                None
-            }
+            Overlay::DeleteGroup { group } => self.submit_delete_group(group),
+            Overlay::CloseProject { project } => self.submit_close_project(project),
+            Overlay::CloseWorkspace { project, workspace } => self.submit_close_workspace(project, workspace),
+            Overlay::CloseTab { project, workspace, tab } => self.submit_close_tab(project, workspace, tab),
+            Overlay::ClosePane { pane } => self.submit_close_pane(pane, area)?,
             Overlay::Update(step) => self.submit_update(step),
-            Overlay::Restart => {
-                self.outbox.restart = true;
-                None
-            }
+            Overlay::Restart => self.submit_restart(),
             busy => Some(busy),
         };
         Ok(())
+    }
+
+    fn submit_rename(&mut self, target: Target, input: &str) -> Option<Overlay> {
+        let name = input.trim();
+        self.rename(target, (!name.is_empty()).then(|| name.to_string()));
+        None
+    }
+
+    fn submit_new_group(&mut self, input: &str) -> Option<Overlay> {
+        self.add_group(input.trim().to_string());
+        None
+    }
+
+    fn submit_delete_group(&mut self, group: u64) -> Option<Overlay> {
+        self.delete_group(group);
+        None
+    }
+
+    fn submit_close_project(&mut self, project: u64) -> Option<Overlay> {
+        self.close_project(project);
+        None
+    }
+
+    fn submit_close_workspace(&mut self, project: u64, workspace: u64) -> Option<Overlay> {
+        if let Some((p, w)) = self.workspace_index(project, workspace) {
+            self.close_workspace(p, w);
+        }
+        None
+    }
+
+    fn submit_close_tab(&mut self, project: u64, workspace: u64, tab: u64) -> Option<Overlay> {
+        if let Some((p, w, t)) = self.tab_index(project, workspace, tab) {
+            self.close_tab(p, w, t);
+        }
+        None
+    }
+
+    fn submit_close_pane(&mut self, pane: u64, area: Rect) -> Result<Option<Overlay>> {
+        self.pane_action(pane, PaneAction::Close, area)?;
+        Ok(None)
     }
 
     pub(super) fn delete_group_message(&self, id: u64) -> Option<String> {
@@ -186,6 +293,15 @@ impl App {
         let name = term.program(&self.config).unwrap_or_else(|| "?".into());
         Some(format!("Close the pane running {name}? What runs in it is stopped."))
     }
+}
+
+fn confirm_view(
+    title: &'static str,
+    message: String,
+    submit: &'static str,
+    extra: Option<&'static str>,
+) -> ui::Overlay {
+    ui::Overlay::Confirm(ui::Confirm { title, message, note: None, submit, extra })
 }
 
 fn stopped_tabs(tabs: usize) -> String {

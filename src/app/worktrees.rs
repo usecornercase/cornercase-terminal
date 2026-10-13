@@ -185,18 +185,16 @@ impl App {
         input: String,
         worktree: Option<bool>,
         area: Rect,
-    ) -> Result<()> {
+    ) -> Result<Option<Overlay>> {
         let name = input.trim().to_string();
-        let Some(p) = self.project_index(project) else { return Ok(()) };
+        let Some(p) = self.project_index(project) else { return Ok(None) };
         if name.is_empty() {
             let error = Some("the name is required".into());
-            self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false });
-            return Ok(());
+            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false }));
         }
         if worktree == Some(true) {
             self.spawn_worktree(p, name, None, None);
-            self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true });
-            return Ok(());
+            return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true }));
         }
         let repo = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, repo, Some(name), false)?;
@@ -204,7 +202,7 @@ impl App {
         project.workspaces.push(workspace);
         project.active = project.workspaces.len() - 1;
         self.active = p;
-        Ok(())
+        Ok(None)
     }
 
     pub(super) fn worktree_created(
