@@ -79,7 +79,7 @@ impl App {
         let rows_now = s.rows();
         let sections: Vec<&'static str> = rows_now.iter().map(settings::Row::section).collect();
         let removable: Vec<bool> = (0..rows_now.len()).map(|i| s.removable(i).is_some()).collect();
-        let movable: Vec<bool> = rows_now.iter().map(|r| matches!(r, settings::Row::Tab(_))).collect();
+        let movable: Vec<bool> = rows_now.iter().map(settings::Row::movable).collect();
         let pick = s.pick.as_ref().map(|p| (s.pick_choices().len(), p.search.scroll()));
         let tabs = Page::ALL.map(Page::name);
         let layout = ui::SettingsLayout {

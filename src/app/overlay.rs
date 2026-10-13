@@ -15,7 +15,7 @@ use crate::error::Result;
 use crate::issues::browser::Browser;
 use crate::list::Search;
 use crate::picker::Picker;
-use crate::settings::Settings;
+use crate::settings::{self, Settings};
 use crate::shortcuts::Group as KeysGroup;
 use crate::time;
 use crate::ui::{self, FormHit};
@@ -267,7 +267,7 @@ impl App {
                     submit: CREATE_SUBMIT,
                 })
             }
-            Overlay::Settings(s) => s.view(),
+            Overlay::Settings(s) => ui::Overlay::Settings(settings::settings_view(s)),
             Overlay::Rename { target, input } => ui::Overlay::Form(ui::Form {
                 title: target.rename_title(),
                 label: "name",

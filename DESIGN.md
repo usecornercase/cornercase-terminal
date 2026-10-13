@@ -274,6 +274,7 @@ Why cornercase works the way it does, area by area. The rules every change follo
 
 ## Settings (`config.rs`, `settings.rs`, `app/settings_dialog.rs`)
 
+- `Settings` owns the row labels, values, notes and danger flags as `RowText`, the edit field's label and masked value, the pick title and clamped selection, and the hint. These are rules about the settings, so their existing text tests read the model directly. `Row::movable` is shared by view assembly and mouse hit testing; both must offer source reordering on the same rows. Sidebar and tab choices are read from `config`, their owner.
 - Tabs: Worktrees, Agents, Issues, UI. Every change is saved to `config.json` at once. The prefix key row is the one that captures a key instead of editing text (see Keyboard shortcuts). File: `$XDG_CONFIG_HOME/cornercase/config.json`, or next to the socket when `CORNERCASE_SOCKET` is set (so tests never touch the real one). Missing keys take defaults; a corrupt file means all defaults.
 
 ## Terminals (`term.rs`, `emulator.rs`)
