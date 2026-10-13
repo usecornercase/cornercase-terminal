@@ -5,7 +5,7 @@ use std::{
 };
 
 const LEAVES: &[&str] =
-    &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
+    &["error", "http", "list", "log", "panics", "paths", "persist", "process", "text", "time", "version"];
 
 const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[];
@@ -354,6 +354,15 @@ fn production_modules_follow_the_dependency_rules() {
     let sources = sources();
     assert_clean(&import_failures(&sources, "app", &["app", "server"], APP_EXCEPTIONS));
     assert_clean(&leaf_failures(&sources));
+}
+
+#[test]
+fn the_leaves_are_the_first_group_of_lib_rs() {
+    let lib = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).expect("read src/lib.rs");
+    let first = lib.split("\n\n").next().unwrap_or_default();
+    let names: Vec<&str> =
+        first.lines().filter_map(|line| line.strip_suffix(';')?.rsplit_once("mod ").map(|(_, name)| name)).collect();
+    assert_eq!(names, LEAVES);
 }
 
 #[test]
