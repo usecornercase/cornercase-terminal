@@ -1,0 +1,122 @@
+use rstest::rstest;
+use serde_json::json;
+
+use super::super::Severity;
+use super::*;
+
+pub const RECORDED: &str = r#"{"type":"control_response","response":{"subtype":"success","request_id":"usage","response":{"session":{"total_cost_usd":0},"subscription_type":"team","rate_limits_available":true,"rate_limits":{"five_hour":{"utilization":7,"resets_at":"2026-10-04T13:59:59.953605+00:00"},"seven_day":{"utilization":74,"resets_at":"2026-10-04T15:59:59.953630+00:00"},"extra_usage":{"is_enabled":false},"limits":[{"kind":"session","group":"session","percent":7,"severity":"normal","resets_at":"2026-10-04T13:59:59.953605+00:00","scope":null,"is_active":false},{"kind":"weekly_all","group":"weekly","percent":74,"severity":"normal","resets_at":"2026-10-04T15:59:59.953630+00:00","scope":null,"is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"severity":"normal","resets_at":"2026-10-04T16:00:00+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}],"spend":{"used":{"amount_minor":0,"currency":"USD","exponent":2},"limit":null,"percent":0,"severity":"normal","enabled":false}},"behaviors":{}}}}"#;
+
+fn at(text: &str) -> Option<i64> {
+    time::parse_time(text)
+}
+
+pub fn report(line: &str) -> Report {
+    answer(line).expect("the usage answer").expect("a report")
+}
+
+#[test]
+fn a_recorded_answer_gives_one_window_per_limit() {
+    let expected = Report {
+        plan: Some("team".into()),
+        limited: true,
+        windows: vec![
+            Window {
+                label: "session (5h)".into(),
+                percent: 7,
+                severity: Severity::Normal,
+                resets_at: at("2026-10-04T13:59:59"),
+            },
+            Window {
+                label: "week".into(),
+                percent: 74,
+                severity: Severity::Normal,
+                resets_at: at("2026-10-04T15:59:59"),
+            },
+            Window {
+                label: "week · Fable".into(),
+                percent: 0,
+                severity: Severity::Normal,
+                resets_at: at("2026-10-04T16:00:00"),
+            },
+        ],
+        extra: None,
+        notice: None,
+    };
+    assert_eq!(report(RECORDED), expected);
+}
+
+#[test]
+fn an_account_without_rate_limits_has_no_windows() {
+    let body = json!({"subscription_type": null, "rate_limits_available": false, "rate_limits": null});
+    assert_eq!(parse(body).expect("a report"), Report::default());
+}
+
+#[rstest]
+#[case::empty(json!({}), "unexpected answer: missing field `rate_limits_available`")]
+#[case::available_but_missing(
+    json!({"rate_limits_available": true, "rate_limits": null}),
+    "unexpected answer: rate limits are available but missing"
+)]
+fn an_answer_without_the_usage_fields_is_unavailable(#[case] body: Value, #[case] expected: &str) {
+    assert_eq!(parse(body).expect_err("no report").to_string(), expected);
+}
+
+#[test]
+fn unknown_fields_and_kinds_are_tolerated() {
+    let body = json!({
+        "subscription_type": "max",
+        "rate_limits_available": true,
+        "something_new": [1, 2],
+        "rate_limits": {
+            "limits": [{"kind": "daily_burst", "percent": 12.6, "severity": "elevated", "brand_new": true}],
+            "spend": {"enabled": true, "used": {"amount_minor": 1234, "currency": "USD", "exponent": 2},
+                      "limit": {"amount_minor": 5000, "currency": "USD", "exponent": 2}}
+        }
+    });
+    let expected = Report {
+        plan: Some("max".into()),
+        limited: true,
+        windows: vec![Window { label: "daily burst".into(), percent: 13, severity: Severity::Normal, resets_at: None }],
+        extra: Some("extra usage: 12.34 USD of 50.00 USD".into()),
+        notice: None,
+    };
+    assert_eq!(parse(body).expect("a report"), expected);
+}
+
+#[test]
+fn without_a_limits_list_the_five_hour_and_weekly_fields_are_used() {
+    let body = json!({"rate_limits_available": true, "rate_limits": {
+        "five_hour": {"utilization": 95.0, "resets_at": null},
+        "seven_day": {"utilization": 80.0, "resets_at": "2026-10-04T16:00:00Z"}
+    }});
+    let found: Vec<(String, Severity)> =
+        parse(body).expect("a report").windows.into_iter().map(|w| (w.label, w.severity)).collect();
+    assert_eq!(found, [("session (5h)".into(), Severity::Critical), ("week".into(), Severity::Warning)]);
+}
+
+#[rstest]
+#[case::other_request(
+    r#"{"type":"control_response","response":{"subtype":"success","request_id":"initialize","response":{}}}"#
+)]
+#[case::other_message(r#"{"type":"system","subtype":"init"}"#)]
+#[case::not_json("warming up")]
+fn other_lines_are_skipped(#[case] line: &str) {
+    assert!(answer(line).is_none());
+}
+
+#[test]
+fn an_error_response_carries_its_message() {
+    let line =
+        r#"{"type":"control_response","response":{"subtype":"error","request_id":"usage","error":"not logged in"}}"#;
+    let error = answer(line).expect("the usage answer").expect_err("an error");
+    assert_eq!(error.to_string(), "not logged in");
+}
+
+#[test]
+fn the_probe_drops_claude_session_variables() {
+    let cmd = command("claude");
+    let removed: Vec<_> = cmd.get_envs().filter(|(_, v)| v.is_none()).map(|(k, _)| k.to_owned()).collect();
+    let mut expected: Vec<_> = activity::CLAUDE_SESSION_ENV.map(std::ffi::OsString::from).to_vec();
+    expected.sort();
+    assert_eq!(removed, expected);
+}
