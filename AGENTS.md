@@ -67,7 +67,7 @@ src/state.rs      the saved session as JSON, its Widths schema, migrations and m
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
-src/settings.rs   the settings modal's state; returns Actions for App
+src/settings.rs   the settings modal's state and plain row/edit/pick texts; returns Actions for App
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
 src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
 src/awake.rs      keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child
@@ -104,7 +104,7 @@ src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view an
                   hierarchy.rs (lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)
                   sidebar.rs (lists, row menus and agents section), sidebar/drag.rs (row drags), sidebar/tree.rs, tab_bar.rs, panes.rs (pane mouse, scrollback, selection and dividers), links.rs (paths in panes)
                   agent_watch.rs (status, stats samples, notifications and keeping awake), launches.rs (typing into agents), worktrees.rs (creating, checking, removing and upstream counts), actions.rs (editor and agent actions)
-                  changes_panel.rs and changes_panel/branches.rs, files_panel.rs, todo_panel.rs; issues_dialog.rs, update_dialog.rs, picker_dialog.rs, search_dialog.rs, settings_dialog.rs, usage_dialog.rs
+                  changes_panel.rs and changes_panel/branches.rs, files_panel.rs, todo_panel.rs; issues_dialog.rs, update_dialog.rs, picker_dialog.rs, search_dialog.rs, settings_dialog.rs (builds the settings view), usage_dialog.rs
                   control.rs (the request switchboard and lookups) and control/ (wait.rs waits, idle_restart.rs restart-when-idle, create.rs, talk.rs sending and reading, close.rs, arrange.rs renaming and TODOs, status.rs), events.rs (event subscribers), shortcuts.rs (keys menu actions), trace.rs (changes for logs and events), images.rs (placement and encode jobs), remote_access.rs (browser access)
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread
 src/emulator.rs   wraps libghostty-vt; takes plain Snapshots for ui
