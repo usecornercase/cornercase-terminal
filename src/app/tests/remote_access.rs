@@ -3,6 +3,7 @@ use std::net::{TcpListener, TcpStream};
 
 use super::*;
 use crate::test_util::write_executable;
+use crate::web;
 
 const STATUS: &str = r#"{"BackendState":"Running","CertDomains":["mac.tail1234.ts.net"],"Self":{"DNSName":"mac.tail1234.ts.net.","UserID":7},"User":{"7":{"LoginName":"ada@example.com"}}}"#;
 

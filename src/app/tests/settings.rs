@@ -1,4 +1,5 @@
 use super::*;
+use crate::secrets;
 use crate::settings::{Detail, Row};
 use crate::test_util::FakeHttp;
 
@@ -34,7 +35,7 @@ fn config_path(s: &Setup) -> PathBuf {
 }
 
 fn secrets_file(s: &Setup) -> PathBuf {
-    secrets::path(&config_path(s))
+    paths::secrets(&config_path(s))
 }
 
 fn sections(app: &App) -> Vec<&'static str> {
@@ -207,7 +208,7 @@ fn a_rejected_token_stays_in_its_field_and_is_not_saved() {
 #[test]
 fn a_saved_token_shows_as_connected() {
     let (dir, config) = (TempDir::new(), TempDir::new());
-    secrets::write(&secrets::path(&config.path().join("config.json")), "linear_api_key", "k").expect("save");
+    secrets::write(&paths::secrets(&config.path().join("config.json")), "linear_api_key", "k").expect("save");
     let (mut app, _rx) = app_in(dir.path(), config.path().join("config.json"));
     app.env_tokens.clear();
 

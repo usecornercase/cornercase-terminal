@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 
 use crate::client::{self, Link};
 use crate::error::{Error, Result};
+use crate::paths;
 use crate::protocol::{self, ClientMessage};
 use crate::version::{self, CURRENT};
 
@@ -235,7 +236,7 @@ pub fn proxy() -> Result<()> {
     writeln!(out, "{}", banner())?;
     out.flush()?;
     let Some(first) = protocol::recv::<ClientMessage>(&mut io::stdin().lock())? else { return Ok(()) };
-    let path = protocol::socket_path();
+    let path = paths::socket();
     protocol::check_socket_dir(&path)?;
     let stream = client::connect_or_start(&path)?;
     protocol::check_peer(&stream, protocol::own_uid())?;

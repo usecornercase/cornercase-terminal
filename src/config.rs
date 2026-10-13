@@ -8,7 +8,6 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::notify;
-use crate::protocol;
 use crate::shortcuts::Prefix;
 use crate::state;
 use crate::ui;
@@ -116,17 +115,6 @@ impl Config {
     pub fn fetch_every(&self) -> Option<Duration> {
         (self.fetch_minutes > 0).then(|| Duration::from_secs(self.fetch_minutes.saturating_mul(60)))
     }
-}
-
-pub fn path() -> PathBuf {
-    if let Some(socket) = std::env::var_os(protocol::SOCKET_ENV) {
-        return Path::new(&socket).with_file_name("config.json");
-    }
-    let config_home = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".config")))
-        .unwrap_or_else(std::env::temp_dir);
-    config_home.join("cornercase").join("config.json")
 }
 
 pub fn load(path: &Path) -> Config {

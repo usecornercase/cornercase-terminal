@@ -817,7 +817,7 @@ pub fn run(cli: Cli) -> Result<bool> {
 }
 
 fn print_logs(args: &LogsArgs) -> Result<bool> {
-    let path = log::path();
+    let path = crate::paths::log();
     let mut out = io::stdout().lock();
     if args.path {
         writeln!(out, "{}", path.display())?;
@@ -1221,7 +1221,7 @@ pub struct StatsArgs {
 
 fn print_stats(args: &StatsArgs) -> Result<bool> {
     let now = std::time::SystemTime::now();
-    let path = crate::stats::path(&crate::state::path());
+    let path = crate::paths::stats(&crate::paths::session());
     let view = match ask("stats", control::Command::Stats(control::Stats {})) {
         Ok(value) => {
             let mut view: crate::stats::View = answer(value)?;

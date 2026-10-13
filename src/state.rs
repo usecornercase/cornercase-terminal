@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::changes::{Mode, Scope};
 use crate::issues::People;
-use crate::protocol;
 use crate::split::Node;
 use crate::ui::{GroupEntry, Widths};
 
@@ -211,17 +210,6 @@ impl From<V1State> for V2State {
         }
         Self { workspaces, active }
     }
-}
-
-pub fn path() -> PathBuf {
-    if let Some(socket) = std::env::var_os(protocol::SOCKET_ENV) {
-        return Path::new(&socket).with_extension("json");
-    }
-    let state_home = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".local").join("state")))
-        .unwrap_or_else(std::env::temp_dir);
-    state_home.join("cornercase").join("session.json")
 }
 
 pub fn load(path: &Path) -> Option<State> {

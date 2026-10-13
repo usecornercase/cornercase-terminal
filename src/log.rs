@@ -9,14 +9,10 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::protocol;
-use crate::state;
-
 pub const LEVEL_ENV: &str = "CORNERCASE_LOG";
 pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub const SLOW: Duration = Duration::from_secs(1);
 const QUEUE: usize = 4096;
-const FILE: &str = "server.log";
 pub const PRIVATE: u32 = 0o600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,13 +51,6 @@ struct Logger {
 }
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
-
-pub fn path() -> PathBuf {
-    match std::env::var_os(protocol::SOCKET_ENV) {
-        Some(socket) => Path::new(&socket).with_extension("log"),
-        None => state::path().with_file_name(FILE),
-    }
-}
 
 pub fn rotated(path: &Path) -> PathBuf {
     let mut name = path.as_os_str().to_owned();

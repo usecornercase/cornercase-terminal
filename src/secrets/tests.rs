@@ -1,15 +1,12 @@
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 
 use super::*;
+use crate::paths;
 use crate::test_util::TempDir;
 
 fn file(tmp: &TempDir) -> PathBuf {
-    path(&tmp.path().join("config.json"))
-}
-
-#[test]
-fn lives_next_to_the_config() {
-    assert_eq!(path(Path::new("/c/cornercase/config.json")), PathBuf::from("/c/cornercase/secrets.json"));
+    paths::secrets(&tmp.path().join("config.json"))
 }
 
 #[test]

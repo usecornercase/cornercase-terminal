@@ -107,10 +107,6 @@ fn save(path: &Path, saved: &Saved) -> io::Result<()> {
     crate::state::write(path, saved, true)
 }
 
-pub fn path(config: &Path) -> PathBuf {
-    config.with_file_name("browsers.json")
-}
-
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::MetadataExt;

@@ -17,7 +17,6 @@ mod bridge;
 mod http;
 mod page;
 
-pub use auth::path as devices_path;
 use http::{Request, Response};
 
 pub const DEFAULT_PORT: u16 = 47681;

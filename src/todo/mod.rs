@@ -1,12 +1,11 @@
 pub mod editor;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use editor::Editor;
 
-pub const FILE: &str = "todos.json";
 pub const VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,10 +55,6 @@ pub fn clean(text: &str) -> Option<String> {
     let text: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_string())
-}
-
-pub fn path(state: &Path) -> PathBuf {
-    state.with_file_name(FILE)
 }
 
 pub fn load(path: &Path) -> Todos {
@@ -177,6 +172,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::paths;
     use crate::test_util::TempDir;
 
     fn texts(todos: &Todos) -> Vec<String> {
@@ -343,7 +339,7 @@ mod tests {
         #[test]
         fn the_list_comes_back_from_its_file() {
             let tmp = TempDir::new();
-            let path = tmp.path().join(FILE);
+            let path = tmp.path().join(paths::TODOS_FILE);
             let (mut todos, ids) = with(&["a", "b"]);
             todos.toggle(ids[0]);
             crate::state::save(&path, &todos.saved()).expect("save");
@@ -371,7 +367,7 @@ mod tests {
         #[case::other_version(Some(r#"{"version": 99, "items": [{"text": "a"}]}"#))]
         fn an_unreadable_file_means_an_empty_list(#[case] content: Option<&str>) {
             let tmp = TempDir::new();
-            let path = tmp.path().join(FILE);
+            let path = tmp.path().join(paths::TODOS_FILE);
             if let Some(content) = content {
                 std::fs::write(&path, content).expect("write");
             }

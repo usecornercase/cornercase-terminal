@@ -20,11 +20,10 @@ use crate::issues::cache::Cache as IssueCache;
 use crate::issues::{Account, People, Person, Source};
 use crate::launch::Launch;
 use crate::notify::Notification;
+use crate::paths;
 use crate::pointer;
 use crate::project::{Group, Project, Tab};
-use crate::protocol;
 use crate::restart;
-use crate::secrets;
 use crate::settings::Page;
 use crate::split::Dir;
 use crate::state::{self, ChangesState, IssuesState, PaneState, ProjectState, State, TabState, WorkspaceState};
@@ -32,7 +31,7 @@ use crate::todo::{self, Todos};
 use crate::ui::{self};
 use crate::update::{Install, Updates};
 use crate::usage;
-use crate::web::{self, Web};
+use crate::web::Web;
 use agent_watch::WATCH_AGENTS_EVERY;
 use interaction::AUTO_SCROLL_EVERY;
 use interaction::Grab;
@@ -167,10 +166,10 @@ pub struct App {
 
 impl App {
     pub fn new(shell: String, theme: HostTheme, config_path: PathBuf, tx: Sender<AppEvent>) -> Self {
-        let secrets_path = secrets::path(&config_path);
+        let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let claude_dir = activity::claude_dir(home.as_deref());
-        let web = Web::new(web::devices_path(&config_path), protocol::socket_path(), tx.clone());
+        let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
         Self {
             groups: Vec::new(),
             projects: Vec::new(),

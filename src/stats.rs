@@ -359,9 +359,6 @@ impl Stats {
     }
 }
 
-pub fn path(session: &Path) -> PathBuf {
-    session.with_file_name("stats.json")
-}
 pub fn load(path: &Path, now: SystemTime) -> Stats {
     let mut stats = Stats::new(now);
     if let Some(saved) = std::fs::read(path)

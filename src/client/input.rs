@@ -8,6 +8,7 @@ use std::time::{Duration, Instant, SystemTime};
 use crossterm::event::Event;
 use rustix::event::{PollFd, PollFlags, Timespec};
 
+use crate::paths;
 use crate::{log, panics};
 
 mod parse;
@@ -255,7 +256,7 @@ fn ended(error: &io::Error) -> bool {
 }
 
 pub(super) fn report(message: &str) {
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(log::path()) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).mode(log::PRIVATE).open(paths::log()) {
         let line = log::line(SystemTime::now(), log::Level::Warn, "client", message, &[]);
         let _ = file.write_all(line.as_bytes());
     }

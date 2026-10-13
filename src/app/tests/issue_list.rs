@@ -1,4 +1,5 @@
 use super::*;
+use crate::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
 
 fn assert_only_linear(s: &Setup) {
@@ -77,7 +78,7 @@ fn shortcut(s: &mut Setup, routes: Vec<(&'static str, u16, &'static str)>) -> Fa
 }
 
 fn secrets_file(s: &Setup) -> PathBuf {
-    secrets::path(&s.config.path().join("config.json"))
+    paths::secrets(&s.config.path().join("config.json"))
 }
 
 fn browser(app: &App) -> &Browser {

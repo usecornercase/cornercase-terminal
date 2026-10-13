@@ -181,7 +181,7 @@ fn unchanged_samples_and_repeated_pruning_keep_the_revision() {
 #[test]
 fn a_private_file_round_trips_without_transient_process_state() {
     let dir = TempDir::new();
-    let path = path(&dir.path().join("session.json"));
+    let path = crate::paths::stats(&dir.path().join("session.json"));
     let mut stats = Stats::new(at(1_000));
     prompts(&mut stats, 1_000, 2);
     let saved = stats.saved(at(1_000));

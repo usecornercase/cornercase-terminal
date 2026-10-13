@@ -52,6 +52,7 @@ use crate::issues::browser::{Browser, Screen};
 use crate::issues::{self, Secret};
 use crate::mouse;
 use crate::notify::{self};
+use crate::paths;
 use crate::picker::Picker;
 use crate::process;
 use crate::project::{Phase, Workspace};

@@ -14,10 +14,12 @@ use crate::error::Error;
 use crate::graphics::Support;
 use crate::host_theme::HostTheme;
 use crate::notify::Channel;
+use crate::paths;
 use crate::{pointer, process};
 
+pub use crate::paths::SOCKET_ENV;
+
 pub const VERSION: u32 = 3;
-pub const SOCKET_ENV: &str = "CORNERCASE_SOCKET";
 pub const NESTED_ENV: &str = "CORNERCASE";
 pub const RESTARTED_ENV: &str = "CORNERCASE_RESTARTED";
 const MAX_MESSAGE: usize = 64 * 1024 * 1024;
@@ -81,23 +83,8 @@ pub fn recv<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T>> {
     postcard::from_bytes(&body).map(Some).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
-pub fn socket_path() -> PathBuf {
-    if let Some(path) = std::env::var_os(SOCKET_ENV) {
-        return path.into();
-    }
-    let dir = std::env::var_os("XDG_RUNTIME_DIR").map_or_else(
-        || std::env::temp_dir().join(format!("cornercase-{}", rustix::process::getuid().as_raw())),
-        |dir| PathBuf::from(dir).join("cornercase"),
-    );
-    dir.join("server.sock")
-}
-
-pub fn lock_path(socket: &Path) -> PathBuf {
-    socket.with_extension("lock")
-}
-
 pub fn try_lock(socket: &Path) -> io::Result<Option<File>> {
-    let file = OpenOptions::new().create(true).write(true).truncate(false).open(lock_path(socket))?;
+    let file = OpenOptions::new().create(true).write(true).truncate(false).open(paths::lock(socket))?;
     match flock(&file, FlockOperation::NonBlockingLockExclusive) {
         Ok(()) => Ok(Some(file)),
         Err(Errno::WOULDBLOCK) => Ok(None),
