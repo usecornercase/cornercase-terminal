@@ -176,5 +176,9 @@ pub(in crate::agents) fn command(program: &str) -> Command {
     cmd
 }
 
+pub(in crate::agents) fn requests() -> String {
+    REQUESTS.to_string()
+}
+
 #[cfg(test)]
 pub(crate) mod tests;

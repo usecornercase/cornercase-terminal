@@ -418,3 +418,12 @@ mod output {
         assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
     }
 }
+
+mod known_agents {
+    #[test]
+    fn the_skill_names_every_known_agent() {
+        for agent in crate::agents::Known::ALL {
+            assert!(super::SKILL.contains(agent.title()), "missing {}", agent.title());
+        }
+    }
+}

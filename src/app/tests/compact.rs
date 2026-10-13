@@ -98,8 +98,8 @@ fn clicks_on_the_menu_never_reach_the_pane() {
 #[test]
 fn the_usage_button_opens_the_usage_modal() {
     let (mut app, _rx) = app();
-    app.config.agent_commands.insert(agents::CLAUDE.into(), "/nonexistent/claude".into());
-    app.config.agent_commands.insert(agents::CODEX.into(), "/nonexistent/codex".into());
+    app.config.agent_commands.insert(agents::Known::Claude.name().into(), "/nonexistent/claude".into());
+    app.config.agent_commands.insert(agents::Known::Codex.name().into(), "/nonexistent/codex".into());
     open_menu(&mut app);
     press(&mut app, small().back.as_position());
     press(&mut app, small().usage.as_position());

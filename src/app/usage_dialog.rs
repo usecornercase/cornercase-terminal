@@ -23,15 +23,18 @@ impl App {
     }
 
     fn probe_usage(&mut self) {
-        let installed: Vec<usage::Agent> = usage::Agent::ALL
-            .into_iter()
-            .filter(|agent| agents::installed(&agents::command(&self.config, agent.kind())))
+        let supported: Vec<agents::Known> =
+            agents::Known::ALL.into_iter().filter(|agent| agent.usage().is_some()).collect();
+        let installed: Vec<agents::Known> = supported
+            .iter()
+            .copied()
+            .filter(|agent| agents::installed(&agents::command(&self.config, agent.name())))
             .collect();
-        let shown = if installed.is_empty() { usage::Agent::ALL.to_vec() } else { installed };
+        let shown = if installed.is_empty() { supported } else { installed };
         for agent in self.usage.start(shown) {
-            let command = agents::command(&self.config, agent.kind());
+            let command = agents::command(&self.config, agent.name());
             let timeout = self.usage_timeout;
-            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.kind());
+            let job = Job::new(Level::Info, "usage", "probe").with("agent", agent.name());
             self.spawn_job(
                 job,
                 move || usage::probe(agent, &command, timeout),
@@ -90,7 +93,7 @@ impl App {
     }
 }
 
-fn section(agent: usage::Agent, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
+fn section(agent: agents::Known, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
     let report = probe.last().map(|(r, _)| r);
     let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
     let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
@@ -112,7 +115,8 @@ fn section(agent: usage::Agent, probe: &usage::Probe, now: Instant, clock: i64) 
                 resets: w.resets_at.map(|at| usage::until(at - clock)).unwrap_or_default(),
             })
             .collect(),
-        empty: report.and_then(|r| r.notice.or_else(|| (!r.limited).then(|| agent.no_limits()))),
+        empty: report
+            .and_then(|r| r.notice.or_else(|| agent.usage().filter(|_| !r.limited).map(|spec| spec.no_limits))),
         extra: report.and_then(|r| r.extra.clone()),
     }
 }

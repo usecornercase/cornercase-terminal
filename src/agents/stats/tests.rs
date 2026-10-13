@@ -8,7 +8,7 @@ use crate::test_util::TempDir;
 fn at(hours: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_secs(hours * 3_600)
 }
-fn working(pane: u64, kind: Kind) -> Sample {
+fn working(pane: u64, kind: Known) -> Sample {
     Sample {
         pane,
         kind,
@@ -19,7 +19,7 @@ fn working(pane: u64, kind: Kind) -> Sample {
     }
 }
 fn prompts(stats: &mut Stats, hours: u64, number: usize) {
-    stats.counted(Kind::Claude, Counted { prompts: vec![at(hours); number], tokens: Vec::new() });
+    stats.counted(Known::Claude, Counted { prompts: vec![at(hours); number], tokens: Vec::new() });
 }
 
 #[rstest]
@@ -48,7 +48,7 @@ fn pruning_keeps_the_total_and_sparse_retention() {
 #[test]
 fn parallelism_is_a_maximum_and_time_keeps_half_seconds_and_caps_stalls() {
     let mut stats = Stats::new(at(1_000));
-    let samples = [working(1, Kind::Claude), working(2, Kind::Codex)];
+    let samples = [working(1, Known::Claude), working(2, Known::Codex)];
     stats.sample(at(1_000), Duration::ZERO, &samples);
     stats.sample(at(1_000), Duration::from_millis(500), &samples);
     stats.sample(at(1_000), Duration::from_secs(100), &samples[..1]);
@@ -59,7 +59,7 @@ fn parallelism_is_a_maximum_and_time_keeps_half_seconds_and_caps_stalls() {
 #[test]
 fn a_removed_or_replaced_agent_cannot_extend_busy_time() {
     let mut stats = Stats::new(at(1_000));
-    let sample = working(1, Kind::Claude);
+    let sample = working(1, Known::Claude);
     stats.sample(at(1_000), Duration::ZERO, &[sample]);
     stats.sample(at(1_000), Duration::from_secs(1), &[]);
     let w = &stats.view(at(1_000)).windows["total"];
@@ -75,7 +75,7 @@ fn a_removed_or_replaced_agent_cannot_extend_busy_time() {
 #[test]
 fn shells_do_not_work_and_waiting_and_unseen_done_need_you() {
     let mut stats = Stats::new(at(1_000));
-    let mut sample = working(1, Kind::Claude);
+    let mut sample = working(1, Known::Claude);
     stats.sample(at(1_000), Duration::ZERO, &[sample]);
     sample.background = true;
     stats.sample(at(1_000), Duration::from_secs(1), &[sample]);
@@ -92,7 +92,7 @@ fn shells_do_not_work_and_waiting_and_unseen_done_need_you() {
 #[test]
 fn automatic_resumes_stay_suppressed_after_a_foreground_absence() {
     let mut stats = Stats::new(at(1_000));
-    let mut s = working(1, Kind::Claude);
+    let mut s = working(1, Known::Claude);
     s.resuming = true;
     stats.sample(at(1_000), Duration::ZERO, &[s]);
     s.resuming = false;
@@ -107,7 +107,7 @@ fn automatic_resumes_stay_suppressed_after_a_foreground_absence() {
 #[test]
 fn an_agent_returning_from_an_editor_counts_only_when_its_pid_changes() {
     let mut stats = Stats::new(at(1_000));
-    let mut sample = working(1, Kind::Claude);
+    let mut sample = working(1, Known::Claude);
     stats.sample(at(1_000), Duration::ZERO, &[sample]);
     stats.sample(at(1_000), Duration::ZERO, &[]);
     stats.sample(at(1_000), Duration::ZERO, &[sample]);
@@ -120,7 +120,7 @@ fn an_agent_returning_from_an_editor_counts_only_when_its_pid_changes() {
 fn heatmap_blocks_go_back_from_the_hour_and_use_nonzero_quartiles() {
     let mut stats = Stats::new(at(1_000 - 5 * 24));
     for (i, ms) in [(0, 1_000), (1, 2_000), (2, 3_000), (3, 4_000)] {
-        stats.add(at(1_000 - i * 24), Kind::Claude, Counts { agent_ms: ms, ..Counts::default() });
+        stats.add(at(1_000 - i * 24), Known::Claude, Counts { agent_ms: ms, ..Counts::default() });
     }
     let view = stats.view(at(1_000));
     assert_eq!(view.blocks.iter().take(5).map(|b| b.agent_seconds).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 0.0]);
@@ -129,7 +129,7 @@ fn heatmap_blocks_go_back_from_the_hour_and_use_nonzero_quartiles() {
 #[test]
 fn the_first_incomplete_day_has_a_heatmap_square() {
     let mut stats = Stats::new(at(1_000));
-    stats.add(at(1_000), Kind::Claude, Counts { agent_ms: 1000, ..Counts::default() });
+    stats.add(at(1_000), Known::Claude, Counts { agent_ms: 1000, ..Counts::default() });
     let view = stats.view(at(1_000));
     assert_eq!(view.days, 0);
     assert_eq!(view.levels(1), [Some(1), None, None, None, None, None, None]);
@@ -161,7 +161,7 @@ fn saving_observes_revisions_until_a_minute_passes_and_flushes_the_latest_number
 #[test]
 fn unchanged_samples_and_repeated_pruning_keep_the_revision() {
     let mut stats = Stats::new(at(1_000));
-    let mut sample = working(1, Kind::Claude);
+    let mut sample = working(1, Known::Claude);
     sample.status = Some(Status::Idle);
     stats.sample(at(1_000), Duration::ZERO, &[sample]);
     let revision = stats.revision();

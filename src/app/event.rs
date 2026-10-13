@@ -20,7 +20,7 @@ pub(crate) enum AppEvent {
     Changes(ChangesEvent),
     Files(FilesEvent),
     Update(UpdateEvent),
-    Usage(usage::Agent, Result<usage::Report>),
+    Usage(crate::agents::Known, Result<usage::Report>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
     Encoded { key: encode::Key, result: Result<Vec<u8>> },
     Web(web::Event),

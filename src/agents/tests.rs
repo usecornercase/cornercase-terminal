@@ -62,10 +62,10 @@ mod modes {
     #[case::equals(&["gemini", "--approval-mode=yolo"], "yolo (dangerous)")]
     #[case::plan(&["gemini", "--approval-mode", "plan"], "plan")]
     fn gemini_modes_include_plan_and_recognize_yolo_aliases(#[case] args: &[&str], #[case] expected: &str) {
-        let modes = modes(&config(), GEMINI);
-        assert_eq!(mode_of(GEMINI, &strings(args), &modes).as_deref(), Some(expected));
+        let modes = modes(&config(), Known::Gemini.name());
+        assert_eq!(mode_of(Known::Gemini.name(), &strings(args), &modes).as_deref(), Some(expected));
         assert_eq!(
-            with_mode(GEMINI, &strings(&args[1..]), &modes, Some("plan")),
+            with_mode(Known::Gemini.name(), &strings(&args[1..]), &modes, Some("plan")),
             strings(&["--approval-mode", "plan"])
         );
     }
@@ -108,32 +108,33 @@ mod modes {
     #[test]
     fn a_mode_is_found_in_the_arguments() {
         let args = strings(&["--add-dir", "x", "--permission-mode", "plan"]);
-        assert_eq!(mode_of(CLAUDE, &args, &modes(&config(), "claude")).as_deref(), Some("plan"));
+        assert_eq!(mode_of(Known::Claude.name(), &args, &modes(&config(), "claude")).as_deref(), Some("plan"));
     }
 
     #[test]
     fn extra_arguments_are_the_rest() {
         let args = strings(&["--add-dir", "x", "--permission-mode", "plan"]);
-        assert_eq!(extra_args(CLAUDE, &args, &modes(&config(), "claude")), strings(&["--add-dir", "x"]));
+        assert_eq!(extra_args(Known::Claude.name(), &args, &modes(&config(), "claude")), strings(&["--add-dir", "x"]));
     }
 
     #[test]
     fn picking_a_mode_replaces_the_old_one_and_keeps_the_extras() {
         let args = strings(&["--permission-mode", "plan", "--add-dir", "x"]);
-        let next = with_mode(CLAUDE, &args, &modes(&config(), "claude"), Some("skip permissions (dangerous)"));
+        let next =
+            with_mode(Known::Claude.name(), &args, &modes(&config(), "claude"), Some("skip permissions (dangerous)"));
         assert_eq!(next, strings(&["--dangerously-skip-permissions", "--add-dir", "x"]));
     }
 
     #[test]
     fn no_mode_keeps_only_the_extras() {
         let args = strings(&["--permission-mode", "plan", "-v"]);
-        assert_eq!(with_mode(CLAUDE, &args, &modes(&config(), "claude"), None), strings(&["-v"]));
+        assert_eq!(with_mode(Known::Claude.name(), &args, &modes(&config(), "claude"), None), strings(&["-v"]));
     }
 
     #[test]
     fn new_extras_keep_the_mode() {
         let args = strings(&["--sandbox", "read-only", "-v"]);
-        let next = with_extra(CODEX, &args, &modes(&config(), "codex"), strings(&["--model", "o3"]));
+        let next = with_extra(Known::Codex.name(), &args, &modes(&config(), "codex"), strings(&["--model", "o3"]));
         assert_eq!(next, strings(&["--sandbox", "read-only", "--model", "o3"]));
     }
 
@@ -190,7 +191,7 @@ mod resuming {
     #[case::claude("claude", None, "claude --resume 4f2c-91")]
     #[case::claude_in_its_mode("claude", Some("plan"), "claude --permission-mode plan --resume 4f2c-91")]
     #[case::codex("codex", None, "codex resume 4f2c-91")]
-    #[case::gemini(GEMINI, Some("plan"), "gemini --approval-mode plan --resume 4f2c-91")]
+    #[case::gemini(Known::Gemini.name(), Some("plan"), "gemini --approval-mode plan --resume 4f2c-91")]
     #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
     fn the_conversation_comes_back_in_the_mode_it_ran_in(
         #[case] kind: &str,

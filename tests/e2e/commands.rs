@@ -473,7 +473,7 @@ fn stats_reads_the_local_file_without_starting_a_server() {
     let now = std::time::SystemTime::now();
     let mut stats = cornercase::agents::stats::Stats::new(now);
     stats.counted(
-        cornercase::agents::stats::Kind::Claude,
+        cornercase::agents::Known::Claude,
         cornercase::agents::stats::Counted {
             prompts: vec![now],
             tokens: vec![(

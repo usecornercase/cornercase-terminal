@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::agents::claude::usage as claude;
 use crate::agents::claude::usage::tests as claude_tests;
 use crate::agents::codex::usage::tests as codex_tests;
 use crate::test_util::{TempDir, write_executable};
@@ -24,17 +25,17 @@ fn fake(name: &str, script: &str) -> (TempDir, String) {
 }
 
 #[rstest]
-#[case::claude(Agent::Claude, 2, claude_tests::RECORDED, claude_tests::report)]
-#[case::codex(Agent::Codex, 3, codex_tests::RECORDED, codex_tests::report)]
+#[case::claude(Known::Claude, 2, claude_tests::RECORDED, claude_tests::report)]
+#[case::codex(Known::Codex, 3, codex_tests::RECORDED, codex_tests::report)]
 fn the_probe_answers_after_reading_the_requests(
-    #[case] agent: Agent,
+    #[case] agent: Known,
     #[case] requests: usize,
     #[case] recorded: &str,
     #[case] report: fn(&str) -> Report,
 ) {
     let reads = "read -r line\n".repeat(requests);
     let script = format!("{reads}echo '{{\"type\":\"system\"}}'\necho '{recorded}'\nexec sleep 30");
-    let (_dir, command) = fake(agent.kind(), &script);
+    let (_dir, command) = fake(agent.name(), &script);
     assert_eq!(probe(agent, &command, TIMEOUT).expect("a report"), report(recorded));
 }
 
@@ -44,21 +45,21 @@ fn the_codex_probe_runs_the_app_server() {
         "codex",
         "read -r a\nread -r b\nread -r c\necho \"{\\\"id\\\":2,\\\"error\\\":{\\\"message\\\":\\\"$1\\\"}}\"",
     );
-    let error = probe(Agent::Codex, &command, TIMEOUT).expect_err("the arguments as an error");
+    let error = probe(Known::Codex, &command, TIMEOUT).expect_err("the arguments as an error");
     assert_eq!(error.to_string(), "app-server");
 }
 
 #[rstest]
-#[case::hangs(Agent::Claude, "exec sleep 30", Duration::from_millis(300), "claude did not answer in time")]
-#[case::exits(Agent::Claude, "exit 1", TIMEOUT, "claude exited without answering")]
-#[case::codex_hangs(Agent::Codex, "exec sleep 30", Duration::from_millis(300), "codex did not answer in time")]
+#[case::hangs(Known::Claude, "exec sleep 30", Duration::from_millis(300), "claude did not answer in time")]
+#[case::exits(Known::Claude, "exit 1", TIMEOUT, "claude exited without answering")]
+#[case::codex_hangs(Known::Codex, "exec sleep 30", Duration::from_millis(300), "codex did not answer in time")]
 fn a_probe_that_gets_no_answer_fails(
-    #[case] agent: Agent,
+    #[case] agent: Known,
     #[case] script: &str,
     #[case] timeout: Duration,
     #[case] expected: &str,
 ) {
-    let (_dir, command) = fake(agent.kind(), script);
+    let (_dir, command) = fake(agent.name(), script);
     let error = probe(agent, &command, timeout).expect_err("no report");
     assert_eq!(error.to_string(), expected);
 }
@@ -73,6 +74,6 @@ fn an_agent_gone_before_the_requests_fails_at_once() {
 
 #[test]
 fn a_missing_agent_fails() {
-    let error = probe(Agent::Codex, "/nonexistent/codex", TIMEOUT).expect_err("no report");
+    let error = probe(Known::Codex, "/nonexistent/codex", TIMEOUT).expect_err("no report");
     assert!(error.to_string().starts_with("could not run /nonexistent/codex"), "{error}");
 }

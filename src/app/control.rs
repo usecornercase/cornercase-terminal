@@ -31,8 +31,6 @@ const STARTS_WITHIN: Duration = Duration::from_secs(10);
 
 pub(super) const CONFIRM_WITHIN: Duration = Duration::from_secs(10);
 
-const WATCHED: [&str; 4] = [agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE];
-
 const NO_SIZE: &str = "this cornercase server has not opened a window yet, so a new terminal would have no size; \
     run `cornercase` once first";
 
@@ -296,7 +294,7 @@ impl App {
             return Ok(());
         }
         match agents::detect(&self.config, &term.foreground_args()) {
-            Some(agent) if WATCHED.contains(&agent.as_str()) => Ok(()),
+            Some(agent) if agents::Known::of(&agent).is_some() => Ok(()),
             other => Err(other),
         }
     }

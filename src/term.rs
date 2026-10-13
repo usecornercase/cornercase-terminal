@@ -16,7 +16,7 @@ use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system}
 use self::emulator::Emulator;
 use crate::agents::activity;
 use crate::agents::context;
-use crate::agents::{self, AgentState};
+use crate::agents::{self, AgentState, Known};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::host::theme::HostTheme;
@@ -201,15 +201,14 @@ impl Term {
     }
 
     pub(crate) fn dialog(&self) -> bool {
-        self.seen_agent_screen()
-            .is_some_and(|(agent, screen)| agents::claude::screen::input_box(agent, &screen) == Some(false))
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agent.input_box(&screen) == Some(false))
     }
 
     pub(crate) fn survey(&self) -> bool {
-        self.seen_agent_screen().is_some_and(|(agent, screen)| agents::claude::screen::survey(agent, &screen))
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agent.survey(&screen))
     }
 
-    fn seen_agent_screen(&self) -> Option<(&str, String)> {
+    fn seen_agent_screen(&self) -> Option<(Known, String)> {
         let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return None };
         (self.foreground_pid() == Some(seen)).then(|| (agent, self.emulator.screen_text().unwrap_or_default()))
     }

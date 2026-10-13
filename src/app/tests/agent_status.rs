@@ -299,7 +299,7 @@ enum Fake {
 fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
     let opencode = FakeOpencode::new();
     type_line(app, &opencode.command_line());
-    pump_until(app, rx, "opencode runs", |a| runs(a, agents::OPENCODE));
+    pump_until(app, rx, "opencode runs", |a| runs(a, agents::Known::Opencode.name()));
     tick(app);
     opencode
 }
@@ -319,7 +319,7 @@ struct Watched {
 }
 
 impl Watched {
-    fn start(agent: &str, hidden: bool) -> Self {
+    fn start(agent: agents::Known, hidden: bool) -> Self {
         let (app, rx, dirs) = app_with(1);
         let mut watched = Self { app, rx, _dirs: dirs, agents: Vec::new() };
         watched.run(agent);
@@ -330,26 +330,29 @@ impl Watched {
         watched
     }
 
-    fn run(&mut self, agent: &str) {
+    fn run(&mut self, agent: agents::Known) {
         let (app, rx) = (&mut self.app, &self.rx);
-        let fake = if agent == agents::CODEX {
-            let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
-            type_line(app, &codex.command_line());
-            watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
-            Fake::Codex(codex, app.projects[0].workspaces[0].active)
-        } else if agent == agents::GEMINI {
-            let gemini = FakeGemini::new(&app.projects[0].path);
-            type_line(app, &gemini.command_line());
-            pump_until(app, rx, "Gemini runs", |a| runs(a, agents::GEMINI));
-            Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
-        } else if agent == agents::OPENCODE {
-            Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active)
-        } else {
-            let claude = FakeClaude::running(FakeClaude::SILENT);
-            claude.start(app);
-            pump_until(app, rx, "claude runs", |a| runs(a, agents::CLAUDE));
-            let pid = app.term().and_then(Term::foreground_pid).expect("the pid of claude");
-            Fake::Claude(claude, pid)
+        let fake = match agent {
+            agents::Known::Codex => {
+                let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
+                type_line(app, &codex.command_line());
+                watch_until(app, rx, "codex runs", |a| a.tab().is_some_and(|t| t.context().is_some()));
+                Fake::Codex(codex, app.projects[0].workspaces[0].active)
+            }
+            agents::Known::Gemini => {
+                let gemini = FakeGemini::new(&app.projects[0].path);
+                type_line(app, &gemini.command_line());
+                pump_until(app, rx, "Gemini runs", |a| runs(a, agents::Known::Gemini.name()));
+                Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
+            }
+            agents::Known::Opencode => Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active),
+            agents::Known::Claude => {
+                let claude = FakeClaude::running(FakeClaude::SILENT);
+                claude.start(app);
+                pump_until(app, rx, "claude runs", |a| runs(a, agents::Known::Claude.name()));
+                let pid = app.term().and_then(Term::foreground_pid).expect("the pid of claude");
+                Fake::Claude(claude, pid)
+            }
         };
         self.agents.push(fake);
     }
@@ -403,7 +406,8 @@ impl Watched {
 
 #[rstest]
 fn a_restart_names_the_agent_at_work_and_the_other_program(
-    #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Opencode)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
     type_line(&mut w.app, "sleep 30");
@@ -423,7 +427,7 @@ fn runs(app: &App, agent: &str) -> bool {
 }
 
 #[rstest]
-fn a_tab_follows_turns_and_approvals(#[values(agents::CODEX, agents::GEMINI)] agent: &str) {
+fn a_tab_follows_turns_and_approvals(#[values(agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known) {
     let mut w = Watched::start(agent, false);
     let mut seen = vec![status(&w.app, 0, 0)];
 
@@ -438,20 +442,20 @@ fn a_tab_follows_turns_and_approvals(#[values(agents::CODEX, agents::GEMINI)] ag
 
 #[rstest]
 fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
-    #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
 
     w.report("waiting", 6);
 
-    let text = format!("{agent} needs you in {}", w.place());
+    let text = format!("{} needs you in {}", agent.name(), w.place());
     let notification = Notification { text: text.clone(), channel: None };
     assert_eq!(w.told(), (Some(text), vec![notification]));
 }
 
 #[test]
 fn an_opencode_tab_works_until_its_reply_and_shows_its_model_and_context() {
-    let mut w = Watched::start(agents::OPENCODE, false);
+    let mut w = Watched::start(agents::Known::Opencode, false);
     let mut seen = vec![status(&w.app, 0, 0)];
 
     w.report("idle", 1);
@@ -465,7 +469,7 @@ fn an_opencode_tab_works_until_its_reply_and_shows_its_model_and_context() {
 
 #[test]
 fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_data() {
-    let mut w = Watched::start(agents::GEMINI, false);
+    let mut w = Watched::start(agents::Known::Gemini, false);
     let Fake::Gemini(fake, _) = &w.agents[0] else { unreachable!("Gemini was started") };
     fake.append(crate::test_util::fixture!("gemini/0.63.0/reply.jsonl"));
     watch_until(&mut w.app, &w.rx, "Gemini's context shows", |a| a.tab().is_some_and(|t| t.context().is_some()));
@@ -487,7 +491,7 @@ fn gemini_context_reaches_both_layouts_and_ambiguity_hides_only_conversation_dat
 
 #[test]
 fn an_opencode_tab_is_measured_like_any_agent() {
-    let mut w = Watched::start(agents::OPENCODE, false);
+    let mut w = Watched::start(agents::Known::Opencode, false);
     w.app.config.memory = true;
 
     watch_until(&mut w.app, &w.rx, "the memory is measured", |a| memory(a).is_some());
@@ -495,7 +499,7 @@ fn an_opencode_tab_is_measured_like_any_agent() {
 
 #[test]
 fn a_second_opencode_in_its_folder_hides_the_status_instead_of_finishing_it() {
-    let mut w = Watched::start(agents::OPENCODE, true);
+    let mut w = Watched::start(agents::Known::Opencode, true);
     let Fake::Opencode(opencode, _) = &w.agents[0] else { unreachable!("an opencode was started") };
     let other = opencode.start(&w.app.projects[0].path.clone());
 
@@ -507,7 +511,7 @@ fn a_second_opencode_in_its_folder_hides_the_status_instead_of_finishing_it() {
 
 #[test]
 fn opencode_finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
-    let mut w = Watched::start(agents::OPENCODE, true);
+    let mut w = Watched::start(agents::Known::Opencode, true);
 
     w.report("idle", 1);
     assert_eq!(status(&w.app, 0, 0), Some(Status::Done));
@@ -519,18 +523,21 @@ fn opencode_finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
 
 #[rstest]
 fn a_hidden_tab_that_finishes_says_so(
-    #[values(agents::CLAUDE, agents::CODEX, agents::GEMINI, agents::OPENCODE)] agent: &str,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Opencode)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
 
     w.report("idle", 6);
 
-    let text = format!("{agent} finished in {}", w.place());
+    let text = format!("{} finished in {}", agent.name(), w.place());
     assert_eq!(w.told().1, [Notification { text, channel: None }]);
 }
 
 #[rstest]
-fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
+fn a_settled_change_notifies_once(
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+) {
     let mut w = Watched::start(agent, true);
     w.report("waiting", 6);
     w.told();
@@ -541,7 +548,9 @@ fn a_settled_change_notifies_once(#[values(agents::CLAUDE, agents::CODEX, agents
 }
 
 #[rstest]
-fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
+fn the_visible_tab_stays_quiet(
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+) {
     let mut w = Watched::start(agent, false);
 
     w.report("waiting", 6);
@@ -550,7 +559,9 @@ fn the_visible_tab_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::G
 }
 
 #[rstest]
-fn a_question_answered_at_once_stays_quiet(#[values(agents::CLAUDE, agents::CODEX, agents::GEMINI)] agent: &str) {
+fn a_question_answered_at_once_stays_quiet(
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+) {
     let mut w = Watched::start(agent, true);
     w.report("waiting", 1);
 
@@ -561,8 +572,8 @@ fn a_question_answered_at_once_stays_quiet(#[values(agents::CLAUDE, agents::CODE
 
 #[test]
 fn claude_and_codex_in_one_workspace_each_say_who_needs_you() {
-    let mut w = Watched::start(agents::CLAUDE, true);
-    w.run(agents::CODEX);
+    let mut w = Watched::start(agents::Known::Claude, true);
+    w.run(agents::Known::Codex);
     w.report("busy", 1);
     w.app.add_tab(0, 0, AREA).expect("hide the codex tab");
 
@@ -575,7 +586,7 @@ fn claude_and_codex_in_one_workspace_each_say_who_needs_you() {
 
 #[test]
 fn turned_off_only_the_toast_shows() {
-    let mut w = Watched::start(agents::CLAUDE, true);
+    let mut w = Watched::start(agents::Known::Claude, true);
     w.app.config.desktop_notifications = notify::OFF.into();
 
     w.report("waiting", 6);
@@ -586,7 +597,7 @@ fn turned_off_only_the_toast_shows() {
 
 #[test]
 fn control_characters_never_reach_the_message() {
-    let mut w = Watched::start(agents::CODEX, true);
+    let mut w = Watched::start(agents::Known::Codex, true);
     w.app.projects[0].name = Some("shop\x1b]0;evil\x07".into());
 
     w.report("waiting", 6);
@@ -644,11 +655,11 @@ mod resuming {
         let (mut app, rx, _dirs, claude, saved) = remembered_claude();
         assert_eq!(app.stats_view(SystemTime::now()).windows["total"].counts.agents, 1);
         claude.signal("quit");
-        watch_until(&mut app, &rx, "old agent exits", |a| !runs(a, agents::CLAUDE));
+        watch_until(&mut app, &rx, "old agent exits", |a| !runs(a, agents::Known::Claude.name()));
         std::fs::remove_file(claude.dir().join("quit")).expect("clear quit");
         let (mut back, rx, _dirs) = app_with(0);
-        back.config.agent_commands.insert(agents::CLAUDE.into(), claude.script().display().to_string());
-        back.config.agent_args.insert(agents::CLAUDE.into(), vec![claude.dir().display().to_string()]);
+        back.config.agent_commands.insert(agents::Known::Claude.name().into(), claude.script().display().to_string());
+        back.config.agent_args.insert(agents::Known::Claude.name().into(), vec![claude.dir().display().to_string()]);
         back.agents.claude_dir = Some(claude.dir().to_path_buf());
         assert!(back.restore(&saved, AREA));
         refreshing(&mut back, &rx, "resumed conversation", |a| {
@@ -665,7 +676,7 @@ mod resuming {
         claude.start_with(&mut app, "--permission-mode plan");
         let saved = remembered(&mut app, &rx);
         claude.signal("quit");
-        let (mut back, rx, _bin) = restored(&saved, agents::CLAUDE, true);
+        let (mut back, rx, _bin) = restored(&saved, agents::Known::Claude.name(), true);
 
         wait_resumed(&mut back, &rx, "--permission-mode plan --resume s1");
 
@@ -680,7 +691,7 @@ mod resuming {
         type_line(&mut app, &codex.command_line());
         let saved = remembered(&mut app, &rx);
         codex.signal("quit", "");
-        let (mut back, rx, _bin) = restored(&saved, agents::CODEX, true);
+        let (mut back, rx, _bin) = restored(&saved, agents::Known::Codex.name(), true);
 
         wait_resumed(&mut back, &rx, &format!("resume {CODEX_ID}"));
     }
@@ -693,7 +704,7 @@ mod resuming {
         watch_until(&mut app, &rx, "Gemini is ready", |a| status(a, 0, 0) == Some(Status::Idle));
         gemini.append(crate::test_util::fixture!("gemini/0.63.0/prompt.jsonl"));
         let saved = remembered(&mut app, &rx);
-        let (mut back, rx, _bin) = restored(&saved, agents::GEMINI, true);
+        let (mut back, rx, _bin) = restored(&saved, agents::Known::Gemini.name(), true);
         wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
         assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
     }
@@ -702,7 +713,7 @@ mod resuming {
     fn the_conversation_is_kept_until_its_agent_is_back_or_the_grace_runs_out() {
         let (_app, _rx, _dirs, claude, saved) = remembered_claude();
         claude.signal("quit");
-        let (mut back, _rx, _bin) = restored(&saved, agents::CLAUDE, true);
+        let (mut back, _rx, _bin) = restored(&saved, agents::Known::Claude.name(), true);
         back.agents.launches.clear();
         let now = Instant::now();
 
@@ -730,7 +741,7 @@ mod resuming {
         let (_app, _rx, _dirs, claude, saved) = remembered_claude();
         claude.signal("quit");
 
-        let (back, _rx, _bin) = restored(&saved, agents::CLAUDE, false);
+        let (back, _rx, _bin) = restored(&saved, agents::Known::Claude.name(), false);
 
         assert_eq!((back.agents.launches.len(), saved_agent(&back.state())), (0, None));
     }
@@ -762,7 +773,7 @@ mod agents_section {
         app.active = 0;
         let claude = FakeClaude::running(FakeClaude::SILENT);
         claude.start(&mut app);
-        pump_until(&mut app, &rx, "claude runs", |a| runs(a, agents::CLAUDE));
+        pump_until(&mut app, &rx, "claude runs", |a| runs(a, agents::Known::Claude.name()));
         app.active = 1;
         let codex = FakeCodex::new("019a1234-5678-7000-8000-000000000001", "gpt-5.4", false);
         type_line(&mut app, &codex.command_line());

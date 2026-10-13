@@ -7,7 +7,7 @@ const CODEX_ANSWER: &str = r#"{"id":2,"result":{"rateLimits":{"limitId":"codex",
 fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>, TempDir) {
     let dir = TempDir::new();
     let (mut app, rx) = empty_app();
-    for kind in [agents::CLAUDE, agents::CODEX] {
+    for kind in [agents::Known::Claude.name(), agents::Known::Codex.name()] {
         let command = match scripts.iter().find(|(k, _)| *k == kind) {
             Some((_, script)) => {
                 let path = dir.path().join(kind);
@@ -22,7 +22,7 @@ fn with_agents(scripts: &[(&str, &str)]) -> (App, Receiver<AppEvent>, TempDir) {
 }
 
 fn with_claude(script: &str) -> (App, Receiver<AppEvent>, TempDir) {
-    with_agents(&[(agents::CLAUDE, script)])
+    with_agents(&[(agents::Known::Claude.name(), script)])
 }
 
 fn shown(app: &App) -> Option<ui::Usage> {
@@ -76,9 +76,7 @@ fn sharing_copies_only_after_something_was_counted() {
     click(&mut app, ui::usage_share(AREA, &view).as_position());
     assert_eq!(app.take_host_writes(), Vec::<Vec<u8>>::new());
     let now = SystemTime::now();
-    app.agents
-        .stats
-        .counted(agents::stats::Kind::Claude, agents::stats::Counted { prompts: vec![now], tokens: Vec::new() });
+    app.agents.stats.counted(agents::Known::Claude, agents::stats::Counted { prompts: vec![now], tokens: Vec::new() });
     let expected = agents::stats::share_link(&app.agents.stats, now);
     let view = shown(&app).expect("dialog");
     click(&mut app, ui::usage_share(AREA, &view).as_position());
@@ -101,8 +99,8 @@ fn the_button_shows_loading_then_the_windows() {
 #[test]
 fn every_installed_agent_gets_a_section() {
     let (mut app, rx, _dir) = with_agents(&[
-        (agents::CLAUDE, &format!("read -r a\nread -r b\necho '{ANSWER}'")),
-        (agents::CODEX, &format!("read -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'")),
+        (agents::Known::Claude.name(), &format!("read -r a\nread -r b\necho '{ANSWER}'")),
+        (agents::Known::Codex.name(), &format!("read -r a\nread -r b\nread -r c\necho '{CODEX_ANSWER}'")),
     ]);
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);
@@ -118,7 +116,7 @@ fn every_installed_agent_gets_a_section() {
 
 #[test]
 fn an_agent_that_is_not_installed_has_no_section() {
-    let (mut app, _rx, _dir) = with_agents(&[(agents::CODEX, "exec sleep 30")]);
+    let (mut app, _rx, _dir) = with_agents(&[(agents::Known::Codex.name(), "exec sleep 30")]);
     app.usage_timeout = Duration::from_millis(200);
     click(&mut app, areas().usage.as_position());
     app.switch_usage(usage::Page::Limits);

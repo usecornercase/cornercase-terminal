@@ -7,6 +7,7 @@ use super::interaction::RowDrag;
 use super::menus::MenuAction;
 use super::menus::Target;
 use super::overlay::Overlay;
+use crate::agents::Known;
 use crate::error::Result;
 use crate::git;
 use crate::project::Workspace;
@@ -88,7 +89,7 @@ impl App {
             let context = term.context.context();
             ui::AgentEntry {
                 status: term.agent.status(),
-                agent: term.agent.agent().unwrap_or_default().to_string(),
+                agent: term.agent.agent().map(Known::name).unwrap_or_default().to_string(),
                 project: self.project_label(project),
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
                 details: self.details(context, None),

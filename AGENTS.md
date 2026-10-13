@@ -70,7 +70,8 @@ src/text.rs       truncation, displayed paths, folder names, breadcrumbs, one-li
 src/time.rs       timestamps, calendar dates and ages
 src/version.rs    the binary version, version comparison and build id
 
-src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
+src/agents.rs     launch catalogue, shared modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
+                  agents/known.rs Known, the supported identities and exhaustive dispatch to each agent folder
                   agents/activity.rs shared activity and status, done-but-unseen, notifications and rollups; agents/launch.rs starting an agent in a new tab (pure state machine)
                   agents/awake.rs keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child; agents/stats.rs local agent-work counts, hourly buckets, windows, heatmap, private persistence and share links
                   agents/context.rs model/context state per pane; agents/context/ shared discovery, incremental JSONL reads, counting and backwards last-message reads; agents/usage/ running plan probes and the modal's state per agent

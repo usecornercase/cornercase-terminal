@@ -3,9 +3,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use crate::agents;
-use crate::agents::claude::usage as claude;
-use crate::agents::codex::usage as codex;
+use crate::agents::Known;
 use crate::error::{Error, Result};
 use crate::time;
 
@@ -74,42 +72,15 @@ pub(crate) struct Report {
     pub(crate) notice: Option<&'static str>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Agent {
-    Claude,
-    Codex,
+pub(crate) struct Spec {
+    pub(in crate::agents) command: fn(&str) -> Command,
+    pub(in crate::agents) requests: fn() -> String,
+    pub(in crate::agents) answer: Answer,
+    pub(crate) no_limits: &'static str,
 }
 
-impl Agent {
-    pub(crate) const ALL: [Self; 2] = [Self::Claude, Self::Codex];
-
-    pub(crate) fn kind(self) -> &'static str {
-        match self {
-            Self::Claude => agents::CLAUDE,
-            Self::Codex => agents::CODEX,
-        }
-    }
-
-    pub(crate) fn title(self) -> &'static str {
-        match self {
-            Self::Claude => "Claude Code",
-            Self::Codex => "Codex",
-        }
-    }
-
-    pub(crate) fn no_limits(self) -> &'static str {
-        match self {
-            Self::Claude => "no plan limits for this account (API key, Bedrock or Vertex)",
-            Self::Codex => "no plan limits for this account",
-        }
-    }
-
-    fn index(self) -> usize {
-        match self {
-            Self::Claude => 0,
-            Self::Codex => 1,
-        }
-    }
+fn index(agent: Known) -> usize {
+    Known::ALL.iter().position(|kind| *kind == agent).unwrap_or(0)
 }
 
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "clamped to 0..=999 first")]
@@ -160,7 +131,7 @@ fn await_answer(
     }
 }
 
-fn run(agent: Agent, mut command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
+fn run(agent: Known, mut command: Command, requests: &str, answer: Answer, timeout: Duration) -> Result<Report> {
     let program = command.get_program().to_string_lossy().into_owned();
     let mut child = command
         .stdin(Stdio::piped())
@@ -170,18 +141,16 @@ fn run(agent: Agent, mut command: Command, requests: &str, answer: Answer, timeo
         .map_err(|e| Error::Usage(format!("could not run {program}: {e}")))?;
     let mut stdin = child.stdin.take();
     let written = stdin.as_mut().map(|s| s.write_all(requests.as_bytes()).and_then(|()| s.flush()));
-    let answer = await_answer(written, child.stdout.take(), answer, agent.kind(), timeout);
+    let answer = await_answer(written, child.stdout.take(), answer, agent.name(), timeout);
     let _ = child.kill();
     let _ = child.wait();
     drop(stdin);
     answer
 }
 
-pub(crate) fn probe(agent: Agent, program: &str, timeout: Duration) -> Result<Report> {
-    match agent {
-        Agent::Claude => run(agent, claude::command(program), claude::REQUESTS, claude::answer, timeout),
-        Agent::Codex => run(agent, codex::command(program), &codex::requests(), codex::answer, timeout),
-    }
+pub(crate) fn probe(agent: Known, program: &str, timeout: Duration) -> Result<Report> {
+    let spec = agent.usage().ok_or_else(|| Error::Usage(format!("{} has no plan probe", agent.name())))?;
+    run(agent, (spec.command)(program), &(spec.requests)(), spec.answer, timeout)
 }
 
 pub(crate) fn until(secs: i64) -> String {
@@ -243,22 +212,22 @@ impl Probe {
 
 #[derive(Debug, Default)]
 pub(crate) struct State {
-    shown: Vec<Agent>,
-    probes: [Probe; 2],
+    shown: Vec<Known>,
+    probes: [Probe; Known::ALL.len()],
 }
 
 impl State {
-    pub(crate) fn start(&mut self, shown: Vec<Agent>) -> Vec<Agent> {
+    pub(crate) fn start(&mut self, shown: Vec<Known>) -> Vec<Known> {
         self.shown = shown;
-        self.shown.iter().copied().filter(|agent| self.probes[agent.index()].start()).collect()
+        self.shown.iter().copied().filter(|agent| self.probes[index(*agent)].start()).collect()
     }
 
-    pub(crate) fn answered(&mut self, agent: Agent, result: Result<Report>, now: Instant) {
-        self.probes[agent.index()].answered(result, now);
+    pub(crate) fn answered(&mut self, agent: Known, result: Result<Report>, now: Instant) {
+        self.probes[index(agent)].answered(result, now);
     }
 
-    pub(crate) fn shown(&self) -> impl Iterator<Item = (Agent, &Probe)> {
-        self.shown.iter().map(|&agent| (agent, &self.probes[agent.index()]))
+    pub(crate) fn shown(&self) -> impl Iterator<Item = (Known, &Probe)> {
+        self.shown.iter().map(|&agent| (agent, &self.probes[index(agent)]))
     }
 }
 

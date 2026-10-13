@@ -1,20 +1,27 @@
 use rstest::rstest;
 
-use super::holds_prompts;
+use super::{CANNOT_WATCH, holds_prompts};
+use crate::agents::Known;
 use crate::agents::activity::Status;
-use crate::agents::{CLAUDE, CODEX, GEMINI, OPENCODE};
+
+#[test]
+fn the_wait_refusal_names_every_known_agent() {
+    for agent in Known::ALL {
+        assert!(CANNOT_WATCH.contains(agent.title()), "missing {}", agent.title());
+    }
+}
 
 #[rstest]
-#[case::codex_at_work(Some(CODEX), Some(Status::Working), true)]
-#[case::codex_asking(Some(CODEX), Some(Status::Waiting), true)]
-#[case::gemini_at_work(Some(GEMINI), Some(Status::Working), true)]
-#[case::gemini_asking(Some(GEMINI), Some(Status::Waiting), true)]
-#[case::gemini_idle(Some(GEMINI), Some(Status::Idle), false)]
-#[case::codex_idle(Some(CODEX), Some(Status::Idle), false)]
-#[case::claude_at_work(Some(CLAUDE), Some(Status::Working), false)]
-#[case::opencode_at_work(Some(OPENCODE), Some(Status::Working), false)]
+#[case::codex_at_work(Some(Known::Codex), Some(Status::Working), true)]
+#[case::codex_asking(Some(Known::Codex), Some(Status::Waiting), true)]
+#[case::gemini_at_work(Some(Known::Gemini), Some(Status::Working), true)]
+#[case::gemini_asking(Some(Known::Gemini), Some(Status::Waiting), true)]
+#[case::gemini_idle(Some(Known::Gemini), Some(Status::Idle), false)]
+#[case::codex_idle(Some(Known::Codex), Some(Status::Idle), false)]
+#[case::claude_at_work(Some(Known::Claude), Some(Status::Working), false)]
+#[case::opencode_at_work(Some(Known::Opencode), Some(Status::Working), false)]
 fn agents_that_queue_prompts_record_them_late(
-    #[case] agent: Option<&str>,
+    #[case] agent: Option<Known>,
     #[case] status: Option<Status>,
     #[case] holds: bool,
 ) {

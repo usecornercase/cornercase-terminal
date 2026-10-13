@@ -4,10 +4,13 @@ pub mod claude;
 pub(crate) mod codex;
 pub(crate) mod context;
 pub(crate) mod gemini;
+mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
 pub mod stats;
 pub(crate) mod usage;
+
+pub use known::Known;
 
 use std::ffi::OsStr;
 use std::os::unix::fs::PermissionsExt;
@@ -26,18 +29,10 @@ pub(crate) struct AgentState {
 }
 
 pub(crate) const AUTO: &str = "auto";
-pub(crate) const CLAUDE: &str = "claude";
-pub(crate) const CODEX: &str = "codex";
-pub(crate) const GEMINI: &str = "gemini";
-pub(crate) const OPENCODE: &str = "opencode";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
-const KNOWN: [(&str, &str); 14] = [
-    (CLAUDE, "claude"),
-    (CODEX, "codex"),
-    (GEMINI, "gemini"),
-    (OPENCODE, "opencode"),
+const OTHERS: [(&str, &str); 10] = [
     ("cursor", "cursor-agent"),
     ("copilot", "copilot"),
     ("amp", "amp"),
@@ -49,40 +44,16 @@ const KNOWN: [(&str, &str); 14] = [
     ("goose", "goose"),
     ("aider", "aider"),
 ];
-type ModeTable = &'static [(&'static str, &'static [&'static str])];
-
-const DEFAULT_MODES: [(&str, ModeTable); 3] = [
-    (
-        "claude",
-        &[
-            ("accept edits", &["--permission-mode", "acceptEdits"]),
-            ("auto", &["--permission-mode", "auto"]),
-            ("plan", &["--permission-mode", "plan"]),
-            ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
-        ],
-    ),
-    (
-        "codex",
-        &[
-            ("read only", &["--sandbox", "read-only"]),
-            ("workspace write", &["--sandbox", "workspace-write"]),
-            ("no sandbox, no approvals (dangerous)", &["--dangerously-bypass-approvals-and-sandbox"]),
-        ],
-    ),
-    (
-        GEMINI,
-        &[
-            ("auto edit", &["--approval-mode", "auto_edit"]),
-            ("plan", &["--approval-mode", "plan"]),
-            ("yolo (dangerous)", &["--yolo"]),
-        ],
-    ),
-];
+pub(in crate::agents) type ModeTable = &'static [(&'static str, &'static [&'static str])];
 
 pub(crate) type Mode = (String, Vec<String>);
 
 pub(crate) fn kinds(config: &Config) -> Vec<String> {
-    let mut kinds: Vec<String> = KNOWN.iter().map(|(kind, _)| (*kind).to_string()).collect();
+    let mut kinds: Vec<String> = Known::ALL
+        .into_iter()
+        .map(|kind| kind.name().to_string())
+        .chain(OTHERS.iter().map(|(kind, _)| (*kind).to_string()))
+        .collect();
     for kind in config.agent_commands.keys() {
         if !kinds.contains(kind) {
             kinds.push(kind.clone());
@@ -96,7 +67,7 @@ pub(crate) fn command(config: &Config, kind: &str) -> String {
         .agent_commands
         .get(kind)
         .cloned()
-        .or_else(|| KNOWN.iter().find(|(k, _)| *k == kind).map(|(_, bin)| (*bin).to_string()))
+        .or_else(|| OTHERS.iter().find(|(k, _)| *k == kind).map(|(_, bin)| (*bin).to_string()))
         .unwrap_or_else(|| kind.to_string())
 }
 
@@ -116,10 +87,9 @@ pub(crate) fn installed(program: &str) -> bool {
 }
 
 pub(crate) fn modes(config: &Config, kind: &str) -> Vec<Mode> {
-    let mut modes: Vec<Mode> = DEFAULT_MODES
-        .iter()
-        .filter(|(k, _)| *k == kind)
-        .flat_map(|(_, modes)| modes.iter())
+    let mut modes: Vec<Mode> = Known::of(kind)
+        .into_iter()
+        .flat_map(|kind| kind.modes().iter())
         .map(|(name, args)| ((*name).to_string(), args.iter().map(|a| (*a).to_string()).collect()))
         .collect();
     for (name, args) in config.agent_modes.get(kind).into_iter().flatten() {
@@ -155,18 +125,7 @@ pub(crate) fn mode_of(kind: &str, args: &[String], modes: &[Mode]) -> Option<Str
 }
 
 fn normalized(kind: &str, args: &[String]) -> Vec<String> {
-    if kind != GEMINI {
-        return args.to_vec();
-    }
-    args.iter()
-        .flat_map(|arg| match arg.as_str() {
-            "-y" | "--yolo" => vec!["--approval-mode".into(), "yolo".into()],
-            _ => arg
-                .split_once('=')
-                .filter(|(flag, _)| *flag == "--approval-mode")
-                .map_or_else(|| vec![arg.clone()], |(flag, value)| vec![flag.into(), value.into()]),
-        })
-        .collect()
+    Known::of(kind).map_or_else(|| args.to_vec(), |kind| kind.normalized(args))
 }
 
 pub(crate) fn extra_args(kind: &str, args: &[String], modes: &[Mode]) -> Vec<String> {
@@ -240,11 +199,7 @@ pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String>
     let kind = agent.kind.as_str();
     let args = with_mode(kind, &args(config, kind), &modes(config, kind), agent.mode.as_deref());
     let conversation = agent.conversation.clone();
-    let line = match kind {
-        CLAUDE | GEMINI => [args, vec!["--resume".into(), conversation]].concat(),
-        CODEX => [vec!["resume".into()], args, vec![conversation]].concat(),
-        _ => return None,
-    };
+    let line = Known::of(kind)?.resume(args, conversation)?;
     Some(std::iter::once(command(config, kind)).chain(line).map(|a| quote(&a)).collect::<Vec<_>>().join(" "))
 }
 
@@ -264,7 +219,7 @@ pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
         names.contains(&basename(&bin))
-            || (kind == CODEX && argv.get(1).is_some_and(|arg| arg.ends_with("/codex/bin/codex.js")))
+            || Known::of(kind).is_some_and(|kind| argv.get(1).is_some_and(|arg| kind.runs_as(arg)))
     })
 }
 

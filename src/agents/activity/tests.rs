@@ -148,11 +148,11 @@ mod notice {
     fn another_agent_taking_over_the_pane_tells_you_again() {
         let mut pane = Pane::default();
         let start = Instant::now();
-        pane.follow(Some("claude"));
+        pane.follow(Some(Known::Claude));
         pane.update(Some(Activity::Waiting), false, start);
         let first = pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
 
-        pane.follow(Some("codex"));
+        pane.follow(Some(Known::Codex));
         pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
         let second = pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER * 2);
 
@@ -163,11 +163,11 @@ mod notice {
     fn the_same_agent_keeps_its_state() {
         let mut pane = Pane::default();
         let start = Instant::now();
-        pane.follow(Some("codex"));
+        pane.follow(Some(Known::Codex));
         pane.update(Some(Activity::Waiting), false, start);
         pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
 
-        pane.follow(Some("codex"));
+        pane.follow(Some(Known::Codex));
 
         assert_eq!(pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER * 2), None);
     }

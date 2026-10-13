@@ -70,10 +70,10 @@ impl App {
                             let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
-                            term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
+                            term.agent.follow(found.as_ref().map(|(agent, _)| *agent));
                             let notice = term.agent.update(activity, seen, now);
                             let state = term.agent.state();
-                            if let Some(kind) = term.context.kind().and_then(agents::stats::Kind::of)
+                            if let Some(kind) = term.context.kind()
                                 && let Some((pid, _)) = term.context.agent()
                             {
                                 self.agents.stats.counted(kind, term.context.take_counted());
@@ -91,7 +91,7 @@ impl App {
                                     "activity",
                                     "status",
                                     pane = term.id,
-                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
+                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.name()),
                                     from = before.unwrap_or("none"),
                                     to = state.unwrap_or("none"),
                                 );
@@ -120,7 +120,7 @@ impl App {
             self.agents.stats.prune(clock);
         }
         for (agent, status, project, workspace) in notices {
-            self.notify(&agent, status, project, workspace);
+            self.notify(agent.name(), status, project, workspace);
         }
     }
 
@@ -182,41 +182,40 @@ fn agent_in(
     dir: Option<&Path>,
     term: &mut Term,
     now: Instant,
-) -> Option<(String, activity::Activity)> {
+) -> Option<(agents::Known, activity::Activity)> {
     let pid = term.foreground_pid();
     let args = pid.map(process::args).unwrap_or_default();
-    match (pid, agents::detect(config, &args)) {
-        (Some(pid), Some(agent)) if agent == agents::CLAUDE => {
+    let Some((pid, agent)) = pid.zip(agents::detect(config, &args).as_deref().and_then(agents::Known::of)) else {
+        term.context.update(dir, None);
+        remember(config, term, None, now);
+        return None;
+    };
+    match agent {
+        agents::Known::Claude => {
             let claude = Claude { pid, args, session: Session::read(dir, pid) };
             term.context.update(dir, Some(&claude));
-            remember(config, term, Some((&agent, &claude.args)), now);
+            remember(config, term, Some((agent.name(), &claude.args)), now);
             if term.input_seen != Some(pid)
-                && agents::claude::screen::input_box(&agent, &term.emulator.screen_text().unwrap_or_default())
-                    == Some(true)
+                && agent.input_box(&term.emulator.screen_text().unwrap_or_default()) == Some(true)
             {
                 term.input_seen = Some(pid);
             }
             Some((agent, claude.activity(&term.emulator.title())))
         }
-        (Some(pid), Some(agent)) if agent == agents::CODEX => {
+        agents::Known::Codex => {
             term.context.update_codex(pid);
-            remember(config, term, Some((&agent, &args)), now);
+            remember(config, term, Some((agent.name(), &args)), now);
             Some((agent, agents::codex::codex(&term.emulator.title(), term.context.codex_turn())))
         }
-        (Some(pid), Some(agent)) if agent == agents::GEMINI => {
+        agents::Known::Gemini => {
             term.context.update_gemini(pid, &term.emulator.screen_text().unwrap_or_default());
-            remember(config, term, Some((&agent, &args)), now);
+            remember(config, term, Some((agent.name(), &args)), now);
             agents::gemini::gemini(&term.emulator.title()).map(|state| (agent, state))
         }
-        (Some(pid), Some(agent)) if agent == agents::OPENCODE => {
+        agents::Known::Opencode => {
             term.context.update_opencode(pid);
-            remember(config, term, Some((&agent, &args)), now);
+            remember(config, term, Some((agent.name(), &args)), now);
             term.context.opencode_turn().map(|turn| (agent, agents::opencode::opencode(turn)))
-        }
-        _ => {
-            term.context.update(dir, None);
-            remember(config, term, None, now);
-            None
         }
     }
 }

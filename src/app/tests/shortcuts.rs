@@ -187,7 +187,7 @@ fn a_jumps_to_the_agent_that_needs_you() {
     let mut app = with_prefix(app);
     app.active = 0;
     let term = app.projects[1].workspaces[0].tabs[0].pane_mut().expect("a pane");
-    term.agent.follow(Some(agents::CLAUDE));
+    term.agent.follow(Some(agents::Known::Claude));
     term.agent.update(Some(Activity::Waiting), false, Instant::now());
     keys(&mut app, "a");
     assert_eq!(app.active, 1);

@@ -3,7 +3,7 @@ use std::time::{Instant, SystemTime};
 use crossterm::event::KeyCode;
 
 use super::wait::Condition;
-use super::{Handled, Pending, Stage, WATCHED, deadline, json, none, pane_ids};
+use super::{Handled, Pending, Stage, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -16,6 +16,8 @@ use crate::project::Hierarchy;
 use crate::term;
 use crate::term::keys;
 
+const CANNOT_READ: &str = "cornercase only reads the messages of Claude Code, Codex, Gemini CLI and opencode";
+
 fn not_reading(pane: u64) -> String {
     format!(
         "the program in pane {pane} is not reading its input: {} MiB are waiting for it, so nothing more was sent",
@@ -23,13 +25,9 @@ fn not_reading(pane: u64) -> String {
     )
 }
 
-fn unfound(pane: u64, agent: &str) -> String {
-    let why = match agent {
-        agents::CLAUDE => "Claude Code has not said yet which conversation it is in",
-        agents::CODEX => "Codex writes its rollout from its first turn on, and two Codex in one folder hide each other",
-        agents::GEMINI => "Gemini has no conversation in its folder yet, or two Gemini share that home and folder",
-        _ => "opencode has no conversation in its folder yet, or two opencode share that folder",
-    };
+fn unfound(pane: u64, agent: agents::Known) -> String {
+    let why = agent.unfound();
+    let agent = agent.name();
     format!(
         "cornercase has not found where the {agent} agent in pane {pane} keeps its conversation: {why}; \
          `cornercase read --pane {pane}` prints its screen"
@@ -71,8 +69,10 @@ impl App {
                  --pane {pane} 0` and send again, or send with --force"
             ));
         }
-        let local = agents::detect(&self.config, &term.foreground_args()).as_deref() == Some(agents::GEMINI)
-            && send.text.as_deref().is_some_and(|text| text.trim_start().starts_with(['/', '?', '!']));
+        let local = agents::detect(&self.config, &term.foreground_args())
+            .as_deref()
+            .and_then(agents::Known::of)
+            .is_some_and(|agent| send.text.as_deref().is_some_and(|text| agent.local_command(text)));
         let confirm = (send.enter && !local && self.watched_agent(term).is_ok()).then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
@@ -136,21 +136,17 @@ impl App {
     ) -> Handled {
         let pane = self.target(caller, last.pane, last.tab)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
-        let running = term.agent.agent().map(str::to_string);
-        let agent = match running.or_else(|| agents::detect(&self.config, &term.foreground_args())) {
-            Some(agent) if WATCHED.contains(&agent.as_str()) => agent,
-            other => {
-                let runs = other.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
-                return Err(format!(
-                    "pane {pane} {runs}, and cornercase only reads the messages of Claude Code, Codex, Gemini CLI \
-                     and opencode; \
-                     `cornercase read --pane {pane}` prints its screen"
-                ));
-            }
+        let running = term.agent.agent().map(|agent| agent.name().to_string());
+        let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
+        let Some(agent) = running.as_deref().and_then(agents::Known::of) else {
+            let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
+            return Err(format!(
+                "pane {pane} {runs}, and {CANNOT_READ}; `cornercase read --pane {pane}` prints its screen"
+            ));
         };
-        let record = term.context.record_for(&agent).ok_or_else(|| unfound(pane, &agent))?;
+        let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
         let key = self.requests.key();
-        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", &agent);
+        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", agent.name());
         self.spawn_job(
             job,
             move || record.last_message(),
@@ -159,7 +155,7 @@ impl App {
                 Some(AppEvent::LastMessage { request: key, result })
             },
         );
-        let done = Done { agent: Some(agent), ..pane_ids(pane) };
+        let done = Done { agent: Some(agent.name().to_string()), ..pane_ids(pane) };
         self.requests.pending.push(Pending { client: Some(client), key, timeout: None, done, stage: Stage::Reading });
         Ok(None)
     }
@@ -181,3 +177,6 @@ impl App {
         self.answer(pending.client, reply);
     }
 }
+
+#[cfg(test)]
+mod tests;

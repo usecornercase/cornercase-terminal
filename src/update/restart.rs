@@ -64,7 +64,9 @@ pub(crate) fn confirmation(running: Option<&[Running]>) -> String {
         parts(running).into_iter().map(|(counted, detail)| format!("{counted} ({detail})")).collect();
     let text = format!("{STOPS} Running now: {}. {COMES_BACK}", now.join(" and "));
     match running.iter().filter(|r| r.resumes).count() {
-        0 if running.iter().any(|r| r.agent.as_deref() == Some(agents::CLAUDE)) => format!("{text} {RESUME}"),
+        0 if running.iter().any(|r| r.agent.as_deref().and_then(agents::Known::of) == Some(agents::Known::Claude)) => {
+            format!("{text} {RESUME}")
+        }
         0 => text,
         1 => format!("{text} 1 agent conversation resumes in its tab."),
         n => format!("{text} {n} agent conversations resume in their tabs."),

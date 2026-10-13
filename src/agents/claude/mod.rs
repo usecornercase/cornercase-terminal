@@ -5,6 +5,34 @@ use serde::Deserialize;
 
 use crate::agents::activity::{Activity, BRAILLE, glyph};
 
+pub(in crate::agents) const NAME: &str = "claude";
+pub(in crate::agents) const TITLE: &str = "Claude Code";
+pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
+    ("accept edits", &["--permission-mode", "acceptEdits"]),
+    ("auto", &["--permission-mode", "auto"]),
+    ("plan", &["--permission-mode", "plan"]),
+    ("skip permissions (dangerous)", &["--dangerously-skip-permissions"]),
+];
+pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
+pub(in crate::agents) const RUNS_AS: bool = false;
+pub(in crate::agents) const LOCAL_COMMAND: bool = false;
+pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(crate::agents::usage::Spec {
+    command: usage::command,
+    requests: usage::requests,
+    answer: usage::answer,
+    no_limits: "no plan limits for this account (API key, Bedrock or Vertex)",
+});
+pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";
+
+pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
+    args.to_vec()
+}
+
+#[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional resume signature across agents")]
+pub(in crate::agents) fn resume(args: Vec<String>, conversation: String) -> Option<Vec<String>> {
+    Some([args, vec!["--resume".into(), conversation]].concat())
+}
+
 pub const CLAUDE_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
 pub const CLAUDE_SESSION_ENV: [&str; 10] = [
     "CLAUDECODE",

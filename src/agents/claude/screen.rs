@@ -1,5 +1,3 @@
-use crate::agents::CLAUDE;
-
 const INPUT_MARK: char = '❯';
 const RULE: char = '─';
 const RULE_MIN: usize = 8;
@@ -10,13 +8,14 @@ const SURVEY_INDENT: &str = "  ";
 const SURVEY_GAP: usize = 3;
 const SURVEY_QUESTION_LINES: usize = 4;
 
-pub(crate) fn input_box(agent: &str, screen: &str) -> Option<bool> {
-    (agent == CLAUDE).then(|| box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
+#[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional input-box check across agents")]
+pub(in crate::agents) fn input_box(screen: &str) -> Option<bool> {
+    Some(box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
 }
 
-pub(crate) fn survey(agent: &str, screen: &str) -> bool {
+pub(in crate::agents) fn survey(screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().collect();
-    let Some(rule) = box_rule(&lines).filter(|_| agent == CLAUDE) else { return false };
+    let Some(rule) = box_rule(&lines) else { return false };
     let above = &lines[..rule];
     let Some(gap) = above.iter().rev().take(SURVEY_GAP).position(|line| survey_options(line)) else { return false };
     let question = &above[..above.len() - 1 - gap];

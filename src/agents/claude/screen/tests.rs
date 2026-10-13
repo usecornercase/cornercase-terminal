@@ -1,8 +1,7 @@
 mod input_box {
     use rstest::rstest;
 
-    use super::super::input_box;
-    use crate::agents::{CLAUDE, CODEX};
+    use crate::agents::Known;
 
     const RULE: &str = "────────────────────────────────────────";
     const FOOTER: &str = "  ⏵⏵ auto mode on · 1 shell · ← for agents";
@@ -26,20 +25,19 @@ mod input_box {
     #[case::a_past_prompt_in_the_transcript(&["", "❯ fix the login", "", "● Fixed."], Some(false))]
     #[case::its_shell_mode(&[RULE, "! sleep 300", RULE, "  ! for shell mode"], Some(false))]
     fn claudes_box_is_its_marker_right_under_a_rule(#[case] lines: &[&str], #[case] expected: Option<bool>) {
-        assert_eq!(input_box(CLAUDE, &screen(lines)), expected);
+        assert_eq!(Known::Claude.input_box(&screen(lines)), expected);
     }
 
     #[test]
     fn other_agents_are_not_known() {
-        assert_eq!(input_box(CODEX, &screen(&["› Ask Codex to do anything"])), None);
+        assert_eq!(Known::Codex.input_box(&screen(&["› Ask Codex to do anything"])), None);
     }
 }
 
 mod survey {
     use rstest::rstest;
 
-    use super::super::survey;
-    use crate::agents::{CLAUDE, CODEX};
+    use crate::agents::Known;
 
     const RULE: &str = "────────────────────────────────────────";
     const QUESTION: &str = "● How is Claude doing this session? (optional)";
@@ -64,7 +62,7 @@ mod survey {
           "  1: Bad    2: Fine   3: Good   4: Unsure 0: Dismiss", ""]
     )]
     fn is_its_question_and_answers_right_above_the_input_box(#[case] lines: &[&str]) {
-        assert!(survey(CLAUDE, &screen(lines)));
+        assert!(Known::Claude.survey(&screen(lines)));
     }
 
     #[rstest]
@@ -95,17 +93,17 @@ mod survey {
           "                               Dismiss", "                    ◐ medium · /effort"]
     )]
     fn is_nothing_else(#[case] lines: &[&str]) {
-        assert!(!survey(CLAUDE, &screen(lines)));
+        assert!(!Known::Claude.survey(&screen(lines)));
     }
 
     #[test]
     fn needs_the_input_box_under_it() {
         let panel = [QUESTION, OPTIONS, "", RULE, "  Shell details", "  x to stop"].join("\n");
-        assert!(!survey(CLAUDE, &panel));
+        assert!(!Known::Claude.survey(&panel));
     }
 
     #[test]
     fn is_only_claudes() {
-        assert!(!survey(CODEX, &screen(&[QUESTION, OPTIONS, ""])));
+        assert!(!Known::Codex.survey(&screen(&[QUESTION, OPTIONS, ""])));
     }
 }

@@ -12,7 +12,7 @@ mod pane {
             ..Pane::default()
         };
 
-        let found = [agents::OPENCODE, agents::CLAUDE].map(|agent| replaced.record_for(agent));
+        let found = [Known::Opencode, Known::Claude].map(|agent| replaced.record_for(agent));
 
         assert_eq!(found, [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]);
     }
@@ -41,7 +41,7 @@ pub(in crate::agents) mod counting_records {
         )
         .expect("session");
         let claude = Claude { pid: 1, args: Vec::new(), session: Some(session) };
-        let mut pane = Pane { agent: Some((1, since())), kind: Some(agents::CLAUDE), ..Pane::default() };
+        let mut pane = Pane { agent: Some((1, since())), kind: Some(Known::Claude), ..Pane::default() };
         let mut output = 0;
         wait_until("subagent usage", || {
             pane.update(Some(dir.path()), Some(&claude));

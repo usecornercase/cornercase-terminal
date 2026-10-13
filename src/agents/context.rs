@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::agents;
 use crate::agents::claude::Claude;
 use crate::agents::claude::transcript::{Limits, Subagents, Transcript, transcript_path};
 use crate::agents::codex::rollout as codex;
 use crate::agents::gemini::session as gemini;
 use crate::agents::opencode::database as opencode;
+use crate::agents::{self, Known};
 
 pub(in crate::agents) mod counting;
 pub(in crate::agents) mod discovery;
@@ -32,7 +32,7 @@ pub(crate) struct Pane {
     shown: Option<Context>,
     codex: Option<codex::Rollout>,
     agent: Option<(i32, SystemTime)>,
-    kind: Option<&'static str>,
+    kind: Option<Known>,
     finding: Job<Option<PathBuf>>,
     opencode: Option<opencode::Session>,
     looking: Job<(Option<opencode::Session>, opencode::Models)>,
@@ -47,13 +47,13 @@ pub(crate) struct Pane {
 }
 
 impl Pane {
-    fn follow(&mut self, pid: i32, kind: &'static str) {
+    fn follow(&mut self, pid: i32, kind: Known) {
         if self.agent.is_none_or(|(seen, _)| seen != pid) || self.kind != Some(kind) {
             *self = Self { agent: Some((pid, SystemTime::now())), kind: Some(kind), ..Self::default() };
         }
     }
 
-    pub(crate) fn kind(&self) -> Option<&'static str> {
+    pub(crate) fn kind(&self) -> Option<Known> {
         self.kind
     }
 
@@ -66,7 +66,7 @@ impl Pane {
     }
 
     pub(crate) fn update_codex(&mut self, pid: i32) {
-        self.follow(pid, agents::CODEX);
+        self.follow(pid, Known::Codex);
         if let Some(found) = self.finding.take()
             && found.as_ref() != self.codex.as_ref().map(|r| &r.path)
         {
@@ -87,7 +87,7 @@ impl Pane {
     }
 
     pub(crate) fn update_opencode(&mut self, pid: i32) {
-        self.follow(pid, agents::OPENCODE);
+        self.follow(pid, Known::Opencode);
         if let Some((mut found, models)) = self.looking.take() {
             if let Some(session) = &mut found
                 && let Some((_, since)) = self.agent
@@ -109,7 +109,7 @@ impl Pane {
     }
 
     pub(crate) fn update_gemini(&mut self, pid: i32, screen: &str) {
-        self.follow(pid, agents::GEMINI);
+        self.follow(pid, Known::Gemini);
         if let Some(mut found) = self.reading.take() {
             if let Some(session) = &mut found
                 && let Some((_, since)) = self.agent
@@ -132,7 +132,7 @@ impl Pane {
 
     pub(crate) fn update(&mut self, dir: Option<&Path>, claude: Option<&Claude>) {
         if let Some(claude) = claude {
-            self.follow(claude.pid, agents::CLAUDE);
+            self.follow(claude.pid, Known::Claude);
         }
         let found = dir.zip(claude).and_then(|(dir, claude)| {
             let session = claude.session.as_ref()?;
@@ -195,16 +195,15 @@ impl Pane {
         self.opencode.as_ref().map(|session| session.turn)
     }
 
-    pub(crate) fn record_for(&self, agent: &str) -> Option<Record> {
+    pub(crate) fn record_for(&self, agent: Known) -> Option<Record> {
         Some(match agent {
-            agents::CLAUDE => Record::Claude(self.transcript.as_ref()?.path.clone()),
-            agents::CODEX => Record::Codex(self.codex.as_ref()?.path.clone()),
-            agents::GEMINI => Record::Gemini(self.gemini_record.as_ref()?.0.clone()),
-            agents::OPENCODE => {
+            Known::Claude => Record::Claude(self.transcript.as_ref()?.path.clone()),
+            Known::Codex => Record::Codex(self.codex.as_ref()?.path.clone()),
+            Known::Gemini => Record::Gemini(self.gemini_record.as_ref()?.0.clone()),
+            Known::Opencode => {
                 let place = self.opencode.as_ref()?.place.clone()?;
                 Record::Opencode { database: place.database, session: place.id }
             }
-            _ => return None,
         })
     }
 

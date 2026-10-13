@@ -22,7 +22,7 @@ pub(in crate::agents) fn rollout_path(pid: i32, since: SystemTime) -> Option<Pat
         }
         for child in process::children(pid) {
             let args = process::args(child);
-            let codex = args.iter().take(2).any(|arg| is_codex(arg) || arg.ends_with("/codex/bin/codex.js"));
+            let codex = args.iter().take(2).any(|arg| is_codex(arg) || super::runs_as(arg));
             if codex && !pids.contains(&child) {
                 pids.push(child);
             }

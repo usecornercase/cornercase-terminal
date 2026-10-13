@@ -6,6 +6,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
+use crate::agents::Known;
 use crate::agents::activity::Status;
 use crate::persist;
 use crate::time::Stamp;
@@ -27,30 +28,8 @@ pub(crate) const LABELS: [&str; 9] = [
     "tokens from cache",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Kind {
-    Claude,
-    Codex,
-    Gemini,
-    Opencode,
-}
-
-impl Kind {
-    pub(crate) const ALL: [Self; 4] = [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode];
-    pub(crate) fn of(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|kind| kind.name() == name)
-    }
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Claude => "claude",
-            Self::Codex => "codex",
-            Self::Gemini => "gemini",
-            Self::Opencode => "opencode",
-        }
-    }
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|kind| *kind == self).unwrap_or(0)
-    }
+fn index(kind: Known) -> usize {
+    Known::ALL.iter().position(|agent| *agent == kind).unwrap_or(0)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -158,9 +137,9 @@ impl Bucket {
             counts: Metrics::from(counts),
             busy_seconds: seconds(self.busy_ms),
             most_at_once: self.most_at_once,
-            by_agent: Kind::ALL
+            by_agent: Known::ALL
                 .into_iter()
-                .map(|kind| (kind.name().into(), Metrics::from(self.by_agent[kind.index()])))
+                .map(|kind| (kind.name().into(), Metrics::from(self.by_agent[index(kind)])))
                 .collect(),
         }
     }
@@ -182,7 +161,7 @@ pub struct Stats {
     total: Bucket,
     hours: BTreeMap<u64, Bucket>,
     previous: HashMap<u64, Sample>,
-    started: HashMap<u64, (Kind, i32)>,
+    started: HashMap<u64, (Known, i32)>,
     revision: u64,
     pruned_hour: Option<u64>,
 }
@@ -190,7 +169,7 @@ pub struct Stats {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Sample {
     pub(crate) pane: u64,
-    pub(crate) kind: Kind,
+    pub(crate) kind: Known,
     pub(crate) pid: i32,
     pub(crate) status: Option<Status>,
     pub(crate) background: bool,
@@ -235,12 +214,12 @@ impl Stats {
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
-    fn add(&mut self, at: SystemTime, kind: Kind, counts: Counts) {
+    fn add(&mut self, at: SystemTime, kind: Known, counts: Counts) {
         self.revision = self.revision.saturating_add(1);
-        self.total.by_agent[kind.index()].add(counts);
-        self.hours.entry(hour(at)).or_default().by_agent[kind.index()].add(counts);
+        self.total.by_agent[index(kind)].add(counts);
+        self.hours.entry(hour(at)).or_default().by_agent[index(kind)].add(counts);
     }
-    pub fn counted(&mut self, kind: Kind, counted: Counted) {
+    pub fn counted(&mut self, kind: Known, counted: Counted) {
         for at in counted.prompts {
             self.add(at, kind, Counts { prompts: 1, ..Counts::default() });
         }

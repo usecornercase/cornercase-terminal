@@ -93,6 +93,8 @@ enum Verdict {
     Failed(String),
 }
 
+const CANNOT_WATCH: &str = "cornercase only knows what Claude Code, Codex, Gemini CLI and opencode are doing";
+
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 
 const SHELL_UNSEEN: Duration = Duration::from_secs(1);
@@ -101,8 +103,8 @@ const TEXT_EVERY: Duration = Duration::from_millis(100);
 
 const SOONEST: Duration = Duration::from_millis(10);
 
-pub(super) fn holds_prompts(agent: Option<&str>, status: Option<Status>) -> bool {
-    matches!(agent, Some(agents::CODEX | agents::GEMINI)) && matches!(status, Some(Status::Working | Status::Waiting))
+pub(super) fn holds_prompts(agent: Option<agents::Known>, status: Option<Status>) -> bool {
+    agent.is_some_and(agents::Known::holds_prompts) && matches!(status, Some(Status::Working | Status::Waiting))
 }
 
 fn not_confirmed(pane: u64) -> String {
@@ -358,15 +360,8 @@ impl App {
         if until.needs_agent()
             && let Err(agent) = self.watched_agent(term)
         {
-            let runs = agent.map_or_else(
-                || "runs no agent".to_string(),
-                |agent| {
-                    format!(
-                        "runs {agent}, and cornercase only knows what Claude Code, Codex, Gemini CLI and opencode \
-                         are doing"
-                    )
-                },
-            );
+            let runs =
+                agent.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}, and {CANNOT_WATCH}"));
             return Err(format!(
                 "pane {pane} {runs}, so there is nothing to wait for; wait with --until shell, --text or --quiet instead"
             ));

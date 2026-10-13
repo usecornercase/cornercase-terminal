@@ -1,6 +1,8 @@
 use std::ops::RangeInclusive;
 use std::time::{Duration, Instant};
 
+use crate::agents::Known;
+
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 const NOTIFY_AFTER: Duration = Duration::from_secs(1);
 pub(crate) const SHELL: &str = "shell";
@@ -42,7 +44,7 @@ pub(crate) fn attention(statuses: impl IntoIterator<Item = Option<Status>>) -> O
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct Pane {
-    agent: Option<String>,
+    agent: Option<Known>,
     activity: Option<Activity>,
     unseen: bool,
     since: Option<Instant>,
@@ -52,9 +54,9 @@ pub(crate) struct Pane {
 }
 
 impl Pane {
-    pub(crate) fn follow(&mut self, agent: Option<&str>) {
-        if self.agent.as_deref() != agent {
-            *self = Self { agent: agent.map(str::to_string), ..Self::default() };
+    pub(crate) fn follow(&mut self, agent: Option<Known>) {
+        if self.agent != agent {
+            *self = Self { agent, ..Self::default() };
         }
     }
 
@@ -88,8 +90,8 @@ impl Pane {
         self.notified = true;
     }
 
-    pub(crate) fn agent(&self) -> Option<&str> {
-        self.agent.as_deref()
+    pub(crate) fn agent(&self) -> Option<Known> {
+        self.agent
     }
 
     pub(crate) fn reacted(&self, since: Instant) -> bool {

@@ -196,6 +196,7 @@ Examples:
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
+
 pub(super) const REMOTE_HELP: &str =
     "cornercase runs `ssh DESTINATION cornercase proxy`, so your ssh config, keys, agent and
 ProxyJump apply, and starts the server there if none is running. The shells, agents and files stay
@@ -254,3 +255,6 @@ pub(super) const WAIT_TAB: &str = "A tab: its agent's pane, else its active one;
 pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
+
+#[cfg(test)]
+mod tests;
