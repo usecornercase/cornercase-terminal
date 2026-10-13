@@ -2,9 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.46
+## 0.12.47
 
 - No changes in the app. The code that draws the screen moved from ui.rs into one file per part of it.
+
+## 0.12.46
+
+- Switching browser access off and on quickly no longer fails with "port is taken" while a command that just started still holds the port. Tests that failed now and then on a slow machine wait for what they check.
+
+## 0.12.45
+
+- No changes in the app. Its largest source file, app.rs, is now one file per concern.
 
 ## 0.12.44
 

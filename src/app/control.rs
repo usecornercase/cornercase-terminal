@@ -8,7 +8,8 @@ use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{App, AppEvent, Target, Toast};
+use super::menus::Target;
+use super::{App, AppEvent, Toast};
 use crate::activity::{self, Status};
 use crate::agents;
 use crate::awake;

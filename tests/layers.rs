@@ -17,7 +17,6 @@ const UI_EXCEPTIONS: &[&str] = &[
     "src/usage/mod.rs",
 ];
 const LONG_FILES: &[&str] = &[
-    "src/app.rs",
     "src/app/control.rs",
     "src/cli.rs",
     "src/client.rs",
