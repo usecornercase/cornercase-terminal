@@ -482,6 +482,6 @@ mod mapping {
         let saved = ProjectState::of(&project, Some(0));
         let back = saved.restore(8, "/q".into(), Some(7), Vec::new());
         assert_eq!((back.id, back.group, back.collapsed), (8, Some(7), true));
-        assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), std::path::Path::new("/q")));
+        assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), Path::new("/q")));
     }
 }
