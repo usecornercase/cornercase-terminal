@@ -161,7 +161,6 @@ mod search;
 mod settings;
 mod sidebar_hit;
 mod sidebar_scroll;
-mod sidebar_setting;
 mod splits;
 mod stacked;
 mod tab_bar_drawing;

@@ -1,7 +1,12 @@
+use std::path::PathBuf;
+
+use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
+use super::args::{RestartArgs, UpdateArgs};
+use super::status::cell;
 use super::*;
-use crate::control::{GroupInfo, Ids, PaneInfo, TabInfo, WorkspaceInfo};
+use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, TabInfo, WorkspaceInfo};
 
 fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
@@ -48,10 +53,10 @@ mod parsing {
     }
 
     #[rstest]
-    #[case::now(&["restart"], client::When::Now)]
-    #[case::when_idle(&["restart", "--when-idle"], client::When::Idle { timeout: None })]
-    #[case::with_a_timeout(&["update", "--when-idle", "--timeout", "90"], client::When::Idle { timeout: Some(90.0) })]
-    fn a_restart_can_wait_for_the_agents(#[case] args: &[&str], #[case] expected: client::When) {
+    #[case::now(&["restart"], update::When::Now)]
+    #[case::when_idle(&["restart", "--when-idle"], update::When::Idle { timeout: None })]
+    #[case::with_a_timeout(&["update", "--when-idle", "--timeout", "90"], update::When::Idle { timeout: Some(90.0) })]
+    fn a_restart_can_wait_for_the_agents(#[case] args: &[&str], #[case] expected: update::When) {
         let when = match parse(args).expect("parse").command {
             Some(Command::Restart(RestartArgs { when, .. }) | Command::Update(UpdateArgs { when, .. })) => when,
             other => panic!("not a restart: {other:?}"),

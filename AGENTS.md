@@ -55,21 +55,21 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 ```
 src/main.rs       hands argv to cli.rs (uses anyhow)
-src/cli.rs        clap definitions of every command; the commands for scripts and agents send a request and print the answer
+src/cli.rs        `run` and the dispatcher of every command; the commands for scripts and agents send a request and print the answer; cli/args.rs the clap definitions, cli/help.rs their help texts, cli/status.rs the `status` output, cli/update.rs `cornercase update` and `restart`, cli/read.rs `read`
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
-src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste; `kill-server`, `restart` and `update`
+src/client.rs     the UI process: entry points, terminal setup/teardown; client/window.rs the attached window (forwards events, writes frames, reconnects a remote window), client/probe.rs the colour query and what the outer terminal can show, client/requests.rs a command talking to the server, client/server_process.rs starting and stopping the server (`kill-server`); client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste
 src/web/          browser access: mod.rs (the loopback listener, routes, pairing, paired browsers' count), bridge.rs (one WebSocket as a client of the server's socket), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js)
 src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser access
 src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages and length-prefixed postcard framing
-src/state.rs      the saved session as JSON, migrations and mapping to the hierarchy
+src/state.rs      the saved session as JSON, its Widths schema, migrations and mapping to the hierarchy
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
-src/config.rs     user settings (config.json), `~` expansion, validation
+src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
 src/settings.rs   the settings modal's state; returns Actions for App
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
-src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt
+src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
 src/awake.rs      keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child
 src/activity.rs   what the agent in a pane is doing: Claude Code's session file, its title glyph, Codex's title and turns, opencode's turns, done-but-unseen, rollups
 src/context.rs    model/context lines for Claude Code, Codex, Gemini CLI and opencode; context/codex.rs reads Codex rollouts, context/opencode.rs opencode's SQLite database (its session, turn and line, its last message), context/message.rs the last message each wrote (`read --last-message`), reading JSONL backwards
@@ -96,7 +96,7 @@ src/search.rs     global search: candidates and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
-src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
+src/project.rs    Project > Workspace > Tab > panes, labels, removal, moving; project/group.rs holds Group, GroupEntry, icons, colours, preset selection and saved-icon normalization
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state, new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
 src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)

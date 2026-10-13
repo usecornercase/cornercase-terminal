@@ -51,15 +51,14 @@ pub use dialog::usage::{Usage, UsageSection, UsageWindow, usage_area, usage_done
 pub use dialog::{CANCEL_LABEL, Note, Overlay};
 pub use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub use layout::{
-    Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, Nav, Sidebar, Tabs, changes_button, files_button, full_layout, layout,
-    layout_with,
+    Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, Nav, changes_button, files_button, full_layout, layout, layout_with,
 };
 pub use pane::{TabView, scrollback_badge, scrollback_label};
 pub use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
 pub use rows::{ROW_MENU_ICON, Rows, more_above, row_close_button, row_menu_button};
 pub use sidebar::{
-    GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES, GroupEntry, NEW_BUTTON, ProjectEntry, SidebarHit, SidebarRow, active_row,
-    close_button, entry_row, new_project_button, project_rows, sidebar_hit, sidebar_rows,
+    NEW_BUTTON, ProjectEntry, SidebarHit, SidebarRow, active_row, close_button, entry_row, new_project_button,
+    project_rows, sidebar_hit, sidebar_rows,
 };
 pub use theme::muted;
 pub use toast::{Toast, ToastButton, ToastIcon, toast_area, toast_button};
@@ -68,15 +67,17 @@ pub use tree::{
     tree_hit, tree_layout_rows, tree_row, tree_rows,
 };
 pub use widgets::update_button;
-pub use widths::{
-    MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, SIDEBAR_WIDTH, WORKSPACES_WIDTH, Widths,
-};
+pub use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, SIDEBAR_WIDTH, WORKSPACES_WIDTH};
 pub use workspaces::{
     Details, ICON_WIDTH, TabEntry, TabLines, WorkspaceEntry, WorkspaceHit, WorkspaceRow, new_workspace_button,
     workspace_hit, workspace_layout, workspace_row, workspace_rows,
 };
 
 use crate::activity::Status;
+
+pub use crate::config::{Sidebar, Tabs};
+pub use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES, GroupEntry};
+pub use crate::state::Widths;
 
 use agents_section::draw_agents;
 use chrome::{

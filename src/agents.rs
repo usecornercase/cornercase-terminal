@@ -2,8 +2,17 @@ use std::ffi::OsStr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 use crate::config::Config;
-use crate::state::AgentState;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentState {
+    pub kind: String,
+    pub conversation: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+}
 
 pub const AUTO: &str = "auto";
 pub const CLAUDE: &str = "claude";

@@ -199,6 +199,43 @@ fn discovery_uses_one_home_and_folder_and_rejects_stale_or_subagent_sessions() {
     assert!(look(first.pid(), UNIX_EPOCH, None, None).is_none());
 }
 
+#[test]
+fn a_process_the_agent_starts_during_the_scan_is_not_another_gemini() {
+    let project = TempDir::new();
+    let fake = FakeGemini::new(project.path());
+    fake.append(REPLY);
+    let go = project.path().join("go");
+    let parent = project.path().join("gemini");
+    crate::test_util::write_executable(
+        &parent,
+        "#!/bin/sh\nwhile [ ! -e \"$1\" ]; do sleep 0.02; done\n\"$2\" \"$3\" \"$4\"\n",
+    );
+    let mut forker = std::process::Command::new(&parent)
+        .arg(&go)
+        .arg(&fake.script)
+        .arg(&fake.session)
+        .arg(fake.dir.path())
+        .current_dir(project.path())
+        .env_clear()
+        .env("GEMINI_CLI_HOME", fake.dir.path())
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn the parent");
+    let pid = i32::try_from(forker.id()).expect("pid fits");
+    crate::test_util::wait_until("the parent runs", || process::args(pid).len() > 1);
+
+    let found = look_among(pid, UNIX_EPOCH, None, None, || {
+        std::fs::write(&go, "").expect("signal the parent");
+        crate::test_util::wait_until("the parent starts a gemini", || {
+            process::children(pid).into_iter().any(|child| named(&process::args(child), NAME))
+        });
+        process::all()
+    });
+    let _ = forker.kill();
+    let _ = forker.wait();
+    assert!(found.is_some());
+}
+
 #[rstest]
 #[case::model(
     "workspace (/directory)          sandbox          /model\n\

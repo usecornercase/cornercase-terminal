@@ -9,7 +9,7 @@ use std::time::Instant;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::activity;
-use crate::agents;
+use crate::agents::{self, AgentState};
 use crate::config::Config;
 use crate::context;
 use crate::emulator::Emulator;
@@ -17,7 +17,6 @@ use crate::error::{Error, Result};
 use crate::host_theme::HostTheme;
 use crate::memory;
 use crate::process;
-use crate::state::AgentState;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;
 const READ_BUFFER: usize = 16 * 1024;
