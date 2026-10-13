@@ -19,6 +19,24 @@ fn ids(app: &App) -> (u64, u64, u64, u64) {
 }
 
 #[test]
+fn tells_when_the_side_panel_changes_once_per_switch() {
+    let (mut app, _rx) = empty_app();
+    assert_eq!(told(&mut app), Vec::<String>::new());
+
+    for (switch, shown) in [
+        (App::toggle_changes as fn(&mut App), "changes"),
+        (App::toggle_todo, "todo"),
+        (App::toggle_files, "files"),
+        (App::close_panel, "none"),
+    ] {
+        switch(&mut app);
+
+        assert_eq!(told(&mut app), [format!("ui: panel shown={shown}")]);
+        assert_eq!(told(&mut app), Vec::<String>::new(), "an unchanged panel is not logged twice");
+    }
+}
+
+#[test]
 fn tells_each_new_item_once_with_where_it_sits() {
     let (mut app, _rx, dirs) = app_with(1);
     let (project, workspace, tab, pane) = ids(&app);

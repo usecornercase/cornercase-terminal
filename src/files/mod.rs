@@ -94,7 +94,6 @@ struct Place {
 
 #[derive(Debug, Default)]
 pub struct Panel {
-    pub open: bool,
     places: HashMap<u64, Place>,
     listings: HashMap<(u64, String), Arc<Vec<Entry>>>,
     generation: u64,
@@ -222,7 +221,6 @@ impl Panel {
     }
 
     pub fn close(&mut self) {
-        self.open = false;
         self.unfocus();
     }
 

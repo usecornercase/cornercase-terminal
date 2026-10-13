@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::time::SystemTime;
 
+use super::layout::Side;
 use super::{App, Toast};
 use crate::control::{self, Ids, What};
 use crate::log::{self, Level};
@@ -375,14 +376,11 @@ impl App {
             }
             self.seen.overlay = overlay;
         }
-        let panel = if self.changes.open {
-            Some("changes")
-        } else if self.todo.open {
-            Some("todo")
-        } else if self.files.open {
-            Some("files")
-        } else {
-            None
+        let panel = match self.side {
+            Some(Side::Changes) => Some("changes"),
+            Some(Side::Todo) => Some("todo"),
+            Some(Side::Files) => Some("files"),
+            None => None,
         };
         if panel != self.seen.panel {
             let note = Note::new(Level::Info, "ui", "panel").with("shown", panel.unwrap_or("none"));

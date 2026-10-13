@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::interaction::{Drag, LinkPress};
+use super::layout::Side;
 use crate::emulator::Snapshot;
 use crate::files::link::{self, Target};
 use crate::mouse::MouseMode;
@@ -80,11 +81,7 @@ impl App {
         let Some(workspace) = self.project().and_then(crate::project::Project::workspace).map(|w| w.id) else {
             return;
         };
-        if !self.files.open {
-            self.changes.close();
-            self.close_todo();
-            self.files.open = true;
-        }
+        self.show_side(Some(Side::Files));
         self.nav = None;
         match target.lines {
             Some(lines) => self.files.open_at(workspace, &target.path, lines, None),

@@ -81,7 +81,7 @@ fn an_unfold_request_keeps_large_tracked_files_folded_without_reading_their_patc
     std::fs::write(repo.path().join(path), "new\n".repeat(diff::MAX_LINES + 1)).expect("large edit");
     let targets = [(Checkout { workspace: 1, dir: repo.path().to_path_buf(), base: None }, false)];
     let now = Instant::now();
-    let mut panel = Panel { scope: Scope::Every, open: true, ..Panel::default() };
+    let mut panel = Panel { scope: Scope::Every, watched: true, ..Panel::default() };
     let (workspace, generation, request) = panel.request_every(&targets, now).expect("summary request");
     let result = git::load(&request).expect("summary");
     panel.loaded(workspace, generation, &request, Ok(result));

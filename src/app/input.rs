@@ -5,7 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::interaction::Drag;
-use super::layout::Focus;
+use super::layout::{Focus, Side};
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
@@ -84,15 +84,16 @@ impl App {
             self.commit_todo();
             self.files.unfocus();
         }
-        if in_panel && self.todo.open {
-            self.todo_mouse(ev, pos, areas.changes, area);
-            return Ok(());
-        }
-        if in_panel && self.files_shown() {
-            return self.files_mouse(ev, pos, areas.changes, area);
-        }
         if in_panel {
-            return self.changes_mouse(ev, pos, areas.changes, area);
+            match self.side {
+                Some(Side::Todo) => {
+                    self.todo_mouse(ev, pos, areas.changes, area);
+                    return Ok(());
+                }
+                Some(Side::Files) => return self.files_mouse(ev, pos, areas.changes, area),
+                Some(Side::Changes) => return self.changes_mouse(ev, pos, areas.changes, area),
+                None => {}
+            }
         }
         if let Some(delta) = wheel(ev.kind)
             && self.scroll_column(&areas, pos, delta)
@@ -249,9 +250,7 @@ impl App {
 
     fn toggle_nav(&mut self) {
         if self.nav.is_none() {
-            self.changes.close();
-            self.close_todo();
-            self.files.close();
+            self.show_side(None);
         }
         self.nav = match self.nav {
             Some(_) => None,

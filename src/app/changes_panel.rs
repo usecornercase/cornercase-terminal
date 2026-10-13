@@ -7,6 +7,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::event::AppEvent;
 use super::input::wheel;
+use super::layout::Side;
 use super::toast::copy;
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, Checkout, Tints};
@@ -74,7 +75,8 @@ impl App {
     }
 
     pub(super) fn changes_shown(&self) -> bool {
-        self.changes.open && (self.changes.scope == changes::Scope::Every || self.changes_target().is_some())
+        self.side == Some(Side::Changes)
+            && (self.changes.scope == changes::Scope::Every || self.changes_target().is_some())
     }
 
     pub(super) fn refresh_changes(&mut self, now: Instant) {
@@ -123,13 +125,8 @@ impl App {
     }
 
     pub(super) fn toggle_changes(&mut self) {
-        if self.changes.open {
-            self.changes.close();
-        } else {
-            self.close_todo();
-            self.files.close();
-            self.changes.open = true;
-        }
+        let side = (self.side != Some(Side::Changes)).then_some(Side::Changes);
+        self.show_side(side);
         self.nav = None;
     }
 
@@ -367,7 +364,7 @@ impl App {
                 }
             }
             Some(PanelHit::Mode(mode)) => self.changes.set_mode(mode),
-            Some(PanelHit::Close) => self.changes.close(),
+            Some(PanelHit::Close) => self.show_side(None),
             Some(PanelHit::Filter | PanelHit::Query) => self.changes.filter.get_or_insert_default().focused = true,
             Some(PanelHit::ClearFilter) => self.changes.filter = None,
             Some(PanelHit::Base) => {

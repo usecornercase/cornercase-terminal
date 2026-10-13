@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. Each overlay's view, submission and mouse handling run through their own methods.
 
+## 0.12.71
+
+- No changes in the app. It keeps one side panel at a time.
+
 ## 0.12.70
 
 - No changes in the app. It keeps one drag at a time.

@@ -101,7 +101,7 @@ fn hovering_a_border_asks_for_a_resize_pointer(
 #[test]
 fn the_changes_border_asks_for_a_sideways_pointer() {
     let (mut app, _rx) = app();
-    app.todo.open = true;
+    app.side = Some(Side::Todo);
     let from = border(&app, ui::Border::Changes);
 
     hover(&mut app, from);

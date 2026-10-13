@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::interaction::{Drag, Grab, RowDrag};
+use super::layout::Side;
 use super::{App, Toast};
 use crate::todo::editor::Editor;
 use crate::todo::{Field, Removed};
@@ -42,23 +43,17 @@ impl App {
     }
 
     pub(super) fn todo_typing(&self) -> bool {
-        self.overlay.is_none() && self.todo.open && self.todo.field.is_some()
+        self.overlay.is_none() && self.side == Some(Side::Todo) && self.todo.field.is_some()
     }
 
     pub(super) fn toggle_todo(&mut self) {
-        if self.todo.open {
-            self.close_todo();
-        } else {
-            self.changes.close();
-            self.files.close();
-            self.todo.open = true;
-        }
+        let side = (self.side != Some(Side::Todo)).then_some(Side::Todo);
+        self.show_side(side);
         self.nav = None;
     }
 
     pub(super) fn close_todo(&mut self) {
         self.commit_todo();
-        self.todo.open = false;
     }
 
     pub(super) fn commit_todo(&mut self) {
@@ -131,7 +126,7 @@ impl App {
             self.commit_todo();
         }
         match hit {
-            Some(Hit::Close) => self.close_todo(),
+            Some(Hit::Close) => self.show_side(None),
             Some(Hit::ClearDone) => {
                 if let Some(removed) = self.todos.clear_done() {
                     self.removed_todos(format!("cleared {} done", removed.len()), removed);
