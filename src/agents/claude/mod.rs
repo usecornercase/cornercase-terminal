@@ -1,9 +1,14 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use serde::Deserialize;
 
+use self::transcript::{Limits, Subagents, Transcript, transcript_path};
 use crate::agents::activity::{Activity, BRAILLE, glyph};
+use crate::agents::context::counting::Ledger;
+use crate::agents::context::discovery::Job;
+use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const TITLE: &str = "Claude Code";
@@ -49,21 +54,21 @@ pub const CLAUDE_SESSION_ENV: [&str; 10] = [
 const SPINNER: [char; 4] = ['◐', '◓', '◑', '◒'];
 const IDLE: char = '✳';
 #[derive(Debug, Deserialize)]
-pub(crate) struct Session {
+struct Session {
     pid: Option<i64>,
     status: Option<String>,
     #[serde(rename = "sessionId")]
-    pub(crate) id: Option<String>,
-    pub(crate) cwd: Option<PathBuf>,
+    id: Option<String>,
+    cwd: Option<PathBuf>,
 }
 
 impl Session {
-    pub(crate) fn read(dir: Option<&Path>, pid: i32) -> Option<Self> {
+    fn read(dir: Option<&Path>, pid: i32) -> Option<Self> {
         let text = std::fs::read_to_string(dir?.join("sessions").join(format!("{pid}.json"))).ok()?;
         Self::parse(&text, pid)
     }
 
-    pub(crate) fn parse(text: &str, pid: i32) -> Option<Self> {
+    fn parse(text: &str, pid: i32) -> Option<Self> {
         let session: Self = serde_json::from_str(text).ok()?;
         session.pid.is_none_or(|p| p == i64::from(pid)).then_some(session)
     }
@@ -79,16 +84,68 @@ impl Session {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct Claude {
-    pub(crate) pid: i32,
-    pub(crate) args: Vec<String>,
-    pub(crate) session: Option<Session>,
+#[derive(Debug, Default)]
+pub(in crate::agents) struct Reader {
+    transcript: Option<Transcript>,
+    subagents: Subagents,
+    following: Job<Subagents>,
+    session: Option<Session>,
 }
 
-impl Claude {
-    pub(crate) fn activity(&self, title: &str) -> Activity {
+impl Reader {
+    pub(in crate::agents) fn update(
+        &mut self,
+        look: &Look<'_>,
+        since: SystemTime,
+        shown: &mut Option<Context>,
+        ledger: &mut Ledger,
+    ) -> Option<SystemTime> {
+        self.session = Session::read(look.claude_dir, look.pid);
+        let found = look.claude_dir.zip(self.session.as_ref()).and_then(|(dir, session)| {
+            let cwd = session.cwd.as_deref()?;
+            Some((dir, cwd, transcript_path(dir, cwd, session.id.as_deref()?)?))
+        });
+        let Some((dir, cwd, path)) = found else {
+            self.transcript = None;
+            *shown = None;
+            return None;
+        };
+        if self.transcript.as_ref().is_none_or(|t| t.path != path) {
+            self.transcript = None;
+            *shown = None;
+        }
+        let transcript = self.transcript.get_or_insert_with(|| Transcript::new(path));
+        let before = transcript.reply.clone();
+        transcript.update();
+        let prompted = transcript.prompted;
+        ledger.apply(&transcript.path.to_string_lossy(), since, std::mem::take(&mut transcript.counted));
+        if transcript.reply != before {
+            *shown = transcript.reply.as_ref().map(|reply| reply.context(&Limits::read(dir, cwd, look)));
+        }
+        let parent = transcript.path.with_extension("").join("subagents");
+        if let Some(mut found) = self.following.take() {
+            for (path, records) in std::mem::take(&mut found.records) {
+                ledger.apply(&path.to_string_lossy(), since, records);
+            }
+            self.subagents = found;
+        }
+        if !self.following.running() {
+            let state = std::mem::take(&mut self.subagents);
+            self.following.start(move || state.read(&parent, since));
+        }
+        prompted
+    }
+
+    pub(in crate::agents) fn activity(&self, title: &str) -> Activity {
         self.session.as_ref().and_then(Session::activity).or_else(|| from_title(title)).unwrap_or(Activity::Idle)
+    }
+
+    pub(in crate::agents) fn record(&self) -> Option<Record> {
+        Some(Record::Claude(self.transcript.as_ref()?.path.clone()))
+    }
+
+    pub(in crate::agents) fn conversation(&self) -> Option<&str> {
+        self.transcript.as_ref().filter(|t| t.len > 0).and_then(|t| t.path.file_stem()?.to_str())
     }
 }
 

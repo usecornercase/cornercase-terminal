@@ -1,4 +1,9 @@
+use std::time::SystemTime;
+
 use crate::agents::activity::Activity;
+use crate::agents::context::counting::Ledger;
+use crate::agents::context::discovery::Job;
+use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "opencode";
 pub(in crate::agents) const TITLE: &str = "opencode";
@@ -16,8 +21,53 @@ pub(in crate::agents) const UNFOUND: &str =
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
-pub(crate) fn opencode(turn: bool) -> Activity {
+fn activity(turn: bool) -> Activity {
     if turn { Activity::Working } else { Activity::Idle }
+}
+
+#[derive(Debug, Default)]
+pub(in crate::agents) struct Reader {
+    session: Option<database::Session>,
+    looking: Job<(Option<database::Session>, database::Models)>,
+    models: database::Models,
+}
+
+impl Reader {
+    pub(in crate::agents) fn update(
+        &mut self,
+        look: &Look<'_>,
+        since: SystemTime,
+        shown: &mut Option<Context>,
+        ledger: &mut Ledger,
+    ) -> Option<SystemTime> {
+        let mut prompted = None;
+        if let Some((mut found, models)) = self.looking.take() {
+            if let Some(session) = &mut found
+                && let Some(place) = &session.place
+            {
+                ledger.apply(&place.id, since, std::mem::take(&mut session.counted));
+            }
+            self.models = models;
+            *shown = found.as_ref().and_then(|session| session.context.clone());
+            prompted = found.as_ref().and_then(|session| session.prompted);
+            self.session = found;
+        }
+        if !self.looking.running() {
+            let pid = look.pid;
+            let mut models = std::mem::take(&mut self.models);
+            self.looking.start(move || (database::look(pid, since, &mut models), models));
+        }
+        prompted
+    }
+
+    pub(in crate::agents) fn activity(&self) -> Option<Activity> {
+        self.session.as_ref().map(|session| activity(session.turn))
+    }
+
+    pub(in crate::agents) fn record(&self) -> Option<Record> {
+        let place = self.session.as_ref()?.place.clone()?;
+        Some(Record::Opencode { database: place.database, session: place.id })
+    }
 }
 
 pub(in crate::agents) mod database;

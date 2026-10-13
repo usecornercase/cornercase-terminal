@@ -8,7 +8,7 @@ pub(in crate::agents) fn session(text: &str, pid: i32) -> Option<Activity> {
 }
 
 fn claude(dir: Option<&Path>, pid: i32, title: &str) -> Activity {
-    Claude { pid, args: Vec::new(), session: Session::read(dir, pid) }.activity(title)
+    Reader { session: Session::read(dir, pid), ..Reader::default() }.activity(title)
 }
 
 mod session_file {

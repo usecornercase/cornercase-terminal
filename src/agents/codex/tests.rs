@@ -16,6 +16,6 @@ mod codex_title {
     #[case::approval_without_a_turn("[ ! ] Action Required | shop", false, Activity::Waiting)]
     #[case::empty("", false, Activity::Idle)]
     fn shows_what_codex_is_doing(#[case] title: &str, #[case] turn: bool, #[case] expected: Activity) {
-        assert_eq!(codex(title, turn), expected);
+        assert_eq!(activity(title, turn), expected);
     }
 }

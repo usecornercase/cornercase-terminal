@@ -1,4 +1,10 @@
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use crate::agents::activity::{Activity, glyph};
+use crate::agents::context::counting::Ledger;
+use crate::agents::context::discovery::Job;
+use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
@@ -36,12 +42,60 @@ pub(in crate::agents) fn local_command(text: &str) -> bool {
     text.trim_start().starts_with(['/', '?', '!'])
 }
 
-pub(crate) fn gemini(title: &str) -> Option<Activity> {
+fn from_title(title: &str) -> Option<Activity> {
     match glyph(title.trim())? {
         '✋' => Some(Activity::Waiting),
         '✦' | '⏲' => Some(Activity::Working),
         '◇' => Some(Activity::Idle),
         _ => None,
+    }
+}
+
+#[derive(Debug, Default)]
+pub(in crate::agents) struct Reader {
+    session: Option<session::Session>,
+    reading: Job<Option<session::Session>>,
+    record: Option<(PathBuf, Option<String>)>,
+}
+
+impl Reader {
+    pub(in crate::agents) fn update(
+        &mut self,
+        look: &Look<'_>,
+        since: SystemTime,
+        shown: &mut Option<Context>,
+        ledger: &mut Ledger,
+    ) -> Option<SystemTime> {
+        let screen = (look.screen)();
+        let mut prompted = None;
+        if let Some(mut found) = self.reading.take() {
+            if let Some(session) = &mut found {
+                ledger.apply(&session.path.to_string_lossy(), since, std::mem::take(&mut session.counted));
+            }
+            *shown = found.as_ref().and_then(|session| session.context.clone());
+            prompted = found.as_ref().and_then(|session| session.prompted);
+            self.record = found.as_ref().map(|s| (s.path.clone(), s.id().map(str::to_string)));
+            self.session = found;
+        }
+        if !self.reading.running() {
+            let pid = look.pid;
+            let previous = self.session.take();
+            let footer = session::footer_model(&screen);
+            self.reading.start(move || session::look(pid, since, previous, footer));
+        }
+        prompted
+    }
+
+    pub(in crate::agents) fn activity(title: &str) -> Option<Activity> {
+        from_title(title)
+    }
+
+    pub(in crate::agents) fn record(&self) -> Option<Record> {
+        Some(Record::Gemini(self.record.as_ref()?.0.clone()))
+    }
+
+    pub(in crate::agents) fn conversation(&self) -> Option<&str> {
+        self.record.as_ref()?.1.as_deref()
     }
 }
 

@@ -1,4 +1,10 @@
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use crate::agents::activity::{Activity, BRAILLE, glyph};
+use crate::agents::context::counting::Ledger;
+use crate::agents::context::discovery::Job;
+use crate::agents::context::{Context, Look, Record};
 
 const ACTION_REQUIRED: [&str; 2] = ["[ ! ] Action Required", "[ . ] Action Required"];
 
@@ -37,13 +43,57 @@ pub(in crate::agents) fn runs_as(arg: &str) -> bool {
     arg.ends_with(NPM_SCRIPT)
 }
 
-pub(crate) fn codex(title: &str, turn: bool) -> Activity {
+fn activity(title: &str, turn: bool) -> Activity {
     if ACTION_REQUIRED.iter().any(|prefix| title.starts_with(prefix)) {
         Activity::Waiting
     } else if turn || glyph(title).is_some_and(|g| BRAILLE.contains(&g)) {
         Activity::Working
     } else {
         Activity::Idle
+    }
+}
+
+#[derive(Debug, Default)]
+pub(in crate::agents) struct Reader {
+    rollout: Option<rollout::Rollout>,
+    finding: Job<Option<PathBuf>>,
+}
+
+impl Reader {
+    pub(in crate::agents) fn update(
+        &mut self,
+        look: &Look<'_>,
+        since: SystemTime,
+        shown: &mut Option<Context>,
+        ledger: &mut Ledger,
+    ) -> Option<SystemTime> {
+        if let Some(found) = self.finding.take()
+            && found.as_ref() != self.rollout.as_ref().map(|r| &r.path)
+        {
+            self.rollout = found.map(rollout::Rollout::new);
+            *shown = None;
+        }
+        let pid = look.pid;
+        self.finding.start(move || rollout::rollout_path(pid, since));
+        if let Some(rollout) = &mut self.rollout {
+            rollout.update();
+            *shown = rollout.context();
+            ledger.apply(&rollout.path.to_string_lossy(), since, std::mem::take(&mut rollout.counted));
+            return rollout.prompted();
+        }
+        None
+    }
+
+    pub(in crate::agents) fn activity(&self, title: &str) -> Activity {
+        activity(title, self.rollout.as_ref().is_some_and(rollout::Rollout::turn))
+    }
+
+    pub(in crate::agents) fn record(&self) -> Option<Record> {
+        Some(Record::Codex(self.rollout.as_ref()?.path.clone()))
+    }
+
+    pub(in crate::agents) fn conversation(&self) -> Option<&str> {
+        self.rollout.as_ref()?.id()
     }
 }
 

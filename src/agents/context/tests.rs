@@ -1,26 +1,38 @@
 use super::*;
 
+pub(in crate::agents) fn pane_look(pid: i32) -> Look<'static> {
+    Look { pid, args: Vec::new(), title: String::new(), screen: &String::new, claude_dir: None }
+}
+
 mod pane {
     use super::*;
+    use crate::agents::claude::transcript::transcript_path;
+    use crate::test_util::TempDir;
 
     #[test]
     fn the_record_is_the_one_of_the_agent_asked_for() {
-        let place = opencode::Place { database: "/d/opencode.db".into(), id: "ses".into() };
-        let replaced = Pane {
-            codex: Some(codex::Rollout::new("/c/rollout.jsonl".into())),
-            opencode: Some(opencode::Session { place: Some(place), ..opencode::Session::default() }),
-            ..Pane::default()
-        };
+        let dir = TempDir::new();
+        let path = transcript_path(dir.path(), dir.path(), "session").expect("path");
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+        std::fs::write(&path, "").expect("transcript");
+        std::fs::create_dir(dir.path().join("sessions")).expect("sessions");
+        std::fs::write(
+            dir.path().join("sessions/1.json"),
+            serde_json::json!({"pid": 1, "sessionId": "session", "cwd": dir.path()}).to_string(),
+        )
+        .expect("session");
+        let mut replaced = Pane::default();
+        replaced.update(Some(Known::Claude), &Look { claude_dir: Some(dir.path()), ..pane_look(1) });
 
-        let found = [Known::Opencode, Known::Claude].map(|agent| replaced.record_for(agent));
+        let found = Known::ALL.map(|agent| replaced.record_for(agent));
 
-        assert_eq!(found, [Some(Record::Opencode { database: "/d/opencode.db".into(), session: "ses".into() }), None]);
+        assert_eq!(found, [Some(Record::Claude(path)), None, None, None]);
     }
 }
 
-#[expect(unused_qualifications, reason = "preserve the existing test bodies when nesting this module")]
 pub(in crate::agents) mod counting_records {
     use super::*;
+    use crate::agents::claude::transcript::transcript_path;
     use crate::agents::context::counting::tests::{since, sum};
     use crate::test_util::{TempDir, wait_until};
 
@@ -35,30 +47,36 @@ pub(in crate::agents) mod counting_records {
         std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
         std::fs::write(&transcript, FIXTURE).expect("transcript");
         std::fs::write(&sub, crate::test_util::fixture!("claude/2.1.296/subagent.jsonl")).expect("subagent");
-        let session = crate::agents::claude::Session::parse(
-            &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
-            1,
+        std::fs::create_dir(dir.path().join("sessions")).expect("sessions");
+        std::fs::write(
+            dir.path().join("sessions/1.json"),
+            serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
         )
         .expect("session");
-        let claude = Claude { pid: 1, args: Vec::new(), session: Some(session) };
+        let look = Look { claude_dir: Some(dir.path()), ..pane_look(1) };
         let mut pane = Pane { agent: Some((1, since())), kind: Some(Known::Claude), ..Pane::default() };
         let mut output = 0;
         wait_until("subagent usage", || {
-            pane.update(Some(dir.path()), Some(&claude));
+            pane.update(Some(Known::Claude), &look);
             output += sum(pane.take_counted()).1.out;
             output == 100
         });
-        pane.update(Some(dir.path()), Some(&claude));
+        pane.update(Some(Known::Claude), &look);
         assert_eq!(sum(pane.take_counted()).1.out, 0);
         let cleared = transcript_path(dir.path(), &cwd, "clear-session").expect("path");
         std::fs::write(cleared, "").expect("clear transcript");
-        let session = crate::agents::claude::Session::parse(
-            &serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
-            1,
+        std::fs::write(
+            dir.path().join("sessions/1.json"),
+            serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
         )
         .expect("clear session");
-        pane.update(Some(dir.path()), Some(&Claude { pid: 1, args: Vec::new(), session: Some(session) }));
-        pane.update(Some(dir.path()), Some(&claude));
+        pane.update(Some(Known::Claude), &look);
+        std::fs::write(
+            dir.path().join("sessions/1.json"),
+            serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
+        )
+        .expect("session");
+        pane.update(Some(Known::Claude), &look);
         assert_eq!(sum(pane.take_counted()).1.out, 0);
     }
 }

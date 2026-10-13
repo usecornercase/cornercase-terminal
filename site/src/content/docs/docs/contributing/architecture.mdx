@@ -117,11 +117,11 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 | `agents.rs` | Launch catalogue, shared modes and arguments, choosing and detecting an agent, the trust prompt, and `AgentState` for resuming a pane. |
 | `agents/known.rs` | `Known`, the supported agent identities and exhaustive dispatch to each folder’s rules. Its order preserves the saved stats positions. |
 | `agents/activity.rs` | Shared activity and status, the finished-but-unseen mark, notifications and rollups. |
-| `agents/context.rs`, `agents/context/` | Model/context state per pane, shared discovery jobs, incremental JSONL reads, counting and backwards last-message reads. |
-| `agents/claude/` | Agent rules, session status and terminal title (`mod.rs`), transcript and configured window rules (`transcript.rs`), last message (`message.rs`), input box and survey (`screen.rs`), plan probe (`usage.rs`) and test fake (`fake.rs`). |
-| `agents/codex/` | Agent rules and terminal title (`mod.rs`), rollout discovery and incremental parsing (`rollout.rs`), last message (`message.rs`), plan probe (`usage.rs`) and test fake (`fake.rs`). |
-| `agents/gemini/` | Agent rules and dynamic terminal title (`mod.rs`), session discovery, JSONL message updates, context and last message (`session.rs`), and test fake (`fake.rs`). |
-| `agents/opencode/` | Agent rules and turn status (`mod.rs`), SQLite database discovery and parsing, context and last message (`database.rs`), and test fake (`fake.rs`). |
+| `agents/context.rs`, `agents/context/` | Shared pane state, lazy `Look`, exhaustive `Reader` and `Record` dispatch, shared discovery jobs, incremental JSONL reads, counting and backwards last-message reads. |
+| `agents/claude/` | Agent rules, reader, session status and terminal title (`mod.rs`), transcript and configured window rules (`transcript.rs`), last message (`message.rs`), input box and survey (`screen.rs`), plan probe (`usage.rs`) and test fake (`fake.rs`). |
+| `agents/codex/` | Agent rules, reader and terminal title (`mod.rs`), rollout discovery and incremental parsing (`rollout.rs`), last message (`message.rs`), plan probe (`usage.rs`) and test fake (`fake.rs`). |
+| `agents/gemini/` | Agent rules, reader and dynamic terminal title (`mod.rs`), session discovery, JSONL message updates, context and last message (`session.rs`), and test fake (`fake.rs`). |
+| `agents/opencode/` | Agent rules, reader and turn status (`mod.rs`), SQLite database discovery and parsing, context and last message (`database.rs`), and test fake (`fake.rs`). |
 | `agents/usage/` | Shared plan-probe runner, answer reading and dialog state, one section per supported agent. |
 | `agents/stats.rs` | Local per-agent work counts, hourly buckets, windows, heatmap, private storage and share links. |
 | `agents/launch.rs` | Starting an agent in a new tab, as a pure state machine. |

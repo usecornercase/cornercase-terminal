@@ -25,12 +25,12 @@ mod input_box {
     #[case::a_past_prompt_in_the_transcript(&["", "❯ fix the login", "", "● Fixed."], Some(false))]
     #[case::its_shell_mode(&[RULE, "! sleep 300", RULE, "  ! for shell mode"], Some(false))]
     fn claudes_box_is_its_marker_right_under_a_rule(#[case] lines: &[&str], #[case] expected: Option<bool>) {
-        assert_eq!(Known::Claude.input_box(&screen(lines)), expected);
+        assert_eq!(Known::Claude.input_box(|| screen(lines)), expected);
     }
 
     #[test]
     fn other_agents_are_not_known() {
-        assert_eq!(Known::Codex.input_box(&screen(&["› Ask Codex to do anything"])), None);
+        assert_eq!(Known::Codex.input_box(|| screen(&["› Ask Codex to do anything"])), None);
     }
 }
 

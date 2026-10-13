@@ -5,10 +5,9 @@ use std::time::SystemTime;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::agents::claude::Claude;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
 use crate::agents::context::jsonl::Tail;
-use crate::agents::context::{Context, percent};
+use crate::agents::context::{Context, Look, percent};
 use crate::process;
 
 const DIR_NAME_MAX: usize = 200;
@@ -286,19 +285,19 @@ pub(in crate::agents) struct Limits {
 }
 
 impl Limits {
-    pub(in crate::agents) fn read(dir: &Path, cwd: &Path, claude: &Claude) -> Self {
+    pub(in crate::agents) fn read(dir: &Path, cwd: &Path, look: &Look<'_>) -> Self {
         let project = cwd.join(".claude");
         let files: Vec<Value> =
             [dir.join("settings.json"), project.join("settings.json"), project.join("settings.local.json")]
                 .iter()
                 .filter_map(|path| serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok())
                 .collect();
-        let mut env: HashMap<String, String> = process::env(claude.pid).into_iter().collect();
+        let mut env: HashMap<String, String> = process::env(look.pid).into_iter().collect();
         for vars in files.iter().filter_map(|file| file.get("env")?.as_object()) {
             env.extend(vars.iter().filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_string()))));
         }
         let model = files.iter().rev().find_map(|file| file.get("model")?.as_str().map(str::to_string));
-        Self::new(&claude.args, &env, model)
+        Self::new(&look.args, &env, model)
     }
 
     fn new(args: &[String], env: &HashMap<String, String>, settings_model: Option<String>) -> Self {

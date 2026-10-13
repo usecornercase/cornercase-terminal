@@ -3,9 +3,10 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
-use crate::agents::claude::Session;
-use crate::agents::context::Pane;
+use crate::agents::Known;
 use crate::agents::context::counting::Ledger;
+use crate::agents::context::tests::pane_look;
+use crate::agents::context::{Look, Pane};
 use crate::test_util::{Sleeper, TempDir};
 use crate::time::Stamp;
 
@@ -490,14 +491,16 @@ impl Setup {
         Self { claude_dir: TempDir::new(), project: TempDir::new(), sleeper: Sleeper::with_env(vars) }
     }
 
-    fn claude(&self, args: &[&str]) -> Claude {
-        let text = serde_json::json!({ "sessionId": "s1", "cwd": self.project.path() }).to_string();
-        let session = Session::parse(&text, self.sleeper.pid());
-        Claude { pid: self.sleeper.pid(), args: strings(args), session }
+    fn look(&self, args: &[&str], id: &str) -> Look<'_> {
+        let text = serde_json::json!({ "sessionId": id, "cwd": self.project.path() }).to_string();
+        let sessions = self.claude_dir.path().join("sessions");
+        std::fs::create_dir_all(&sessions).expect("sessions");
+        std::fs::write(sessions.join(format!("{}.json", self.sleeper.pid())), text).expect("session");
+        Look { args: strings(args), claude_dir: Some(self.claude_dir.path()), ..pane_look(self.sleeper.pid()) }
     }
 
     fn limits(&self, args: &[&str]) -> Limits {
-        Limits::read(self.claude_dir.path(), self.project.path(), &self.claude(args))
+        Limits::read(self.claude_dir.path(), self.project.path(), &self.look(args, "s1"))
     }
 
     fn transcript(&self, lines: &[String]) {
@@ -548,7 +551,7 @@ mod pane {
         let s = Setup::new(&[]);
         s.transcript(&[assistant("claude-opus-5-5", 2, 15_655, 149_954)]);
         let mut pane = Pane::default();
-        pane.update(Some(s.claude_dir.path()), Some(&s.claude(&["claude"])));
+        pane.update(Some(Known::Claude), &s.look(&["claude"], "s1"));
         (s, pane)
     }
 
@@ -565,7 +568,7 @@ mod pane {
         s.transcript(&[assistant("claude-sonnet-4-5-20250929", 0, 0, 100_000)]);
         let mut pane = Pane::default();
 
-        pane.update(Some(s.claude_dir.path()), Some(&s.claude(&["claude", "--model", "sonnet[1m]"])));
+        pane.update(Some(Known::Claude), &s.look(&["claude", "--model", "sonnet[1m]"], "s1"));
 
         assert_eq!(pane.context().and_then(|c| c.percent), Some(10));
     }
@@ -573,10 +576,9 @@ mod pane {
     #[test]
     fn a_new_session_starts_empty() {
         let (s, mut pane) = answered();
-        let mut cleared = s.claude(&["claude"]);
-        cleared.session.as_mut().expect("a session").id = Some("s2".into());
+        let cleared = s.look(&["claude"], "s2");
 
-        pane.update(Some(s.claude_dir.path()), Some(&cleared));
+        pane.update(Some(Known::Claude), &cleared);
 
         assert_eq!(pane.context(), None);
     }
@@ -585,7 +587,7 @@ mod pane {
     fn goes_away_with_claude() {
         let (s, mut pane) = answered();
 
-        pane.update(Some(s.claude_dir.path()), None);
+        pane.update(None, &s.look(&["claude"], "s1"));
 
         assert_eq!((pane.context(), pane.prompted()), (None, None));
     }
@@ -596,11 +598,10 @@ mod pane {
         let typed = r#"{"type":"user","message":{"role":"user","content":"/clear"},"timestamp":"2026-10-08T20:23:15.694Z","origin":{"kind":"human"}}"#;
         s.transcript(&[typed.to_string()]);
         let mut pane = Pane::default();
-        pane.update(Some(s.claude_dir.path()), Some(&s.claude(&["claude"])));
-        let mut cleared = s.claude(&["claude"]);
-        cleared.session.as_mut().expect("a session").id = Some("s2".into());
+        pane.update(Some(Known::Claude), &s.look(&["claude"], "s1"));
+        let cleared = s.look(&["claude"], "s2");
 
-        pane.update(Some(s.claude_dir.path()), Some(&cleared));
+        pane.update(Some(Known::Claude), &cleared);
 
         assert_eq!(pane.prompted(), Stamp::parse("2026-10-08T20:23:15.694Z"));
     }

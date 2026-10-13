@@ -14,8 +14,8 @@ mod gemini_title {
                 Some("idle") => Some(Activity::Idle),
                 _ => None,
             };
-            assert_eq!(gemini(fixture["title"].as_str().expect("title")), expected, "{}", fixture["name"]);
+            assert_eq!(from_title(fixture["title"].as_str().expect("title")), expected, "{}", fixture["name"]);
         }
-        assert_eq!(gemini("unrelated title"), None);
+        assert_eq!(from_title("unrelated title"), None);
     }
 }

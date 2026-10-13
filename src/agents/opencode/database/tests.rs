@@ -1,7 +1,10 @@
 use rstest::rstest;
 
 use super::*;
+use crate::agents::Known;
+use crate::agents::activity::Activity;
 use crate::agents::context::Pane;
+use crate::agents::context::tests::pane_look;
 use crate::agents::opencode::fake::FakeOpencode;
 use crate::test_util::{Sleeper, TempDir, wait_until};
 
@@ -184,23 +187,23 @@ fn a_process_without_the_database_open_has_no_session() {
 fn the_pane_follows_the_turn_and_clears_when_opencode_exits() {
     let mut running = Running::start();
     let mut pane = Pane::default();
-    pane.update_opencode(running.pid());
+    pane.update(Some(Known::Opencode), &pane_look(running.pid()));
     running.fake.write(FakeOpencode::SESSION, running.project.path(), WORKING);
     wait_until("the turn shows", || {
-        pane.update_opencode(running.pid());
-        pane.opencode_turn() == Some(true)
+        pane.update(Some(Known::Opencode), &pane_look(running.pid()));
+        pane.activity("") == Some(Activity::Working)
     });
     assert_eq!(pane.context().cloned(), Some(shown("DeepSeek V4 Pro", None)));
 
     running.fake.write(FakeOpencode::SESSION, running.project.path(), REPLY);
     wait_until("the reply shows", || {
-        pane.update_opencode(running.pid());
-        pane.opencode_turn() == Some(false) && pane.context().is_some_and(|c| c.percent == Some(12))
+        pane.update(Some(Known::Opencode), &pane_look(running.pid()));
+        pane.activity("") == Some(Activity::Idle) && pane.context().is_some_and(|c| c.percent == Some(12))
     });
     running.opencode.stop();
     wait_until("the line clears", || {
-        pane.update_opencode(running.pid());
-        pane.context().is_none() && pane.opencode_turn().is_none()
+        pane.update(Some(Known::Opencode), &pane_look(running.pid()));
+        pane.context().is_none() && pane.activity("").is_none()
     });
 }
 

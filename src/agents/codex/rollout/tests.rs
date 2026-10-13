@@ -3,8 +3,10 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
+use crate::agents::Known;
 use crate::agents::codex::fake::FakeCodex;
 use crate::agents::context::Pane;
+use crate::agents::context::tests::pane_look;
 use crate::test_util::{Running, Sleeper, TempDir, wait_until, write_executable};
 
 const ID: &str = "019a1234-5678-7000-8000-000000000001";
@@ -269,14 +271,14 @@ fn a_fake_agent_is_associated_by_its_open_rollout_and_cleared_on_exit(#[case] wr
     let pid = child.pid();
     let mut pane = Pane::default();
     wait_until("the fake agent opens its rollout", || {
-        pane.update_codex(pid);
+        pane.update(Some(Known::Codex), &pane_look(pid));
         pane.context().is_some()
     });
     assert_eq!(pane.context().cloned(), Some(shown("gpt-5.4", Some(20))));
     fake.signal("quit", "");
     drop(child);
     wait_until("the line clears", || {
-        pane.update_codex(pid);
+        pane.update(Some(Known::Codex), &pane_look(pid));
         pane.context().is_none()
     });
 }
@@ -342,13 +344,13 @@ fn a_session_served_by_the_daemon_is_found_by_folder_once_written_after_the_agen
     let mut pane = Pane::default();
     wait_until("the session is written after the agent started", || {
         fake.append(&usage);
-        pane.update_codex(agent.pid());
+        pane.update(Some(Known::Codex), &pane_look(agent.pid()));
         pane.context().is_some()
     });
     assert_eq!(pane.context().cloned(), Some(shown("gpt-5.4", Some(20))));
     drop(daemon);
     wait_until("the line clears", || {
-        pane.update_codex(agent.pid());
+        pane.update(Some(Known::Codex), &pane_look(agent.pid()));
         pane.context().is_none()
     });
 }

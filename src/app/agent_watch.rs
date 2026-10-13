@@ -8,7 +8,7 @@ use crate::agents;
 use crate::agents::AgentState;
 use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
-use crate::agents::claude::{Claude, Session};
+use crate::agents::context::Look;
 use crate::agents::launch::Launch;
 use crate::config::Config;
 use crate::host::notify::{self, Notification};
@@ -185,39 +185,21 @@ fn agent_in(
 ) -> Option<(agents::Known, activity::Activity)> {
     let pid = term.foreground_pid();
     let args = pid.map(process::args).unwrap_or_default();
-    let Some((pid, agent)) = pid.zip(agents::detect(config, &args).as_deref().and_then(agents::Known::of)) else {
-        term.context.update(dir, None);
-        remember(config, term, None, now);
-        return None;
+    let agent = agents::detect(config, &args).as_deref().and_then(agents::Known::of);
+    let (args, title) = {
+        let screen = || term.emulator.screen_text().unwrap_or_default();
+        let look =
+            Look { pid: pid.unwrap_or_default(), args, title: term.emulator.title(), screen: &screen, claude_dir: dir };
+        term.context.update(agent, &look);
+        (look.args, look.title)
     };
-    match agent {
-        agents::Known::Claude => {
-            let claude = Claude { pid, args, session: Session::read(dir, pid) };
-            term.context.update(dir, Some(&claude));
-            remember(config, term, Some((agent.name(), &claude.args)), now);
-            if term.input_seen != Some(pid)
-                && agent.input_box(&term.emulator.screen_text().unwrap_or_default()) == Some(true)
-            {
-                term.input_seen = Some(pid);
-            }
-            Some((agent, claude.activity(&term.emulator.title())))
-        }
-        agents::Known::Codex => {
-            term.context.update_codex(pid);
-            remember(config, term, Some((agent.name(), &args)), now);
-            Some((agent, agents::codex::codex(&term.emulator.title(), term.context.codex_turn())))
-        }
-        agents::Known::Gemini => {
-            term.context.update_gemini(pid, &term.emulator.screen_text().unwrap_or_default());
-            remember(config, term, Some((agent.name(), &args)), now);
-            agents::gemini::gemini(&term.emulator.title()).map(|state| (agent, state))
-        }
-        agents::Known::Opencode => {
-            term.context.update_opencode(pid);
-            remember(config, term, Some((agent.name(), &args)), now);
-            term.context.opencode_turn().map(|turn| (agent, agents::opencode::opencode(turn)))
-        }
+    remember(config, term, agent.map(|agent| (agent.name(), args.as_slice())), now);
+    let (pid, agent) = pid.zip(agent)?;
+    if term.input_seen != Some(pid) && agent.input_box(|| term.emulator.screen_text().unwrap_or_default()) == Some(true)
+    {
+        term.input_seen = Some(pid);
     }
+    term.context.activity(&title).map(|state| (agent, state))
 }
 
 fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {

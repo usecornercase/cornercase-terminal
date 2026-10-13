@@ -201,7 +201,7 @@ impl Term {
     }
 
     pub(crate) fn dialog(&self) -> bool {
-        self.seen_agent_screen().is_some_and(|(agent, screen)| agent.input_box(&screen) == Some(false))
+        self.seen_agent_screen().is_some_and(|(agent, screen)| agent.input_box(|| screen) == Some(false))
     }
 
     pub(crate) fn survey(&self) -> bool {

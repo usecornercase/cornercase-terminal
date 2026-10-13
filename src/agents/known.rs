@@ -69,9 +69,9 @@ impl Known {
         }
     }
 
-    pub(crate) fn input_box(self, screen: &str) -> Option<bool> {
+    pub(crate) fn input_box(self, screen: impl FnOnce() -> String) -> Option<bool> {
         match self {
-            Self::Claude => claude::screen::input_box(screen),
+            Self::Claude => claude::screen::input_box(&screen()),
             Self::Codex => codex::INPUT_BOX,
             Self::Gemini => gemini::INPUT_BOX,
             Self::Opencode => opencode::INPUT_BOX,

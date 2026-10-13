@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::agents::activity::Status;
+use crate::agents::activity::{Activity, Status};
 use crate::agents::claude::fake::FakeClaude;
 use crate::agents::codex::fake::FakeCodex;
 use crate::agents::gemini::fake::FakeGemini;
@@ -308,7 +308,9 @@ fn opencode_says(app: &mut App, rx: &Receiver<AppEvent>, opencode: &FakeOpencode
     let folder = app.projects[0].path.clone();
     opencode.write(FakeOpencode::SESSION, &folder, messages);
     let turn = messages == OPENCODE_WORKING;
-    watch_until(app, rx, "opencode's turn shows", |a| tab_term(a, 0, tab).context.opencode_turn() == Some(turn));
+    watch_until(app, rx, "opencode's turn shows", |a| {
+        tab_term(a, 0, tab).context.activity("") == Some(if turn { Activity::Working } else { Activity::Idle })
+    });
 }
 
 struct Watched {
