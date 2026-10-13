@@ -261,7 +261,7 @@ impl App {
                     title: "New workspace",
                     label: "name",
                     value: input.clone(),
-                    hint: format!("in {}", ui::display_path(&path, home)),
+                    hint: format!("in {}", crate::text::display_path(&path, home)),
                     toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
                     note: if *creating { Some(ui::Note::Busy("creating…")) } else { note(error) },
                     submit: CREATE_SUBMIT,

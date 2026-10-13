@@ -8,8 +8,8 @@ use ratatui::widgets::Paragraph;
 
 use super::{
     Details, Drag, ICON_WIDTH, ROW_MENU_ICON, TabEntry, View, button_style, centered, draw_band, draw_details, hovered,
-    truncate_right,
 };
+use crate::text::truncate_right;
 
 pub const HEIGHT: u16 = 2;
 const MAX_NAME: usize = 24;

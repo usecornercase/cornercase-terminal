@@ -18,7 +18,6 @@ mod rows;
 mod sidebar;
 mod stats;
 pub mod tab_bar;
-mod text;
 mod theme;
 mod toast;
 pub mod todo;
@@ -62,7 +61,6 @@ pub use sidebar::{
     GROUP_COLOURS, GROUP_ICONS, GROUP_STYLES, GroupEntry, NEW_BUTTON, ProjectEntry, SidebarHit, SidebarRow, active_row,
     close_button, entry_row, new_project_button, project_rows, sidebar_hit, sidebar_rows,
 };
-pub use text::{CRUMB_SEPARATOR, display_path, folder_name, truncate_left, truncate_right};
 pub use theme::muted;
 pub use toast::{Toast, ToastButton, ToastIcon, toast_area, toast_button};
 pub use tree::{

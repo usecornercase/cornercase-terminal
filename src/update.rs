@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -11,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
 use crate::issues::http::{self, Service};
+use crate::text::hex;
 
 pub use crate::version::CURRENT;
 
@@ -202,13 +202,6 @@ fn verify(archive: &[u8], sums: &str) -> Result<()> {
     } else {
         Err(Error::Api("the download does not match its checksum".into()))
     }
-}
-
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
-        let _ = write!(out, "{b:02x}");
-        out
-    })
 }
 
 fn unpack(archive: &[u8], staging: &Path) -> Result<PathBuf> {

@@ -14,10 +14,10 @@ use super::rows::{
     Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, row_button,
     row_close_button, row_menu_button, row_rect,
 };
-use super::text::truncate_right;
 use super::theme::{severity_color, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle};
 use crate::activity::{self, Status};
+use crate::text::truncate_right;
 use crate::usage::Severity;
 
 const SHELL_ICON: &str = "›";

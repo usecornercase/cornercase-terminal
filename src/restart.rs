@@ -1,7 +1,7 @@
 use crate::activity::Status;
 use crate::agents;
 use crate::control::{PaneInfo, Report};
-use crate::ui::CRUMB_SEPARATOR;
+use crate::text::CRUMB_SEPARATOR;
 
 const STOPS: &str = "Restarting stops every program running in cornercase's terminals.";
 const NOTHING: &str = "Nothing is running in your terminals.";

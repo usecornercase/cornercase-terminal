@@ -191,7 +191,7 @@ impl App {
             }
             UpdateStep::Ask | UpdateStep::Updating | UpdateStep::Failed(_) => {
                 let exe = match &self.updates.install {
-                    Install::Replace(exe) => ui::display_path(exe, self.home.as_deref()),
+                    Install::Replace(exe) => crate::text::display_path(exe, self.home.as_deref()),
                     Install::Command(_) => String::new(),
                 };
                 format!(

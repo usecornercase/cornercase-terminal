@@ -7,8 +7,8 @@ use ratatui::widgets::{Clear, Paragraph};
 use super::{
     CANCEL_LABEL, INPUT_PROMPT, buttons_in, draw_dialog_buttons, first_visible, form_inner, list_item, pick_background,
 };
+use crate::text::truncate_left;
 use crate::ui::View;
-use crate::ui::text::truncate_left;
 use crate::ui::widgets::{overlay_block, rail};
 
 const PICKER_WIDTH: u16 = 72;

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::update::hex;
+use crate::text::hex;
 
 pub const COOKIE: &str = "cornercase";
 pub const PAIRING_FOR: Duration = Duration::from_mins(10);

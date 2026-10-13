@@ -4,8 +4,9 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
 
-use super::{muted, overlay_block, surface_colour, truncate_right};
+use super::{muted, overlay_block, surface_colour};
 use crate::host_theme::HostTheme;
+use crate::text::truncate_right;
 
 pub const TITLE: &str = "Connection lost";
 pub const QUIT: &str = " quit ";

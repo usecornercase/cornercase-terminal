@@ -12,7 +12,7 @@ use crate::error::{Error, Result};
 use crate::keys;
 use crate::log;
 use crate::remote::{self, Remote};
-use crate::{client, restart, server, ui};
+use crate::{client, restart, server};
 
 mod read;
 
@@ -1156,7 +1156,7 @@ fn cell(value: &Value) -> String {
 
 fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo, depth: usize, home: Option<&Path>) {
     let shown = report.shown;
-    let place = |path: &Path| ui::display_path(path, home);
+    let place = |path: &Path| crate::text::display_path(path, home);
     let marks = |is_shown: bool| if is_shown { vec!["shown"] } else { Vec::new() };
     let parts = [project.name.clone(), place(&project.path)];
     lines.push(line(depth, "project", project.id, &parts, &marks(shown.project == Some(project.id))));

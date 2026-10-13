@@ -4,8 +4,9 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
-use super::{BRAND_COLOR, View, hovered, overlay_block, rail, truncate_right};
+use super::{BRAND_COLOR, View, hovered, overlay_block, rail};
 use crate::shortcuts::{self, Step};
+use crate::text::truncate_right;
 
 const GAP: u16 = 2;
 const KEY_GAP: usize = 2;

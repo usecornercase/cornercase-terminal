@@ -324,7 +324,7 @@ impl App {
             .workspace_index(project, workspace)
             .map(|(p, w)| {
                 let ws = &self.projects[p].workspaces[w];
-                (ws.label(), ui::display_path(&ws.path, self.home.as_deref()))
+                (ws.label(), crate::text::display_path(&ws.path, self.home.as_deref()))
             })
             .unwrap_or_default();
         let (message, note) = match lock {
@@ -343,7 +343,7 @@ impl App {
 }
 
 pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {
-    let reason = ui::truncate_right(&lock.reason, MAX_LOCK_REASON);
+    let reason = crate::text::truncate_right(&lock.reason, MAX_LOCK_REASON);
     let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
     format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept.")
 }

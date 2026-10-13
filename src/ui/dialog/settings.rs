@@ -8,9 +8,9 @@ use super::issues::{issue_buttons_in, issues_area};
 use super::{
     Note, draw_dialog_buttons, draw_input, draw_tabs, first_visible, form_inner, list_item, pick_background, tabs_in,
 };
+use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::rows::{GAP, row_close_button};
-use crate::ui::text::truncate_right;
 use crate::ui::widgets::{hovered, overlay_block, rail};
 
 pub fn settings_area(area: Rect) -> Rect {

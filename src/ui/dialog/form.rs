@@ -8,8 +8,8 @@ use super::{
     CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_dialog_buttons, draw_note, draw_secondary,
     form_inner,
 };
+use crate::text::truncate_left;
 use crate::ui::View;
-use crate::ui::text::truncate_left;
 use crate::ui::widgets::{button_width, hovered, overlay_block};
 
 const FORM_HEIGHT: u16 = 10;

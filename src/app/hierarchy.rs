@@ -74,7 +74,7 @@ impl App {
     }
 
     pub(super) fn project_label(&self, project: &Project) -> String {
-        project.name.clone().unwrap_or_else(|| ui::folder_name(&project.path, self.home.as_deref()))
+        project.name.clone().unwrap_or_else(|| crate::text::folder_name(&project.path, self.home.as_deref()))
     }
 
     pub(super) fn remove(&mut self, id: u64) {

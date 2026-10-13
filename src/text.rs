@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::Path;
 
 pub const CRUMB_SEPARATOR: &str = " › ";
@@ -33,3 +34,17 @@ pub fn truncate_left(s: &str, max: usize) -> String {
     let tail: String = s.chars().skip(n - (max - 1)).collect();
     format!("…{}", tail.trim_start_matches('…'))
 }
+
+pub fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    })
+}
+
+#[cfg(test)]
+mod tests;

@@ -9,12 +9,12 @@ use super::files;
 use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
 use super::pane::wordmark;
 use super::remote_access;
-use super::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 use super::theme::status_icon;
 use super::widgets::{
     button_style, centered, draw_band, draw_button, draw_separator, middle, sidebar_hovered, update_button,
 };
 use crate::activity::Status;
+use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 
 pub(super) const SEARCH_ICON: &str = " ⌕ ";
 

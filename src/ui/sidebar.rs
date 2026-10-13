@@ -12,10 +12,10 @@ use super::rows::{
     Band, GAP, RowButton, Rows, Tags, arrow, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker,
     row_button, row_close_button, row_rect,
 };
-use super::text::truncate_right;
 use super::theme::status_icon;
 use super::widgets::{button_style, draw_band, draw_button, draw_title};
 use crate::activity::{self, Status};
+use crate::text::truncate_right;
 
 pub const NEW_BUTTON: &str = "+ New";
 

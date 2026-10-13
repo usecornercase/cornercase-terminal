@@ -9,7 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::changes::{Action, buttons, close};
-use super::{action_style, dim, draw_close, hovered_at as hovered, put, truncate_left, truncate_right};
+use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
 use crate::files::search::occurrences;
@@ -17,6 +17,7 @@ use crate::files::{Gutter, Line, Lines, Mark, Mode};
 use crate::graphics::kitty;
 use crate::markdown;
 use crate::syntax::Segments;
+use crate::text::{truncate_left, truncate_right};
 
 pub const LABEL: &str = "Files";
 const HEADER_ROWS: u16 = 3;

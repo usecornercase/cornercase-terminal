@@ -6,12 +6,9 @@ use std::{
 
 const APP_EXCEPTIONS: &[&str] = &["src/term.rs", "src/web/mod.rs"];
 const UI_EXCEPTIONS: &[&str] = &[
-    "src/cli.rs",
     "src/config.rs",
     "src/issues/browser.rs",
-    "src/issues/mod.rs",
     "src/project.rs",
-    "src/restart.rs",
     "src/settings.rs",
     "src/state.rs",
     "src/usage/mod.rs",

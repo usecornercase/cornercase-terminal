@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
-use crate::issues::one_line;
 use crate::term::bracketed;
+use crate::text::one_line;
 
 const SHELL_QUIET: Duration = Duration::from_millis(300);
 const SHELL_LATEST: Duration = Duration::from_secs(5);

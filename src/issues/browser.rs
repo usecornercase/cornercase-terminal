@@ -480,7 +480,7 @@ impl Browser {
         if parts.is_empty() {
             "people".into()
         } else {
-            ui::truncate_right(&format!("people: {}", parts.join(", ")), PEOPLE_LABEL_MAX)
+            crate::text::truncate_right(&format!("people: {}", parts.join(", ")), PEOPLE_LABEL_MAX)
         }
     }
 
@@ -1000,7 +1000,7 @@ impl Browser {
         vec![
             row("start", vec![Span::raw(self.start_hint(issue))]),
             row("agent", agent),
-            row("prompt", vec![Span::raw(super::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)]),
+            row("prompt", vec![Span::raw(crate::text::one_line(&prompt)), Span::styled(format!("  ({send})"), dim)]),
         ]
     }
 

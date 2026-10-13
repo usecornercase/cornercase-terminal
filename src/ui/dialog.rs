@@ -26,8 +26,8 @@ use super::dialog::usage::{Usage, usage_area};
 use super::keys;
 use super::remote_access;
 use super::sidebar::GroupEntry;
-use super::text::truncate_left;
 use super::widgets::{button_width, hovered, tab_style};
+use crate::text::truncate_left;
 
 pub(super) const FORM_WIDTH: u16 = 64;
 

@@ -337,7 +337,7 @@ pub fn branch(issue: &Issue) -> String {
 }
 
 pub fn workspace_name(issue: &Issue) -> String {
-    crate::ui::truncate_right(&format!("{} {}", issue.key, issue.title), NAME_MAX)
+    crate::text::truncate_right(&format!("{} {}", issue.key, issue.title), NAME_MAX)
 }
 
 fn fold(c: char) -> char {
@@ -401,10 +401,6 @@ pub fn prompt(template: &str, issue: &Issue, branch: &str) -> String {
     }
     out.push_str(rest);
     out
-}
-
-pub fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub fn meta(issue: &Issue, now: i64) -> String {
@@ -550,11 +546,6 @@ mod tests {
         #[case::newlines_are_kept("a\nb", "a\nb")]
         fn fills_in_the_issue(#[case] template: &str, #[case] expected: &str) {
             assert_eq!(prompt(template, &gh(7, "it's broken"), "issue-7"), expected);
-        }
-
-        #[test]
-        fn one_line_joins_lines_and_spaces() {
-            assert_eq!(one_line(" a\n  b\tc "), "a b c");
         }
     }
 

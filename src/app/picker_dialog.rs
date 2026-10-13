@@ -150,7 +150,7 @@ impl App {
 
     pub(super) fn picker_view(picker: &Picker, into_group: bool, home: Option<&Path>) -> ui::Overlay {
         let items = picker.items();
-        let dir = ui::display_path(picker.dir(), home);
+        let dir = crate::text::display_path(picker.dir(), home);
         let hint = match picker.selected().and_then(|i| items.get(i)) {
             Some(item) if item.name == ".." => "enter goes up".into(),
             Some(item) if item.workspace => format!("enter imports {}", item.name),

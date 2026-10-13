@@ -371,7 +371,7 @@ fn fill(buf: &mut Buffer, r: Rect, bg: Color) {
 }
 
 fn cut(text: &str, room: usize) -> String {
-    crate::ui::truncate_right(text, room)
+    crate::text::truncate_right(text, room)
 }
 
 pub fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
@@ -467,7 +467,7 @@ fn draw_field(
     if filter.query.is_empty() {
         put(buf, start, row.y, &cut(FILTER_PLACEHOLDER, room), dim(view.muted), end);
     }
-    let query = crate::ui::truncate_left(&filter.query, room);
+    let query = crate::text::truncate_left(&filter.query, room);
     let x = put(buf, start, row.y, &query, Style::default().add_modifier(Modifier::BOLD), end);
     (filter.focused && x < end).then_some(Position::new(x, row.y))
 }
@@ -662,7 +662,7 @@ fn draw_file(buf: &mut Buffer, view: &View, file: &File, i: usize, r: Rect, hove
     let path = file.label();
     let start = r.x + 6 + indent;
     let room = usize::from(path_end.saturating_sub(start));
-    let shown = crate::ui::truncate_left(&path, room);
+    let shown = crate::text::truncate_left(&path, room);
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
     let x = put(buf, start, r.y, folder, dim(view.muted), path_end);

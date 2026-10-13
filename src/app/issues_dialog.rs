@@ -23,7 +23,6 @@ use crate::markdown;
 use crate::panics;
 use crate::search::Search;
 use crate::secrets;
-use crate::ui::{self};
 
 pub(super) struct Apis {
     pub(super) shortcut: String,
@@ -157,7 +156,7 @@ impl App {
             starting: false,
             error: None,
             notice: None,
-            secrets_path: ui::display_path(&self.secrets_path, self.home.as_deref()),
+            secrets_path: crate::text::display_path(&self.secrets_path, self.home.as_deref()),
             agents: self.agent_choices(),
             picker: None,
             places,

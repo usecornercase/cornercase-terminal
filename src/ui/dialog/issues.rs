@@ -8,8 +8,8 @@ use super::{
     Note, dialog_button_style, draw_input, draw_tabs, first_visible, form_inner, list_item, pick_background,
     right_aligned, tabs_in,
 };
+use crate::text::truncate_right;
 use crate::ui::View;
-use crate::ui::text::truncate_right;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
 
 const ISSUES_WIDTH: u16 = 110;

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::Path;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -147,9 +146,7 @@ mod buttons;
 mod changes_layout;
 mod compact;
 mod dialogs;
-mod display_path;
 mod draw;
-mod folder_name;
 mod groups;
 mod hover;
 mod issues;
@@ -175,7 +172,5 @@ mod tree_drawing;
 mod tree_drop;
 mod tree_layout;
 mod tree_rows;
-mod truncate_left;
-mod truncate_right;
 mod widths;
 mod workspaces_column;

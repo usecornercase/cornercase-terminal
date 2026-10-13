@@ -5,9 +5,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::{first_visible, list_item, pick_background};
+use crate::text::{truncate_left, truncate_right};
 use crate::ui::View;
 use crate::ui::rows::GAP;
-use crate::ui::text::{truncate_left, truncate_right};
 use crate::ui::widgets::rail;
 
 fn results_rows(results: Rect) -> [Rect; 2] {
