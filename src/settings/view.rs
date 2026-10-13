@@ -4,7 +4,7 @@ use crate::shortcuts::Prefix;
 
 use super::{Page, Row, RowText, Settings, Status};
 
-const RESUME_NOTE: &str = "Claude Code, Codex and Gemini, in their tabs";
+const RESUME_NOTE: &str = "Claude Code, Codex, Gemini and Grok, in their tabs";
 
 impl Settings {
     fn keep_awake_row(&self) -> (String, String, String, bool) {

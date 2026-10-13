@@ -77,7 +77,7 @@ src/agents.rs     launch catalogue, shared modes and arguments, which agent take
                   agents/context.rs shared pane state, Look, Reader and Record dispatch; agents/context/ shared discovery, incremental JSONL reads, counting and backwards last-message reads; agents/usage/ running plan probes and the modal's state per agent
                   agents/claude/ reader, session status and title (mod.rs), transcript and window rules (transcript.rs), last message (message.rs), input box and survey (screen.rs), plan usage (usage.rs), test fake (fake.rs)
                   agents/codex/ reader and title (mod.rs), rollout discovery and parsing (rollout.rs), last message (message.rs), plan usage (usage.rs), test fake (fake.rs); agents/gemini/ reader and title (mod.rs), session discovery and parsing (session.rs), test fake (fake.rs)
-                  agents/opencode/ reader and turn status (mod.rs), database discovery and parsing, context and last message (database.rs), test fake (fake.rs)
+                  agents/opencode/ reader and database (database.rs), fake; agents/grok/ reader and session files (session.rs), fake
 src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps), every.rs (the Every project targets and grouping)
 src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
 src/files/        files panel: mod.rs (open folders, viewer, search bar and mode, jobs, tree marks and margin marks from the changes diff), disk.rs (one folder's listing with `ignore`, reading a file), search.rs (the workspace's file index, fuzzy names with nucleo, text with ripgrep's searcher), link.rs (the path under a pane click and where it points)
@@ -169,7 +169,7 @@ Astro + Starlight, deployed to GitHub Pages by `.github/workflows/pages.yml` (Pa
 
 ## Known limitations
 
-- Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells (Claude Code, Codex and Gemini CLI resume their conversations in them).
+- Shells do not survive the server: after `kill-server` or a reboot, panes come back as new shells (Claude Code, Codex, Gemini CLI and Grok Build resume their conversations in them).
 - Host colours are read once; a theme switch is not seen.
 - Inner programs never get key releases.
 - Runs on Linux and macOS only.

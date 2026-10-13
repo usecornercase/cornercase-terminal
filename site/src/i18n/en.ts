@@ -105,7 +105,7 @@ export const page = {
         num: '2 · In parallel',
         title: 'Ten agents, one glance.',
         text: 'Each agent gets its own branch, folder and tab, so two of them never touch the same file. The sidebar tells you who is working {working}, who is waiting for you {waiting} and who is done {done}, with the model and how full its context is. When one needs you, your terminal taps you on the shoulder. Even through SSH.',
-        more: 'Works with Claude Code, Codex, Gemini and 11 more →',
+        more: 'Works with Claude Code, Codex, Gemini, Grok and 11 more →',
         label:
           "A narrow cornercase window: the seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, each with a Claude working; and the conversation on dark mode in the pane, with the path it names underlined.",
       },

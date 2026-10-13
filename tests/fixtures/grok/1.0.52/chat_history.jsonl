@@ -1,0 +1,4 @@
+{"type":"user","synthetic_reason":"system_reminder","content":[{"type":"text","text":"reminder"}]}
+{"type":"user","prompt_index":0,"content":[{"type":"text","text":"<user_query>\nsay hi\n</user_query>"}]}
+{"type":"reasoning","summary":[{"type":"summary_text","text":"The user said hi."}]}
+{"type":"assistant","content":"Hi.","model_id":"grok-4.7"}

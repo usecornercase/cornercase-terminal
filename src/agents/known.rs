@@ -1,4 +1,4 @@
-use super::{ModeTable, claude, codex, gemini, opencode, usage};
+use super::{ModeTable, claude, codex, gemini, grok, opencode, usage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Known {
@@ -6,10 +6,11 @@ pub enum Known {
     Codex,
     Gemini,
     Opencode,
+    Grok,
 }
 
 impl Known {
-    pub(crate) const ALL: [Self; 4] = [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode];
+    pub(crate) const ALL: [Self; 5] = [Self::Claude, Self::Codex, Self::Gemini, Self::Opencode, Self::Grok];
 
     pub(crate) fn of(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.name() == name)
@@ -21,6 +22,7 @@ impl Known {
             Self::Codex => codex::NAME,
             Self::Gemini => gemini::NAME,
             Self::Opencode => opencode::NAME,
+            Self::Grok => grok::NAME,
         }
     }
 
@@ -30,6 +32,7 @@ impl Known {
             Self::Codex => codex::TITLE,
             Self::Gemini => gemini::TITLE,
             Self::Opencode => opencode::TITLE,
+            Self::Grok => grok::TITLE,
         }
     }
 
@@ -39,6 +42,7 @@ impl Known {
             Self::Codex => codex::MODES,
             Self::Gemini => gemini::MODES,
             Self::Opencode => opencode::MODES,
+            Self::Grok => grok::MODES,
         }
     }
 
@@ -48,6 +52,7 @@ impl Known {
             Self::Codex => codex::normalized(args),
             Self::Gemini => gemini::normalized(args),
             Self::Opencode => opencode::normalized(args),
+            Self::Grok => grok::normalized(args),
         }
     }
 
@@ -57,6 +62,7 @@ impl Known {
             Self::Codex => codex::resume(args, conversation),
             Self::Gemini => gemini::resume(args, conversation),
             Self::Opencode => opencode::RESUME,
+            Self::Grok => grok::resume(args, conversation),
         }
     }
 
@@ -66,6 +72,7 @@ impl Known {
             Self::Codex => codex::runs_as(arg),
             Self::Gemini => gemini::RUNS_AS,
             Self::Opencode => opencode::RUNS_AS,
+            Self::Grok => grok::RUNS_AS,
         }
     }
 
@@ -75,6 +82,7 @@ impl Known {
             Self::Codex => codex::INPUT_BOX,
             Self::Gemini => gemini::INPUT_BOX,
             Self::Opencode => opencode::INPUT_BOX,
+            Self::Grok => grok::INPUT_BOX,
         }
     }
 
@@ -84,6 +92,7 @@ impl Known {
             Self::Codex => codex::SURVEY,
             Self::Gemini => gemini::SURVEY,
             Self::Opencode => opencode::SURVEY,
+            Self::Grok => grok::SURVEY,
         }
     }
 
@@ -93,6 +102,7 @@ impl Known {
             Self::Codex => codex::HOLDS_PROMPTS,
             Self::Gemini => gemini::HOLDS_PROMPTS,
             Self::Opencode => opencode::HOLDS_PROMPTS,
+            Self::Grok => grok::HOLDS_PROMPTS,
         }
     }
 
@@ -102,6 +112,7 @@ impl Known {
             Self::Codex => codex::LOCAL_COMMAND,
             Self::Gemini => gemini::local_command(text),
             Self::Opencode => opencode::LOCAL_COMMAND,
+            Self::Grok => grok::local_command(text),
         }
     }
 
@@ -111,6 +122,7 @@ impl Known {
             Self::Codex => codex::UNFOUND,
             Self::Gemini => gemini::UNFOUND,
             Self::Opencode => opencode::UNFOUND,
+            Self::Grok => grok::UNFOUND,
         }
     }
 
@@ -120,6 +132,7 @@ impl Known {
             Self::Codex => codex::USAGE,
             Self::Gemini => gemini::USAGE,
             Self::Opencode => opencode::USAGE,
+            Self::Grok => grok::USAGE,
         }
     }
 }

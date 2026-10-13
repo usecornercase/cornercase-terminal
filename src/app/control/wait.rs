@@ -93,7 +93,8 @@ enum Verdict {
     Failed(String),
 }
 
-const CANNOT_WATCH: &str = "cornercase only knows what Claude Code, Codex, Gemini CLI and opencode are doing";
+const CANNOT_WATCH: &str =
+    "cornercase only knows what Claude Code, Codex, Gemini CLI, opencode and Grok Build are doing";
 
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 

@@ -16,6 +16,7 @@ cornercase starts coding agents for you when you start an [issue](../../guides/i
 | `codex` | `codex` | yes |
 | `gemini` | `gemini` | yes |
 | `opencode` | `opencode` | |
+| `grok` | `grok` | yes |
 | `cursor` | `cursor-agent` | |
 | `copilot` | `copilot` | |
 | `amp` | `amp` | |
@@ -52,7 +53,7 @@ Codex's npm wrapper, `node …/@openai/codex/bin/codex.js`, is recognised too. I
 
 ### What the agent is doing
 
-Tabs where Claude Code, Codex, Gemini CLI or opencode runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). cornercase recognises these agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so an opencode tab never shows `!`. Gemini uses its dynamic window title for status, and its session JSONL under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp/<project>/chats` for prompts, replies and context. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled in Gemini's settings for icons and notifications; a fixed or hidden title gives no status. Two Gemini using the same home in the same folder hide their conversation data. Other agents don't get an icon yet.
+Tabs where Claude Code, Codex, Gemini CLI, opencode or Grok Build runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). cornercase recognises these agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so an opencode tab never shows `!`. Gemini uses its dynamic window title for status, and its session JSONL under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp/<project>/chats` for prompts, replies and context. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled in Gemini's settings for icons and notifications; a fixed or hidden title gives no status. Two Gemini using the same home in the same folder hide their conversation data. Grok Build is followed from `$GROK_HOME` (or `~/.grok`): the row in `active_sessions.json` for the pane's process, then that session's `events.jsonl`, `updates.jsonl`, `chat_history.jsonl`, `summary.json` and `signals.json`. A permission prompt or an open question or plan approval shows `!`; other tools, including a shell, stay working. A prompt typed while it works waits. Its `/` and `!` lines are local commands. Other agents don't get an icon yet.
 
 ## Modes and arguments
 
@@ -70,6 +71,9 @@ Each agent starts with its command followed by its arguments, `agent_args` in `c
 | `gemini` | auto edit | `--approval-mode auto_edit` |
 | | plan | `--approval-mode plan` |
 | | yolo (dangerous) | `--yolo` |
+| `grok` | accept edits | `--permission-mode acceptEdits` |
+| | auto | `--permission-mode auto` |
+| | always approve (dangerous) | `--always-approve` |
 
 <Screen
   name="settings-gemini-modes"
@@ -106,7 +110,7 @@ starts `claude --permission-mode plan --add-dir ../shared`: mode *plan*, extra a
 }
 ```
 
-Here Claude Code's `plan` mode gets an extra flag and its `auto` mode disappears from the list, while `mine`, a custom agent (see below), gets two modes of its own. Any agent can have modes this way, not only the three with built-in ones.
+Here Claude Code's `plan` mode gets an extra flag and its `auto` mode disappears from the list, while `mine`, a custom agent (see below), gets two modes of its own. Any agent can have modes this way, not only the ones with built-in ones.
 
 ## Your own agents
 
@@ -137,22 +141,23 @@ The prompt is pasted with bracketed paste when the agent supports it. When the p
 
 ## Resuming after a restart
 
-When a new server restores your session, a pane where Claude Code, Codex or Gemini CLI was running types the agent's resume command into its new shell, once the shell has been quiet for 0.3 s:
+When a new server restores your session, a pane where Claude Code, Codex, Gemini CLI or Grok Build was running types the agent's resume command into its new shell, once the shell has been quiet for 0.3 s:
 
 | Agent | Command typed |
 | --- | --- |
 | Claude Code | `claude <arguments> --resume <session id>` |
 | Codex | `codex resume <arguments> <session id>` |
 | Gemini CLI | `gemini <arguments> --resume <session id>` |
+| Grok Build | `grok <arguments> --resume <session id>` |
 
-The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and the one in the name of the rollout file Codex keeps open, or Gemini's `sessionId` in its main session JSONL. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+The command and the extra arguments are the ones in **settings → Agents**; the mode is the one the agent was running in, found in its command line, so an agent started in plan mode comes back in plan mode even if another mode is set now. The session id is the one Claude Code writes to `sessions/<pid>.json` under `~/.claude` (or `$CLAUDE_CONFIG_DIR`), the one in the name of the rollout file Codex keeps open, Gemini's `sessionId` in its main session JSONL, or Grok Build's `info.id` in `summary.json`. A conversation with nothing in it yet isn't resumed. Turn it off with **resume conversations** (`resume_agents`). See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 ## Keep the computer awake
 
 An agent left working stops when the computer goes to sleep: its process freezes and its request or build times out. Turn on **settings → Agents → keep awake** (`keep_awake`) and, while at least one agent is working, the computer does not go to sleep on its own. Once none is, cornercase waits 30 seconds, so agents that end and start turns back to back don't take and release it every few seconds, then lets the computer sleep as usual.
 
 - **What counts**: an agent whose status is working, the `◐` on its tab. One waiting for you (`!`) does not, nor a Claude Code agent whose turn is over while a shell it started in the background still runs, so a dev server an agent left running doesn't keep the machine up all night. opencode never says it is waiting for you, so one at a permission prompt counts as working until you answer.
-- **Claude Code on a Mac** already keeps the computer awake while it works, by itself. The setting matters most for Codex, opencode and Gemini CLI, and on Linux.
+- **Claude Code on a Mac** already keeps the computer awake while it works, by itself. Grok Build can do the same with its own setting. Neither changes this one: cornercase still keeps one lock for every agent, and waiting for you does not hold it. The setting matters most for Codex, opencode and Gemini CLI, and on Linux.
 - **What it blocks**: only sleeping when idle. The display still turns off, the screen still locks, and sleep you ask for (the menu, closing the lid) still happens.
 - **Which machine**: the server's, where the agents run. With `cornercase remote` the other machine stays awake; the laptop showing the window may still sleep, and the window reconnects when it wakes.
 

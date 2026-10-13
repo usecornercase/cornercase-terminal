@@ -103,7 +103,7 @@ mod pages {
 
 #[test]
 fn agents_with_modes_are_listed() {
-    assert_eq!(settings().listed_kinds(), ["claude", "codex", "gemini"]);
+    assert_eq!(settings().listed_kinds(), ["claude", "codex", "gemini", "grok"]);
 }
 
 mod folder {

@@ -70,6 +70,15 @@ mod modes {
         );
     }
 
+    #[test]
+    fn grok_modes_follow_its_permission_flags() {
+        let modes = modes(&config(), Known::Grok.name());
+        let kind = Known::Grok.name();
+        assert_eq!(mode_of(kind, &strings(&["grok", "--permission-mode", "auto"]), &modes).as_deref(), Some("auto"));
+        assert_eq!(mode_of(kind, &strings(&["grok", "--yolo"]), &modes).as_deref(), Some("always approve (dangerous)"));
+        assert_eq!(mode_of(kind, &strings(&["grok", "--permission-mode=dontAsk"]), &modes), None);
+    }
+
     #[rstest]
     #[case::qwen("qwen")]
     #[case::custom("mine")]
@@ -192,6 +201,8 @@ mod resuming {
     #[case::claude_in_its_mode("claude", Some("plan"), "claude --permission-mode plan --resume 4f2c-91")]
     #[case::codex("codex", None, "codex resume 4f2c-91")]
     #[case::gemini(Known::Gemini.name(), Some("plan"), "gemini --approval-mode plan --resume 4f2c-91")]
+    #[case::grok(Known::Grok.name(), Some("accept edits"), "grok --permission-mode acceptEdits --resume 4f2c-91")]
+    #[case::grok_always(Known::Grok.name(), Some("always approve (dangerous)"), "grok --always-approve --resume 4f2c-91")]
     #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
     fn the_conversation_comes_back_in_the_mode_it_ran_in(
         #[case] kind: &str,

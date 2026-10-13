@@ -246,6 +246,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
                 Counts::default(),
                 Counts::default(),
                 Counts::default(),
+                Counts::default(),
             ]
             .to_vec(),
             busy_ms: a[3] * 1000,
@@ -267,6 +268,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
             Bucket {
                 by_agent: [
                     Counts { agent_ms: n.as_u64().expect("seconds") * 1000, ..Counts::default() },
+                    Counts::default(),
                     Counts::default(),
                     Counts::default(),
                     Counts::default(),

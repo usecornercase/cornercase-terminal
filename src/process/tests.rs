@@ -35,6 +35,25 @@ mod descendants {
     }
 }
 
+mod started {
+    use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn is_field_22_of_stat() {
+        let stat = std::fs::read_to_string("/proc/self/stat").expect("stat");
+        let rest = stat.rsplit_once(')').expect("comm").1;
+        let field: u64 = rest.split_whitespace().nth(19).expect("start time").parse().expect("number");
+        assert_eq!(started(this_pid()), Some(field));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn is_unknown_without_a_proc_stat() {
+        assert_eq!(started(this_pid()), None);
+    }
+}
+
 mod footprint {
     use std::ptr::null_mut;
 

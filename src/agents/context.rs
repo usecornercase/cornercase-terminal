@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::agents::activity::Activity;
-use crate::agents::{self, Known, claude, codex, gemini, opencode};
+use crate::agents::{self, Known, claude, codex, gemini, grok, opencode};
 use crate::error::Result;
 
 pub(in crate::agents) mod counting;
@@ -28,6 +28,7 @@ pub(crate) enum Record {
     Codex(PathBuf),
     Gemini(PathBuf),
     Opencode { database: PathBuf, session: String },
+    Grok(PathBuf),
 }
 
 impl Record {
@@ -37,6 +38,7 @@ impl Record {
             Self::Codex(path) => codex::message::codex(path),
             Self::Gemini(path) => gemini::session::last_message(path),
             Self::Opencode { database, session } => opencode::database::last_message(database, session),
+            Self::Grok(path) => grok::session::last_message(path),
         }
     }
 }
@@ -55,6 +57,7 @@ enum Reader {
     Codex(codex::Reader),
     Gemini(gemini::Reader),
     Opencode(opencode::Reader),
+    Grok(grok::Reader),
 }
 
 impl Reader {
@@ -64,6 +67,7 @@ impl Reader {
             Known::Codex => Self::Codex(codex::Reader::default()),
             Known::Gemini => Self::Gemini(gemini::Reader::default()),
             Known::Opencode => Self::Opencode(opencode::Reader::default()),
+            Known::Grok => Self::Grok(grok::Reader::default()),
         }
     }
 
@@ -79,6 +83,7 @@ impl Reader {
             Self::Codex(reader) => reader.update(look, since, shown, ledger),
             Self::Gemini(reader) => reader.update(look, since, shown, ledger),
             Self::Opencode(reader) => reader.update(look, since, shown, ledger),
+            Self::Grok(reader) => reader.update(look, since, shown, ledger),
         }
     }
 
@@ -88,6 +93,7 @@ impl Reader {
             Self::Codex(reader) => Some(reader.activity(title)),
             Self::Gemini(_) => gemini::Reader::activity(title),
             Self::Opencode(reader) => reader.activity(),
+            Self::Grok(reader) => reader.activity(title),
         }
     }
 
@@ -97,6 +103,7 @@ impl Reader {
             Self::Codex(reader) => reader.record(),
             Self::Gemini(reader) => reader.record(),
             Self::Opencode(reader) => reader.record(),
+            Self::Grok(reader) => reader.record(),
         }
     }
 
@@ -106,6 +113,7 @@ impl Reader {
             Self::Codex(reader) => reader.conversation(),
             Self::Gemini(reader) => reader.conversation(),
             Self::Opencode(_) => None,
+            Self::Grok(reader) => reader.conversation(),
         }
     }
 }
@@ -165,6 +173,13 @@ impl Pane {
 
     pub(crate) fn conversation(&self) -> Option<&str> {
         self.reader.as_ref()?.conversation()
+    }
+}
+
+#[cfg(test)]
+impl Pane {
+    pub(in crate::agents) fn watching(pid: i32, kind: Known, since: SystemTime) -> Self {
+        Self { agent: Some((pid, since)), kind: Some(kind), ..Self::default() }
     }
 }
 

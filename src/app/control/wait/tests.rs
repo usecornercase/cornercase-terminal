@@ -20,6 +20,9 @@ fn the_wait_refusal_names_every_known_agent() {
 #[case::codex_idle(Some(Known::Codex), Some(Status::Idle), false)]
 #[case::claude_at_work(Some(Known::Claude), Some(Status::Working), false)]
 #[case::opencode_at_work(Some(Known::Opencode), Some(Status::Working), false)]
+#[case::grok_at_work(Some(Known::Grok), Some(Status::Working), true)]
+#[case::grok_asking(Some(Known::Grok), Some(Status::Waiting), true)]
+#[case::grok_idle(Some(Known::Grok), Some(Status::Idle), false)]
 fn agents_that_queue_prompts_record_them_late(
     #[case] agent: Option<Known>,
     #[case] status: Option<Status>,

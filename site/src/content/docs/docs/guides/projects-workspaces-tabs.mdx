@@ -119,12 +119,12 @@ The shell is the one in your `SHELL` environment variable when the server starte
 
 ### What your agents are doing
 
-When Claude Code, Codex, Gemini CLI or opencode runs in a tab, an icon before the tab's name tells you what it is doing:
+When Claude Code, Codex, Gemini CLI, opencode or Grok Build runs in a tab, an icon before the tab's name tells you what it is doing:
 
 | Icon | Means |
 | --- | --- |
 | `◐` yellow | The agent is working. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
-| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex and Gemini CLI only. |
+| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex, Gemini CLI and Grok Build. opencode never shows it. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
@@ -148,7 +148,7 @@ They never show on the workspace, project or group rows, and a program that ends
 
 ### How full the context is
 
-Claude Code, Codex, Gemini CLI and opencode tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-a-tab-uses).
+Claude Code, Codex, Gemini CLI, opencode and Grok Build tabs show their model and the share of the context window used on a second line. The percentage turns orange from 75% and red from 90%. In the [compact layout](../small-terminals/) the line sits at the bottom of the tab's row; long model names are shortened to fit. The model and the percentage are separate switches, **settings → UI → model** and **settings → UI → context**: turn one off to keep only the other, such as `23%` alone, or both to give every tab one row, unless it shows its [memory](#how-much-memory-a-tab-uses).
 
 **Codex** uses the model recorded in its session and `last_token_usage.total_tokens` divided by its reported `model_context_window`, for example `gpt-5.4 · 20%`. Cached input and reasoning tokens are already included; lifetime token totals are not used. This is the share used out of the reported window, rather than Codex's own remaining percentage, which subtracts a fixed baseline.
 
@@ -224,7 +224,7 @@ Each installed Claude Code or Codex gets its own section, and each limit shows h
 The numbers come from the agents themselves: showing the Limits tab runs `claude` and `codex` in the background, on the machine where cornercase's server runs, and asks each for its usage (Codex through `codex app-server`). That sends no prompt and costs no tokens, and cornercase never reads your login. It takes a second or a few; meanwhile each section shows `loading…`, or the last numbers with how old they are. Nothing is asked while the dialog is closed. An agent that isn't installed has no section, unless neither is: then both show, each saying why it couldn't run. [`agent_commands`](../../reference/agents/#your-own-agents) says where to find one that isn't on the `PATH`. `done` or `Esc` closes the dialog. If a section says `usage unavailable`, see [Usage is unavailable](../../help/troubleshooting/#usage-is-unavailable).
 
 
-Stats counts **only Claude Code, Codex, Gemini CLI and opencode running inside cornercase**, from when this feature was installed. It never imports the agents' histories. The columns show the current hour and the 23 before it (**24 h**), 168 hours (**7 days**) and **total**. These are rolling windows, independent of your time zone.
+Stats counts **only Claude Code, Codex, Gemini CLI, opencode and Grok Build running inside cornercase**, from when this feature was installed. It never imports the agents' histories, including older Grok Build sessions. The columns show the current hour and the 23 before it (**24 h**), 168 hours (**7 days**) and **total**. These are rolling windows, independent of your time zone.
 
 <Screen name="usage-stats" alt="Usage on the Stats tab, showing parallel work, three windows of agent counts and durations, token kinds and a purple heatmap, with share and done buttons" caption="How much your agents worked, and how much of it they did side by side." crop={[23, 5, 64, 27]} />
 
@@ -366,7 +366,7 @@ Below 90 columns the [compact layout](../small-terminals/) lists the tabs in its
 
 ### The agents section
 
-Turn on **settings → UI → agents section** to list every Claude Code, Codex, Gemini CLI and opencode running in any project at the bottom of the sidebar, one row per agent:
+Turn on **settings → UI → agents section** to list every Claude Code, Codex, Gemini CLI, opencode and Grok Build running in any project at the bottom of the sidebar, one row per agent:
 
 <Screen
   name="sidebar-agents"
@@ -382,7 +382,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.
 - In a narrow sidebar the model goes first, then the workspace; the icon and the project stay.
 
-It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex, Gemini CLI and opencode are listed, since other agents don't report what they are doing.
+It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex, Gemini CLI, opencode and Grok Build are listed, since other agents don't report what they are doing.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

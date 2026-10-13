@@ -41,7 +41,7 @@ The bot then sends the list of your agents, and **`Remote`** shows a green **`�
 - **An agent needs you** (a permission prompt, a question): `! claude needs you · web-shop › dark-mode`, the last lines of its screen, and a button for each option it shows (`1 · Yes`, `2 · Yes, and don't ask again`…), plus **esc** and **screen**. A tap presses that key in its pane, as if you had typed it, and the option buttons go away.
 - **An agent finishes its turn**: `✓ claude finished · web-shop › dark-mode` and the last thing it wrote, read from its own conversation (not its screen), with its bold, lists, code and links. A long message comes in several, at most four; the rest stays in cornercase. When a Claude Code turn ends with a command still running in the background (a dev server), it says `ended its turn · a background shell still runs`.
 
-A message is sent once per change, after the agent held it for a second, and only while you are away. This works with the agents whose state cornercase reads: Claude Code, Codex, Gemini CLI and opencode (opencode never says that it waits for you, see [Agents](../../reference/agents/)).
+A message is sent once per change, after the agent held it for a second, and only while you are away. This works with the agents whose state cornercase reads: Claude Code, Codex, Gemini CLI, opencode and Grok Build (opencode never says that it waits for you, see [Agents](../../reference/agents/)).
 
 ## Answer
 

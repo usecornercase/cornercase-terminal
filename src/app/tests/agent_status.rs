@@ -5,6 +5,7 @@ use crate::agents::activity::{Activity, Status};
 use crate::agents::claude::fake::FakeClaude;
 use crate::agents::codex::fake::FakeCodex;
 use crate::agents::gemini::fake::FakeGemini;
+use crate::agents::grok::fake::FakeGrok;
 use crate::agents::opencode::fake::FakeOpencode;
 use crate::config;
 use crate::test_util::write_executable;
@@ -294,6 +295,7 @@ enum Fake {
     Codex(FakeCodex, usize),
     Gemini(FakeGemini, usize),
     Opencode(FakeOpencode, usize),
+    Grok(FakeGrok, usize),
 }
 
 fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
@@ -348,6 +350,14 @@ impl Watched {
                 Fake::Gemini(gemini, app.projects[0].workspaces[0].active)
             }
             agents::Known::Opencode => Fake::Opencode(start_opencode(app, rx), app.projects[0].workspaces[0].active),
+            agents::Known::Grok => {
+                let grok = FakeGrok::new(&app.projects[0].path);
+                type_line(app, &grok.command_line());
+                pump_until(app, rx, "grok runs", |a| runs(a, agents::Known::Grok.name()));
+                let pid = app.term().and_then(Term::foreground_pid).expect("the pid of grok");
+                grok.bind(pid);
+                Fake::Grok(grok, app.projects[0].workspaces[0].active)
+            }
             agents::Known::Claude => {
                 let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(app);
@@ -390,6 +400,17 @@ impl Watched {
                     let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
                     opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
                 }
+                Fake::Grok(grok, tab) => {
+                    grok.report(status);
+                    let wanted = match status {
+                        "busy" => Activity::Working,
+                        "waiting" => Activity::Waiting,
+                        _ => Activity::Idle,
+                    };
+                    watch_until(&mut self.app, &self.rx, "grok's turn shows", |a| {
+                        tab_term(a, 0, *tab).context.activity("") == Some(wanted)
+                    });
+                }
             }
         }
         for _ in 0..ticks {
@@ -408,7 +429,13 @@ impl Watched {
 
 #[rstest]
 fn a_restart_names_the_agent_at_work_and_the_other_program(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Opencode)]
+    #[values(
+        agents::Known::Claude,
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Opencode,
+        agents::Known::Grok
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
@@ -429,7 +456,9 @@ fn runs(app: &App, agent: &str) -> bool {
 }
 
 #[rstest]
-fn a_tab_follows_turns_and_approvals(#[values(agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known) {
+fn a_tab_follows_turns_and_approvals(
+    #[values(agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)] agent: agents::Known,
+) {
     let mut w = Watched::start(agent, false);
     let mut seen = vec![status(&w.app, 0, 0)];
 
@@ -444,7 +473,8 @@ fn a_tab_follows_turns_and_approvals(#[values(agents::Known::Codex, agents::Know
 
 #[rstest]
 fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
 
@@ -467,6 +497,13 @@ fn an_opencode_tab_works_until_its_reply_and_shows_its_model_and_context() {
 
     assert_eq!(seen, [Status::Working, Status::Idle, Status::Working].map(Some));
     assert_eq!(second_row(&mut w.app), (2, "▌ │   DeepSeek V4… · 12%".to_string()));
+}
+
+#[test]
+fn a_grok_tab_shows_its_model_and_context() {
+    let mut w = Watched::start(agents::Known::Grok, false);
+    let row = second_row(&mut w.app).1;
+    assert!(row.contains("grok-4.7") && row.contains("8%"), "{row}");
 }
 
 #[test]
@@ -525,7 +562,13 @@ fn opencode_finishing_out_of_sight_marks_the_tab_done_until_it_is_opened() {
 
 #[rstest]
 fn a_hidden_tab_that_finishes_says_so(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Opencode)]
+    #[values(
+        agents::Known::Claude,
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Opencode,
+        agents::Known::Grok
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
@@ -538,7 +581,8 @@ fn a_hidden_tab_that_finishes_says_so(
 
 #[rstest]
 fn a_settled_change_notifies_once(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
     w.report("waiting", 6);
@@ -551,7 +595,8 @@ fn a_settled_change_notifies_once(
 
 #[rstest]
 fn the_visible_tab_stays_quiet(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, false);
 
@@ -709,6 +754,20 @@ mod resuming {
         let (mut back, rx, _bin) = restored(&saved, agents::Known::Gemini.name(), true);
         wait_resumed(&mut back, &rx, &format!("--approval-mode plan --resume {}", FakeGemini::ID));
         assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
+    }
+
+    #[test]
+    fn grok_comes_back_in_its_conversation_and_mode() {
+        let (mut app, rx, _dirs) = app_with(1);
+        let grok = FakeGrok::new(&app.projects[0].path);
+        type_line(&mut app, &format!("{} --permission-mode acceptEdits", grok.command_line()));
+        pump_until(&mut app, &rx, "grok runs", |a| runs(a, agents::Known::Grok.name()));
+        let pid = app.term().and_then(Term::foreground_pid).expect("the pid of grok");
+        grok.bind(pid);
+        let saved = remembered(&mut app, &rx);
+        let (mut back, rx, _bin) = restored(&saved, agents::Known::Grok.name(), true);
+        wait_resumed(&mut back, &rx, &format!("--permission-mode acceptEdits --resume {}", FakeGrok::ID));
+        assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("accept edits"));
     }
 
     #[test]

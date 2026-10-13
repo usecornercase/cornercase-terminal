@@ -7,7 +7,7 @@ use std::thread;
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
 
-pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid};
+pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid, started};
 
 const MAX_DESCENDANTS: usize = 256;
 
@@ -133,6 +133,12 @@ mod imp {
     pub(crate) fn footprint(pid: i32) -> Option<u64> {
         status_footprint(&std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)
     }
+
+    pub(crate) fn started(pid: i32) -> Option<u64> {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let rest = stat.rsplit_once(')')?.1;
+        rest.split_whitespace().nth(19)?.parse().ok()
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -234,6 +240,10 @@ mod imp {
     pub(crate) fn env(pid: i32) -> Vec<(String, String)> {
         procargs_buffer(pid).map(|buf| procenv(&buf)).unwrap_or_default()
     }
+
+    pub(crate) fn started(_pid: i32) -> Option<u64> {
+        None
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -273,6 +283,10 @@ mod imp {
     }
 
     pub(crate) fn footprint(_pid: i32) -> Option<u64> {
+        None
+    }
+
+    pub(crate) fn started(_pid: i32) -> Option<u64> {
         None
     }
 }

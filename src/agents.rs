@@ -4,6 +4,7 @@ pub mod claude;
 pub(crate) mod codex;
 pub(crate) mod context;
 pub(crate) mod gemini;
+pub(crate) mod grok;
 mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
