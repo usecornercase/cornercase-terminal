@@ -4,6 +4,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
 use super::menus::Target;
 use super::settings_dialog::settings_view;
@@ -321,7 +322,7 @@ impl App {
             }),
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
-            Overlay::Issues(b) => b.view(area, time::now()),
+            Overlay::Issues(b) => view(b, room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),

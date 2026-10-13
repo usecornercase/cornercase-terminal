@@ -8,8 +8,8 @@ const LEAVES: &[&str] =
     &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
 
 const APP_EXCEPTIONS: &[&str] = &[];
-const UI_EXCEPTIONS: &[&str] = &["src/issues/browser.rs"];
-const LONG_FILES: &[&str] = &["src/issues/browser.rs", "src/settings.rs"];
+const UI_EXCEPTIONS: &[&str] = &[];
+const LONG_FILES: &[&str] = &[];
 
 struct Source {
     path: PathBuf,

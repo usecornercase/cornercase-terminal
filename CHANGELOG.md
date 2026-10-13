@@ -2,9 +2,21 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.66
+## 0.12.67
 
 - No changes in the app. Background jobs start through one helper.
+
+## 0.12.66
+
+- No changes in the app. The issues browser's code is split into files by concern.
+
+## 0.12.65
+
+- No changes in the app. The settings model is split into files by concern: choosing a row, submitting a pick or an edit, the Issues page, keys and row texts.
+
+## 0.12.64
+
+- No changes in the app. The issues dialog's view and hit testing now live with the app, and its browser takes sizes and hits instead of UI types.
 
 ## 0.12.63
 

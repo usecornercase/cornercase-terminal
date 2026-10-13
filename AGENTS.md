@@ -67,7 +67,7 @@ src/state.rs      the saved session as JSON, its Widths schema, migrations and m
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
-src/settings.rs   the settings modal's state and plain row/edit/pick texts; returns Actions for App
+src/settings.rs   the settings modal's state and plain row/edit/pick texts; returns Actions for App; settings/activate.rs what choosing a row does, submit.rs finishing a pick or an edit, trackers.rs the Issues page's tokens and tabs, input.rs keys, paste and capturing the prefix key, view.rs row texts
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
 src/agents.rs     known coding agents, their modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
 src/awake.rs      keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child
@@ -84,7 +84,7 @@ src/log.rs        server.log: levels, the line format, the writer thread and its
 src/secrets.rs    Shortcut / Linear / Jira / Plane tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
-src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state), cache.rs (lists on disk)
+src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state, sizes and hits; app/issues_dialog.rs builds its view) and browser/ (buttons, token_form, people, picker, input, view), cache.rs (lists on disk)
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)

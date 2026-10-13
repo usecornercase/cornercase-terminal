@@ -12,7 +12,9 @@ use crate::clipboard;
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
 use crate::git;
-use crate::issues::browser::{self, Action, Browser, Connection, Place, Screen};
+use crate::issues::browser::{
+    self, Action, Browser, Connection, IssuesHit, Listing, Pick, Place, Room, Screen, Step, Tab, TokenForm,
+};
 use crate::issues::cache::Key as CacheKey;
 use crate::issues::{
     self, Account, Client, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
@@ -22,6 +24,8 @@ use crate::list::Search;
 use crate::log::{self, Job, Level};
 use crate::markdown;
 use crate::secrets;
+use crate::time;
+use crate::ui;
 
 pub(super) struct Apis {
     pub(super) shortcut: String,
@@ -463,13 +467,26 @@ impl App {
 
     pub(super) fn issues_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        let action = b.key(key, area);
+        let action = b.key(key, room(area));
         self.act(action, area)
     }
 
     pub(super) fn issues_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
-        let action = b.mouse(ev, pos, area);
+        let room = room(area);
+        let ui::Overlay::Issues(view) = view(b, room, time::now()) else { return Ok(()) };
+        let hit = match &view.body {
+            ui::IssuesBody::Detail { .. } => ui::issue_button_hit(area, &view.buttons, pos).map(IssuesHit::Button),
+            body => {
+                let (items, scroll) = match body {
+                    ui::IssuesBody::List { items, scroll, .. } => (items.len(), *scroll),
+                    _ => (0, b.search.scroll()),
+                };
+                let toggles: Vec<&str> = view.toggles.iter().map(String::as_str).collect();
+                ui::issues_hit(area, &view.tabs, &toggles, &view.buttons, items, scroll, pos)
+            }
+        };
+        let action = b.mouse(ev.kind, hit, room);
         self.act(action, area)
     }
 
@@ -523,6 +540,17 @@ impl App {
     }
 }
 
+pub(super) fn room(area: Rect) -> Room {
+    let issues = ui::issues_area(area);
+    let list = ui::issues_list(issues);
+    let detail = ui::issue_detail(issues);
+    Room {
+        list_rows: usize::from(list.height),
+        detail_rows: usize::from(detail.height),
+        detail_width: usize::from(detail.width),
+    }
+}
+
 pub(super) fn env_tokens() -> HashMap<Source, String> {
     Source::REMOTE
         .into_iter()
@@ -533,3 +561,214 @@ pub(super) fn env_tokens() -> HashMap<Source, String> {
         })
         .collect()
 }
+
+fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let picker = browser.picker.as_ref();
+    let choices = browser.choices();
+    let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
+    let items = choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta }).collect();
+    let body = ui::IssuesBody::List {
+        filter: picker.map(|p| p.search.query().to_string()).unwrap_or_default(),
+        items,
+        selected,
+        scroll: picker.map_or(0, |p| p.search.scroll()),
+        empty: "nothing matches".into(),
+    };
+    let (hint, note) = match picker.map(|p| p.pick) {
+        Some(Pick::Place) => {
+            ("where should it be worked on? a repository gets a worktree, others a new tab".to_string(), None)
+        }
+        Some(Pick::Person(source, field)) => {
+            let note = match browser.members.get(&source) {
+                None => Some(ui::Note::Busy("loading people…")),
+                Some(Err(e)) => Some(ui::Note::Error(e.clone())),
+                Some(Ok(_)) => None,
+            };
+            (
+                format!(
+                    "{} {}: anyone, you, or someone else · type to find them",
+                    source.name(),
+                    source.people_fields()[field]
+                ),
+                note,
+            )
+        }
+        _ => ("which agent should take it? settings set how each one starts".to_string(), None),
+    };
+    (body, note, hint)
+}
+
+fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let rows = browser.people_rows();
+    let items = rows
+        .iter()
+        .map(|(source, field)| ui::IssueRow {
+            key: format!("{} {}", source.name(), source.people_fields()[*field]),
+            title: browser.people.of(*source)[*field].describe(),
+            meta: String::new(),
+        })
+        .collect();
+    let body = ui::IssuesBody::List {
+        filter: String::new(),
+        items,
+        selected: browser.filtering.map(|c| c.min(rows.len().saturating_sub(1))),
+        scroll: 0,
+        empty: "nothing to filter here".into(),
+    };
+    (body, None, "enter picks a person · the filter goes into each tracker's search and is remembered".into())
+}
+
+pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
+    let (body, note, hint) = match &browser.screen {
+        _ if browser.picker.is_some() => picker_view(browser),
+        _ if browser.filtering.is_some() => people_view(browser),
+        Screen::Detail { detail, scroll, .. } => {
+            let lines = browser.detail_lines(room);
+            let rows = room.detail_rows;
+            let scroll = (*scroll).min(lines.len().saturating_sub(rows));
+            let note = match detail {
+                None => Some(ui::Note::Busy("loading…")),
+                Some(Err(e)) => Some(ui::Note::Error(e.clone())),
+                Some(Ok(_)) => None,
+            };
+            let more = if lines.len() > rows {
+                format!(" · lines {}-{} of {}", scroll + 1, (scroll + rows).min(lines.len()), lines.len())
+            } else {
+                String::new()
+            };
+            let hint = format!("enter starts it{more}");
+            (ui::IssuesBody::Detail { lines, scroll }, note, hint)
+        }
+        Screen::List => match browser.token_form() {
+            Some(source) => token_view(browser, source),
+            None => list_view(browser, now),
+        },
+    };
+    let hint = browser.notice.clone().unwrap_or(hint);
+    let (toggles, on) = browser.toggles();
+    let note = if browser.starting {
+        Some(ui::Note::Busy("starting…"))
+    } else if let Some(e) = &browser.error {
+        Some(ui::Note::Error(e.clone()))
+    } else {
+        note
+    };
+    ui::Overlay::Issues(ui::Issues {
+        title: format!("Issues · {}", browser.project_name),
+        tabs: browser.tab_names(),
+        tab: browser.tab,
+        toggles,
+        on,
+        body,
+        note,
+        hint,
+        buttons: browser.labels(),
+    })
+}
+
+fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let form = browser.forms.get(&source);
+    let step = browser.form_step(source);
+    let (label, input) = browser.token_field(source);
+    let mut help = vec![format!("Connect {}.", source.name()), String::new()];
+    match step {
+        Step::Site => {
+            help.push("Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.".into());
+        }
+        Step::Email => {
+            help.push("Type the email you sign in to Atlassian with and press Enter.".into());
+        }
+        Step::Workspace => {
+            help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
+            help.push("Then press Enter.".into());
+        }
+        Step::Token => {
+            match source {
+                Source::Jira => help
+                    .extend([format!("Signing in to {} as {}.", browser.jira_site, browser.jira_email), String::new()]),
+                Source::Plane => {
+                    let line = format!("Connecting to the Plane workspace {}.", browser.plane_workspace);
+                    help.extend([line, String::new()]);
+                }
+                _ => {}
+            }
+            help.push(source.token_help().into());
+        }
+    }
+    match (step, source.token_env()) {
+        (Step::Token, Some(env)) => {
+            help.push(String::new());
+            help.push(format!(
+                "It is saved in {} (only you can read it); you can also paste it in settings. {env}, when set, \
+                 takes precedence.",
+                browser.secrets_path
+            ));
+        }
+        _ if source == Source::Plane => {
+            help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
+        _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
+    }
+    let note = match form {
+        Some(f) if f.checking => Some(ui::Note::Busy("checking…")),
+        Some(TokenForm { error: Some(e), .. }) => Some(ui::Note::Error(e.clone())),
+        _ => None,
+    };
+    (ui::IssuesBody::Token { label, input, help }, note, String::new())
+}
+
+fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let shown = browser.shown();
+    let selected = shown.len().checked_sub(1).map(|last| browser.search.selected().min(last));
+    let listings: Vec<(Source, &Listing)> =
+        browser.sources().into_iter().filter_map(|s| browser.lists.get(&s).map(|l| (s, l))).collect();
+    let loading = listings.iter().any(|(_, l)| l.loading);
+    let error = listings.iter().find_map(|(s, l)| {
+        l.error.as_ref().map(|e| if browser.current() == Tab::All { format!("{}: {e}", s.name()) } else { e.clone() })
+    });
+    let empty = if !browser.search.query().trim().is_empty() {
+        "no matches".to_string()
+    } else if loading || error.is_some() {
+        String::new()
+    } else if browser.current() == Tab::One(Source::Github) && !browser.github {
+        "this project is not in a git repository".into()
+    } else if browser.sources().is_empty() {
+        "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
+    } else if browser.closed {
+        "no issues".into()
+    } else {
+        "no open issues".into()
+    };
+    let note = match error {
+        Some(e) => Some(ui::Note::Error(e)),
+        None if loading && shown.is_empty() => Some(ui::Note::Busy("loading…")),
+        None => None,
+    };
+    let account = match browser.current() {
+        Tab::One(source) => browser.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
+        Tab::All => None,
+    };
+    let action =
+        selected.map(|i| format!("enter reads {} · start works on it {}", shown[i].key, browser.start_hint(shown[i])));
+    let refreshing = (loading && !shown.is_empty()).then(|| "refreshing…".to_string());
+    let hint = refreshing.into_iter().chain(account).chain(action).collect::<Vec<_>>().join(" · ");
+    let items = shown
+        .iter()
+        .map(|issue| ui::IssueRow {
+            key: issue.key.clone(),
+            title: issue.title.clone(),
+            meta: issues::meta(issue, now),
+        })
+        .collect();
+    let body = ui::IssuesBody::List {
+        filter: browser.search.query().to_string(),
+        items,
+        selected,
+        scroll: browser.search.scroll(),
+        empty,
+    };
+    (body, note, hint)
+}
+
+#[cfg(test)]
+mod tests;
