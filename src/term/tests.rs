@@ -9,24 +9,24 @@ use crate::test_util::{TempDir, is_sh, wait_until};
 
 const RECV_TIMEOUT: Duration = Duration::from_secs(5);
 
-fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
+fn spawn_sh_in(cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     spawn_with(&[], cwd)
 }
 
-fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<AppEvent>) {
+fn spawn_with(args: &[String], cwd: Option<PathBuf>) -> (Term, Receiver<Event>) {
     let (tx, rx) = mpsc::channel();
     let opts =
         SpawnOptions { id: 1, shell: "/bin/sh", args, env: &[], rows: 24, cols: 80, cwd, theme: &HostTheme::default() };
     (Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
 }
 
-fn spawn_sh() -> (Term, Receiver<AppEvent>) {
+fn spawn_sh() -> (Term, Receiver<Event>) {
     spawn_sh_in(None)
 }
 
-fn contents(term: &mut Term, rx: &Receiver<AppEvent>) -> String {
+fn contents(term: &mut Term, rx: &Receiver<Event>) -> String {
     while let Ok(ev) = rx.try_recv() {
-        if let AppEvent::Output(_, bytes) = ev {
+        if let Event::Output(_, bytes) = ev {
             term.feed(&bytes);
         }
     }
@@ -74,7 +74,7 @@ mod spawn {
 
     #[test]
     fn returns_error_when_shell_does_not_exist() {
-        let (tx, _rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel::<Event>();
         let opts = SpawnOptions {
             id: 1,
             shell: "/nonexistent/shell",
@@ -136,7 +136,7 @@ mod output {
 
         term.write(b"echo x\r");
 
-        assert_matches!(rx.recv_timeout(RECV_TIMEOUT), Ok(AppEvent::Output(1, _)));
+        assert_matches!(rx.recv_timeout(RECV_TIMEOUT), Ok(Event::Output(1, _)));
     }
 }
 
@@ -338,8 +338,7 @@ mod kill {
 
         term.kill();
 
-        let exited =
-            std::iter::from_fn(|| rx.recv_timeout(RECV_TIMEOUT).ok()).any(|ev| matches!(ev, AppEvent::Exited(1)));
+        let exited = std::iter::from_fn(|| rx.recv_timeout(RECV_TIMEOUT).ok()).any(|ev| matches!(ev, Event::Exited(1)));
         assert!(exited, "no Exited(1) event received");
     }
 }

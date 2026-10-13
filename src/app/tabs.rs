@@ -3,20 +3,31 @@ use std::path::PathBuf;
 use ratatui::layout::Rect;
 
 use super::App;
+use crate::control;
 use crate::error::Result;
 use crate::project::{Project, Tab, Workspace};
+use crate::protocol;
 use crate::split::Dir;
 use crate::term::{SpawnOptions, Term};
 
 impl App {
+    pub(super) fn pane_env(id: u64) -> Vec<(String, String)> {
+        vec![
+            (protocol::NESTED_ENV.to_string(), "1".to_string()),
+            (control::PANE_ENV.to_string(), id.to_string()),
+            (control::SERVER_ENV.to_string(), control::server_token().to_string()),
+        ]
+    }
+
     pub(super) fn spawn(&mut self, area: Rect, cwd: PathBuf) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
+        let env = Self::pane_env(id);
         let opts = SpawnOptions {
             id,
             shell: &self.shell,
             args: &[],
-            env: &[],
+            env: &env,
             rows,
             cols,
             cwd: Some(cwd),

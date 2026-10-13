@@ -11,6 +11,7 @@ use crate::graphics::encode;
 use crate::issues::{Account, Detail, Listed, Person, Query, Secret, Source};
 use crate::launch::{self};
 use crate::tailscale;
+use crate::term;
 use crate::update::Release;
 use crate::usage;
 use crate::web::{self};
@@ -159,6 +160,21 @@ impl AppEvent {
             Self::Web(_) => "web",
             Self::Tailscale(_) => "tailscale",
         }
+    }
+}
+
+impl From<term::Event> for AppEvent {
+    fn from(event: term::Event) -> Self {
+        match event {
+            term::Event::Output(id, bytes) => Self::Output(id, bytes),
+            term::Event::Exited(id) => Self::Exited(id),
+        }
+    }
+}
+
+impl From<web::Event> for AppEvent {
+    fn from(event: web::Event) -> Self {
+        Self::Web(event)
     }
 }
 
