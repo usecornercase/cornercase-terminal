@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.60
+
+- No changes in the app. The ssh window and the client no longer import each other.
+
 ## 0.12.53
 
 - No changes in the app. The code of cli.rs and client.rs moved into files of their own.

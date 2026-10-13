@@ -60,7 +60,7 @@ src/control.rs    the JSON of those requests and answers, shared by the commands
 src/client.rs     the UI process: entry points, terminal setup/teardown; client/window.rs the attached window (forwards events, writes frames, reconnects a remote window), client/probe.rs the colour query and what the outer terminal can show, client/requests.rs a command talking to the server, client/server_process.rs starting and stopping the server (`kill-server`); client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste
 src/web/          browser access: mod.rs (the loopback listener, routes, pairing, paired browsers' count), bridge.rs (one WebSocket as a client of the server's socket), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js)
 src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser access
-src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
+src/remote.rs     `cornercase remote`: the ssh command and the pipes it connects (`remote::Piped`), the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket, connecting through a function `cli` passes)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages and length-prefixed postcard framing
 src/state.rs      the saved session as JSON, migrations and mapping to the hierarchy
@@ -95,7 +95,7 @@ src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, vie
 src/search.rs     global search: candidates and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
-src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
+src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid; stopping and reaping a child
 src/project.rs    Group, Project > Workspace > Tab > panes, labels, removal, moving
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state, new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
