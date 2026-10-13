@@ -8,8 +8,8 @@ use serde_json::{Map, Value};
 
 use crate::agents;
 use crate::notify;
+use crate::persist;
 use crate::shortcuts::Prefix;
-use crate::state;
 use crate::ui;
 
 pub const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
@@ -149,7 +149,7 @@ fn migrate(keys: &mut Map<String, Value>) {
 }
 
 pub fn save(path: &Path, config: &Config) -> io::Result<()> {
-    state::save(path, config)
+    persist::save(path, config)
 }
 
 pub fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {

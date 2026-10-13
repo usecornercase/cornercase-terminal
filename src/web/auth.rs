@@ -104,7 +104,7 @@ impl Devices {
 }
 
 fn save(path: &Path, saved: &Saved) -> io::Result<()> {
-    crate::state::write(path, saved, true)
+    crate::persist::write(path, saved, true)
 }
 
 #[cfg(test)]

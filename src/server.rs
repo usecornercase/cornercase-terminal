@@ -26,9 +26,10 @@ use crate::log::{self, Level};
 use crate::notify::Channel;
 use crate::panics;
 use crate::paths;
+use crate::persist::{self, Saver};
 use crate::pointer;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
-use crate::state::{self, Saver};
+use crate::state;
 use crate::todo;
 use crate::version;
 
@@ -273,7 +274,7 @@ struct Server {
     started: bool,
     build: String,
     session: PathBuf,
-    saver: Saver,
+    saver: Saver<state::State>,
     todo_saver: Saver<todo::Saved>,
     stats_saver: crate::stats::Saver,
     restart: Option<PathBuf>,
@@ -776,7 +777,7 @@ impl Server {
             None => log::info!("server", "no session to restore", path = self.session.display()),
         }
         if !complete {
-            match state::back_up(&self.session) {
+            match persist::back_up(&self.session) {
                 Ok(backup) => log::warning!("server", "the session came back incomplete", copy = backup.display()),
                 Err(e) => log::error!("server", "failed to keep a copy of the session", error = e),
             }
@@ -871,7 +872,7 @@ impl Server {
         }
         if self.restart.is_some()
             && self.started
-            && let Err(e) = state::save(&self.session, &self.app.state())
+            && let Err(e) = persist::save(&self.session, &self.app.state())
         {
             log::error!("server", "failed to save the session", error = e);
         }

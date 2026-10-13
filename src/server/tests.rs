@@ -135,7 +135,7 @@ mod a_bug {
 
         fn with_graphics(dir: TempDir, saved: &State, graphics: Support) -> Self {
             let session = dir.path().join("session.json");
-            state::save(&session, saved).expect("save a session");
+            persist::save(&session, saved).expect("save a session");
             let (tx, rx) = mpsc::channel();
             let (app_tx, app_rx) = mpsc::channel();
             spawn_forwarder(app_rx, tx.clone());
@@ -667,7 +667,7 @@ mod drawing {
 
         attached.server.save(t0);
         attached.server.save(t0 + SAVE_EVERY / 2);
-        attached.server.save(t0 + state::SETTLE + SAVE_EVERY);
+        attached.server.save(t0 + persist::SETTLE + SAVE_EVERY);
 
         assert!(session.exists(), "the session settles and is written");
     }

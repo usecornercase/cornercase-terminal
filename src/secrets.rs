@@ -29,7 +29,7 @@ pub fn remove(path: &Path, key: &str) -> io::Result<()> {
 }
 
 fn store(path: &Path, secrets: &BTreeMap<String, String>) -> io::Result<()> {
-    crate::state::write(path, secrets, true)
+    crate::persist::write(path, secrets, true)
 }
 
 #[cfg(test)]

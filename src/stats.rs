@@ -7,7 +7,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 use crate::activity::Status;
-use crate::state;
+use crate::persist;
 use crate::time::Stamp;
 
 pub const WEEKS: usize = 26;
@@ -381,7 +381,7 @@ pub fn load(path: &Path, now: SystemTime) -> Stats {
     stats
 }
 pub fn save(path: &Path, saved: &Saved) -> std::io::Result<()> {
-    state::write(path, saved, true)
+    persist::write(path, saved, true)
 }
 
 #[derive(Debug)]

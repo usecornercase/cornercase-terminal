@@ -58,7 +58,7 @@ impl Cache {
             version: VERSION,
             lists: self.lists.iter().map(|e| Entry { key: e.key.clone(), issues: e.issues.clone() }).collect(),
         };
-        if let Err(e) = crate::state::save(path, &file) {
+        if let Err(e) = crate::persist::save(path, &file) {
             log::warning!("issues", "failed to save the issue cache", error = e);
         }
     }

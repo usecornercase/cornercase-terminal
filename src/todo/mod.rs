@@ -342,7 +342,7 @@ mod tests {
             let path = tmp.path().join(paths::TODOS_FILE);
             let (mut todos, ids) = with(&["a", "b"]);
             todos.toggle(ids[0]);
-            crate::state::save(&path, &todos.saved()).expect("save");
+            crate::persist::save(&path, &todos.saved()).expect("save");
             assert_eq!(texts(&load(&path)), ["b", "[x] a"]);
         }
 

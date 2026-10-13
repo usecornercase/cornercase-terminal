@@ -1,4 +1,7 @@
+use std::time::Instant;
+
 use super::*;
+use crate::persist::{self, SETTLE, Saver};
 use crate::test_util::TempDir;
 
 fn project(dir: &str) -> ProjectState {
@@ -140,7 +143,7 @@ mod file {
 
         assert_eq!(load(&path), Some(expected.clone()));
 
-        save(&path, &expected).expect("save the session");
+        persist::save(&path, &expected).expect("save the session");
         assert_eq!(
             std::fs::read_to_string(&path).expect("read the saved session"),
             fixture.strip_suffix('\n').expect("fixture newline")
@@ -152,7 +155,7 @@ mod file {
         let tmp = TempDir::new();
         let path = tmp.path().join("nested").join("session.json");
 
-        save(&path, &state(&["/a", "/b"])).expect("save");
+        persist::save(&path, &state(&["/a", "/b"])).expect("save");
 
         assert_eq!(load(&path), Some(state(&["/a", "/b"])));
     }
@@ -165,7 +168,7 @@ mod file {
         let path = tmp.path().join("session.json");
         let saved = State { widths: Some(widths), ..state(&["/a"]) };
 
-        save(&path, &saved).expect("save");
+        persist::save(&path, &saved).expect("save");
 
         assert_eq!(load(&path), Some(saved));
     }
@@ -203,7 +206,7 @@ mod file {
         workspace.tabs[0].name = Some("server".into());
         saved.projects[0].workspaces.push(workspace);
 
-        save(&path, &saved).expect("save");
+        persist::save(&path, &saved).expect("save");
 
         assert_eq!(load(&path), Some(saved));
     }
@@ -216,7 +219,7 @@ mod file {
         let agent = AgentState { kind: "claude".into(), conversation: "4f2c-91".into(), mode: Some("plan".into()) };
         saved.projects[0].workspaces[0].tabs[0].panes[0].agent = Some(agent);
 
-        save(&path, &saved).expect("save");
+        persist::save(&path, &saved).expect("save");
 
         assert_eq!(load(&path), Some(saved));
     }
@@ -232,7 +235,7 @@ mod file {
         ];
         saved.projects[1].group = Some(1);
 
-        save(&path, &saved).expect("save");
+        persist::save(&path, &saved).expect("save");
 
         assert_eq!(load(&path), Some(saved));
     }
@@ -245,7 +248,7 @@ mod file {
         saved.projects[1].collapsed = true;
         saved.projects[0].workspaces[0].collapsed = true;
 
-        save(&path, &saved).expect("save");
+        persist::save(&path, &saved).expect("save");
 
         assert_eq!(load(&path), Some(saved));
     }
@@ -322,7 +325,7 @@ mod file {
     fn other_versions_load_nothing() {
         let tmp = TempDir::new();
         let path = tmp.path().join("session.json");
-        save(&path, &State { version: VERSION + 1, ..state(&["/a"]) }).expect("save");
+        persist::save(&path, &State { version: VERSION + 1, ..state(&["/a"]) }).expect("save");
 
         assert_eq!(load(&path), None);
     }
@@ -331,7 +334,7 @@ mod file {
 mod saver {
     use super::*;
 
-    fn saver(tmp: &TempDir) -> (Saver, PathBuf) {
+    fn saver(tmp: &TempDir) -> (Saver<State>, PathBuf) {
         let path = tmp.path().join("session.json");
         (Saver::new(path.clone(), None), path)
     }
@@ -396,27 +399,5 @@ mod saver {
         saver.flush().expect("flush");
 
         assert_eq!(load(&path), Some(state(&["/a"])));
-    }
-}
-
-mod back_up {
-    use super::*;
-
-    #[test]
-    fn a_second_copy_keeps_the_first_one() {
-        let tmp = TempDir::new();
-        let path = tmp.path().join("session.json");
-        std::fs::write(&path, "first").expect("write the session");
-        back_up(&path).expect("first copy");
-        std::fs::write(&path, "second").expect("write the session again");
-
-        let backup = back_up(&path).expect("second copy");
-
-        let read = |name: &str| std::fs::read_to_string(tmp.path().join(name)).ok();
-        assert_eq!(backup, tmp.path().join("session.json.bak"));
-        assert_eq!(
-            (read("session.json.bak"), read("session.json.bak.1")),
-            (Some("second".into()), Some("first".into()))
-        );
     }
 }
