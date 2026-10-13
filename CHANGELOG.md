@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.79
+
+- No changes in the app. Each supported agent's rules, readers, plan probes and test fake moved into its own folder.
+
 ## 0.12.76
 
 - No changes in the app. Code that nothing used was removed.
