@@ -8,6 +8,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::interaction::Drag;
+use super::layout::Side;
 use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
 use crate::error::Result;
@@ -76,23 +77,18 @@ impl App {
     }
 
     pub(super) fn files_shown(&self) -> bool {
-        self.files.open && self.files_target().is_some()
+        self.side == Some(Side::Files) && self.files_target().is_some()
     }
 
     pub(super) fn toggle_files(&mut self) {
-        if self.files.open {
-            self.files.close();
-        } else {
-            self.changes.close();
-            self.close_todo();
-            self.files.open = true;
-        }
+        let side = (self.side != Some(Side::Files)).then_some(Side::Files);
+        self.show_side(side);
         self.nav = None;
     }
 
     pub(super) fn refresh_files(&mut self, now: Instant) {
         let shown = self.files_shown();
-        self.changes.watched = shown;
+        self.changes.watched = self.side == Some(Side::Changes) || shown;
         let Some((workspace, root)) = self.files_target().filter(|_| shown) else { return };
         if let Some((generation, list)) = self.files.list(workspace, &root, now) {
             let job = Job::new(Level::Debug, "files", "list").with("workspace", workspace);
@@ -335,7 +331,7 @@ impl App {
             return Ok(());
         }
         match panel::hit(panel_area, &view, pos) {
-            Some(Hit::Close) => self.files.close(),
+            Some(Hit::Close) => self.show_side(None),
             Some(Hit::Mode) => self.files.toggle_mode(workspace),
             Some(Hit::Field) => self.files.query_mut(workspace).focused = true,
             Some(Hit::Clear) => self.edit_query(workspace, String::clear),

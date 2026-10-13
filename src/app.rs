@@ -51,7 +51,7 @@ use issues_dialog::{IssueConnections, IssueEvent};
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::Focus;
-use layout::Scrolls;
+use layout::{Scrolls, Side};
 use overlay::Overlay;
 use session::not_restored;
 use toast::Toast;
@@ -120,6 +120,7 @@ pub struct App {
     active: usize,
     drawn: ui::Areas,
     nav: Option<ui::Nav>,
+    side: Option<Side>,
     next_id: u64,
     hover: Option<Position>,
     widths: ui::Widths,
@@ -170,6 +171,7 @@ impl App {
             active: 0,
             drawn: ui::Areas::default(),
             nav: None,
+            side: None,
             deleting_groups: Vec::new(),
             next_id: 1,
             hover: None,
@@ -386,11 +388,11 @@ impl App {
             people: self.issues.people.clone(),
         });
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
-        let changes = (self.changes.open
+        let changes = (self.side == Some(Side::Changes)
             || self.changes.mode != changes::Mode::default()
             || self.changes.scope != changes::Scope::default())
         .then_some(ChangesState {
-            open: self.changes.open,
+            open: self.side == Some(Side::Changes),
             mode: self.changes.mode,
             scope: (self.changes.scope != changes::Scope::default()).then_some(self.changes.scope),
         });
@@ -402,20 +404,27 @@ impl App {
             widths: Some(self.widths),
             issues,
             changes,
-            todo: self.todo.open,
-            files: self.files.open,
+            todo: self.side == Some(Side::Todo),
+            files: self.side == Some(Side::Files),
         }
     }
 
     pub fn restore(&mut self, saved: &State, area: Rect) -> bool {
         self.widths = saved.widths.unwrap_or_default();
         if let Some(changes) = saved.changes {
-            self.changes.open = changes.open && !saved.todo && !saved.files;
             self.changes.mode = changes.mode;
             self.changes.scope = changes.scope.unwrap_or_default();
         }
-        self.todo.open = saved.todo && !saved.files;
-        self.files.open = saved.files;
+        let side = if saved.files {
+            Some(Side::Files)
+        } else if saved.todo {
+            Some(Side::Todo)
+        } else if saved.changes.is_some_and(|changes| changes.open) {
+            Some(Side::Changes)
+        } else {
+            None
+        };
+        self.show_side(side);
         if let Some(issues) = &saved.issues {
             self.issues.tab = issues.tab.as_deref().and_then(IssueTab::from_id);
             self.issues.closed = issues.closed;
@@ -590,6 +599,7 @@ impl App {
         });
         let tree = self.drawn.tree.then(|| self.tree_view());
         let agents = self.config.agents_section.then(|| self.agents_view());
+        let changes_open = self.side == Some(Side::Changes);
         let view = ui::View {
             tree,
             agents,
@@ -617,8 +627,8 @@ impl App {
             update: self.update_label(),
             remote: self.remote_button(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
-            changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: self.changes.open }),
-            todo: self.todo.open.then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: changes_open }),
+            todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
             todo_dot: self.config.todo_dot,
             todo_pending: self.todos.pending() > 0,
             files,

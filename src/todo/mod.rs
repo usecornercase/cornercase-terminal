@@ -40,7 +40,6 @@ pub struct SavedItem {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Panel {
-    pub open: bool,
     pub scroll: usize,
     pub field: Option<Field>,
 }

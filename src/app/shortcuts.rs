@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
+use super::layout::Side;
 use super::menus::Target;
 use super::{App, Overlay, Toast};
 use crate::activity::Status;
@@ -128,7 +129,7 @@ impl App {
                 }
             }
             Action::Todo => {
-                let opening = !self.todo.open;
+                let opening = self.side != Some(Side::Todo);
                 self.toggle_todo();
                 if opening {
                     self.todo.field = Some(Field::default());
@@ -246,7 +247,7 @@ impl App {
 
     fn find_files(&mut self, mode: Mode) {
         let Some(workspace) = self.project().and_then(Project::workspace).map(|w| w.id) else { return };
-        if !self.files.open {
+        if self.side != Some(Side::Files) {
             self.toggle_files();
         }
         self.files.search(workspace, mode);
@@ -257,7 +258,7 @@ impl App {
             self.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         }
-        let opening = !self.changes.open;
+        let opening = self.side != Some(Side::Changes);
         self.toggle_changes();
         if opening {
             self.changes.filter.get_or_insert_default().focused = true;
@@ -269,7 +270,7 @@ impl App {
             self.toast = Some(Toast::new(NOT_GIT, ui::ToastIcon::Bug));
             return;
         };
-        if !self.changes.open {
+        if self.side != Some(Side::Changes) {
             self.toggle_changes();
         }
         self.open_branches(&target);

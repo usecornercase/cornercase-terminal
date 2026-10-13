@@ -26,6 +26,33 @@ fn saved(projects: Vec<ProjectState>, active: usize) -> State {
 }
 
 #[rstest::rstest]
+#[case::changes_and_todo(true, true, false, (false, true, false))]
+#[case::changes_and_files(true, false, true, (false, false, true))]
+#[case::todo_and_files(false, true, true, (false, false, true))]
+#[case::all_three(true, true, true, (false, false, true))]
+fn restoring_multiple_panels_prefers_files_then_todo_then_changes(
+    #[case] changes: bool,
+    #[case] todo: bool,
+    #[case] files: bool,
+    #[case] expected: (bool, bool, bool),
+) {
+    let mut saved = saved(Vec::new(), 0);
+    saved.changes = Some(ChangesState { open: changes, mode: changes::Mode::Uncommitted, scope: None });
+    saved.todo = todo;
+    saved.files = files;
+    let (mut app, _rx) = empty_app();
+
+    assert!(app.restore(&saved, AREA));
+
+    assert_eq!(
+        (app.side == Some(Side::Changes), app.side == Some(Side::Todo), app.side == Some(Side::Files)),
+        expected
+    );
+    let again = app.state();
+    assert_eq!((again.changes.is_some_and(|changes| changes.open), again.todo, again.files), expected);
+}
+
+#[rstest::rstest]
 #[case::changes(true, false, false)]
 #[case::todo(false, true, false)]
 #[case::files(false, false, true)]

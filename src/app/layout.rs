@@ -20,6 +20,13 @@ pub(super) struct Scrolls {
     pub(super) followed: Focus,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Side {
+    Changes,
+    Todo,
+    Files,
+}
+
 impl App {
     pub(super) fn sidebar(&self) -> ui::Sidebar {
         ui::Sidebar::from_setting(&self.config.sidebar)
@@ -31,14 +38,30 @@ impl App {
     }
 
     pub(super) fn panel_shown(&self) -> bool {
-        self.changes_shown() || self.todo.open || self.files_shown()
+        match self.side {
+            Some(Side::Changes) => self.changes_shown(),
+            Some(Side::Todo) => true,
+            Some(Side::Files) => self.files_shown(),
+            None => false,
+        }
+    }
+
+    pub(super) fn show_side(&mut self, side: Option<Side>) {
+        if self.side == side {
+            return;
+        }
+        match self.side {
+            Some(Side::Changes) => self.changes.close(),
+            Some(Side::Todo) => self.close_todo(),
+            Some(Side::Files) => self.files.close(),
+            None => {}
+        }
+        self.side = side;
     }
 
     pub(super) fn close_panel(&mut self) {
         self.todo.field = None;
-        self.close_todo();
-        self.changes.close();
-        self.files.close();
+        self.show_side(None);
     }
 
     pub(super) fn pane_size(&self, area: Rect) -> (u16, u16) {
