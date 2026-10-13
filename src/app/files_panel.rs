@@ -26,7 +26,48 @@ fn plural(n: usize, what: &str) -> String {
     }
 }
 
+#[derive(Debug)]
+pub enum FilesEvent {
+    Listed { workspace: u64, generation: u64, folders: Vec<(String, Option<Vec<disk::Entry>>)> },
+    Read { workspace: u64, generation: u64, path: String, content: Option<disk::Content>, done: bool },
+    Indexed { workspace: u64, generation: u64, paths: Vec<String> },
+    Names { workspace: u64, generation: u64, search: files::Search, found: Vec<search::Name> },
+    Text { workspace: u64, generation: u64, search: files::Search, found: search::Text },
+}
+
+impl FilesEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Listed { .. } => "files listed",
+            Self::Read { .. } => "file read",
+            Self::Indexed { .. } => "files indexed",
+            Self::Names { .. } => "names found",
+            Self::Text { .. } => "text found",
+        }
+    }
+}
+
 impl App {
+    pub(super) fn files_answered(&mut self, event: FilesEvent) {
+        match event {
+            FilesEvent::Listed { workspace, generation, folders } => {
+                self.files.listed(workspace, generation, folders);
+            }
+            FilesEvent::Read { workspace, generation, path, content, done } => {
+                self.files.read(workspace, generation, &path, content, done);
+            }
+            FilesEvent::Indexed { workspace, generation, paths } => self.files.indexed(workspace, generation, paths),
+            FilesEvent::Names { workspace, generation, search, found } => {
+                self.files.named(workspace, generation, search, found);
+                self.found_answered(workspace);
+            }
+            FilesEvent::Text { workspace, generation, search, found } => {
+                self.files.grepped(workspace, generation, search, found);
+                self.found_answered(workspace);
+            }
+        }
+    }
+
     fn files_target(&self) -> Option<(u64, PathBuf)> {
         let workspace = self.project()?.workspace()?;
         Some((workspace.id, workspace.path.clone()))
@@ -58,7 +99,11 @@ impl App {
                 Ok(list.folders.iter().map(|folder| (folder.clone(), disk::list(&list.root, folder).ok())).collect())
             };
             self.spawn_job(job, listing, move |folders, _| {
-                Some(AppEvent::FilesListed { workspace, generation, folders: folders.unwrap_or_default() })
+                Some(AppEvent::Files(FilesEvent::Listed {
+                    workspace,
+                    generation,
+                    folders: folders.unwrap_or_default(),
+                }))
             });
         }
         if let Some((generation, load)) = self.files.load(workspace, &root, now) {
@@ -68,7 +113,7 @@ impl App {
             std::thread::spawn(move || {
                 let send = |content, done| {
                     let path = load.path.clone();
-                    let _ = tx.send(AppEvent::FileRead { workspace, generation, path, content, done });
+                    let _ = tx.send(AppEvent::Files(FilesEvent::Read { workspace, generation, path, content, done }));
                 };
                 let read = panics::contain(|| disk::read(&load.file, load.previous));
                 job.done();
@@ -107,7 +152,7 @@ impl App {
                 move |paths, job| {
                     let paths = paths.unwrap_or_default();
                     job.note("files", paths.len());
-                    Some(AppEvent::FilesIndexed { workspace, generation, paths })
+                    Some(AppEvent::Files(FilesEvent::Indexed { workspace, generation, paths }))
                 },
             );
         }
@@ -120,7 +165,7 @@ impl App {
                 move |found, job| {
                     let found = found.unwrap_or_default();
                     job.note("found", found.len());
-                    Some(AppEvent::NamesFound { workspace, generation, search, found })
+                    Some(AppEvent::Files(FilesEvent::Names { workspace, generation, search, found }))
                 },
             );
         }
@@ -134,7 +179,7 @@ impl App {
                 move |found, job| {
                     let found = found.unwrap_or_default();
                     job.note("capped", found.capped);
-                    Some(AppEvent::TextFound { workspace, generation, search, found })
+                    Some(AppEvent::Files(FilesEvent::Text { workspace, generation, search, found }))
                 },
             );
         }

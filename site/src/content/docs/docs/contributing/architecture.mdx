@@ -38,6 +38,8 @@ After every step that can change the app (a refresh, input, a command, a backgro
 
 Each client has its own writer thread, so a slow client never blocks the loop. All clients share one size, that of the client that attached, typed or clicked last (a smaller client gets the frame cropped), and see the same `App`, which is why hover, menus and scroll positions are mirrored.
 
+`AppEvent` has 13 variants. Background answers are grouped into `WorktreeEvent`, `IssueEvent`, `ChangesEvent`, `FilesEvent` and `UpdateEvent`, each defined and handled in its concern's file under `app/`. Every arm of `App::handle_event` calls one method; input filtering and PTY output stay in `app.rs`. The nested enums supply the existing event names for `server.log`, and the issues handler keeps the connection epochs that reject stale answers.
+
 ## Protocol
 
 `protocol.rs` frames messages with a little-endian length prefix and encodes them with `postcard`; messages over 64 MiB are refused.

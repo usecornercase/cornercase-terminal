@@ -402,7 +402,7 @@ fn branches_that_arrive_after_the_panel_closes_are_dropped() {
     app.changes.open = false;
     loop {
         let ev = rx.recv_timeout(Duration::from_secs(5)).expect("the branches arrive");
-        let branches = matches!(ev, AppEvent::Branches { .. });
+        let branches = matches!(ev, AppEvent::Changes(ChangesEvent::Branches { .. }));
         app.handle_event(ev, AREA).expect("handle event");
         if branches {
             break;

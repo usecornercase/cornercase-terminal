@@ -20,7 +20,53 @@ mod branches;
 
 const CHANGES_LABEL: &str = "Changes";
 
+#[derive(Debug)]
+pub enum ChangesEvent {
+    Loaded {
+        workspace: u64,
+        generation: u64,
+        request: Box<changes::git::Request>,
+        result: Result<changes::git::Loaded>,
+    },
+    Branches {
+        workspace: u64,
+        branches: Vec<String>,
+        default: Option<String>,
+    },
+    Gap {
+        workspace: u64,
+        file: std::sync::Arc<ChangedFile>,
+        hunk: usize,
+        lines: Vec<changes::GapLine>,
+    },
+}
+
+impl ChangesEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Loaded { .. } => "changes",
+            Self::Branches { .. } => "branches",
+            Self::Gap { .. } => "gap",
+        }
+    }
+}
+
 impl App {
+    pub(super) fn changes_answered(&mut self, event: ChangesEvent) {
+        match event {
+            ChangesEvent::Loaded { workspace, generation, request, result } => {
+                self.changes.loaded(workspace, generation, &request, result);
+                if self.changes_shown() && self.changes.scope == changes::Scope::Every {
+                    self.refresh_changes(Instant::now());
+                }
+            }
+            ChangesEvent::Branches { workspace, branches, default } => {
+                self.branches_listed(workspace, branches, default);
+            }
+            ChangesEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
+        }
+    }
+
     pub(super) fn changes_target(&self) -> Option<Checkout> {
         let workspace = self.project().filter(|p| !p.closing)?.workspace().filter(|w| w.open())?;
         git::branch(&workspace.path)?;
@@ -51,7 +97,14 @@ impl App {
         self.spawn_job(
             job,
             move || changes::git::load(&loading),
-            move |result, _| Some(AppEvent::Changes { workspace, generation, request: Box::new(request), result }),
+            move |result, _| {
+                Some(AppEvent::Changes(ChangesEvent::Loaded {
+                    workspace,
+                    generation,
+                    request: Box::new(request),
+                    result,
+                }))
+            },
         );
     }
 
@@ -354,7 +407,7 @@ impl App {
                         move |new_side, _| {
                             let new_side = new_side.ok().flatten()?;
                             let lines = changes::gap_lines(&f, h, &new_side);
-                            Some(AppEvent::Gap { workspace, file: f, hunk: h, lines })
+                            Some(AppEvent::Changes(ChangesEvent::Gap { workspace, file: f, hunk: h, lines }))
                         },
                     );
                 }

@@ -33,12 +33,15 @@ use crate::update::{Install, Updates};
 use crate::usage;
 use crate::web::Web;
 use agent_watch::WATCH_AGENTS_EVERY;
+use changes_panel::ChangesEvent;
+use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
 use interaction::Grab;
 use interaction::LinkPress;
 use interaction::PaneDrag;
 use interaction::RowDrag;
 use issues_dialog::Apis;
+use issues_dialog::IssueEvent;
 use issues_dialog::env_tokens;
 use launches::LAUNCH_EVERY;
 use layout::Focus;
@@ -46,7 +49,9 @@ use overlay::Overlay;
 use session::not_restored;
 use toast::Toast;
 use toast::copy;
+use update_dialog::UpdateEvent;
 use worktrees::SYNC_EVERY;
+use worktrees::WorktreeEvent;
 
 mod actions;
 mod agent_watch;
@@ -515,99 +520,43 @@ impl App {
 
     pub fn handle_event(&mut self, ev: AppEvent, area: Rect) -> Result<()> {
         match ev {
-            AppEvent::Input(Event::Key(key)) if key.kind == KeyEventKind::Press => self.handle_key(key, area)?,
-            AppEvent::Input(Event::Mouse(ev)) => self.handle_mouse(ev, area)?,
-            AppEvent::Input(Event::Paste(text)) => self.handle_paste(&text),
+            AppEvent::Input(event) => self.handle_input(event, area)?,
+            AppEvent::Output(id, bytes) => self.output(id, &bytes),
             AppEvent::Exited(id) => self.remove(id),
-            AppEvent::WorktreeCreated { project, result, request: Some(key), .. } => {
-                self.worktree_ready(key, project, result, area);
-            }
-            AppEvent::WorktreeCreated { project, result, start, request: None } => {
-                self.worktree_created(project, result, start, area)?;
-            }
-            AppEvent::WorktreeChecked { project, workspace, status, request: Some(key) } => {
-                self.removal_checked(key, project, workspace, &status);
-            }
-            AppEvent::WorktreeChecked { project, workspace, status, request: None } => {
-                self.worktree_checked(project, workspace, status);
-            }
-            AppEvent::WorktreeRemoved { project, workspace, result, request: Some(key) } => {
-                self.worktree_gone(key, project, workspace, result);
-            }
-            AppEvent::WorktreeRemoved { project, workspace, result, request: None } => {
-                self.worktree_removed(project, workspace, result);
-            }
-            AppEvent::IssuesLoaded { project, source, epoch, query, result } => {
-                if epoch == self.epoch(source) {
-                    self.issues_loaded(project, source, &query, result);
-                }
-            }
-            AppEvent::IssueRead { source, epoch, key, result } => {
-                let current = epoch == self.epoch(source);
-                if let Some(Overlay::Issues(b)) = &mut self.overlay
-                    && current
-                {
-                    b.read_done(source, &key, result.map_err(|e| e.to_string()));
-                }
-            }
-            AppEvent::TokenChecked { source, epoch, token, result } => {
-                let result = if epoch == self.epoch(source) {
-                    result
-                } else {
-                    Err(Error::Api(format!("the {} settings changed during the check", source.name())))
-                };
-                self.token_checked(source, &token, result, area)?;
-            }
-            AppEvent::PeopleLoaded { project, source, epoch, result } => {
-                if epoch == self.epoch(source) {
-                    self.people_loaded(project, source, result);
-                }
-            }
-            AppEvent::Behind { project, behind } => self.behind_counted(project, &behind),
-            AppEvent::Changes { workspace, generation, request, result } => {
-                self.changes.loaded(workspace, generation, &request, result);
-                if self.changes_shown() && self.changes.scope == changes::Scope::Every {
-                    self.refresh_changes(Instant::now());
-                }
-            }
-            AppEvent::Branches { workspace, branches, default } => self.branches_listed(workspace, branches, default),
-            AppEvent::Gap { workspace, file, hunk, lines } => self.gap_loaded(workspace, &file, hunk, lines),
-            AppEvent::FilesListed { workspace, generation, folders } => {
-                self.files.listed(workspace, generation, folders);
-            }
-            AppEvent::FileRead { workspace, generation, path, content, done } => {
-                self.files.read(workspace, generation, &path, content, done);
-            }
-            AppEvent::FilesIndexed { workspace, generation, paths } => self.files.indexed(workspace, generation, paths),
-            AppEvent::NamesFound { workspace, generation, search, found } => {
-                self.files.named(workspace, generation, search, found);
-                self.found_answered(workspace);
-            }
-            AppEvent::TextFound { workspace, generation, search, found } => {
-                self.files.grepped(workspace, generation, search, found);
-                self.found_answered(workspace);
-            }
-            AppEvent::UpdateChecked(result) => self.update_checked(result),
-            AppEvent::Updated(result) => self.updated(result),
+            AppEvent::Worktree(event) => self.worktree_answered(event, area)?,
+            AppEvent::Issues(event) => self.issue_answered(event, area)?,
+            AppEvent::Changes(event) => self.changes_answered(event),
+            AppEvent::Files(event) => self.files_answered(event),
+            AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
-            AppEvent::Output(id, bytes) => {
-                for launch in self.launches.iter_mut().filter(|l| l.term == id) {
-                    launch.output(Instant::now());
-                }
-                if let Some(t) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
-                    t.feed(&bytes);
-                    for text in t.emulator.take_copied() {
-                        copy(&mut self.host_writes, &mut self.toast, &text);
-                    }
-                }
-            }
-            AppEvent::Input(_) => {}
         }
         Ok(())
+    }
+
+    fn handle_input(&mut self, event: Event, area: Rect) -> Result<()> {
+        match event {
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_key(key, area)?,
+            Event::Mouse(ev) => self.handle_mouse(ev, area)?,
+            Event::Paste(text) => self.handle_paste(&text),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn output(&mut self, id: u64, bytes: &[u8]) {
+        for launch in self.launches.iter_mut().filter(|l| l.term == id) {
+            launch.output(Instant::now());
+        }
+        if let Some(t) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) {
+            t.feed(bytes);
+            for text in t.emulator.take_copied() {
+                copy(&mut self.host_writes, &mut self.toast, &text);
+            }
+        }
     }
 
     pub fn set_issue_cache(&mut self, path: PathBuf) {

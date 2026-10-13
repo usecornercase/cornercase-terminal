@@ -18,7 +18,7 @@ fn release() -> Release {
 fn found(install: Install) -> (App, Receiver<AppEvent>) {
     let (mut app, rx) = empty_app();
     app.updates.install = install;
-    app.handle_event(AppEvent::UpdateChecked(Ok(Some(release()))), AREA).expect("handle check");
+    app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(release())))), AREA).expect("handle check");
     (app, rx)
 }
 
@@ -95,7 +95,7 @@ fn a_newer_release_shows_a_button_and_a_toast() {
 #[test]
 fn nothing_new_shows_nothing() {
     let (mut app, _rx) = empty_app();
-    app.handle_event(AppEvent::UpdateChecked(Ok(None)), AREA).expect("handle check");
+    app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(None))), AREA).expect("handle check");
     assert_eq!((app.update_label(), toast(&app)), (None, None));
 }
 
@@ -143,7 +143,7 @@ fn the_wheel_scrolls_long_notes() {
 fn the_restart_list_starts_at_its_top() {
     let (mut app, _rx) = scrolled_notes();
 
-    app.handle_event(AppEvent::Updated(Ok(())), AREA).expect("handle the update");
+    app.handle_event(AppEvent::Update(UpdateEvent::Installed(Ok(()))), AREA).expect("handle the update");
 
     assert_eq!((step(&app), app.update_scroll), (Some(&UpdateStep::Installed), 0));
 }
@@ -179,7 +179,7 @@ fn a_finished_update_offers_a_restart() {
     open(&mut app);
     app.overlay = Some(Overlay::Update(UpdateStep::Updating));
 
-    app.handle_event(AppEvent::Updated(Ok(())), AREA).expect("handle update");
+    app.handle_event(AppEvent::Update(UpdateEvent::Installed(Ok(()))), AREA).expect("handle update");
     submit(&mut app);
 
     assert_eq!(app.take_restart(), Some(PathBuf::from("/opt/cc/bin/cornercase")));
@@ -191,7 +191,8 @@ fn a_failed_update_can_be_tried_again() {
     let (mut app, _rx) = found(replaced());
     app.overlay = Some(Overlay::Update(UpdateStep::Updating));
 
-    app.handle_event(AppEvent::Updated(Err(Error::Api("no network".into()))), AREA).expect("handle update");
+    app.handle_event(AppEvent::Update(UpdateEvent::Installed(Err(Error::Api("no network".into())))), AREA)
+        .expect("handle update");
 
     assert_eq!(step(&app), Some(&UpdateStep::Failed("no network".into())));
     assert_eq!(app.overlay.as_ref().map(Overlay::submit_label), Some(RETRY_UPDATE_SUBMIT));
@@ -236,12 +237,12 @@ fn a_later_release_replaces_the_one_shown_and_says_so_again() {
     app.toast = None;
     let later = update::release(&serde_json::json!({"tag_name": "v9.1.0", "assets": []})).expect("a release");
 
-    app.handle_event(AppEvent::UpdateChecked(Ok(Some(later.clone()))), AREA).expect("handle check");
+    app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(later.clone())))), AREA).expect("handle check");
     assert_eq!(app.update_label().as_deref(), Some("↑ 9.1.0"));
     assert_eq!(toast(&app), Some(UPDATE_AVAILABLE));
 
     app.toast = None;
-    app.handle_event(AppEvent::UpdateChecked(Ok(Some(later))), AREA).expect("handle check");
+    app.handle_event(AppEvent::Update(UpdateEvent::Checked(Ok(Some(later)))), AREA).expect("handle check");
     assert_eq!(toast(&app), None);
 }
 

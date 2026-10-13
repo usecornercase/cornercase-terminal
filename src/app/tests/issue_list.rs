@@ -674,7 +674,7 @@ mod jira {
         let key = s.app.cache_key(Source::Jira, browser(&s.app).project, &browser(&s.app).query(Source::Jira));
 
         s.app.set_config(Config { jira_site: "other.atlassian.net".into(), ..s.app.config.clone() });
-        answer(&mut s, |e| matches!(e, AppEvent::IssuesLoaded { source: Source::Jira, .. }));
+        answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::Listed { source: Source::Jira, .. })));
 
         assert_eq!((s.app.accounts.get(&Source::Jira), s.app.issue_cache.get(&key)), (None, None));
     }
@@ -685,7 +685,7 @@ mod jira {
 
         s.app.check_token(Source::Jira, Secret("t0k".into()));
         s.app.set_config(Config { jira_email: "bo@acme.dev".into(), ..s.app.config.clone() });
-        answer(&mut s, |e| matches!(e, AppEvent::TokenChecked { .. }));
+        answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::TokenChecked { .. })));
 
         assert_eq!(secrets::read(&secrets_file(&s), "jira_api_token"), None);
     }
@@ -699,7 +699,7 @@ mod jira {
         let account = Account { handle: "Ana".into(), workspace: "acme.atlassian.net".into() };
 
         s.app.token_checked(Source::Jira, &Secret("new".into()), Ok(account), AREA).expect("save the new token");
-        answer(&mut s, |e| matches!(e, AppEvent::IssuesLoaded { source: Source::Jira, .. }));
+        answer(&mut s, |e| matches!(e, AppEvent::Issues(IssueEvent::Listed { source: Source::Jira, .. })));
 
         assert_eq!(s.app.issue_cache.get(&key), None);
     }
@@ -800,7 +800,7 @@ mod plane {
         let result = std::iter::once(event)
             .chain(std::iter::from_fn(|| s.rx.recv_timeout(Duration::from_secs(10)).ok()))
             .find_map(|event| match event {
-                AppEvent::TokenChecked { result, .. } => Some(result),
+                AppEvent::Issues(IssueEvent::TokenChecked { result, .. }) => Some(result),
                 _ => None,
             })
             .expect("a token check");

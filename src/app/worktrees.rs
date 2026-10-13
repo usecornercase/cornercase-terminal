@@ -35,7 +35,51 @@ pub(super) enum Check {
     Changed,
 }
 
+#[derive(Debug)]
+pub enum WorktreeEvent {
+    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
+    Removed { project: u64, workspace: u64, result: Result<()>, request: Option<u64> },
+    Behind { project: u64, behind: Vec<(u64, u32)> },
+}
+
+impl WorktreeEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Created { .. } => "worktree created",
+            Self::Checked { .. } => "worktree checked",
+            Self::Removed { .. } => "worktree removed",
+            Self::Behind { .. } => "behind",
+        }
+    }
+}
+
 impl App {
+    pub(super) fn worktree_answered(&mut self, event: WorktreeEvent, area: Rect) -> Result<()> {
+        match event {
+            WorktreeEvent::Created { project, result, request: Some(key), .. } => {
+                self.worktree_ready(key, project, result, area);
+            }
+            WorktreeEvent::Created { project, result, start, request: None } => {
+                self.worktree_created(project, result, start, area)?;
+            }
+            WorktreeEvent::Checked { project, workspace, status, request: Some(key) } => {
+                self.removal_checked(key, project, workspace, &status);
+            }
+            WorktreeEvent::Checked { project, workspace, status, request: None } => {
+                self.worktree_checked(project, workspace, status);
+            }
+            WorktreeEvent::Removed { project, workspace, result, request: Some(key) } => {
+                self.worktree_gone(key, project, workspace, result);
+            }
+            WorktreeEvent::Removed { project, workspace, result, request: None } => {
+                self.worktree_removed(project, workspace, result);
+            }
+            WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
+        }
+        Ok(())
+    }
+
     pub(super) fn count_behind(&mut self, now: Instant) {
         let Some(fetch_every) = self.config.fetch_every() else {
             self.projects.iter_mut().flat_map(|p| &mut p.workspaces).for_each(|w| w.behind = 0);
@@ -68,7 +112,7 @@ impl App {
                 move || Ok(upstream::check(&repo, &checking, fetch)),
                 move |behind, _| {
                     let behind = behind.unwrap_or_else(|_| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
-                    Some(AppEvent::Behind { project: id, behind })
+                    Some(AppEvent::Worktree(WorktreeEvent::Behind { project: id, behind }))
                 },
             );
         }
@@ -123,7 +167,7 @@ impl App {
         self.spawn_job(
             job,
             move || worktree::create(&repo, &branch, &path).map(|()| path),
-            move |result, _| Some(AppEvent::WorktreeCreated { project: id, result, start, request }),
+            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Created { project: id, result, start, request })),
         );
     }
 
@@ -233,7 +277,7 @@ impl App {
                 job.note("changed", status.as_ref().map_or(true, |s| s.changed));
                 job.note("locked", status.as_ref().is_ok_and(|s| s.lock.is_some()));
                 let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
-                Some(AppEvent::WorktreeChecked { project: id, workspace, status, request })
+                Some(AppEvent::Worktree(WorktreeEvent::Checked { project: id, workspace, status, request }))
             },
         );
     }
@@ -291,7 +335,7 @@ impl App {
         self.spawn_job(
             job,
             move || worktree::remove(&repo, &path, force, unlock),
-            move |result, _| Some(AppEvent::WorktreeRemoved { project, workspace, result, request }),
+            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Removed { project, workspace, result, request })),
         );
         true
     }

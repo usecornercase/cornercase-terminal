@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
+use crate::app::changes_panel::ChangesEvent;
 use crate::app::event::AppEvent;
 use crate::app::input::WHEEL_ROWS;
 use crate::app::overlay::Overlay;
@@ -20,7 +21,7 @@ impl App {
             move || Ok((changes::git::branches(&dir), changes::git::default_base(&dir))),
             move |result, _| {
                 let (branches, default) = result.ok()?;
-                Some(AppEvent::Branches { workspace, branches, default })
+                Some(AppEvent::Changes(ChangesEvent::Branches { workspace, branches, default }))
             },
         );
     }

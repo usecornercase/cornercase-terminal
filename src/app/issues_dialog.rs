@@ -17,7 +17,7 @@ use crate::issues::browser::{
 };
 use crate::issues::cache::Key as CacheKey;
 use crate::issues::{
-    self, Account, Client, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
+    self, Account, Client, Detail, Issue, Listed, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
 use crate::launch::{self};
 use crate::list::Search;
@@ -46,7 +46,58 @@ impl Apis {
     }
 }
 
+#[derive(Debug)]
+pub enum IssueEvent {
+    Listed { project: u64, source: Source, epoch: u64, query: Query, result: Result<Listed> },
+    Read { source: Source, epoch: u64, key: String, result: Result<Detail> },
+    TokenChecked { source: Source, epoch: u64, token: Secret, result: Result<Account> },
+    People { project: u64, source: Source, epoch: u64, result: Result<Vec<Person>> },
+}
+
+impl IssueEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Listed { .. } => "issues loaded",
+            Self::Read { .. } => "issue read",
+            Self::TokenChecked { .. } => "token checked",
+            Self::People { .. } => "people loaded",
+        }
+    }
+}
+
 impl App {
+    pub(super) fn issue_answered(&mut self, event: IssueEvent, area: Rect) -> Result<()> {
+        match event {
+            IssueEvent::Listed { project, source, epoch, query, result } => {
+                if epoch == self.epoch(source) {
+                    self.issues_loaded(project, source, &query, result);
+                }
+            }
+            IssueEvent::Read { source, epoch, key, result } => {
+                let current = epoch == self.epoch(source);
+                if let Some(Overlay::Issues(b)) = &mut self.overlay
+                    && current
+                {
+                    b.read_done(source, &key, result.map_err(|e| e.to_string()));
+                }
+            }
+            IssueEvent::TokenChecked { source, epoch, token, result } => {
+                let result = if epoch == self.epoch(source) {
+                    result
+                } else {
+                    Err(Error::Api(format!("the {} settings changed during the check", source.name())))
+                };
+                self.token_checked(source, &token, result, area)?;
+            }
+            IssueEvent::People { project, source, epoch, result } => {
+                if epoch == self.epoch(source) {
+                    self.people_loaded(project, source, result);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn issues_available(&self) -> bool {
         self.project().is_some()
     }
@@ -278,7 +329,7 @@ impl App {
         self.spawn_job(
             job,
             move || client.people(),
-            move |result, _| Some(AppEvent::PeopleLoaded { project, source, epoch, result }),
+            move |result, _| Some(AppEvent::Issues(IssueEvent::People { project, source, epoch, result })),
         );
     }
 
@@ -316,7 +367,7 @@ impl App {
         self.spawn_job(
             job,
             move || client.list(&listing),
-            move |result, _| Some(AppEvent::IssuesLoaded { project, source, epoch, query, result }),
+            move |result, _| Some(AppEvent::Issues(IssueEvent::Listed { project, source, epoch, query, result })),
         );
     }
 
@@ -357,7 +408,9 @@ impl App {
             });
             Ok(detail)
         };
-        self.spawn_job(job, read, move |result, _| Some(AppEvent::IssueRead { source, epoch, key, result }));
+        self.spawn_job(job, read, move |result, _| {
+            Some(AppEvent::Issues(IssueEvent::Read { source, epoch, key, result }))
+        });
     }
 
     fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
@@ -398,12 +451,12 @@ impl App {
             Ok(client) => client,
             Err(message) => {
                 let epoch = self.epoch(source);
-                let _ = self.tx.send(AppEvent::TokenChecked {
+                let _ = self.tx.send(AppEvent::Issues(IssueEvent::TokenChecked {
                     source,
                     epoch,
                     token,
                     result: Err(Error::Api(message.into())),
-                });
+                }));
                 return;
             }
         };
@@ -412,7 +465,7 @@ impl App {
         self.spawn_job(
             job,
             move || client.whoami(),
-            move |result, _| Some(AppEvent::TokenChecked { source, epoch, token, result }),
+            move |result, _| Some(AppEvent::Issues(IssueEvent::TokenChecked { source, epoch, token, result })),
         );
     }
 

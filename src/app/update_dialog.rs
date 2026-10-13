@@ -38,7 +38,29 @@ pub(super) enum UpdateStep {
     Manual(&'static str),
 }
 
+#[derive(Debug)]
+pub enum UpdateEvent {
+    Checked(Result<Option<Release>>),
+    Installed(Result<()>),
+}
+
+impl UpdateEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Checked(_) => "update checked",
+            Self::Installed(_) => "updated",
+        }
+    }
+}
+
 impl App {
+    pub(super) fn update_answered(&mut self, event: UpdateEvent) {
+        match event {
+            UpdateEvent::Checked(result) => self.update_checked(result),
+            UpdateEvent::Installed(result) => self.updated(result),
+        }
+    }
+
     pub(super) fn check_updates(&mut self, now: Instant) {
         if !self.config.check_updates || !self.updates.due(now) {
             return;
@@ -50,7 +72,7 @@ impl App {
             Ok(found.map(|release| update::with_changelog(release, version::CURRENT)))
         };
         let job = Job::new(Level::Info, "update", "check");
-        self.spawn_job(job, check, |found, _| Some(AppEvent::UpdateChecked(found)));
+        self.spawn_job(job, check, |found, _| Some(AppEvent::Update(UpdateEvent::Checked(found))));
     }
 
     pub(super) fn update_checked(&mut self, result: Result<Option<Release>>) {
@@ -145,7 +167,7 @@ impl App {
                 self.spawn_job(
                     job,
                     move || update::update(&release, target, &exe),
-                    |result, _| Some(AppEvent::Updated(result)),
+                    |result, _| Some(AppEvent::Update(UpdateEvent::Installed(result))),
                 );
                 Some(Overlay::Update(UpdateStep::Updating))
             }
