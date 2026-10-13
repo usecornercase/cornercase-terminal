@@ -54,7 +54,7 @@ Each client has its own writer thread, so a slow client never blocks the loop. A
 
 Geometry functions such as `ui::layout`, `entry_row`, `workspace_row`, `form_buttons` and `picker_item` are shared by drawing and hit testing, so a click lands exactly on what was drawn, and tests take their click positions from the same functions.
 
-Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::compact_layout` reuses the same areas with a top bar and three-row bands.
+Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::layout::compact_layout` reuses the same areas with a top bar and three-row bands.
 
 ## Terminal emulation
 
@@ -89,7 +89,8 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `log.rs` | `server.log`: levels, the `key=value` line format, the writer thread and its rotation, background job timings, and `cornercase logs`. `app/trace.rs` logs what changed in the app after each step of the server loop. |
 | `protocol.rs` | Messages, framing, socket and lock paths, build id. |
 | `app.rs`, `app/` | `App` state, construction, server-facing methods, refresh and event dispatch, and drawing the `View` stay in `app.rs`. Children wire each concern: layout and input, hierarchy and tabs, sidebar and pane interaction, agent watching and launches, worktrees, panels and dialogs. `app/event.rs` defines `AppEvent` and `Start`, re-exported by `app.rs`. `app/control.rs` answers commands and keeps their waits; `events.rs`, `trace.rs`, `images.rs`, `shortcuts.rs` and `remote_access.rs` keep their existing jobs. |
-| `ui.rs` | Layout, hit testing and drawing from a plain `View`; `ui/tab_bar.rs` lays out and draws the tab bar above the pane. |
+| `ui.rs` | A plain `View`, `draw()` and the re-exports of `ui/`. |
+| `ui/*.rs` | One file per part of the screen with its view types, layout, hit testing and drawing: `sidebar`, `workspaces`, `tree`, `agents_section`, `drop`, `chrome`, `pane`, `toast`, `dialog` (and `dialog/`), plus the shared `theme`, `widgets`, `text`, `layout`, `widths` and `rows`; `tab_bar.rs` lays out and draws the tab bar above the pane. |
 | `project.rs` | Project › workspace › tab › panes, labels, removal. |
 | `split.rs` | A tab's split tree: rects, dividers, splitting, removing, ratios. |
 | `term.rs` | A shell in a PTY, its emulator, and the reader thread. |

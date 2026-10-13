@@ -1,0 +1,539 @@
+use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
+use ratatui::widgets::{Block, Borders};
+
+use super::agents_section::AGENTS_LABEL;
+use super::chrome::{BACK_LABEL, TODO_LABEL};
+use super::files;
+use super::rows::GAP;
+use super::tab_bar;
+use super::widgets::button_width;
+use super::widths::{MIN_STACK_SECTION, PANE_PADDING, Widths};
+
+pub const COMPACT_WIDTH: u16 = 90;
+
+pub const COMPACT_PITCH: u16 = 3;
+
+const STACK_FOOTER: u16 = 6;
+
+pub(super) const COMPACT_BUTTON_WIDTH: u16 = 7;
+
+pub(super) const HEADER_HEIGHT: u16 = 2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Border {
+    Projects,
+    Workspaces,
+    Stack,
+    Agents,
+    Changes,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Sidebar {
+    SideBySide,
+    #[default]
+    ProjectsOnTop,
+    WorkspacesOnTop,
+    Tree,
+}
+
+impl Sidebar {
+    pub const ALL: [Self; 4] = [Self::SideBySide, Self::ProjectsOnTop, Self::WorkspacesOnTop, Self::Tree];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::SideBySide => "side_by_side",
+            Self::ProjectsOnTop => "projects_on_top",
+            Self::WorkspacesOnTop => "workspaces_on_top",
+            Self::Tree => "tree",
+        }
+    }
+
+    fn note(self) -> &'static str {
+        match self {
+            Self::SideBySide => "projects and workspaces in two columns",
+            Self::ProjectsOnTop => "one column, workspaces below projects",
+            Self::WorkspacesOnTop => "one column, projects below workspaces",
+            Self::Tree => "one list: projects, workspaces and tabs",
+        }
+    }
+
+    pub fn choices() -> Vec<(&'static str, &'static str)> {
+        Self::ALL.into_iter().map(|s| (s.id(), s.note())).collect()
+    }
+
+    pub fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+
+    pub fn stacked(self) -> bool {
+        self != Self::SideBySide
+    }
+}
+
+fn from_setting<T: Copy + Default>(all: &[T], id: fn(T) -> &'static str, setting: &str) -> T {
+    all.iter().copied().find(|s| id(*s).eq_ignore_ascii_case(setting.trim())).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Tabs {
+    #[default]
+    Sidebar,
+    Top,
+}
+
+impl Tabs {
+    pub const ALL: [Self; 2] = [Self::Sidebar, Self::Top];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Sidebar => "sidebar",
+            Self::Top => "top",
+        }
+    }
+
+    pub fn choices() -> Vec<(&'static str, &'static str)> {
+        let note = |t: Self| match t {
+            Self::Sidebar => "under their workspace in the sidebar",
+            Self::Top => "in a bar above the pane, only the active workspace's",
+        };
+        Self::ALL.into_iter().map(|t| (t.id(), note(t))).collect()
+    }
+
+    pub fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+}
+
+pub(super) const STACKED_KEEP: u16 = 2 * MIN_STACK_SECTION + 1;
+
+pub(super) fn split_agents(r: Rect, widths: Widths, keep: u16) -> [Rect; 3] {
+    let room = r.height.saturating_sub(1);
+    let rows = widths.agents_rows(room, keep);
+    let rest = Rect { height: room - rows, ..r };
+    let line = Rect { y: rest.bottom(), height: r.height.min(1), ..r };
+    let agents = Rect { y: line.bottom(), height: rows, ..r };
+    [rest, line, agents]
+}
+
+pub(super) fn stack_room(column: Rect) -> Rect {
+    let y = column.y.saturating_add(HEADER_HEIGHT).min(column.bottom());
+    Rect { y, height: column.bottom().saturating_sub(y).saturating_sub(STACK_FOOTER + 1), ..column }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Nav {
+    Projects,
+    Workspaces,
+    Agents,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Areas {
+    pub pitch: u16,
+    pub tree: bool,
+    pub bar: Rect,
+    pub search: Rect,
+    pub search_button: Rect,
+    pub back: Rect,
+    pub sidebar: Rect,
+    pub title: Rect,
+    pub list: Rect,
+    pub separator: Rect,
+    pub settings: Rect,
+    pub usage: Rect,
+    pub quit: Rect,
+    pub workspaces: Rect,
+    pub workspaces_title: Rect,
+    pub workspaces_list: Rect,
+    pub workspaces_separator: Rect,
+    pub issues: Rect,
+    pub results: Rect,
+    pub pane: Rect,
+    pub projects_border: Rect,
+    pub workspaces_border: Rect,
+    pub stack_border: Rect,
+    pub agents: Rect,
+    pub agents_title: Rect,
+    pub agents_list: Rect,
+    pub agents_border: Rect,
+    pub agents_button: Rect,
+    pub changes: Rect,
+    pub changes_border: Rect,
+    pub changes_button: Rect,
+    pub todo_button: Rect,
+    pub files_button: Rect,
+    pub tab_bar: Rect,
+}
+
+impl Areas {
+    pub fn border(&self, border: Border) -> Rect {
+        match border {
+            Border::Projects => self.projects_border,
+            Border::Workspaces => self.workspaces_border,
+            Border::Stack => self.stack_border,
+            Border::Agents => self.agents_border,
+            Border::Changes => self.changes_border,
+        }
+    }
+
+    pub fn border_hit(&self, pos: Position) -> Option<Border> {
+        [Border::Projects, Border::Workspaces, Border::Stack, Border::Agents, Border::Changes]
+            .into_iter()
+            .find(|&b| self.border(b).contains(pos))
+    }
+
+    pub fn compact(&self) -> bool {
+        !self.bar.is_empty()
+    }
+
+    pub fn todo_dot(&self) -> Option<Rect> {
+        let r = self.todo_button;
+        let x = r.x.checked_sub(1).filter(|&x| !self.compact() && x > self.files_button.right())?;
+        Some(Rect { x, width: 1, ..r })
+    }
+
+    #[must_use]
+    pub fn with_tab_bar(self, shown: bool) -> Self {
+        if !shown || self.compact() {
+            return self;
+        }
+        let height = tab_bar::HEIGHT.min(self.pane.height);
+        let pane = Rect { y: self.pane.y + height, height: self.pane.height - height, ..self.pane };
+        Self { tab_bar: Rect { height, ..self.pane }, pane, ..self }
+    }
+
+    #[must_use]
+    pub fn shown(self, nav: Option<Nav>) -> Self {
+        if !self.compact() {
+            return self;
+        }
+        let hidden = Rect::default();
+        let projects = if nav == Some(Nav::Projects) {
+            self
+        } else {
+            Self {
+                sidebar: hidden,
+                title: hidden,
+                list: hidden,
+                separator: hidden,
+                settings: hidden,
+                usage: hidden,
+                quit: hidden,
+                agents_button: hidden,
+                ..self
+            }
+        };
+        let workspaces = if nav == Some(Nav::Workspaces) {
+            projects
+        } else {
+            Self {
+                workspaces: hidden,
+                workspaces_title: hidden,
+                workspaces_list: hidden,
+                workspaces_separator: hidden,
+                issues: hidden,
+                back: if nav == Some(Nav::Agents) { projects.back } else { hidden },
+                ..projects
+            }
+        };
+        if nav == Some(Nav::Agents) {
+            workspaces
+        } else {
+            Self { agents: hidden, agents_title: hidden, agents_list: hidden, ..workspaces }
+        }
+    }
+}
+
+fn right_edge(r: Rect) -> Rect {
+    Rect::new(r.right().saturating_sub(1), r.y, r.width.min(1), r.height)
+}
+
+fn sidebar_block() -> Block<'static> {
+    Block::default().borders(Borders::RIGHT)
+}
+
+fn projects_column(r: Rect) -> [Rect; 6] {
+    let [title, _, list, separator, settings, usage, quit] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(GAP),
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(r);
+    [title, list, separator, settings, usage, quit]
+}
+
+fn workspaces_column(r: Rect) -> [Rect; 5] {
+    let [title, _, list, separator, issues, todo, _] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(GAP),
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(r);
+    [title, list, separator, issues, todo]
+}
+
+fn below_header(r: Rect) -> Rect {
+    Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)]).areas::<2>(r)[1]
+}
+
+pub fn layout(area: Rect, widths: Widths) -> Areas {
+    layout_with(area, widths, false, Sidebar::SideBySide)
+}
+
+pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) -> Areas {
+    full_layout(area, widths, changes, sidebar, false)
+}
+
+pub fn full_layout(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar, agents: bool) -> Areas {
+    if area.width < COMPACT_WIDTH {
+        return compact_layout(area, changes, agents);
+    }
+    let columns = |r: Rect| match sidebar {
+        Sidebar::SideBySide => wide_layout(r, widths, agents),
+        Sidebar::Tree => tree_layout(r, widths, agents),
+        Sidebar::ProjectsOnTop | Sidebar::WorkspacesOnTop => stacked_layout(r, widths, sidebar, agents),
+    };
+    if !changes {
+        return columns(area);
+    }
+    let [main, panel] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(widths.changes_width(area.width))]).areas(area);
+    let border = Rect { width: panel.width.min(1), ..panel };
+    let content = Rect { x: panel.x.saturating_add(1), width: panel.width.saturating_sub(1), ..panel };
+    Areas { changes: content, changes_border: border, ..columns(main) }
+}
+
+fn search_area(header: Rect) -> Rect {
+    Rect { height: header.height.min(1), ..header }.inner(Margin::new(1, 0))
+}
+
+fn agents_section(r: Rect, widths: Widths, keep: u16, agents: bool) -> (Rect, Areas) {
+    if !agents {
+        return (r, Areas::default());
+    }
+    let [rest, line, section_rect] = split_agents(r, widths, keep);
+    let [agents_title, agents_list] = section(section_rect);
+    let areas = Areas { agents: section_rect, agents_title, agents_list, agents_border: line, ..Areas::default() };
+    (rest, areas)
+}
+
+fn wide_layout(area: Rect, widths: Widths, agents: bool) -> Areas {
+    let Widths { projects, workspaces, .. } = widths.fit(area.width);
+    let [columns, _, pane] = Layout::horizontal([
+        Constraint::Length(projects + workspaces),
+        Constraint::Length(PANE_PADDING),
+        Constraint::Min(1),
+    ])
+    .areas(area);
+    let [left, workspaces] =
+        Layout::horizontal([Constraint::Length(projects), Constraint::Length(workspaces)]).areas(columns);
+    let [header, results] = Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)])
+        .areas(Rect { width: columns.width.saturating_sub(1), ..columns });
+    let search = search_area(header);
+    let sidebar = below_header(left);
+    let [title, list, separator, settings, usage, quit] = projects_column(sidebar_block().inner(sidebar));
+    let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
+    let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
+    let [title, list] = if agents { section(lists) } else { [title, list] };
+    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
+        workspaces_column(below_header(sidebar_block().inner(workspaces)));
+    Areas {
+        pitch: 1,
+        tree: false,
+        bar: Rect::default(),
+        search,
+        search_button: search,
+        back: Rect::default(),
+        sidebar,
+        title,
+        list,
+        separator,
+        settings,
+        usage,
+        quit,
+        workspaces,
+        workspaces_title,
+        workspaces_list,
+        workspaces_separator,
+        issues,
+        results,
+        pane,
+        projects_border: right_edge(sidebar),
+        workspaces_border: right_edge(workspaces),
+        stack_border: Rect::default(),
+        changes: Rect::default(),
+        changes_border: Rect::default(),
+        changes_button: Rect::default(),
+        todo_button: changes_button(todo, TODO_LABEL),
+        files_button: files_button(todo),
+        ..agents_areas
+    }
+}
+
+fn section(r: Rect) -> [Rect; 2] {
+    let [title, _, list] =
+        Layout::vertical([Constraint::Length(1), Constraint::Length(GAP), Constraint::Min(0)]).areas(r);
+    [title, list]
+}
+
+fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool) -> (Areas, Rect) {
+    let column = Rect { width: widths.stacked_width(area.width), ..area };
+    let pane_x = column.right().saturating_add(PANE_PADDING).min(area.right());
+    let pane = Rect { x: pane_x, width: area.right() - pane_x, ..area };
+    let inner = sidebar_block().inner(column);
+    let [header, results] = Layout::vertical([Constraint::Length(HEADER_HEIGHT), Constraint::Min(0)]).areas(inner);
+    let search = search_area(header);
+    let room = stack_room(inner);
+    let footer_y = inner.bottom().saturating_sub(STACK_FOOTER).max(room.y);
+    let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
+    let [separator, issues, todo, settings, usage, quit] = Layout::vertical([Constraint::Length(1); 6]).areas(footer);
+    let frame = Areas {
+        pitch: 1,
+        search,
+        search_button: search,
+        sidebar: column,
+        separator,
+        settings,
+        usage,
+        quit,
+        issues,
+        results,
+        pane,
+        projects_border: right_edge(column),
+        todo_button: changes_button(todo, TODO_LABEL),
+        files_button: files_button(todo),
+        ..Areas::default()
+    };
+    let (sections, section) = agents_section(Rect { height: footer_y - room.y, ..room }, widths, keep, agents);
+    let frame = Areas {
+        agents: Rect { x: column.x, width: column.width, ..section.agents },
+        agents_title: section.agents_title,
+        agents_list: section.agents_list,
+        agents_border: section.agents_border,
+        ..frame
+    };
+    (frame, sections)
+}
+
+fn stacked_layout(area: Rect, widths: Widths, sidebar: Sidebar, agents: bool) -> Areas {
+    let (frame, sections) = one_column(area, widths, STACKED_KEEP, agents);
+    let room = Rect { height: sections.height.saturating_sub(1), ..sections };
+    let top_rows = widths.top_rows(room.height);
+    let top = Rect { height: top_rows, ..room }.intersection(sections);
+    let line = Rect { y: room.y + top_rows, height: 1, ..room }.intersection(sections);
+    let under = Rect { y: room.y + top_rows + 1, height: room.height - top_rows, ..room }.intersection(sections);
+    let (projects, workspaces) = if sidebar == Sidebar::WorkspacesOnTop { (under, top) } else { (top, under) };
+    let [title, list] = section(projects);
+    let [workspaces_title, workspaces_list] = section(workspaces);
+    let widen = |r: Rect| Rect { x: frame.sidebar.x, width: frame.sidebar.width, ..r };
+    Areas {
+        sidebar: widen(projects),
+        title,
+        list,
+        workspaces: widen(workspaces),
+        workspaces_title,
+        workspaces_list,
+        stack_border: line,
+        ..frame
+    }
+}
+
+fn tree_layout(area: Rect, widths: Widths, agents: bool) -> Areas {
+    let (frame, sections) = one_column(area, widths, MIN_STACK_SECTION, agents);
+    let [title, list] = section(sections);
+    Areas {
+        tree: true,
+        sidebar: Rect { x: frame.sidebar.x, width: frame.sidebar.width, ..sections },
+        title,
+        list,
+        ..frame
+    }
+}
+
+fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
+    let pitch = COMPACT_PITCH;
+    let [bar, below] = Layout::vertical([Constraint::Length(pitch), Constraint::Min(0)]).areas(area);
+    let search_width = COMPACT_BUTTON_WIDTH.min(bar.width);
+    let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
+    let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
+    let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
+    let files_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
+    let files_button = Rect { x: todo_button.x - files_width, width: files_width, ..bar };
+    let changes_width = COMPACT_BUTTON_WIDTH.min(files_button.x.saturating_sub(bar.x));
+    let changes_button = Rect { x: files_button.x - changes_width, width: changes_width, ..bar };
+    let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
+    let column = |footer: u16| {
+        Layout::vertical([
+            Constraint::Length(pitch),
+            Constraint::Length(GAP),
+            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(footer),
+        ])
+        .areas::<5>(menu)
+    };
+    let [title, _, list, separator, footer] = column(pitch);
+    let [settings, usage, quit] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1)]).areas(footer);
+    let [workspaces_title, _, workspaces_list, workspaces_separator, issues] = column(pitch);
+    let back = Rect { width: button_width(BACK_LABEL) + 2, ..workspaces_title }.intersection(workspaces_title);
+    let [agents_title, _, agents_list] =
+        Layout::vertical([Constraint::Length(pitch), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
+    let agents_width = (button_width(AGENTS_LABEL) + 2).min(title.width);
+    let agents_button = Rect { x: title.right() - agents_width, width: agents_width, ..title };
+    let shown = |r: Rect| if agents { r } else { Rect::default() };
+    Areas {
+        pitch,
+        tree: false,
+        bar,
+        search: bar,
+        search_button,
+        back,
+        sidebar: below,
+        title,
+        list,
+        separator,
+        settings,
+        usage,
+        quit,
+        workspaces: below,
+        workspaces_title,
+        workspaces_list,
+        workspaces_separator,
+        issues,
+        results: below,
+        pane: below,
+        projects_border: Rect::default(),
+        workspaces_border: Rect::default(),
+        stack_border: Rect::default(),
+        agents: shown(below),
+        agents_title: shown(agents_title),
+        agents_list: shown(agents_list),
+        agents_border: Rect::default(),
+        agents_button: shown(agents_button),
+        changes: if changes { below } else { Rect::default() },
+        changes_border: Rect::default(),
+        changes_button,
+        todo_button,
+        files_button,
+        tab_bar: Rect::default(),
+    }
+}
+
+pub fn changes_button(issues: Rect, label: &str) -> Rect {
+    let width = button_width(label);
+    Rect { x: issues.right().saturating_sub(width + 1), width, ..issues }.intersection(issues)
+}
+
+pub fn files_button(row: Rect) -> Rect {
+    Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
+}

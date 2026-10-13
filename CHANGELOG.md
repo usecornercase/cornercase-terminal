@@ -6,9 +6,17 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The tests of changes, context, files, graphics, issues, todo, usage and web moved into files of their own.
 
+## 0.12.49
+
+- No changes in the app. The code that draws the screen moved from ui.rs into one file per part of it.
+
 ## 0.12.48
 
 - No changes in the app. The tests of the modules at the top of src moved into files of their own.
+
+## 0.12.47
+
+- No changes in the app. The code that draws the screen moved from ui.rs into one file per part of it.
 
 ## 0.12.46
 
