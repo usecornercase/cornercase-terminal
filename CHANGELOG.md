@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The code of cli.rs and client.rs moved into files of their own.
 
+## 0.12.52
+
+- No changes in the app. The code that answers commands for scripts and agents moved from app/control.rs into one file per family of requests.
+
 ## 0.12.51
 
 - No changes in the app. Helpers that several parts share (the version, file locations, times, saving files, cutting text, lists, HTTP) moved into small modules of their own.
