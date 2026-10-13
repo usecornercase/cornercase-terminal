@@ -63,7 +63,7 @@ src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser ac
 src/remote.rs     `cornercase remote`: the ssh command and the pipes it connects (`remote::Piped`), the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket, connecting through a function `cli` passes)
 src/server.rs     the daemon: owns App and every Term, accepts clients on a Unix socket, draws a ratatui frame per client; server/images.rs what each client's terminal holds of the image shown (kitty ids, iTerm2/sixel re-sends)
 src/protocol.rs   messages and length-prefixed postcard framing
-src/state.rs      the saved session as JSON, its Widths schema, migrations and mapping to the hierarchy
+src/state.rs      the saved session as JSON, its Widths schema, migrations and the mapping to and from the hierarchy (`ProjectState::of`/`restore`)
 src/restart.rs    what a server restart stops: running programs from a status Report, the confirmation texts
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/config.rs     user settings (config.json), Sidebar and Tabs choices, `~` expansion, validation
@@ -91,8 +91,8 @@ src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)
 src/graphics/     images in the files panel: mod.rs (Support, Missing, Picture), detect.rs (which protocol a client's terminal shows), decode.rs, encode.rs (fit, payloads), kitty.rs, iterm.rs, sixel.rs, tmux.rs (passthrough)
 src/files/        files panel: mod.rs (open folders, viewer, search bar and mode, jobs, tree marks and margin marks from the changes diff), disk.rs (one folder's listing with `ignore`, reading a file), search.rs (the workspace's file index, fuzzy names with nucleo, text with ripgrep's searcher), link.rs (the path under a pane click and where it points)
 src/syntax.rs     tree-sitter highlighting through arborium: which grammar a file gets, captures -> palette colours
-src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps)
-src/search.rs     global search: candidates and ranking
+src/changes/      changes panel: mod.rs (panel state, refresh pacing, folds, viewed, branch picker, tints), git.rs (git commands, base, merge-base), diff.rs (patch parser, word emphasis, highlighting), filter.rs (which files a path filter keeps), every.rs (the Every project targets and grouping)
+src/search.rs     global search: candidates (built from the hierarchy) and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid; stopping and reaping a child

@@ -125,9 +125,10 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `graphics/` | Images in the files panel: which protocol each window's terminal understands (`detect.rs`), decoding an image and fitting it to the panel (`decode.rs`, `encode.rs`), the bytes for kitty graphics, iTerm2 inline images and sixel (`kitty.rs`, `iterm.rs`, `sixel.rs`), and wrapping them for tmux (`tmux.rs`). |
 | `syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
-| `search.rs`, `picker.rs` | Global search; the folder picker. |
+| `search.rs`, `picker.rs` | Global search, whose candidates `search::candidates` builds from the hierarchy; the folder picker. |
+| `changes/every.rs` | The Every project view of the changes panel: which checkouts to scan and how their summaries group into one diff with headers. |
 | `settings.rs`, `app/settings_dialog.rs`, `config.rs`, `secrets.rs` | The settings modal's state and plain row, edit and pick texts; the app builds and hit-tests its UI view. `config.json` owns the `Sidebar` and `Tabs` choices; `secrets.json` stores tokens. |
-| `state.rs` | The saved session and its `Widths` schema, its migrations and mapping to the hierarchy. |
+| `state.rs` | The saved session and its `Widths` schema, its migrations and the mapping between the hierarchy and it (`ProjectState::of` and `restore`, and the same for workspaces and tabs). |
 | `update.rs` | The hourly check for a newer release on GitHub and its changelog; downloading, verifying and swapping the binary. |
 | `clipboard.rs` | OSC 52. |
 | `error.rs` | The library's error type. |
