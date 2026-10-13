@@ -72,7 +72,7 @@ pub(super) fn draw_toast(f: &mut Frame, view: &View, toast: Toast) {
     let icon = match toast.icon {
         ToastIcon::Check => Span::styled(TOAST_ICON, Style::default().fg(Color::Green)),
         ToastIcon::Agent(status) => {
-            let icon = status_icon(view.muted, status);
+            let icon = status_icon(view.muted, status, view.spin);
             Span::styled(format!(" {} ", icon.content), icon.style)
         }
         ToastIcon::Bug => Span::styled(BUG_ICON, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),

@@ -277,7 +277,7 @@ fn draw_tab(f: &mut Frame, view: &View, tab: &TabEntry, (r, bg): (Rect, Style), 
     let style = if marked { bg.fg(Color::White).add_modifier(Modifier::BOLD) } else { bg.fg(Color::Gray) };
     let mut line = vec![Span::styled(" ", bg)];
     let mut used = 1;
-    line.extend(tab.prefix(view.muted, bg));
+    line.extend(tab.prefix(view.muted, bg, view.spin));
     used += ICON_WIDTH;
     let others = others(tab);
     let reserved = others.as_ref().map_or(0, |n| 1 + n.chars().count());

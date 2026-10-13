@@ -437,6 +437,7 @@ export class App {
     this.follow();
     this.frame = new Painter(this, this.grid).draw();
     this.needsDraw = false;
+    this.spinIcons();
     return { grid: this.grid, cursor: this.frame.cursor };
   }
 
@@ -450,6 +451,16 @@ export class App {
 
   private awakeAt: number | null = null;
   private awakeCheck: (() => void) | null = null;
+  private spinTimer: (() => void) | null = null;
+
+  private spinIcons(): void {
+    const working = this.projects.some((p) => p.workspaces.some((w) => w.tabs.some((t) => tabStatus(t) === 'working')));
+    if (!working || this.spinTimer) return;
+    this.spinTimer = this.after(100, () => {
+      this.spinTimer = null;
+      this.dirty();
+    });
+  }
 
   private keepAwake(): void {
     const now = this.now();

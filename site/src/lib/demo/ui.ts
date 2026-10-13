@@ -102,17 +102,23 @@ interface Band {
 const DARK: Style = { fg: 8 };
 const CYAN: Style = { fg: 6 };
 const PRESSED: Style = { fg: 0, bg: 6, add: BOLD };
-const STATUS_ICONS: Record<Status, Seg> = {
+const SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+const SPIN_EVERY = 100;
+const STATUS_ICONS: Record<Exclude<Status, 'working'>, Seg> = {
   idle: seg('○', { fg: 8 }),
-  working: seg('◐', { fg: 3 }),
   done: seg('✓', { fg: 2, add: BOLD }),
   waiting: seg('!', { fg: 208, add: BOLD }),
 };
+const statusIcon = (status: Status, now: number): Seg => {
+  if (status !== 'working') return STATUS_ICONS[status];
+  const frame = Math.floor(now / SPIN_EVERY) % SPINNER.length;
+  return seg(SPINNER[frame], { fg: 3 });
+};
 const SHELL_ICON = seg('›', DARK);
 const PROGRAM_ICON = seg('▸', DARK);
-const tabIcon = (t: Tab): Seg => {
+const tabIcon = (t: Tab, now: number): Seg => {
   const status = tabStatus(t);
-  return status ? STATUS_ICONS[status] : tabRunning(t) ? PROGRAM_ICON : SHELL_ICON;
+  return status ? statusIcon(status, now) : tabRunning(t) ? PROGRAM_ICON : SHELL_ICON;
 };
 const BRAND = 99;
 const UNDO = 'undo';
@@ -346,7 +352,7 @@ export class Painter {
       if (isEmpty(r)) return;
       const active = tab === app.tab();
       const bg = this.rowBackground(r, active || dragged === t);
-      const icon = tabIcon(tab);
+      const icon = tabIcon(tab, app.now());
       const line: Line = [seg(' ', bg), { ...icon, s: { ...bg, ...icon.s } }, seg(' ', bg)];
       const count = tabOthers(tab.panes.length - 1);
       const room = Math.max(0, r.w - width(line) - 5 - (count ? 1 + count.length : 0));
@@ -540,7 +546,7 @@ export class Painter {
     const icon = rect(menu.x, menu.y, Math.min(7, menu.w), menu.h);
     const lit = !!app.nav || this.sidebarHovered(menu);
     const menuStyle = lit ? PRESSED : { fg: 6, bg: this.surface };
-    this.band(icon, menuLabel(app.attentionElsewhere(), icon.w, lit), menuStyle);
+    this.band(icon, menuLabel(app.attentionElsewhere(), app.now(), icon.w, lit), menuStyle);
     const crumbs = rect(right(icon) + 2, middle(menu).y, Math.max(0, menu.w - icon.w - 2), 1);
     this.line(crumbs, this.breadcrumb(crumbs.w), { bg: this.surface });
     this.region({ r: menu, click: () => app.toggleNav(), cursor: 'pointer' });
@@ -626,7 +632,7 @@ export class Painter {
     const badge = group.collapsed ? attention(app.projects.filter((p) => p.group === group.id).map(projectAttention)) : null;
     const room = this.room(b) - 2;
     const used = 2 + count.length;
-    const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - used);
+    const marks = fitTags(badge ? [statusIcon(badge, app.now())] : [], room - used);
     const max = room - used - marks.reserved;
     const line = [...b.lead, arrow(group.collapsed), this.groupHeader(group, max), seg(count, DARK)];
     pushTags(line, marks, used + [...truncateRight(group.name, max)].length, room);
@@ -643,7 +649,7 @@ export class Painter {
     const count = summary && app.config.counts ? ` (${project.workspaces.length})` : '';
     const room = this.room(b);
     const badge = summary ? projectAttention(project) : null;
-    const marks = fitTags(badge ? [STATUS_ICONS[badge]] : [], room - count.length);
+    const marks = fitTags(badge ? [statusIcon(badge, app.now())] : [], room - count.length);
     const name = truncateRight(projectLabel(project), room - count.length - marks.reserved);
     const line = [...b.lead, seg(name, p === app.active ? { fg: 15, add: BOLD } : { fg: 7 }), seg(count, DARK)];
     pushTags(line, marks, [...name].length + count.length, room);
@@ -663,7 +669,7 @@ export class Painter {
     const room = this.room(b);
     const status = badge ? attention(ws.tabs.map(tabStatus)) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
-    const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [STATUS_ICONS[status]] : []), ...behind];
+    const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, app.now())] : []), ...behind];
     const marks = fitTags(tags, room);
     const name = truncateRight(workspaceLabel(ws), room - marks.reserved);
     const line = [...b.lead, seg(name, style)];
@@ -687,7 +693,7 @@ export class Painter {
     const fit = room - marks.reserved;
     const name = marks.segs.length ? [...truncateRight(tabLabel(tab), fit)].slice(0, Math.max(0, fit)).join('') : truncateRight(tabLabel(tab), room);
     const line = [...b.lead];
-    line.push(tabIcon(tab), seg(' '));
+    line.push(tabIcon(tab, app.now()), seg(' '));
     line.push(seg(name, active ? { fg: 15 } : { fg: 7 }));
     pushTags(line, marks, [...name].length, room);
     this.band(b.r, line, b.bg);
@@ -837,7 +843,7 @@ export class Painter {
 
   private agentRow(r: Rect, pitch: number, entry: AgentRow): void {
     const bg = this.rowBackground(r, entry.active);
-    const line: Line = [marker(entry.active), STATUS_ICONS[entry.status], seg(' ')];
+    const line: Line = [marker(entry.active), statusIcon(entry.status, this.app.now()), seg(' ')];
     const indent = width(line);
     const room = Math.max(0, r.w - indent - 1);
     line.push(...agentPlace(entry, room, { fg: entry.active ? 15 : 7 }));
@@ -1410,7 +1416,7 @@ export class Painter {
     const w = Math.min(3 + [...message].length + 1 + (undo ? UNDO.length + 3 : 0) + 2, app.cols);
     const h = Math.min(3, app.rows);
     const r = rect(Math.max(0, app.cols - w - 1), Math.max(0, app.rows - h - 1), w, h);
-    const icon = bug ? seg('✗', { fg: 1, add: BOLD }) : status ? STATUS_ICONS[status] : seg('✓', { fg: 2 });
+    const icon = bug ? seg('✗', { fg: 1, add: BOLD }) : status ? statusIcon(status, app.now()) : seg('✓', { fg: 2 });
     this.g.clear(r);
     this.g.box(r, { fg: icon.s?.fg ?? 2 });
     const x = this.span(r.x + 1, r.y + 1, ` ${icon.t} `, icon.s ?? {});
@@ -1450,10 +1456,11 @@ function todoIcon(pending: boolean, w: number): Line {
   return [seg(`${' '.repeat(left)}☐ ${TODO_DOT}${' '.repeat(Math.max(0, w - left - 3))}`)];
 }
 
-function menuLabel(status: Status | null, w: number, lit: boolean): Line {
+function menuLabel(status: Status | null, now: number, w: number, lit: boolean): Line {
   if (!status) return [seg(centered('≡', w))];
+  const icon = statusIcon(status, now);
   const left = Math.floor((w - 1) / 2);
-  return [seg(`${' '.repeat(left)}≡ `), lit ? seg(STATUS_ICONS[status].t) : STATUS_ICONS[status], seg(' '.repeat(Math.max(0, w - left - 3)))];
+  return [seg(`${' '.repeat(left)}≡ `), lit ? seg(icon.t) : icon, seg(' '.repeat(Math.max(0, w - left - 3)))];
 }
 
 interface Tags {

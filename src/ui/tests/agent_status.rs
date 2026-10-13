@@ -61,7 +61,7 @@ fn renders_icons_on_tabs_and_marks_on_the_rows_above() {
 }
 
 #[rstest]
-#[case::working(Status::Working, "◐", Color::Yellow)]
+#[case::working(Status::Working, "⠋", Color::Yellow)]
 #[case::waiting(Status::Waiting, "!", WAITING_COLOR)]
 #[case::done(Status::Done, "✓", Color::Green)]
 #[case::idle(Status::Idle, "○", Color::DarkGray)]
@@ -87,12 +87,30 @@ fn a_tab_without_an_agent_shows_its_shell_before_the_name(#[case] running: bool,
 }
 
 #[test]
+fn a_working_icon_walks_the_spinner() {
+    let mut v = with_agents();
+    v.workspaces[0].tabs[1] = tab("claude", Some(Status::Working));
+    let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let shown: Vec<String> = frames
+        .iter()
+        .enumerate()
+        .map(|(i, _)| {
+            v.spin = u8::try_from(i).expect("a frame");
+            let r = tab_row(&v, 0, 1);
+            let t = render(&v);
+            t.backend().buffer()[(r.x + 4, r.y)].symbol().to_string()
+        })
+        .collect();
+    assert_eq!(shown, frames);
+}
+
+#[test]
 fn every_tab_icon_takes_one_cell() {
     let agents = [Status::Idle, Status::Working, Status::Done, Status::Waiting].map(|s| (Some(s), false));
     let widths: Vec<usize> = agents
         .into_iter()
         .chain([(None, false), (None, true)])
-        .map(|(status, running)| TabEntry { status, running, ..TabEntry::from("") }.icon(Color::DarkGray).width())
+        .map(|(status, running)| TabEntry { status, running, ..TabEntry::from("") }.icon(Color::DarkGray, 0).width())
         .collect();
     assert_eq!(widths, vec![1; 6]);
 }
@@ -103,7 +121,7 @@ fn agent_and_shell_tabs_start_their_names_in_the_same_column() {
     v.workspaces[0].tabs[1] = TabEntry { running: true, ..TabEntry::from("yarn") };
     let t = render(&v);
     let rows: Vec<String> = (0..3).map(|i| row_text(&t, tab_row(&v, 0, i)).trim_end().to_string()).collect();
-    assert_eq!(rows, ["▌ ├ ◐ claude", "  ├ ▸ yarn", "  ├ › nvim"]);
+    assert_eq!(rows, ["▌ ├ ⠋ claude", "  ├ ▸ yarn", "  ├ › nvim"]);
 }
 
 #[test]

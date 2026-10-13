@@ -66,6 +66,17 @@ fn second_row(app: &mut App) -> (u16, String) {
 }
 
 #[test]
+fn a_working_agent_wakes_the_spinner_and_an_idle_one_does_not() {
+    let (mut app, rx, _dirs, claude) = working_claude();
+    let working = app.tick(Instant::now());
+    claude.signal("finish");
+    watch_until(&mut app, &rx, "claude finishes in sight", |a| status(a, 0, 0) == Some(Status::Idle));
+
+    let spinning = working.is_some_and(|wait| !wait.is_zero() && wait <= activity::SPIN_EVERY);
+    assert_eq!((spinning, app.tick(Instant::now())), (true, None));
+}
+
+#[test]
 fn a_tab_follows_what_claude_says_it_is_doing() {
     let (mut app, rx, _dirs, claude) = working_claude();
     claude.signal("finish");

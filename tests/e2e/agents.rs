@@ -37,7 +37,10 @@ fn claude_asking_in_a_hidden_tab_reaches_the_desktop_through_the_outer_terminal(
     );
     app.send(format!("{} {}\r", claude.display(), sessions.display()).as_bytes());
     let tab = usize::from(ui::workspace_row(workspaces_list(), 1, &tab_lines(&[1]), 0, WorkspaceRow::Tab(0, 0)).y);
-    app.wait_for("the tab says claude works", |s| s.lines().nth(tab).unwrap_or_default().contains("◐"));
+    app.wait_for("the tab says claude works", |s| {
+        let row = s.lines().nth(tab).unwrap_or_default();
+        row.chars().any(|c| "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏".contains(c))
+    });
     app.click(workspace_row(&[1], WorkspaceRow::NewTab(0)));
     app.wait_for("the second tab is active", |s| s.contains("$ ") && !s.contains(&claude.display().to_string()));
 

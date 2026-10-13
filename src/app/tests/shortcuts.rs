@@ -146,7 +146,8 @@ fn a_digit_shows_that_tab() {
 
 #[test]
 fn brackets_switch_the_workspace() {
-    let (app, _rx) = app();
+    let dir = TempDir::new();
+    let (app, _rx) = app_in(dir.path(), no_config());
     let mut app = with_prefix(app);
     add_workspace(&mut app);
     keys(&mut app, "]");
