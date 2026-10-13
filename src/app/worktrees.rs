@@ -1,0 +1,358 @@
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use ratatui::layout::Rect;
+
+use super::App;
+use super::event::AppEvent;
+use super::event::Start;
+use super::overlay::Overlay;
+use super::toast::Toast;
+use crate::error::Result;
+use crate::git;
+use crate::launch::Launch;
+use crate::log::{Job, Level};
+use crate::panics;
+use crate::project::{Phase, Tab, Workspace};
+use crate::ui::{self};
+use crate::upstream;
+use crate::worktree;
+
+pub(super) const UNCOMMITTED: &str = "It has changes that are not committed; removing it deletes them.";
+
+const UNCOMMITTED_TOO: &str = "It has uncommitted changes, which are deleted.";
+
+const MAX_LOCK_REASON: usize = 100;
+
+pub(super) const SYNC_EVERY: Duration = Duration::from_secs(1);
+
+pub(super) const COUNT_BEHIND_EVERY: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Check {
+    Running,
+    Confirmed,
+    Clean,
+    Changed,
+}
+
+impl App {
+    pub(super) fn count_behind(&mut self, now: Instant) {
+        let Some(fetch_every) = self.config.fetch_every() else {
+            self.projects.iter_mut().flat_map(|p| &mut p.workspaces).for_each(|w| w.behind = 0);
+            return;
+        };
+        if self.counted.is_some_and(|at| now.duration_since(at) < COUNT_BEHIND_EVERY) {
+            return;
+        }
+        self.counted = Some(now);
+        self.fetched.retain(|id, _| self.projects.iter().any(|p| p.id == *id));
+        for project in &self.projects {
+            let workspaces: Vec<(u64, PathBuf)> = project
+                .workspaces
+                .iter()
+                .filter(|w| git::branch(&w.path).is_some())
+                .map(|w| (w.id, w.path.clone()))
+                .collect();
+            if workspaces.is_empty() || !self.counting.insert(project.id) {
+                continue;
+            }
+            let fetch = self.fetched.get(&project.id).is_none_or(|at| now.duration_since(*at) >= fetch_every);
+            if fetch {
+                self.fetched.insert(project.id, now);
+            }
+            let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
+            let job = Job::new(Level::Debug, "git", "upstream").with("project", id).with("fetch", fetch).begin();
+            std::thread::spawn(move || {
+                let behind = panics::contain(|| upstream::check(&repo, &workspaces, fetch));
+                job.done();
+                let behind = behind.unwrap_or_else(|| workspaces.iter().map(|(id, _)| (*id, 0)).collect());
+                let _ = tx.send(AppEvent::Behind { project: id, behind });
+            });
+        }
+    }
+
+    pub(super) fn behind_counted(&mut self, project: u64, behind: &[(u64, u32)]) {
+        self.counting.remove(&project);
+        if self.config.fetch_every().is_none() {
+            return;
+        }
+        let Some(p) = self.projects.iter_mut().find(|p| p.id == project) else { return };
+        for (id, n) in behind {
+            if let Some(w) = p.workspaces.iter_mut().find(|w| w.id == *id) {
+                w.behind = *n;
+            }
+        }
+    }
+
+    pub(super) fn sync_worktrees(&mut self) {
+        for p in 0..self.projects.len() {
+            let project = &mut self.projects[p];
+            if !git::is_repo_root(&project.path) {
+                continue;
+            }
+            let linked = git::linked_worktrees(&project.path);
+            let gone: Vec<usize> = (0..project.workspaces.len())
+                .rev()
+                .filter(|&w| {
+                    let ws = &project.workspaces[w];
+                    ws.worktree && ws.open() && ws.tabs.is_empty() && !ws.path.is_dir()
+                })
+                .collect();
+            for w in gone {
+                self.changes.forget(project.workspaces[w].id);
+                project.remove_workspace(w);
+            }
+            let missing: Vec<PathBuf> =
+                linked.into_iter().filter(|path| project.workspaces.iter().all(|w| &w.path != path)).collect();
+            for path in missing {
+                let id = self.take_id();
+                self.projects[p].workspaces.push(Workspace::new(id, path, None, true));
+            }
+        }
+    }
+
+    pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {
+        let project = &self.projects[p];
+        let (id, repo, tx) = (project.id, project.path.clone(), self.tx.clone());
+        let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
+        let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
+        let job = job.with("path", path.display()).with("issue", start.is_some()).begin();
+        std::thread::spawn(move || {
+            let result = panics::job(|| worktree::create(&repo, &branch, &path).map(|()| path));
+            job.finish(&result);
+            let _ = tx.send(AppEvent::WorktreeCreated { project: id, result, start, request });
+        });
+    }
+
+    pub(super) fn create_workspace(
+        &mut self,
+        project: u64,
+        input: String,
+        worktree: Option<bool>,
+        area: Rect,
+    ) -> Result<()> {
+        let name = input.trim().to_string();
+        let Some(p) = self.project_index(project) else { return Ok(()) };
+        if name.is_empty() {
+            let error = Some("the name is required".into());
+            self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false });
+            return Ok(());
+        }
+        if worktree == Some(true) {
+            self.spawn_worktree(p, name, None, None);
+            self.overlay = Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true });
+            return Ok(());
+        }
+        let repo = self.projects[p].path.clone();
+        let workspace = self.new_workspace(area, repo, Some(name), false)?;
+        let project = &mut self.projects[p];
+        project.workspaces.push(workspace);
+        project.active = project.workspaces.len() - 1;
+        self.active = p;
+        Ok(())
+    }
+
+    pub(super) fn worktree_created(
+        &mut self,
+        project: u64,
+        result: Result<PathBuf>,
+        start: Option<Start>,
+        area: Rect,
+    ) -> Result<()> {
+        let path = match result {
+            Ok(path) => path.canonicalize().unwrap_or(path),
+            Err(e) => {
+                match &mut self.overlay {
+                    Some(Overlay::NewWorkspace { error, creating, .. }) => {
+                        *error = Some(e.to_string());
+                        *creating = false;
+                    }
+                    Some(Overlay::Issues(b)) => {
+                        b.error = Some(e.to_string());
+                        b.starting = false;
+                    }
+                    _ => {}
+                }
+                return Ok(());
+            }
+        };
+        if matches!(self.overlay, Some(Overlay::NewWorkspace { .. } | Overlay::Issues(_))) {
+            self.overlay = None;
+        }
+        let Some(p) = self.project_index(project) else { return Ok(()) };
+        let w = self.worktree_workspace(p, path);
+        self.open_workspace(p, w, start, area)
+    }
+
+    pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> usize {
+        if let Some(w) = self.projects[p].workspaces.iter().position(|w| w.path == path) {
+            return w;
+        }
+        let id = self.take_id();
+        self.projects[p].workspaces.push(Workspace::new(id, path, None, true));
+        self.projects[p].workspaces.len() - 1
+    }
+
+    pub(super) fn open_workspace(&mut self, p: usize, w: usize, start: Option<Start>, area: Rect) -> Result<()> {
+        let workspace = &mut self.projects[p].workspaces[w];
+        if let Some(start) = &start
+            && workspace.name.is_none()
+        {
+            workspace.name = Some(start.name.clone());
+        }
+        if workspace.tabs.is_empty() {
+            self.add_tab(p, w, area)?;
+            let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
+            if let (Some(term), Some(start)) = (term, start) {
+                self.launches.push(Launch::new(term, start.spec, Instant::now()));
+            }
+        }
+        self.projects[p].active = w;
+        self.active = p;
+        Ok(())
+    }
+
+    pub(super) fn ask_removal(&mut self, p: usize, w: usize) {
+        let (project, workspace) = (self.projects[p].id, self.projects[p].workspaces[w].id);
+        self.spawn_check(p, w, None);
+        self.overlay = Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Running, lock: None });
+    }
+
+    pub(super) fn spawn_check(&self, p: usize, w: usize, request: Option<u64>) {
+        let project = &self.projects[p];
+        let (id, workspace) = (project.id, project.workspaces[w].id);
+        let (path, tx) = (project.workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "status").with("workspace", workspace).begin();
+        std::thread::spawn(move || {
+            let status = panics::job(|| Ok(worktree::status(&path)));
+            let job = job.with("changed", status.as_ref().map_or(true, |s| s.changed));
+            job.with("locked", status.as_ref().is_ok_and(|s| s.lock.is_some())).finish(&status);
+            let status = status.unwrap_or(worktree::Status { changed: true, lock: None });
+            let _ = tx.send(AppEvent::WorktreeChecked { project: id, workspace, status, request });
+        });
+    }
+
+    pub(super) fn confirm_removal(
+        &mut self,
+        project: u64,
+        workspace: u64,
+        check: Check,
+        unlock: bool,
+    ) -> Option<Overlay> {
+        if matches!(check, Check::Running | Check::Confirmed) {
+            return Some(Overlay::RemoveWorkspace { project, workspace, check: Check::Confirmed, lock: None });
+        }
+        self.start_removal(project, workspace, check == Check::Changed, unlock, None);
+        None
+    }
+
+    pub(super) fn worktree_checked(&mut self, project: u64, workspace: u64, status: worktree::Status) {
+        let Some(Overlay::RemoveWorkspace { project: asked, workspace: shown, check, lock }) = &mut self.overlay else {
+            return;
+        };
+        if (*asked, *shown) != (project, workspace) || !matches!(check, Check::Running | Check::Confirmed) {
+            return;
+        }
+        let go_on = *check == Check::Confirmed && !status.changed && status.lock.is_none();
+        *check = if status.changed { Check::Changed } else { Check::Clean };
+        *lock = status.lock;
+        if go_on {
+            self.overlay = None;
+            self.start_removal(project, workspace, false, false, None);
+        }
+    }
+
+    pub(super) fn start_removal(
+        &mut self,
+        project: u64,
+        workspace: u64,
+        force: bool,
+        unlock: bool,
+        request: Option<u64>,
+    ) -> bool {
+        let Some((p, w)) = self.workspace_index(project, workspace) else { return false };
+        let target = &mut self.projects[p].workspaces[w];
+        if !target.open() {
+            return false;
+        }
+        target.start_removing();
+        target.kill();
+        self.changes.forget(workspace);
+        self.projects[p].step_off(w);
+        let (repo, path, tx) =
+            (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
+        let job = job.with("force", force).with("unlock", unlock).begin();
+        std::thread::spawn(move || {
+            let result = panics::job(|| worktree::remove(&repo, &path, force, unlock));
+            job.finish(&result);
+            let _ = tx.send(AppEvent::WorktreeRemoved { project, workspace, result, request });
+        });
+        true
+    }
+
+    pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<()>) {
+        let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
+        let toast = match result {
+            Ok(()) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
+            Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
+        };
+        self.toast = Some(toast);
+    }
+
+    pub(super) fn settle_removal(&mut self, project: u64, workspace: u64, removed: bool) -> Option<String> {
+        let (p, w) = self.workspace_index(project, workspace)?;
+        let name = self.projects[p].workspaces[w].label();
+        if removed {
+            self.drop_workspace(project, workspace);
+        } else {
+            self.projects[p].workspaces[w].phase = Phase::Open;
+        }
+        Some(name)
+    }
+
+    pub(super) fn remove_view(
+        &self,
+        project: u64,
+        workspace: u64,
+        check: Check,
+        lock: Option<&worktree::Lock>,
+        submit: &'static str,
+    ) -> ui::Overlay {
+        let (label, path) = self
+            .workspace_index(project, workspace)
+            .map(|(p, w)| {
+                let ws = &self.projects[p].workspaces[w];
+                (ws.label(), ui::display_path(&ws.path, self.home.as_deref()))
+            })
+            .unwrap_or_default();
+        let (message, note) = match lock {
+            Some(lock) => (lock_message(&label, lock), lock_note(lock, check == Check::Changed).map(ui::Note::Error)),
+            None => (
+                format!("Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."),
+                match check {
+                    Check::Confirmed => Some(ui::Note::Busy("checking…")),
+                    Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),
+                    Check::Running | Check::Clean => None,
+                },
+            ),
+        };
+        ui::Overlay::Confirm(ui::Confirm { title: "Remove workspace", message, note, submit, extra: None })
+    }
+}
+
+pub(super) fn lock_message(label: &str, lock: &worktree::Lock) -> String {
+    let reason = ui::truncate_right(&lock.reason, MAX_LOCK_REASON);
+    let locked = if reason.is_empty() { "is locked".to_string() } else { format!("is locked: {reason}") };
+    format!("The worktree of {label} {locked}. Unlock it and delete its folder? The branch is kept.")
+}
+
+pub(super) fn lock_note(lock: &worktree::Lock, changed: bool) -> Option<String> {
+    let holder = lock.holder.map(|holder| match holder {
+        worktree::Holder::Gone(pid) => format!("Process {pid} is gone; the lock was left behind."),
+        worktree::Holder::Running(pid) => format!("Process {pid} still runs and may be using it."),
+    });
+    let parts: Vec<String> = holder.into_iter().chain(changed.then(|| UNCOMMITTED_TOO.to_string())).collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
+}

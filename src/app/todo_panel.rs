@@ -1,7 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
-use super::{App, Grab, RowDrag, Toast, wheel};
+use super::input::wheel;
+use super::{App, Grab, RowDrag, Toast};
 use crate::todo::editor::Editor;
 use crate::todo::{Field, Removed};
 use crate::ui;
