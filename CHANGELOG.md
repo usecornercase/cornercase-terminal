@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The issues dialog's view and hit testing now live with the app, and its browser takes sizes and hits instead of UI types.
 
+## 0.12.53
+
+- No changes in the app. The code of cli.rs and client.rs moved into files of their own.
+
 ## 0.12.52
 
 - No changes in the app. The code that answers commands for scripts and agents moved from app/control.rs into one file per family of requests.

@@ -55,9 +55,9 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 ```
 src/main.rs       hands argv to cli.rs (uses anyhow)
-src/cli.rs        clap definitions of every command; the commands for scripts and agents send a request and print the answer
+src/cli.rs        `run` and the dispatcher of every command; the commands for scripts and agents send a request and print the answer; cli/args.rs the clap definitions, cli/help.rs their help texts, cli/status.rs the `status` output, cli/update.rs `cornercase update` and `restart`, cli/read.rs `read`
 src/control.rs    the JSON of those requests and answers, shared by the commands and the server; CORNERCASE_PANE
-src/client.rs     the UI process: terminal setup/teardown, colour query, starts the server, forwards events, writes frames, reconnects a remote window; client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste; `kill-server`, `restart` and `update`
+src/client.rs     the UI process: entry points, terminal setup/teardown; client/window.rs the attached window (forwards events, writes frames, reconnects a remote window), client/probe.rs the colour query and what the outer terminal can show, client/requests.rs a command talking to the server, client/server_process.rs starting and stopping the server (`kill-server`); client/input.rs reads input and filters late replies; client/input/parse.rs decodes keys, mouse and paste
 src/web/          browser access: mod.rs (the loopback listener, routes, pairing, paired browsers' count), bridge.rs (one WebSocket as a client of the server's socket), http.rs, auth.rs (pairing tokens, browsers.json), page.rs and assets/ (the page, vendored xterm.js)
 src/tailscale.rs  `tailscale status --json` and `tailscale serve` for browser access
 src/remote.rs     `cornercase remote`: the ssh command, the proxy's banner and version check, failures; `cornercase proxy` (stdio <-> the socket)
