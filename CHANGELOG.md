@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.85
+
+- Grok Build is followed like the other agents. A tab shows when it is working, when it needs you and when it has finished, plus the model and how full its context is.
+- After a restart, a Grok Build pane comes back with `grok --resume`.
+- `send`, `read --last-message` and `wait` work with it. A prompt typed while it works waits, and `/` and `!` are local commands.
+
 ## 0.12.83
 
 - Keep working with your agents from Telegram when you leave the computer. Make a bot with @BotFather, paste its token in **Settings › Remote**, and scan the code shown under **phone** to pair your chat.
