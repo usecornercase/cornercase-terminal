@@ -39,10 +39,11 @@ impl App {
     }
 
     pub(super) fn usage_view(&self) -> ui::Usage {
-        let mut view = view(&self.usage, Instant::now(), time::now());
-        view.page = self.usage_page;
-        view.stats = self.stats_view(SystemTime::now());
-        view
+        ui::Usage {
+            page: self.usage_page,
+            stats: self.stats_view(SystemTime::now()),
+            sections: sections(&self.usage, Instant::now(), time::now()),
+        }
     }
 
     pub(super) fn switch_usage(&mut self, page: usage::Page) {
@@ -97,12 +98,8 @@ fn section(agent: usage::Agent, probe: &usage::Probe, now: Instant, clock: i64) 
     }
 }
 
-fn view(state: &usage::State, now: Instant, clock: i64) -> ui::Usage {
-    ui::Usage {
-        page: usage::Page::Limits,
-        stats: crate::stats::View::default(),
-        sections: state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect(),
-    }
+fn sections(state: &usage::State, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
+    state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect()
 }
 
 #[cfg(test)]
