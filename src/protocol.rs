@@ -100,7 +100,7 @@ pub(crate) fn check_socket_dir(socket: &Path) -> Result<(), Error> {
     let kind = meta.file_type();
     match unsafe_dir_reason(kind.is_symlink(), kind.is_dir(), meta.uid(), meta.mode(), own_uid()) {
         Some(reason) => {
-            Err(Error::UnsafeSocketDir { path: dir, reason, custom: std::env::var_os(paths::SOCKET_ENV).is_some() })
+            Err(Error::UnsafeSocketDir { path: dir, reason, custom: paths::custom_socket().is_some() })
         }
         None => Ok(()),
     }
