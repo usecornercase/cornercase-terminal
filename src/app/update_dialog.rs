@@ -1,0 +1,238 @@
+use std::time::Instant;
+
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::{Position, Rect};
+use ratatui::text::Line;
+
+use super::App;
+use super::event::AppEvent;
+use super::input::wheel;
+use super::overlay::Overlay;
+use super::overlay::RESTART_SUBMIT;
+use super::toast::Toast;
+use super::toast::copy;
+use crate::error::Result;
+use crate::log::{self, Job, Level};
+use crate::markdown;
+use crate::panics;
+use crate::restart;
+use crate::ui::{self};
+use crate::update::{self, Install, Release};
+
+pub(super) const UPDATE_AVAILABLE: &str = "a new cornercase is out";
+
+const UPDATE_TITLE: &str = "Update";
+
+const RESTART_TITLE: &str = "Restart";
+
+const RESTART_MESSAGE: &str = "Restart cornercase now? Its server starts again and every client comes back.";
+
+pub(super) const RESTART_LABEL: &str = "↻ restart";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum UpdateStep {
+    Ask,
+    Updating,
+    Failed(String),
+    Installed,
+    Manual(&'static str),
+}
+
+impl App {
+    pub(super) fn check_updates(&mut self, now: Instant) {
+        if !self.config.check_updates || !self.updates.due(now) {
+            return;
+        }
+        self.updates.checked = Some(now);
+        let (url, tx) = (self.updates.url.clone(), self.tx.clone());
+        let job = Job::new(Level::Info, "update", "check").begin();
+        std::thread::spawn(move || {
+            let found = panics::job(|| {
+                let found = update::check(&url, update::CURRENT)?;
+                Ok(found.map(|release| update::with_changelog(release, update::CURRENT)))
+            });
+            job.finish(&found);
+            let _ = tx.send(AppEvent::UpdateChecked(found));
+        });
+    }
+
+    pub(super) fn update_checked(&mut self, result: Result<Option<Release>>) {
+        match result {
+            Ok(Some(release)) if !self.updates.installed => {
+                log::info!("update", "release found", version = release.version);
+                if self.updates.available.as_ref().is_none_or(|known| known.version != release.version) {
+                    self.toast = Some(Toast::new(UPDATE_AVAILABLE, ui::ToastIcon::Check));
+                }
+                self.updates.available = Some(release);
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn running(&self) -> Vec<restart::Running> {
+        restart::from_report(&self.report(None))
+    }
+
+    pub(super) fn list_running(&mut self, now: Instant) {
+        self.restart_list = self.running();
+        self.listed = Some(now);
+    }
+
+    pub(super) fn update_label(&self) -> Option<String> {
+        if self.updates.installed {
+            return Some(RESTART_LABEL.into());
+        }
+        self.updates.available.as_ref().map(|release| format!("↑ {}", release.version))
+    }
+
+    pub(super) fn open_update(&mut self) {
+        let step = match &self.updates.install {
+            _ if self.updates.installed => UpdateStep::Installed,
+            Install::Replace(_) => UpdateStep::Ask,
+            Install::Command(command) => UpdateStep::Manual(command),
+        };
+        self.update_scroll = 0;
+        if step == UpdateStep::Installed {
+            self.list_running(Instant::now());
+        }
+        self.overlay = Some(Overlay::Update(step));
+    }
+
+    pub(super) fn update_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
+        if let Some(delta) = wheel(ev.kind) {
+            self.scroll_update(delta, area);
+            return Ok(());
+        }
+        let Some(overlay) = &self.overlay else { return Ok(()) };
+        if ev.kind != MouseEventKind::Down(MouseButton::Left) {
+            return Ok(());
+        }
+        let [submit, cancel] = ui::update_buttons(area, overlay.submit_label(), overlay.cancel_label());
+        if submit.contains(pos) {
+            self.submit_form(area)?;
+        } else if cancel.contains(pos) {
+            self.cancel_form();
+        }
+        Ok(())
+    }
+
+    pub(super) fn scroll_update(&mut self, delta: isize, area: Rect) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
+            let lines = self.update_notes(area).len();
+            self.update_scroll = ui::update_scroll(area, lines, self.update_scroll.saturating_add_signed(delta));
+        }
+    }
+
+    pub(super) fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
+        let width = usize::from(ui::update_notes(area).width);
+        if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
+            return markdown::render(&restart::confirmation(Some(&self.restart_list)), width);
+        }
+        let Some(release) = self.updates.available.as_ref().filter(|r| !r.notes.is_empty()) else {
+            return Vec::new();
+        };
+        let notes: Vec<String> =
+            release.notes.iter().map(|(version, notes)| format!("**What's new in {version}**\n\n{notes}")).collect();
+        markdown::render(&notes.join("\n\n"), width)
+    }
+
+    pub(super) fn submit_update(&mut self, step: UpdateStep) -> Option<Overlay> {
+        match step {
+            UpdateStep::Ask | UpdateStep::Failed(_) => {
+                let (Some(release), Install::Replace(exe), Some(target)) =
+                    (self.updates.available.clone(), self.updates.install.clone(), update::target())
+                else {
+                    return None;
+                };
+                let tx = self.tx.clone();
+                let job = Job::new(Level::Info, "update", "install").with("version", &release.version).begin();
+                std::thread::spawn(move || {
+                    let result = panics::job(|| update::update(&release, target, &exe));
+                    job.finish(&result);
+                    let _ = tx.send(AppEvent::Updated(result));
+                });
+                Some(Overlay::Update(UpdateStep::Updating))
+            }
+            UpdateStep::Installed => {
+                self.restart = true;
+                None
+            }
+            UpdateStep::Manual(command) => {
+                copy(&mut self.host_writes, &mut self.toast, command);
+                None
+            }
+            UpdateStep::Updating => Some(Overlay::Update(step)),
+        }
+    }
+
+    pub(super) fn updated(&mut self, result: Result<()>) {
+        let step = match result {
+            Ok(()) => {
+                self.updates.installed = true;
+                self.update_scroll = 0;
+                self.list_running(Instant::now());
+                UpdateStep::Installed
+            }
+            Err(e) => UpdateStep::Failed(e.to_string()),
+        };
+        if let Some(Overlay::Update(current)) = &mut self.overlay {
+            *current = step;
+        }
+    }
+
+    pub(super) fn update_view(&self, step: &UpdateStep, area: Rect) -> ui::Overlay {
+        let version = self.updates.available.as_ref().map_or("", |r| r.version.as_str());
+        let current = update::CURRENT;
+        let message = match step {
+            UpdateStep::Installed => format!("cornercase {version} is installed. Restart to use it."),
+            UpdateStep::Manual(command) => {
+                format!("cornercase {version} is out (you have {current}). Update it with:\n{command}")
+            }
+            UpdateStep::Ask | UpdateStep::Updating | UpdateStep::Failed(_) => {
+                let exe = match &self.updates.install {
+                    Install::Replace(exe) => ui::display_path(exe, self.home.as_deref()),
+                    Install::Command(_) => String::new(),
+                };
+                format!(
+                    "cornercase {version} is out (you have {current}). Updating replaces {exe}; \
+                     your terminals keep running until you restart."
+                )
+            }
+        };
+        let note = match step {
+            UpdateStep::Updating => Some(ui::Note::Busy("downloading…")),
+            UpdateStep::Failed(error) => Some(ui::Note::Error(error.clone())),
+            _ => None,
+        };
+        let overlay = Overlay::Update(step.clone());
+        let (submit, cancel) = (overlay.submit_label(), overlay.cancel_label());
+        let notes = self.update_notes(area);
+        ui::Overlay::Update(ui::Update {
+            title: UPDATE_TITLE,
+            message,
+            notes,
+            scroll: self.update_scroll,
+            note,
+            submit,
+            cancel,
+        })
+    }
+
+    pub(super) fn open_restart(&mut self) {
+        self.update_scroll = 0;
+        self.list_running(Instant::now());
+        self.overlay = Some(Overlay::Restart);
+    }
+
+    pub(super) fn restart_view(&self, area: Rect) -> ui::Overlay {
+        ui::Overlay::Update(ui::Update {
+            title: RESTART_TITLE,
+            message: RESTART_MESSAGE.into(),
+            notes: self.update_notes(area),
+            scroll: self.update_scroll,
+            note: None,
+            submit: RESTART_SUBMIT,
+            cancel: ui::CANCEL_LABEL,
+        })
+    }
+}
