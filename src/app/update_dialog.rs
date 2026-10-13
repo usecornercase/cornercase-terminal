@@ -10,7 +10,6 @@ use super::input::wheel;
 use super::overlay::Overlay;
 use super::overlay::RESTART_SUBMIT;
 use super::toast::Toast;
-use super::toast::copy;
 use crate::error::Result;
 use crate::log::{self, Job, Level};
 use crate::markdown;
@@ -189,7 +188,7 @@ impl App {
                 None
             }
             UpdateStep::Manual(command) => {
-                copy(&mut self.outbox.host_writes, &mut self.toast, command);
+                self.copy(command);
                 None
             }
             UpdateStep::Updating => Some(Overlay::Update(step)),

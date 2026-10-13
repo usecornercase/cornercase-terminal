@@ -7,7 +7,6 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::event::AppEvent;
 use super::input::wheel;
-use super::toast::copy;
 use crate::changes::diff::File as ChangedFile;
 use crate::changes::{self, Checkout, Tints};
 use crate::error::Result;
@@ -430,7 +429,7 @@ impl App {
         let Some(hunk) = file.hunks.get(h) else { return Ok(()) };
         let (first, last) = hunk.changed();
         match action {
-            HunkAction::Copy => copy(&mut self.outbox.host_writes, &mut self.toast, &hunk.patch()),
+            HunkAction::Copy => self.copy(&hunk.patch()),
             HunkAction::Open => return self.open_in_editor(target, &file.path, first, area),
             HunkAction::Ask => {
                 let lines = if first == last { first.to_string() } else { format!("{first}-{last}") };

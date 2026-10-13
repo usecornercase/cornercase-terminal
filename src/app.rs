@@ -55,7 +55,6 @@ use layout::Scrolls;
 use overlay::Overlay;
 use session::not_restored;
 use toast::Toast;
-use toast::copy;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 
@@ -496,7 +495,7 @@ impl App {
         if let Some(t) = self.projects.pane_by_mut(id) {
             t.feed(bytes);
             for text in t.emulator.take_copied() {
-                copy(&mut self.outbox.host_writes, &mut self.toast, &text);
+                self.copy(&text);
             }
         }
     }

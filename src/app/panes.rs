@@ -11,7 +11,6 @@ use super::menus::PaneAction;
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
-use super::toast::copy;
 use crate::error::Result;
 use crate::log::{self};
 use crate::mouse;
@@ -154,7 +153,7 @@ impl App {
         }
         self.drag = None;
         if let Ok(Some(text)) = term.emulator.finish_selection() {
-            copy(&mut self.outbox.host_writes, &mut self.toast, &text);
+            self.copy(&text);
         }
         if let Some(press) = link.filter(|p| p.term == id && Some(p.at) == at) {
             self.open_link(&press.target);

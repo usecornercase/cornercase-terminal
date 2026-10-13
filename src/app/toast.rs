@@ -63,9 +63,9 @@ impl App {
         }
         true
     }
-}
 
-pub(super) fn copy(host_writes: &mut Vec<Vec<u8>>, toast: &mut Option<Toast>, text: &str) {
-    host_writes.push(clipboard::osc52(text));
-    *toast = Some(Toast::new(COPIED, ui::ToastIcon::Check));
+    pub(super) fn copy(&mut self, text: &str) {
+        self.outbox.host_writes.push(clipboard::osc52(text));
+        self.toast = Some(Toast::new(COPIED, ui::ToastIcon::Check));
+    }
 }

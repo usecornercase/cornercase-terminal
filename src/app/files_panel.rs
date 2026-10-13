@@ -8,7 +8,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
 use super::interaction::Drag;
-use super::{App, AppEvent, copy};
+use super::{App, AppEvent};
 use crate::changes::{Checkout, Tints};
 use crate::error::Result;
 use crate::files::search::{self, MAX_MATCHES, MAX_NAMES};
@@ -512,7 +512,7 @@ impl App {
                     }
                     _ => path,
                 };
-                copy(&mut self.outbox.host_writes, &mut self.toast, &text);
+                self.copy(&text);
             }
         }
         Ok(())
