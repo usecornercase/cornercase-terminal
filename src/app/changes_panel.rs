@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -9,7 +9,7 @@ use super::event::AppEvent;
 use super::input::wheel;
 use super::layout::Side;
 use crate::changes::diff::File as ChangedFile;
-use crate::changes::{self, Checkout, Tints};
+use crate::changes::{self, Checkout, Tints, every};
 use crate::error::Result;
 use crate::git;
 use crate::log::{Job, Level};
@@ -156,94 +156,12 @@ impl App {
     }
 
     pub(super) fn every_targets(&self) -> Vec<(Checkout, bool)> {
-        crate::project::sidebar_order(&self.projects, &self.groups)
-            .into_iter()
-            .flat_map(|p| {
-                let project = &self.projects[p];
-                let workspaces: Vec<_> = project
-                    .workspaces
-                    .iter()
-                    .filter(|w| !project.closing && w.open() && git::branch(&w.path).is_some())
-                    .collect();
-                let several = workspaces
-                    .iter()
-                    .filter(|w| {
-                        self.changes.summary(w.id).and_then(changes::Model::diff).is_some_and(|d| !d.files.is_empty())
-                    })
-                    .count()
-                    > 1;
-                workspaces
-                    .into_iter()
-                    .map(|w| {
-                        let hidden = self.changes.headers.contains(&project.id)
-                            || (several && self.changes.headers.contains(&w.id));
-                        (Checkout { workspace: w.id, dir: w.path.clone(), base: None }, hidden)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect()
+        every::targets(&self.projects, &crate::project::sidebar_order(&self.projects, &self.groups), &self.changes)
     }
 
     pub(super) fn every_body(&self, targets: &[(Checkout, bool)]) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
-        let mut diff = changes::diff::Diff::default();
-        let mut owners = Vec::new();
-        let mut headers = Vec::new();
-        let mut error = None;
-        let workspaces: HashSet<_> = targets.iter().map(|(t, _)| t.workspace).collect();
-        for p in crate::project::sidebar_order(&self.projects, &self.groups) {
-            let project = &self.projects[p];
-            if error.is_none() {
-                error = project.workspaces.iter().filter(|w| workspaces.contains(&w.id)).find_map(|w| {
-                    let failure = self.changes.summary(w.id)?.result.as_ref().err()?;
-                    Some(format!("{}: {failure}", self.project_label(project)))
-                });
-            }
-            let workspaces: Vec<_> = project
-                .workspaces
-                .iter()
-                .filter(|w| workspaces.contains(&w.id))
-                .filter_map(|w| {
-                    let diff = self.changes.summary(w.id)?.diff()?;
-                    (!diff.files.is_empty()).then_some((w, diff))
-                })
-                .collect();
-            if workspaces.is_empty() {
-                continue;
-            }
-            let start = diff.files.len();
-            let count = workspaces.iter().map(|(_, d)| d.files.len()).sum::<usize>();
-            headers.push(panel::Header {
-                id: project.id,
-                label: self.project_label(project),
-                files: start..start + count,
-                workspace: false,
-                folded: self.changes.headers.contains(&project.id),
-            });
-            let several = workspaces.len() > 1;
-            for (workspace, changes) in workspaces {
-                let start = diff.files.len();
-                if several {
-                    headers.push(panel::Header {
-                        id: workspace.id,
-                        label: workspace.label(),
-                        files: start..start + changes.files.len(),
-                        workspace: true,
-                        folded: self.changes.headers.contains(&workspace.id),
-                    });
-                }
-                owners.extend(std::iter::repeat_n(workspace.id, changes.files.len()));
-                diff.files.extend(changes.files.iter().cloned());
-            }
-        }
-        let body = if diff.files.is_empty() && targets.iter().any(|(t, _)| self.changes.summary(t.workspace).is_none())
-        {
-            panel::Body::Loading
-        } else if diff.files.is_empty() && error.is_some() {
-            panel::Body::Failed(error.unwrap_or_default())
-        } else {
-            panel::Body::Ready(std::sync::Arc::new(diff))
-        };
-        (body, owners, headers)
+        let order = crate::project::sidebar_order(&self.projects, &self.groups);
+        every::group(&self.projects, &order, &self.changes, targets, self.home.as_deref())
     }
 
     pub(super) fn panel_view(&self) -> Option<panel::View> {
