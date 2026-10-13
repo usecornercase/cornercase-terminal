@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.82
+
+- No changes in the app. Each supported agent now has one reader for its conversation and activity.
+
 ## 0.12.80
 
 - No changes in the app. Supported agents now share one identity, with each agent’s rules kept in its own folder.
