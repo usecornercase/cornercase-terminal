@@ -45,10 +45,8 @@ use agent_watch::{AgentRuntime, WATCH_AGENTS_EVERY};
 use changes_panel::ChangesEvent;
 use files_panel::FilesEvent;
 use interaction::AUTO_SCROLL_EVERY;
+use interaction::Drag;
 use interaction::Grab;
-use interaction::LinkPress;
-use interaction::PaneDrag;
-use interaction::RowDrag;
 use issues_dialog::{IssueConnections, IssueEvent};
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
@@ -126,14 +124,9 @@ pub struct App {
     next_id: u64,
     hover: Option<Position>,
     widths: ui::Widths,
-    resizing: Option<ui::Border>,
+    drag: Option<Drag>,
     border_click: Option<(ui::Border, Instant)>,
-    divider_drag: Option<(u64, Vec<bool>)>,
     divider_click: Option<(u64, Vec<bool>, Instant)>,
-    selecting: Option<u64>,
-    link_press: Option<LinkPress>,
-    row_drag: Option<RowDrag>,
-    pane_drag: Option<PaneDrag>,
     toast: Option<Toast>,
     overlay: Option<Overlay>,
     config: Config,
@@ -182,14 +175,9 @@ impl App {
             next_id: 1,
             hover: None,
             widths: ui::Widths::default(),
-            resizing: None,
+            drag: None,
             border_click: None,
-            divider_drag: None,
             divider_click: None,
-            selecting: None,
-            link_press: None,
-            row_drag: None,
-            pane_drag: None,
             toast: None,
             overlay: None,
             config: config::load(&config_path),
@@ -242,14 +230,8 @@ impl App {
         self.overlay = None;
         self.nav = None;
         self.hover = None;
-        self.row_drag = None;
-        self.pane_drag = None;
-        self.resizing = None;
-        self.divider_drag = None;
-        self.selecting = None;
-        self.link_press = None;
+        self.drag = None;
         self.todo.field = None;
-        self.files.selecting = None;
         self.files.unfocus();
         if let Some(filter) = &mut self.changes.filter {
             filter.focused = false;
@@ -266,21 +248,20 @@ impl App {
             Dir::Right => pointer::Shape::Columns,
             Dir::Down => pointer::Shape::Rows,
         };
-        if let Some(b) = self.resizing {
-            return border(b);
+        match &self.drag {
+            Some(Drag::Border(b)) => return border(*b),
+            Some(Drag::Divider { tab, path }) => {
+                let dividers = self.tab().filter(|t| t.id == *tab).map(|t| t.layout.dividers(areas.pane));
+                return dividers
+                    .and_then(|d| d.into_iter().find(|d| d.path == *path))
+                    .map_or(pointer::Shape::Default, |d| divider(d.dir));
+            }
+            Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) => {
+                return pointer::Shape::Default;
+            }
+            None => {}
         }
-        if let Some((tab, path)) = &self.divider_drag {
-            let dividers = self.tab().filter(|t| t.id == *tab).map(|t| t.layout.dividers(areas.pane));
-            return dividers
-                .and_then(|d| d.into_iter().find(|d| d.path == *path))
-                .map_or(pointer::Shape::Default, |d| divider(d.dir));
-        }
-        let busy = self.row_drag.is_some()
-            || self.pane_drag.is_some()
-            || self.selecting.is_some()
-            || self.files.selecting.is_some()
-            || self.link_press.is_some();
-        let Some(pos) = self.hover.filter(|_| self.overlay.is_none() && !busy) else {
+        let Some(pos) = self.hover.filter(|_| self.overlay.is_none()) else {
             return pointer::Shape::Default;
         };
         if self.panel_shown() && areas.changes.contains(pos) {
@@ -322,7 +303,7 @@ impl App {
     }
 
     pub fn tick(&self, now: Instant) -> Option<Duration> {
-        let drag = self.row_drag.filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
+        let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         [drag, launch, self.next_request(now)].into_iter().flatten().min()
     }
@@ -585,7 +566,7 @@ impl App {
         let modal = overlay.as_ref().is_some_and(ui::Overlay::is_modal);
         let (files, placed) = self.files_seen(sight, area, modal);
         let dim_inactive = self.config.dim_inactive_panes;
-        let dragging = self.divider_drag.clone();
+        let dragging = self.drag.as_ref().and_then(Drag::divider);
         let pane_area = self.layout(area).shown(self.nav).pane;
         let landing = self.pane_landing(pane_area);
         let pointer = self.link_hover();
@@ -604,7 +585,7 @@ impl App {
         let visible = self.visible_tab();
         let tabs = self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs);
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
-        let moved = self.row_drag.filter(|d| d.moved).zip(self.hover);
+        let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
         let drag = moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),
@@ -626,10 +607,10 @@ impl App {
             active_tab,
             workspaces_scroll: self.scroll.workspaces,
             issues: self.issues_available(),
-            hover: self.hover.filter(|_| self.pane_drag.is_none()),
+            hover: self.hover.filter(|_| self.drag.as_ref().is_none_or(Drag::shows_hover)),
             widths: self.widths,
             sidebar: self.sidebar(),
-            resizing: self.resizing,
+            resizing: self.drag.as_ref().and_then(Drag::border),
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
             tab,

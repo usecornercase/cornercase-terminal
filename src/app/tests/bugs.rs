@@ -15,18 +15,12 @@ fn resetting_the_interaction_closes_dialogs_and_ends_drags() {
     press(&mut app, row);
     app.overlay = Some(Overlay::Usage);
     app.nav = Some(ui::Nav::Projects);
-    app.resizing = Some(ui::Border::Projects);
-    app.divider_drag = Some((1, vec![true]));
-    app.selecting = Some(1);
-    assert!(app.row_drag.is_some() && app.hover.is_some());
+    assert!(matches!(app.drag, Some(Drag::Row(_))) && app.hover.is_some());
 
     app.reset_interaction();
 
     assert!(app.overlay.is_none());
-    assert_eq!(
-        (app.nav, app.hover, app.row_drag, app.resizing, app.divider_drag, app.selecting),
-        (None, None, None, None, None, None)
-    );
+    assert_eq!((app.nav, app.hover, app.drag), (None, None, None));
 }
 
 #[test]

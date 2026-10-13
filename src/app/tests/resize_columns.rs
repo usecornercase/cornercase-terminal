@@ -71,7 +71,7 @@ fn the_drag_ends_on_release() {
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(45, from.y));
 
-    assert_eq!((app.resizing, app.widths.projects), (None, 40));
+    assert_eq!((app.drag, app.widths.projects), (None, 40));
 }
 
 fn hover(app: &mut App, pos: Position) {
@@ -139,7 +139,7 @@ fn esc_ends_the_drag_where_it_is() {
 
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
 
-    assert_eq!((app.resizing, app.widths, app.pointer(AREA)), (None, widths, pointer::Shape::Default));
+    assert_eq!((app.drag.as_ref(), app.widths, app.pointer(AREA)), (None, widths, pointer::Shape::Default));
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn the_prefix_key_ends_the_drag_and_brings_back_the_default_pointer() {
     send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
 
     assert!(matches!(app.overlay, Some(Overlay::Keys(None))));
-    assert_eq!((app.resizing, app.pointer(AREA)), (None, pointer::Shape::Default));
+    assert_eq!((app.drag.as_ref(), app.pointer(AREA)), (None, pointer::Shape::Default));
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn a_drag_away_from_the_border_keeps_resizing() {
 
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(39, from.y + 4));
 
-    assert_eq!((app.resizing, app.widths.projects), (Some(ui::Border::Projects), 40));
+    assert_eq!((app.drag, app.widths.projects), (Some(Drag::Border(ui::Border::Projects)), 40));
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn a_double_click_brings_back_the_default_width() {
     click(&mut app, moved);
     click(&mut app, moved);
 
-    assert_eq!((app.widths, app.resizing), (ui::Widths::default(), None));
+    assert_eq!((app.widths, app.drag), (ui::Widths::default(), None));
 }
 
 #[test]
@@ -203,7 +203,7 @@ fn a_click_right_after_a_drag_is_not_a_double_click() {
 
     press(&mut app, moved);
 
-    assert_eq!((app.widths.projects, app.resizing), (40, Some(ui::Border::Projects)));
+    assert_eq!((app.widths.projects, app.drag), (40, Some(Drag::Border(ui::Border::Projects))));
 }
 
 #[test]

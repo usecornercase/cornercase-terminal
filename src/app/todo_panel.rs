@@ -2,7 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
-use super::{App, Grab, RowDrag, Toast};
+use super::interaction::{Drag, Grab, RowDrag};
+use super::{App, Toast};
 use crate::todo::editor::Editor;
 use crate::todo::{Field, Removed};
 use crate::ui;
@@ -32,7 +33,7 @@ impl App {
         let light = self.theme.is_light() == Some(true);
         let muted = ui::muted(&self.theme);
         let mut view = panel::View { items, scroll: self.todo.scroll, adding, light, muted, drag: None };
-        if let Some((drag, pos)) = self.row_drag.filter(|d| d.moved).zip(self.hover)
+        if let Some((drag, pos)) = self.row_drag().filter(|d| d.moved).zip(self.hover)
             && let Grab::Todo(id) = drag.target
         {
             view.drag = Some((id, panel::drop(panel_area, &view, id, pos)));
@@ -149,8 +150,14 @@ impl App {
                 }
             }
             Some(Hit::Item { id, row, .. }) => {
-                self.row_drag =
-                    Some(RowDrag { target: Grab::Todo(id), row, moved: false, area, scrolled: None, fold: false });
+                self.drag = Some(Drag::Row(RowDrag {
+                    target: Grab::Todo(id),
+                    row,
+                    moved: false,
+                    area,
+                    scrolled: None,
+                    fold: false,
+                }));
             }
             None => {}
         }

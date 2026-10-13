@@ -95,7 +95,6 @@ struct Place {
 #[derive(Debug, Default)]
 pub struct Panel {
     pub open: bool,
-    pub selecting: Option<u32>,
     places: HashMap<u64, Place>,
     listings: HashMap<(u64, String), Arc<Vec<Entry>>>,
     generation: u64,
@@ -224,7 +223,6 @@ impl Panel {
 
     pub fn close(&mut self) {
         self.open = false;
-        self.selecting = None;
         self.unfocus();
     }
 
@@ -360,7 +358,6 @@ impl Panel {
         place.last = Some(path.to_string());
         place.viewer = Some(Viewer { path: path.to_string(), ..Viewer::default() });
         self.reading = None;
-        self.selecting = None;
     }
 
     pub fn close_file(&mut self, workspace: u64) {
@@ -368,7 +365,6 @@ impl Panel {
             place.viewer = None;
         }
         self.reading = None;
-        self.selecting = None;
     }
 
     pub fn list(&mut self, workspace: u64, root: &Path, now: Instant) -> Option<(u64, List)> {

@@ -5,7 +5,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::interaction::LinkPress;
+use super::interaction::{Drag, LinkPress};
 use crate::emulator::Snapshot;
 use crate::files::link::{self, Target};
 use crate::mouse::MouseMode;
@@ -27,28 +27,27 @@ impl App {
         };
         match ev.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                self.link_press = None;
+                self.drag = None;
                 let Some(target) = self.link_at(at) else { return false };
-                self.link_press = Some(LinkPress { term: id, at, target, held: reads.then_some(ev) });
+                self.drag = Some(Drag::Link(LinkPress { term: id, at, target, held: reads.then_some(ev) }));
                 reads
             }
             MouseEventKind::Drag(MouseButton::Left) => {
-                let Some(press) = self.link_press.clone().filter(|p| p.term == id && p.held.is_some()) else {
-                    return false;
-                };
+                let Some(press) = self.held_link().filter(|p| p.term == id) else { return false };
+                let press = press.clone();
                 if press.at == at {
                     return true;
                 }
-                self.link_press = None;
+                self.drag = None;
                 if let Some(held) = press.held {
                     self.forward_mouse(held, press.at);
                 }
                 false
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                let Some(press) = self.link_press.take().filter(|p| p.term == id && p.held.is_some()) else {
-                    return false;
-                };
+                let press = self.held_link().filter(|p| p.term == id).cloned();
+                self.drag = None;
+                let Some(press) = press else { return false };
                 if press.at == at {
                     self.open_link(&press.target);
                     return true;
@@ -59,6 +58,21 @@ impl App {
                 false
             }
             _ => false,
+        }
+    }
+
+    fn held_link(&self) -> Option<&LinkPress> {
+        match &self.drag {
+            Some(Drag::Link(press)) => press.held.is_some().then_some(press),
+            Some(
+                Drag::Border(_)
+                | Drag::Divider { .. }
+                | Drag::Row(_)
+                | Drag::Pane(_)
+                | Drag::Selection { .. }
+                | Drag::Lines { .. },
+            )
+            | None => None,
         }
     }
 
@@ -81,10 +95,10 @@ impl App {
     pub(super) fn link_hover(&self) -> Option<Position> {
         self.hover.filter(|_| {
             self.overlay.is_none()
-                && self.row_drag.is_none()
-                && self.pane_drag.is_none()
-                && self.selecting.is_none()
-                && self.divider_drag.is_none()
+                && match &self.drag {
+                    Some(Drag::Row(_) | Drag::Pane(_) | Drag::Selection { .. } | Drag::Divider { .. }) => false,
+                    Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
+                }
         })
     }
 

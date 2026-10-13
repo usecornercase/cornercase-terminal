@@ -146,7 +146,7 @@ fn a_drag_takes_esc_first() {
     open(&mut app, Side::Todo);
     press(&mut app, entry_pos());
     esc(&mut app);
-    assert_eq!((app.row_drag.is_none(), app.panel_shown()), (true, true));
+    assert_eq!((app.drag.is_none(), app.panel_shown()), (true, true));
     esc(&mut app);
     assert!(!app.panel_shown());
 }
@@ -160,7 +160,7 @@ fn a_drag_of_the_panel_border_takes_esc_first_and_puts_the_pointer_back() {
     mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), Position::new(AREA.width - 1, r.y + 1));
     assert_eq!(app.pointer(AREA), pointer::Shape::Columns);
     esc(&mut app);
-    assert_eq!((app.resizing, app.panel_shown(), app.pointer(AREA)), (None, true, pointer::Shape::Default));
+    assert_eq!((app.drag.as_ref(), app.panel_shown(), app.pointer(AREA)), (None, true, pointer::Shape::Default));
 }
 
 #[test]

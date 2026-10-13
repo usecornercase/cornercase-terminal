@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use crate::app::App;
 use crate::app::input::wheel;
 use crate::app::interaction::AUTO_SCROLL_EVERY;
+use crate::app::interaction::Drag;
 use crate::app::interaction::Grab;
 use crate::app::interaction::RowDrag;
 use crate::app::menus::Target;
@@ -16,18 +17,19 @@ use crate::ui::{self, SidebarRow, WorkspaceRow};
 
 impl App {
     pub(in crate::app) fn grab(&mut self, target: Target, row: Rect, area: Rect, fold: bool) {
-        self.row_drag = Some(RowDrag { target: Grab::Row(target), row, moved: false, area, scrolled: None, fold });
+        self.drag =
+            Some(Drag::Row(RowDrag { target: Grab::Row(target), row, moved: false, area, scrolled: None, fold }));
     }
 
     pub(in crate::app) fn drag_row(&mut self, drag: RowDrag, ev: MouseEvent, areas: &ui::Areas, area: Rect) {
         let pos = Position::new(ev.column, ev.row);
         match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) => {
-                self.row_drag = Some(RowDrag { moved: drag.moved || !drag.row.contains(pos), area, ..drag });
+                self.drag = Some(Drag::Row(RowDrag { moved: drag.moved || !drag.row.contains(pos), area, ..drag }));
                 self.auto_scroll(Instant::now());
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                self.row_drag = None;
+                self.drag = None;
                 let dropped = drag.moved || !drag.row.contains(pos);
                 match drag.target {
                     Grab::Row(target) if dropped => self.drop_row(target, pos, area),
@@ -46,9 +48,9 @@ impl App {
                         Grab::Todo(_) => self.scroll_todo(areas.changes, delta),
                     }
                 }
-                self.row_drag = Some(RowDrag { moved: true, area, ..drag });
+                self.drag = Some(Drag::Row(RowDrag { moved: true, area, ..drag }));
             }
-            _ => self.row_drag = None,
+            _ => self.drag = None,
         }
     }
 
@@ -135,7 +137,7 @@ impl App {
     }
 
     pub(in crate::app) fn auto_scroll(&mut self, now: Instant) {
-        let Some(drag) = self.row_drag.filter(|d| d.moved) else { return };
+        let Some(drag) = self.row_drag().filter(|d| d.moved) else { return };
         let Some(pos) = self.hover else { return };
         if drag.scrolled.is_some_and(|at| now.duration_since(at) < AUTO_SCROLL_EVERY) {
             return;
@@ -145,7 +147,7 @@ impl App {
             Grab::Row(target) => target,
             Grab::Todo(_) => {
                 if self.auto_scroll_todo(areas.changes, pos) {
-                    self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+                    self.drag = Some(Drag::Row(RowDrag { scrolled: Some(now), ..drag }));
                 }
                 return;
             }
@@ -154,7 +156,7 @@ impl App {
         if matches!(target, Target::Tab(..)) && !areas.tab_bar.is_empty() {
             if let Some(delta) = self.tab_strip(&areas).edge(pos) {
                 self.scroll.tab_bar = self.tab_strip(&areas).scrolled(delta);
-                self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+                self.drag = Some(Drag::Row(RowDrag { scrolled: Some(now), ..drag }));
             }
             return;
         }
@@ -167,6 +169,6 @@ impl App {
         let Some(delta) = rows.edge(pos) else { return };
         let scroll = if sidebar { &mut self.scroll.projects } else { &mut self.scroll.workspaces };
         *scroll = rows.scrolled(delta);
-        self.row_drag = Some(RowDrag { scrolled: Some(now), ..drag });
+        self.drag = Some(Drag::Row(RowDrag { scrolled: Some(now), ..drag }));
     }
 }

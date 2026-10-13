@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::interaction::Drag;
 use super::layout::Focus;
 use super::overlay::Overlay;
 use super::toast::NOT_READING;
@@ -16,11 +17,12 @@ pub(super) const WHEEL_ROWS: isize = 3;
 
 impl App {
     pub(super) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        let dragging = |app: &mut Self| {
-            app.row_drag.take().is_some()
-                || app.pane_drag.take().is_some()
-                || app.resizing.take().is_some()
-                || app.divider_drag.take().is_some()
+        let dragging = |app: &mut Self| match &app.drag {
+            Some(Drag::Border(_) | Drag::Divider { .. } | Drag::Row(_) | Drag::Pane(_)) => {
+                app.drag = None;
+                true
+            }
+            Some(Drag::Selection { .. } | Drag::Link(_) | Drag::Lines { .. }) | None => false,
         };
         if key.code == KeyCode::Esc && dragging(self) {
             return Ok(());
@@ -207,21 +209,19 @@ impl App {
     }
 
     fn continue_drag(&mut self, ev: MouseEvent, areas: &ui::Areas, area: Rect) -> bool {
-        if let Some(border) = self.resizing {
-            self.drag_border(border, ev, area);
-        } else if self.divider_drag.is_some() {
-            self.drag_divider(ev, areas.pane);
-        } else if let Some(drag) = self.pane_drag {
-            self.drag_pane(drag, ev, areas.pane, area);
-        } else if self.files.selecting.is_some() {
-            self.drag_lines(ev, areas.changes);
-        } else if let Some(term) = self.selecting {
-            let pane = self.tab().and_then(|t| t.rect(areas.pane, term)).unwrap_or(areas.pane);
-            self.drag_selection(term, ev, pane);
-        } else if let Some(drag) = self.row_drag {
-            self.drag_row(drag, ev, areas, area);
-        } else {
-            return false;
+        match self.drag.clone() {
+            Some(Drag::Border(border)) => self.drag_border(border, ev, area),
+            Some(Drag::Divider { tab, path }) => self.drag_divider(tab, &path, ev, areas.pane),
+            Some(Drag::Pane(drag)) => self.drag_pane(drag, ev, areas.pane, area),
+            Some(Drag::Lines { workspace, path, anchor }) => {
+                self.drag_lines(workspace, &path, anchor, ev, areas.changes);
+            }
+            Some(Drag::Selection { term, link }) => {
+                let pane = self.tab().and_then(|t| t.rect(areas.pane, term)).unwrap_or(areas.pane);
+                self.drag_selection(term, link, ev, pane);
+            }
+            Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
+            Some(Drag::Link(_)) | None => return false,
         }
         true
     }

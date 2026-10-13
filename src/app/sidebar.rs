@@ -1,6 +1,7 @@
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
 use super::menus::MenuAction;
@@ -108,8 +109,14 @@ impl App {
         let (p, w, t, pane) = places[i];
         let pane = self.projects[p].workspaces[w].tabs[t].panes[pane].id;
         let row = ui::agent_row(list, pitch, places.len(), scroll, i);
-        self.row_drag =
-            Some(RowDrag { target: Grab::Agent(pane), row, moved: false, area, scrolled: None, fold: false });
+        self.drag = Some(Drag::Row(RowDrag {
+            target: Grab::Agent(pane),
+            row,
+            moved: false,
+            area,
+            scrolled: None,
+            fold: false,
+        }));
     }
 
     pub(super) fn tab_lines(&self) -> ui::TabLines {

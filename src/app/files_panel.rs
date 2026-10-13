@@ -7,6 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::{Position, Rect};
 
 use super::input::wheel;
+use super::interaction::Drag;
 use super::{App, AppEvent, copy};
 use crate::changes::{Checkout, Tints};
 use crate::error::Result;
@@ -351,7 +352,7 @@ impl App {
             Some(Hit::Line(n)) => {
                 if let Some(viewer) = self.files.viewer_mut(workspace) {
                     viewer.selection = Some((n, n));
-                    self.files.selecting = Some(n);
+                    self.drag = Some(Drag::Lines { workspace, path: viewer.path.clone(), anchor: n });
                 }
             }
             Some(Hit::Fold(key)) => {
@@ -461,17 +462,23 @@ impl App {
         }
     }
 
-    pub(super) fn drag_lines(&mut self, ev: MouseEvent, panel_area: Rect) {
-        let Some(anchor) = self.files.selecting else { return };
+    pub(super) fn drag_lines(&mut self, workspace: u64, path: &str, anchor: u32, ev: MouseEvent, panel_area: Rect) {
+        let shown = self.files_shown()
+            && self.files_target().is_some_and(|(id, _)| id == workspace)
+            && self.files.viewer(workspace).is_some_and(|viewer| viewer.path == path);
+        if !shown {
+            self.drag = None;
+            return;
+        }
         match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) => {
-                let (Some((workspace, _)), Some(view)) = (self.files_target(), self.files_view()) else { return };
+                let Some(view) = self.files_view() else { return };
                 let Some(line) = panel::line_near(panel_area, &view, ev.row) else { return };
                 if let Some(viewer) = self.files.viewer_mut(workspace) {
                     viewer.selection = Some((anchor, line));
                 }
             }
-            _ => self.files.selecting = None,
+            _ => self.drag = None,
         }
     }
 

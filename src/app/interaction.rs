@@ -46,7 +46,71 @@ pub(super) struct LinkPress {
     pub(super) held: Option<MouseEvent>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Drag {
+    Border(ui::Border),
+    Divider { tab: u64, path: Vec<bool> },
+    Row(RowDrag),
+    Pane(PaneDrag),
+    Selection { term: u64, link: Option<LinkPress> },
+    Link(LinkPress),
+    Lines { workspace: u64, path: String, anchor: u32 },
+}
+
+impl Drag {
+    pub(super) fn border(&self) -> Option<ui::Border> {
+        match self {
+            Self::Border(border) => Some(*border),
+            Self::Divider { .. }
+            | Self::Row(_)
+            | Self::Pane(_)
+            | Self::Selection { .. }
+            | Self::Link(_)
+            | Self::Lines { .. } => None,
+        }
+    }
+
+    pub(super) fn divider(&self) -> Option<(u64, Vec<bool>)> {
+        match self {
+            Self::Divider { tab, path } => Some((*tab, path.clone())),
+            Self::Border(_)
+            | Self::Row(_)
+            | Self::Pane(_)
+            | Self::Selection { .. }
+            | Self::Link(_)
+            | Self::Lines { .. } => None,
+        }
+    }
+
+    pub(super) fn shows_hover(&self) -> bool {
+        match self {
+            Self::Pane(_) => false,
+            Self::Border(_)
+            | Self::Divider { .. }
+            | Self::Row(_)
+            | Self::Selection { .. }
+            | Self::Link(_)
+            | Self::Lines { .. } => true,
+        }
+    }
+}
+
 impl App {
+    pub(super) fn row_drag(&self) -> Option<RowDrag> {
+        match &self.drag {
+            Some(Drag::Row(drag)) => Some(*drag),
+            Some(
+                Drag::Border(_)
+                | Drag::Divider { .. }
+                | Drag::Pane(_)
+                | Drag::Selection { .. }
+                | Drag::Link(_)
+                | Drag::Lines { .. },
+            )
+            | None => None,
+        }
+    }
+
     pub(super) fn press_border(&mut self, border: ui::Border, now: Instant) {
         let double = self.border_click.is_some_and(|(b, at)| b == border && now.duration_since(at) < DOUBLE_CLICK);
         if double {
@@ -54,7 +118,7 @@ impl App {
             self.border_click = None;
         } else {
             self.border_click = Some((border, now));
-            self.resizing = Some(border);
+            self.drag = Some(Drag::Border(border));
         }
     }
 
@@ -72,7 +136,7 @@ impl App {
             };
             self.border_click = None;
         } else {
-            self.resizing = None;
+            self.drag = None;
         }
     }
 

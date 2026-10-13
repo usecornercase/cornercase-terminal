@@ -5,8 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::input::wheel;
-use super::interaction::DOUBLE_CLICK;
-use super::interaction::PaneDrag;
+use super::interaction::{DOUBLE_CLICK, Drag, LinkPress, PaneDrag};
 use super::menus::MenuAction;
 use super::menus::PaneAction;
 use super::overlay::Overlay;
@@ -49,7 +48,7 @@ impl App {
             if right && !program_takes_right {
                 let rect = tab.rect(area, id);
                 let tab = tab.id;
-                self.pane_drag = rect.map(|rect| PaneDrag { tab, pane: id, from: pos, rect, moved: false });
+                self.drag = rect.map(|rect| Drag::Pane(PaneDrag { tab, pane: id, from: pos, rect, moved: false }));
                 return;
             }
             if id != active {
@@ -73,7 +72,19 @@ impl App {
         if term.emulator.mouse_mode() == mouse::MouseMode::None && left {
             let id = term.id;
             if term.emulator.start_selection(at).is_ok() {
-                self.selecting = Some(id);
+                let link = match self.drag.take() {
+                    Some(Drag::Link(press)) => Some(press),
+                    Some(
+                        Drag::Border(_)
+                        | Drag::Divider { .. }
+                        | Drag::Row(_)
+                        | Drag::Pane(_)
+                        | Drag::Selection { .. }
+                        | Drag::Lines { .. },
+                    )
+                    | None => None,
+                };
+                self.drag = Some(Drag::Selection { term: id, link });
             }
             return;
         }
@@ -122,28 +133,30 @@ impl App {
         true
     }
 
-    pub(super) fn drag_selection(&mut self, id: u64, ev: MouseEvent, pane: Rect) {
+    pub(super) fn drag_selection(&mut self, id: u64, mut link: Option<LinkPress>, ev: MouseEvent, pane: Rect) {
         let Some(term) = self.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id) else {
-            self.selecting = None;
+            self.drag = None;
             return;
         };
         let at = pane_cell(pane, ev);
         if ev.kind == MouseEventKind::Drag(MouseButton::Left) {
-            if self.link_press.as_ref().is_some_and(|p| Some(p.at) != at) {
-                self.link_press = None;
+            if link.as_ref().is_some_and(|p| Some(p.at) != at) {
+                link = None;
             }
             if let Some(at) = at
                 && term.emulator.extend_selection(at).is_err()
             {
-                self.selecting = None;
+                self.drag = None;
+            } else {
+                self.drag = Some(Drag::Selection { term: id, link });
             }
             return;
         }
-        self.selecting = None;
+        self.drag = None;
         if let Ok(Some(text)) = term.emulator.finish_selection() {
             copy(&mut self.outbox.host_writes, &mut self.toast, &text);
         }
-        if let Some(press) = self.link_press.take().filter(|p| p.term == id && Some(p.at) == at) {
+        if let Some(press) = link.filter(|p| p.term == id && Some(p.at) == at) {
             self.open_link(&press.target);
         }
     }
@@ -160,20 +173,19 @@ impl App {
             self.divider_click = None;
         } else {
             self.divider_click = Some((tab, path.clone(), now));
-            self.divider_drag = Some((tab, path));
+            self.drag = Some(Drag::Divider { tab, path });
         }
     }
 
-    pub(super) fn drag_divider(&mut self, ev: MouseEvent, pane: Rect) {
-        let Some((tab, path)) = self.divider_drag.clone() else { return };
+    pub(super) fn drag_divider(&mut self, tab: u64, path: &[bool], ev: MouseEvent, pane: Rect) {
         if ev.kind != MouseEventKind::Drag(MouseButton::Left) {
-            self.divider_drag = None;
+            self.drag = None;
             return;
         }
         self.divider_click = None;
         let Some(t) = self.tab_mut().filter(|t| t.id == tab) else { return };
         if let Some(divider) = t.layout.dividers(pane).into_iter().find(|d| d.path == path) {
-            t.layout.set_ratio(&path, split::ratio_at(&divider, Position::new(ev.column, ev.row)));
+            t.layout.set_ratio(path, split::ratio_at(&divider, Position::new(ev.column, ev.row)));
         }
     }
 
@@ -181,16 +193,16 @@ impl App {
         let pos = Position::new(ev.column, ev.row);
         let moved = drag.moved || !drag.rect.contains(pos);
         match ev.kind {
-            MouseEventKind::Drag(MouseButton::Right) => self.pane_drag = Some(PaneDrag { moved, ..drag }),
+            MouseEventKind::Drag(MouseButton::Right) => self.drag = Some(Drag::Pane(PaneDrag { moved, ..drag })),
             MouseEventKind::Up(_) => {
-                self.pane_drag = None;
+                self.drag = None;
                 if moved {
                     self.drop_pane(drag, pos, pane, area);
                 } else {
                     self.open_pane_menu(drag.pane, drag.from, pane);
                 }
             }
-            _ => self.pane_drag = None,
+            _ => self.drag = None,
         }
     }
 
@@ -204,7 +216,19 @@ impl App {
     }
 
     pub(super) fn pane_landing(&self, pane: Rect) -> Option<(Rect, split::Place)> {
-        let drag = self.pane_drag.filter(|d| d.moved)?;
+        let drag = match &self.drag {
+            Some(Drag::Pane(drag)) if drag.moved => *drag,
+            Some(
+                Drag::Border(_)
+                | Drag::Divider { .. }
+                | Drag::Row(_)
+                | Drag::Pane(_)
+                | Drag::Selection { .. }
+                | Drag::Link(_)
+                | Drag::Lines { .. },
+            )
+            | None => return None,
+        };
         let tab = self.tab().filter(|t| t.id == drag.tab)?;
         tab.landing(pane, drag.pane, self.hover?).map(|l| (l.area, l.place))
     }

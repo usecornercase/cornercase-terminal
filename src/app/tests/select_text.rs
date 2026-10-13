@@ -78,7 +78,7 @@ fn a_program_that_wants_the_mouse_gets_the_drag_instead() {
 
     drag(&mut app, cell(0, 0), cell(4, 0));
 
-    assert_eq!((app.selecting, app.take_host_writes()), (None, Vec::<Vec<u8>>::new()));
+    assert_eq!((app.drag.clone(), app.take_host_writes()), (None, Vec::<Vec<u8>>::new()));
 }
 
 #[test]
