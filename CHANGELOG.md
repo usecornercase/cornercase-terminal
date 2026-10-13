@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.57
+## 0.12.61
 
 - No changes in the app. The terminal and the browser access no longer import the app: they send their own events, and the app builds the environment of every shell.
+
+## 0.12.60
+
+- No changes in the app. The settings dialog's view is now built in app/settings_dialog.rs instead of in the settings module.
 
 ## 0.12.56
 

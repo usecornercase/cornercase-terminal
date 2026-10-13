@@ -75,7 +75,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 
 - **Ids, not indices.** Every project, workspace, tab and pane gets an id from one counter. Menus, dialogs and background jobs refer to ids, so nothing breaks when the lists change underneath them.
 - **Closing is asynchronous.** Closing kills processes; a pane is removed when its shell exits, whether its PTY reader sends `Exited` or `App::refresh` finds the shell reaped first (a detached process can keep the PTY open long after the shell is gone).
-- **Pure state machines.** `issues::browser::Browser`, `settings::Settings` and `launch::Launch` contain no I/O: they take input and return actions or steps, which `App` carries out on threads. Answers carry their query and issue key, so stale ones are dropped.
+- **Pure state machines.** `issues::browser::Browser`, `settings::Settings` and `launch::Launch` contain no I/O: they take input and return actions or steps, which `App` carries out on threads. Answers carry their query and issue key, so stale ones are dropped. `Settings` also builds no UI view: it returns row and field text, picker titles and selection, and hints as plain data; `app/settings_dialog.rs` assembles its view and handles hit testing.
 - **Saving settles.** `persist::Saver` writes `session.json` (and `todos.json`) only after the state has been stable for 2 seconds, and `state.rs` migrates older session versions.
 
 ## Module map
@@ -118,7 +118,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
 | `search.rs`, `picker.rs` | Global search; the folder picker. |
-| `settings.rs`, `config.rs`, `secrets.rs` | The settings modal; `config.json` and its `Sidebar` and `Tabs` choices; `secrets.json`. |
+| `settings.rs`, `app/settings_dialog.rs`, `config.rs`, `secrets.rs` | The settings modal's state and plain row, edit and pick texts; the app builds and hit-tests its UI view. `config.json` owns the `Sidebar` and `Tabs` choices; `secrets.json` stores tokens. |
 | `state.rs` | The saved session and its `Widths` schema, its migrations and mapping to the hierarchy. |
 | `update.rs` | The hourly check for a newer release on GitHub and its changelog; downloading, verifying and swapping the binary. |
 | `clipboard.rs` | OSC 52. |

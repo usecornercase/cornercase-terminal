@@ -147,8 +147,7 @@ mod fetch {
         press(&mut s, KeyCode::Enter);
         s.edit.as_mut().expect("editing").input = "0".into();
         press(&mut s, KeyCode::Enter);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        assert_eq!(view.rows[1].value, "off");
+        assert_eq!(s.row_text(&Row::Fetch).value, "off");
     }
 
     #[test]
@@ -382,8 +381,7 @@ mod tokens {
         go_to(&mut s, &Row::Token(Source::Shortcut));
         press(&mut s, KeyCode::Enter);
         type_text(&mut s, "t0k");
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        assert_eq!(view.edit.map(|e| e.value).as_deref(), Some("•••"));
+        assert_eq!(s.edit_field().map(|(_, value)| value).as_deref(), Some("•••"));
     }
 }
 
@@ -533,8 +531,8 @@ mod agent_tabs {
         let mut s = settings();
         s.config.context = false;
         s.open_page(Page::Ui);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        let rows: Vec<(&str, &str)> = view.rows[6..9].iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
+        let texts: Vec<RowText> = s.rows()[6..9].iter().map(|row| s.row_text(row)).collect();
+        let rows: Vec<(&str, &str)> = texts.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
 }
@@ -581,9 +579,7 @@ mod sidebar {
         s.config.sidebar = "projects_on_top".into();
         go_to(&mut s, &Row::Sidebar);
         press(&mut s, KeyCode::Enter);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        let pick = view.pick.expect("a pick list");
-        assert_eq!(pick.selected.map(|i| pick.items[i].0.as_str()), Some("projects_on_top"));
+        assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("projects_on_top"));
     }
 
     #[test]
@@ -599,8 +595,8 @@ mod sidebar {
     fn the_tabs_start_in_the_sidebar() {
         let mut s = settings();
         s.open_page(Page::Ui);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        assert_eq!((view.rows[1].label.as_str(), view.rows[1].value.as_str()), ("tabs", "sidebar"));
+        let row = s.row_text(&Row::Tabs);
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("tabs", "sidebar"));
     }
 
     #[test]
@@ -608,8 +604,7 @@ mod sidebar {
         let mut s = settings();
         s.config.sidebar = "sideways".into();
         s.open_page(Page::Ui);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        assert_eq!(view.rows[0].value, "projects_on_top");
+        assert_eq!(s.row_text(&Row::Sidebar).value, "projects_on_top");
     }
 }
 
@@ -631,9 +626,7 @@ mod notifications {
         s.config.desktop_notifications = "osc9".into();
         go_to(&mut s, &Row::Notifications);
         press(&mut s, KeyCode::Enter);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        let pick = view.pick.expect("a pick list");
-        assert_eq!(pick.selected.map(|i| pick.items[i].0.as_str()), Some("osc9"));
+        assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("osc9"));
     }
 }
 
@@ -648,8 +641,7 @@ mod prefix {
     }
 
     fn value(s: &Settings) -> String {
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        view.rows.iter().find(|r| r.label == "prefix key").map(|r| r.value.clone()).expect("the prefix row")
+        s.row_text(&Row::Prefix).value
     }
 
     #[test]
@@ -778,8 +770,7 @@ mod agent {
         let mut s = settings();
         s.config.agent_args.insert("claude".into(), vec!["--dangerously-skip-permissions".into()]);
         s.open_page(Page::Agents);
-        let ui::Overlay::Settings(view) = s.view() else { panic!("not the settings") };
-        let claude = view.rows.iter().find(|r| r.label == "claude").expect("claude row");
+        let claude = s.row_text(&Row::Kind("claude".into()));
         assert_eq!((claude.value.as_str(), claude.dangerous), ("skip permissions (dangerous)", true));
     }
 }
