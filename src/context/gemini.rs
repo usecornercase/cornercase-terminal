@@ -182,11 +182,22 @@ fn counted(entry: &Value) -> Option<Record> {
 }
 
 pub(super) fn look(pid: i32, since: SystemTime, previous: Option<Session>, footer: Option<String>) -> Option<Session> {
+    look_among(pid, since, previous, footer, process::all)
+}
+
+fn look_among(
+    pid: i32,
+    since: SystemTime,
+    previous: Option<Session>,
+    footer: Option<String>,
+    scan: impl FnOnce() -> Vec<i32>,
+) -> Option<Session> {
+    let others = scan();
     let family: Vec<i32> = std::iter::once(pid).chain(process::descendants(pid)).collect();
     let holder = family.iter().rev().copied().find(|&pid| named(&process::args(pid), NAME)).unwrap_or(pid);
     let dir = home(holder, "GEMINI_CLI_HOME", ".gemini", ".gemini")?;
     let cwd = folder(holder)?;
-    if process::all().into_iter().any(|other| {
+    if others.into_iter().any(|other| {
         !family.contains(&other)
             && named(&process::args(other), NAME)
             && folder(other).as_ref() == Some(&cwd)

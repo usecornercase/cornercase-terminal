@@ -4,7 +4,7 @@ use super::App;
 use super::menus::Target;
 use super::overlay::Overlay;
 use crate::log::{self};
-use crate::project::{Group, Phase, Project, Tab, Workspace, shift_active};
+use crate::project::{Group, Phase, Project, Tab, Workspace, group, shift_active};
 use crate::search::Goto;
 use crate::term::Term;
 use crate::ui::{self};
@@ -291,13 +291,7 @@ impl App {
     }
 
     pub(super) fn add_group(&mut self, name: String) -> u64 {
-        let taken =
-            |&(icon, colour): &(char, u8)| self.groups.iter().any(|g| (g.entry.icon, g.entry.colour) == (icon, colour));
-        let (icon, colour) = ui::GROUP_STYLES
-            .iter()
-            .copied()
-            .find(|style| !taken(style))
-            .unwrap_or(ui::GROUP_STYLES[self.groups.len() % ui::GROUP_STYLES.len()]);
+        let (icon, colour) = group::preset(&self.groups);
         let id = self.take_id();
         self.groups.push(Group { id, entry: ui::GroupEntry { name, icon, colour, collapsed: false } });
         id

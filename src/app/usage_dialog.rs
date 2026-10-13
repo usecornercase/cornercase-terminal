@@ -9,7 +9,7 @@ use crate::agents;
 use crate::log::{Job, Level};
 use crate::panics;
 use crate::time;
-use crate::ui::{self};
+use crate::ui;
 use crate::usage;
 
 impl App {
@@ -39,10 +39,11 @@ impl App {
     }
 
     pub(super) fn usage_view(&self) -> ui::Usage {
-        let mut view = self.usage.view(Instant::now(), time::now());
-        view.page = self.usage_page;
-        view.stats = self.stats_view(SystemTime::now());
-        view
+        ui::Usage {
+            page: self.usage_page,
+            stats: self.stats_view(SystemTime::now()),
+            sections: sections(&self.usage, Instant::now(), time::now()),
+        }
     }
 
     pub(super) fn switch_usage(&mut self, page: usage::Page) {
@@ -69,3 +70,37 @@ impl App {
         self.stats.view(now)
     }
 }
+
+fn section(agent: usage::Agent, probe: &usage::Probe, now: Instant, clock: i64) -> ui::UsageSection {
+    let report = probe.last().map(|(r, _)| r);
+    let plan = report.and_then(|r| r.plan.as_deref()).map_or_else(String::new, |p| format!(" · {p} plan"));
+    let windows = report.map(|r| r.windows.as_slice()).unwrap_or_default();
+    let status = if probe.loading() {
+        "loading…".into()
+    } else {
+        probe.last().map(|(_, at)| usage::updated(now.duration_since(*at).as_secs())).unwrap_or_default()
+    };
+    ui::UsageSection {
+        title: format!("{}{plan}", agent.title()),
+        status,
+        error: probe.error().map(|e| format!("usage unavailable: {e}")),
+        windows: windows
+            .iter()
+            .map(|w| ui::UsageWindow {
+                label: w.label.clone(),
+                percent: w.percent,
+                severity: w.severity,
+                resets: w.resets_at.map(|at| usage::until(at - clock)).unwrap_or_default(),
+            })
+            .collect(),
+        empty: report.and_then(|r| r.notice.or_else(|| (!r.limited).then(|| agent.no_limits()))),
+        extra: report.and_then(|r| r.extra.clone()),
+    }
+}
+
+fn sections(state: &usage::State, now: Instant, clock: i64) -> Vec<ui::UsageSection> {
+    state.shown().map(|(agent, probe)| section(agent, probe, now, clock)).collect()
+}
+
+#[cfg(test)]
+mod tests;

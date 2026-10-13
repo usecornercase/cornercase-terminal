@@ -7,7 +7,10 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::split::{self, Dir, Node, Place};
 use crate::term::Term;
-use crate::ui::GroupEntry;
+
+pub mod group;
+
+pub use group::Group;
 
 pub struct Landing {
     pub area: Rect,
@@ -241,11 +244,6 @@ impl Workspace {
             term.kill();
         }
     }
-}
-
-pub struct Group {
-    pub id: u64,
-    pub entry: GroupEntry,
 }
 
 pub struct Project {

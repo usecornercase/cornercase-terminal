@@ -8,7 +8,7 @@ use crate::config::{self, Config};
 use crate::issues::Source;
 use crate::log::{self, Level};
 use crate::secrets;
-use crate::settings::{self, Page, Settings, Status};
+use crate::settings::{self, DONE, Page, Settings, Status};
 use crate::ui::{self};
 
 impl App {
@@ -79,7 +79,7 @@ impl App {
         let rows_now = s.rows();
         let sections: Vec<&'static str> = rows_now.iter().map(settings::Row::section).collect();
         let removable: Vec<bool> = (0..rows_now.len()).map(|i| s.removable(i).is_some()).collect();
-        let movable: Vec<bool> = rows_now.iter().map(|r| matches!(r, settings::Row::Tab(_))).collect();
+        let movable: Vec<bool> = rows_now.iter().map(settings::Row::movable).collect();
         let pick = s.pick.as_ref().map(|p| (s.pick_choices().len(), p.search.scroll()));
         let tabs = Page::ALL.map(Page::name);
         let layout = ui::SettingsLayout {
@@ -156,4 +156,49 @@ pub(super) fn changed_keys(old: &Config, new: &Config) -> Vec<String> {
         return Vec::new();
     };
     new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).map(|(key, _)| key).collect()
+}
+
+pub(super) fn settings_view(settings: &Settings) -> ui::Settings {
+    let rows: Vec<ui::SettingsRow> = settings
+        .rows()
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let text = settings.row_text(row);
+            ui::SettingsRow {
+                section: row.section(),
+                label: text.label,
+                value: text.value,
+                note: text.note,
+                dangerous: text.dangerous,
+                removable: settings.removable(i).is_some(),
+                movable: row.movable(),
+            }
+        })
+        .collect();
+    let edit = settings.edit_field().map(|(label, value)| ui::SettingsEdit { label, value });
+    let pick = settings.pick.as_ref().map(|pick| {
+        let choices = settings.pick_choices();
+        ui::SettingsPick {
+            title: settings.pick_title(),
+            filter: pick.search.query().to_string(),
+            items: choices.iter().map(|item| (item.value.clone(), item.note.clone(), item.dangerous)).collect(),
+            selected: settings.pick_selected(),
+            scroll: pick.search.scroll(),
+        }
+    });
+    let error = settings.edit.as_ref().and_then(|e| e.error.clone());
+    let note = if settings.busy() { Some(ui::Note::Busy("checking…")) } else { error.map(ui::Note::Error) };
+    let hint = settings.hint();
+    ui::Settings {
+        tabs: Page::ALL.iter().map(|p| p.name()).collect(),
+        tab: settings.page.index(),
+        rows,
+        cursor: settings.cursor,
+        edit,
+        pick,
+        note,
+        hint,
+        submit: DONE,
+    }
 }
