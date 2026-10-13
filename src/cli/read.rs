@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
-use super::{ReadArgs, print_json, print_out, say};
+use super::args::ReadArgs;
+use super::{print_json, print_out, say};
 use crate::client::ask;
 use crate::control::{self, LastMessage};
 use crate::error::{Error, Result};

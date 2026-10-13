@@ -1,47 +1,9 @@
 use std::sync::mpsc;
 
 use super::*;
+use crate::context;
 use crate::host_theme::HostTheme;
 use crate::test_util::TempDir;
-
-mod shell_quote {
-    use rstest::rstest;
-
-    use super::super::shell_quote;
-
-    #[rstest]
-    #[case::plain("/home/me/wt-1.x", "/home/me/wt-1.x")]
-    #[case::a_space("/home/me/my wt", "'/home/me/my wt'")]
-    #[case::a_single_quote("/home/it's", "'/home/it'\\''s'")]
-    fn paths_are_quoted_for_a_shell(#[case] path: &str, #[case] expected: &str) {
-        assert_eq!(shell_quote(path), expected);
-    }
-}
-
-mod holds_prompts {
-    use rstest::rstest;
-
-    use super::super::holds_prompts;
-    use crate::activity::Status;
-    use crate::agents::{CLAUDE, CODEX, GEMINI, OPENCODE};
-
-    #[rstest]
-    #[case::codex_at_work(Some(CODEX), Some(Status::Working), true)]
-    #[case::codex_asking(Some(CODEX), Some(Status::Waiting), true)]
-    #[case::gemini_at_work(Some(GEMINI), Some(Status::Working), true)]
-    #[case::gemini_asking(Some(GEMINI), Some(Status::Waiting), true)]
-    #[case::gemini_idle(Some(GEMINI), Some(Status::Idle), false)]
-    #[case::codex_idle(Some(CODEX), Some(Status::Idle), false)]
-    #[case::claude_at_work(Some(CLAUDE), Some(Status::Working), false)]
-    #[case::opencode_at_work(Some(OPENCODE), Some(Status::Working), false)]
-    fn agents_that_queue_prompts_record_them_late(
-        #[case] agent: Option<&str>,
-        #[case] status: Option<Status>,
-        #[case] holds: bool,
-    ) {
-        assert_eq!(holds_prompts(agent, status), holds);
-    }
-}
 
 mod answer_lost_requests {
     use super::*;

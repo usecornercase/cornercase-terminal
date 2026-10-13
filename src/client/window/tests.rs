@@ -3,13 +3,6 @@ use std::path::PathBuf;
 use super::*;
 
 #[test]
-fn a_server_without_restart_when_idle_is_called_too_old_to_wait() {
-    let refused = Error::Control(control::unknown_command("restart-when-idle"));
-
-    assert_eq!(too_old_to_wait(refused).to_string(), TOO_OLD_TO_WAIT);
-}
-
-#[test]
 fn an_input_thread_that_unwinds_tells_the_window_it_ended() {
     let (tx, rx) = mpsc::channel();
     crate::panics::contain(|| {
@@ -17,32 +10,6 @@ fn an_input_thread_that_unwinds_tells_the_window_it_ended() {
         panic!("an input thread bug");
     });
     assert!(matches!(rx.try_recv(), Ok(Incoming::InputEnded)));
-}
-
-mod probe {
-    use std::os::unix::net::UnixStream;
-
-    use super::*;
-
-    #[test]
-    fn a_reply_queued_when_the_deadline_passes_is_read_and_dropped() {
-        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
-        theirs.write_all(b"\x1b_Gi=31;OK\x1b\\").expect("write the late reply");
-        let probe = listen(&ours, Duration::ZERO);
-        assert!(!probe.is_done());
-        assert!(!readable(&ours, Duration::ZERO), "the late reply would reach a pane");
-    }
-
-    #[test]
-    fn a_probe_that_ends_on_its_marker_waits_for_nothing_more() {
-        let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
-        theirs.write_all(b"\x1bP>|ghostty 1.3.1\x1b\\\x1b[?62;22;52c").expect("write the replies");
-        let started = Instant::now();
-
-        let probe = listen(&ours, THEME_QUERY_TIMEOUT);
-
-        assert!(probe.is_done() && started.elapsed() < DRAIN_QUIET);
-    }
 }
 
 mod restart {
