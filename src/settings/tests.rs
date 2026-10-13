@@ -52,9 +52,10 @@ mod pages {
 
     #[rstest]
     #[case::worktrees(Page::Worktrees, &[""])]
-    #[case::agents(Page::Agents, &["Agent", "How each agent starts", "Telegram"])]
+    #[case::agents(Page::Agents, &["Agent", "How each agent starts"])]
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
-    #[case::ui(Page::Ui, &["", "Remote"])]
+    #[case::ui(Page::Ui, &[""])]
+    #[case::remote(Page::Remote, &["Browser", "Telegram"])]
     fn hold_their_sections(#[case] page: Page, #[case] expected: &[&str]) {
         assert_eq!(sections(page), expected);
     }
@@ -67,8 +68,8 @@ mod pages {
     #[rstest]
     #[case::tab(KeyCode::Tab, KeyModifiers::NONE, Page::Agents)]
     #[case::right(KeyCode::Right, KeyModifiers::NONE, Page::Agents)]
-    #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Ui)]
-    #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Ui)]
+    #[case::shift_tab_wraps(KeyCode::BackTab, KeyModifiers::SHIFT, Page::Remote)]
+    #[case::left_wraps(KeyCode::Left, KeyModifiers::NONE, Page::Remote)]
     fn are_switched_with_keys(#[case] code: KeyCode, #[case] modifiers: KeyModifiers, #[case] expected: Page) {
         let mut s = settings();
         key(&mut s, code, modifiers);
@@ -174,11 +175,12 @@ mod telegram {
     #[test]
     fn the_phone_row_shows_once_a_bot_is_set() {
         let mut s = settings();
-        s.open_page(Page::Agents);
+        s.open_page(Page::Remote);
         let alone = s.rows().contains(&Row::TelegramChat);
         let mut s = with_bot(None);
-        s.open_page(Page::Agents);
-        assert_eq!((alone, s.rows().ends_with(&[Row::TelegramBot, Row::TelegramChat])), (false, true));
+        s.open_page(Page::Remote);
+        assert_eq!(s.rows(), [Row::Remote, Row::TelegramBot, Row::TelegramChat]);
+        assert!(!alone);
     }
 
     #[test]
@@ -518,7 +520,7 @@ mod remote {
     #[test]
     fn paired_browsers_show_only_when_there_are_some() {
         let mut s = settings();
-        s.open_page(Page::Ui);
+        s.open_page(Page::Remote);
         let without = s.rows().contains(&Row::Browsers);
         s.browsers = 2;
         assert_eq!((without, s.rows().contains(&Row::Browsers)), (false, true));
@@ -618,8 +620,7 @@ mod sidebar {
                 Row::Detail(Detail::Memory),
                 Row::Notifications,
                 Row::Updates,
-                Row::Prefix,
-                Row::Remote
+                Row::Prefix
             ]
         );
     }

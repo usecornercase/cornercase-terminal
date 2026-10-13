@@ -4,8 +4,9 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.83
 
-- Keep working with your agents from Telegram when you leave the computer. Make a bot with @BotFather, paste its token in **Settings › Agents › Telegram**, and scan the code shown under **phone** to pair your chat.
-- Click **Away**, next to **Quit**, press `o` in the keys menu, or run `cornercase away`. While you are away, an agent that needs you sends you its question, with buttons for its options, and one that finishes sends you what it wrote. Reply to a message and your reply goes to that agent. Typing in a cornercase window, or clicking **Away** again, turns it off.
+- Keep working with your agents from Telegram when you leave the computer. Make a bot with @BotFather, paste its token in **Settings › Remote**, and scan the code shown under **phone** to pair your chat.
+- Click **Remote**, at the bottom of the sidebar, then **continue on Telegram**, press `o` in the keys menu, or run `cornercase away`. While you are away, an agent that needs you sends you its question, with buttons for its options, and one that finishes sends you what it wrote. Reply to a message and your reply goes to that agent. It stays on until you turn it off the same way, or with `/back` from the chat.
+- Remote access from your phone's browser moved to the same **Settings › Remote** tab, and **Remote** now opens a menu with both.
 - From the chat, `/status` lists your agents, with buttons to write to one, see its screen or stop its turn, and `/new` starts an agent, in a new worktree if you like.
 
 ## 0.12.82

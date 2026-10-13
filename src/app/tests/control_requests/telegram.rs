@@ -185,24 +185,40 @@ mod away {
     use super::*;
 
     #[test]
-    fn the_away_button_shows_once_paired_toggles_and_typing_in_a_window_ends_it() {
+    fn the_remote_menu_turns_away_on_and_off_and_typing_changes_nothing() {
         let (mut app, _rx) = app();
-        assert_eq!(app.away_button(), None);
+        assert_eq!(app.remote_button(), None);
         let mut phone = Phone::paired(&mut app);
-        assert_eq!(app.away_button(), Some(false));
+        assert_eq!(app.remote_button(), Some(false));
 
-        click(&mut app, ui::away_button(areas().quit, false).as_position());
-        let away = (app.telegram.away, toast(&app).map(String::from));
-        click(&mut app, ui::away_button(areas().quit, true).as_position());
-        let toggled = app.telegram.away;
-        click(&mut app, ui::away_button(areas().quit, false).as_position());
+        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        let labels = menu_labels(&app);
+        pick(&mut app, "continue on Telegram");
+        let away = (app.telegram.away, app.remote_button(), toast(&app).map(String::from));
         send_key(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
+        let still = app.telegram.away;
+        click(&mut app, ui::remote_button(areas().usage, true).as_position());
+        pick(&mut app, "stop messaging on Telegram");
 
-        assert_eq!(away, (true, Some("away: agents message you on Telegram until you type in a window".into())));
-        assert!(!toggled && !app.telegram.away);
+        assert_eq!(labels, ["set up your phone's browser…", "continue on Telegram"]);
+        assert_eq!(away, (true, Some(true), Some("away: agents message you on Telegram".into())));
+        assert!(still && !app.telegram.away);
         let said: Vec<String> = phone.read(&mut app).iter().map(|(_, order)| html(order).to_string()).collect();
         let starts: Vec<&str> = said.iter().map(|html| html.split("</b>").next().unwrap_or_default()).collect();
-        assert_eq!(starts, ["<b>Away", "<b>Back at the computer", "<b>Away", "<b>Back at the computer"], "{said:?}");
+        assert_eq!(starts, ["<b>Away", "<b>Back"], "{said:?}");
+    }
+
+    #[test]
+    fn what_is_not_set_up_opens_its_row_in_settings() {
+        let (mut app, _rx) = app();
+        let _phone = Phone::set_up(&mut app, None);
+
+        click(&mut app, ui::remote_button(areas().usage, false).as_position());
+        pick(&mut app, "set up Telegram…");
+
+        let Some(Overlay::Settings(settings)) = &app.overlay else { panic!("settings are not open") };
+        let row = settings.rows().get(settings.cursor).cloned();
+        assert_eq!((settings.page, row), (Page::Remote, Some(crate::settings::Row::TelegramBot)));
     }
 
     #[test]

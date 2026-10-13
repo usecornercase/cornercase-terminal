@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use crossterm::event::{Event, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 use serde_json::Value;
 
@@ -24,13 +24,12 @@ mod notices;
 pub(in crate::app) const CLIENTS: u64 = 1 << 62;
 const ROUTES: usize = 256;
 const RECENT: i64 = 60;
-const NOT_PAIRED: &str = "Telegram is not set up: pair a phone in Settings › Agents › Telegram";
-const AWAY: &str = "away: agents message you on Telegram until you type in a window";
+const NOT_PAIRED: &str = "Telegram is not set up: pair a phone in Settings › Remote";
+const AWAY: &str = "away: agents message you on Telegram";
 const BACK: &str = "back: agents no longer message you on Telegram";
-const AWAY_HTML: &str = "<b>Away</b>: I'll message you here when an agent needs you or finishes. Typing in a \
-    cornercase window, or /back, stops it.";
+const AWAY_HTML: &str = "<b>Away</b>: I'll message you here when an agent needs you or finishes, until you send \
+    /back or turn it off in cornercase.";
 const BACK_HTML: &str = "<b>Back</b>: I no longer message you here. /away starts again.";
-const BACK_AT_HTML: &str = "<b>Back at the computer</b>: I no longer message you here. /away starts again.";
 const CONNECTED: &str = "Telegram connected";
 
 #[derive(Debug)]
@@ -498,8 +497,14 @@ impl App {
         }
     }
 
-    pub(super) fn away_button(&self) -> Option<bool> {
-        self.telegram.paired().then_some(self.telegram.away)
+    pub(super) fn toggle_away(&mut self) {
+        if !self.telegram.paired() {
+            self.open_settings_on(&settings::Row::TelegramBot);
+        } else if self.telegram.away {
+            self.come_back(By::Window);
+        } else if let Err(why) = self.go_away(By::Window) {
+            self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
+        }
     }
 
     pub(super) fn go_away(&mut self, by: By) -> Result<(), String> {
@@ -525,9 +530,8 @@ impl App {
         }
         self.telegram.away = false;
         log::info!("telegram", "back", by = by.name());
-        let html = if by == By::Window { BACK_AT_HTML } else { BACK_HTML };
-        self.say(html.into(), Vec::new(), None, None);
-        if by == By::Command {
+        self.say(BACK_HTML.into(), Vec::new(), None, None);
+        if by != By::Telegram {
             self.toast = Some(Toast::new(BACK, ui::ToastIcon::Check));
         }
         self.refresh_telegram_note();
@@ -540,28 +544,6 @@ impl App {
             self.go_away(By::Command)?;
         }
         Ok(Some(serde_json::json!({ "away": self.telegram.away })))
-    }
-
-    pub(super) fn returning(&self, event: &Event, area: Rect) -> bool {
-        let used = match event {
-            Event::Key(key) => key.kind == KeyEventKind::Press,
-            Event::Paste(_) => true,
-            Event::Mouse(mouse) => {
-                let pressed = matches!(
-                    mouse.kind,
-                    MouseEventKind::Down(_) | MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                );
-                let at = Position::new(mouse.column, mouse.row);
-                pressed && !self.on_away_button(at, area)
-            }
-            _ => false,
-        };
-        self.telegram.away && used
-    }
-
-    fn on_away_button(&self, at: Position, area: Rect) -> bool {
-        let areas = self.layout(area).shown(self.nav);
-        self.away_button().is_some_and(|on| ui::away_button(areas.quit, on).contains(at))
     }
 }
 

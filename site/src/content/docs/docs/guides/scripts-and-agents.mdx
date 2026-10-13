@@ -55,7 +55,7 @@ group 9  personal  collapsed
 | `focus` | Shows a pane, tab, workspace or project in the window. |
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
 | `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/). |
-| `away` | Has agents message you [on Telegram](../telegram/) until you type in a window; `--off` stops it. |
+| `away` | Has agents message you [on Telegram](../telegram/); `--off` stops it. |
 | `skill` | Prints the instructions that teach coding agents these commands. |
 
 `cornercase --help` and `cornercase COMMAND --help` describe every option, with examples.
@@ -288,7 +288,7 @@ cornercase away          # agents message you on Telegram
 cornercase away --off    # they stop
 ```
 
-`away` turns on the [Telegram](../telegram/) away mode, as the **`Away`** button does: while it is on, an agent that needs you or finishes its turn sends you its question or its last message, and what you reply goes to it. Typing in a cornercase window turns it off. It fails when no phone is paired, saying where to set it up. An agent can run it for you when you tell it you are leaving.
+`away` turns on the [Telegram](../telegram/) away mode, as **Remote › continue on Telegram** does: while it is on, an agent that needs you or finishes its turn sends you its question or its last message, and what you reply goes to it, until you turn it off. It fails when no phone is paired, saying where to set it up. An agent can run it for you when you tell it you are leaving.
 
 ### Restart without cutting an agent off
 

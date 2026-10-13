@@ -35,6 +35,8 @@ fn a_paired_browser_types_into_the_shell_over_a_websocket() {
     ui.wait_for("the remote button shows", |s| s.contains("Remote"));
 
     ui.click(ui.position_of("Remote"));
+    ui.wait_for("the remote menu opens", |s| s.contains("open in your phone's browser"));
+    ui.click(ui.position_of("open in your phone's browser"));
     ui.wait_for("the pairing address shows", |s| s.contains("pair?t="));
     let token = pairing_token(&ui.text());
     let paired = http_get(port, &format!("/pair?t={token}"));

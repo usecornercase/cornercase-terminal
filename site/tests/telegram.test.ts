@@ -6,30 +6,31 @@ import { world } from '../src/lib/demo/world';
 
 const key = (k: string, ctrl = false) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: ctrl, altKey: false, shiftKey: false });
 
-test('o in the keys menu says Telegram is not set up', () => {
+test('o in the keys menu opens the Telegram bot row in Settings › Remote', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.config.prefix = 'ctrl+]';
   inputKey(app, key(']', true));
   app.render();
   assert.ok(app.textAt('away on Telegram'));
   inputKey(app, key('o'));
-  assert.equal(app.toast?.text, 'Telegram is not set up: pair a phone in Settings › Agents › Telegram');
-  assert.equal(app.toast?.bug, true);
+  assert.equal(app.overlay?.kind, 'settings');
+  if (app.overlay?.kind !== 'settings') return;
+  assert.equal(app.settingsRows(app.overlay.page)[app.overlay.cursor].id, 'telegram');
+  app.render();
+  assert.ok(app.textAt('make a bot with @BotFather'));
   app.destroy();
 });
 
-test('a bot token in Settings › Agents shows the phone row', () => {
+test('the Remote tab holds the browser and Telegram, which need a real cornercase', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
   app.openSettings();
-  app.settingsPage(1);
-  const rows = () => app.settingsRows(1).map((row) => row.id);
-  assert.equal(rows().at(-1), 'telegram');
-  app.settingsClick(rows().indexOf('telegram'));
-  for (const c of '1:t') inputKey(app, key(c));
-  inputKey(app, key('Enter'));
-  app.advance(1000);
-  assert.deepEqual(rows().slice(-2), ['telegram', 'telegram-phone']);
+  inputKey(app, key('ArrowLeft'));
+  assert.equal(app.overlay?.kind === 'settings' && app.overlay.page, 4);
+  const rows = app.settingsRows(4);
+  assert.deepEqual(rows.map((row) => row.section), ['Browser', 'Telegram']);
+  assert.equal(app.settingsRows(1).some((row) => row.section === 'Telegram'), false);
+  app.settingsClick(1);
   app.render();
-  assert.ok(app.textAt('@cornercase_bot'));
+  assert.ok(app.textAt('the demo has neither Tailscale nor Telegram'));
   app.destroy();
 });

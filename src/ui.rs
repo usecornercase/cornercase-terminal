@@ -18,7 +18,6 @@ mod rows;
 mod sidebar;
 mod stats;
 pub(crate) mod tab_bar;
-mod telegram;
 mod theme;
 mod toast;
 pub mod todo;
@@ -67,14 +66,13 @@ pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_dr
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::{Nav, full_layout};
 pub(crate) use pane::{TabView, scrollback_badge};
-pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as remote_done};
+pub(crate) use remote_access::{RemoteAccess, TELEGRAM_TITLE, button as remote_button, done as remote_done};
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
-pub(crate) use telegram::{TITLE as TELEGRAM_TITLE, away_button};
 pub(crate) use theme::muted;
 #[cfg(test)]
 pub(crate) use toast::toast_area;
@@ -120,8 +118,8 @@ use theme::{BRAND_COLOR, hover_colour, line_colour, surface_colour};
 use toast::draw_toast;
 use tree::draw_tree;
 use widgets::{
-    action_style, button_style, centered, dim, draw_band, draw_close, draw_separator, hovered, hovered_at, middle,
-    overlay_block, put, rail, sidebar_hovered, tab_style,
+    action_style, button_style, button_width, centered, dim, draw_band, draw_close, draw_separator, hovered,
+    hovered_at, middle, overlay_block, put, rail, sidebar_hovered, tab_style,
 };
 use workspaces::{draw_details, draw_workspaces};
 
@@ -149,7 +147,6 @@ pub(crate) struct View<'a> {
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
-    pub(crate) away: Option<bool>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,

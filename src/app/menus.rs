@@ -8,6 +8,7 @@ use crate::log::{self};
 use crate::project::Hierarchy;
 use crate::project::group;
 use crate::project::split::Dir;
+use crate::settings;
 use crate::ui::{self};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +79,8 @@ pub(super) enum MenuAction {
     OpenProject,
     NewGroup,
     Pane(u64, PaneAction),
+    Browser,
+    Away,
 }
 
 impl App {
@@ -114,6 +117,11 @@ impl App {
             MenuAction::OpenProject => "open project".into(),
             MenuAction::NewGroup => "new group".into(),
             MenuAction::Pane(_, action) => action.label().into(),
+            MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
+            MenuAction::Browser => "set up your phone's browser…".into(),
+            MenuAction::Away if !self.telegram.paired() => "set up Telegram…".into(),
+            MenuAction::Away if self.telegram.away => "stop messaging on Telegram".into(),
+            MenuAction::Away => "continue on Telegram".into(),
         }
     }
 
@@ -158,6 +166,9 @@ impl App {
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
+            MenuAction::Browser if self.config.remote => self.open_remote(),
+            MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
+            MenuAction::Away => self.toggle_away(),
         }
         Ok(())
     }

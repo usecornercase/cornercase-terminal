@@ -207,7 +207,8 @@ impl App {
     }
 
     pub(super) fn remote_button(&self) -> Option<bool> {
-        self.config.remote.then_some(self.remote.browsers > 0)
+        let set_up = self.config.remote || self.telegram.bot().is_some();
+        set_up.then_some(self.remote.browsers > 0 || self.telegram.away)
     }
 
     pub(super) fn remote_view(&self) -> ui::RemoteAccess {
@@ -221,7 +222,7 @@ impl App {
             ),
             (Phase::Ready(_), None) => (None, vec!["could not make a code, see server.log".into()]),
             (Phase::Starting, _) => (None, vec!["starting Tailscale…".into()]),
-            (Phase::Off, _) => (None, vec!["turn on remote access in Settings › UI".into()]),
+            (Phase::Off, _) => (None, vec!["turn on remote access in Settings › Remote".into()]),
             (Phase::Failed(why), _) => (None, vec![why.clone(), "fix it, then open Remote again".into()]),
         };
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();

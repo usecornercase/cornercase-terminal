@@ -67,17 +67,6 @@ fn hovering_the_remote_button_leaves_usage_unlit() {
 }
 
 #[test]
-fn the_away_button_sits_right_of_quit_and_lights_green_while_away() {
-    let quit = layout(AREA, Widths::default()).quit;
-    let away = away_button(quit, true);
-    let view = View { away: Some(true), hover: Some(away.as_position()), ..view(&["cornercase"]) };
-    let t = render(&view);
-    let dot = t.backend().buffer()[(away.right() - 2, away.y)].clone();
-    let cells = (t.backend().buffer()[(away.x, away.y)].bg, t.backend().buffer()[(quit.x, quit.y)].bg);
-    assert_eq!((dot.symbol(), dot.fg, cells), ("●", Color::Green, (Color::Cyan, Color::Reset)));
-}
-
-#[test]
 fn a_form_and_the_usage_are_drawn_where_their_area_says() {
     let form = corners_of_its_area(&with(Overlay::Form(new_workspace_form(true))));
     let usage = corners_of_its_area(&with(Overlay::Usage(usage())));

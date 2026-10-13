@@ -459,9 +459,6 @@ impl App {
     }
 
     fn handle_input(&mut self, event: Event, area: Rect) -> Result<()> {
-        if self.returning(&event, area) {
-            self.come_back(telegram::By::Window);
-        }
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_key(key, area)?,
             Event::Mouse(ev) => self.handle_mouse(ev, area)?,
@@ -590,7 +587,6 @@ impl App {
             nav: self.nav,
             update: self.update_label(),
             remote: self.remote_button(),
-            away: self.away_button(),
             changes: if self.changes_shown() { self.panel_view() } else { None },
             changes_button: self.changes_label().map(|label| ui::ChangesButton { label, open: changes_open }),
             todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),

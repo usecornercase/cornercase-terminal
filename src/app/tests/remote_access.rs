@@ -73,8 +73,13 @@ fn shown(app: &App) -> Option<ui::RemoteAccess> {
     }
 }
 
-fn open(r: &mut Remote) -> String {
+fn open_dialog(r: &mut Remote) {
     click(&mut r.app, ui::remote_button(areas().usage, false).as_position());
+    pick(&mut r.app, "open in your phone's browser");
+}
+
+fn open(r: &mut Remote) -> String {
+    open_dialog(r);
     let url = shown(&r.app).and_then(|v| v.url).expect("a pairing address");
     url.split_once("?t=").map(|(_, token)| token.to_string()).expect("a token")
 }
@@ -137,7 +142,7 @@ fn without_tailscale_the_dialog_says_so() {
     let mut r = with_tailscale(None);
     r.app.config.remote = true;
     r.app.refresh(Instant::now());
-    click(&mut r.app, ui::remote_button(areas().usage, false).as_position());
+    open_dialog(&mut r);
 
     let first = |a: &App| shown(a).and_then(|v| v.lines.first().cloned());
     pump_until(&mut r.app, &r.rx, "tailscale is found missing", |a| first(a).as_deref() != Some("starting Tailscale…"));
@@ -195,7 +200,7 @@ fn opening_the_dialog_after_a_failure_tries_again_on_the_same_port() {
     });
     std::fs::write(&ok, "").expect("connect tailscale");
 
-    click(&mut r.app, ui::remote_button(areas().usage, false).as_position());
+    open_dialog(&mut r);
     pump_until(&mut r.app, &r.rx, "tailscale answers again", |a| {
         matches!(a.remote.phase, crate::app::remote_access::Phase::Ready(_))
     });

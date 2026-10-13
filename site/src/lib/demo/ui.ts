@@ -1246,7 +1246,7 @@ export class Painter {
     const editRow = rect(c.x, bottom(body), c.w, 1);
     const noteRow = rect(c.x, bottom(body) + 1, c.w, 1);
     const buttonsRow = rect(c.x, bottom(body) + 2, c.w, 1);
-    this.tabs(tabsRow, ['Worktrees', 'Agents', 'Issues', 'UI'], o.page, (i) => app.settingsPage(i));
+    this.tabs(tabsRow, ['Worktrees', 'Agents', 'Issues', 'UI', 'Remote'], o.page, (i) => app.settingsPage(i));
     if (o.pick) {
       this.input(rect(body.x, body.y, body.w, 1), o.pick.title, o.pick.filter);
       const list = rect(body.x, body.y + 2, body.w, Math.max(0, body.h - 2));

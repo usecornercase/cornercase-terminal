@@ -50,6 +50,16 @@ impl App {
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
+    pub(super) fn open_settings_on(&mut self, row: &settings::Row) {
+        self.settings_page = row.page();
+        self.open_settings();
+        if let Some(Overlay::Settings(s)) = &mut self.overlay
+            && let Some(i) = s.rows().iter().position(|r| r == row)
+        {
+            s.select(i);
+        }
+    }
+
     fn settings_pick_rows(area: Rect) -> usize {
         usize::from(ui::settings_pick_list(ui::settings_area(area)).height)
     }

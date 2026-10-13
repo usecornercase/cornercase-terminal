@@ -163,7 +163,6 @@ export interface Config {
   trust: boolean;
   resume: boolean;
   awake: boolean;
-  telegram: boolean;
   sidebar: string;
   tabs: string;
   agentsSection: boolean;
@@ -195,7 +194,6 @@ export const defaultConfig = (): Config => ({
   trust: false,
   resume: true,
   awake: false,
-  telegram: false,
   sidebar: 'projects_on_top',
   tabs: 'sidebar',
   agentsSection: false,

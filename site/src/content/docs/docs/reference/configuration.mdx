@@ -31,8 +31,8 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 
 <Screen
   name="settings-agents"
-  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; how each agent starts: claude, codex and gemini in their default mode, plus another agent; and under Telegram, the bot not set, with a note to make one with @BotFather and paste its token"
-  crop={[2, 4, 106, 18]}
+  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; and how each agent starts: claude, codex and gemini in their default mode, plus another agent"
+  crop={[2, 4, 106, 15]}
 />
 
 | Row | What it sets |
@@ -44,8 +44,6 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **keep awake** | Off (the default): the computer sleeps when idle, as it always does. On: while an agent is working, the computer does not go to sleep on its own. The note says whether it is being kept awake now, or why it can't be on this machine. See [Keep the computer awake](../agents/#keep-the-computer-awake). |
 | **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
-| **bot** (Telegram) | The [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. The note says whether cornercase reaches it. `Backspace` removes it. |
-| **phone** (Telegram) | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone; `Backspace` forgets the chat. |
 
 Choosing how an agent starts opens a list of its modes, each with the arguments it adds, plus **extra arguments…** for anything else you want on its command line:
 
@@ -80,7 +78,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; prefix key off; and under Remote, remote access off"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; and prefix key off"
   crop={[2, 4, 106, 18]}
 />
 
@@ -98,8 +96,23 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
 | **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
-| **remote access** | Open this cornercase in your phone's browser over Tailscale: on, a `Remote` button shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
+
+### Remote
+
+Using cornercase away from the computer: in your phone's browser, or through Telegram. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with both, and shows a green `●` while a browser is attached or you are away on Telegram.
+
+<Screen
+  name="settings-remote"
+  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token"
+  crop={[2, 4, 106, 9]}
+/>
+
+| Row | What it sets |
+| --- | --- |
+| **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **Remote › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
+| **bot** | The [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. The note says whether cornercase reaches it. `Backspace` removes it. |
+| **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone; `Backspace` forgets the chat. |
 
 ### Keys in the settings modal
 

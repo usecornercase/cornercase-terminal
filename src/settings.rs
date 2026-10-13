@@ -71,7 +71,7 @@ impl Row {
             | Self::Notifications
             | Self::Updates
             | Self::Prefix => "",
-            Self::Remote | Self::Browsers => "Remote",
+            Self::Remote | Self::Browsers => "Browser",
             Self::TelegramBot | Self::TelegramChat => "Telegram",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
@@ -91,9 +91,7 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
-            | Self::AddAgent
-            | Self::TelegramBot
-            | Self::TelegramChat => Page::Agents,
+            | Self::AddAgent => Page::Agents,
             Self::Token(_)
             | Self::JiraSite
             | Self::JiraEmail
@@ -111,9 +109,8 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates
-            | Self::Prefix
-            | Self::Remote
-            | Self::Browsers => Page::Ui,
+            | Self::Prefix => Page::Ui,
+            Self::Remote | Self::Browsers | Self::TelegramBot | Self::TelegramChat => Page::Remote,
         }
     }
 }
@@ -177,10 +174,11 @@ pub(crate) enum Page {
     Agents,
     Issues,
     Ui,
+    Remote,
 }
 
 impl Page {
-    pub(crate) const ALL: [Self; 4] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui];
+    pub(crate) const ALL: [Self; 5] = [Self::Worktrees, Self::Agents, Self::Issues, Self::Ui, Self::Remote];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
@@ -188,6 +186,7 @@ impl Page {
             Self::Agents => "Agents",
             Self::Issues => "Issues",
             Self::Ui => "UI",
+            Self::Remote => "Remote",
         }
     }
 
@@ -341,12 +340,8 @@ impl Settings {
         rows.extend(shown.iter().copied().chain(hidden).map(Row::Tab));
         rows.extend([Row::DefaultAgent, Row::Submit, Row::Trust, Row::Resume, Row::KeepAwake]);
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
-        rows.push(Row::AddAgent);
-        rows.push(Row::TelegramBot);
-        if self.telegram.bot.is_some() {
-            rows.push(Row::TelegramChat);
-        }
         rows.extend([
+            Row::AddAgent,
             Row::Sidebar,
             Row::Tabs,
             Row::AgentsSection,
@@ -363,6 +358,10 @@ impl Settings {
         ]);
         if self.browsers > 0 {
             rows.push(Row::Browsers);
+        }
+        rows.push(Row::TelegramBot);
+        if self.telegram.bot.is_some() {
+            rows.push(Row::TelegramChat);
         }
         rows.retain(|row| row.page() == self.page);
         rows
