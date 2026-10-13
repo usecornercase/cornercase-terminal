@@ -254,7 +254,7 @@ mod proxy {
 
     #[test]
     fn a_slow_ssh_never_holds_the_server_back() {
-        let (mut server, proxy) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (mut server, proxy) = UnixStream::pair().expect("a socket pair");
         server.set_write_timeout(Some(std::time::Duration::from_secs(1))).expect("a write timeout");
         let (open, gate) = mpsc::channel();
         let got = Arc::new(Mutex::new(Vec::new()));

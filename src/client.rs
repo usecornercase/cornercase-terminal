@@ -117,7 +117,10 @@ impl Target {
                 protocol::check_peer(&stream, protocol::own_uid())?;
                 Link::socket(stream)
             }
-            Self::Remote(remote) => remote.connect(again),
+            Self::Remote(remote) => {
+                let piped = remote.connect(again)?;
+                Ok(Link::piped(piped.reader, piped.writer, piped.child, piped.stderr))
+            }
         }
     }
 
