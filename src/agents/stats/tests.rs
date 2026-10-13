@@ -246,7 +246,8 @@ pub(crate) fn example(now: SystemTime) -> Stats {
                 Counts::default(),
                 Counts::default(),
                 Counts::default(),
-            ],
+            ]
+            .to_vec(),
             busy_ms: a[3] * 1000,
             most_at_once: a[4],
         }
@@ -269,7 +270,8 @@ pub(crate) fn example(now: SystemTime) -> Stats {
                     Counts::default(),
                     Counts::default(),
                     Counts::default(),
-                ],
+                ]
+                .to_vec(),
                 ..Bucket::default()
             },
         );
@@ -284,4 +286,59 @@ fn sharing_matches_the_site_contract() {
     let now = at(10_000);
     let stats = example(now);
     assert_eq!(share_link(&stats, now), fixture["link"].as_str().expect("link"));
+}
+
+mod agent_counts {
+    use super::*;
+
+    fn counts(entries: usize) -> String {
+        let one = r#"{"agents":1,"prompts":2,"turns":3,"agent_ms":4,"waited_ms":5,"tokens":{"in":6,"out":7,"cache_read":8,"cache_write":9}}"#;
+        let list = |n: usize| vec![one; n].join(",");
+        format!("[{}]", list(entries))
+    }
+
+    fn file(entries: usize) -> String {
+        let hour = vec!["[1,2,3,4,5,6,7,8,9]"; entries].join(",");
+        format!(
+            r#"{{"version":1,"since":3600000,"total":{{"by_agent":{},"busy_ms":10,"most_at_once":2}},"hours":[[1000,[{hour}],10,2]]}}"#,
+            counts(entries)
+        )
+    }
+
+    fn loaded(text: &str) -> Saved {
+        let dir = TempDir::new();
+        let path = dir.path().join("stats.json");
+        std::fs::write(&path, text).expect("write");
+        load(&path, at(1_000)).saved(at(1_000))
+    }
+
+    #[test]
+    fn a_file_with_every_agent_is_written_back_unchanged() {
+        let text = file(Known::ALL.len());
+        let dir = TempDir::new();
+        let path = dir.path().join("stats.json");
+        std::fs::write(&path, &text).expect("write");
+        let saved = load(&path, at(1_000)).saved(at(1_000));
+        save(&path, &saved).expect("save");
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), text);
+    }
+
+    #[test]
+    fn missing_agents_load_as_zeros() {
+        let saved = loaded(&file(Known::ALL.len() - 1));
+        let last = Known::ALL.len() - 1;
+        assert_eq!(saved.hours[0].1.len(), Known::ALL.len());
+        assert_eq!(saved.hours[0].1[last], [0; 9]);
+        assert_eq!(saved.hours[0].1[0], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(saved.total.by_agent.len(), Known::ALL.len());
+        assert_eq!(saved.total.by_agent[last], Counts::default());
+    }
+
+    #[test]
+    fn entries_past_the_last_known_agent_are_ignored() {
+        let saved = loaded(&file(Known::ALL.len() + 1));
+        assert_eq!(saved.hours[0].1.len(), Known::ALL.len());
+        assert_eq!(saved.total.by_agent.len(), Known::ALL.len());
+        assert_eq!(saved.since, 3_600_000);
+    }
 }
