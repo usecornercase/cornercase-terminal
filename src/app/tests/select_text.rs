@@ -60,6 +60,19 @@ fn the_text_is_highlighted_while_dragging() {
 }
 
 #[test]
+fn escape_does_not_end_a_text_selection() {
+    let (mut app, _rx) = showing("hello world");
+    press(&mut app, cell(0, 0));
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), cell(4, 0));
+
+    send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), cell(10, 0));
+    mouse(&mut app, MouseEventKind::Up(MouseButton::Left), cell(10, 0));
+
+    assert_eq!(app.take_host_writes(), [clipboard::osc52("hello world")]);
+}
+
+#[test]
 fn a_program_that_wants_the_mouse_gets_the_drag_instead() {
     let (mut app, _rx) = showing("\x1b[?1002hhello world");
 

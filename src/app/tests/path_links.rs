@@ -127,6 +127,21 @@ fn a_drag_from_a_path_still_reaches_the_program() {
 }
 
 #[test]
+fn a_path_stays_underlined_while_a_press_is_held_in_a_program_reading_the_mouse() {
+    let repo = repo();
+    let (mut app, _rx) = showing(&repo, "\x1b[?1000h\x1b[?1006hsrc/main.rs");
+    let pos = cell(3, 0);
+    app.term_mut().expect("a pane").input_at = None;
+
+    press(&mut app, pos);
+
+    assert!(!written(&app), "the press waits");
+    assert!(!app.files.open, "the path opens on release");
+    let terminal = render(&mut app, AREA);
+    assert!(terminal.backend().buffer()[pos].modifier.contains(Modifier::UNDERLINED));
+}
+
+#[test]
 fn the_path_under_the_pointer_is_underlined() {
     let repo = repo();
     let (mut app, _rx) = showing(&repo, "open src/main.rs now");
