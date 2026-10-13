@@ -92,7 +92,7 @@ impl App {
 
     pub(super) fn forward_mouse(&mut self, ev: MouseEvent, at: Position) {
         let Some(term) = self.term_mut() else { return };
-        let bytes = mouse::encode(&ev, at.x, at.y, term.emulator.mouse_mode(), term.emulator.mouse_encoding());
+        let bytes = mouse::encode(ev, at.x, at.y, term.emulator.mouse_mode(), term.emulator.mouse_encoding());
         if let Some(bytes) = bytes {
             term.write(&bytes);
         }

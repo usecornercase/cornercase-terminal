@@ -21,7 +21,7 @@ const MOTION: u32 = 32;
 const WHEEL: u32 = 64;
 const LEGACY_OFFSET: u32 = 32;
 
-pub(crate) fn encode(ev: &MouseEvent, col: u16, row: u16, mode: MouseMode, encoding: MouseEncoding) -> Option<Vec<u8>> {
+pub(crate) fn encode(ev: MouseEvent, col: u16, row: u16, mode: MouseMode, encoding: MouseEncoding) -> Option<Vec<u8>> {
     if !is_wanted(ev.kind, mode) {
         return None;
     }

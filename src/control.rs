@@ -294,6 +294,7 @@ pub(crate) struct SendText {
 pub(crate) struct Keys {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
+    #[expect(clippy::struct_field_names, reason = "the keys request names this JSON field keys")]
     pub(crate) keys: Vec<String>,
 }
 

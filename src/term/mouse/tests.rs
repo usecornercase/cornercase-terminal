@@ -13,7 +13,7 @@ fn event(kind: MouseEventKind) -> MouseEvent {
 }
 
 fn encode_sgr(kind: MouseEventKind, mode: MouseMode) -> Option<String> {
-    encode(&event(kind), 4, 9, mode, E::Sgr).map(|b| String::from_utf8(b).expect("sgr is ascii"))
+    encode(event(kind), 4, 9, mode, E::Sgr).map(|b| String::from_utf8(b).expect("sgr is ascii"))
 }
 
 mod filtering {
@@ -61,7 +61,7 @@ mod sgr {
         let mut ev = event(K::Down(LEFT));
         ev.modifiers = KeyModifiers::SHIFT | KeyModifiers::CONTROL;
 
-        let out = encode(&ev, 0, 0, M::Press, E::Sgr);
+        let out = encode(ev, 0, 0, M::Press, E::Sgr);
 
         assert_eq!(out.as_deref(), Some(&b"\x1b[<20;1;1M"[..]));
     }
@@ -72,28 +72,28 @@ mod legacy {
 
     #[test]
     fn default_encoding_offsets_every_value_by_32() {
-        let out = encode(&event(K::Down(LEFT)), 4, 9, M::PressRelease, E::Default);
+        let out = encode(event(K::Down(LEFT)), 4, 9, M::PressRelease, E::Default);
 
         assert_eq!(out, Some(vec![0x1b, b'[', b'M', 32, 32 + 5, 32 + 10]));
     }
 
     #[test]
     fn default_encoding_reports_release_without_button() {
-        let out = encode(&event(K::Up(RIGHT)), 4, 9, M::PressRelease, E::Default).expect("release is wanted");
+        let out = encode(event(K::Up(RIGHT)), 4, 9, M::PressRelease, E::Default).expect("release is wanted");
 
         assert_eq!(out[3], 32 + 3);
     }
 
     #[test]
     fn default_encoding_clamps_coordinates_that_do_not_fit_a_byte() {
-        let out = encode(&event(K::Down(LEFT)), 400, 0, M::Press, E::Default).expect("press is wanted");
+        let out = encode(event(K::Down(LEFT)), 400, 0, M::Press, E::Default).expect("press is wanted");
 
         assert_eq!(out[4], u8::MAX);
     }
 
     #[test]
     fn utf8_encoding_represents_big_coordinates() {
-        let out = encode(&event(K::Down(LEFT)), 299, 0, M::Press, E::Utf8).expect("press is wanted");
+        let out = encode(event(K::Down(LEFT)), 299, 0, M::Press, E::Utf8).expect("press is wanted");
 
         let chars: Vec<u32> = String::from_utf8(out).expect("valid utf8").chars().map(u32::from).collect();
 
