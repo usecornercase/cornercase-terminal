@@ -10,16 +10,13 @@ use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system}
 
 use crate::activity;
 use crate::agents::{self, AgentState};
-use crate::app::AppEvent;
 use crate::config::Config;
 use crate::context;
-use crate::control;
 use crate::emulator::Emulator;
 use crate::error::{Error, Result};
 use crate::host_theme::HostTheme;
 use crate::memory;
 use crate::process;
-use crate::protocol;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;
 const READ_BUFFER: usize = 16 * 1024;
@@ -58,6 +55,12 @@ pub struct Term {
     interactive: bool,
 }
 
+#[derive(Debug)]
+pub enum Event {
+    Output(u64, Vec<u8>),
+    Exited(u64),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Job {
     pub pid: i32,
@@ -80,16 +83,13 @@ fn pty_size(rows: u16, cols: u16) -> PtySize {
 }
 
 impl Term {
-    pub fn spawn(opts: SpawnOptions, tx: Sender<AppEvent>) -> Result<Self> {
+    pub fn spawn<E: From<Event> + Send + 'static>(opts: SpawnOptions, tx: Sender<E>) -> Result<Self> {
         let SpawnOptions { id, shell, args, env, rows, cols, cwd, theme } = opts;
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| Error::OpenPty(e.into()))?;
 
         let mut cmd = CommandBuilder::new(shell);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
-        cmd.env(protocol::NESTED_ENV, "1");
-        cmd.env(control::PANE_ENV, id.to_string());
-        cmd.env(control::SERVER_ENV, control::server_token());
         for key in activity::CLAUDE_SESSION_ENV {
             cmd.env_remove(key);
         }
@@ -293,15 +293,15 @@ fn spawn_writer(mut pty: Box<dyn Write + Send>) -> Writer {
     Writer { tx, queued }
 }
 
-fn spawn_reader(id: u64, mut reader: Box<dyn Read + Send>, tx: Sender<AppEvent>) {
+fn spawn_reader<E: From<Event> + Send + 'static>(id: u64, mut reader: Box<dyn Read + Send>, tx: Sender<E>) {
     thread::spawn(move || {
         let mut buf = vec![0u8; READ_BUFFER];
         while let Ok(n @ 1..) = reader.read(&mut buf) {
-            if tx.send(AppEvent::Output(id, buf[..n].to_vec())).is_err() {
+            if tx.send(E::from(Event::Output(id, buf[..n].to_vec()))).is_err() {
                 return;
             }
         }
-        let _ = tx.send(AppEvent::Exited(id));
+        let _ = tx.send(E::from(Event::Exited(id)));
     });
 }
 

@@ -6,6 +6,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 - No changes in the app. The issues dialog's view and hit testing now live with the app, and its browser takes sizes and hits instead of UI types.
 
+## 0.12.61
+
+- No changes in the app. The terminal and the browser access no longer import the app: they send their own events, and the app builds the environment of every shell.
+
 ## 0.12.60
 
 - No changes in the app. The settings dialog's view is now built in app/settings_dialog.rs instead of in the settings module.
