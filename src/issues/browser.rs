@@ -9,7 +9,15 @@ use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, 
 use crate::list::Search;
 use crate::markdown;
 use crate::time;
-use crate::ui::{self, IssuesHit};
+use crate::ui;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IssuesHit {
+    Tab(usize),
+    Toggle(usize),
+    Item(usize),
+    Button(usize),
+}
 
 const WHEEL_ROWS: isize = 3;
 const PEOPLE_LABEL_MAX: usize = 40;
