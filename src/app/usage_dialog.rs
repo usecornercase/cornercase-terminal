@@ -8,11 +8,11 @@ use super::event::AppEvent;
 use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents;
-use crate::clipboard;
+use crate::agents::usage;
+use crate::host::clipboard;
 use crate::log::{Job, Level};
 use crate::time;
 use crate::ui;
-use crate::usage;
 
 impl App {
     pub(super) fn open_usage(&mut self) {
@@ -80,12 +80,12 @@ impl App {
         } else if view.page == usage::Page::Stats && !view.stats.empty && ui::usage_share(area, &view).contains(pos) {
             self.outbox
                 .host_writes
-                .push(clipboard::osc52(&crate::stats::share_link(&self.agents.stats, SystemTime::now())));
+                .push(clipboard::osc52(&agents::stats::share_link(&self.agents.stats, SystemTime::now())));
             self.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
         }
     }
 
-    pub fn stats_view(&self, now: SystemTime) -> crate::stats::View {
+    pub fn stats_view(&self, now: SystemTime) -> agents::stats::View {
         self.agents.stats.view(now)
     }
 }

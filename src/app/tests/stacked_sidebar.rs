@@ -1,10 +1,11 @@
 use super::*;
+use crate::config;
 
 const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
 
 fn stacked(projects: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(projects);
-    app.config.sidebar = ui::Sidebar::ProjectsOnTop.id().into();
+    app.config.sidebar = config::Sidebar::ProjectsOnTop.id().into();
     (app, rx, dirs)
 }
 
@@ -101,7 +102,7 @@ fn the_terminals_get_the_room_of_the_workspaces_column() {
     let (mut app, _rx, _dirs) = app_with(1);
     let before = term(&app, 0).emulator.size().expect("size").1;
 
-    app.config.sidebar = ui::Sidebar::WorkspacesOnTop.id().into();
+    app.config.sidebar = config::Sidebar::WorkspacesOnTop.id().into();
     app.resize(AREA);
 
     assert_eq!(term(&app, 0).emulator.size().expect("size").1, before + ui::WORKSPACES_WIDTH);

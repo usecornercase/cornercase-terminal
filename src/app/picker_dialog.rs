@@ -9,10 +9,10 @@ use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::error::Result;
 use crate::log::{self};
-use crate::picker::Picker;
 use crate::project::Hierarchy;
+use crate::project::picker::Picker;
+use crate::project::vscode;
 use crate::ui::{self, PickerHit};
-use crate::vscode;
 
 pub(super) const PICKER_SUBMIT: &str = "open";
 

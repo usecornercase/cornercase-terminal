@@ -3,8 +3,8 @@ pub mod adf;
 use serde_json::Value;
 
 use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, checklist, join_body};
-use crate::clipboard;
 use crate::error::{Error, Result};
+use crate::host::clipboard;
 use crate::http::{self, Answer, Service, path_segment, text};
 use crate::time::parse_time;
 

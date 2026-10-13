@@ -2,14 +2,18 @@ use std::path::{Path, PathBuf};
 
 use ratatui::layout::{Position, Rect};
 
-use crate::activity::Status;
+use self::split::{Dir, Node, Place};
+use crate::agents::activity::Status;
+use crate::agents::context::Context;
 use crate::config::Config;
-use crate::context::Context;
-use crate::split::{self, Dir, Node, Place};
 use crate::term::Term;
 
 pub mod group;
 mod hierarchy;
+pub mod picker;
+pub mod search;
+pub mod split;
+pub mod vscode;
 
 pub use group::Group;
 pub use hierarchy::{Hierarchy, group_indices, sidebar_order};

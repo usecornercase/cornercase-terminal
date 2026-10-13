@@ -15,8 +15,8 @@ use crate::files::disk::{Body, Content};
 use crate::files::search::occurrences;
 use crate::files::{Gutter, Line, Lines, Mark, Mode};
 use crate::graphics::kitty;
-use crate::markdown;
-use crate::syntax::Segments;
+use crate::highlight::markdown;
+use crate::highlight::syntax::Segments;
 use crate::text::{truncate_left, truncate_right};
 
 pub const LABEL: &str = "Files";

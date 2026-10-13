@@ -5,8 +5,8 @@ use ratatui::layout::Rect;
 use super::App;
 use super::event::Start;
 use crate::agents;
+use crate::agents::launch::{self, Launch, Step, Trust};
 use crate::error::Result;
-use crate::launch::{self, Launch, Step, Trust};
 use crate::log::{self};
 use crate::project::Hierarchy;
 

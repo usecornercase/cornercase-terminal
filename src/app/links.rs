@@ -7,10 +7,10 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::interaction::{Drag, LinkPress};
 use super::layout::Side;
-use crate::emulator::Snapshot;
 use crate::files::link::{self, Target};
-use crate::mouse::MouseMode;
 use crate::project::Tab;
+use crate::term::emulator::Snapshot;
+use crate::term::mouse::MouseMode;
 
 impl App {
     fn link_at(&mut self, at: Position) -> Option<Target> {

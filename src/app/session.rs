@@ -5,11 +5,12 @@ use ratatui::layout::Rect;
 
 use super::App;
 use crate::agents;
+use crate::agents::AgentState;
+use crate::agents::launch::Launch;
 use crate::error::Result;
-use crate::launch::Launch;
 use crate::log::{self};
 use crate::project::{Tab, Workspace};
-use crate::state::{AgentState, TabState, WorkspaceState};
+use crate::state::{TabState, WorkspaceState};
 use crate::term::Term;
 
 pub(super) const RESUME_GRACE: Duration = Duration::from_secs(30);

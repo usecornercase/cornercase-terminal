@@ -1,9 +1,9 @@
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
-use crate::activity::Status;
-use crate::host_theme::HostTheme;
-use crate::usage::Severity;
+use crate::agents::activity::Status;
+use crate::agents::usage::Severity;
+use crate::host::theme::HostTheme;
 
 pub(super) const BRAND_COLOR: Color = Color::Indexed(99);
 

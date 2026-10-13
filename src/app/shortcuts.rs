@@ -4,15 +4,15 @@ use ratatui::layout::{Position, Rect};
 use super::layout::Side;
 use super::menus::Target;
 use super::{App, Overlay, Toast};
-use crate::activity::Status;
+use crate::agents::activity::Status;
 use crate::error::Result;
 use crate::files::Mode;
 use crate::list::Search;
 use crate::log;
 use crate::project::Project;
-use crate::search::Goto;
+use crate::project::search::Goto;
+use crate::project::split::{self, Place};
 use crate::shortcuts::{self, Action, Group, Step};
-use crate::split::{self, Place};
 use crate::todo::Field;
 use crate::ui::{self, keys};
 

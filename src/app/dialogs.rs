@@ -5,9 +5,10 @@ use super::App;
 use super::menus::{PaneAction, Target};
 use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
 use crate::error::Result;
+use crate::git::worktree;
 use crate::project::Hierarchy;
+use crate::project::group;
 use crate::ui::{self, FormHit};
-use crate::worktree;
 
 pub(super) const KEEP_PROJECTS_SUBMIT: &str = "keep projects";
 
@@ -124,8 +125,8 @@ impl App {
             return;
         };
         match hit {
-            Some(ui::StyleHit::Icon(i)) => entry.icon = ui::GROUP_ICONS[i],
-            Some(ui::StyleHit::Colour(i)) => entry.colour = ui::GROUP_COLOURS[i],
+            Some(ui::StyleHit::Icon(i)) => entry.icon = group::GROUP_ICONS[i],
+            Some(ui::StyleHit::Colour(i)) => entry.colour = group::GROUP_COLOURS[i],
             Some(ui::StyleHit::Done) => self.overlay = None,
             None => {}
         }

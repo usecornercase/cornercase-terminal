@@ -2,10 +2,9 @@ use super::App;
 use super::menus::Target;
 use super::overlay::Overlay;
 use crate::log::{self};
+use crate::project::search::Goto;
 use crate::project::{Group, Hierarchy, Phase, Project, Tab, Workspace, group, shift_active};
-use crate::search::Goto;
 use crate::term::Term;
-use crate::ui::{self};
 
 impl App {
     pub(super) fn take_id(&mut self) -> u64 {
@@ -42,11 +41,11 @@ impl App {
         self.groups.iter().position(|g| g.id == id)
     }
 
-    pub(super) fn group(&self, id: u64) -> Option<&ui::GroupEntry> {
+    pub(super) fn group(&self, id: u64) -> Option<&group::GroupEntry> {
         self.groups.iter().find(|g| g.id == id).map(|g| &g.entry)
     }
 
-    pub(super) fn group_mut(&mut self, id: u64) -> Option<&mut ui::GroupEntry> {
+    pub(super) fn group_mut(&mut self, id: u64) -> Option<&mut group::GroupEntry> {
         self.groups.iter_mut().find(|g| g.id == id).map(|g| &mut g.entry)
     }
 
@@ -265,7 +264,7 @@ impl App {
     pub(super) fn add_group(&mut self, name: String) -> u64 {
         let (icon, colour) = group::preset(&self.groups);
         let id = self.take_id();
-        self.groups.push(Group { id, entry: ui::GroupEntry { name, icon, colour, collapsed: false } });
+        self.groups.push(Group { id, entry: group::GroupEntry { name, icon, colour, collapsed: false } });
         id
     }
 

@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::graphics::Support;
-use crate::host_theme::HostTheme;
-use crate::notify::Channel;
+use crate::host::notify::Channel;
+use crate::host::theme::HostTheme;
 use crate::paths;
-use crate::{pointer, process};
+use crate::{host::pointer, process};
 
 pub use crate::paths::SOCKET_ENV;
 

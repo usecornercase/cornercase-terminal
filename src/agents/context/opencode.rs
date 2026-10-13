@@ -320,7 +320,7 @@ fn counted(data: &str) -> Option<Record> {
         "user" => (entry["time"]["created"].as_u64()?, Usage::Prompt),
         "assistant" => {
             let v = entry.get("tokens")?;
-            let tokens = crate::stats::Tokens {
+            let tokens = crate::agents::stats::Tokens {
                 input: v["input"].as_u64().unwrap_or(0),
                 out: v["output"].as_u64().unwrap_or(0).saturating_add(v["reasoning"].as_u64().unwrap_or(0)),
                 cache_read: v["cache"]["read"].as_u64().unwrap_or(0),

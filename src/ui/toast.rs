@@ -8,7 +8,7 @@ use super::View;
 use super::dialog::CANCEL_LABEL;
 use super::theme::status_icon;
 use super::widgets::button_width;
-use crate::activity::Status;
+use crate::agents::activity::Status;
 
 const UNDO_LABEL: &str = "undo";
 

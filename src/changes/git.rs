@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use super::Mode;
 use super::diff::{self, Diff, File, MAX_UNTRACKED_BYTES};
 use crate::error::{Error, Result};
-use crate::worktree;
+use crate::git::worktree;
 
 const GLOBAL: [&str; 5] = ["--no-optional-locks", "-c", "core.quotepath=false", "-c", "diff.autoRefreshIndex=false"];
 const DIFF: [&str; 9] = [

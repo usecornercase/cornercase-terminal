@@ -21,13 +21,13 @@ use signal_hook::iterator::Signals;
 use crate::app::{App, AppEvent, Streamed};
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
-use crate::host_theme::HostTheme;
+use crate::host::notify::Channel;
+use crate::host::pointer;
+use crate::host::theme::HostTheme;
 use crate::log::{self, Level};
-use crate::notify::Channel;
 use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
-use crate::pointer;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::state;
 use crate::todo;
@@ -276,7 +276,7 @@ struct Server {
     session: PathBuf,
     saver: Saver<state::State>,
     todo_saver: Saver<todo::Saved>,
-    stats_saver: crate::stats::Saver,
+    stats_saver: crate::agents::stats::Saver,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
     drawn: Option<Instant>,
@@ -320,7 +320,7 @@ pub fn run() -> Result<()> {
     let todos = todo::load(&paths::todos(&session));
     let todo_saver = Saver::new(paths::todos(&session), Some(todos.saved()));
     app.set_todos(todos);
-    let stats = crate::stats::load(&paths::stats(&session), SystemTime::now());
+    let stats = crate::agents::stats::load(&paths::stats(&session), SystemTime::now());
     log::info!(
         "stats",
         "loaded",
@@ -416,7 +416,7 @@ fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>)
 
 impl Server {
     fn new(app: App, session: PathBuf, todo_saver: Saver<todo::Saved>, tx: Sender<ServerEvent>) -> Self {
-        let stats_saver = crate::stats::Saver::new(paths::stats(&session), app.stats().revision());
+        let stats_saver = crate::agents::stats::Saver::new(paths::stats(&session), app.stats().revision());
         Self {
             app,
             clients: Vec::new(),

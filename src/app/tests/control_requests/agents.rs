@@ -81,7 +81,7 @@ mod work_stats {
         agent.app.agents.watched = Some(now.checked_sub(Duration::from_secs(1)).expect("previous read"));
         agent.app.watch_agents(now);
     }
-    fn total(agent: &Agent) -> crate::stats::Window {
+    fn total(agent: &Agent) -> crate::agents::stats::Window {
         agent.app.stats_view(SystemTime::now()).windows["total"].clone()
     }
 
@@ -563,7 +563,7 @@ mod restarting_when_idle {
 mod keeping_awake {
     use super::restarting_when_idle::working;
     use super::*;
-    use crate::awake::{KEEP_FOR, State, Tool};
+    use crate::agents::awake::{KEEP_FOR, State, Tool};
     use crate::control::KeepAwake;
 
     fn holding(agent: &mut Agent) -> TempDir {

@@ -5,7 +5,7 @@ use super::App;
 use super::input::WHEEL_ROWS;
 use super::overlay::Overlay;
 use crate::list::Search;
-use crate::search::{self, Candidate};
+use crate::project::search::{self, Candidate};
 use crate::ui::{self};
 
 impl App {

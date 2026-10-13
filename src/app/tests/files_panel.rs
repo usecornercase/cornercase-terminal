@@ -1,6 +1,7 @@
 use super::*;
 use crate::changes::diff::Status;
 use crate::files::Mark;
+use crate::state;
 use crate::ui::changes::Action;
 use crate::ui::files::{self as panel, Screen};
 
@@ -126,7 +127,7 @@ fn the_compact_bar_has_a_button_too() {
     let small = Rect { width: 80, ..AREA };
     let repo = repo();
     let (mut app, _rx) = app_in(repo.path(), no_config());
-    click_in(&mut app, ui::layout(small, ui::Widths::default()).files_button.as_position(), small);
+    click_in(&mut app, ui::layout(small, state::Widths::default()).files_button.as_position(), small);
     assert_eq!(app.side, Some(Side::Files));
 }
 

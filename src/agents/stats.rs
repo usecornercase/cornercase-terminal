@@ -6,7 +6,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
-use crate::activity::Status;
+use crate::agents::activity::Status;
 use crate::persist;
 use crate::time::Stamp;
 

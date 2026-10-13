@@ -2,7 +2,7 @@ use std::fmt;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::split::{Dir, Place};
+use crate::project::split::{Dir, Place};
 
 const MODIFIERS: [(KeyModifiers, &str); 3] =
     [(KeyModifiers::CONTROL, "ctrl"), (KeyModifiers::ALT, "alt"), (KeyModifiers::SHIFT, "shift")];

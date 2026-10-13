@@ -14,7 +14,7 @@ use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
-use crate::{log, restart, server};
+use crate::{log, server, update::restart};
 
 mod args;
 mod help;
@@ -367,12 +367,12 @@ fn print_stats(args: &StatsArgs) -> Result<bool> {
     let path = crate::paths::stats(&crate::paths::session());
     let view = match ask("stats", control::Command::Stats(control::Stats {})) {
         Ok(value) => {
-            let mut view: crate::stats::View = answer(value)?;
+            let mut view: crate::agents::stats::View = answer(value)?;
             view.days = crate::time::Stamp::parse(&view.since)
                 .map_or(0, |since| now.duration_since(since).unwrap_or_default().as_secs() / 86_400);
             view
         }
-        Err(Error::NoServer) => crate::stats::load(&path, now).view(now),
+        Err(Error::NoServer) => crate::agents::stats::load(&path, now).view(now),
         Err(e) => return Err(e),
     };
     if args.json {

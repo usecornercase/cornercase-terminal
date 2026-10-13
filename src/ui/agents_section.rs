@@ -11,7 +11,7 @@ use super::rows::{Rows, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
 use super::workspaces::{Details, draw_details};
-use crate::activity::Status;
+use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
 pub const AGENTS_LABEL: &str = "Agents ›";

@@ -11,8 +11,8 @@ use super::View;
 use super::sidebar::NEW_BUTTON;
 use super::theme::BRAND_COLOR;
 use super::widgets::sidebar_hovered;
-use crate::emulator::Snapshot;
-use crate::split::{Dir, Node, Place};
+use crate::project::split::{Dir, Node, Place};
+use crate::term::emulator::Snapshot;
 
 const MOVE_LABEL: &str = "move here";
 

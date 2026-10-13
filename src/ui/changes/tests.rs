@@ -3,6 +3,8 @@ use ratatui::backend::TestBackend;
 
 use super::*;
 use crate::changes::diff;
+use crate::config;
+use crate::state;
 
 const PATCH: &str = "diff --git a/src/returns.rs b/src/returns.rs
 --- a/src/returns.rs
@@ -98,9 +100,9 @@ fn scopes_draw_in_both_layouts(#[case] scope: Scope, #[case] columns: u16) {
     let view = if scope == Scope::Every { every() } else { sample() };
     let areas = super::super::layout_with(
         Rect::new(0, 0, columns, 24),
-        super::super::Widths::default(),
+        state::Widths::default(),
         true,
-        super::super::Sidebar::SideBySide,
+        config::Sidebar::SideBySide,
     );
     let mut terminal = Terminal::new(TestBackend::new(columns, 24)).expect("terminal");
     terminal.draw(|f| draw(f, areas.changes, &view, None)).expect("draw");

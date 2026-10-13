@@ -5,6 +5,7 @@ pub mod jira;
 pub mod linear;
 pub mod md;
 pub mod plane;
+pub mod secrets;
 pub mod shortcut;
 
 use std::fmt;

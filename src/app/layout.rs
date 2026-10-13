@@ -1,6 +1,7 @@
 use ratatui::layout::Rect;
 
 use super::App;
+use crate::config;
 use crate::project::{Project, Workspace};
 use crate::ui::{self, WorkspaceRow};
 
@@ -28,13 +29,13 @@ pub(super) enum Side {
 }
 
 impl App {
-    pub(super) fn sidebar(&self) -> ui::Sidebar {
-        ui::Sidebar::from_setting(&self.config.sidebar)
+    pub(super) fn sidebar(&self) -> config::Sidebar {
+        config::Sidebar::from_setting(&self.config.sidebar)
     }
 
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
         ui::full_layout(area, self.widths, self.panel_shown(), self.sidebar(), self.config.agents_section)
-            .with_tab_bar(ui::Tabs::from_setting(&self.config.tabs) == ui::Tabs::Top)
+            .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
     }
 
     pub(super) fn panel_shown(&self) -> bool {

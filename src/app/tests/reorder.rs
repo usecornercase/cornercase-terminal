@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::state;
 
 fn drag_entry(app: &mut App, from: SidebarRow, to: SidebarRow) {
     let (from, to) = (sidebar_pos(app, from), sidebar_pos(app, to));
@@ -220,7 +221,7 @@ fn holding_a_drag_on_the_more_line_scrolls_the_list() {
     let (mut app, _rx, _dirs) = app_with(4);
     app.active = 0;
     app.follow(SHORT);
-    let short = ui::layout(SHORT, ui::Widths::default());
+    let short = ui::layout(SHORT, state::Widths::default());
     let rows = ui::project_rows(short.list, short.pitch, &app.sidebar_rows(), app.scroll.projects);
 
     mouse_in(&mut app, MouseEventKind::Down(MouseButton::Left), short.list.as_position(), SHORT);
@@ -236,7 +237,7 @@ fn a_drag_in_the_compact_menu_reorders_and_keeps_it_open() {
     const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 40 };
     let (mut app, _rx, paths, _dirs) = grouped(2, &[]);
     app.nav = Some(ui::Nav::Projects);
-    let small = ui::layout(SMALL, ui::Widths::default());
+    let small = ui::layout(SMALL, state::Widths::default());
     let entry = |p| ui::entry_row(small.list, small.pitch, &app.sidebar_rows(), 0, SidebarRow::Project(p));
     let (from, to) = (entry(1).as_position(), entry(0).as_position());
 

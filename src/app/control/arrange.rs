@@ -2,7 +2,7 @@ use super::{Handled, json, name_of, none};
 use crate::app::menus::Target;
 use crate::app::{App, Toast};
 use crate::control::{self, Done, Item, TodoItem, TodoList};
-use crate::notify::{self, Notification};
+use crate::host::notify::{self, Notification};
 use crate::project::Hierarchy;
 use crate::ui;
 

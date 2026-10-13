@@ -1,4 +1,6 @@
 use super::*;
+use crate::config;
+use crate::state;
 use crate::ui::tab_bar::Strip;
 
 fn drawn_in(app: &mut App, area: Rect) {
@@ -7,7 +9,7 @@ fn drawn_in(app: &mut App, area: Rect) {
 
 fn on_top(tabs: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(1);
-    app.config.tabs = ui::Tabs::Top.id().into();
+    app.config.tabs = config::Tabs::Top.id().into();
     for _ in 1..tabs {
         app.add_tab(0, 0, AREA).expect("add a tab");
     }
@@ -31,7 +33,7 @@ fn the_pane_starts_below_the_bar() {
     let (app, _rx, _dirs) = on_top(1);
     let areas = app.layout(AREA);
     assert_eq!((areas.tab_bar.height, areas.pane.y), (ui::tab_bar::HEIGHT, areas.tab_bar.bottom()));
-    assert_eq!(areas.pane.bottom(), ui::layout(AREA, ui::Widths::default()).pane.bottom());
+    assert_eq!(areas.pane.bottom(), ui::layout(AREA, state::Widths::default()).pane.bottom());
 }
 
 #[test]
@@ -43,7 +45,7 @@ fn the_workspaces_list_leaves_the_tabs_out() {
 #[test]
 fn the_tree_ends_at_the_workspaces() {
     let (mut app, _rx, _dirs) = on_top(2);
-    app.config.sidebar = ui::Sidebar::Tree.id().into();
+    app.config.sidebar = config::Sidebar::Tree.id().into();
     drawn_in(&mut app, AREA);
     let rows = ui::tree_rows(&app.tree_shape());
     assert!(!rows.iter().any(|r| matches!(r, ui::TreeRow::Tab(..) | ui::TreeRow::NewTab(..))), "{rows:?}");

@@ -15,6 +15,7 @@ mod auth;
 mod bridge;
 mod http;
 mod page;
+pub mod tailscale;
 
 use http::{Request, Response};
 

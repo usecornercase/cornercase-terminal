@@ -1,7 +1,7 @@
 use super::*;
 use rstest::rstest;
 
-use crate::worktree::{Holder, Lock};
+use crate::git::worktree::{Holder, Lock};
 
 fn lock(reason: &str, holder: Option<Holder>) -> Lock {
     Lock { reason: reason.into(), holder }

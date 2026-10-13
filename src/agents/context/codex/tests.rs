@@ -3,7 +3,7 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
-use crate::context::Pane;
+use crate::agents::context::Pane;
 use crate::test_util::{FakeCodex, Running, Sleeper, TempDir, wait_until, write_executable};
 
 const ID: &str = "019a1234-5678-7000-8000-000000000001";
@@ -375,7 +375,7 @@ fn a_served_session_is_hidden_from_other_folders_and_while_another_agent_shares_
 
 mod counting_records {
     use super::*;
-    use crate::context::counting::{
+    use crate::agents::context::counting::{
         Ledger,
         tests::{since, sum},
     };
@@ -388,7 +388,10 @@ mod counting_records {
             .collect();
         let mut ledger = Ledger::default();
         ledger.apply("thread", since(), records.clone());
-        assert_eq!(sum(ledger.take()).1, crate::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 });
+        assert_eq!(
+            sum(ledger.take()).1,
+            crate::agents::stats::Tokens { input: 180, out: 80, cache_read: 120, cache_write: 0 }
+        );
         ledger.apply("thread", since(), records.clone());
         assert_eq!(sum(ledger.take()).1.out, 0);
         let mut first = Ledger::default();

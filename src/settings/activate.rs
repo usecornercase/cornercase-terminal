@@ -1,7 +1,7 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs};
+use crate::host::notify;
 use crate::list::Search;
-use crate::notify;
 
 use super::{Action, EXTRA_ARGS, Edit, Pick, PickItem, Row, Settings, Status};
 

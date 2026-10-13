@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::changes::{Mode, Scope};
 use crate::issues::People;
 use crate::project::group::GroupEntry;
+use crate::project::split::Node;
 use crate::project::{Project, Tab, Workspace};
-use crate::split::Node;
 use crate::term::Term;
 
 pub use crate::agents::AgentState;

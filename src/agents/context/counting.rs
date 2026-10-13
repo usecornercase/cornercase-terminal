@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::SystemTime;
 
-use crate::stats::{Counted, Tokens};
+use crate::agents::stats::{Counted, Tokens};
 
 const REMEMBER: usize = 512;
 const CONVERSATIONS: usize = 16;

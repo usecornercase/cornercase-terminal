@@ -10,8 +10,8 @@ use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use super::{Host, write_out};
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::graphics::{self, Support};
-use crate::host_theme::{HostTheme, ThemeProbe};
-use crate::{pointer, process};
+use crate::host::theme::{HostTheme, ThemeProbe};
+use crate::{host::pointer, process};
 
 fn truecolor() -> bool {
     std::env::var("COLORTERM").is_ok_and(|v| matches!(v.as_str(), "truecolor" | "24bit"))

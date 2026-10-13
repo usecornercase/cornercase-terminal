@@ -4,8 +4,8 @@ use regex::Regex;
 
 use super::idle_restart::held;
 use super::{Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, duration, json, none, pane_ids};
-use crate::activity::{self, Status};
 use crate::agents;
+use crate::agents::activity::{self, Status};
 use crate::app::App;
 use crate::control::{self, Done, Ids, Until};
 use crate::project::Hierarchy;

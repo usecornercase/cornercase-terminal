@@ -11,10 +11,10 @@ use super::overlay::Overlay;
 use super::overlay::RESTART_SUBMIT;
 use super::toast::Toast;
 use crate::error::Result;
+use crate::highlight::markdown;
 use crate::log::{self, Job, Level};
-use crate::markdown;
-use crate::restart;
 use crate::ui::{self};
+use crate::update::restart;
 use crate::update::{self, Install, Release, Updates};
 use crate::version;
 

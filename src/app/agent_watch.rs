@@ -4,17 +4,17 @@ use std::time::{Duration, Instant, SystemTime};
 use super::App;
 use super::overlay::Overlay;
 use super::toast::Toast;
-use crate::activity::{self, Claude, Session};
 use crate::agents;
-use crate::awake::{self, Awake};
+use crate::agents::AgentState;
+use crate::agents::activity::{self, Claude, Session};
+use crate::agents::awake::{self, Awake};
+use crate::agents::launch::Launch;
 use crate::config::Config;
-use crate::launch::Launch;
+use crate::host::notify::{self, Notification};
 use crate::log::{self};
-use crate::notify::{self, Notification};
 use crate::process;
 use crate::project::Hierarchy;
-use crate::search::Goto;
-use crate::state::AgentState;
+use crate::project::search::Goto;
 use crate::term::Term;
 use crate::ui::{self};
 
@@ -24,7 +24,7 @@ pub(super) struct AgentRuntime {
     pub(super) claude_dir: Option<PathBuf>,
     pub(super) watched: Option<Instant>,
     pub(super) awake: Awake,
-    pub(super) stats: crate::stats::Stats,
+    pub(super) stats: agents::stats::Stats,
 }
 
 impl AgentRuntime {
@@ -35,7 +35,7 @@ impl AgentRuntime {
             claude_dir: activity::claude_dir(home),
             watched: None,
             awake: Awake::new(awake::tools()),
-            stats: crate::stats::Stats::new(SystemTime::now()),
+            stats: agents::stats::Stats::new(SystemTime::now()),
         }
     }
 }
@@ -72,11 +72,11 @@ impl App {
                             term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
                             let notice = term.agent.update(activity, seen, now);
                             let state = term.agent.state();
-                            if let Some(kind) = term.context.kind().and_then(crate::stats::Kind::of)
+                            if let Some(kind) = term.context.kind().and_then(agents::stats::Kind::of)
                                 && let Some((pid, _)) = term.context.agent()
                             {
                                 self.agents.stats.counted(kind, term.context.take_counted());
-                                samples.push(crate::stats::Sample {
+                                samples.push(agents::stats::Sample {
                                     pane: term.id,
                                     kind,
                                     pid,

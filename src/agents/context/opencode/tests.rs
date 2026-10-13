@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::context::Pane;
+use crate::agents::context::Pane;
 use crate::test_util::{FakeOpencode, Sleeper, TempDir, wait_until};
 
 const REPLY: &str = crate::test_util::fixture!("opencode/1.18.35/reply.jsonl");
@@ -294,7 +294,7 @@ mod last_message {
 
 mod counting_records {
     use super::*;
-    use crate::context::counting::{
+    use crate::agents::context::counting::{
         Ledger,
         tests::{since, sum},
     };
@@ -307,7 +307,7 @@ mod counting_records {
         ledger.apply("a", since(), records.clone());
         assert_eq!(
             sum(ledger.take()),
-            (1, crate::stats::Tokens { input: 20, out: 65, cache_read: 200, cache_write: 10 })
+            (1, crate::agents::stats::Tokens { input: 20, out: 65, cache_read: 200, cache_write: 10 })
         );
         ledger.apply("a", since(), records);
         assert_eq!(sum(ledger.take()).1.out, 0);

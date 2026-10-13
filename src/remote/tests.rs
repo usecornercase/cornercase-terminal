@@ -2,8 +2,8 @@ use rstest::rstest;
 
 use super::*;
 use crate::graphics::Support;
-use crate::host_theme::HostTheme;
-use crate::notify::Channel;
+use crate::host::notify::Channel;
+use crate::host::theme::HostTheme;
 use crate::protocol::Hello;
 
 fn devbox() -> Remote {

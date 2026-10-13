@@ -1,5 +1,5 @@
 use super::*;
-use crate::secrets;
+use crate::issues::secrets;
 use crate::test_util::{FakeHttp, fake_gh};
 
 fn assert_only_linear(s: &Setup) {

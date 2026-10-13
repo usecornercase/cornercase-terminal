@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::holds_prompts;
-use crate::activity::Status;
+use crate::agents::activity::Status;
 use crate::agents::{CLAUDE, CODEX, GEMINI, OPENCODE};
 
 #[rstest]

@@ -1,7 +1,7 @@
 use ratatui::style::Modifier;
 
 use super::*;
-use crate::split::Dir;
+use crate::project::split::Dir;
 
 fn three(dim_inactive: bool) -> TabView {
     let mut layout = Node::Leaf(0);

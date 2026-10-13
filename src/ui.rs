@@ -73,7 +73,7 @@ pub use workspaces::{
     workspace_hit, workspace_layout, workspace_row, workspace_rows,
 };
 
-use crate::activity::Status;
+use crate::agents::activity::Status;
 
 pub use crate::config::{Sidebar, Tabs};
 pub use crate::issues::browser::IssuesHit;

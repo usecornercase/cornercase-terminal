@@ -77,7 +77,7 @@ fn dragging_over_text_copies_it_and_says_so() {
 
     app.send(format!("\x1b[<0;{from};{y}M\x1b[<32;{to};{y}M\x1b[<0;{to};{y}m").as_bytes());
 
-    let osc52 = String::from_utf8(cornercase::clipboard::osc52("copy-me")).expect("utf-8");
+    let osc52 = String::from_utf8(cornercase::host::clipboard::osc52("copy-me")).expect("utf-8");
     app.wait_for_raw("the text reaches the outer terminal's clipboard", |raw| raw.contains(&osc52));
     app.wait_for("a toast says it was copied", |s| s.contains("copied to clipboard"));
 }
@@ -88,7 +88,7 @@ fn a_program_inside_can_copy_to_the_clipboard() {
 
     app.send(b"printf '\\033]52;c;Y29weS1tZQ==\\007'\r");
 
-    let osc52 = String::from_utf8(cornercase::clipboard::osc52("copy-me")).expect("utf-8");
+    let osc52 = String::from_utf8(cornercase::host::clipboard::osc52("copy-me")).expect("utf-8");
     app.wait_for_raw("the copy reaches the outer terminal's clipboard", |raw| raw.contains(&osc52));
     app.wait_for("a toast says it was copied", |s| s.contains("copied to clipboard"));
 }

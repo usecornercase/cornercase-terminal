@@ -1,4 +1,6 @@
 use super::*;
+use cornercase::project::group;
+use cornercase::state;
 
 #[test]
 fn sidebar_shows_the_search_and_the_title() {
@@ -126,7 +128,7 @@ fn the_search_switches_project() {
 #[test]
 fn a_narrow_terminal_gets_a_menu_bar() {
     let narrow = ui::COMPACT_WIDTH - 10;
-    let areas = ui::layout(Rect::new(0, 0, narrow, ROWS), ui::Widths::default());
+    let areas = ui::layout(Rect::new(0, 0, narrow, ROWS), state::Widths::default());
     let mut app = Harness::open(Session::new(), ROWS, narrow);
     app.wait_for("the bar names the project", |s| s.lines().nth(1).is_some_and(|l| l.contains("≡")));
 
@@ -226,11 +228,11 @@ fn a_project_moves_into_a_new_group() {
     app.open_new_menu(1, 1);
     app.wait_for("the group form opens", |s| s.contains("New group") && s.contains("right-click a project"));
     app.send(b"work\r");
-    app.wait_for("the group shows", |s| s.contains(&format!("  ▾ {} work", ui::GROUP_STYLES[0].0)));
+    app.wait_for("the group shows", |s| s.contains(&format!("  ▾ {} work", group::GROUP_STYLES[0].0)));
     app.right_click(at);
     app.wait_for("the menu opens", |s| s.contains("move to group"));
     app.pick(at, &["rename project", "move to group"], 1);
-    let group = format!("{} work", ui::GROUP_STYLES[0].0);
+    let group = format!("{} work", group::GROUP_STYLES[0].0);
     app.wait_for("the groups are listed", |s| s.contains(&format!(" {group} ")) && !s.contains("move to group"));
     app.click(ui::menu_item(ui::menu_area(AREA, at, &[group.as_str()]), 0).as_position());
 

@@ -11,8 +11,8 @@ use crate::app::interaction::Grab;
 use crate::app::interaction::RowDrag;
 use crate::app::menus::Target;
 use crate::log::{self};
+use crate::project::search::Goto;
 use crate::project::{Hierarchy, move_before};
-use crate::search::Goto;
 use crate::ui::{self, SidebarRow, WorkspaceRow};
 
 impl App {

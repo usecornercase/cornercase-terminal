@@ -1,4 +1,7 @@
 use super::*;
+use crate::config;
+use crate::project::group;
+use crate::state;
 use crate::ui::TreeRow;
 
 const TALL: Rect = Rect { x: 0, y: 0, width: 100, height: 30 };
@@ -9,13 +12,13 @@ fn drawn(app: &mut App) {
 
 fn tree(n: usize) -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(n);
-    app.config.sidebar = ui::Sidebar::Tree.id().into();
+    app.config.sidebar = config::Sidebar::Tree.id().into();
     drawn(&mut app);
     (app, rx, dirs)
 }
 
 fn list() -> Rect {
-    ui::layout_with(TALL, ui::Widths::default(), false, ui::Sidebar::Tree).list
+    ui::layout_with(TALL, state::Widths::default(), false, config::Sidebar::Tree).list
 }
 
 fn row(app: &App, row: TreeRow) -> Rect {
@@ -140,7 +143,7 @@ fn a_search_result_unfolds_the_way_to_it() {
     let (mut app, _rx, _dirs) = tree(2);
     let id = app.take_id();
     app.groups
-        .push(Group { id, entry: ui::GroupEntry { name: "work".into(), icon: '●', colour: 4, collapsed: true } });
+        .push(Group { id, entry: group::GroupEntry { name: "work".into(), icon: '●', colour: 4, collapsed: true } });
     app.projects[0].group = Some(id);
     app.projects[0].collapsed = true;
     app.projects[0].workspaces[0].collapsed = true;
@@ -167,7 +170,7 @@ fn a_search_result_for_the_folded_active_project_unfolds_it() {
 fn switching_to_the_tree_shows_the_active_tab() {
     let (mut app, _rx, _dirs) = app_with(10);
     drawn(&mut app);
-    app.config.sidebar = ui::Sidebar::Tree.id().into();
+    app.config.sidebar = config::Sidebar::Tree.id().into();
 
     drawn(&mut app);
 

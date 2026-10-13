@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::worktree;
+use crate::git::worktree;
 
 pub fn check(repo: &Path, workspaces: &[(u64, PathBuf)], fetch: bool) -> Vec<(u64, u32)> {
     if fetch {

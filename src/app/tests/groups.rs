@@ -1,6 +1,7 @@
 use rstest::rstest;
 
 use super::*;
+use crate::project::group;
 
 fn moving_while_deleting() -> (App, Receiver<AppEvent>, Vec<TempDir>, u64) {
     let (mut app, rx, dirs) = asked_to_delete(1, 2);
@@ -75,7 +76,7 @@ fn a_new_group_takes_the_first_style_without_asking() {
     let (mut app, _rx) = app();
     new_group(&mut app, "work");
     let entry = &app.groups[0].entry;
-    assert_eq!((app.overlay.is_none(), (entry.icon, entry.colour)), (true, ui::GROUP_STYLES[0]));
+    assert_eq!((app.overlay.is_none(), (entry.icon, entry.colour)), (true, group::GROUP_STYLES[0]));
 }
 
 #[test]
@@ -129,7 +130,10 @@ fn clicks_in_the_modal_set_the_icon_and_the_colour() {
     click(&mut app, ui::style_icon(AREA, 7).as_position());
     click(&mut app, ui::style_colour(AREA, 12).as_position());
 
-    assert_eq!((app.groups[0].entry.icon, app.groups[0].entry.colour), (ui::GROUP_ICONS[7], ui::GROUP_COLOURS[12]));
+    assert_eq!(
+        (app.groups[0].entry.icon, app.groups[0].entry.colour),
+        (group::GROUP_ICONS[7], group::GROUP_COLOURS[12])
+    );
 }
 
 #[rstest]
@@ -147,7 +151,7 @@ fn the_modal_closes_keeping_the_choice(#[case] key: Option<KeyCode>) {
         None => click(&mut app, ui::style_done(AREA).as_position()),
     }
 
-    assert_eq!((app.overlay.is_none(), app.groups[0].entry.icon), (true, ui::GROUP_ICONS[3]));
+    assert_eq!((app.overlay.is_none(), app.groups[0].entry.icon), (true, group::GROUP_ICONS[3]));
 }
 
 #[test]
@@ -166,7 +170,7 @@ fn each_new_group_gets_the_next_style() {
     let (mut app, _rx) = app();
     new_group(&mut app, "work");
     new_group(&mut app, "oss");
-    assert_eq!(styles(&app), ui::GROUP_STYLES[..2]);
+    assert_eq!(styles(&app), group::GROUP_STYLES[..2]);
 }
 
 #[test]
@@ -178,16 +182,16 @@ fn a_new_group_takes_a_style_no_other_group_has() {
     let oss = app.groups[1].id;
     app.delete_group(oss);
     new_group(&mut app, "clients");
-    assert_eq!(styles(&app), [ui::GROUP_STYLES[0], ui::GROUP_STYLES[2], ui::GROUP_STYLES[1]]);
+    assert_eq!(styles(&app), [group::GROUP_STYLES[0], group::GROUP_STYLES[2], group::GROUP_STYLES[1]]);
 }
 
 #[test]
 fn past_the_presets_the_styles_start_over() {
     let (mut app, _rx) = app();
-    for i in 0..=ui::GROUP_STYLES.len() {
+    for i in 0..=group::GROUP_STYLES.len() {
         new_group(&mut app, &format!("group {i}"));
     }
-    assert_eq!(styles(&app)[ui::GROUP_STYLES.len()], ui::GROUP_STYLES[0]);
+    assert_eq!(styles(&app)[group::GROUP_STYLES.len()], group::GROUP_STYLES[0]);
 }
 
 #[test]
@@ -506,8 +510,8 @@ fn groups_survive_a_restore() {
     let (mut restored, _rx2) = empty_app();
     restored.restore(&saved, AREA);
 
-    let groups: Vec<&ui::GroupEntry> = restored.groups.iter().map(|g| &g.entry).collect();
-    let expected: Vec<&ui::GroupEntry> = app.groups.iter().map(|g| &g.entry).collect();
+    let groups: Vec<&group::GroupEntry> = restored.groups.iter().map(|g| &g.entry).collect();
+    let expected: Vec<&group::GroupEntry> = app.groups.iter().map(|g| &g.entry).collect();
     assert_eq!((groups, restored.sidebar_rows(), restored.state()), (expected, app.sidebar_rows(), saved));
     drop(dirs);
 }

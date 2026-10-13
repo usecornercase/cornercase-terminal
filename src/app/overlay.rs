@@ -10,14 +10,14 @@ use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
 use crate::changes::BranchPicker;
 use crate::error::Result;
+use crate::git::worktree;
 use crate::issues::browser::Browser;
 use crate::list::Search;
-use crate::picker::Picker;
+use crate::project::picker::Picker;
 use crate::settings::Settings;
 use crate::shortcuts::Group as KeysGroup;
 use crate::time;
 use crate::ui;
-use crate::worktree;
 
 pub(super) const CREATE_SUBMIT: &str = "create";
 

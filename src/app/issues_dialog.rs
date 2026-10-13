@@ -9,23 +9,23 @@ use super::event::AppEvent;
 use super::event::Start;
 use super::overlay::Overlay;
 use crate::agents;
-use crate::clipboard;
+use crate::agents::launch::{self};
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
 use crate::git;
+use crate::highlight::markdown;
+use crate::host::clipboard;
 use crate::issues::browser::{
     self, Action, Browser, Connection, IssuesHit, Listing, Pick, Place, Room, Screen, Step, Tab, TokenForm,
 };
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
+use crate::issues::secrets;
 use crate::issues::{
     self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
 };
-use crate::launch::{self};
 use crate::list::Search;
 use crate::log::{self, Job, Level};
-use crate::markdown;
 use crate::project::Hierarchy;
-use crate::secrets;
 use crate::time;
 use crate::ui;
 

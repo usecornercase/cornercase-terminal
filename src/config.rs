@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::agents;
-use crate::notify;
+use crate::host::notify;
 use crate::persist;
 use crate::shortcuts::Prefix;
 

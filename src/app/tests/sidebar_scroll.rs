@@ -1,9 +1,10 @@
 use super::*;
+use crate::state;
 
 const SHORT: Rect = Rect { x: 0, y: 0, width: 100, height: 12 };
 
 fn short() -> ui::Areas {
-    ui::layout(SHORT, ui::Widths::default())
+    ui::layout(SHORT, state::Widths::default())
 }
 
 fn wheel_at(app: &mut App, kind: MouseEventKind, pos: Position) {

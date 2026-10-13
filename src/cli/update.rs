@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::protocol::{self, ServerMessage};
 use crate::update::{self, Install, Outcome};
 use crate::version::CURRENT;
-use crate::{control, paths, restart};
+use crate::{control, paths, update::restart};
 
 const RESTART_WHEN_IDLE: &str = "Restart it once no agent is working? [y/N] ";
 const WAITING: &str = "the server restarts once no agent is working; Ctrl+C cancels the restart";

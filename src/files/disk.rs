@@ -11,7 +11,7 @@ use ignore::WalkBuilder;
 
 use crate::graphics::Picture;
 use crate::graphics::decode;
-use crate::syntax::{self, Segments};
+use crate::highlight::syntax::{self, Segments};
 
 pub const MAX_ENTRIES: usize = 10_000;
 pub const MAX_BYTES: u64 = 8 << 20;

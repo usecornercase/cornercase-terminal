@@ -2,9 +2,9 @@ use super::{Handled, Pending, Stage, json, none};
 use crate::app::App;
 use crate::control::{self, Done, Item};
 use crate::error;
+use crate::git::worktree;
 use crate::project::Hierarchy;
 use crate::term::Term;
-use crate::worktree;
 
 pub(super) fn shell_quote(path: &str) -> String {
     if !path.is_empty() && path.chars().all(|c| c.is_ascii_alphanumeric() || "/._~+-".contains(c)) {

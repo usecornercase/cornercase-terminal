@@ -1,8 +1,8 @@
 use std::sync::mpsc;
 
 use super::*;
-use crate::context;
-use crate::host_theme::HostTheme;
+use crate::agents::context;
+use crate::host::theme::HostTheme;
 use crate::test_util::TempDir;
 
 mod answer_lost_requests {

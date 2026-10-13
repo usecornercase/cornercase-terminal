@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::menus::Target;
 use crate::files;
+use crate::state;
 use crate::ui::{self};
 
 pub(super) const DOUBLE_CLICK: Duration = Duration::from_millis(400);
@@ -140,11 +141,11 @@ impl App {
         }
     }
 
-    fn agents_dragged(&self, row: u16, area: Rect) -> ui::Widths {
+    fn agents_dragged(&self, row: u16, area: Rect) -> state::Widths {
         let bottom = self.layout(area).agents.bottom();
-        let wanted = ui::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.widths };
+        let wanted = state::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.widths };
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
         let rows = ui::full_layout(area, wanted, panel, sidebar, true).agents.height;
-        ui::Widths { agents: Some(rows), ..wanted }
+        state::Widths { agents: Some(rows), ..wanted }
     }
 }

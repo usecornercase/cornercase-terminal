@@ -15,9 +15,9 @@ use libghostty_vt::terminal::{
 use ratatui::layout::Position;
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::host_theme::HostTheme;
-use crate::keys;
-use crate::mouse::{MouseEncoding, MouseMode};
+use crate::host::theme::HostTheme;
+use crate::term::keys;
+use crate::term::mouse::{MouseEncoding, MouseMode};
 
 pub type Result<T> = libghostty_vt::error::Result<T>;
 pub type ReplyFn = Box<dyn FnMut(&[u8])>;

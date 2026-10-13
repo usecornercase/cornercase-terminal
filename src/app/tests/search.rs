@@ -1,4 +1,5 @@
 use super::*;
+use crate::project::group;
 
 fn named() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, dirs) = app_with(2);
@@ -86,7 +87,7 @@ fn a_group_is_found_before_its_projects() {
     with_group(&mut app, false);
     app.projects[1].name = Some("clients-api".into());
     let found: Vec<(Kind, String)> = app.search_results("clients").into_iter().map(|c| (c.kind, c.name)).collect();
-    let group = format!("{} clients", ui::GROUP_STYLES[0].0);
+    let group = format!("{} clients", group::GROUP_STYLES[0].0);
     assert_eq!(found, [(Kind::Group, group), (Kind::Project, "clients-api".into())]);
 }
 

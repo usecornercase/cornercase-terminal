@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use self::diff::{Diff, File, Segments};
 use crate::error::Result;
-use crate::host_theme::HostTheme;
+use crate::host::theme::HostTheme;
 use crate::list::Cursor;
 
 const OPEN_EVERY: Duration = Duration::from_secs(1);

@@ -2,8 +2,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use super::{Browser, Room, Screen};
+use crate::highlight::markdown;
 use crate::issues::{Detail, Issue, branch};
-use crate::markdown;
 use crate::time;
 
 impl Browser {

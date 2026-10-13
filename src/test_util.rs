@@ -52,7 +52,7 @@ pub fn spawn_term(
         rows: 24,
         cols: 80,
         cwd,
-        theme: &crate::host_theme::HostTheme::default(),
+        theme: &crate::host::theme::HostTheme::default(),
     };
     (crate::term::Term::spawn(opts, tx).expect("spawn /bin/sh"), rx)
 }
@@ -307,7 +307,8 @@ rm -f "$s"
     }
 
     pub fn command_line(&self, args: &str) -> String {
-        let unset = format!("env -u {} -u {}", crate::context::NO_LONG_ENV, crate::context::NO_COMPACT_ENV);
+        let unset =
+            format!("env -u {} -u {}", crate::agents::context::NO_LONG_ENV, crate::agents::context::NO_COMPACT_ENV);
         format!("{unset} {} {} {args}", self.script().display(), self.dir().display())
     }
 

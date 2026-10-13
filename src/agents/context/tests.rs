@@ -3,7 +3,7 @@ use std::io::Write;
 use rstest::rstest;
 
 use super::*;
-use crate::activity::Session;
+use crate::agents::activity::Session;
 use crate::test_util::{Sleeper, TempDir};
 use crate::time::Stamp;
 
@@ -621,7 +621,7 @@ mod pane {
 #[expect(unused_qualifications, reason = "preserve the existing test bodies when nesting this module")]
 mod counting_records {
     use super::*;
-    use crate::context::counting::tests::{since, sum};
+    use crate::agents::context::counting::tests::{since, sum};
     use crate::test_util::{TempDir, wait_until};
 
     const FIXTURE: &str = crate::test_util::fixture!("claude/2.1.296/usage.jsonl");
@@ -661,11 +661,11 @@ mod counting_records {
         ledger.apply("a", since(), records.clone());
         assert_eq!(
             sum(ledger.take()),
-            (2, crate::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
+            (2, crate::agents::stats::Tokens { input: 20, out: 50, cache_read: 200, cache_write: 10 })
         );
         ledger.apply("clear", since(), Vec::new());
         ledger.apply("a", since(), records);
-        assert_eq!(sum(ledger.take()), (0, crate::stats::Tokens::default()));
+        assert_eq!(sum(ledger.take()), (0, crate::agents::stats::Tokens::default()));
         assert!(
             counted_claude(
                 &serde_json::json!({"type":"assistant","message":{"id":"missing-time","usage":{"output_tokens":99}}}),
@@ -700,7 +700,7 @@ mod counting_records {
         std::fs::create_dir_all(sub.parent().expect("parent")).expect("directory");
         std::fs::write(&transcript, FIXTURE).expect("transcript");
         std::fs::write(&sub, crate::test_util::fixture!("claude/2.1.296/subagent.jsonl")).expect("subagent");
-        let session = crate::activity::Session::parse(
+        let session = crate::agents::activity::Session::parse(
             &serde_json::json!({"pid": 1, "sessionId": "session", "cwd": cwd}).to_string(),
             1,
         )
@@ -717,7 +717,7 @@ mod counting_records {
         assert_eq!(sum(pane.take_counted()).1.out, 0);
         let cleared = transcript_path(dir.path(), &cwd, "clear-session").expect("path");
         std::fs::write(cleared, "").expect("clear transcript");
-        let session = crate::activity::Session::parse(
+        let session = crate::agents::activity::Session::parse(
             &serde_json::json!({"pid": 1, "sessionId": "clear-session", "cwd": cwd}).to_string(),
             1,
         )

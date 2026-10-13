@@ -15,9 +15,9 @@ use super::Context;
 use super::http::Request;
 use crate::client::input::Parser;
 use crate::graphics::{Missing, Support};
-use crate::host_theme::{HostTheme, PALETTE_LEN};
+use crate::host::notify::Channel;
+use crate::host::theme::{HostTheme, PALETTE_LEN};
 use crate::log;
-use crate::notify::Channel;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::version;
 

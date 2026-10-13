@@ -16,9 +16,9 @@ use super::rows::{
 };
 use super::theme::{severity_color, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle};
-use crate::activity::{self, Status};
+use crate::agents::activity::{self, Status};
+use crate::agents::usage::Severity;
 use crate::text::truncate_right;
-use crate::usage::Severity;
 
 const SHELL_ICON: &str = "›";
 

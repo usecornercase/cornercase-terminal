@@ -1,4 +1,5 @@
 use super::*;
+use crate::state;
 use crate::ui::todo as panel;
 
 fn toggle_button(app: &mut App) -> String {
@@ -96,7 +97,7 @@ fn the_todo_and_changes_panels_take_turns() {
 fn the_compact_bar_has_a_button_too() {
     let small = Rect { width: 80, ..AREA };
     let (mut app, _rx, _dirs) = app_with(1);
-    click_in(&mut app, ui::layout(small, ui::Widths::default()).todo_button.as_position(), small);
+    click_in(&mut app, ui::layout(small, state::Widths::default()).todo_button.as_position(), small);
     assert_eq!(app.side, Some(Side::Todo));
 }
 

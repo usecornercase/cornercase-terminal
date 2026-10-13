@@ -5,13 +5,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::{FORM_WIDTH, buttons_in, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
-use crate::markdown;
+use crate::agents::usage::Severity;
+use crate::highlight::markdown;
 use crate::ui::View;
 use crate::ui::chrome::USAGE_LABEL;
 use crate::ui::stats;
 use crate::ui::theme::severity_color;
 use crate::ui::widgets::{overlay_block, update_button};
-use crate::usage::Severity;
 
 const USAGE_BAR: &str = "━";
 
@@ -40,7 +40,7 @@ pub(in crate::ui) fn usage_rows(usage: Rect) -> [Rect; 3] {
 }
 
 pub fn usage_tabs(area: Rect, usage: &Usage) -> Vec<Rect> {
-    tabs_in(usage_rows(usage_area(area, usage))[0], &crate::usage::Page::NAMES)
+    tabs_in(usage_rows(usage_area(area, usage))[0], &crate::agents::usage::Page::NAMES)
 }
 
 pub fn usage_share(area: Rect, usage: &Usage) -> Rect {
@@ -68,8 +68,8 @@ pub struct UsageSection {
 }
 
 pub struct Usage {
-    pub page: crate::usage::Page,
-    pub stats: crate::stats::View,
+    pub page: crate::agents::usage::Page,
+    pub stats: crate::agents::stats::View,
     pub sections: Vec<UsageSection>,
 }
 
@@ -134,14 +134,14 @@ pub(in crate::ui) fn draw_usage(f: &mut Frame, view: &View, usage: &Usage) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, USAGE_LABEL), r);
     let [_, body, _] = usage_rows(r);
-    draw_tabs(f, view, &usage_tabs(f.area(), usage), &crate::usage::Page::NAMES, usage.page.index());
-    let lines = if usage.page == crate::usage::Page::Stats {
+    draw_tabs(f, view, &usage_tabs(f.area(), usage), &crate::agents::usage::Page::NAMES, usage.page.index());
+    let lines = if usage.page == crate::agents::usage::Page::Stats {
         stats::lines((view.line(), view.muted, view.light), &usage.stats, body.width)
     } else {
         usage_lines((view.muted, view.line()), usage, body.width)
     };
     f.render_widget(Paragraph::new(lines), body);
-    if usage.page == crate::usage::Page::Stats && !usage.stats.empty {
+    if usage.page == crate::agents::usage::Page::Stats && !usage.stats.empty {
         draw_secondary(f, view, usage_share(f.area(), usage), "share");
     }
     draw_submit(f, view, usage_done(f.area(), usage), crate::settings::DONE);

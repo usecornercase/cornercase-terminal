@@ -1,5 +1,5 @@
-use crate::activity::Status;
 use crate::agents;
+use crate::agents::activity::Status;
 use crate::control::{PaneInfo, Report};
 use crate::text::CRUMB_SEPARATOR;
 

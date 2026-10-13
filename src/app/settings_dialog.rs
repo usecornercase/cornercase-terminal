@@ -6,8 +6,8 @@ use super::input::wheel;
 use super::overlay::Overlay;
 use crate::config::{self, Config};
 use crate::issues::Source;
+use crate::issues::secrets;
 use crate::log::{self, Level};
-use crate::secrets;
 use crate::settings::{self, DONE, Page, Settings, Status};
 use crate::ui::{self};
 

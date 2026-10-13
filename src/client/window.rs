@@ -18,12 +18,12 @@ use super::{Ending, Guard, Host, INPUT_POLL, Link, Target, input};
 use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
-use crate::host_theme::HostTheme;
-use crate::notify::{self, Channel};
+use crate::host::notify::{self, Channel};
+use crate::host::theme::HostTheme;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::remote::{self, Stderr};
 use crate::ui::remote::{self as notice, Notice};
-use crate::{pointer, version};
+use crate::{host::pointer, version};
 
 enum Incoming {
     Input(Event),

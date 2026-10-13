@@ -8,10 +8,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cornercase::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
+use cornercase::agents::activity::{CLAUDE_DIR_ENV, CLAUDE_SESSION_ENV};
+use cornercase::config;
 use cornercase::control::{PANE_ENV, PaneInfo, PaneRow, PaneRows, Report};
-use cornercase::protocol::{NESTED_ENV, SOCKET_ENV};
-use cornercase::split::{self, Dir};
+use cornercase::paths::SOCKET_ENV;
+use cornercase::project::split::{self, Dir};
+use cornercase::protocol::NESTED_ENV;
+use cornercase::state;
 use cornercase::ui::{self, SidebarRow, WorkspaceRow};
 use cornercase::update;
 use parking_lot::Mutex;
@@ -426,7 +429,7 @@ fn workspace_row(tabs: &[usize], row: WorkspaceRow) -> Position {
 }
 
 fn areas() -> ui::Areas {
-    ui::layout_with(AREA, ui::Widths::default(), false, ui::Sidebar::default())
+    ui::layout_with(AREA, state::Widths::default(), false, config::Sidebar::default())
 }
 
 const NEW_MENU: [&str; 2] = ["open project", "new group"];

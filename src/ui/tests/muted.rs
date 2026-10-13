@@ -2,7 +2,7 @@ use libghostty_vt::style::RgbColor;
 use rstest::rstest;
 
 use super::*;
-use crate::host_theme::HostTheme;
+use crate::host::theme::HostTheme;
 
 #[rstest]
 #[case::unknown_background(None, Color::DarkGray)]

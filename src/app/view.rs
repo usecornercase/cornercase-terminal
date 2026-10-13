@@ -1,5 +1,5 @@
 use super::App;
-use crate::context::Context;
+use crate::agents::context::Context;
 use crate::project::{Tab, Workspace};
 use crate::ui::{self};
 

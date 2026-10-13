@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::control::{self, Request, Response};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ClientMessage, ServerMessage};
-use crate::{paths, restart};
+use crate::{paths, update::restart};
 
 pub(crate) fn connect() -> Result<UnixStream> {
     let path = paths::socket();

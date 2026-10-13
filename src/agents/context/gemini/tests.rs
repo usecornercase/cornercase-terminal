@@ -267,7 +267,7 @@ fn the_labelled_footer_only_supplies_complete_model_ids(#[case] screen: &str, #[
 
 mod counting_records {
     use super::*;
-    use crate::context::counting::{
+    use crate::agents::context::counting::{
         Ledger,
         tests::{since, sum},
     };
@@ -282,7 +282,7 @@ mod counting_records {
         ledger.apply("a", since(), std::mem::take(&mut session.counted));
         assert_eq!(
             sum(ledger.take()),
-            (1, crate::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
+            (1, crate::agents::stats::Tokens { input: 90, out: 28, cache_read: 30, cache_write: 0 })
         );
         for line in crate::test_util::fixture!("gemini/0.63.0/usage-restore.jsonl").lines() {
             session.apply(&serde_json::from_str(line).expect("record"));

@@ -117,13 +117,17 @@ fn codex_usage() -> UsageSection {
 }
 
 fn usage() -> Usage {
-    Usage { page: crate::usage::Page::Limits, stats: crate::stats::View::default(), sections: vec![claude_usage()] }
+    Usage {
+        page: crate::agents::usage::Page::Limits,
+        stats: crate::agents::stats::View::default(),
+        sections: vec![claude_usage()],
+    }
 }
 
 fn stats_usage(empty: bool) -> Usage {
     let now = std::time::UNIX_EPOCH + std::time::Duration::from_hours(10_000);
-    let stats = if empty { crate::stats::Stats::new(now) } else { crate::stats::tests::example(now) };
-    Usage { page: crate::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
+    let stats = if empty { crate::agents::stats::Stats::new(now) } else { crate::agents::stats::tests::example(now) };
+    Usage { page: crate::agents::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
 }
 
 #[test]
@@ -157,7 +161,7 @@ fn the_heatmap_has_a_purple_ramp_for_each_theme(#[case] light: bool, #[case] pal
 fn usage_tabs_and_border_share_the_drawn_geometry() {
     let usage = stats_usage(false);
     let area = usage_area(AREA, &usage);
-    assert_eq!(usage_tabs(AREA, &usage), tabs_in(usage_rows(area)[0], &crate::usage::Page::NAMES));
+    assert_eq!(usage_tabs(AREA, &usage), tabs_in(usage_rows(area)[0], &crate::agents::usage::Page::NAMES));
     let corners = corners_of_its_area(&with(Overlay::Usage(usage)));
     assert_eq!(corners, ("╭".into(), "╯".into()));
 }
@@ -172,8 +176,8 @@ fn renders_the_usage_windows() {
 #[test]
 fn renders_one_section_per_agent() {
     let usage = Usage {
-        page: crate::usage::Page::Limits,
-        stats: crate::stats::View::default(),
+        page: crate::agents::usage::Page::Limits,
+        stats: crate::agents::stats::View::default(),
         sections: vec![claude_usage(), codex_usage()],
     };
     insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, TALL).backend());
@@ -192,8 +196,8 @@ fn renders_usage_while_loading_and_after_a_failure() {
         ..codex_usage()
     };
     let usage = Usage {
-        page: crate::usage::Page::Limits,
-        stats: crate::stats::View::default(),
+        page: crate::agents::usage::Page::Limits,
+        stats: crate::agents::stats::View::default(),
         sections: vec![loading, failed],
     };
     insta::assert_snapshot!(render(&with(Overlay::Usage(usage))).backend());
@@ -237,8 +241,8 @@ fn the_usage_done_button_sits_on_the_last_row() {
 #[test]
 fn a_usage_too_tall_for_the_screen_keeps_its_done_button() {
     let usage = Usage {
-        page: crate::usage::Page::Limits,
-        stats: crate::stats::View::default(),
+        page: crate::agents::usage::Page::Limits,
+        stats: crate::agents::stats::View::default(),
         sections: vec![claude_usage(), codex_usage()],
     };
     let r = usage_area(AREA, &usage);

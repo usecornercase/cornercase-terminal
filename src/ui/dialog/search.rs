@@ -89,7 +89,7 @@ pub(in crate::ui) fn draw_results(f: &mut Frame, view: &View, search: &Search, r
 }
 
 fn highlight(name: &str, query: &str, base: Style, matched: Style) -> Vec<Span<'static>> {
-    let Some((start, end)) = crate::search::find(name, query) else {
+    let Some((start, end)) = crate::project::search::find(name, query) else {
         return vec![Span::styled(name.to_string(), base)];
     };
     let part = |from: usize, to: usize| name.chars().skip(from).take(to - from).collect::<String>();

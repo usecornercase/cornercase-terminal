@@ -1,4 +1,6 @@
 use super::*;
+use crate::project::group;
+use crate::state;
 
 fn locked_restore() -> (TempDir, Locked, App, Receiver<AppEvent>, WorkspaceState) {
     let (dir, locked) = (TempDir::new(), Locked::new());
@@ -81,8 +83,8 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
     let saved = State {
         version: state::VERSION,
         groups: vec![
-            ui::GroupEntry { name: "work".into(), icon: ui::GROUP_ICONS[0], colour: 99, collapsed: false },
-            ui::GroupEntry { name: "archive".into(), icon: ui::GROUP_ICONS[3], colour: 33, collapsed: true },
+            group::GroupEntry { name: "work".into(), icon: group::GROUP_ICONS[0], colour: 99, collapsed: false },
+            group::GroupEntry { name: "archive".into(), icon: group::GROUP_ICONS[3], colour: 33, collapsed: true },
         ],
         projects: vec![
             ProjectState { name: Some("Notes".into()), collapsed: true, ..project(&paths[0], vec![loose]) },
@@ -121,7 +123,13 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
             },
         ],
         active: 1,
-        widths: Some(ui::Widths { projects: 35, workspaces: 24, changes: Some(42), stack: Some(11), agents: Some(7) }),
+        widths: Some(state::Widths {
+            projects: 35,
+            workspaces: 24,
+            changes: Some(42),
+            stack: Some(11),
+            agents: Some(7),
+        }),
         issues: Some(IssuesState {
             tab: Some("github".into()),
             closed: true,

@@ -6,13 +6,13 @@ use ratatui::layout::Rect;
 use super::wait::Condition;
 use super::{Handled, NO_PROJECT, Pending, Stage, deadline, json, name_of, none, sized};
 use crate::agents;
+use crate::agents::launch::{self, Launch};
 use crate::app::App;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
-use crate::launch::{self, Launch};
 use crate::project::Hierarchy;
-use crate::split::Dir;
+use crate::project::split::Dir;
 
 pub(super) struct Then {
     start: Option<(launch::Spec, Option<String>)>,

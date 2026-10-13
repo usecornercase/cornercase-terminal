@@ -5,10 +5,10 @@ use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::agents;
 use crate::changes::Checkout;
-use crate::clipboard;
 use crate::error::Result;
+use crate::host::clipboard;
+use crate::project::search::Goto;
 use crate::project::{Hierarchy, Tab};
-use crate::search::Goto;
 use crate::term::{SpawnOptions, Term};
 use crate::ui::{self};
 

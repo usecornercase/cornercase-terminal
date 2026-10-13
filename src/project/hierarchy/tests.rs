@@ -5,7 +5,7 @@ use rstest::rstest;
 use super::*;
 use crate::project::Phase;
 use crate::project::group::GroupEntry;
-use crate::split::{Dir, Node};
+use crate::project::split::{Dir, Node};
 use crate::test_util::spawn_term;
 use crate::ui::{self, SidebarRow};
 

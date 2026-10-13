@@ -3,10 +3,10 @@ use std::time::{Duration, Instant};
 use rstest::rstest;
 
 use super::sections;
+use crate::agents::usage::{self, Agent, Report, State};
 use crate::error::Error;
 use crate::time;
 use crate::ui;
-use crate::usage::{self, Agent, Report, State};
 
 const CLOCK: i64 = 1_791_158_400;
 

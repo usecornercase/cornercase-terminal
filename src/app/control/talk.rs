@@ -4,17 +4,17 @@ use crossterm::event::KeyCode;
 
 use super::wait::Condition;
 use super::{Handled, Pending, Stage, WATCHED, deadline, json, none, pane_ids};
-use crate::activity::{self, Status};
 use crate::agents;
+use crate::agents::activity::{self, Status};
+use crate::agents::context;
+use crate::agents::launch::Launch;
 use crate::app::{App, AppEvent};
-use crate::context;
 use crate::control::{self, Done};
 use crate::error;
-use crate::keys;
-use crate::launch::Launch;
 use crate::log::{Job, Level};
 use crate::project::Hierarchy;
 use crate::term;
+use crate::term::keys;
 
 fn not_reading(pane: u64) -> String {
     format!(

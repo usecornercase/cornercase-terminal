@@ -1,4 +1,5 @@
 use super::*;
+use cornercase::version;
 
 fn serve(files: impl FnOnce(&str) -> Vec<(String, Vec<u8>)>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind a port");
@@ -201,7 +202,7 @@ fn update_installs_the_latest_release_and_restarts_the_server(#[case] version: &
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{out:?}");
-    assert!(stdout.contains(&format!("updated cornercase {} → {version}", update::CURRENT)), "{stdout}");
+    assert!(stdout.contains(&format!("updated cornercase {} → {version}", version::CURRENT)), "{stdout}");
     assert!(stdout.contains("restarted the cornercase server"), "{stdout}");
     assert_eq!(stdout.contains("restarts once no agent is working"), !when.is_empty(), "{stdout}");
     assert!(stdout.contains("1 program (`sleep` in ") && stdout.contains("stopped 1 program"), "{stdout}");
@@ -223,12 +224,12 @@ fn update_leaves_an_up_to_date_install_and_its_server_alone() {
         .session
         .command_of(&bin)
         .arg("update")
-        .env(update::LATEST_ENV, fake_release(update::CURRENT, "#!/bin/sh\n"))
+        .env(update::LATEST_ENV, fake_release(version::CURRENT, "#!/bin/sh\n"))
         .output()
         .expect("run update");
 
     assert!(out.status.success(), "{out:?}");
-    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("cornercase {} is up to date\n", update::CURRENT));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("cornercase {} is up to date\n", version::CURRENT));
     assert_eq!(app.session.servers(), 1);
     let _ = std::fs::remove_dir_all(bin.parent().expect("its folder"));
 }

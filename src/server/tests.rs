@@ -1,4 +1,6 @@
 use super::*;
+use crate::config;
+use crate::state;
 use crate::test_util::TempDir;
 use crate::version;
 
@@ -474,7 +476,7 @@ mod showing_images {
     }
 
     fn settings() -> Position {
-        ui::full_layout(Rect::new(0, 0, 100, 20), ui::Widths::default(), true, ui::Sidebar::default(), false)
+        ui::full_layout(Rect::new(0, 0, 100, 20), state::Widths::default(), true, config::Sidebar::default(), false)
             .settings
             .as_position()
     }
@@ -548,7 +550,7 @@ mod pointing {
         let mut attached = Attached::new();
         let mut window = attached.join_with(Support::default(), Some(pointer::Terminal::Kitty));
         let area = Rect::new(0, 0, COLS, ROWS);
-        let layout = ui::full_layout(area, ui::Widths::default(), false, ui::Sidebar::default(), false);
+        let layout = ui::full_layout(area, state::Widths::default(), false, config::Sidebar::default(), false);
         let border = layout.border(ui::Border::Projects);
         let server = &mut attached.server;
         server.draw();
@@ -568,8 +570,8 @@ mod drawing {
 
     use super::a_bug::Attached;
     use super::*;
-    use crate::clipboard;
     use crate::control::{Report, Response};
+    use crate::host::clipboard;
 
     fn drawn_just_now(attached: &mut Attached) -> Instant {
         attached.server.draw();

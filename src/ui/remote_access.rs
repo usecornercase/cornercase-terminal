@@ -6,7 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block, update_button};
-use crate::markdown;
+use crate::highlight::markdown;
 
 pub const TITLE: &str = "Remote";
 pub const LABEL: &str = "Remote";

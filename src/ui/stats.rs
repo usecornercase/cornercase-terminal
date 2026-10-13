@@ -3,8 +3,8 @@ use ratatui::text::{Line, Span};
 
 #[cfg(test)]
 use super::View;
-use crate::markdown;
-use crate::stats::{self, WEEKS};
+use crate::agents::stats::{self, WEEKS};
+use crate::highlight::markdown;
 
 #[cfg(test)]
 pub fn colour(view: &View, level: u8) -> Color {

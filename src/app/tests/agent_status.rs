@@ -1,7 +1,8 @@
 use rstest::rstest;
 
 use super::*;
-use crate::activity::Status;
+use crate::agents::activity::Status;
+use crate::config;
 use crate::test_util::{FakeClaude, FakeCodex, FakeGemini, FakeOpencode, write_executable};
 
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
@@ -203,7 +204,7 @@ fn a_split_tab_adds_up_the_memory_of_every_pane() {
 fn the_tree_measures_the_tabs_of_every_open_project() {
     let (mut app, rx, _dirs) = app_with(2);
     app.config.memory = true;
-    app.config.sidebar = ui::Sidebar::Tree.id().into();
+    app.config.sidebar = config::Sidebar::Tree.id().into();
     render(&mut app, Rect::new(0, 0, 100, 30));
 
     let measured = |a: &App| a.projects.iter().all(|p| p.workspaces[0].tabs[0].memory().is_some());

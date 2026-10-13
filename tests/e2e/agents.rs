@@ -90,7 +90,7 @@ fn an_issue_is_read_then_handed_to_its_agent_in_its_own_worktree() {
     let detail_buttons = ["start", "agent…", "raw", "copy url", "back"];
     app.click(ui::issue_buttons(ui::issues_area(AREA), &detail_buttons)[3].as_position());
     let osc52 =
-        String::from_utf8(cornercase::clipboard::osc52("https://github.com/acme/shop/issues/7")).expect("utf-8");
+        String::from_utf8(cornercase::host::clipboard::osc52("https://github.com/acme/shop/issues/7")).expect("utf-8");
     app.wait_for_raw("the URL reaches the outer terminal's clipboard", |raw| raw.contains(&osc52));
     app.send(b"\r");
 

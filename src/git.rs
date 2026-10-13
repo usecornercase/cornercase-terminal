@@ -1,3 +1,6 @@
+pub mod upstream;
+pub mod worktree;
+
 use std::path::{Path, PathBuf};
 
 const SHORT_SHA_LEN: usize = 7;

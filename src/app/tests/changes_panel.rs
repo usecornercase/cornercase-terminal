@@ -1,4 +1,5 @@
 use super::*;
+use crate::changes;
 use crate::test_util::{git, write_executable};
 
 mod every_project {
@@ -28,11 +29,11 @@ mod every_project {
 
     fn open_file(app: &mut App, rx: &Receiver<AppEvent>, path: &str) -> usize {
         let view = app.panel_view().expect("panel");
-        let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+        let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         let file = diff.files.iter().position(|f| f.path == path).expect("file");
         click(app, row(app, panel::Row::File(file)));
         pump_until(app, rx, "the file patch loads", |a| {
-            let Some(panel::View { body: panel::Body::Ready(d), .. }) = a.panel_view() else { return false };
+            let Some(panel::View { body: changes::Body::Ready(d), .. }) = a.panel_view() else { return false };
             !d.files[file].hunks.is_empty()
         });
         file
@@ -61,7 +62,7 @@ mod every_project {
             [("shop", false), ("main", true), ("topic", true), ("api", false)]
         );
         assert_eq!(view.folded, [true; 3]);
-        let panel::Body::Ready(diff) = view.body else { panic!("ready") };
+        let changes::Body::Ready(diff) = view.body else { panic!("ready") };
         assert!(diff.files.iter().all(|f| f.hunks.is_empty()));
         let before = app.active;
         let header = row(&app, panel::Row::Header(0));
@@ -139,7 +140,7 @@ mod every_project {
         let targets = app.every_targets();
         let (workspace, generation, request) = app.changes.request_every(&targets, Instant::now()).expect("summary");
         app.changes.loaded(workspace, generation, &request, Err(Error::Git("cannot read status".into())));
-        assert_eq!(app.panel_view().expect("panel").body, panel::Body::Failed("shop: cannot read status".into()));
+        assert_eq!(app.panel_view().expect("panel").body, changes::Body::Failed("shop: cannot read status".into()));
     }
 
     #[rstest::rstest]
@@ -154,7 +155,7 @@ mod every_project {
         assert!(app.changes_target().is_none());
         let view = app.panel_view().expect("panel");
         assert!(view.owners.is_empty() && view.headers.is_empty());
-        assert!(matches!(view.body, panel::Body::Ready(d) if d.files.is_empty()));
+        assert!(matches!(view.body, changes::Body::Ready(d) if d.files.is_empty()));
     }
 
     #[rstest::rstest]
@@ -216,7 +217,7 @@ mod every_project {
         let targets = app.every_targets();
         std::fs::remove_file(repo.path().join(".git/HEAD")).expect("head disappears after resolving targets");
         let (body, owners, headers) = app.every_body(&targets);
-        assert!(matches!(body, panel::Body::Ready(d) if d.files.len() == 1));
+        assert!(matches!(body, changes::Body::Ready(d) if d.files.len() == 1));
         assert_eq!(owners, [targets[0].0.workspace]);
         assert_eq!(headers.len(), 1);
     }
@@ -361,7 +362,7 @@ fn the_button_opens_the_panel_and_narrows_the_pane() {
 #[test]
 fn the_panel_shows_the_changed_file() {
     let (_repo, app, _rx) = open_changes();
-    let Some(panel::View { body: panel::Body::Ready(diff), .. }) = app.panel_view() else {
+    let Some(panel::View { body: changes::Body::Ready(diff), .. }) = app.panel_view() else {
         panic!("the panel has a diff")
     };
     assert_eq!((diff.files[0].path.as_str(), diff.added(), diff.removed()), ("a.txt", 1, 1));

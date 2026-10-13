@@ -13,7 +13,7 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher as Fuzzy, Utf32Str};
 use parking_lot::Mutex;
 
-use crate::syntax;
+use crate::highlight::syntax;
 
 pub const MAX_FILES: usize = 200_000;
 pub const MAX_NAMES: usize = 200;

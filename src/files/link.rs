@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::expand_home;
-use crate::emulator::Cell;
+use crate::term::emulator::Cell;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Link {

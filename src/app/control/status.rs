@@ -1,6 +1,6 @@
 use super::{Handled, json, none};
+use crate::agents::awake;
 use crate::app::App;
-use crate::awake;
 use crate::control::{self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 use crate::git;
 use crate::log::{self, Level};

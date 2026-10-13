@@ -4,7 +4,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use crate::clipboard;
+use crate::host::clipboard;
 use crate::todo::{self};
 use crate::ui::{self};
 

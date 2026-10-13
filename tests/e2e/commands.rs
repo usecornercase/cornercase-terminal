@@ -471,21 +471,24 @@ fn a_server_without_a_window_refuses_new_terminals() {
 fn stats_reads_the_local_file_without_starting_a_server() {
     let session = Session::new();
     let now = std::time::SystemTime::now();
-    let mut stats = cornercase::stats::Stats::new(now);
+    let mut stats = cornercase::agents::stats::Stats::new(now);
     stats.counted(
-        cornercase::stats::Kind::Claude,
-        cornercase::stats::Counted {
+        cornercase::agents::stats::Kind::Claude,
+        cornercase::agents::stats::Counted {
             prompts: vec![now],
-            tokens: vec![(now, cornercase::stats::Tokens { out: 321, ..cornercase::stats::Tokens::default() })],
+            tokens: vec![(
+                now,
+                cornercase::agents::stats::Tokens { out: 321, ..cornercase::agents::stats::Tokens::default() },
+            )],
         },
     );
-    cornercase::stats::save(&session.dir.join("stats.json"), &stats.saved(now)).expect("save stats");
+    cornercase::agents::stats::save(&session.dir.join("stats.json"), &stats.saved(now)).expect("save stats");
     let text = session.says(&["stats"]);
     assert!(text.contains("prompts") && text.contains("321"), "{text}");
     let json: serde_json::Value = serde_json::from_str(&session.says(&["stats", "--json"])).expect("stats JSON");
     assert_eq!(json["windows"]["total"]["prompts"], 1);
     assert_eq!(json["windows"]["total"]["tokens"]["out"], 321);
-    assert_eq!(session.says(&["stats", "--share"]), cornercase::stats::share_link(&stats, now));
+    assert_eq!(session.says(&["stats", "--share"]), cornercase::agents::stats::share_link(&stats, now));
     assert!(!session.socket().exists());
 }
 

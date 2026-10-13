@@ -1,3 +1,8 @@
+pub mod emulator;
+pub mod keys;
+pub mod memory;
+pub mod mouse;
+
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -8,14 +13,13 @@ use std::time::Instant;
 
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
-use crate::activity;
+use self::emulator::Emulator;
+use crate::agents::activity;
+use crate::agents::context;
 use crate::agents::{self, AgentState};
 use crate::config::Config;
-use crate::context;
-use crate::emulator::Emulator;
 use crate::error::{Error, Result};
-use crate::host_theme::HostTheme;
-use crate::memory;
+use crate::host::theme::HostTheme;
 use crate::process;
 
 const SCROLLBACK_BYTES: usize = 10_000_000;

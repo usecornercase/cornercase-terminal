@@ -1,11 +1,13 @@
 use super::*;
+use cornercase::config;
+use cornercase::state;
 
 #[test]
 fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
     let mut app = Harness::start();
     app.click(areas().todo_button.as_position());
     app.wait_for("the todo panel opens", |s| s.contains("+ New TODO"));
-    let panel = ui::layout_with(AREA, ui::Widths::default(), true, ui::Sidebar::default()).changes;
+    let panel = ui::layout_with(AREA, state::Widths::default(), true, config::Sidebar::default()).changes;
     let view = ui::todo::View {
         items: Vec::new(),
         scroll: 0,

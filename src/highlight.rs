@@ -1,3 +1,6 @@
+pub mod markdown;
+pub mod syntax;
+
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, OnceLock};

@@ -78,8 +78,8 @@ fn sharing_copies_only_after_something_was_counted() {
     let now = SystemTime::now();
     app.agents
         .stats
-        .counted(crate::stats::Kind::Claude, crate::stats::Counted { prompts: vec![now], tokens: Vec::new() });
-    let expected = crate::stats::share_link(&app.agents.stats, now);
+        .counted(agents::stats::Kind::Claude, agents::stats::Counted { prompts: vec![now], tokens: Vec::new() });
+    let expected = agents::stats::share_link(&app.agents.stats, now);
     let view = shown(&app).expect("dialog");
     click(&mut app, ui::usage_share(AREA, &view).as_position());
     assert_eq!(app.take_host_writes(), [clipboard::osc52(&expected)]);

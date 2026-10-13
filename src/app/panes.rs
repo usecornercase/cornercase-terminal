@@ -13,9 +13,9 @@ use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
 use crate::log::{self};
-use crate::mouse;
 use crate::project::Hierarchy;
-use crate::split::{self, Dir};
+use crate::project::split::{self, Dir};
+use crate::term::mouse;
 use crate::ui::{self};
 
 impl App {

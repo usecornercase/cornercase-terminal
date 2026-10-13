@@ -1,6 +1,8 @@
 use rstest::rstest;
 
 use super::*;
+use crate::config;
+use crate::state;
 
 fn moved_projects_border() -> (App, Receiver<AppEvent>, Position) {
     let (mut app, rx) = app();
@@ -38,7 +40,10 @@ fn dragging_the_projects_border_widens_the_sidebar() {
 
     drag(&mut app, from, 39);
 
-    assert_eq!(app.widths, ui::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..ui::Widths::default() });
+    assert_eq!(
+        app.widths,
+        state::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..state::Widths::default() }
+    );
 }
 
 #[test]
@@ -79,12 +84,12 @@ fn hover(app: &mut App, pos: Position) {
 }
 
 #[rstest]
-#[case::projects(ui::Sidebar::SideBySide, ui::Border::Projects, pointer::Shape::Columns)]
-#[case::workspaces(ui::Sidebar::SideBySide, ui::Border::Workspaces, pointer::Shape::Columns)]
-#[case::stack(ui::Sidebar::ProjectsOnTop, ui::Border::Stack, pointer::Shape::Rows)]
-#[case::agents(ui::Sidebar::ProjectsOnTop, ui::Border::Agents, pointer::Shape::Rows)]
+#[case::projects(config::Sidebar::SideBySide, ui::Border::Projects, pointer::Shape::Columns)]
+#[case::workspaces(config::Sidebar::SideBySide, ui::Border::Workspaces, pointer::Shape::Columns)]
+#[case::stack(config::Sidebar::ProjectsOnTop, ui::Border::Stack, pointer::Shape::Rows)]
+#[case::agents(config::Sidebar::ProjectsOnTop, ui::Border::Agents, pointer::Shape::Rows)]
 fn hovering_a_border_asks_for_a_resize_pointer(
-    #[case] sidebar: ui::Sidebar,
+    #[case] sidebar: config::Sidebar,
     #[case] which: ui::Border,
     #[case] expected: pointer::Shape,
 ) {
@@ -183,7 +188,7 @@ fn a_double_click_brings_back_the_default_width() {
     click(&mut app, moved);
     click(&mut app, moved);
 
-    assert_eq!((app.widths, app.drag), (ui::Widths::default(), None));
+    assert_eq!((app.widths, app.drag), (state::Widths::default(), None));
 }
 
 #[test]
@@ -215,7 +220,7 @@ fn the_widths_are_saved() {
 
     assert_eq!(
         app.state().widths,
-        Some(ui::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..ui::Widths::default() })
+        Some(state::Widths { projects: 40, workspaces: ui::WORKSPACES_WIDTH, ..state::Widths::default() })
     );
 }
 
@@ -223,7 +228,7 @@ fn the_widths_are_saved() {
 fn restore_brings_back_the_widths() {
     let dir = TempDir::new();
     let (mut app, _rx) = empty_app();
-    let widths = ui::Widths { projects: 40, workspaces: 20, ..ui::Widths::default() };
+    let widths = state::Widths { projects: 40, workspaces: 20, ..state::Widths::default() };
     let project = ProjectState {
         path: dir.path().to_path_buf(),
         name: None,

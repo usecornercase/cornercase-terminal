@@ -5,8 +5,8 @@ use std::time::SystemTime;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::activity::Claude;
 use crate::agents;
+use crate::agents::activity::Claude;
 use crate::process;
 
 mod codex;
@@ -81,7 +81,7 @@ impl Pane {
         self.agent
     }
 
-    pub fn take_counted(&mut self) -> crate::stats::Counted {
+    pub fn take_counted(&mut self) -> agents::stats::Counted {
         self.ledger.take()
     }
 

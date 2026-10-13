@@ -9,14 +9,14 @@ use super::event::AppEvent;
 use super::event::Start;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::agents::launch::Launch;
 use crate::error::Result;
 use crate::git;
-use crate::launch::Launch;
+use crate::git::upstream;
+use crate::git::worktree;
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::ui::{self};
-use crate::upstream;
-use crate::worktree;
 
 #[derive(Default)]
 pub(super) struct Upstream {

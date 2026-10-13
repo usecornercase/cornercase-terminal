@@ -6,7 +6,8 @@ use super::overlay::Overlay;
 use crate::error::Result;
 use crate::log::{self};
 use crate::project::Hierarchy;
-use crate::split::Dir;
+use crate::project::group;
+use crate::project::split::Dir;
 use crate::ui::{self};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +107,7 @@ impl App {
             MenuAction::Rename(target) => target.rename_label().into(),
             MenuAction::MoveToGroup(_) => "move to group".into(),
             MenuAction::SetGroup(_, None) => "no group".into(),
-            MenuAction::SetGroup(_, Some(id)) => self.group(id).map(ui::GroupEntry::label).unwrap_or_default(),
+            MenuAction::SetGroup(_, Some(id)) => self.group(id).map(group::GroupEntry::label).unwrap_or_default(),
             MenuAction::GroupStyle(_) => "icon and colour".into(),
             MenuAction::DeleteGroup(_) => "delete group".into(),
             MenuAction::AddProject(_) => "add project".into(),

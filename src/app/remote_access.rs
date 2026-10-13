@@ -8,8 +8,8 @@ use ratatui::layout::{Position, Rect};
 use super::{App, AppEvent, Overlay, Toast};
 use crate::log::{self, Job, Level};
 use crate::panics;
-use crate::tailscale::{self, Node, Problem};
 use crate::ui;
+use crate::web::tailscale::{self, Node, Problem};
 use crate::web::{self, Web};
 
 const CONNECTED: &str = "a browser connected";

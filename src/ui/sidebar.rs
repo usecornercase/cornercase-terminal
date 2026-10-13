@@ -13,7 +13,7 @@ use super::rows::{
 };
 use super::theme::status_icon;
 use super::widgets::{button_style, draw_band, draw_button, draw_title};
-use crate::activity::{self, Status};
+use crate::agents::activity::{self, Status};
 use crate::project::group::GroupEntry;
 use crate::text::truncate_right;
 

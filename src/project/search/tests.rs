@@ -109,8 +109,8 @@ mod candidates {
     use super::*;
     use crate::config::Config;
     use crate::project::group::GroupEntry;
+    use crate::project::split::Node;
     use crate::project::{Phase, Project, Tab, Workspace};
-    use crate::split::Node;
     use crate::test_util::{git, git_repo};
 
     fn group(id: u64, name: &str) -> Group {

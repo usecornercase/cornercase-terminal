@@ -2,7 +2,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::list::Cursor;
-use crate::{git, vscode};
+use crate::{git, project::vscode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {

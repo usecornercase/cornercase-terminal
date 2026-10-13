@@ -1,11 +1,12 @@
 use rstest::rstest;
 
 use super::*;
+use crate::state;
 
 const SMALL: Rect = Rect { x: 0, y: 0, width: 80, height: 40 };
 
 fn small() -> ui::Areas {
-    ui::layout(SMALL, ui::Widths::default())
+    ui::layout(SMALL, state::Widths::default())
 }
 
 fn press(app: &mut App, pos: Position) {

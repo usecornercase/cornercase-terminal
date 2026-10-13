@@ -1,5 +1,5 @@
 use super::*;
-use crate::activity::Activity;
+use crate::agents::activity::Activity;
 use crate::files::Mode;
 use crate::shortcuts::Group;
 

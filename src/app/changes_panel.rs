@@ -159,7 +159,7 @@ impl App {
         every::targets(&self.projects, &crate::project::sidebar_order(&self.projects, &self.groups), &self.changes)
     }
 
-    pub(super) fn every_body(&self, targets: &[(Checkout, bool)]) -> (panel::Body, Vec<u64>, Vec<panel::Header>) {
+    pub(super) fn every_body(&self, targets: &[(Checkout, bool)]) -> (changes::Body, Vec<u64>, Vec<every::Header>) {
         let order = crate::project::sidebar_order(&self.projects, &self.groups);
         every::group(&self.projects, &order, &self.changes, targets, self.home.as_deref())
     }
@@ -174,18 +174,18 @@ impl App {
         } else {
             let target = target.as_ref()?;
             let body = match model.map(|m| &m.result) {
-                None => panel::Body::Loading,
-                Some(Ok(diff)) => panel::Body::Ready(std::sync::Arc::clone(diff)),
-                Some(Err(e)) => panel::Body::Failed(e.clone()),
+                None => changes::Body::Loading,
+                Some(Ok(diff)) => changes::Body::Ready(std::sync::Arc::clone(diff)),
+                Some(Err(e)) => changes::Body::Failed(e.clone()),
             };
             let owners = match &body {
-                panel::Body::Ready(d) => vec![target.workspace; d.files.len()],
+                changes::Body::Ready(d) => vec![target.workspace; d.files.len()],
                 _ => Vec::new(),
             };
             (body, owners, Vec::new())
         };
         let (mut folded, mut viewed, mut gaps) = (Vec::new(), Vec::new(), HashMap::new());
-        if let panel::Body::Ready(diff) = &body {
+        if let changes::Body::Ready(diff) = &body {
             for (i, file) in diff.files.iter().enumerate() {
                 let ws = owners[i];
                 folded.push(self.changes.folded(ws, diff, file));
@@ -201,7 +201,7 @@ impl App {
             query: f.query().to_string(),
             focused: f.focused && self.overlay.is_none(),
             kept: match &body {
-                panel::Body::Ready(diff) => changes::filter::kept(diff, f.query()),
+                changes::Body::Ready(diff) => changes::filter::kept(diff, f.query()),
                 _ => Vec::new(),
             },
         });
@@ -251,7 +251,7 @@ impl App {
             return Ok(());
         }
         let diff = match &view.body {
-            panel::Body::Ready(d) => Some(d.clone()),
+            changes::Body::Ready(d) => Some(d.clone()),
             _ => None,
         };
         let file = |i: usize| {

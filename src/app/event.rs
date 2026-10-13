@@ -1,13 +1,13 @@
 use crossterm::event::Event;
 
 use super::{ChangesEvent, FilesEvent, IssueEvent, UpdateEvent, WorktreeEvent};
-use crate::context::{self};
+use crate::agents::context::{self};
+use crate::agents::launch::{self};
+use crate::agents::usage;
 use crate::error::Result;
 use crate::graphics::encode;
-use crate::launch::{self};
-use crate::tailscale;
 use crate::term;
-use crate::usage;
+use crate::web::tailscale;
 use crate::web::{self};
 
 #[derive(Debug)]

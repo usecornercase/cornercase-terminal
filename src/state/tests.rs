@@ -43,7 +43,7 @@ mod file {
     #[expect(clippy::too_many_lines, reason = "pin every version 5 field explicitly against the fixture")]
     fn version_five_matches_the_saved_format() {
         use crate::issues::Who;
-        use crate::split::Dir;
+        use crate::project::split::Dir;
 
         let expected = State {
             version: 5,
@@ -404,7 +404,7 @@ mod saver {
 
 mod mapping {
     use super::*;
-    use crate::split::Dir;
+    use crate::project::split::Dir;
     use crate::test_util::spawn_term;
 
     fn split_tab() -> Tab {

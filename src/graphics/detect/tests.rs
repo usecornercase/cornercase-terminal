@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::host_theme::ThemeProbe;
+use crate::host::theme::ThemeProbe;
 
 type Vars = &'static [(&'static str, &'static str)];
 

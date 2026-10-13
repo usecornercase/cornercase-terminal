@@ -1,5 +1,5 @@
 use super::*;
-use crate::secrets;
+use crate::issues::secrets;
 use crate::settings::{Detail, Row};
 use crate::test_util::FakeHttp;
 

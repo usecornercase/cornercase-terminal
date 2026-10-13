@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::activity::Status;
+use crate::agents::activity::Status;
 
 const BAR: Rect = Rect { x: 10, y: 0, width: 40, height: HEIGHT };
 

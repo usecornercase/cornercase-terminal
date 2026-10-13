@@ -10,36 +10,35 @@ use crossterm::event::{Event, KeyEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 
-use crate::activity::{self};
-#[cfg(test)]
 use crate::agents;
+use crate::agents::activity::{self};
 #[cfg(test)]
-use crate::awake::Awake;
+use crate::agents::awake::Awake;
+#[cfg(test)]
+use crate::agents::launch::Launch;
+use crate::agents::usage;
 use crate::changes::{self};
 use crate::config::{self, Config};
 use crate::error::{Error, Result};
 use crate::files;
-use crate::host_theme::HostTheme;
+use crate::host::notify::Notification;
+use crate::host::pointer;
+use crate::host::theme::HostTheme;
 use crate::issues::People;
 use crate::issues::browser::Tab as IssueTab;
 use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
-#[cfg(test)]
-use crate::launch::Launch;
-use crate::notify::Notification;
 use crate::paths;
-use crate::pointer;
+use crate::project::split::Dir;
 use crate::project::{Group, Hierarchy, Project, Tab, group};
-#[cfg(test)]
-use crate::restart;
 use crate::settings::Page;
-use crate::split::Dir;
 use crate::state::{self, ChangesState, IssuesState, ProjectState, State};
 use crate::todo::{self, Todos};
 use crate::ui::{self};
 use crate::update::Install;
-use crate::usage;
+#[cfg(test)]
+use crate::update::restart;
 use crate::web::Web;
 use agent_watch::{AgentRuntime, WATCH_AGENTS_EVERY};
 use changes_panel::ChangesEvent;
@@ -123,7 +122,7 @@ pub struct App {
     side: Option<Side>,
     next_id: u64,
     hover: Option<Position>,
-    widths: ui::Widths,
+    widths: state::Widths,
     drag: Option<Drag>,
     border_click: Option<(ui::Border, Instant)>,
     divider_click: Option<(u64, Vec<bool>, Instant)>,
@@ -175,7 +174,7 @@ impl App {
             deleting_groups: Vec::new(),
             next_id: 1,
             hover: None,
-            widths: ui::Widths::default(),
+            widths: state::Widths::default(),
             drag: None,
             border_click: None,
             divider_click: None,
@@ -398,7 +397,7 @@ impl App {
         for entry in &saved.groups {
             let icon = group::known_icon(entry.icon);
             let id = self.take_id();
-            self.groups.push(Group { id, entry: ui::GroupEntry { icon, ..entry.clone() } });
+            self.groups.push(Group { id, entry: group::GroupEntry { icon, ..entry.clone() } });
         }
         let mut missed: Vec<(String, usize)> = Vec::new();
         for (i, saved_project) in saved.projects.iter().enumerate() {
@@ -493,11 +492,11 @@ impl App {
         std::mem::take(&mut self.outbox.notifications)
     }
 
-    pub fn set_stats(&mut self, stats: crate::stats::Stats) {
+    pub fn set_stats(&mut self, stats: agents::stats::Stats) {
         self.agents.stats = stats;
     }
 
-    pub fn stats(&self) -> &crate::stats::Stats {
+    pub fn stats(&self) -> &agents::stats::Stats {
         &self.agents.stats
     }
 

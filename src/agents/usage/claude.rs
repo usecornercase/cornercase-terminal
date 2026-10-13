@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{Report, Window, window};
-use crate::activity;
+use crate::agents::activity;
 use crate::error::{Error, Result};
 use crate::time;
 

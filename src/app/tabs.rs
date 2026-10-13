@@ -5,9 +5,9 @@ use ratatui::layout::Rect;
 use super::App;
 use crate::control;
 use crate::error::Result;
+use crate::project::split::Dir;
 use crate::project::{Hierarchy, Project, Tab, Workspace};
 use crate::protocol;
-use crate::split::Dir;
 use crate::term::{SpawnOptions, Term};
 
 impl App {

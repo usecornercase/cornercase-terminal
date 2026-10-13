@@ -44,24 +44,27 @@ use super::worktrees::UNCOMMITTED;
 use super::worktrees::lock_message;
 use super::worktrees::lock_note;
 use super::*;
+use crate::agents::AgentState;
+use crate::agents::context::{self};
 use crate::changes::Checkout;
-use crate::clipboard;
-use crate::context::{self};
+use crate::config;
 use crate::git;
+use crate::host::clipboard;
+use crate::host::notify::{self};
 use crate::issues::browser::{Browser, Screen};
 use crate::issues::{self, Secret};
 use crate::list::Search;
-use crate::mouse;
-use crate::notify::{self};
 use crate::paths;
-use crate::picker::Picker;
 use crate::process;
+use crate::project::picker::Picker;
+use crate::project::search::{Goto, Kind};
+use crate::project::split::{self};
 use crate::project::{Phase, Workspace};
-use crate::search::{Goto, Kind};
 use crate::settings::{Settings, Status};
-use crate::split::{self};
-use crate::state::{AgentState, PaneState, TabState, WorkspaceState};
+use crate::state;
+use crate::state::{PaneState, TabState, WorkspaceState};
 use crate::term::Term;
+use crate::term::mouse;
 use crate::test_util::{Locked, TempDir, git_repo, is_sh, wait_until, wait_until_within};
 use crate::ui::SidebarRow;
 use crate::ui::WorkspaceRow;
@@ -136,7 +139,7 @@ fn running_sleep(app: &mut App) {
 const AREA: Rect = Rect { x: 0, y: 0, width: 100, height: 20 };
 
 fn areas() -> ui::Areas {
-    ui::layout(AREA, ui::Widths::default())
+    ui::layout(AREA, state::Widths::default())
 }
 
 fn no_config() -> PathBuf {
@@ -146,7 +149,7 @@ fn no_config() -> PathBuf {
 fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
     let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
-    app.config.sidebar = ui::Sidebar::SideBySide.id().into();
+    app.config.sidebar = config::Sidebar::SideBySide.id().into();
     (app, rx)
 }
 

@@ -9,7 +9,7 @@ use super::help::{
     STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
-use crate::keys;
+use crate::term::keys;
 
 #[derive(Debug, Parser)]
 #[command(name = "cornercase", version, about = ABOUT, long_about = LONG_ABOUT, after_help = AFTER_HELP)]

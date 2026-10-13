@@ -19,9 +19,9 @@ use self::window::attach;
 use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::Facts;
-use crate::host_theme::HostTheme;
+use crate::host::theme::HostTheme;
 use crate::remote::{Remote, Stderr};
-use crate::{paths, pointer, process, protocol, restart};
+use crate::{host::pointer, paths, process, protocol, update::restart};
 
 pub(crate) mod input;
 mod probe;
