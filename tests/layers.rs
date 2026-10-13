@@ -8,14 +8,7 @@ const LEAVES: &[&str] =
     &["error", "log", "panics", "process", "version", "paths", "time", "persist", "text", "list", "http"];
 
 const APP_EXCEPTIONS: &[&str] = &["src/term.rs", "src/web/mod.rs"];
-const UI_EXCEPTIONS: &[&str] = &[
-    "src/config.rs",
-    "src/issues/browser.rs",
-    "src/project.rs",
-    "src/settings.rs",
-    "src/state.rs",
-    "src/usage/mod.rs",
-];
+const UI_EXCEPTIONS: &[&str] = &["src/issues/browser.rs", "src/settings.rs", "src/usage/mod.rs"];
 const LONG_FILES: &[&str] =
     &["src/app/control.rs", "src/cli.rs", "src/client.rs", "src/issues/browser.rs", "src/settings.rs"];
 

@@ -4,10 +4,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::changes::{Mode, Scope};
 use crate::issues::People;
+use crate::project::group::GroupEntry;
 use crate::split::Node;
-use crate::ui::{GroupEntry, Widths};
+
+pub use crate::agents::AgentState;
 
 pub const VERSION: u32 = 5;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Widths {
+    pub projects: u16,
+    pub workspaces: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stack: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agents: Option<u16>,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct State {
@@ -96,14 +110,6 @@ pub struct PaneState {
     pub right_clicks: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AgentState {
-    pub kind: String,
-    pub conversation: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mode: Option<String>,
 }
 
 impl WorkspaceState {

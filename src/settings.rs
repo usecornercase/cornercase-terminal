@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::agents;
-use crate::config::{self, Config};
+use crate::config::{self, Config, Sidebar, Tabs};
 use crate::issues::{Account, Secret, Source, jira, plane};
 use crate::list::Search;
 use crate::notify;
@@ -426,8 +426,8 @@ impl Settings {
                 *detail.switch(&mut config) = on;
                 self.save(config, detail.notice(on).into())
             }
-            Row::Sidebar => self.pick_from(row, ui::Sidebar::choices()),
-            Row::Tabs => self.pick_from(row, ui::Tabs::choices()),
+            Row::Sidebar => self.pick_from(row, Sidebar::choices()),
+            Row::Tabs => self.pick_from(row, Tabs::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
             Row::Updates => self.flip(
                 |c| &mut c.check_updates,
@@ -526,8 +526,8 @@ impl Settings {
     fn open_pick(&mut self, row: Row, items: Vec<PickItem>) {
         let current = match &row {
             Row::DefaultAgent => Some(self.config.agent.clone()),
-            Row::Sidebar => Some(ui::Sidebar::from_setting(&self.config.sidebar).id().to_string()),
-            Row::Tabs => Some(ui::Tabs::from_setting(&self.config.tabs).id().to_string()),
+            Row::Sidebar => Some(Sidebar::from_setting(&self.config.sidebar).id().to_string()),
+            Row::Tabs => Some(Tabs::from_setting(&self.config.tabs).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
             Row::Kind(kind) => Some(
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
@@ -1115,9 +1115,9 @@ fn with_args(config: &Config, kind: &str, args: Vec<String>) -> Config {
 
 fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let (label, value, note) = if *row == Row::Tabs {
-        ("tabs", ui::Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed")
+        ("tabs", Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed")
     } else {
-        ("sidebar", ui::Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out")
+        ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out")
     };
     (label.into(), value.into(), note.into(), false)
 }

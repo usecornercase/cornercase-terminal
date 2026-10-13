@@ -6,8 +6,9 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::form::form_area;
 use super::{draw_submit, form_inner};
+use crate::project::group::{GROUP_COLOURS, GROUP_ICONS, GroupEntry};
 use crate::ui::View;
-use crate::ui::sidebar::{GROUP_COLOURS, GROUP_ICONS, GroupEntry, group_header};
+use crate::ui::sidebar::group_header;
 use crate::ui::widgets::{hovered, overlay_block, update_button};
 
 const ICONS_PER_ROW: usize = 6;

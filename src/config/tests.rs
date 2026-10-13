@@ -104,7 +104,7 @@ mod file {
 
     #[test]
     fn the_sidebar_starts_with_projects_on_top() {
-        assert_eq!(ui::Sidebar::from_setting(&Config::default().sidebar), ui::Sidebar::ProjectsOnTop);
+        assert_eq!(Sidebar::from_setting(&Config::default().sidebar), Sidebar::ProjectsOnTop);
     }
 
     #[test]
@@ -228,3 +228,5 @@ mod fetch_every {
         assert_eq!(Config { fetch_minutes, ..Config::default() }.fetch_every(), expected);
     }
 }
+
+mod sidebar_setting;

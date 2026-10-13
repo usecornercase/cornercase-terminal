@@ -54,6 +54,8 @@ Each client has its own writer thread, so a slow client never blocks the loop. A
 
 Geometry functions such as `ui::layout`, `entry_row`, `workspace_row`, `form_buttons` and `picker_item` are shared by drawing and hit testing, so a click lands exactly on what was drawn, and tests take their click positions from the same functions.
 
+Types saved in the session and choices read from the config belong to their models: `project/group.rs` owns groups and their styles, `config.rs` owns `Sidebar` and `Tabs`, `state.rs` owns the saved `Widths` fields, and `agents.rs` owns the `AgentState` a pane resumes. `ui/widths.rs` keeps width defaults and geometry. The old `ui` paths and `state::AgentState` remain re-exported while callers move.
+
 Colours are palette indices (cyan, the brand purple `99`, the surfaces `236` and `254`, the lines `239` and `250`), so the user's terminal theme applies. Grey text is `View::muted`: the theme's bright black, or the fixed greys `243` and `245` when that one would not show (`ui::muted`). Below 90 columns, `ui::layout::compact_layout` reuses the same areas with a top bar and three-row bands.
 
 ## Terminal emulation
@@ -92,7 +94,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `app.rs`, `app/` | `App` state, construction, server-facing methods, refresh and event dispatch, and drawing the `View` stay in `app.rs`. Children wire each concern: layout and input, hierarchy and tabs, sidebar and pane interaction, agent watching and launches, worktrees, panels and dialogs. `app/event.rs` defines `AppEvent` and `Start`, re-exported by `app.rs`. `app/control.rs` answers commands and keeps their waits; `events.rs`, `trace.rs`, `images.rs`, `shortcuts.rs` and `remote_access.rs` keep their existing jobs. |
 | `ui.rs` | A plain `View`, `draw()` and the re-exports of `ui/`. |
 | `ui/*.rs` | One file per part of the screen with its view types, layout, hit testing and drawing: `sidebar`, `workspaces`, `tree`, `agents_section`, `drop`, `chrome`, `pane`, `toast`, `dialog` (and `dialog/`), plus the shared `theme`, `widgets`, `layout`, `widths` and `rows`; `tab_bar.rs` lays out and draws the tab bar above the pane. |
-| `project.rs` | Project › workspace › tab › panes, labels, removal. |
+| `project.rs`, `project/group.rs` | Project › workspace › tab › panes, labels, removal; groups, icons, colours and presets. |
 | `split.rs` | A tab's split tree: rects, dividers, splitting, removing, ratios. |
 | `term.rs` | A shell in a PTY, its emulator, and the reader thread. |
 | `emulator.rs` | The libghostty-vt wrapper; plain snapshots for the UI. |
@@ -103,7 +105,7 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
 | `worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
 | `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane (REST, with an HTML to Markdown converter), the browser state and the on-disk cache. |
-| `agents.rs` | Known agents, modes and arguments, choosing and detecting an agent, the trust prompt. |
+| `agents.rs` | Known agents, modes and arguments, choosing and detecting an agent, the trust prompt, and `AgentState` for resuming a pane. |
 | `activity.rs` | What the agent in a pane is doing: Claude Code's session file and terminal title, Codex's terminal title and turns, Gemini's dynamic terminal title, opencode's turns, and the finished-but-unseen mark. |
 | `context.rs`, `context/codex.rs`, `context/gemini.rs`, `context/opencode.rs` | Model/context lines for Claude Code, Codex, Gemini CLI and opencode. Claude uses its session transcript and configured window rules; Codex follows the process's open rollout, recorded model and latest usage/window, reading incrementally and clearing obsolete context on session changes and compaction. Gemini discovers the main session by home and folder on a thread, applies JSONL message updates and field replacements, and reads prompts, model and usage. opencode reads the SQLite database its process holds open, on a thread: the session in its folder, whether a turn is running, and the last answer's tokens over the window in opencode's `models.json`. |
 | `memory.rs` | How much memory a pane uses: the memory its shell and everything under it hold on their own, measured on a thread every 2 seconds. |
@@ -116,8 +118,8 @@ Keys are encoded in `keys.rs`: Ghostty's encoder for special keys, and for every
 | `syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
 | `markdown.rs`, `highlight.rs` | Markdown to wrapped lines; syntax highlighting of code blocks with palette colours. |
 | `search.rs`, `picker.rs` | Global search; the folder picker. |
-| `settings.rs`, `config.rs`, `secrets.rs` | The settings modal; `config.json`; `secrets.json`. |
-| `state.rs` | The saved session, its migrations and mapping to the hierarchy. |
+| `settings.rs`, `config.rs`, `secrets.rs` | The settings modal; `config.json` and its `Sidebar` and `Tabs` choices; `secrets.json`. |
+| `state.rs` | The saved session and its `Widths` schema, its migrations and mapping to the hierarchy. |
 | `update.rs` | The hourly check for a newer release on GitHub and its changelog; downloading, verifying and swapping the binary. |
 | `clipboard.rs` | OSC 52. |
 | `error.rs` | The library's error type. |
