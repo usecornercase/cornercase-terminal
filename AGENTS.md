@@ -84,7 +84,7 @@ src/log.rs        server.log: levels, the line format, the writer thread and its
 src/secrets.rs    Shortcut / Linear / Jira / Plane tokens in secrets.json (0600)
 src/markdown.rs   Markdown -> wrapped ratatui Lines
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached
-src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state, sizes and hits; app/issues_dialog.rs builds its view), cache.rs (lists on disk)
+src/issues/       issue model and clients: github.rs (gh CLI), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state, sizes and hits; app/issues_dialog.rs builds its view) and browser/ (buttons, token_form, people, picker, input, view), cache.rs (lists on disk)
 src/clipboard.rs  OSC 52
 src/worktree.rs   `git worktree add`/`remove`, checkout path, `.worktreeinclude`
 src/upstream.rs   `git fetch` and commits to pull per workspace (`↓n`)

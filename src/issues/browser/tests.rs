@@ -1,5 +1,8 @@
-use crossterm::event::KeyEventKind;
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use ratatui::style::Color;
+use ratatui::text::Line;
 
+use super::view::detail_lines;
 use super::*;
 use crate::issues::{Comment, issue};
 

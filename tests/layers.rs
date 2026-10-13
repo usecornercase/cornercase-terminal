@@ -9,7 +9,7 @@ const LEAVES: &[&str] =
 
 const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[];
-const LONG_FILES: &[&str] = &["src/issues/browser.rs", "src/settings.rs"];
+const LONG_FILES: &[&str] = &["src/settings.rs"];
 
 struct Source {
     path: PathBuf,
