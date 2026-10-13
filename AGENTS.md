@@ -96,7 +96,7 @@ src/search.rs     global search: candidates and ranking
 src/picker.rs     folder picker state
 src/vscode.rs     reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
 src/process.rs    a pid's cwd, name, arguments, environment, descendants and memory footprint: /proc on Linux, libproc and sysctl on macOS; a socket peer's uid
-src/project.rs    Project > Workspace > Tab > panes, labels, removal, moving; project/group.rs holds Group, GroupEntry, icons, colours and presets
+src/project.rs    Project > Workspace > Tab > panes, labels, removal, moving; project/group.rs holds Group, GroupEntry, icons, colours, preset selection and saved-icon normalization
 src/split.rs      a tab's split tree: rects, dividers, splitting, removing, ratios
 src/app.rs        App state, new, server-facing methods, refresh and event dispatch, drawing the View; re-exports the public event and image types
 src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view and clicks), dialogs.rs (forms and confirmations), toast.rs, menus.rs (row and pane menus)

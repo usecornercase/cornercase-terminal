@@ -26,3 +26,12 @@ impl GroupEntry {
         format!("{} {}", self.icon, self.name)
     }
 }
+
+pub fn preset(groups: &[Group]) -> (char, u8) {
+    let taken = |&(icon, colour): &(char, u8)| groups.iter().any(|g| (g.entry.icon, g.entry.colour) == (icon, colour));
+    GROUP_STYLES.iter().copied().find(|style| !taken(style)).unwrap_or(GROUP_STYLES[groups.len() % GROUP_STYLES.len()])
+}
+
+pub fn known_icon(icon: char) -> char {
+    if GROUP_ICONS.contains(&icon) { icon } else { GROUP_ICONS[0] }
+}
