@@ -401,3 +401,77 @@ mod saver {
         assert_eq!(load(&path), Some(state(&["/a"])));
     }
 }
+
+mod mapping {
+    use super::*;
+    use crate::split::Dir;
+    use crate::test_util::spawn_term;
+
+    fn split_tab() -> Tab {
+        let mut tab = Tab::new(5, Some("dev".into()), spawn_term(6, &[], None).0);
+        tab.split(6, Dir::Right, spawn_term(7, &[], None).0, true);
+        tab.active = 1;
+        tab.right_clicks = vec![7];
+        tab
+    }
+
+    fn saved_tab(panes: usize, active: usize) -> TabState {
+        let pane = PaneState { cwd: None, right_clicks: false, agent: None };
+        TabState { name: None, panes: vec![pane; panes], active, layout: None }
+    }
+
+    #[test]
+    fn a_tab_comes_back_with_its_layout_active_pane_and_right_clicks() {
+        let tab = split_tab();
+        let saved = TabState::of(&tab);
+        assert_eq!(saved.layout, tab.layout_by_index());
+        let panes = vec![spawn_term(16, &[], None).0, spawn_term(17, &[], None).0];
+        let back = saved.restore(15, panes);
+        assert_eq!((back.id, back.name.as_deref(), back.active), (15, Some("dev"), 1));
+        assert_eq!(
+            back.layout,
+            Node::Split {
+                dir: Dir::Right,
+                ratio: 0.5,
+                first: Box::new(Node::Leaf(16)),
+                second: Box::new(Node::Leaf(17))
+            }
+        );
+        assert_eq!(back.right_clicks, [17]);
+    }
+
+    #[test]
+    fn a_single_pane_tab_saves_no_layout() {
+        let tab = Tab::new(5, None, spawn_term(6, &[], None).0);
+        assert_eq!(TabState::of(&tab).layout, None);
+    }
+
+    #[test]
+    fn a_project_keeps_its_group_position_folds_and_active_workspace() {
+        let mut project = Project::new(1, "/p".into(), Some("name".into()));
+        let mut first = Workspace::new(2, "/p".into(), None, false);
+        first.collapsed = true;
+        project.workspaces = vec![first, Workspace::new(3, "/p/w".into(), Some("w".into()), true)];
+        project.active = 1;
+        project.collapsed = true;
+        let saved = ProjectState::of(&project, Some(2));
+        assert_eq!((saved.group, saved.active, saved.collapsed), (Some(2), 1, true));
+        assert_eq!(saved.name.as_deref(), Some("name"));
+        assert_eq!(saved.workspaces.len(), 2);
+        assert!(saved.workspaces[0].collapsed);
+        assert!(saved.workspaces[1].worktree);
+    }
+
+    #[test]
+    fn restoring_clamps_an_active_child_that_is_out_of_range() {
+        let workspace =
+            WorkspaceState { tabs: Vec::new(), active: 9, ..WorkspaceState::plain("/p".into(), Vec::new(), 9) };
+        let restored =
+            workspace.restore(4, "/p".into(), vec![Tab::restored(5, None, vec![spawn_term(6, &[], None).0], None)]);
+        assert_eq!(restored.active, 0);
+        let project = ProjectState::of(&Project::new(1, "/p".into(), None), None);
+        let project = ProjectState { active: 9, ..project };
+        assert_eq!(project.restore(1, "/p".into(), Some(7), vec![restored]).active, 0);
+        assert_eq!(saved_tab(2, 9).restore(8, vec![spawn_term(9, &[], None).0, spawn_term(10, &[], None).0]).active, 1);
+    }
+}
