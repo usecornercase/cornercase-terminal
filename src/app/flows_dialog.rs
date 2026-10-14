@@ -22,11 +22,13 @@ const FORM_LABEL: usize = 16;
 const HEADING: &str = "teams of agents that work through a plan, started from an issue or a prompt";
 
 impl App {
-    pub(super) fn open_flows(&mut self, flow: Option<(&Origin, &str)>) {
-        let project = self.project().map(|p| p.path.clone());
+    pub(super) fn open_flows(&mut self, project: Option<u64>, flow: Option<(&Origin, &str)>) {
+        let project = project.or_else(|| self.project().map(|p| p.id));
+        let path = project.and_then(|id| self.project_path(id));
         let installed = builtin::installed(&self.config);
-        let agents = Agents::new(installed, Known::of(&self.config.agent), project.is_some());
-        let mut dialog = Dialog::new(self.flow_listing(project.as_deref()), agents);
+        let agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
+        let mut dialog = Dialog::new(self.flow_listing(path.as_deref()), agents);
+        dialog.project = project;
         if let Some(i) = flow.and_then(|(origin, name)| dialog.find(origin, name)) {
             dialog.select(i);
             if origin_editable(flow) {
@@ -164,9 +166,10 @@ impl App {
     fn flows_dir(&self, place: Place) -> Result<PathBuf, String> {
         match place {
             Place::Yours => Ok(paths::flows(&self.config_path)),
-            Place::Project => {
-                self.project().map(|p| store::project_dir(&p.path)).ok_or_else(|| "no project is open".to_string())
-            }
+            Place::Project => self
+                .flows_project()
+                .map(|path| store::project_dir(&path))
+                .ok_or_else(|| "the project is not open".to_string()),
         }
     }
 
@@ -182,9 +185,15 @@ impl App {
         }
     }
 
+    fn flows_project(&self) -> Option<PathBuf> {
+        match &self.overlay {
+            Some(Overlay::Flows { dialog, .. }) => dialog.project.and_then(|id| self.project_path(id)),
+            _ => None,
+        }
+    }
+
     fn refresh_flows(&mut self) {
-        let project = self.project().map(|p| p.path.clone());
-        let listing = self.flow_listing(project.as_deref());
+        let listing = self.flow_listing(self.flows_project().as_deref());
         if let Some(dialog) = self.flows_dialog() {
             dialog.set_listing(listing);
         }

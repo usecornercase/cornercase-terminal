@@ -75,6 +75,24 @@ impl App {
         self.start_flow_act(action, area);
     }
 
+    fn run_open_on(&self, project: u64, branch: &str) -> bool {
+        self.runs.iter().any(|run| {
+            self.projects.workspace_index(run.workspace).is_some_and(|(p, w)| {
+                self.projects[p].id == project
+                    && git::branch(&self.projects[p].workspaces[w].path).as_deref() == Some(branch)
+            })
+        })
+    }
+
+    pub(super) fn start_flow_settled(&mut self, failure: Option<&str>) -> bool {
+        let Some(start) = self.start_flow().filter(|start| start.waiting) else { return false };
+        match failure {
+            Some(why) => start.failed(why),
+            None => self.overlay = None,
+        }
+        true
+    }
+
     fn start_flow_act(&mut self, action: Action, area: Rect) {
         match action {
             Action::None => {}
@@ -83,16 +101,19 @@ impl App {
                     self.overlay = back.map(|back| *back);
                 }
             }
-            Action::Edit(origin, name) => self.open_flows(Some((&origin, &name))),
+            Action::Edit(origin, name) => {
+                let project = self.start_flow().map(|start| start.project);
+                self.open_flows(project, Some((&origin, &name)));
+            }
             Action::Start { flow, task, branch } => {
                 let Some(project) = self.start_flow().map(|start| start.project) else { return };
-                match self.start_run(project, *flow, task, branch, true, area) {
-                    Ok(()) => self.overlay = None,
-                    Err(why) => {
-                        if let Some(start) = self.start_flow() {
-                            start.notice = Some(why);
-                        }
-                    }
+                let started = self.start_run(project, *flow, task, branch.clone(), true, area);
+                let opened = started.is_ok() && self.run_open_on(project, &branch);
+                match (started, self.start_flow()) {
+                    (Ok(()), _) if opened => self.overlay = None,
+                    (Ok(()), Some(start)) => start.waiting = true,
+                    (Err(why), Some(start)) => start.notice = Some(why),
+                    (_, None) => {}
                 }
             }
         }
@@ -115,7 +136,11 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         branch: start.branch.clone(),
         focus: start.focus,
         warnings: start.warnings(),
-        note: start.notice.clone().map(ui::Note::Error),
+        note: if start.waiting {
+            Some(ui::Note::Busy("creating the worktree and starting the team…"))
+        } else {
+            start.notice.clone().map(ui::Note::Error)
+        },
         hint: start.hint(),
         buttons: start.buttons(room),
         preview: start.selected().map(|saved| saved.flow.clone()),

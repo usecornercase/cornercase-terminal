@@ -12,7 +12,7 @@ struct Setup {
     app: App,
     rx: Receiver<AppEvent>,
     _config: TempDir,
-    _project: TempDir,
+    project: TempDir,
 }
 
 fn setup(repo: bool) -> Setup {
@@ -24,7 +24,7 @@ fn setup(repo: bool) -> Setup {
     for kind in Known::ALL {
         app.config.agent_commands.insert(kind.name().into(), "/nonexistent/agent".into());
     }
-    Setup { app, rx, _config: config, _project: project }
+    Setup { app, rx, _config: config, project }
 }
 
 fn opened(repo: bool) -> Setup {
@@ -183,14 +183,41 @@ mod running {
         let _dirs = with_claude(&mut s);
         type_in(&mut s.app, "Fix the login form", WIDE);
         button(&mut s.app, WIDE, START);
-        assert!(s.app.overlay.is_none());
+        click_in(&mut s.app, Position::new(0, 0), WIDE);
+        let ui::Overlay::StartFlow(view) = overlay_shown(&s.app, WIDE) else { panic!("the dialog closed at once") };
+        assert_eq!(view.note, Some(ui::Note::Busy("creating the worktree and starting the team…")));
         pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        assert!(s.app.overlay.is_none());
         let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
         let tabs: Vec<String> = workspace.tabs.iter().map(|t| t.label(&s.app.config)).collect();
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("fix-the-login-form"));
         assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
         assert_eq!((workspace.active, s.app.runs[0].task.as_str()), (0, "Fix the login form"));
         assert_eq!(s.app.side, Some(Side::Flow));
+    }
+
+    #[test]
+    fn a_worktree_that_cannot_be_made_is_said_in_the_dialog_with_the_task_kept() {
+        let mut s = opened(true);
+        let dirs = with_claude(&mut s);
+        let blocked = dirs[0].path().join("a file");
+        std::fs::write(&blocked, "").expect("write a file where the worktrees go");
+        s.app.config.worktrees_dir = blocked.display().to_string();
+        type_in(&mut s.app, "Fix the login form", WIDE);
+        button(&mut s.app, WIDE, START);
+        pump_until(
+            &mut s.app,
+            &s.rx,
+            "the worktree fails",
+            |a| matches!(&a.overlay, Some(Overlay::StartFlow { start, .. }) if !start.waiting),
+        );
+        let start = start(&s.app);
+        assert!(
+            start.notice.as_deref().is_some_and(|n| n.starts_with("the flow did not start: ")),
+            "{:?}",
+            start.notice
+        );
+        assert_eq!((start.prompt.text(), s.app.toast.is_none()), ("Fix the login form".into(), true));
     }
 
     #[test]
@@ -202,6 +229,33 @@ mod running {
         assert!(refused.contains("cannot find on its PATH"), "{refused}");
         let ui::Overlay::StartFlow(view) = overlay_shown(&s.app, WIDE) else { panic!("the dialog closed") };
         assert_eq!((view.note, s.app.runs.len()), (Some(ui::Note::Error(refused)), 0));
+    }
+}
+
+mod projects {
+    use super::*;
+    use crate::flows::{builtin, store};
+
+    fn project_flow(dir: &Path, name: &str) {
+        let flow = crate::flows::Flow { name: name.into(), ..builtin::starter(&[], None) };
+        store::save(&store::project_dir(dir), &flow, None).expect("save the project's flow");
+    }
+
+    #[test]
+    fn edit_lists_the_flows_of_the_project_the_dialog_is_for_not_the_shown_one() {
+        let mut s = setup(true);
+        let other = git_repo(&[("README", "hi")]);
+        project_flow(s.project.path(), "Shown project's flow");
+        project_flow(other.path(), "Other project's flow");
+        s.app.open_project(other.path().to_path_buf(), AREA).expect("open the other project");
+        let id = s.app.projects[1].id;
+        s.app.active = 0;
+        s.app.open_start_flow(s.app.start_flow_in(id));
+        button(&mut s.app, WIDE, dialog::EDIT);
+        let Some(Overlay::Flows { dialog: flows, .. }) = &s.app.overlay else { panic!("no flows dialog") };
+        let names: Vec<&str> = flows.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
+        assert!(names.contains(&"Other project's flow") && !names.contains(&"Shown project's flow"), "{names:?}");
+        assert_eq!(flows.project, Some(id));
     }
 }
 

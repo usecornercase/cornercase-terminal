@@ -82,7 +82,12 @@ impl App {
             self.open_run(p, w, starting, area)
         });
         match opened {
-            Ok(info) => self.answer(client, Ok(json(&info))),
+            Ok(info) => {
+                if client.is_none() {
+                    self.start_flow_settled(None);
+                }
+                self.answer(client, Ok(json(&info)));
+            }
             Err(message) if client.is_none() => self.run_failed(&message),
             Err(message) => self.answer(client, Err(message)),
         }

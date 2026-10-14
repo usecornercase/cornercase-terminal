@@ -238,6 +238,19 @@ mod saving {
     }
 
     #[test]
+    fn a_project_flow_says_in_red_what_env_and_args_it_sets() {
+        let mut d = dialog();
+        d.flows[mine()].origin = Origin::Project(PathBuf::from("/repo/.cornercase/flows/mine.toml"));
+        d.flows[mine()].flow.roles[3].env.insert("PATH".into(), "/tmp/evil".into());
+        d.open(mine());
+        let warnings = d.warnings();
+        assert_eq!(warnings[1], "this project's flow sets PATH for `tester`; they run without asking, so check them");
+        let mut yours = editing();
+        edit_mut(&mut yours).flow.roles[3].env.insert("PATH".into(), "/tmp/evil".into());
+        assert_eq!(yours.warnings().len(), 1);
+    }
+
+    #[test]
     fn once_saved_the_flow_is_clean() {
         let mut d = editing();
         edit_mut(&mut d).flow.description = "changed".into();

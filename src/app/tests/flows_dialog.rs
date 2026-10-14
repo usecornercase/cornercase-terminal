@@ -29,7 +29,7 @@ fn setup(project: bool) -> Setup {
 
 fn open(project: bool) -> Setup {
     let mut s = setup(project);
-    s.app.open_flows(None);
+    s.app.open_flows(None, None);
     s
 }
 
@@ -138,7 +138,7 @@ mod opening {
         duplicate_full_issue(&mut s, WIDE);
         s.app.overlay = None;
         let path = user_dir(&s).join("full-issue-copy.toml");
-        s.app.open_flows(Some((&store::Origin::User(path), "")));
+        s.app.open_flows(None, Some((&store::Origin::User(path), "")));
         assert_eq!(dialog(&s.app).edit.as_ref().map(|e| e.flow.name.as_str()), Some("Full issue copy"));
     }
 }

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::store::{Listing, Origin, Saved};
 use super::{Flow, builtin};
-use crate::agents::Known;
+use crate::agents::{self, Known};
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const EDIT: &str = "edit";
@@ -129,6 +129,7 @@ pub(crate) struct Dialog {
     pub(crate) notice: Option<String>,
     pub(crate) agents: Agents,
     pub(crate) last: Option<Origin>,
+    pub(crate) project: Option<u64>,
 }
 
 impl Dialog {
@@ -142,6 +143,7 @@ impl Dialog {
             notice: None,
             agents,
             last: None,
+            project: None,
         }
     }
 
@@ -365,7 +367,8 @@ impl Dialog {
 
     pub(crate) fn warnings(&self) -> Vec<String> {
         let Some(edit) = &self.edit else { return Vec::new() };
-        std::iter::once(permission_line(&edit.flow)).chain(edit.flow.problems()).collect()
+        let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
+        std::iter::once(permission_line(&edit.flow)).chain(risks).chain(edit.flow.problems()).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {
@@ -433,6 +436,22 @@ pub(crate) fn permission_line(flow: &Flow) -> String {
     let agents = flow.agents();
     let run = if agents == 1 { "agent runs" } else { "agents run" };
     format!("{agents} {run} without asking for permission")
+}
+
+pub(crate) fn project_risks(flow: &Flow) -> Option<String> {
+    let mut parts = Vec::new();
+    for role in std::iter::once(&flow.orchestrator).chain(&flow.roles) {
+        if !role.env.is_empty() {
+            let keys: Vec<&str> = role.env.keys().map(String::as_str).collect();
+            parts.push(format!("sets {} for `{}`", keys.join(", "), role.name.trim()));
+        }
+        if !role.args.is_empty() {
+            parts.push(format!("passes {} to `{}`", agents::join_args(&role.args), role.name.trim()));
+        }
+    }
+    let (last, rest) = parts.split_last()?;
+    let parts = if rest.is_empty() { last.clone() } else { format!("{} and {last}", rest.join(", ")) };
+    Some(format!("this project's flow {parts}; they run without asking, so check them"))
 }
 
 pub(crate) fn agents_count(flow: &Flow) -> String {
