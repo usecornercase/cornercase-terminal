@@ -197,7 +197,7 @@ impl Sample {
         matches!(self.status, Some(Status::Working | Status::Waiting)) && !self.background
     }
     fn over(self) -> bool {
-        matches!(self.status, Some(Status::Idle | Status::Done | Status::Pending)) || self.background
+        matches!(self.status, Some(Status::Idle | Status::Done | Status::Pending | Status::Failed)) || self.background
     }
 }
 

@@ -255,7 +255,7 @@ fn a_pane_that_closes_ends_a_wait_on_several_as_closed() {
     pump_until(&mut app, &rx, "the tab closes", |a| a.projects[0].workspaces[0].tabs.len() == 1);
     app.refresh(Instant::now());
     let early = answers(&mut app);
-    typed_in(&mut app, 0, "echo mark-$((1+1))");
+    typed_in(&mut app, 0, "printf '\\nmark-%s\\n' $((1+1))");
 
     let answer = done(answered(&mut app, &rx, "the open pane prints"));
     assert_eq!(early, []);

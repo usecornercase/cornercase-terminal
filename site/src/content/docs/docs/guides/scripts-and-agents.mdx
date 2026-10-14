@@ -69,7 +69,7 @@ cornercase status --panes          # one line per pane, for scripts
 cornercase status --panes --json   # the same, as JSON
 ```
 
-Each pane shows its program and folder. A pane running Claude Code, Codex, Gemini CLI, opencode or Grok Build also shows what the agent is doing (`working`, `waiting` for an answer, `pending` review, `done` while you were elsewhere, `idle`; opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. `(survey open)` is Claude Code's feedback survey above its input box, which `send` refuses too. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
+Each pane shows its program and folder. Recognised agents that emit [OSC 7501](../../reference/agents/#program-status-protocol) show their reported status, including when no session reader exists. A pane running Claude Code, Codex, Gemini CLI, opencode or Grok Build also shows what the agent is doing (`working`, `waiting` for an answer, `pending` review, `done` while you were elsewhere, `failed`, `idle`; without OSC 7501, opencode is never `waiting`), its model and how full its context is, as the [tab icons](../projects-workspaces-tabs/#what-your-agents-are-doing) do. `working (background shell)` is a Claude Code agent whose turn is over while a shell it started in the background (a test watcher, a dev server) still runs: its tab keeps showing it as working, since Claude wakes up when that shell ends, but a script can tell it apart and stop waiting with [`--until turn-over`](#wait). `(dialog open)` is a Claude Code agent showing something else where its input box should be (a picker, the transcript view, a background shell's details, its `!` shell mode), which [`send`](#talk-to-a-pane) refuses. `(survey open)` is Claude Code's feedback survey above its input box, which `send` refuses too. A workspace shows its branch, `worktree` when it has one of its own, and the commits it is behind.
 
 #### One line per pane
 
@@ -87,7 +87,7 @@ pane	tab	workspace	project	program	agent	status	background_shell	dialog	at_promp
 | `pane`, `tab`, `workspace`, `project` | The ids of the pane and of the tab, workspace and project it is in. |
 | `program` | The program in the foreground, as the tab names it. |
 | `agent` | `claude`, `codex`, `gemini` or `opencode` when one runs in the pane. |
-| `status` | What the agent is doing: `working`, `waiting`, `pending`, `done` or `idle`. |
+| `status` | What the agent is doing: `working`, `waiting`, `pending`, `done`, `failed` or `idle`. |
 | `background_shell`, `dialog`, `at_prompt` | As in the [JSON](#json): the agent's turn is over but a background shell still runs; a Claude Code agent shows a dialog instead of its input box; the shell sits at its prompt with nothing running. |
 | `model`, `context` | The agent's model and how full its context is, in percent. |
 | `caller` | `true` for the pane running the command. |
@@ -190,7 +190,7 @@ cornercase wait --pane 7 --quiet 5                             # until it writes
 
 | Condition | Ends when | Prints |
 | --- | --- | --- |
-| *(none)* | the agent stops working: it is idle, done, pending review or waiting | `idle`, `done`, `pending` or `waiting` |
+| *(none)* | the agent stops working: it is idle, done, pending review or waiting | `idle`, `done`, `failed`, `pending` or `waiting` |
 | `--until idle` | the agent is idle, done or pending review | `idle`, `done` or `pending` |
 | `--until working` | the agent is working | `working` |
 | `--until waiting` | the agent waits for an answer to a question or a permission prompt | `waiting` |
@@ -244,7 +244,7 @@ tab 15  closed
 
 | Event | When |
 | --- | --- |
-| `pane ID  AGENT  FROM → TO` | An agent changed state: `working`, `shell` (its turn is over, but a [background shell](#look) it started still runs), `waiting` for an answer, `pending` review, `done` while you were elsewhere, `idle`, or `none` before it started and once it left the pane. Claude Code, Codex, Gemini CLI, opencode and Grok Build only, as for `wait`. |
+| `pane ID  AGENT  FROM → TO` | An agent changed state: `working`, `shell` (its turn is over, but a [background shell](#look) it started still runs), `waiting` for an answer, `pending` review, `done` while you were elsewhere, `failed`, `idle`, or `none` before it started and once it left the pane. Every recognised agent reporting OSC 7501, or Claude Code, Codex, Gemini CLI, opencode and Grok Build through their readers, as for `wait`. |
 | `pane ID  PROGRAM  exited` | The program in the foreground ended and the shell is back, or another program took its place. |
 | `KIND ID  opened in PARENT` | A project, workspace, tab or pane opened. |
 | `KIND ID  closed` | A project, workspace, tab or pane closed. A pane closes when its shell exits, whatever closed it. |

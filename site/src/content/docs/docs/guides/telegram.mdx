@@ -41,7 +41,11 @@ The bot then sends the list of your agents, and **`Remote`** shows a green **`�
 - **An agent needs you** (a permission prompt, a question): `! claude needs you · web-shop › dark-mode`, the last lines of its screen, and a button for each option it shows (`1 · Yes`, `2 · Yes, and don't ask again`…), plus **esc** and **screen**. A tap presses that key in its pane, as if you had typed it, and the option buttons go away. When the agent asks again right after (the next part of a question in several parts, another permission prompt), that next question comes as a new message with its own buttons.
 - **An agent finishes its turn**: `✓ claude finished · web-shop › dark-mode` and the last thing it wrote, read from its own conversation (not its screen), with its bold, lists, code and links. A long message comes in several, at most four; the rest stays in cornercase. When a Claude Code turn ends with a command still running in the background (a dev server), it says `ended its turn · a background shell still runs`.
 
-A message is sent once per change, after the agent held it for a second, and only while you are away. This works with the agents whose state cornercase reads: Claude Code, Codex, Gemini CLI, opencode and Grok Build (opencode never says that it waits for you, see [Agents](../../reference/agents/)).
+- **An agent reports a failure** through [OSC 7501](../../reference/agents/#program-status-protocol): `! claude failed · web-shop › dark-mode`, with its last message or its screen when no message reader exists.
+
+An OSC 7501 `idle` report cancels work without a finished message; `done` reports completion even if the tab is visible or no working state was observed.
+
+A message is sent once per change, after the agent held it for a second, and only while you are away. This works with every recognised agent that reports OSC 7501, and otherwise with Claude Code, Codex, Gemini CLI, opencode and Grok Build (without reports, opencode never says that it waits for you, see [Agents](../../reference/agents/)).
 
 ## Answer
 

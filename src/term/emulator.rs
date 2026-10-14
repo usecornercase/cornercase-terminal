@@ -15,9 +15,11 @@ use libghostty_vt::terminal::{
 use ratatui::layout::Position;
 use ratatui::style::{Color, Modifier, Style};
 
+use crate::agents::activity::Activity;
 use crate::host::theme::HostTheme;
 use crate::term::keys;
 use crate::term::mouse::{MouseEncoding, MouseMode};
+use crate::term::status;
 
 pub(crate) type Result<T> = libghostty_vt::error::Result<T>;
 pub(crate) type ReplyFn = Box<dyn FnMut(&[u8])>;
@@ -53,12 +55,16 @@ pub(crate) struct Emulator {
     keys: Encoder<'static>,
     anchor: Option<TrackedGridRef>,
     copied: Rc<RefCell<Vec<String>>>,
+    status: status::Status,
+    reply: Rc<RefCell<ReplyFn>>,
 }
 
 impl Emulator {
-    pub(crate) fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, mut reply: ReplyFn) -> Result<Self> {
+    pub(crate) fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, reply: ReplyFn) -> Result<Self> {
         let mut vt = Terminal::new(Options { cols, rows, max_scrollback: scrollback })?;
-        vt.on_pty_write(move |_, bytes| reply(bytes))?;
+        let reply = Rc::new(RefCell::new(reply));
+        let sink = Rc::clone(&reply);
+        vt.on_pty_write(move |_, bytes| sink.borrow_mut()(bytes))?;
         let copied = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&copied);
         vt.on_clipboard_write(move |_, write| {
@@ -76,6 +82,8 @@ impl Emulator {
             keys: Encoder::new()?,
             anchor: None,
             copied,
+            status: status::Status::default(),
+            reply,
         })
     }
 
@@ -91,7 +99,31 @@ impl Emulator {
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
-        self.vt.vt_write(bytes);
+        let mut start = 0;
+        for (at, &byte) in bytes.iter().enumerate() {
+            if self.status.advance(byte) {
+                self.vt.vt_write(&bytes[start..=at]);
+                self.reply.borrow_mut()(status::REPLY);
+                start = at + 1;
+            }
+        }
+        self.vt.vt_write(&bytes[start..]);
+    }
+
+    pub(crate) fn status_process(&mut self, pid: Option<i32>) {
+        self.status.process(pid);
+    }
+
+    pub(crate) fn program_activity(&self) -> Option<Activity> {
+        self.status.activity()
+    }
+
+    pub(crate) fn finished_activity(&self, pid: i32) -> Option<Activity> {
+        self.status.finished(pid)
+    }
+
+    pub(crate) fn acknowledge_status(&mut self, pid: i32) {
+        self.status.acknowledge(pid);
     }
 
     pub(crate) fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {

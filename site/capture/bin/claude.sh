@@ -41,6 +41,12 @@ prompt() {
   esac
 }
 case "${CC_AGENT_STATE:-idle}" in
+  failed)
+    printf '\033[31m! Failed to complete the task: authentication expired.\033[0m\n'
+    state idle
+    printf '\033]7501;state=error:app=claude-code\033\\'
+    while :; do sleep 1; done
+    ;;
   busy)
     prompt "${CC_AGENT_TASK:-482}"
     steps "${CC_AGENT_TASK:-482}" | sed "s/^●/${m}●${r}/"
