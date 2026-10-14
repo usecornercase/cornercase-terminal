@@ -203,8 +203,15 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     let modes = agents::modes(config, name);
     let mut args: Vec<String> = kind.unattended().iter().map(|a| (*a).to_string()).collect();
     args.extend(agents::extra_args(name, &agents::args(config, name), &modes));
-    let mut args = agents::with_model(name, args, role.model.as_deref());
-    args.extend(role.args.iter().cloned());
+    let chosen = role.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
+    if chosen.is_some() || agents::names_model(name, &role.args) {
+        args = agents::without_model(name, &args);
+    }
+    let mut args = agents::with_model(name, args, chosen);
+    match chosen {
+        Some(_) => args.extend(agents::without_model(name, &role.args)),
+        None => args.extend(role.args.iter().cloned()),
+    }
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
         words.push("env".to_string());

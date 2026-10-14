@@ -8,6 +8,7 @@ use crate::agents::context::{Context, Look, Record};
 pub(in crate::agents) const NAME: &str = "opencode";
 pub(in crate::agents) const TITLE: &str = "opencode";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
+pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--auto"];
 pub(in crate::agents) const MODELS: &[&str] = &[];
 pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = Some(database::model_ids);

@@ -148,21 +148,31 @@ pub(crate) fn with_mode(kind: &str, args: &[String], modes: &[Mode], name: Optio
     [mode_args(modes, name), extra_args(kind, args, modes)].concat()
 }
 
+pub(crate) fn without_model(kind: &str, args: &[String]) -> Vec<String> {
+    let Some(known) = Known::of(kind) else { return args.to_vec() };
+    let flags: Vec<&str> = std::iter::once(known.model_flag()).chain(known.model_alias()).collect();
+    let mut out = Vec::with_capacity(args.len());
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if flags.contains(&arg.as_str()) {
+            args.next();
+        } else if !flags.iter().any(|flag| arg.strip_prefix(flag).is_some_and(|rest| rest.starts_with('='))) {
+            out.push(arg.clone());
+        }
+    }
+    out
+}
+
+pub(crate) fn names_model(kind: &str, args: &[String]) -> bool {
+    without_model(kind, args).len() != args.len()
+}
+
 pub(crate) fn with_model(kind: &str, args: Vec<String>, model: Option<&str>) -> Vec<String> {
     let (Some(known), Some(model)) = (Known::of(kind), model.map(str::trim).filter(|m| !m.is_empty())) else {
         return args;
     };
-    let flag = known.model_flag();
-    let mut out = Vec::with_capacity(args.len() + 2);
-    let mut args = args.into_iter();
-    while let Some(arg) = args.next() {
-        if arg == flag {
-            args.next();
-        } else if !arg.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')) {
-            out.push(arg);
-        }
-    }
-    out.extend([flag.to_string(), model.to_string()]);
+    let mut out = without_model(kind, &args);
+    out.extend([known.model_flag().to_string(), model.to_string()]);
     out
 }
 

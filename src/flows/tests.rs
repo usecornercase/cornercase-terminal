@@ -206,6 +206,27 @@ mod commands {
         );
     }
 
+    #[rstest::rstest]
+    #[case::a_model_beats_every_other(Some("gpt-5.5"), &["-m", "o4", "--search"], "--model gpt-5.5 --search")]
+    #[case::args_beat_the_settings(None, &["--model=o4", "--search"], "--model=o4 --search")]
+    #[case::the_settings_stay_otherwise(None, &["--search"], "-m o3 --search")]
+    fn a_role_model_then_its_arguments_beat_the_settings_model(
+        #[case] model: Option<&str>,
+        #[case] args: &[&str],
+        #[case] expected: &str,
+    ) {
+        let mut config = Config::default();
+        config.agent_args.insert("codex".into(), vec!["-m".into(), "o3".into()]);
+        let role = Role {
+            agent: "codex".into(),
+            model: model.map(str::to_string),
+            args: args.iter().map(|a| (*a).to_string()).collect(),
+            ..Role::default()
+        };
+        let line = command(&config, &role).expect("a known agent");
+        assert_eq!(line, format!("codex --dangerously-bypass-approvals-and-sandbox {expected}"));
+    }
+
     #[test]
     fn a_role_resumes_with_its_mode_model_and_environment() {
         let role = Role {
