@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::*;
+use crate::host::sound::{Cue, Kind};
 
 fn round_trip<T: Serialize + DeserializeOwned>(msg: &T) -> T {
     let mut buf = Vec::new();
@@ -145,6 +146,40 @@ mod compatibility {
     #[test]
     fn a_client_without_responses_reads_one_as_invalid_data() {
         assert_eq!(read_as::<BeforeResponse>(&ServerMessage::Response("{}".into())), io::ErrorKind::InvalidData);
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[expect(dead_code, reason = "decoded only, the way a client from before Sound reads it")]
+    enum BeforeSound {
+        Rejected(String),
+        Frame(Vec<u8>),
+        Detached,
+        Shutdown,
+        Restart(PathBuf),
+        Response(String),
+    }
+
+    #[test]
+    fn a_sound_comes_after_every_older_server_variant() {
+        let cue = Cue { kind: Kind::Waiting, path: String::new() };
+
+        assert_eq!(postcard::to_stdvec(&ServerMessage::Sound(cue)).expect("encode")[0], 6);
+    }
+
+    #[test]
+    fn a_client_without_sounds_reads_one_as_invalid_data() {
+        let cue = Cue { kind: Kind::Done, path: "~/done.wav".into() };
+
+        assert_eq!(read_as::<BeforeSound>(&ServerMessage::Sound(cue)), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn a_sound_round_trips() {
+        let cue = Cue { kind: Kind::Done, path: "~/done.wav".into() };
+
+        let msg = round_trip(&ServerMessage::Sound(cue.clone()));
+
+        assert!(matches!(msg, ServerMessage::Sound(heard) if heard == cue));
     }
 }
 

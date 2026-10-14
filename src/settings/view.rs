@@ -1,5 +1,6 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::host::sound;
 use crate::shortcuts::Prefix;
 
 use super::{Page, Row, RowText, Settings, Status};
@@ -100,6 +101,7 @@ impl Settings {
                 "when an agent in another tab needs you or finishes".into(),
                 false,
             ),
+            Row::Sound | Row::SoundWaiting | Row::SoundDone => sound_row(config, row),
             Row::Updates => {
                 let value = if config.check_updates { "[x] every hour" } else { "[ ] never" };
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
@@ -167,6 +169,8 @@ impl Settings {
                 Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
+                Row::SoundWaiting => "sound when it needs you (empty keeps the built-in one)".to_string(),
+                Row::SoundDone => "sound when it finishes (empty keeps the built-in one)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 Row::TelegramBot => "Telegram bot token, from @BotFather".to_string(),
                 _ => String::new(),
@@ -184,6 +188,9 @@ impl Settings {
             Row::Tabs => "Where should a workspace's tabs go?".to_string(),
             Row::WorkingIcon => "What should a working agent's tab show?".to_string(),
             Row::Notifications => "How should your terminal notify you?".to_string(),
+            Row::Sound => "Play a sound when an agent needs you or finishes?".to_string(),
+            Row::SoundWaiting => "Which sound when an agent needs you?".to_string(),
+            Row::SoundDone => "Which sound when an agent finishes?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
             _ => "Which agent do you want to set up?".to_string(),
         }
@@ -210,6 +217,15 @@ impl Settings {
             }
         })
     }
+}
+
+fn sound_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+    let (label, value, note) = match row {
+        Row::SoundWaiting => ("needs you", sound::label(&config.sound_waiting), "played when an agent is waiting"),
+        Row::SoundDone => ("finished", sound::label(&config.sound_done), "played when an agent finishes"),
+        _ => ("sound", sound::switch_label(&config.sound).into(), "when an agent in another tab needs you or finishes"),
+    };
+    (label.into(), value, note.into(), false)
 }
 
 fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {

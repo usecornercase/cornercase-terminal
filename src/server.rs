@@ -601,6 +601,12 @@ impl Server {
                 client.send(ServerMessage::Frame(notification.encode(client.notify)));
             }
         }
+        for cue in app.take_sounds() {
+            for client in clients.iter().filter(|c| c.screen.is_some()) {
+                log::info!("server", "sound sent", client = client.id, kind = cue.kind.name());
+                client.send(ServerMessage::Sound(cue.clone()));
+            }
+        }
     }
 
     fn due(&self, now: Instant) -> bool {

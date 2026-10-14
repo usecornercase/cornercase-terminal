@@ -1,5 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
+use crate::host::sound;
 use crate::issues::{Secret, Source, jira, plane};
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
@@ -39,6 +40,15 @@ impl Settings {
                 let notice = format!("desktop notifications: {value}");
                 self.save(Config { desktop_notifications: value, ..self.config.clone() }, notice)
             }
+            Row::Sound => {
+                let notice = format!("sound: {value}");
+                self.save(Config { sound: value, ..self.config.clone() }, notice)
+            }
+            Row::SoundWaiting | Row::SoundDone if value == sound::FILE => {
+                let current = sound::stored(self.sound_path(&row)).to_string();
+                self.start_edit(row, current)
+            }
+            Row::SoundWaiting | Row::SoundDone => self.save_sound(&row, String::new()),
             Row::Kind(kind) if value == EXTRA_ARGS => {
                 self.edit_extra(&kind);
                 Action::None
@@ -95,8 +105,15 @@ impl Settings {
     }
 
     pub(super) fn submit_edit(&mut self) -> Action {
+        let Some(row) = self.edit.as_ref().map(|edit| edit.row.clone()) else { return Action::None };
+        if matches!(row, Row::SoundWaiting | Row::SoundDone) {
+            return self.submit_sound();
+        }
+        if let Row::Kind(kind) = &row {
+            return self.submit_kind(kind);
+        }
         let Some(edit) = &mut self.edit else { return Action::None };
-        match edit.row.clone() {
+        match row {
             Row::Folder => match config::check_worktrees_dir(&edit.input, self.home.as_deref()) {
                 Ok(worktrees_dir) => {
                     self.edit = None;
@@ -182,16 +199,48 @@ impl Settings {
                 self.telegram.checking = true;
                 Action::CheckTelegram(Secret(token))
             }
-            Row::Kind(kind) => {
-                let extra = agents::split_args(&edit.input);
-                self.edit = None;
-                let modes = agents::modes(&self.config, &kind);
-                let args = agents::with_extra(&kind, &agents::args(&self.config, &kind), &modes, extra);
-                let notice = starts_with(&kind, &args);
-                self.save(with_args(&self.config, &kind, args), notice)
-            }
             _ => Action::None,
         }
+    }
+
+    fn submit_sound(&mut self) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        match sound::check_path(&edit.input, self.home.as_deref()) {
+            Ok(path) => {
+                let row = edit.row.clone();
+                self.edit = None;
+                self.save_sound(&row, path)
+            }
+            Err(message) => {
+                edit.error = Some(message.into());
+                Action::None
+            }
+        }
+    }
+
+    fn submit_kind(&mut self, kind: &str) -> Action {
+        let Some(input) = self.edit.as_ref().map(|edit| edit.input.clone()) else { return Action::None };
+        self.edit = None;
+        let extra = agents::split_args(&input);
+        let modes = agents::modes(&self.config, kind);
+        let args = agents::with_extra(kind, &agents::args(&self.config, kind), &modes, extra);
+        let notice = starts_with(kind, &args);
+        self.save(with_args(&self.config, kind, args), notice)
+    }
+
+    fn sound_path(&self, row: &Row) -> &str {
+        if *row == Row::SoundWaiting { &self.config.sound_waiting } else { &self.config.sound_done }
+    }
+
+    fn save_sound(&mut self, row: &Row, path: String) -> Action {
+        let waiting = *row == Row::SoundWaiting;
+        let notice = sound::source_notice(waiting, &path);
+        let config = if waiting {
+            Config { sound_waiting: path, ..self.config.clone() }
+        } else {
+            Config { sound_done: path, ..self.config.clone() }
+        };
+        self.save(config, notice)
     }
 }
 

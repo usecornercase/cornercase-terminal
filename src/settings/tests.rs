@@ -670,6 +670,9 @@ mod sidebar {
                 Row::Detail(Detail::Context),
                 Row::Detail(Detail::Memory),
                 Row::Notifications,
+                Row::Sound,
+                Row::SoundWaiting,
+                Row::SoundDone,
                 Row::Updates,
                 Row::Prefix
             ]
@@ -739,6 +742,76 @@ mod notifications {
         go_to(&mut s, &Row::Notifications);
         press(&mut s, KeyCode::Enter);
         assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("osc9"));
+    }
+}
+
+mod sound {
+    use super::*;
+
+    #[test]
+    fn is_off_until_it_is_turned_on() {
+        let mut s = settings();
+        s.open_page(Page::Ui);
+        let row = s.row_text(&Row::Sound);
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("sound", "off"));
+
+        go_to(&mut s, &Row::Sound);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "on");
+
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).sound, "on");
+    }
+
+    #[test]
+    fn a_file_replaces_the_built_in_sound() {
+        let mut s = settings();
+        go_to(&mut s, &Row::SoundWaiting);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "file");
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "~/sounds/needs.wav");
+
+        let saved = saved(press(&mut s, KeyCode::Enter));
+
+        assert_eq!(saved.sound_waiting, "~/sounds/needs.wav");
+        assert_eq!(s.row_text(&Row::SoundWaiting).value, "~/sounds/needs.wav");
+    }
+
+    #[test]
+    fn an_empty_path_keeps_the_built_in_sound_and_a_relative_one_is_refused() {
+        let mut s = settings();
+        s.config.sound_done = "/tmp/done.wav".into();
+        go_to(&mut s, &Row::SoundDone);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "file");
+        press(&mut s, KeyCode::Enter);
+        assert_eq!(s.edit_field().map(|(_, value)| value), Some("/tmp/done.wav".into()));
+        s.edit.as_mut().expect("the path field").input.clear();
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).sound_done, "");
+
+        go_to(&mut s, &Row::SoundDone);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "file");
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "done.wav");
+        press(&mut s, KeyCode::Enter);
+
+        assert_eq!(
+            s.edit.as_ref().and_then(|edit| edit.error.clone()).as_deref(),
+            Some("use an absolute path or one starting with ~/")
+        );
+    }
+
+    #[test]
+    fn built_in_clears_a_saved_path() {
+        let mut s = settings();
+        s.config.sound_waiting = "~/needs.wav".into();
+        go_to(&mut s, &Row::SoundWaiting);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "builtin");
+
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).sound_waiting, "");
+        assert_eq!(s.row_text(&Row::SoundWaiting).value, "built-in");
     }
 }
 

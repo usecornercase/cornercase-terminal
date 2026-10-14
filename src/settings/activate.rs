@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
-use crate::host::notify;
+use crate::host::{notify, sound};
 use crate::list::Search;
 
 use super::{Action, EXTRA_ARGS, Edit, Pick, PickItem, Row, Settings, Status};
@@ -65,6 +65,8 @@ impl Settings {
             Row::Tabs => self.pick_from(row, Tabs::choices()),
             Row::WorkingIcon => self.pick_from(row, WorkingIcon::choices()),
             Row::Notifications => self.pick_from(row, notify::choices()),
+            Row::Sound => self.pick_from(row, sound::switch_choices()),
+            Row::SoundWaiting | Row::SoundDone => self.pick_from(row, sound::source_choices()),
             Row::Updates => self.flip(
                 |c| &mut c.check_updates,
                 ["cornercase looks for new versions", "cornercase no longer looks for new versions"],
@@ -141,7 +143,7 @@ impl Settings {
         Action::None
     }
 
-    fn start_edit(&mut self, row: Row, input: String) -> Action {
+    pub(super) fn start_edit(&mut self, row: Row, input: String) -> Action {
         self.edit = Some(Edit { row, input, error: None });
         Action::None
     }
@@ -168,6 +170,9 @@ impl Settings {
             Row::Tabs => Some(Tabs::from_setting(&self.config.tabs).id().to_string()),
             Row::WorkingIcon => Some(WorkingIcon::from_setting(&self.config.working_icon).id().to_string()),
             Row::Notifications => Some(self.config.desktop_notifications.trim().to_lowercase()),
+            Row::Sound => Some(sound::switch_label(&self.config.sound).to_string()),
+            Row::SoundWaiting => Some(sound::picked(&self.config.sound_waiting).to_string()),
+            Row::SoundDone => Some(sound::picked(&self.config.sound_done).to_string()),
             Row::Kind(kind) => Some(
                 agents::mode_of(kind, &agents::args(&self.config, kind), &agents::modes(&self.config, kind))
                     .unwrap_or_else(|| "default".into()),

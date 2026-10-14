@@ -23,6 +23,7 @@ use crate::error::{Error, Result};
 use crate::files;
 use crate::host::notify::Notification;
 use crate::host::pointer;
+use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
 use crate::issues::People;
 use crate::issues::browser::Tab as IssueTab;
@@ -104,6 +105,7 @@ pub(crate) use images::{Placed, Sight};
 struct Outbox {
     host_writes: Vec<Vec<u8>>,
     notifications: Vec<Notification>,
+    sounds: Vec<Cue>,
     detach: bool,
     restart: bool,
 }
@@ -506,6 +508,10 @@ impl App {
 
     pub(crate) fn take_notifications(&mut self) -> Vec<Notification> {
         std::mem::take(&mut self.outbox.notifications)
+    }
+
+    pub(crate) fn take_sounds(&mut self) -> Vec<Cue> {
+        std::mem::take(&mut self.outbox.sounds)
     }
 
     pub(crate) fn set_stats(&mut self, stats: agents::stats::Stats) {

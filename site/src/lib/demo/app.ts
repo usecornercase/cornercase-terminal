@@ -2377,6 +2377,9 @@ export class App {
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
+      { id: 'sound', section: '', label: 'sound', value: c.sound === 'on' ? 'on' : 'off', note: 'when an agent in another tab needs you or finishes' },
+      { id: 'soundWaiting', section: '', label: 'needs you', value: c.soundWaiting || 'built-in', note: 'played when an agent is waiting' },
+      { id: 'soundDone', section: '', label: 'finished', value: c.soundDone || 'built-in', note: 'played when an agent finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
       this.prefixRow(),
     ];
@@ -2457,6 +2460,14 @@ export class App {
     } else if (row.id === 'notify') {
       const items = NOTIFY_CHOICES.map(([value, note]) => ({ value, note }));
       o.pick = { row: row.id, title: 'How should your terminal notify you?', items, selected: Math.max(0, items.findIndex((i) => i.value === c.notify)), filter: '' };
+    } else if (row.id === 'sound') {
+      const items = [['off', 'no sound'], ['on', 'on this computer, in every open window']].map(([value, note]) => ({ value, note }));
+      o.pick = { row: row.id, title: 'Play a sound when an agent needs you or finishes?', items, selected: c.sound === 'on' ? 1 : 0, filter: '' };
+    } else if (row.id === 'soundWaiting' || row.id === 'soundDone') {
+      const path = row.id === 'soundWaiting' ? c.soundWaiting : c.soundDone;
+      const items = [['builtin', 'a short tone'], ['a file…', 'a sound file on this computer']].map(([value, note]) => ({ value, note }));
+      const title = row.id === 'soundWaiting' ? 'Which sound when an agent needs you?' : 'Which sound when an agent finishes?';
+      o.pick = { row: row.id, title, items, selected: path ? 1 : 0, filter: '' };
     } else if (row.id === 'agent') {
       o.pick = {
         row: row.id,
@@ -2576,6 +2587,19 @@ export class App {
     } else if (row === 'notify') {
       c.notify = item.value;
       o.notice = `desktop notifications: ${item.value}`;
+    } else if (row === 'sound') {
+      c.sound = item.value;
+      o.notice = `sound: ${item.value}`;
+    } else if (row === 'soundWaiting' || row === 'soundDone') {
+      const waiting = row === 'soundWaiting';
+      if (item.value === 'a file…') {
+        const label = waiting ? 'sound when it needs you (empty keeps the built-in one)' : 'sound when it finishes (empty keeps the built-in one)';
+        o.edit = { row, label, input: waiting ? c.soundWaiting : c.soundDone, token: false };
+      } else {
+        if (waiting) c.soundWaiting = '';
+        else c.soundDone = '';
+        o.notice = `${waiting ? 'needs you' : 'finished'} plays the built-in sound`;
+      }
     } else if (row.startsWith('kind:')) {
       const kind = row.slice(5);
       if (item.value === 'extra arguments…') {
@@ -2667,6 +2691,16 @@ export class App {
       this.config.jiraJql = edit.input.trim();
       o.edit = undefined;
       o.notice = this.config.jiraJql ? `Jira lists only: ${this.config.jiraJql}` : 'Jira lists every issue you can see';
+    } else if (edit.row === 'soundWaiting' || edit.row === 'soundDone') {
+      const path = edit.input.trim();
+      const waiting = edit.row === 'soundWaiting';
+      if (path && !path.startsWith('/') && !path.startsWith('~/')) edit.error = 'use an absolute path or one starting with ~/';
+      else {
+        if (waiting) this.config.soundWaiting = path;
+        else this.config.soundDone = path;
+        o.edit = undefined;
+        o.notice = path ? `${waiting ? 'needs you' : 'finished'} plays ${path}` : `${waiting ? 'needs you' : 'finished'} plays the built-in sound`;
+      }
     } else if (edit.row.startsWith('kind:')) {
       const kind = edit.row.slice(5);
       const mode = this.modeOf(kind);

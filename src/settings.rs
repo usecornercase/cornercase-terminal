@@ -31,6 +31,9 @@ pub(crate) enum Row {
     DimPanes,
     Detail(Detail),
     Notifications,
+    Sound,
+    SoundWaiting,
+    SoundDone,
     Updates,
     Prefix,
     Token(Source),
@@ -73,6 +76,9 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
+            | Self::Sound
+            | Self::SoundWaiting
+            | Self::SoundDone
             | Self::Updates
             | Self::Prefix => "",
             Self::Remote | Self::Browsers => "Browser",
@@ -114,6 +120,9 @@ impl Row {
             | Self::DimPanes
             | Self::Detail(_)
             | Self::Notifications
+            | Self::Sound
+            | Self::SoundWaiting
+            | Self::SoundDone
             | Self::Updates
             | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::TelegramBot | Self::TelegramChat => Page::Remote,
@@ -360,6 +369,9 @@ impl Settings {
             Row::Detail(Detail::Context),
             Row::Detail(Detail::Memory),
             Row::Notifications,
+            Row::Sound,
+            Row::SoundWaiting,
+            Row::SoundDone,
             Row::Updates,
             Row::Prefix,
             Row::Remote,

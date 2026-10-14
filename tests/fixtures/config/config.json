@@ -49,6 +49,9 @@
   "context": false,
   "memory": true,
   "desktop_notifications": "off",
+  "sound": "on",
+  "sound_waiting": "/tmp/needs-you.wav",
+  "sound_done": "~/sounds/done.wav",
   "check_updates": false,
   "remote": true,
   "remote_port": 47682

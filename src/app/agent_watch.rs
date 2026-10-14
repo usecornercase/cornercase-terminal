@@ -13,6 +13,7 @@ use crate::agents::context::Look;
 use crate::agents::launch::Launch;
 use crate::config::Config;
 use crate::host::notify::{self, Notification};
+use crate::host::sound;
 use crate::log::{self};
 use crate::process;
 use crate::project::Hierarchy;
@@ -150,9 +151,13 @@ impl App {
             agent = agent,
             status = status.name(),
             project = project.id,
-            workspace = project.workspaces[w].id
+            workspace = project.workspaces[w].id,
+            sound = sound::switch_label(&self.config.sound)
         );
         self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        if let Some(cue) = sound::cue(status == activity::Status::Waiting, &self.config) {
+            self.outbox.sounds.push(cue);
+        }
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
     }
 

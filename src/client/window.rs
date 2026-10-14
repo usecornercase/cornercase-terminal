@@ -19,6 +19,7 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::host::notify::{self, Channel};
+use crate::host::sound::{self, Cue};
 use crate::host::theme::HostTheme;
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
 use crate::remote::{self, Stderr};
@@ -42,6 +43,7 @@ enum Received {
 
 enum Next {
     Show(Vec<u8>),
+    Sound(Cue),
     End(Ending),
     Reconnect,
     Nothing,
@@ -50,6 +52,7 @@ enum Next {
 fn next(received: Received, reconnects: bool) -> Result<Next> {
     Ok(match received {
         Received::Message(ServerMessage::Frame(bytes)) => Next::Show(bytes),
+        Received::Message(ServerMessage::Sound(cue)) => Next::Sound(cue),
         Received::Message(ServerMessage::Rejected(reason)) => return Err(Error::Rejected(reason)),
         Received::Invalid => return Err(Error::Rejected(INCOMPATIBLE.into())),
         Received::Message(ServerMessage::Restart(_)) | Received::Ended if reconnects => Next::Reconnect,
@@ -178,6 +181,10 @@ impl Window<'_> {
                         let mut out = stdout();
                         out.write_all(&bytes)?;
                         out.flush()?;
+                    }
+                    Next::Sound(cue) => {
+                        self.retries.showed();
+                        sound::play(cue);
                     }
                     Next::End(ending) => return Ok(Some(ending)),
                     Next::Reconnect => self.lose()?,

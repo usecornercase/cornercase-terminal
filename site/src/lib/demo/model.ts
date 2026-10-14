@@ -176,6 +176,9 @@ export interface Config {
   context: boolean;
   memory: boolean;
   notify: string;
+  sound: string;
+  soundWaiting: string;
+  soundDone: string;
   updates: boolean;
   prefix: string;
   agentArgs: Record<string, string[]>;
@@ -208,6 +211,9 @@ export const defaultConfig = (): Config => ({
   context: true,
   memory: false,
   notify: 'auto',
+  sound: 'off',
+  soundWaiting: '',
+  soundDone: '',
   updates: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },

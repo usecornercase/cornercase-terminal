@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use super::*;
+use crate::host::sound::{Cue, Kind};
 
 #[test]
 fn an_input_thread_that_unwinds_tells_the_window_it_ended() {
@@ -51,6 +52,13 @@ mod connection {
     #[test]
     fn a_rejection_is_never_retried() {
         assert!(next(Received::Message(ServerMessage::Rejected("no".into())), true).is_err());
+    }
+
+    #[test]
+    fn a_sound_is_played_here_and_not_written_to_the_terminal() {
+        let cue = Cue { kind: Kind::Waiting, path: String::new() };
+
+        assert!(matches!(next(Received::Message(ServerMessage::Sound(cue)), false), Ok(Next::Sound(_))));
     }
 }
 

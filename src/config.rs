@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::agents;
-use crate::host::notify;
+use crate::host::{notify, sound};
 use crate::persist;
 use crate::shortcuts::Prefix;
 
@@ -158,6 +158,9 @@ pub(crate) struct Config {
     pub(crate) context: bool,
     pub(crate) memory: bool,
     pub(crate) desktop_notifications: String,
+    pub(crate) sound: String,
+    pub(crate) sound_waiting: String,
+    pub(crate) sound_done: String,
     pub(crate) check_updates: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
@@ -199,6 +202,9 @@ impl Default for Config {
             context: true,
             memory: false,
             desktop_notifications: notify::AUTO.into(),
+            sound: sound::OFF.into(),
+            sound_waiting: String::new(),
+            sound_done: String::new(),
             check_updates: true,
             remote: false,
             remote_port: DEFAULT_PORT,

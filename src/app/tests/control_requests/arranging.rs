@@ -57,11 +57,13 @@ fn a_group_keeps_a_name() {
 #[test]
 fn notify_shows_a_toast_and_asks_for_a_desktop_notification() {
     let (mut app, _rx) = app();
+    app.config.sound = crate::host::sound::ON.into();
 
     done(now(&mut app, None, Command::Notify(wire::Notify { text: "the build\u{7} is ready".into() })));
 
     let sent: Vec<String> = app.take_notifications().into_iter().map(|n| n.text).collect();
     assert_eq!((toast(&app), sent), (Some("the build is ready"), vec!["the build is ready".to_string()]));
+    assert_eq!(app.take_sounds(), []);
 }
 
 #[test]

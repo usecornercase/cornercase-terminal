@@ -240,7 +240,7 @@ fn pump(
                         return "connection lost";
                     }
                 }
-                Ok(Some(ServerMessage::Response(_))) => {}
+                Ok(Some(ServerMessage::Response(_) | ServerMessage::Sound(_))) => {}
                 Ok(Some(ServerMessage::Rejected(why))) => return finish(ws, "rejected", &why),
                 Ok(Some(ServerMessage::Detached)) => return finish(ws, "detached", ""),
                 Ok(Some(ServerMessage::Shutdown)) => return finish(ws, "shutdown", ""),

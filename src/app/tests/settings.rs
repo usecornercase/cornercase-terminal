@@ -144,6 +144,9 @@ fn a_click_on_a_tab_shows_its_rows() {
             Row::Detail(Detail::Context),
             Row::Detail(Detail::Memory),
             Row::Notifications,
+            Row::Sound,
+            Row::SoundWaiting,
+            Row::SoundDone,
             Row::Updates,
             Row::Prefix
         ]

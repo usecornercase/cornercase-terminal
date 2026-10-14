@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Error;
 use crate::graphics::Support;
 use crate::host::notify::Channel;
+use crate::host::sound::Cue;
 use crate::host::theme::HostTheme;
 use crate::paths;
 use crate::{host::pointer, process};
@@ -54,6 +55,7 @@ pub(crate) enum ServerMessage {
     Shutdown,
     Restart(PathBuf),
     Response(String),
+    Sound(Cue),
 }
 
 pub(crate) fn send<T: Serialize>(w: &mut impl Write, msg: &T) -> io::Result<()> {

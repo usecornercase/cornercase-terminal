@@ -8,6 +8,7 @@ use crate::agents::gemini::fake::FakeGemini;
 use crate::agents::grok::fake::FakeGrok;
 use crate::agents::opencode::fake::FakeOpencode;
 use crate::config;
+use crate::host::sound::{self, Cue, Kind};
 use crate::test_util::write_executable;
 
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
@@ -624,6 +625,7 @@ fn the_visible_tab_stays_quiet(
     w.report("waiting", 6);
 
     assert_eq!(w.told(), (None, Vec::new()));
+    assert_eq!(w.app.take_sounds(), []);
 }
 
 #[rstest]
@@ -636,6 +638,24 @@ fn a_question_answered_at_once_stays_quiet(
     w.report("busy", 6);
 
     assert_eq!(w.told(), (None, Vec::new()));
+    assert_eq!(w.app.take_sounds(), []);
+}
+
+#[test]
+fn sound_follows_the_notice_and_stays_off_until_it_is_on() {
+    let mut w = Watched::start(agents::Known::Claude, true);
+    w.report("waiting", 6);
+    assert_eq!(w.app.take_sounds(), []);
+
+    w.app.config.sound = sound::ON.into();
+    w.app.config.sound_waiting = "builtin".into();
+    w.app.config.sound_done = "~/done.wav".into();
+    w.report("idle", 6);
+    assert_eq!(w.app.take_sounds(), vec![Cue { kind: Kind::Done, path: "~/done.wav".into() }]);
+
+    w.report("busy", 1);
+    w.report("waiting", 6);
+    assert_eq!(w.app.take_sounds(), vec![Cue { kind: Kind::Waiting, path: String::new() }]);
 }
 
 #[test]

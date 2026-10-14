@@ -39,6 +39,9 @@
   "context": true,
   "memory": false,
   "desktop_notifications": "auto",
+  "sound": "off",
+  "sound_waiting": "",
+  "sound_done": "",
   "check_updates": true,
   "remote": false,
   "remote_port": 47681
