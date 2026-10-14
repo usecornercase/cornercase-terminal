@@ -21,21 +21,43 @@ pub(crate) struct Entry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub(crate) enum Source {
-    Link { path: PathBuf },
+    Link {
+        path: PathBuf,
+    },
+    Git {
+        repo: String,
+        url: String,
+        #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
+        reference: Option<String>,
+        commit: String,
+        path: PathBuf,
+    },
 }
 
 impl Source {
     pub(crate) fn root(&self) -> &Path {
         match self {
-            Self::Link { path } => path,
+            Self::Link { path } | Self::Git { path, .. } => path,
         }
     }
 
     pub(crate) fn describe(&self) -> String {
         match self {
             Self::Link { path } => format!("linked from {}", path.display()),
+            Self::Git { repo, reference, commit, .. } => {
+                let at = reference.as_ref().map_or_else(String::new, |r| format!("@{r}"));
+                format!("installed from {repo}{at} at {}", short(commit))
+            }
         }
     }
+
+    pub(crate) fn installed(&self) -> bool {
+        matches!(self, Self::Git { .. })
+    }
+}
+
+pub(crate) fn short(commit: &str) -> &str {
+    commit.get(..12).unwrap_or(commit)
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -126,6 +148,10 @@ impl Registry {
             }
         };
         Ok((manifest, enabled))
+    }
+
+    pub(crate) fn entry(&self, id: &str) -> Result<&Entry, String> {
+        self.entries.iter().find(|entry| entry.id == id).ok_or_else(|| missing(id))
     }
 
     pub(crate) fn unlink(&mut self, id: &str) -> bool {

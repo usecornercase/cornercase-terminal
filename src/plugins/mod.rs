@@ -1,7 +1,10 @@
+mod archive;
 pub(crate) mod catalogue;
+pub(crate) mod install;
 pub(crate) mod manifest;
 pub(crate) mod registry;
 pub(crate) mod run;
+pub(crate) mod source;
 pub(crate) mod supervise;
 
 pub(crate) use manifest::Context;

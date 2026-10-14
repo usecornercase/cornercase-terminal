@@ -64,6 +64,10 @@ pub(crate) fn plugin_state(session: &Path, id: &str) -> PathBuf {
     session.with_file_name("plugins").join("state").join(id)
 }
 
+pub(crate) fn plugin_installs(session: &Path) -> PathBuf {
+    session.with_file_name("plugins").join("installed")
+}
+
 pub(crate) fn session() -> PathBuf {
     match custom_socket() {
         Some(socket) => socket.with_extension("json"),

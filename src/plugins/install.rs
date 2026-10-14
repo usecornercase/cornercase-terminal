@@ -1,0 +1,337 @@
+use std::ffi::OsStr;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
+
+use super::archive;
+use super::manifest::{self, Manifest};
+use super::registry::{Entry, Plugin, Registry, Source, short};
+use super::run::{self, Places, private_dir};
+use super::source::Origin;
+use crate::git::worktree;
+use crate::http::{self, Service};
+use crate::process;
+
+const BUILD_WITHIN: Duration = Duration::from_mins(15);
+const STAGING: &str = ".staging";
+const CHECKOUT: &str = "plugin";
+const SERVICE: Service = Service { name: "the plugin's download", rejected: "the plugin's download was refused" };
+const GIT_ENV: [&str; 8] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_CONFIG_PARAMETERS",
+];
+
+static STAGED: AtomicU32 = AtomicU32::new(0);
+
+#[derive(Debug)]
+pub(crate) struct Fetched {
+    pub(crate) origin: Origin,
+    pub(crate) commit: String,
+    pub(crate) manifest: Manifest,
+    staging: Staging,
+}
+
+#[derive(Debug)]
+struct Staging(PathBuf);
+
+impl Drop for Staging {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Installed {
+    pub(crate) manifest: Manifest,
+    pub(crate) enabled: bool,
+    pub(crate) previous: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) enum Update {
+    UpToDate(String),
+    Changed(Box<Fetched>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Removed {
+    Unlinked,
+    Deleted,
+}
+
+impl Fetched {
+    fn checkout(&self) -> PathBuf {
+        self.staging.0.join(CHECKOUT)
+    }
+
+    pub(crate) fn preview(&self) -> Vec<String> {
+        let m = &self.manifest;
+        let mut lines = vec![format!("{} {} ({})", m.name, m.version, m.id)];
+        if !m.description.trim().is_empty() {
+            lines.push(m.description.trim().to_string());
+        }
+        let at = self.origin.reference.as_ref().map_or_else(String::new, |r| format!(" (`{r}`)"));
+        lines.push(format!("From {} at commit {}{at}.", self.origin.repo, self.commit));
+        lines.push(format!("It {}; that is shown, not enforced.", m.asks()));
+        match m.download_here() {
+            Some(download) => {
+                lines.push(format!("It downloads {} and checks its sha256 {}.", download.url, download.sha256));
+            }
+            None if m.build.is_empty() => {}
+            None => {
+                lines.push("Installing it runs, in its folder:".into());
+                lines.extend(m.build.iter().map(|build| format!("  {}", shown(&build.command))));
+            }
+        }
+        let commands = m.commands();
+        if commands.is_empty() {
+            lines.push("Once on, it runs nothing.".into());
+        } else {
+            lines.push("Once on, it runs:".into());
+            lines.extend(commands.iter().map(|(what, command)| format!("  {what}: {}", shown(command))));
+        }
+        lines.push(
+            "It is installed turned off. Once on, it runs as you and can do anything you can, in every terminal: \
+             read its code or trust its author."
+                .into(),
+        );
+        lines
+    }
+}
+
+fn shown(command: &[String]) -> String {
+    command
+        .iter()
+        .map(|arg| {
+            if arg.is_empty() || arg.chars().any(|c| c.is_whitespace() || "'\"\\$`".contains(c)) {
+                format!("'{}'", arg.replace('\'', "'\\''"))
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String> {
+    let staging = Staging(stage(places).map_err(|e| format!("cannot make a folder to fetch into: {e}"))?);
+    let checkout = staging.0.join(CHECKOUT);
+    git(
+        origin,
+        None,
+        [
+            OsStr::new("clone"),
+            "--quiet".as_ref(),
+            "--no-checkout".as_ref(),
+            "--".as_ref(),
+            origin.url.as_ref(),
+            checkout.as_os_str(),
+        ],
+    )?;
+    let candidates: Vec<String> = match &origin.reference {
+        Some(r) => vec![format!("refs/remotes/origin/{r}"), format!("refs/tags/{r}"), r.clone()],
+        None => vec!["HEAD".into()],
+    };
+    let commit = candidates
+        .iter()
+        .find_map(|candidate| {
+            let target = format!("{candidate}^{{commit}}");
+            let args = ["rev-parse", "--verify", "--quiet", "--end-of-options", target.as_str()];
+            git(origin, Some(&checkout), args).ok()
+        })
+        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+        .ok_or_else(|| match &origin.reference {
+            Some(r) => format!("{} has no branch, tag or commit `{r}`", origin.repo),
+            None => format!("{} has no commits", origin.repo),
+        })?;
+    git(origin, Some(&checkout), ["checkout", "--quiet", "--detach", commit.as_str()])?;
+    fs::remove_dir_all(checkout.join(".git")).map_err(|e| format!("cannot drop the history: {e}"))?;
+    let manifest = Manifest::read(&checkout)?;
+    conflict(&Registry::load(&places.registry), &manifest.id, origin)?;
+    Ok(Fetched { origin: origin.clone(), commit, manifest, staging })
+}
+
+fn stage(places: &Places) -> std::io::Result<PathBuf> {
+    let root = places.installs.join(STAGING);
+    private_dir(&places.installs)?;
+    private_dir(&root)?;
+    for entry in fs::read_dir(&root)?.flatten() {
+        let name = entry.file_name();
+        let pid = name.to_string_lossy().split('-').next().and_then(|pid| pid.parse::<i32>().ok());
+        if pid.is_some_and(|pid| !process::alive(pid)) {
+            let _ = fs::remove_dir_all(entry.path());
+        }
+    }
+    let path = root.join(format!("{}-{}", std::process::id(), STAGED.fetch_add(1, Ordering::Relaxed)));
+    let _ = fs::remove_dir_all(&path);
+    private_dir(&path)?;
+    Ok(path)
+}
+
+fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(
+    origin: &Origin,
+    dir: Option<&Path>,
+    args: I,
+) -> Result<Vec<u8>, String> {
+    let protocol = origin.protocol();
+    let mut command = Command::new("git");
+    if let Some(dir) = dir {
+        command.arg("-C").arg(dir);
+    }
+    command
+        .args(["-c", "core.hooksPath=/dev/null", "-c", "transfer.fsckObjects=true", "-c", "protocol.allow=never"])
+        .arg("-c")
+        .arg(format!("protocol.{protocol}.allow=always"))
+        .args(["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=30", "-c", "core.symlinks=true"])
+        .args(args)
+        .stdin(Stdio::null())
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "")
+        .env("SSH_ASKPASS_REQUIRE", "never")
+        .env("GIT_ALLOW_PROTOCOL", protocol);
+    for key in GIT_ENV {
+        command.env_remove(key);
+    }
+    let out = command.output().map_err(|e| format!("cannot run git: {e}"))?;
+    worktree::check(out).map_err(|e| format!("git: {e}"))
+}
+
+fn conflict(registry: &Registry, id: &str, origin: &Origin) -> Result<(), String> {
+    match registry.entries.iter().find(|entry| entry.id == id).map(|entry| &entry.source) {
+        Some(Source::Git { url, .. }) if *url == origin.url => Ok(()),
+        Some(source @ Source::Link { .. }) => Err(format!(
+            "a plugin called `{id}` is already {}; `cornercase plugin unlink {id}` first",
+            source.describe()
+        )),
+        Some(source) => Err(format!(
+            "a plugin called `{id}` is already {}; `cornercase plugin remove {id}` first",
+            source.describe()
+        )),
+        None => Ok(()),
+    }
+}
+
+pub(crate) fn check_update(places: &Places, id: &str) -> Result<Update, String> {
+    let registry = Registry::load(&places.registry);
+    let entry = registry.entry(id)?;
+    let Source::Git { repo, url, reference, commit, .. } = &entry.source else {
+        return Err(format!(
+            "`{id}` is {}; a linked plugin is read from its folder, not updated",
+            entry.source.describe()
+        ));
+    };
+    let origin = Origin { repo: repo.clone(), url: url.clone(), reference: reference.clone() };
+    let fetched = fetch(&origin, places)?;
+    if fetched.manifest.id != id {
+        return Err(format!("{repo} now holds `{}`, not `{id}`; nothing was changed", fetched.manifest.id));
+    }
+    if fetched.commit == *commit {
+        return Ok(Update::UpToDate(commit.clone()));
+    }
+    Ok(Update::Changed(Box::new(fetched)))
+}
+
+#[expect(clippy::needless_pass_by_value, reason = "installing uses up the fetched copy; its folder goes with it")]
+pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, String> {
+    let checkout = fetched.checkout();
+    let id = fetched.manifest.id.clone();
+    if let Some(download) = fetched.manifest.download_here() {
+        let bytes = http::download(&SERVICE, &download.url).map_err(|e| e.to_string())?;
+        archive::verify(&bytes, &download.sha256)?;
+        let count = archive::unpack(&bytes, &checkout)?;
+        places.note(&id, "download unpacked", &[("files", &count)]);
+    } else {
+        build(&fetched, places)?;
+    }
+    if Manifest::read(&checkout)? != fetched.manifest {
+        return Err(format!("installing changed {}; nothing was installed", manifest::FILE));
+    }
+    Manifest::load(&checkout)?;
+    let folder = places.installs.join(&id);
+    let dest = folder.join(short(&fetched.commit));
+    private_dir(&folder).map_err(|e| format!("cannot make {}: {e}", folder.display()))?;
+    let mut registry = Registry::open(&places.registry)?;
+    conflict(&registry, &id, &fetched.origin)?;
+    let previous = registry.entries.iter().find(|entry| entry.id == id).cloned();
+    if previous.as_ref().is_some_and(|entry| entry.source.root() == dest) {
+        return Err(format!("{} is already installed at {}", id, short(&fetched.commit)));
+    }
+    let _ = fs::remove_dir_all(&dest);
+    fs::rename(&checkout, &dest).map_err(|e| format!("cannot move it into {}: {e}", dest.display()))?;
+    let source = Source::Git {
+        repo: fetched.origin.repo.clone(),
+        url: fetched.origin.url.clone(),
+        reference: fetched.origin.reference.clone(),
+        commit: fetched.commit.clone(),
+        path: dest.clone(),
+    };
+    let enabled = previous.as_ref().is_some_and(|entry| entry.enabled);
+    let entry = Entry { id: id.clone(), source, enabled };
+    match registry.entries.iter_mut().find(|e| e.id == id) {
+        Some(found) => *found = entry,
+        None => registry.entries.push(entry),
+    }
+    registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()))?;
+    let kept = previous.as_ref().map(|entry| entry.source.root().to_path_buf());
+    if let Ok(folders) = fs::read_dir(&folder) {
+        for old in folders.flatten().map(|e| e.path()) {
+            if old != dest && Some(&old) != kept.as_ref() {
+                let _ = fs::remove_dir_all(old);
+            }
+        }
+    }
+    let previous = previous.and_then(|entry| match entry.source {
+        Source::Git { commit, .. } => Some(commit),
+        Source::Link { .. } => None,
+    });
+    places.note(&id, "installed", &[("commit", &fetched.commit)]);
+    Ok(Installed { manifest: fetched.manifest.clone(), enabled, previous })
+}
+
+fn build(fetched: &Fetched, places: &Places) -> Result<(), String> {
+    let manifest = &fetched.manifest;
+    let entry = Entry { id: manifest.id.clone(), source: Source::Link { path: fetched.checkout() }, enabled: false };
+    let plugin = Plugin { entry, manifest: Ok(manifest.clone()) };
+    for step in &manifest.build {
+        let shown = shown(&step.command);
+        places.note(&manifest.id, "build step started", &[("command", &shown)]);
+        let child = places
+            .command(&plugin, &step.command, &[], None)
+            .and_then(|mut c| c.spawn())
+            .map_err(|e| format!("cannot run `{shown}`: {e}"))?;
+        let logs = format!("`cornercase plugin logs {}` says more", manifest.id);
+        match run::finish(child, BUILD_WITHIN).map_err(|e| e.to_string())? {
+            Some(status) if status.success() => {}
+            Some(status) => return Err(format!("`{shown}` failed ({status}); {logs}")),
+            None => return Err(format!("`{shown}` was stopped after {} min; {logs}", BUILD_WITHIN.as_secs() / 60)),
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn remove(places: &Places, id: &str) -> Result<Removed, String> {
+    let mut registry = Registry::open(&places.registry)?;
+    let installed = registry.entry(id)?.source.installed();
+    registry.unlink(id);
+    registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()))?;
+    if !installed {
+        return Ok(Removed::Unlinked);
+    }
+    let folder = places.installs.join(id);
+    match fs::remove_dir_all(&folder) {
+        Ok(()) => Ok(Removed::Deleted),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::Deleted),
+        Err(e) => Err(format!("removed from the list, but cannot delete {}: {e}", folder.display())),
+    }
+}
+
+#[cfg(test)]
+mod tests;
