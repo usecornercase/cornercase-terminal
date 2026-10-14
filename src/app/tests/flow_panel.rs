@@ -15,7 +15,7 @@ const CLIENT: u64 = 7;
 const TALL: Rect = Rect { x: 0, y: 0, width: 120, height: 60 };
 const ROLES: [&str; 5] = [ORCHESTRATOR, "coder", "reviewer", "security", "tester"];
 
-fn team() -> (App, Receiver<AppEvent>, TempDir) {
+pub(super) fn team() -> (App, Receiver<AppEvent>, TempDir) {
     let dir = TempDir::new();
     let (mut app, rx) = app_in(dir.path(), no_config());
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);

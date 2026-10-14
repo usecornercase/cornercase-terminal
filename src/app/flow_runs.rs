@@ -163,8 +163,8 @@ impl App {
 
     pub(super) fn resume_line(&self, role: Option<&Role>, agent: &agents::AgentState) -> Option<String> {
         match role {
-            Some(role) => flows::resume(&self.config, role, agent.conversation.clone()),
-            None => agents::resume_line(&self.config, agent),
+            Some(role) if role.agent == agent.kind => flows::resume(&self.config, role, agent.conversation.clone()),
+            _ => agents::resume_line(&self.config, agent),
         }
     }
 
@@ -186,7 +186,10 @@ impl App {
     }
 
     fn brief_again(&mut self, run: &Run, term: &Term) {
-        let Some(agent) = term.resume.as_ref().filter(|_| term.resuming.is_some() && !term.agent.pending()) else {
+        let briefed = |agent: &&agents::AgentState| agent.kind == run.flow.orchestrator.agent;
+        let Some(agent) =
+            term.resume.as_ref().filter(|_| term.resuming.is_some() && !term.agent.pending()).filter(briefed)
+        else {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent) else { return };

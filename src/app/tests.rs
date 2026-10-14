@@ -466,6 +466,7 @@ mod control_requests;
 mod esc_closes_the_side_panel;
 mod files_panel;
 mod flow_panel;
+mod flow_runs;
 mod flows_dialog;
 mod issue_list;
 mod path_links;
