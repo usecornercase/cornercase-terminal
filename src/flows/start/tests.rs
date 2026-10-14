@@ -81,7 +81,7 @@ mod branches {
     fn the_branch_follows_the_first_words_of_the_prompt() {
         let mut s = start();
         type_text(&mut s, "Add a dark mode to the settings page, then make sure the contrast works");
-        assert_eq!(s.branch, "add-a-dark-mode-to-the");
+        assert_eq!(s.branch, "add-a-dark-mode-to-the-settings-page");
     }
 
     #[test]

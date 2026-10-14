@@ -223,7 +223,7 @@ mod commands {
 
     #[test]
     fn the_branch_is_a_slug_of_the_tasks_first_words() {
-        assert_eq!(branch("Fix the login form, then add a test for the empty password"), "fix-the-login-form-then-add");
+        assert_eq!(branch("Fix the login form, then add a test for the empty password"), "fix-the-login-form-then-add-a-test");
         assert_eq!(branch("¿Qué?"), "que");
         assert_eq!(branch("!!!"), "flow");
     }

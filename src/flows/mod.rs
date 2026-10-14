@@ -16,7 +16,7 @@ pub(crate) mod store;
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const MAX_ROLES: usize = 8;
-const BRANCH_WORDS: usize = 6;
+const BRANCH_WORDS: usize = 8;
 const BRANCH_MAX: usize = 40;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

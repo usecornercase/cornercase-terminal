@@ -241,7 +241,7 @@ pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, flow: Opt
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
     if let Some(flow) = flow {
         let diagram = Diagram::plan(flow, view.muted, view.light);
-        draw_diagram(f.buffer_mut(), r.inner(Margin::new(1, 1)), &diagram, 0, None);
+        draw_diagram(f.buffer_mut(), r.inner(Margin::new(2, 1)), &diagram, 0, None);
     }
 }
 
