@@ -36,7 +36,9 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
     assert!(text.contains("Do not change the public API.\n\nKeep every message"), "{text}");
     assert!(text.contains("`cornercase wait --all --pane 14 --pane 15 --pane 16 --pane 17 --until turn-over"));
     assert!(text.contains("run `cornercase mark --pane 12`"), "{text}");
-    assert!(text.contains("--timeout 500` (several agents"), "{text}");
+    assert!(text.contains("--until turn-over --timeout 300` (several agents"), "{text}");
+    assert_eq!(text.matches("--timeout 300`").count(), 2, "one time limit for every wait: {text}");
+    assert!(text.contains("Give your shell tool a time limit longer than `--timeout` when it takes one"), "{text}");
     assert!(text.contains("Never wait in the background"), "{text}");
     assert!(!text.contains("--pane 12 --until"), "{text}");
 }
