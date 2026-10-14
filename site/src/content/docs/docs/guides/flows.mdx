@@ -95,7 +95,7 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 **How it knows.** From what really happens, not from what the agents say: every `cornercase` command run in a pane carries that pane's id, so the orchestrator's `send`, `keys`, `read --last-message` and `wait` are steps between real panes. A `send` into the next stage is that stage's arrow; a `send` into the stage a loop goes back to is a round of that loop; anything else is outside the plan.
 
-**Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; the arrows that carried a message light up under the mouse. The wheel scrolls a diagram taller than the panel.
+**Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; where an arrow splits into a parallel stage, each branch shows the message its own role got. The arrows that carried a message light up under the mouse, a branch with the way it took. The wheel scrolls a diagram taller than the panel.
 
 The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history.
 

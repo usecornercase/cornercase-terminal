@@ -51,6 +51,7 @@ test('progress follows the plan: next stage, a loop round, a step outside the pl
   send(p, FULL_ISSUE, 'tester', 4000);
   assert.deepEqual(p.outside, { kind: 'outside', from: 0, to: 2 });
   assert.equal(p.message({ kind: 'forward', stage: 0 })?.text, 'to security');
+  assert.equal(p.message({ kind: 'forward', stage: 0 }, 'reviewer')?.text, 'to reviewer');
   assert.equal(p.travelled(4500), 0.5);
   assert.equal(p.travelled(5000), null);
 });
@@ -125,6 +126,27 @@ test('a box goes to its tab, and an arrow shows the last message sent along it',
   app.pointerDown(coder.x + 2, coder.y, 0);
   app.pointerUp();
   assert.equal(app.tab()?.name, 'coder');
+  app.destroy();
+});
+
+test('each branch of an arrow opens the message its own role got', () => {
+  const app = demo();
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, '┏━ security');
+  app.advance(1500);
+  const opened = (nth: number) => {
+    app.render();
+    const arrow = app.textAt('▼', nth);
+    assert.ok(arrow);
+    app.pointerDown(arrow.x, arrow.y, 0);
+    app.pointerUp();
+    app.render();
+    const heading = ['reviewer', 'security'].find((role) => app.textAt(`orchestrator → ${role} · sent`));
+    app.closeOverlay();
+    return heading;
+  };
+  assert.deepEqual([opened(0), opened(1)], ['reviewer', 'security']);
   app.destroy();
 });
 

@@ -52,8 +52,13 @@ impl Progress {
         self.rounds.get(stage).copied().unwrap_or_default()
     }
 
-    pub(crate) fn along(&self, edge: Edge) -> Option<&Message> {
-        self.along.iter().find(|(e, _)| *e == edge).map(|(_, message)| message)
+    pub(crate) fn along(&self, edge: Edge, to: Option<&str>) -> Option<&Message> {
+        let found = self.along.iter().rev().find(|(e, m)| *e == edge && to.is_none_or(|to| m.to == to));
+        found.map(|(_, message)| message)
+    }
+
+    pub(crate) fn sent(&self) -> impl Iterator<Item = (Edge, &str)> {
+        self.along.iter().map(|(edge, message)| (*edge, message.to.as_str()))
     }
 
     pub(crate) fn travelling(&self, now: Instant) -> Option<(&Step, f64)> {
@@ -86,7 +91,7 @@ impl Progress {
             if matches!(edge, Edge::Outside { .. }) {
                 self.outside = Some(edge);
             }
-            self.along.retain(|(e, _)| *e != edge);
+            self.along.retain(|(e, m)| *e != edge || m.to != message.to);
             self.along.push((edge, message.clone()));
             self.last = Some(Step { edge, from, to: message.to.clone(), at: message.at });
         }

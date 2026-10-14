@@ -154,7 +154,7 @@ export type Overlay =
   | { kind: 'restart'; scroll: number }
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
-  | { kind: 'flowMessage'; workspace: number; edge: string; scroll: number }
+  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; scroll: number }
   | SettingsOverlay
   | IssuesOverlay;
 

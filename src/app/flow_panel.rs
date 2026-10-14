@@ -46,14 +46,20 @@ fn kept(text: &str) -> String {
     }
 }
 
-fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
+pub(super) type Sent<'a> = (Edge, Option<&'a str>);
+
+fn heading(message: &Message) -> String {
     let what = match message.kind {
         Kind::Keys => "keys pressed",
         Kind::Read => "read",
         Kind::Wait => "waited for",
         Kind::Send => "sent",
     };
-    let mut out = vec![Line::from(Span::styled(what, Style::default().fg(muted))), Line::default()];
+    format!("{} → {} · {what}", message.from, message.to)
+}
+
+fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
+    let mut out = Vec::new();
     let Some(text) = message.text.as_deref() else {
         out.push(Line::from(Span::styled(NOTHING_SENT, Style::default().fg(muted))));
         return out;
@@ -153,35 +159,35 @@ impl App {
                     self.jump_to_pane(pane);
                 }
             }
-            Some(flow::Hit::Edge(edge)) => {
+            Some(flow::Hit::Edge(edge, to)) => {
                 let Some(workspace) = self.shown_run().map(|run| run.workspace) else { return };
-                self.overlay = Some(Overlay::FlowMessage { workspace, edge, scroll: 0 });
+                self.overlay = Some(Overlay::FlowMessage { workspace, edge, to, scroll: 0 });
             }
             None => {}
         }
     }
 
-    fn flow_message(&self, workspace: u64, edge: Edge) -> Option<&Message> {
-        self.run_of(workspace)?.progress.along(edge)
+    fn flow_message(&self, workspace: u64, edge: Edge, to: Option<&str>) -> Option<&Message> {
+        self.run_of(workspace)?.progress.along(edge, to)
     }
 
-    fn flow_message_lines(&self, workspace: u64, edge: Edge, area: Rect) -> Option<Vec<Line<'static>>> {
+    fn flow_message_lines(&self, workspace: u64, sent: Sent<'_>, area: Rect) -> Option<Vec<Line<'static>>> {
         let width = usize::from(ui::update_notes(area).width.max(1));
-        self.flow_message(workspace, edge).map(|message| lines(message, width, ui::muted(&self.theme)))
+        self.flow_message(workspace, sent.0, sent.1).map(|message| lines(message, width, ui::muted(&self.theme)))
     }
 
     pub(super) fn flow_message_view(
         &self,
         workspace: u64,
-        edge: Edge,
+        sent: Sent<'_>,
         scroll: usize,
         area: Rect,
     ) -> Option<ui::Overlay> {
-        let message = self.flow_message(workspace, edge)?;
+        let message = self.flow_message(workspace, sent.0, sent.1)?;
         Some(ui::Overlay::Update(ui::Update {
             title: TITLE,
-            message: format!("{} → {}", message.from, message.to),
-            notes: self.flow_message_lines(workspace, edge, area)?,
+            message: heading(message),
+            notes: self.flow_message_lines(workspace, sent, area)?,
             scroll,
             note: None,
             submit: COPY,
@@ -191,7 +197,8 @@ impl App {
     }
 
     pub(super) fn flow_message_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        let Some(Overlay::FlowMessage { workspace, edge, .. }) = self.overlay else { return };
+        let Some(Overlay::FlowMessage { workspace, edge, to, .. }) = &self.overlay else { return };
+        let (workspace, edge, to) = (*workspace, *edge, to.clone());
         if let Some(delta) = wheel(ev.kind) {
             self.scroll_flow_message(delta, area);
             return;
@@ -201,21 +208,23 @@ impl App {
         }
         let [submit, cancel] = ui::update_buttons(area, COPY, DONE);
         if submit.contains(pos) {
-            self.overlay = self.submit_flow_message(workspace, edge);
+            self.overlay = self.submit_flow_message(workspace, edge, to.as_deref());
         } else if cancel.contains(pos) {
             self.overlay = None;
         }
     }
 
     pub(super) fn scroll_flow_message(&mut self, delta: isize, area: Rect) {
-        let Some(Overlay::FlowMessage { workspace, edge, scroll }) = self.overlay else { return };
-        let count = self.flow_message_lines(workspace, edge, area).map_or(0, |lines| lines.len());
+        let Some(Overlay::FlowMessage { workspace, edge, to, scroll }) = &self.overlay else { return };
+        let count = self.flow_message_lines(*workspace, (*edge, to.as_deref()), area).map_or(0, |lines| lines.len());
         let scroll = ui::update_scroll(area, count, scroll.saturating_add_signed(delta));
-        self.overlay = Some(Overlay::FlowMessage { workspace, edge, scroll });
+        if let Some(Overlay::FlowMessage { scroll: kept, .. }) = &mut self.overlay {
+            *kept = scroll;
+        }
     }
 
-    pub(super) fn submit_flow_message(&mut self, workspace: u64, edge: Edge) -> Option<Overlay> {
-        let text = self.flow_message(workspace, edge).and_then(|message| message.text.clone());
+    pub(super) fn submit_flow_message(&mut self, workspace: u64, edge: Edge, to: Option<&str>) -> Option<Overlay> {
+        let text = self.flow_message(workspace, edge, to).and_then(|message| message.text.clone());
         if let Some(text) = text {
             self.copy(&text);
         }
@@ -223,8 +232,8 @@ impl App {
     }
 
     pub(super) fn close_gone_flow_message(&mut self) {
-        if let Some(Overlay::FlowMessage { workspace, edge, .. }) = self.overlay
-            && self.flow_message(workspace, edge).is_none()
+        if let Some(Overlay::FlowMessage { workspace, edge, to, .. }) = &self.overlay
+            && self.flow_message(*workspace, *edge, to.as_deref()).is_none()
         {
             self.overlay = None;
         }

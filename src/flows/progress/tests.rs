@@ -105,9 +105,22 @@ mod arrows {
     fn the_last_message_along_each_arrow_is_kept() {
         let s = Script::new().send("coder").send("reviewer").send("security").send("tester");
         let p = s.progress();
-        assert_eq!(p.along(Edge::Forward(0)).and_then(|m| m.text.as_deref()), Some("orchestrator to security"));
-        assert_eq!(p.along(Edge::Forward(1)).and_then(|m| m.text.as_deref()), Some("orchestrator to tester"));
-        assert_eq!(p.along(Edge::Loop(1)), None);
+        let text = |edge, to| p.along(edge, to).and_then(|m| m.text.as_deref());
+        assert_eq!(text(Edge::Forward(0), None), Some("orchestrator to security"));
+        assert_eq!(text(Edge::Forward(1), None), Some("orchestrator to tester"));
+        assert_eq!(p.along(Edge::Loop(1), None), None);
+    }
+
+    #[test]
+    fn each_role_keeps_its_own_message_along_an_arrow() {
+        let s = Script::new().send("coder").send("reviewer").send("security").send("reviewer");
+        let p = s.progress();
+        let text = |to| p.along(Edge::Forward(0), to).and_then(|m| m.text.as_deref());
+        assert_eq!(text(Some("security")), Some("orchestrator to security"));
+        assert_eq!(text(Some("reviewer")), Some("orchestrator to reviewer"));
+        assert_eq!(p.along(Edge::Forward(0), Some("reviewer")).map(|m| m.at), Some(s.messages[3].at));
+        assert_eq!(text(None), Some("orchestrator to reviewer"));
+        assert_eq!(p.sent().count(), 2);
     }
 
     #[test]
