@@ -59,6 +59,8 @@ pub(crate) struct Role {
     pub(crate) agent: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) effort: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) args: Vec<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -209,11 +211,26 @@ impl Flow {
     }
 }
 
+impl Role {
+    pub(crate) fn summary(&self) -> String {
+        let agent = if self.agent.trim().is_empty() { "no agent" } else { self.agent.trim() };
+        std::iter::once(agent)
+            .chain(chosen(self.model.as_ref()))
+            .chain(chosen(self.effort.as_ref()))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    }
+}
+
 fn role_problems(role: &Role, name: &str) -> Vec<String> {
     let mut out = Vec::new();
     if Known::of(&role.agent).is_none() {
         let known = Known::ALL.map(Known::name).join(", ");
         out.push(format!("`{name}` runs `{}`, but a flow takes one of {known}", role.agent));
+    } else if let Some(refusal) =
+        chosen(role.effort.as_ref()).and_then(|level| agents::effort_refusal(&role.agent, level))
+    {
+        out.push(format!("`{name}`: {refusal}"));
     }
     for key in role.env.keys() {
         let valid = key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
@@ -231,15 +248,22 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     let modes = agents::modes(config, name);
     let mut args: Vec<String> = kind.unattended().iter().map(|a| (*a).to_string()).collect();
     args.extend(agents::extra_args(name, &agents::args(config, name), &modes));
-    let chosen = role.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
-    if chosen.is_some() || agents::names_model(name, &role.args) {
+    let (picked, effort) = (chosen(role.model.as_ref()), chosen(role.effort.as_ref()));
+    let mut own = role.args.clone();
+    if picked.is_some() || agents::names_model(name, &own) {
         args = agents::without_model(name, &args);
     }
-    let mut args = agents::with_model(name, args, chosen);
-    match chosen {
-        Some(_) => args.extend(agents::without_model(name, &role.args)),
-        None => args.extend(role.args.iter().cloned()),
+    if picked.is_some() {
+        own = agents::without_model(name, &own);
     }
+    if effort.is_some() || agents::names_effort(name, &own) {
+        args = agents::without_effort(name, &args);
+    }
+    if effort.is_some() {
+        own = agents::without_effort(name, &own);
+    }
+    let mut args = agents::with_effort(name, agents::with_model(name, args, picked), effort);
+    args.extend(own);
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
         words.push("env".to_string());
@@ -247,6 +271,10 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     }
     words.push(agents::command(config, name));
     Some((kind, words, args))
+}
+
+fn chosen(value: Option<&String>) -> Option<&str> {
+    value.map(|value| value.trim()).filter(|value| !value.is_empty())
 }
 
 fn quoted(words: impl IntoIterator<Item = String>) -> String {

@@ -67,8 +67,9 @@ pub(super) const SPLIT_HELP: &str = "Examples:
   cornercase split --pane 7 --down -- tail -f server.log";
 pub(super) const START_HELP: &str =
     "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
-chosen there by another of the agent's modes, and --model adds the agent's own model flag (an older
-server refuses both rather than start the agent without them). If it asks whether
+chosen there by another of the agent's modes, --model adds the agent's own model flag and --effort its
+effort (Claude Code, Codex and Grok Build take one; an older server refuses all three rather than
+start the agent without them). If it asks whether
 you trust the folder, the question waits for your answer unless settings → agents accept it for
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With

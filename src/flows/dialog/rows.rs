@@ -1,4 +1,4 @@
-use super::edit::{DEFAULT_MODEL, Editing, Row, Tab};
+use super::edit::{Choice, DEFAULT_MODEL, Editing, Row, Tab};
 use super::{Agents, RowText};
 use crate::agents::{self, Known};
 use crate::text::one_line;
@@ -53,7 +53,7 @@ impl Editing {
             Row::AddStage => text("+ stage", String::new(), ""),
             Row::End => text("◆ at the end", flow.end.label().into(), ""),
             Row::Notes => text("notes", one_line(&flow.notes), TEXT_MARK),
-            Row::RoleName | Row::Agent | Row::Model | Row::Args | Row::Env | Row::Edits | Row::Prompt => {
+            Row::RoleName | Row::Agent | Row::Model | Row::Effort | Row::Args | Row::Env | Row::Edits | Row::Prompt => {
                 self.role_row(row, agents)
             }
         }
@@ -78,6 +78,13 @@ impl Editing {
                 RowText { red: Known::of(&role.agent).is_none(), ..text("agent", role.agent.clone(), note) }
             }
             Row::Model => text("model", role.model.clone().unwrap_or_else(|| DEFAULT_MODEL.into()), String::new()),
+            Row::Effort => match self.effort_levels() {
+                Some(_) => {
+                    let value = role.effort.clone().unwrap_or_else(|| DEFAULT_MODEL.into());
+                    text("effort", value, "how hard it thinks".into())
+                }
+                None => text("effort", "none".into(), format!("{} has no effort switch", role.agent)),
+            },
             Row::Args => text("args", or_none(agents::join_args(&role.args)), "added to the agent's command".into()),
             Row::Env => {
                 let env = role.env.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ");
@@ -120,8 +127,23 @@ impl Editing {
             Row::End => "What happens at the end?".into(),
             Row::Agent => format!("Which agent is the {role}?"),
             Row::Model => format!("Which model does the {role} use?"),
+            Row::Effort => format!("How hard does the {role} think?"),
             _ => String::new(),
         }
+    }
+}
+
+impl Editing {
+    pub(crate) fn effort_levels(&self) -> Option<&'static [&'static str]> {
+        agents::effort_levels(&self.role()?.agent)
+    }
+
+    pub(crate) fn effort_choices(&self) -> Vec<Choice> {
+        let default =
+            Choice { value: DEFAULT_MODEL.into(), label: DEFAULT_MODEL.into(), note: "the agent's own".into() };
+        let levels = self.effort_levels().unwrap_or_default().iter();
+        let levels = levels.map(|level| Choice { value: (*level).into(), label: (*level).into(), note: String::new() });
+        std::iter::once(default).chain(levels).collect()
     }
 }
 

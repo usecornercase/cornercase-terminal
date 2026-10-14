@@ -156,6 +156,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         role: role.name.clone(),
         agent: role.agent.clone(),
         model: role.model.clone(),
+        effort: role.effort.clone(),
         edits: role.edits,
     };
     FlowInfo {

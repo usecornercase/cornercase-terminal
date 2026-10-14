@@ -46,6 +46,16 @@ impl Known {
         }
     }
 
+    pub(crate) fn effort(self) -> Option<super::Effort> {
+        match self {
+            Self::Claude => claude::EFFORT,
+            Self::Codex => codex::EFFORT,
+            Self::Gemini => gemini::EFFORT,
+            Self::Opencode => opencode::EFFORT,
+            Self::Grok => grok::EFFORT,
+        }
+    }
+
     pub(crate) fn model_alias(self) -> Option<&'static str> {
         match self {
             Self::Claude => claude::MODEL_ALIAS,

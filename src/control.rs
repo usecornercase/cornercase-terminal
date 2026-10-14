@@ -121,7 +121,8 @@ impl Command {
             }
             Self::Start(start) | Self::StartWith(start) => {
                 fields.maybe("agent", start.agent.as_ref()).maybe("model", start.model.as_ref());
-                fields.maybe("mode", start.mode.as_ref()).maybe("worktree", start.worktree.as_ref());
+                fields.maybe("mode", start.mode.as_ref()).maybe("effort", start.effort.as_ref());
+                fields.maybe("worktree", start.worktree.as_ref());
                 fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
@@ -298,6 +299,7 @@ pub(crate) struct Start {
     pub(crate) agent: Option<String>,
     pub(crate) model: Option<String>,
     pub(crate) mode: Option<String>,
+    pub(crate) effort: Option<String>,
     pub(crate) project: Option<u64>,
     pub(crate) worktree: Option<String>,
     pub(crate) workspace: Option<u64>,
@@ -463,6 +465,7 @@ pub(crate) struct RoleInfo {
     pub(crate) role: String,
     pub(crate) agent: String,
     pub(crate) model: Option<String>,
+    pub(crate) effort: Option<String>,
     pub(crate) edits: bool,
 }
 

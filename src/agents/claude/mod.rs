@@ -14,6 +14,11 @@ pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const TITLE: &str = "Claude Code";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;
+pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
+    levels: &["low", "medium", "high", "xhigh", "max"],
+    flags: &["--effort"],
+    config: None,
+});
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-skip-permissions"];
 pub(in crate::agents) const ONE_PER_FOLDER: bool = false;
 pub(in crate::agents) const MODELS: &[&str] = &["opus", "sonnet", "haiku"];

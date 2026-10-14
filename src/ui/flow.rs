@@ -101,17 +101,9 @@ pub(crate) fn role_colour(index: usize) -> Color {
     kept.cycle().nth(index).unwrap_or(Color::Indexed(GROUP_STYLES[0].1))
 }
 
-fn describe(role: &Role) -> String {
-    let agent = if role.agent.trim().is_empty() { "no agent" } else { role.agent.trim() };
-    match role.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
-        Some(model) => format!("{agent} · {model}"),
-        None => agent.to_string(),
-    }
-}
-
 impl Diagram {
     pub(crate) fn plan(flow: &Flow, muted: Color, light: bool) -> Self {
-        let node = |role: &Role, colour| Node { role: role.name.clone(), text: describe(role), colour, state: None };
+        let node = |role: &Role, colour| Node { role: role.name.clone(), text: role.summary(), colour, state: None };
         let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
         let stages = flow
             .stages
