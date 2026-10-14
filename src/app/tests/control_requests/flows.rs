@@ -77,9 +77,13 @@ impl Team {
     }
 
     fn run(&mut self, name: &str, branch: Option<&str>) -> Response {
+        self.run_task(name, "Fix the login form", branch)
+    }
+
+    fn run_task(&mut self, name: &str, task: &str, branch: Option<&str>) -> Response {
         let run = wire::FlowRun {
             name: name.into(),
-            prompt: "Fix the login form".into(),
+            prompt: task.into(),
             worktree: branch.map(str::to_string),
             ..wire::FlowRun::default()
         };
@@ -294,6 +298,59 @@ fn a_projects_flow_never_shadows_yours_and_says_so() {
         |origin: &str| listed.flows.iter().find(|f| f.name == "Pair" && f.origin == origin).map(|f| f.problems.clone());
     assert_eq!(problems("user"), Some(Vec::new()));
     assert_eq!(problems("project"), Some(vec!["yours is also named `Pair` and runs instead".to_string()]));
+}
+
+fn branch_of(response: Response) -> String {
+    match response {
+        Response::Ok(value) => serde_json::from_value::<RunInfo>(value).expect("a run").branch,
+        Response::Error(message) => panic!("the flow did not start: {message}"),
+    }
+}
+
+fn suffixed(branch: &str, base: &str) -> bool {
+    branch
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .is_some_and(|hex| hex.len() == 4 && hex.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+#[rstest::rstest]
+#[case::a_task_without_latin_letters("修复登录问题", "flow")]
+#[case::a_task_that_names_main("main", "main")]
+fn a_default_branch_that_says_nothing_or_is_reserved_gets_a_suffix(#[case] task: &str, #[case] base: &str) {
+    let mut team = Team::new();
+
+    let branch = branch_of(team.run_task("Pair", task, None));
+
+    assert!(suffixed(&branch, base), "{branch}");
+}
+
+#[test]
+fn two_runs_of_one_task_and_an_old_branch_never_share_a_default_branch() {
+    let mut team = Team::new();
+    crate::test_util::git(team.repo.path(), &["branch", "fix-the-login-form-again"]);
+
+    let first = branch_of(team.run_task("Pair", "Fix the login form", None));
+    let second = branch_of(team.run_task("Pair", "Fix the login form", None));
+    let old = branch_of(team.run_task("Pair", "Fix the login form again", None));
+
+    assert_eq!(first, "fix-the-login-form");
+    assert!(suffixed(&second, "fix-the-login-form"), "{second}");
+    assert!(suffixed(&old, "fix-the-login-form-again"), "{old}");
+}
+
+#[test]
+fn a_chosen_branch_that_is_the_projects_own_or_a_default_one_is_refused() {
+    let mut team = Team::new();
+    let own = git::checked_out(team.repo.path()).expect("the checkout's branch");
+    let other = if own == "main" { "master" } else { "main" };
+
+    let mine = error(team.run("Pair", Some(&own)));
+    let default = error(team.run("Pair", Some(other)));
+
+    assert!(mine.contains("is checked out in the project's own folder"), "{mine}");
+    assert!(default.contains("is a default branch"), "{default}");
+    assert!(team.app.runs.is_empty());
 }
 
 #[test]

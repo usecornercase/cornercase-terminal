@@ -1,3 +1,4 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 
 use ratatui::layout::Rect;
@@ -9,6 +10,7 @@ use crate::control::{self, BrokenFlow, Done, FlowInfo, Flows, RoleInfo};
 use crate::error;
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::flows::{self, Flow, Role};
+use crate::git;
 use crate::project::Hierarchy;
 
 impl App {
@@ -48,7 +50,7 @@ impl App {
             None => self.here(caller).project.ok_or(NO_PROJECT)?,
         };
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
-        let branch = run.worktree.filter(|b| !b.trim().is_empty()).unwrap_or_else(|| flows::branch(&run.prompt));
+        let branch = run.worktree.unwrap_or_default();
         let starting = Starting { flow, task: run.prompt, branch, focus: run.focus, note };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
@@ -63,6 +65,7 @@ impl App {
         let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
         starting.branch = starting.branch.trim().to_string();
         self.run_refusal(p, &starting)?;
+        starting.branch = self.flow_branch(p, project, &starting)?;
         let branch = starting.branch.clone();
         let busy = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, starting) if *other == project && starting.branch == branch);
         if self.requests.pending.iter().any(busy) {
@@ -70,6 +73,9 @@ impl App {
         }
         if let Some(id) = self.workspace_on(p, &branch) {
             let (p, w) = self.usable_workspace(id)?;
+            if !self.projects[p].workspaces[w].worktree {
+                return Err(own_folder(&branch));
+            }
             return self.open_run(p, w, starting, area).map(|info| Some(json(&info)));
         }
         let key = self.requests.key();
@@ -77,6 +83,37 @@ impl App {
         let stage = Stage::Run(project, Box::new(starting));
         self.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
+    }
+
+    fn flow_branch(&self, p: usize, project: u64, starting: &Starting) -> Result<String, String> {
+        let path = &self.projects[p].path;
+        let own = git::checked_out(path);
+        let reserved = |b: &str| {
+            ["main", "master"].contains(&b) || git::origin_head(path).as_deref() == Some(b) || own.as_deref() == Some(b)
+        };
+        if !starting.branch.is_empty() {
+            return match starting.branch.as_str() {
+                b if own.as_deref() == Some(b) => Err(own_folder(b)),
+                b if reserved(b) => Err(format!(
+                    "branch {b} is a default branch, and a flow works on a branch of its own: pick another branch"
+                )),
+                b => Ok(b.to_string()),
+            };
+        }
+        let starting_on = |b: &str| {
+            let on = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, s) if *other == project && s.branch == b);
+            self.requests.pending.iter().any(on)
+        };
+        let taken =
+            |b: &str| reserved(b) || self.workspace_on(p, b).is_some() || git::has_branch(path, b) || starting_on(b);
+        let branch = flows::branch(&starting.task);
+        if branch != flows::FALLBACK_BRANCH && !taken(&branch) {
+            return Ok(branch);
+        }
+        (0..u16::MAX)
+            .map(|n| format!("{branch}-{:04x}", suffix(&starting.task, n)))
+            .find(|b| !taken(b))
+            .ok_or_else(|| format!("every branch named like {branch} is taken: pick a branch for the flow"))
     }
 
     pub(super) fn flow_worktree_ready(
@@ -165,4 +202,17 @@ fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String>
         )
     });
     Ok((first.flow.clone(), note))
+}
+
+fn own_folder(branch: &str) -> String {
+    format!(
+        "branch {branch} is checked out in the project's own folder, and a flow works in a worktree of its own: pick \
+         another branch"
+    )
+}
+
+fn suffix(task: &str, n: u16) -> u16 {
+    let mut hasher = DefaultHasher::new();
+    (task, n).hash(&mut hasher);
+    u16::try_from(hasher.finish() & 0xffff).unwrap_or_default()
 }

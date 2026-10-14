@@ -43,6 +43,7 @@ impl App {
         focus: bool,
         area: Rect,
     ) -> Result<(), String> {
+        let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
         self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area).map(drop)
     }
 
@@ -72,9 +73,6 @@ impl App {
         }
         if starting.task.trim().is_empty() {
             return Err("the flow needs a task: say what the team should do".into());
-        }
-        if starting.branch.trim().is_empty() {
-            return Err("the flow needs a branch for its worktree".into());
         }
         let project = &self.projects[p];
         if project.closing {
