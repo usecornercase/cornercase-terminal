@@ -256,6 +256,7 @@ mod agents;
 mod arranging;
 mod creating;
 mod events;
+mod flows;
 mod gemini;
 mod grok;
 mod talking;

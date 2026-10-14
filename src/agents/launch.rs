@@ -19,6 +19,7 @@ pub(crate) struct Spec {
     pub(crate) command: String,
     pub(crate) prompt: Option<String>,
     pub(crate) submit: bool,
+    pub(crate) trusted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,7 @@ enum Stage {
 pub(crate) struct Launch {
     pub(crate) term: u64,
     pub(crate) key: Option<u64>,
+    pub(crate) after: Vec<u64>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -72,6 +74,7 @@ impl Launch {
         Self {
             term,
             key: None,
+            after: Vec::new(),
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -86,7 +89,7 @@ impl Launch {
     }
 
     pub(crate) fn command(term: u64, command: String, now: Instant) -> Self {
-        Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false }, now) }
+        Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false, trusted: false }, now) }
     }
 
     pub(crate) fn enter(term: u64, now: Instant) -> Self {
@@ -173,7 +176,7 @@ impl Launch {
                     return Step::Wait;
                 }
                 if (seen.trust_prompt)(&screen) {
-                    if seen.trust == Trust::LeftToYou {
+                    if seen.trust == Trust::LeftToYou && !self.spec.trusted {
                         self.next(Stage::Agent, now);
                         self.asked = true;
                         return Step::Wait;

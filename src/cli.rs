@@ -1,5 +1,5 @@
 use std::io::{self, Read as _, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use clap::CommandFactory;
@@ -17,6 +17,7 @@ use crate::remote::{self, Remote};
 use crate::{log, server, update::restart};
 
 mod args;
+mod flow;
 mod help;
 mod read;
 mod status;
@@ -204,6 +205,7 @@ fn run_control(command: Control) -> Result<bool> {
         }
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
+        Control::Flow(flow) => flow::run(flow.action),
     }?;
     Ok(true)
 }
@@ -246,8 +248,8 @@ fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Re
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
-fn run_start(start: StartArgs) -> Result<()> {
-    let prompt = match (start.prompt, start.prompt_file) {
+fn read_prompt(prompt: Option<String>, file: Option<PathBuf>) -> Result<Option<String>> {
+    Ok(match (prompt, file) {
         (Some(prompt), _) => Some(prompt),
         (None, Some(file)) if file == Path::new("-") => Some(stdin()?),
         (None, Some(file)) => Some(trimmed(
@@ -255,7 +257,11 @@ fn run_start(start: StartArgs) -> Result<()> {
                 .map_err(|e| Error::Control(format!("cannot read the prompt from `{}`: {e}", file.display())))?,
         )),
         (None, None) => None,
-    };
+    })
+}
+
+fn run_start(start: StartArgs) -> Result<()> {
+    let prompt = read_prompt(start.prompt, start.prompt_file)?;
     let name = if start.model.is_some() || start.mode.is_some() { "start-with" } else { "start" };
     let request = control::Start {
         agent: start.agent,

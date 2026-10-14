@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE,
-    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP,
-    NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP,
-    SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
-    WHEN_IDLE,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_HELP, FLOW_RUN_HELP,
+    FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP,
+    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT,
+    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP,
+    WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -115,6 +115,8 @@ pub(crate) enum Control {
     Todo(TodoArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
+    #[command(about = "List the flows, or start one: a team of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
+    Flow(FlowArgs),
 }
 
 #[derive(Debug, Args)]
@@ -465,6 +467,62 @@ pub(crate) enum TodoAction {
         #[arg(value_name = "ID", help = "The item")]
         id: u64,
     },
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowArgs {
+    #[command(subcommand)]
+    pub(crate) action: FlowAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum FlowAction {
+    #[command(about = "List the flows, built in, yours and the project's, with their agents and their problems")]
+    List(FlowListArgs),
+    #[command(
+        about = "Start a flow in a worktree, and print its workspace's id and each role's pane id",
+        after_help = FLOW_RUN_HELP
+    )]
+    Run(FlowRunArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowListArgs {
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "The project whose flows to list too [default: the one this runs in, else the shown one]"
+    )]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowRunArgs {
+    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
+    pub(crate) name: String,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        conflicts_with = "prompt_file",
+        required_unless_present = "prompt_file",
+        help = "The task: what the team should do"
+    )]
+    pub(crate) prompt: Option<String>,
+    #[arg(long, value_name = "FILE", help = "Read the task from a file, or from standard input with -")]
+    pub(crate) prompt_file: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        value_parser = branch,
+        help = "The worktree's branch, made when missing [default: from the task's first words]"
+    )]
+    pub(crate) worktree: Option<String>,
+    #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]

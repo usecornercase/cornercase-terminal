@@ -352,6 +352,7 @@ impl App {
         }
         self.synced = Some(now);
         self.sync_worktrees();
+        self.forget_runs();
         self.forget_files();
         self.count_behind(now);
         self.ask_pull_requests(now);
@@ -366,7 +367,7 @@ impl App {
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ProjectState::of(p, group))
+            .map(|(p, group)| ProjectState::of(p, group, &self.runs))
             .collect();
         let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {

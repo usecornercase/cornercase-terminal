@@ -197,6 +197,30 @@ Examples:
   cornercase mark
   cornercase mark --pane 12
   cornercase mark --pane 12 --reviewed";
+pub(super) const FLOW_HELP: &str =
+    "A flow is a team of coding agents and the plan they follow: one tab per role in a new
+worktree, every agent started without permission prompts, and an orchestrator agent that sends the
+work from role to role with these commands. The built-in flows come with cornercase; yours live in
+flows/ next to config.json, and a project's in .cornercase/flows/ in its repository.
+
+Examples:
+  cornercase flow list
+  cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login";
+pub(super) const FLOW_RUN_HELP: &str =
+    "It makes the worktree (or uses the workspace already on that branch, if it runs no flow), opens
+a tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
+answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
+its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
+pass --focus.
+
+It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
+by a tab. A flow with the same name in several places runs the project's, else yours, else the
+built-in one.
+
+Examples:
+  cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json";
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
