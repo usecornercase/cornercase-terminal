@@ -67,6 +67,13 @@ mod problems {
     }
 
     #[test]
+    fn a_role_works_in_one_stage() {
+        let mut flow = sample();
+        flow.stages.push(Stage { roles: vec!["coder".into()], back: None });
+        assert_eq!(flow.problems(), vec!["`coder` is in stage 1 and stage 4; a role works in one stage".to_string()]);
+    }
+
+    #[test]
     fn a_stage_must_name_existing_roles() {
         let mut flow = sample();
         flow.stages.push(Stage { roles: vec!["ghost".into()], back: None });
@@ -223,7 +230,10 @@ mod commands {
 
     #[test]
     fn the_branch_is_a_slug_of_the_tasks_first_words() {
-        assert_eq!(branch("Fix the login form, then add a test for the empty password"), "fix-the-login-form-then-add-a-test");
+        assert_eq!(
+            branch("Fix the login form, then add a test for the empty password"),
+            "fix-the-login-form-then-add-a-test"
+        );
         assert_eq!(branch("¿Qué?"), "que");
         assert_eq!(branch("!!!"), "flow");
     }

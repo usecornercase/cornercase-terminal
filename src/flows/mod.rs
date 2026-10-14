@@ -166,6 +166,8 @@ impl Flow {
                     out.push(format!("stage {number} names `{name}`, which is not a role"));
                 } else if stage.roles[..j].contains(name) {
                     out.push(format!("stage {number} names `{name}` twice"));
+                } else if let Some(k) = self.stages[..i].iter().position(|earlier| earlier.roles.contains(name)) {
+                    out.push(format!("`{name}` is in stage {} and stage {number}; a role works in one stage", k + 1));
                 }
             }
             if let Some(back) = &stage.back {

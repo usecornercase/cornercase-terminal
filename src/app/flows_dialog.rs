@@ -259,8 +259,9 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
             .enumerate()
             .map(|(i, choice)| {
                 let label = match marks.as_ref().and_then(|m| m.get(i)) {
-                    Some(true) => format!("[x] {}", choice.label),
-                    Some(false) => format!("[ ] {}", choice.label),
+                    Some(Some(true)) => format!("[x] {}", choice.label),
+                    Some(Some(false)) => format!("[ ] {}", choice.label),
+                    Some(None) => format!("    {}", choice.label),
                     None => choice.label.clone(),
                 };
                 (label, choice.note.clone(), false)
