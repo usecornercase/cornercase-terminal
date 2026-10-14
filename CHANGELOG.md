@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.94
+
+- Schedule issues or prompts for later from **Queue**, the **schedule** button in Issues, or `cornercase queue add`. Choose a clock time, a date, a delay such as `in 2h`, or the next Claude/Codex five-hour plan reset, and pick the agent, mode and destination: a project root, a workspace tab or a worktree. Clock times use your client's time zone, including remote terminals and browsers.
+- Every due entry starts together, without moving your active pane. Queued starts always accept the agent's folder trust question, so they can run unattended; immediate starts keep your existing trust setting.
+- The queue survives server restarts and keeps started entries so you can see what ran. Edit, remove or start entries now, and clear the started history. Work more than ten minutes late is marked **missed** and waits for you. A closed destination or failed start shows its reason; interrupted starts ask you to check the workspace before retrying.
+
 ## 0.12.93
 
 - GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so GitLab links the merge request from it to the issue and, with its automatic issue closing on, closes the issue when the merge request reaches the default branch. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope; both can be changed later in **Settings → Issues → GitLab**. A token in `GITLAB_TOKEN` takes precedence instead, and is changed outside cornercase, then `cornercase kill-server`.
