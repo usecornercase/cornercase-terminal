@@ -81,7 +81,7 @@ export const chapters = (say: Demo['tour']): Step[][] => [
     { wait: 1200 },
     { click: '#482' },
     { wait: 1600 },
-    { click: 'start   ', dx: 1, orKey: 'Enter' },
+    { click: 'start   start a flow', dx: 1, orKey: 'Enter' },
     { until: trusting, timeout: 12000 },
     { wait: 1400 },
     { key: 'Enter' },

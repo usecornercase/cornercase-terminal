@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting flow-run flows-list flows-edit"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting flow-run flows-list flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -382,7 +382,7 @@ screen_issue_agent_picker() {
 
 screen_issue_started() {
   open_issue_482
-  cc_click 'start   '
+  cc_click 'start   start a flow'
   cc_wait 'aider'
   cc_click 'claude    claude'
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
@@ -744,8 +744,6 @@ flow_482() {
 
 screen_flow_run() {
   flow_482
-  cc_rclick 'issue-482-returns-page…'
-  cc_click 'show flow'
   cc_wait 'findings · 1/3' 60
   cc_wait 'waiting for reviewer…' 30
   cc_wheel 'feat/dark-mode' down 3
@@ -792,4 +790,21 @@ screen_flows_edit() {
   cc_wait 'goes back'
   cc_hover '╭─ Flows'
   cc_shot flows-edit
+}
+
+screen_flow_start() {
+  CC_SESSION=s1
+  cc_config '{}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click '#482'
+  cc_wait 'opened by @ana'
+  cc_click 'start a flow'
+  cc_wait 'Start a flow'
+  cc_wait '◆ open a pull request'
+  cc_hover '╭─ Start a flow'
+  cc_shot flow-start
 }
