@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.91
+
+- Agents that report their state with OSC 7501 now drive the status icons, spinner and notifications directly. Other recognised agents, including custom commands, get status indicators when they emit the protocol. Agents without it keep their existing status detection.
+- A failed agent shows a red `!`, reports `failed` to scripts and sends a failure notification, including on Telegram while away.
+
 ## 0.12.90
 
 - On Telegram, answering a question from its buttons now brings the agent's next question, with its own buttons, when it asks several in a row or shows another permission prompt right away. Before, only the first one came.
