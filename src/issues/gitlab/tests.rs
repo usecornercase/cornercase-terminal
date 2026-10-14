@@ -68,6 +68,23 @@ fn whoami_failures_say_why(#[case] status: u16, #[case] body: &'static str, #[ca
 }
 
 #[test]
+fn a_redirect_is_not_followed_so_the_token_stays_on_the_server() {
+    let elsewhere = FakeHttp::start(vec![("GET /api/v4/user", 200, USER.to_string())]);
+    let server = FakeHttp::start(vec![("GET /api/v4/user", 302, format!("{}/api/v4/user", elsewhere.url()))]);
+
+    let err = api(&server, &TempDir::new()).whoami().err().map(|e| e.to_string());
+
+    assert_eq!(
+        err.as_deref(),
+        Some(
+            "GitLab answered 302 with a redirect, which is not followed so the token stays on this server: set the \
+             GitLab URL to the address it leads to"
+        )
+    );
+    assert_eq!(elsewhere.requests(), Vec::<String>::new());
+}
+
+#[test]
 fn something_that_is_not_gitlab_says_so() {
     let server = FakeHttp::start(vec![("GET /api/v4/user", 200, "{}")]);
     let err = api(&server, &TempDir::new()).whoami().err().map(|e| e.to_string());
@@ -313,6 +330,19 @@ mod remotes {
 #[case::trimmed(" https://gitlab.acme.dev/ ", "https://gitlab.acme.dev")]
 fn an_empty_server_is_gitlab_com(#[case] url: &str, #[case] expected: &str) {
     assert_eq!(server(url), expected);
+}
+
+#[rstest]
+#[case::https("https://gitlab.acme.dev", false)]
+#[case::http("http://gitlab.acme.dev/", true)]
+#[case::http_with_a_port("http://10.0.0.5:8080", true)]
+#[case::localhost("http://localhost:8080", false)]
+#[case::loopback_address("http://127.0.0.1:3000", false)]
+#[case::ipv6_loopback("http://[::1]:3000", false)]
+#[case::another_ipv6_address("http://[fd00::1]:3000", true)]
+#[case::gitlab_com("", false)]
+fn only_http_to_another_machine_is_unencrypted(#[case] url: &str, #[case] expected: bool) {
+    assert_eq!(unencrypted(url), expected);
 }
 
 #[rstest]

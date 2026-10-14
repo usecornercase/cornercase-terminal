@@ -25,6 +25,18 @@ fn get_sends_the_headers_and_the_query() {
 }
 
 #[test]
+fn get_follows_redirects_unless_asked_not_to() {
+    let target = FakeHttp::start(vec![("GET /there", 200, r#"{"a":1}"#)]);
+    let server = FakeHttp::start(vec![("GET /here", 302, format!("{}/there", target.url()))]);
+    let url = format!("{}/here", server.url());
+
+    let followed = get(&SERVICE, &url, &[], &[]).expect("get");
+    let stayed = get_without_redirects(&SERVICE, &url, &[], &[]).expect("get without redirects");
+
+    assert_eq!((followed.status, stayed.status, target.requests().len()), (200, 302, 1));
+}
+
+#[test]
 fn post_sends_json() {
     let server = FakeHttp::start(vec![("POST /graphql", 200, r#"{"data":{}}"#)]);
 

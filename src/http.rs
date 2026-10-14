@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 const TIMEOUT: Duration = Duration::from_secs(20);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const DOWNLOAD_LIMIT: u64 = 256 * 1024 * 1024;
+const REDIRECTS: u32 = 10;
 
 pub(crate) struct Service {
     pub(crate) name: &'static str,
@@ -27,11 +28,39 @@ impl Answer {
 }
 
 fn agent(timeout: Duration) -> Agent {
-    Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(false).build().into()
+    following(timeout, REDIRECTS)
+}
+
+fn following(timeout: Duration, redirects: u32) -> Agent {
+    Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .max_redirects(redirects)
+        .build()
+        .into()
 }
 
 pub(crate) fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
-    let mut request = agent(TIMEOUT).get(url).header("Accept", "application/json");
+    get_with(&agent(TIMEOUT), service, url, query, headers)
+}
+
+pub(crate) fn get_without_redirects(
+    service: &Service,
+    url: &str,
+    query: &[(&str, &str)],
+    headers: &[(&str, &str)],
+) -> Result<Answer> {
+    get_with(&following(TIMEOUT, 0), service, url, query, headers)
+}
+
+fn get_with(
+    agent: &Agent,
+    service: &Service,
+    url: &str,
+    query: &[(&str, &str)],
+    headers: &[(&str, &str)],
+) -> Result<Answer> {
+    let mut request = agent.get(url).header("Accept", "application/json");
     for (key, value) in headers {
         request = request.header(*key, *value);
     }

@@ -37,10 +37,20 @@ pub(crate) fn check_url(input: &str) -> std::result::Result<String, &'static str
     super::check_url(input, "a URL starts with https://, such as https://gitlab.acme.dev")
 }
 
+pub(crate) fn unencrypted(url: &str) -> bool {
+    let Some(rest) = url.trim().strip_prefix("http://") else { return false };
+    let authority = rest.split('/').next().unwrap_or_default();
+    let host = authority.rsplit('@').next().unwrap_or(authority).to_ascii_lowercase();
+    let name = host.split(':').next().unwrap_or_default();
+    !(name == "localhost" || name.starts_with("127.") || host.starts_with("[::1]"))
+}
+
+pub(crate) const UNENCRYPTED: &str = "the address starts with http://, so the token travels unencrypted";
+
 impl Api {
     fn get(&self, path: &str, query: &[(&str, &str)], missing: &str) -> Result<Value> {
         let url = format!("{}/api/v4{path}", self.base.trim_end_matches('/'));
-        let answer = http::get(&SERVICE, &url, query, &[("PRIVATE-TOKEN", &self.token)])?;
+        let answer = http::get_without_redirects(&SERVICE, &url, query, &[("PRIVATE-TOKEN", &self.token)])?;
         into_json(answer, missing, failure)
     }
 
@@ -210,6 +220,13 @@ fn detail(node: &Value, comments: Vec<Comment>) -> Detail {
 }
 
 fn failure(answer: &Answer) -> Error {
+    if (300..400).contains(&answer.status) {
+        return Error::Api(format!(
+            "GitLab answered {} with a redirect, which is not followed so the token stays on this server: set the \
+             GitLab URL to the address it leads to",
+            answer.status
+        ));
+    }
     let message = ["/message", "/error_description", "/error"].iter().find_map(|p| {
         let value = answer.json.pointer(p)?;
         let text = value.as_str().map_or_else(|| value.to_string(), String::from);

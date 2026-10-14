@@ -241,7 +241,7 @@ The tabs of the issue browser, in order. Accepts `all`, `github`, `gitlab`, `sho
 
 #### `gitlab_url`
 
-The address of your GitLab server, such as `"https://gitlab.acme.dev"`, or one under a path such as `"https://acme.dev/gitlab"`; a trailing `/` is dropped. Empty is gitlab.com. The GitLab tab lists the issues of the project whose remote is on this server. Set from the issue browser or the settings modal. The token is never stored here: it goes in `secrets.json` or comes from `GITLAB_TOKEN` (see [Files and environment](../files-and-environment/)).
+The address of your GitLab server, such as `"https://gitlab.acme.dev"`, or one under a path such as `"https://acme.dev/gitlab"`; a trailing `/` is dropped. Empty is gitlab.com. Requests carry your token, so they don't follow redirects: enter the address the server ends up at. An `http://` address other than `localhost` works, with a warning, since the token then travels unencrypted. The GitLab tab lists the issues of the project whose remote is on this server. Set from the issue browser or the settings modal. The token is never stored here: it goes in `secrets.json` or comes from `GITLAB_TOKEN` (see [Files and environment](../files-and-environment/)).
 
 #### `jira_site`
 

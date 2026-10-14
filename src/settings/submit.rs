@@ -197,7 +197,11 @@ impl Settings {
 }
 
 fn gitlab_url(config: &Config, value: String) -> (Config, String) {
-    let notice = if value.is_empty() { "GitLab is gitlab.com".into() } else { format!("GitLab server: {value}") };
+    let notice = match value.as_str() {
+        "" => "GitLab is gitlab.com".into(),
+        url if gitlab::unencrypted(url) => format!("GitLab server: {url}; {}", gitlab::UNENCRYPTED),
+        url => format!("GitLab server: {url}"),
+    };
     (Config { gitlab_url: value, ..config.clone() }, notice)
 }
 

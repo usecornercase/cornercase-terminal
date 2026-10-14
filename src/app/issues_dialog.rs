@@ -799,8 +799,11 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
                     help.extend([line, String::new()]);
                 }
                 Source::Gitlab => {
-                    let line = format!("Connecting to {}.", gitlab::server(&browser.gitlab_url));
-                    help.extend([line, String::new()]);
+                    help.push(format!("Connecting to {}.", gitlab::server(&browser.gitlab_url)));
+                    if gitlab::unencrypted(&browser.gitlab_url) {
+                        help.push(format!("Careful: {}.", gitlab::UNENCRYPTED));
+                    }
+                    help.push(String::new());
                 }
                 _ => {}
             }

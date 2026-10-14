@@ -180,6 +180,15 @@ function checkUrl(input: string, example = 'https://plane.acme.dev'): [string, s
 
 const GITLAB_EXAMPLE = 'https://gitlab.acme.dev';
 const gitlabServer = (url: string) => url || 'https://gitlab.com';
+const UNENCRYPTED = 'the address starts with http://, so the token travels unencrypted';
+
+function unencrypted(url: string): boolean {
+  const m = url.trim().match(/^http:\/\/(?:[^/@]*@)?([^/]*)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  const name = host.split(':')[0];
+  return !(name === 'localhost' || name.startsWith('127.') || host.startsWith('[::1]'));
+}
 
 function checkSite(input: string): [string, string?] {
   const host = (input.trim().split('://').pop() ?? '').split('/')[0].replace(/\.+$/, '').toLowerCase();
@@ -2678,7 +2687,7 @@ export class App {
       else {
         this.config.gitlabUrl = value;
         o.edit = undefined;
-        o.notice = value ? `GitLab server: ${value}` : 'GitLab is gitlab.com';
+        o.notice = !value ? 'GitLab is gitlab.com' : unencrypted(value) ? `GitLab server: ${value}; ${UNENCRYPTED}` : `GitLab server: ${value}`;
       }
     } else if (edit.row === 'plane-filter') {
       this.config.planeFilter = edit.input.trim();
@@ -2887,7 +2896,11 @@ export class App {
       } else {
         if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
         if (source === 'plane') help.push(`Connecting to the Plane workspace ${this.config.planeWorkspace}.`, '');
-        if (source === 'gitlab') help.push(`Connecting to ${gitlabServer(this.config.gitlabUrl)}.`, '');
+        if (source === 'gitlab') {
+          help.push(`Connecting to ${gitlabServer(this.config.gitlabUrl)}.`);
+          if (unencrypted(this.config.gitlabUrl)) help.push(`Careful: ${UNENCRYPTED}.`);
+          help.push('');
+        }
         help.push(remote.help);
       }
       help.push(

@@ -472,6 +472,15 @@ mod tokens {
         }
 
         #[test]
+        fn a_url_without_encryption_says_so() {
+            let mut s = with_gitlab();
+            saved(edit(&mut s, &Row::GitlabUrl, "http://gitlab.acme.dev"));
+            let expected = "GitLab server: http://gitlab.acme.dev; the address starts with http://, so the token \
+                            travels unencrypted";
+            assert_eq!(s.notice.as_deref(), Some(expected));
+        }
+
+        #[test]
         fn a_bad_url_stays_in_the_field() {
             let mut s = with_gitlab();
             assert_eq!(edit(&mut s, &Row::GitlabUrl, "gitlab.acme.dev"), Action::None);

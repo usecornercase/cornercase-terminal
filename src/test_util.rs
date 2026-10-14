@@ -322,8 +322,13 @@ impl FakeHttp {
                     (routes[i].1, routes[i].2.as_slice())
                 });
                 log.lock().push(request);
+                let (location, body) = if (300..400).contains(&status) {
+                    (format!("Location: {}\r\n", String::from_utf8_lossy(body)), b"".as_slice())
+                } else {
+                    (String::new(), body)
+                };
                 let head = format!(
-                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    "HTTP/1.1 {status} X\r\n{location}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
                 );
                 let _ = std::io::Write::write_all(&mut stream, &[head.as_bytes(), body].concat());
