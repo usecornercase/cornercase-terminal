@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.92
+
+- A workspace whose branch has a pull request on GitHub shows its number at the end of its row, coloured by its checks: `#485✗` in red when one failed, `#483•` in yellow while they run, `#482✓` in green when they all passed. It turns purple once merged and is crossed out once closed. cornercase asks `gh` in the background, every 20 seconds while checks run and every minute otherwise.
+- The workspace's menu (` ⋯ ` or right-click) has **pull request #485**, which lists every check. **copy link** copies the pull request's address, and **ask agent** hands the failed checks, with links to their logs, to the workspace's agent, for you to add a note. With a prefix key, `g p` opens it.
+- It needs `gh` installed and logged in: **Settings → Worktrees → pull requests** says why when none show, and turns it off. `cornercase status` lists each workspace's pull request too.
+
 ## 0.12.91
 
 - Agents that report their state with OSC 7501 now drive the status icons, spinner and notifications directly. Other recognised agents, including custom commands, get status indicators when they emit the protocol. Agents without it keep their existing status detection.
