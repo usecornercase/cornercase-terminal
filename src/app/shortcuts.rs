@@ -113,6 +113,7 @@ impl App {
             Action::Changes => self.changes_by_key(),
             Action::Base => self.compare_base(),
             Action::PullRequest => self.pull_request_by_key(),
+            Action::Flow => self.flow_by_key(),
             Action::NewWorkspace => {
                 if self.project().is_some() {
                     self.nav = None;

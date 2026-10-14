@@ -67,6 +67,7 @@ mod dialogs;
 mod event;
 mod events;
 mod files_panel;
+mod flow_panel;
 mod flow_runs;
 mod flows_dialog;
 mod hierarchy;
@@ -155,6 +156,7 @@ pub(crate) struct App {
     todos: Todos,
     #[allow(dead_code)]
     runs: Vec<crate::flows::run::Run>,
+    flow: flow_panel::FlowPanel,
     todo: todo::Panel,
     files: files::Panel,
     images: images::Payloads,
@@ -211,6 +213,7 @@ impl App {
             confirm_within: control::CONFIRM_WITHIN,
             todos: Todos::default(),
             runs: Vec::new(),
+            flow: flow_panel::FlowPanel::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
             images: images::Payloads::default(),
@@ -323,7 +326,7 @@ impl App {
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
-        [drag, launch, spin, self.next_request(now)].into_iter().flatten().min()
+        [drag, launch, spin, self.flow_frame(now), self.next_request(now)].into_iter().flatten().min()
     }
 
     fn agent_working(&self) -> bool {
@@ -344,6 +347,7 @@ impl App {
         self.sync_remote();
         self.sync_telegram();
         self.check_requests(now);
+        self.close_gone_flow_message();
         self.check_updates(now);
         self.refresh_files(now);
         self.refresh_changes(now);
@@ -617,6 +621,8 @@ impl App {
                 open: changes_open,
             }),
             todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, spin)).flatten(),
+            flow_run: self.has_run(),
             todo_dot: self.config.todo_dot,
             todo_pending: self.todos.pending() > 0,
             files,

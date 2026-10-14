@@ -15,6 +15,7 @@ fn open(app: &mut App, side: Side) {
         Side::Changes => app.toggle_changes(),
         Side::Files => app.toggle_files(),
         Side::Todo => app.toggle_todo(),
+        Side::Flow => app.toggle_flow(),
     }
     assert!(app.panel_shown());
 }
@@ -25,6 +26,7 @@ fn focus_field(app: &mut App, side: Side) {
         Side::Changes => ui::changes::filter_button(area),
         Side::Files => ui::files::field(area),
         Side::Todo => ui::todo::rows(area, &app.todo_view(area)).button(),
+        Side::Flow => unreachable!("the flow panel has no field"),
     };
     click(app, field.as_position());
     assert!(typing(app));
