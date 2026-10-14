@@ -34,6 +34,7 @@ pub(crate) enum Row {
     RoleName,
     Agent,
     Model,
+    Effort,
     Args,
     Env,
     Edits,
@@ -152,8 +153,10 @@ impl Editing {
                 rows.extend([Row::AddStage, Row::End, Row::Notes]);
                 rows
             }
-            Tab::Orchestrator => vec![Row::Agent, Row::Model, Row::Args, Row::Env, Row::Prompt],
-            Tab::Role(_) => vec![Row::RoleName, Row::Agent, Row::Model, Row::Args, Row::Env, Row::Edits, Row::Prompt],
+            Tab::Orchestrator => vec![Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt],
+            Tab::Role(_) => {
+                vec![Row::RoleName, Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Edits, Row::Prompt]
+            }
         }
     }
 
@@ -248,7 +251,8 @@ impl Editing {
                 }
             }
             Row::RoleName | Row::Args | Row::Env | Row::Prompt => self.activate_role(row),
-            Row::Place | Row::Roles(_) | Row::Back(_) | Row::End | Row::Agent | Row::Model => {
+            Row::Effort if self.effort_levels().is_none() => {}
+            Row::Place | Row::Roles(_) | Row::Back(_) | Row::End | Row::Agent | Row::Model | Row::Effort => {
                 let items = self.choices(row, agents);
                 self.pick = Some(Pick { row, items, search: Search::default() });
             }
@@ -559,6 +563,7 @@ impl Editing {
                 })
                 .collect(),
             Row::Model => self.model_choices(agents),
+            Row::Effort => self.effort_choices(),
             _ => Vec::new(),
         }
     }
@@ -627,6 +632,7 @@ impl Editing {
                 {
                     role.agent = value;
                     role.model = None;
+                    role.effort = None;
                 }
             }
             Row::Model if value == OTHER_MODEL => {
@@ -636,6 +642,11 @@ impl Editing {
             Row::Model => {
                 if let Some(role) = self.role_mut() {
                     role.model = (value != DEFAULT_MODEL).then_some(value);
+                }
+            }
+            Row::Effort => {
+                if let Some(role) = self.role_mut() {
+                    role.effort = (value != DEFAULT_MODEL).then_some(value);
                 }
             }
             _ => {}
