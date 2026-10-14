@@ -31,9 +31,13 @@ pub(in crate::agents) struct Backwards {
 
 impl Backwards {
     pub(in crate::agents) fn open(path: &Path) -> io::Result<Self> {
+        Self::open_within(path, MAX_BACK)
+    }
+
+    pub(in crate::agents) fn open_within(path: &Path, max: u64) -> io::Result<Self> {
         let file = File::open(path)?;
         let at = file.metadata()?.len();
-        Ok(Self { file, at, left: MAX_BACK, carry: Vec::new(), lines: Vec::new(), partial: true })
+        Ok(Self { file, at, left: max, carry: Vec::new(), lines: Vec::new(), partial: true })
     }
 
     fn read(&mut self) -> io::Result<()> {
@@ -82,7 +86,11 @@ pub(in crate::agents) fn unreadable(path: &Path, e: &io::Error) -> Error {
 }
 
 pub(in crate::agents) fn lines(path: &Path) -> Result<Option<Backwards>> {
-    match Backwards::open(path) {
+    lines_within(path, MAX_BACK)
+}
+
+pub(in crate::agents) fn lines_within(path: &Path, max: u64) -> Result<Option<Backwards>> {
+    match Backwards::open_within(path, max) {
         Ok(lines) => Ok(Some(lines)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(unreadable(path, &e)),

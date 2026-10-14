@@ -1,0 +1,3 @@
+{"timestamp":1791925801,"params":{"_meta":{"eventId":"human-a","agentTimestampMs":1791925801100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"small prompt"},"_meta":{"promptIndex":0}}}}
+{"timestamp":1791925810,"params":{"_meta":{"eventId":"synthetic-notification","agentTimestampMs":1791925810100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"<monitor-event task_id=\"redacted\">state changed</monitor-event>"},"_meta":{"promptIndex":1,"syntheticPrompt":true,"hideFromScrollback":true}}}}
+{"timestamp":1791925820,"params":{"_meta":{"eventId":"human-b","agentTimestampMs":1791925820100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"small prompt"},"_meta":{"promptIndex":2}}}}

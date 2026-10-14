@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cell::Cell;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -15,8 +16,13 @@ use crate::process;
 use crate::time::Stamp;
 
 const ASKS: [&str; 2] = ["ask_user_question", "exit_plan_mode"];
-const TAIL_BYTES: u64 = 1024 * 1024;
 const TURNS: usize = 64;
+const PROMPT_IDS: usize = 32;
+const BACK_DEFAULT: u64 = 64 * 1024 * 1024;
+
+thread_local! {
+    static BACK_LIMIT: Cell<u64> = const { Cell::new(BACK_DEFAULT) };
+}
 
 #[derive(Debug)]
 pub(in crate::agents) struct Session {
@@ -47,9 +53,10 @@ pub(in crate::agents) struct Session {
     model: Option<String>,
     signals_used: u64,
     signals_model: Option<String>,
-    pending_chunks: VecDeque<Chunk>,
-    waiting_humans: u32,
-    seen_prompts: HashSet<String>,
+    signals_at: Option<SystemTime>,
+    prompt_at: Option<SystemTime>,
+    prompt_ids: HashSet<String>,
+    newest_event: Option<SystemTime>,
     children: Vec<Child>,
 }
 
@@ -62,6 +69,7 @@ enum Start {
 #[derive(Debug)]
 struct Turn {
     at: SystemTime,
+    end: Option<SystemTime>,
     model: Option<String>,
     primary: bool,
 }
@@ -81,7 +89,6 @@ struct Reply {
 struct Chunk {
     at: SystemTime,
     id: String,
-    primary: bool,
 }
 
 #[derive(Debug)]
@@ -169,9 +176,10 @@ impl Session {
             model: None,
             signals_used: 0,
             signals_model: None,
-            pending_chunks: VecDeque::new(),
-            waiting_humans: 0,
-            seen_prompts: HashSet::new(),
+            signals_at: None,
+            prompt_at: None,
+            prompt_ids: HashSet::new(),
+            newest_event: None,
             children: Vec::new(),
         }
     }
@@ -180,11 +188,9 @@ impl Session {
         let opening = self.start == Start::New;
         self.start = Start::Seen;
         self.read_events(opening);
-        let partial = opening && self.prompts_outside_tail();
-        let replayed = self.read_updates(partial) || self.read_chat(partial);
-        if partial || replayed {
-            self.pending_chunks.clear();
-            self.waiting_humans = 0;
+        let replayed = self.read_updates();
+        self.read_chat();
+        if opening || replayed {
             self.recover_prompt();
         }
         if opening {
@@ -196,13 +202,10 @@ impl Session {
         self.read_children();
     }
 
-    fn prompts_outside_tail(&self) -> bool {
-        exceeds(&self.path.join("updates.jsonl")) || exceeds(&self.path.join("chat_history.jsonl"))
-    }
-
     fn read_events(&mut self, opening: bool) {
         let path = self.path.join("events.jsonl");
         let Some(batch) = read_tail(&mut self.events, &path) else { return };
+        let mut unknown = false;
         if opening || batch.reset {
             self.turn_open = false;
             self.phase.clear();
@@ -210,44 +213,54 @@ impl Session {
             self.asks = 0;
             self.turns.clear();
             self.primary = true;
-            if let Some(life) = newest_life(&path) {
-                self.turn_open = life.open;
-                self.primary = life.primary;
+            self.newest_event = None;
+            match newest_life(&path) {
+                Found::Open(primary) => {
+                    self.turn_open = true;
+                    self.primary = primary;
+                }
+                Found::Closed => self.turn_open = false,
+                Found::Unknown => unknown = true,
             }
         }
+        let mut saw_work = false;
+        let mut closed = false;
         for event in lines_of(&batch.bytes) {
+            if work_event(&event) {
+                saw_work = true;
+            }
+            if event["type"].as_str() == Some("turn_ended") {
+                closed = true;
+            }
             self.apply_event(&event);
+        }
+        if unknown && saw_work && !closed {
+            self.turn_open = true;
         }
     }
 
-    fn read_updates(&mut self, partial: bool) -> bool {
+    fn read_updates(&mut self) -> bool {
         let path = self.path.join("updates.jsonl");
         let Some(batch) = read_tail(&mut self.updates, &path) else { return false };
-        let replay = batch.reset && exceeds(&path);
         if batch.reset {
-            self.clear_prompts();
             self.compact = None;
             self.newest = None;
         }
         for update in lines_of(&batch.bytes) {
-            self.apply_update(&update, partial || replay);
+            self.apply_update(&update);
         }
-        replay
+        batch.reset
     }
 
-    fn read_chat(&mut self, partial: bool) -> bool {
+    fn read_chat(&mut self) {
         let path = self.path.join("chat_history.jsonl");
-        let Some(batch) = read_tail(&mut self.chat, &path) else { return false };
-        let replay = batch.reset && exceeds(&path);
+        let Some(batch) = read_tail(&mut self.chat, &path) else { return };
         if batch.reset {
-            self.pending_chunks.clear();
-            self.waiting_humans = 0;
             self.resumable = false;
         }
         for line in lines_of(&batch.bytes) {
-            self.apply_chat(&line, partial || replay);
+            self.apply_chat(&line);
         }
-        replay
     }
 
     fn apply_event(&mut self, event: &Value) {
@@ -259,8 +272,10 @@ impl Session {
                 self.asks = 0;
                 self.primary = is_primary(event);
                 if let Some(at) = event_time(event) {
+                    self.note_event(at);
                     self.turns.push(Turn {
                         at,
+                        end: None,
                         model: event["model_id"].as_str().map(str::to_string),
                         primary: self.primary,
                     });
@@ -275,6 +290,12 @@ impl Session {
                 self.pending.clear();
                 self.asks = 0;
                 self.primary = true;
+                if let Some(at) = event_time(event) {
+                    self.note_event(at);
+                    if let Some(turn) = self.turns.iter_mut().rev().find(|turn| turn.end.is_none()) {
+                        turn.end = Some(at);
+                    }
+                }
             }
             Some("phase_changed") => self.phase = event["phase"].as_str().unwrap_or_default().to_string(),
             Some("permission_requested") => *self.pending.entry(tool_name(event)).or_insert(0) += 1,
@@ -290,9 +311,9 @@ impl Session {
         }
     }
 
-    fn apply_update(&mut self, update: &Value, skip_prompts: bool) {
+    fn apply_update(&mut self, update: &Value) {
         let body = &update["params"]["update"];
-        let at = unix_time(&update["timestamp"]);
+        let at = update_time(update);
         match body["sessionUpdate"].as_str() {
             Some("auto_compact_completed" | "compaction_checkpoint") => self.compact = self.compact.max(at),
             Some("turn_completed") => {
@@ -306,68 +327,70 @@ impl Session {
                         self.push_extra(format!("{}/side", self.id), record);
                     }
                 }
-                self.newest = Some(reply);
+                if reply.primary {
+                    self.newest = Some(reply);
+                }
             }
-            Some("user_message_chunk") if !skip_prompts => self.note_chunk(update, body),
+            Some("user_message_chunk") => self.note_chunk(update),
             _ => {}
         }
     }
 
-    fn apply_chat(&mut self, line: &Value, skip_prompts: bool) {
-        if line["synthetic_reason"].as_str() == Some("compaction_meta") {
+    fn apply_chat(&mut self, line: &Value) {
+        if line["synthetic_reason"].as_str() == Some("compaction_meta")
+            || (kind_of(line) == Some("assistant") && line["content"].is_string())
+            || (kind_of(line) == Some("user")
+                && line.get("synthetic_reason").is_none()
+                && line["prompt_index"].as_u64().is_some())
+        {
             self.resumable = true;
-        }
-        if kind_of(line) == Some("assistant") && line["content"].is_string() {
-            self.resumable = true;
-        }
-        if skip_prompts || kind_of(line) != Some("user") || line.get("synthetic_reason").is_some() {
-            return;
-        }
-        if line["prompt_index"].as_u64().is_none() {
-            return;
-        }
-        self.resumable = true;
-        if let Some(chunk) = self.pending_chunks.pop_front() {
-            self.emit_prompt(chunk);
-        } else {
-            self.waiting_humans = self.waiting_humans.saturating_add(1);
         }
     }
 
-    fn note_chunk(&mut self, update: &Value, body: &Value) {
-        let text = body["content"]["text"].as_str().unwrap_or_default();
-        if reminder(text) || body["_meta"]["promptIndex"].as_u64().is_none() {
+    fn note_chunk(&mut self, update: &Value) {
+        let Some(chunk) = human_chunk(update) else { return };
+        if !self.primary_at(chunk.at) {
             return;
         }
-        let Some(chunk) = chunk_of(update, self.primary) else { return };
-        if self.waiting_humans > 0 {
-            self.waiting_humans -= 1;
-            self.emit_prompt(chunk);
-        } else {
-            self.pending_chunks.push_back(chunk);
-        }
+        self.emit_prompt(chunk);
     }
 
     fn emit_prompt(&mut self, chunk: Chunk) {
-        if !chunk.primary || !self.seen_prompts.insert(chunk.id.clone()) {
-            return;
+        if let Some(latest) = self.prompt_at {
+            if chunk.at < latest {
+                return;
+            }
+            if chunk.at == latest {
+                if self.prompt_ids.contains(&chunk.id) || self.prompt_ids.len() >= PROMPT_IDS {
+                    return;
+                }
+            } else {
+                self.prompt_ids.clear();
+            }
         }
+        self.prompt_ids.insert(chunk.id.clone());
+        self.prompt_at = Some(chunk.at);
         self.counted.push(counting::Record { at: chunk.at, id: chunk.id, usage: Usage::Prompt });
         self.prompted = self.prompted.max(Some(chunk.at));
     }
 
-    fn clear_prompts(&mut self) {
-        self.pending_chunks.clear();
-        self.waiting_humans = 0;
-        self.seen_prompts.clear();
-        self.prompted = None;
+    fn primary_at(&self, at: SystemTime) -> bool {
+        self.turns
+            .iter()
+            .rev()
+            .find(|turn| turn.at <= at && turn.end.is_none_or(|end| at <= end))
+            .is_none_or(|turn| turn.primary)
+    }
+
+    fn note_event(&mut self, at: SystemTime) {
+        self.newest_event = self.newest_event.map_or(Some(at), |latest| Some(latest.max(at)));
     }
 
     fn reply(&self, body: &Value, at: SystemTime) -> Reply {
         let usage = &body["usage"];
         let input_total = usage["inputTokens"].as_u64().unwrap_or(0);
         let cached = usage["cachedReadTokens"].as_u64().unwrap_or(0);
-        let turn = self.turns.iter().rev().find(|turn| turn.at <= at);
+        let turn = self.turns.iter().rev().find(|turn| turn.at <= at && turn.end.is_none_or(|end| at <= end));
         Reply {
             at,
             id: body["prompt_id"].as_str().map_or_else(|| Stamp(at).to_string(), str::to_string),
@@ -396,10 +419,11 @@ impl Session {
             .filter(|n| *n > 0)
             .or_else(|| summary["context_window"].as_u64())
             .unwrap_or(0);
-        if let Some(model) = model.clone()
-            && self.seen_model.as_ref().is_some_and(|seen| seen != &model || self.seen_window != window)
-        {
-            self.boundary = Some(SystemTime::now());
+        let changed = model.as_ref().is_some_and(|model| {
+            self.seen_model.as_ref().is_some_and(|seen| seen != model || self.seen_window != window)
+        });
+        if changed && let Some(mark) = self.transition(model.as_deref()) {
+            self.boundary = Some(self.boundary.map_or(mark, |kept| kept.max(mark)));
         }
         if model.is_some() {
             self.seen_model.clone_from(&model);
@@ -409,6 +433,17 @@ impl Session {
         self.window = window;
         self.signals_used = signals["contextTokensUsed"].as_u64().unwrap_or(0);
         self.signals_model = signals["primaryModelId"].as_str().map(str::to_string);
+        self.signals_at = std::fs::metadata(self.path.join("signals.json")).and_then(|info| info.modified()).ok();
+    }
+
+    fn transition(&self, model: Option<&str>) -> Option<SystemTime> {
+        let recorded = self
+            .turns
+            .iter()
+            .rev()
+            .find(|turn| model.is_some_and(|id| turn.model.as_deref() == Some(id)))
+            .map(|turn| turn.at);
+        recorded.or(self.newest_event)
     }
 
     fn occupancy(&self) -> Option<u16> {
@@ -421,12 +456,25 @@ impl Session {
             let after = self.boundary.is_none_or(|cut| reply.at > cut);
             let same = reply.model.as_deref().is_none_or(|id| id == model);
             let one = reply.calls.is_some_and(|calls| calls <= 1) && reply.input_total <= self.window;
-            return (fresh && after && same && one).then(|| context::percent(reply.input_total, self.window));
+            if fresh && after && same && one {
+                return Some(context::percent(reply.input_total, self.window));
+            }
         }
-        if self.boundary.is_some() || self.compact.is_some() {
+        self.signals_percent(model)
+    }
+
+    fn signals_percent(&self, model: &str) -> Option<u16> {
+        let at = self.signals_at?;
+        if self.signals_model.as_deref().is_some_and(|id| id != model) {
             return None;
         }
-        if self.signals_model.as_deref().is_some_and(|id| id != model) {
+        if self.newest.is_some() && self.signals_model.as_deref() != Some(model) {
+            return None;
+        }
+        if self.newest.as_ref().is_some_and(|reply| at < reply.at) {
+            return None;
+        }
+        if self.compact.is_some_and(|cut| cut > at) || self.boundary.is_some_and(|cut| cut > at) {
             return None;
         }
         (self.signals_used > 0 && self.signals_used <= self.window)
@@ -444,13 +492,16 @@ impl Session {
     }
 
     fn recover_prompt(&mut self) {
-        let Some(chunk) = newest_chunk(&self.path.join("updates.jsonl"), self.primary) else { return };
-        if !newest_human(&self.path.join("chat_history.jsonl")) {
+        let Some(chunk) = newest_chunk(&self.path.join("updates.jsonl")) else { return };
+        if !self.primary_at(chunk.at) {
             return;
         }
-        self.pending_chunks.retain(|item| item.id != chunk.id);
         self.emit_prompt(chunk);
-        self.resumable = true;
+    }
+
+    #[cfg(test)]
+    pub(super) fn retained_prompts(&self) -> usize {
+        self.prompt_ids.len()
     }
 
     fn recover_resumable(&mut self) {
@@ -513,9 +564,10 @@ impl Session {
     }
 }
 
-struct Life {
-    open: bool,
-    primary: bool,
+enum Found {
+    Open(bool),
+    Closed,
+    Unknown,
 }
 
 fn grok_home(pid: i32) -> Option<PathBuf> {
@@ -601,63 +653,97 @@ fn lines_of(bytes: &[u8]) -> Vec<Value> {
         .collect()
 }
 
-fn exceeds(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|info| info.len() > TAIL_BYTES)
+fn back_limit() -> u64 {
+    BACK_LIMIT.with(Cell::get)
 }
 
-fn newest_life(path: &Path) -> Option<Life> {
-    let lines = message::lines(path).ok()??;
+#[cfg(test)]
+pub(in crate::agents) fn set_back_limit(limit: u64) {
+    BACK_LIMIT.with(|cell| cell.set(limit));
+}
+
+fn newest_life(path: &Path) -> Found {
+    let limit = back_limit();
+    let big = std::fs::metadata(path).is_ok_and(|info| info.len() > limit);
+    let Ok(Some(lines)) = message::lines_within(path, limit) else {
+        return if big { Found::Unknown } else { Found::Closed };
+    };
     for line in lines {
         let Ok(line) = line else { continue };
         let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
         match entry["type"].as_str() {
-            Some("turn_started") => return Some(Life { open: true, primary: is_primary(&entry) }),
-            Some("turn_ended") => return Some(Life { open: false, primary: true }),
+            Some("turn_started") => return Found::Open(is_primary(&entry)),
+            Some("turn_ended") => return Found::Closed,
             _ => {}
         }
     }
-    None
+    if big { Found::Unknown } else { Found::Closed }
 }
 
-fn newest_human(path: &Path) -> bool {
-    let Some(lines) = message::lines(path).ok().flatten() else { return false };
-    for line in lines {
-        let Ok(line) = line else { continue };
-        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
-        if kind_of(&entry) == Some("user")
-            && entry.get("synthetic_reason").is_none()
-            && entry["prompt_index"].as_u64().is_some()
-        {
-            return true;
-        }
-    }
-    false
-}
-
-fn newest_chunk(path: &Path, primary: bool) -> Option<Chunk> {
+fn newest_chunk(path: &Path) -> Option<Chunk> {
     let lines = message::lines(path).ok()??;
     for line in lines {
         let Ok(line) = line else { continue };
         let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
-        let body = &entry["params"]["update"];
-        if body["sessionUpdate"].as_str() != Some("user_message_chunk") {
-            continue;
+        if let Some(chunk) = human_chunk(&entry) {
+            return Some(chunk);
         }
-        let text = body["content"]["text"].as_str().unwrap_or_default();
-        if reminder(text) || body["_meta"]["promptIndex"].as_u64().is_none() {
-            continue;
-        }
-        return chunk_of(&entry, primary);
     }
     None
 }
 
-fn chunk_of(update: &Value, primary: bool) -> Option<Chunk> {
+fn human_chunk(update: &Value) -> Option<Chunk> {
     let body = &update["params"]["update"];
+    if body["sessionUpdate"].as_str() != Some("user_message_chunk") || synthetic(update) {
+        return None;
+    }
     let index = body["_meta"]["promptIndex"].as_u64()?;
-    let at = millis(update).or_else(|| unix_time(&update["timestamp"]))?;
-    let id = event_id(update).unwrap_or_else(|| fallback_id(update, index));
-    Some(Chunk { at, id, primary })
+    let text = body["content"]["text"].as_str().unwrap_or_default();
+    if reminder_only(text) {
+        return None;
+    }
+    let at = update_time(update)?;
+    let ms = stamp_ms(update).unwrap_or(0);
+    Some(Chunk { at, id: format!("{index}-{ms}") })
+}
+
+fn work_event(event: &Value) -> bool {
+    matches!(
+        event["type"].as_str(),
+        Some(
+            "phase_changed"
+                | "tool_started"
+                | "tool_completed"
+                | "permission_requested"
+                | "loop_started"
+                | "first_token"
+        )
+    )
+}
+
+fn synthetic(update: &Value) -> bool {
+    flag(update, "syntheticPrompt")
+}
+
+fn flag(update: &Value, key: &str) -> bool {
+    update["params"]["update"]["_meta"][key].as_bool().unwrap_or(false)
+        || update["params"]["_meta"][key].as_bool().unwrap_or(false)
+}
+
+fn reminder_only(text: &str) -> bool {
+    let text = text.trim_start();
+    (text.starts_with("<system-reminder>") || text.starts_with("<user_info>")) && !text.contains("<user_query>")
+}
+
+fn update_time(update: &Value) -> Option<SystemTime> {
+    millis(update).or_else(|| unix_time(&update["timestamp"]))
+}
+
+fn stamp_ms(update: &Value) -> Option<u64> {
+    update["params"]["_meta"]["agentTimestampMs"]
+        .as_u64()
+        .or_else(|| update["params"]["update"]["_meta"]["agentTimestampMs"].as_u64())
+        .or_else(|| update["timestamp"].as_u64().map(|secs| secs.saturating_mul(1000)))
 }
 
 fn child_token(update: &Value) -> Option<counting::Record> {
@@ -722,23 +808,6 @@ fn asks_you(event: &Value) -> bool {
 
 fn tool_name(event: &Value) -> String {
     event["tool_name"].as_str().unwrap_or_default().to_string()
-}
-
-fn reminder(text: &str) -> bool {
-    text.contains("<system-reminder>") || text.contains("<user_info>")
-}
-
-fn event_id(update: &Value) -> Option<String> {
-    update["params"]["_meta"]["eventId"]
-        .as_str()
-        .or_else(|| update["params"]["update"]["_meta"]["eventId"].as_str())
-        .map(str::to_string)
-}
-
-fn fallback_id(update: &Value, index: u64) -> String {
-    let stamp =
-        update["params"]["_meta"]["agentTimestampMs"].as_u64().or_else(|| update["timestamp"].as_u64()).unwrap_or(0);
-    format!("prompt-{stamp}-{index}")
 }
 
 fn millis(update: &Value) -> Option<SystemTime> {

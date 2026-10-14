@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -5,7 +6,7 @@ use serde_json::json;
 
 use super::*;
 use crate::agents::activity::Activity;
-use crate::agents::context::counting::{Usage, tests::sum};
+use crate::agents::context::counting::{Ledger, Usage, tests::sum};
 use crate::agents::context::{Context, Look, Pane, tests::pane_look};
 use crate::agents::stats::Tokens;
 use crate::agents::{DEFAULT_TRUST_PROMPT, Known, TrustPrompt, asks_trust};
@@ -121,6 +122,8 @@ fn permission_a_question_and_a_cancelled_turn_come_from_the_session() {
     assert_eq!(activity_of(fixture!("grok/1.0.52/question-answered-events.jsonl")), Activity::Working);
     assert_eq!(activity_of(fixture!("grok/1.0.52/plan-open-events.jsonl")), Activity::Waiting);
     assert_eq!(activity_of(fixture!("grok/1.0.52/plan-continued-events.jsonl")), Activity::Working);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/exit-open-events.jsonl")), Activity::Waiting);
+    assert_eq!(activity_of(fixture!("grok/1.0.52/exit-continued-events.jsonl")), Activity::Working);
     assert_eq!(activity_of(fixture!("grok/1.0.52/permission-late-resolution-events.jsonl")), Activity::Waiting);
     assert_eq!(activity_of(fixture!("grok/1.0.52/cancelled-events.jsonl")), Activity::Idle);
 }
@@ -177,6 +180,7 @@ fn compaction_and_a_model_change_clear_the_percentage() {
         ("summary.json", fixture!("grok/1.0.52/summary.json")),
         ("signals.json", fixture!("grok/1.0.52/signals.json")),
     ]);
+    age(&session_dir(home.path(), &cwd).join("signals.json"), 1_791_925_000);
     let (sleeper, found) = seen(home.path(), &cwd);
     assert_eq!(found.context.as_ref().map(|ctx| ctx.percent), Some(None));
     std::fs::write(
@@ -193,7 +197,7 @@ fn compaction_and_a_model_change_clear_the_percentage() {
 
 #[test]
 fn a_side_turn_and_a_child_session_add_tokens_without_prompts() {
-    let events = r#"{"ts":"2026-10-13T21:10:21.697Z","type":"turn_started","turn_number":0,"model_id":"grok-4.7","session_relationship":"worker"}
+    let events = r#"{"ts":"2026-10-13T21:10:20.000Z","type":"turn_started","turn_number":0,"model_id":"grok-4.7","session_relationship":"worker"}
 "#;
     let updates = r#"{"timestamp":1791925821,"method":"session/update","params":{"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hi"},"_meta":{"promptIndex":0}}}}
 {"timestamp":1791925830,"method":"session/update","params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"side","usage":{"inputTokens":100,"outputTokens":5,"cachedReadTokens":0,"cacheCreationTokens":1,"modelCalls":1}}}}
@@ -340,6 +344,197 @@ fn grow_past_a_megabyte(path: &Path) {
         body.extend_from_slice(line);
     }
     std::fs::write(path, body).expect("grow");
+}
+
+#[test]
+fn a_monitor_event_between_prompts_is_not_a_prompt() {
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", fixture!("grok/1.0.52/events.jsonl")),
+        ("updates.jsonl", fixture!("grok/1.0.52/synthetic-monitor-updates.jsonl")),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    let times: Vec<_> =
+        found.counted.iter().filter(|record| record.usage == Usage::Prompt).map(|record| record.at).collect();
+    assert_eq!(times.len(), 2);
+    assert!(found.prompted.is_some_and(|at| at == *times.iter().max().expect("later")));
+    assert!(times.iter().all(|at| *at != UNIX_EPOCH + Duration::from_millis(1_791_925_810_100)));
+}
+
+#[test]
+fn a_quoted_reminder_is_still_a_prompt() {
+    let updates = r#"{"timestamp":1791925801,"params":{"_meta":{"agentTimestampMs":1791925801100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"please read <system-reminder> and continue"},"_meta":{"promptIndex":0}}}}
+"#;
+    let (home, cwd) = home_with(&[("updates.jsonl", updates)]);
+    assert_eq!(prompt_count(&seen(home.path(), &cwd).1), 1);
+}
+
+#[test]
+fn a_rewritten_chat_keeps_the_prompt_from_the_same_poll() {
+    let updates = r#"{"timestamp":1791925801,"params":{"_meta":{"eventId":"human-A","agentTimestampMs":1791925801100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"small prompt"},"_meta":{"promptIndex":0}}}}
+"#;
+    let (home, cwd) = home_with(&[
+        ("updates.jsonl", updates),
+        ("chat_history.jsonl", "{\"type\":\"user\",\"prompt_index\":0,\"content\":\"small prompt\"}\n"),
+    ]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(prompt_count(&found), 1);
+    std::fs::write(
+        found.path.join("chat_history.jsonl"),
+        "{\"type\":\"user\",\"synthetic_reason\":\"compaction_meta\",\"content\":\"summary\"}\n{\"type\":\"user\",\"prompt_index\":1,\"content\":\"small prompt\"}\n",
+    )
+    .expect("rewrite");
+    std::fs::write(
+        found.path.join("updates.jsonl"),
+        format!(
+            "{updates}{{\"timestamp\":1791925820,\"params\":{{\"_meta\":{{\"eventId\":\"human-B\",\"agentTimestampMs\":1791925820100}},\"update\":{{\"sessionUpdate\":\"user_message_chunk\",\"content\":{{\"type\":\"text\",\"text\":\"small prompt\"}},\"_meta\":{{\"promptIndex\":1}}}}}}}}\n"
+        ),
+    )
+    .expect("append");
+    let next = session::follow(sleeper.pid(), Some(found)).expect("rewritten");
+    assert_eq!(next.prompted, Some(UNIX_EPOCH + Duration::from_millis(1_791_925_820_100)));
+    assert_eq!(prompt_count(&next), 2);
+}
+
+#[test]
+fn a_completed_worker_turn_does_not_confirm_the_parent() {
+    let events = r#"{"ts":"2026-10-13T21:10:01.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"primary"}
+{"ts":"2026-10-13T21:10:05.000Z","type":"turn_ended","outcome":"completed"}
+{"ts":"2026-10-13T21:10:06.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"worker"}
+{"ts":"2026-10-13T21:10:10.000Z","type":"turn_ended","outcome":"completed"}
+{"ts":"2026-10-13T21:10:20.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"primary"}
+{"ts":"2026-10-13T21:10:30.000Z","type":"turn_ended","outcome":"completed"}
+"#;
+    let updates = r#"{"timestamp":1791925801,"params":{"_meta":{"agentTimestampMs":1791925801100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"one"},"_meta":{"promptIndex":0}}}}
+{"timestamp":1791925801,"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"p","usage":{"inputTokens":1000,"outputTokens":1,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+{"timestamp":1791925806,"params":{"_meta":{"agentTimestampMs":1791925806100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"worker"},"_meta":{"promptIndex":1}}}}
+{"timestamp":1791925806,"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"w","usage":{"inputTokens":50,"outputTokens":2,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+{"timestamp":1791925820,"params":{"_meta":{"agentTimestampMs":1791925820100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"two"},"_meta":{"promptIndex":0}}}}
+{"timestamp":1791925820,"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"q","usage":{"inputTokens":2000,"outputTokens":3,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+"#;
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", events),
+        ("updates.jsonl", updates),
+        ("summary.json", r#"{"current_model_id":"grok-4.7","context_window":256000}"#),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    assert_eq!(prompt_count(&found), 2);
+    assert_eq!(found.prompted, Some(UNIX_EPOCH + Duration::from_millis(1_791_925_820_100)));
+    assert_eq!(tokens_of(&found).out, 6);
+    assert_eq!(
+        found.context.as_ref().and_then(|ctx| ctx.percent),
+        Some(crate::agents::context::percent(2000, 256_000))
+    );
+}
+
+#[test]
+fn a_new_model_reply_in_the_same_poll_sets_the_percentage() {
+    let events = r#"{"ts":"2026-10-13T21:10:01.000Z","type":"turn_started","model_id":"grok-4.7"}
+{"ts":"2026-10-13T21:10:10.000Z","type":"turn_ended"}
+"#;
+    let updates = r#"{"timestamp":1791925810,"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"one","usage":{"inputTokens":20480,"outputTokens":1,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+"#;
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", events),
+        ("updates.jsonl", updates),
+        ("summary.json", r#"{"current_model_id":"grok-4.7","context_window":256000}"#),
+    ]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(found.context.as_ref().and_then(|ctx| ctx.percent), Some(8));
+    std::fs::write(
+        found.path.join("events.jsonl"),
+        format!(
+            "{events}{{\"ts\":\"2026-10-13T21:10:20.000Z\",\"type\":\"turn_started\",\"model_id\":\"grok-4.6\"}}\n{{\"ts\":\"2026-10-13T21:10:30.000Z\",\"type\":\"turn_ended\"}}\n"
+        ),
+    )
+    .expect("switch");
+    std::fs::write(
+        found.path.join("updates.jsonl"),
+        format!(
+            "{updates}{{\"timestamp\":1791925830,\"params\":{{\"update\":{{\"sessionUpdate\":\"turn_completed\",\"prompt_id\":\"two\",\"usage\":{{\"inputTokens\":61440,\"outputTokens\":1,\"cachedReadTokens\":0,\"cacheCreationTokens\":0,\"modelCalls\":1}}}}}}}}\n"
+        ),
+    )
+    .expect("usage");
+    std::fs::write(found.path.join("summary.json"), r#"{"current_model_id":"grok-4.6","context_window":256000}"#)
+        .expect("summary");
+    let switched = session::follow(sleeper.pid(), Some(found)).expect("switched");
+    assert_eq!(switched.context, Some(Context { model: "grok-4.6".into(), percent: Some(24) }));
+    let again = session::follow(sleeper.pid(), Some(switched)).expect("again");
+    assert_eq!(again.context.as_ref().and_then(|ctx| ctx.percent), Some(24));
+}
+
+#[test]
+fn a_multi_call_turn_shows_the_signals_written_with_it() {
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", fixture!("grok/1.0.52/events.jsonl")),
+        ("updates.jsonl", fixture!("grok/1.0.52/multi-call-updates.jsonl")),
+        ("summary.json", fixture!("grok/1.0.52/summary.json")),
+        ("signals.json", fixture!("grok/1.0.52/multi-call-signals.json")),
+    ]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(found.context.as_ref().and_then(|ctx| ctx.percent), Some(50));
+    age(&found.path.join("signals.json"), 1_791_925_000);
+    let stale = session::look(sleeper.pid()).expect("stale");
+    assert_eq!(stale.context.as_ref().and_then(|ctx| ctx.percent), None);
+}
+
+#[test]
+fn thousands_of_prompts_stay_bounded_and_count_once() {
+    let (home, cwd) = home_with(&[("updates.jsonl", "")]);
+    let (sleeper, mut found) = seen(home.path(), &cwd);
+    let mut ledger = Ledger::default();
+    let mut total = 0_usize;
+    for batch in 0..4u64 {
+        let mut text = std::fs::read_to_string(found.path.join("updates.jsonl")).expect("updates");
+        for n in 0..500u64 {
+            let n = batch * 500 + n;
+            let ms = 1_791_925_800_000 + n;
+            writeln!(
+                text,
+                "{{\"timestamp\":1791925800,\"params\":{{\"_meta\":{{\"agentTimestampMs\":{ms}}},\"update\":{{\"sessionUpdate\":\"user_message_chunk\",\"content\":{{\"type\":\"text\",\"text\":\"p\"}},\"_meta\":{{\"promptIndex\":0}}}}}}}}"
+            )
+            .expect("line");
+        }
+        std::fs::write(found.path.join("updates.jsonl"), text).expect("batch");
+        found = session::follow(sleeper.pid(), Some(found)).expect("batch");
+        assert!(found.retained_prompts() <= 32);
+        let records = std::mem::take(&mut found.counted);
+        total += records.iter().filter(|record| record.usage == Usage::Prompt).count();
+        ledger.apply(&found.id, UNIX_EPOCH, records);
+    }
+    assert_eq!(total, 2000);
+    let path = found.path.join("updates.jsonl");
+    let body = std::fs::read(&path).expect("body");
+    std::fs::write(&path, &body[..body.len() / 2]).expect("shrink");
+    std::fs::write(&path, body).expect("restore");
+    let mut replayed = session::follow(sleeper.pid(), Some(found)).expect("replay");
+    ledger.apply(&replayed.id, UNIX_EPOCH, std::mem::take(&mut replayed.counted));
+    assert_eq!(sum(ledger.take()).0, 2000);
+}
+
+#[test]
+fn an_unfinished_turn_past_the_backwards_scan_stays_working() {
+    session::set_back_limit(4096);
+    let (home, cwd) = home_with(&[("events.jsonl", fixture!("grok/1.0.52/working-events.jsonl"))]);
+    let path = session_dir(home.path(), &cwd).join("events.jsonl");
+    grow_past_a_megabyte(&path);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!((found.activity, found.turn_open), (Activity::Working, true));
+    std::fs::write(
+        found.path.join("events.jsonl"),
+        format!(
+            "{}{{\"ts\":\"2026-10-13T21:20:00.000Z\",\"type\":\"turn_ended\",\"outcome\":\"completed\"}}\n",
+            std::fs::read_to_string(found.path.join("events.jsonl")).expect("events")
+        ),
+    )
+    .expect("end");
+    let ended = session::follow(sleeper.pid(), Some(found)).expect("ended");
+    session::set_back_limit(64 * 1024 * 1024);
+    assert_eq!((ended.activity, ended.turn_open), (Activity::Idle, false));
+}
+
+fn age(path: &Path, secs: u64) {
+    let file = std::fs::File::options().write(true).open(path).expect("open");
+    file.set_modified(UNIX_EPOCH + Duration::from_secs(secs)).expect("mtime");
 }
 
 #[test]

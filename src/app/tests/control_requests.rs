@@ -257,6 +257,7 @@ mod arranging;
 mod creating;
 mod events;
 mod gemini;
+mod grok;
 mod talking;
 mod telegram;
 mod worktrees;

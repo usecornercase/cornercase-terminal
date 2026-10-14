@@ -69,6 +69,13 @@ impl FakeGrok {
             .expect("write the active sessions");
     }
 
+    pub(crate) fn add_prompt(&self, millis: u64) {
+        let line = format!(
+            "{{\"timestamp\":1791925800,\"params\":{{\"_meta\":{{\"agentTimestampMs\":{millis}}},\"update\":{{\"sessionUpdate\":\"user_message_chunk\",\"content\":{{\"type\":\"text\",\"text\":\"later\"}},\"_meta\":{{\"promptIndex\":0}}}}}}}}\n"
+        );
+        append(&self.session.join("updates.jsonl"), &line);
+    }
+
     pub(crate) fn report(&self, status: &str) {
         let now = Stamp(SystemTime::now()).to_string();
         let line = match status {
