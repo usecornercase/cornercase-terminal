@@ -301,6 +301,32 @@ mod agents {
         assert!(html(&order).starts_with("<b>✓ claude finished</b> · "));
     }
 
+    #[rstest::rstest]
+    #[case::a_flow_member(true, false)]
+    #[case::an_agent_in_no_flow(false, true)]
+    fn a_flow_member_finishing_a_turn_messages_no_one(#[case] member: bool, #[case] sent: bool) {
+        use crate::flows::run::{Member, Run};
+        let (mut agent, mut phone, id) = seen_agent();
+        away(&mut agent, &mut phone);
+        if member {
+            let mut run = Run::new(agent.app.projects[0].workspaces[0].id, crate::flows::Flow::default(), "x".into());
+            run.members.push(Member { role: "coder".into(), pane: id });
+            agent.app.runs.push(run);
+        }
+        let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
+        term.feed(b"\x1b]7501;state=done\x07");
+        let now = Instant::now();
+        for offset in [1, 3] {
+            let at = now + Duration::from_secs(offset);
+            agent.app.watch_agents(at);
+            agent.app.watch_telegram(at);
+        }
+        let answered = Instant::now() + Duration::from_millis(1_500);
+        agent.until("the last message is read", |_| Instant::now() >= answered);
+        let orders = phone.read(&mut agent.app);
+        assert_eq!(orders.iter().any(|(_, order)| matches!(order, Order::Send { .. })), sent, "{orders:?}");
+    }
+
     #[test]
     fn reported_idle_cancels_a_turn_without_sending_a_finished_message() {
         let (mut agent, mut phone, id) = seen_agent();
