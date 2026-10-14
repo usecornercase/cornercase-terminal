@@ -267,7 +267,7 @@ impl App {
             Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),
             Command::Split(split) => self.split_request(client, caller, split, area, now),
-            Command::Start(start) => self.start_request(client, caller, start, area, now),
+            Command::Start(start) | Command::StartWith(start) => self.start_request(client, caller, start, area, now),
             Command::Send(send) => self.send_request(client, caller, send, now),
             Command::Keys(keys) => self.keys_request(caller, &keys, now),
             Command::Read(read) => self.read_request(caller, &read),

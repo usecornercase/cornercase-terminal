@@ -148,6 +148,24 @@ pub(crate) fn with_mode(kind: &str, args: &[String], modes: &[Mode], name: Optio
     [mode_args(modes, name), extra_args(kind, args, modes)].concat()
 }
 
+pub(crate) fn with_model(kind: &str, args: Vec<String>, model: Option<&str>) -> Vec<String> {
+    let (Some(known), Some(model)) = (Known::of(kind), model.map(str::trim).filter(|m| !m.is_empty())) else {
+        return args;
+    };
+    let flag = known.model_flag();
+    let mut out = Vec::with_capacity(args.len() + 2);
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if arg == flag {
+            args.next();
+        } else if !arg.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')) {
+            out.push(arg);
+        }
+    }
+    out.extend([flag.to_string(), model.to_string()]);
+    out
+}
+
 pub(crate) fn with_extra(kind: &str, args: &[String], modes: &[Mode], extra: Vec<String>) -> Vec<String> {
     [mode_args(modes, mode_of(kind, args, modes).as_deref()), extra].concat()
 }
@@ -190,10 +208,37 @@ pub(crate) fn join_args(args: &[String]) -> String {
 }
 
 pub(crate) fn command_line(config: &Config, kind: &str) -> String {
-    std::iter::once(quote(&command(config, kind)))
-        .chain(args(config, kind).iter().map(|a| quote(a)))
-        .collect::<Vec<_>>()
-        .join(" ")
+    line(config, kind, args(config, kind))
+}
+
+fn line(config: &Config, kind: &str, args: Vec<String>) -> String {
+    std::iter::once(command(config, kind)).chain(args).map(|a| quote(&a)).collect::<Vec<_>>().join(" ")
+}
+
+pub(crate) fn start_line(
+    config: &Config,
+    kind: &str,
+    mode: Option<&str>,
+    model: Option<&str>,
+) -> Result<String, String> {
+    let mut chosen = args(config, kind);
+    if let Some(name) = mode {
+        let table = modes(config, kind);
+        if table.iter().all(|(known, _)| known != name) {
+            let names: Vec<&str> = table.iter().map(|(known, _)| known.as_str()).collect();
+            return Err(if names.is_empty() {
+                format!("{kind} has no modes in cornercase; add some with agent_modes in config.json")
+            } else {
+                format!("{kind} has no mode `{name}`; its modes are `{}`", names.join("`, `"))
+            });
+        }
+        chosen = with_mode(kind, &chosen, &table, Some(name));
+    }
+    if model.is_some_and(|m| !m.trim().is_empty()) && Known::of(kind).is_none() {
+        let known = Known::ALL.map(Known::name).join(", ");
+        return Err(format!("cornercase passes a model to {known} only; give {kind} its model in agent_args"));
+    }
+    Ok(line(config, kind, with_model(kind, chosen, model)))
 }
 
 pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {

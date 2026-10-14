@@ -48,6 +48,7 @@ pub(crate) enum Command {
     NewTab(NewTab),
     Split(Split),
     Start(Start),
+    StartWith(Start),
     Send(SendText),
     Keys(Keys),
     Read(Read),
@@ -91,6 +92,7 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
+            Self::StartWith(_) => 22,
         }]
     }
 
@@ -113,8 +115,9 @@ impl Command {
                 fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
                 fields.add("focus", split.focus);
             }
-            Self::Start(start) => {
-                fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
+            Self::Start(start) | Self::StartWith(start) => {
+                fields.maybe("agent", start.agent.as_ref()).maybe("model", start.model.as_ref());
+                fields.maybe("mode", start.mode.as_ref()).maybe("worktree", start.worktree.as_ref());
                 fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
@@ -180,7 +183,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 22] = [
+    pub(crate) const NAMES: [&str; 23] = [
         "status",
         "open",
         "new-workspace",
@@ -203,6 +206,7 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "start-with",
     ];
 }
 
@@ -279,6 +283,8 @@ pub(crate) struct Split {
 #[serde(default)]
 pub(crate) struct Start {
     pub(crate) agent: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) mode: Option<String>,
     pub(crate) project: Option<u64>,
     pub(crate) worktree: Option<String>,
     pub(crate) workspace: Option<u64>,

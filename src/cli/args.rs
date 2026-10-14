@@ -201,6 +201,14 @@ pub(crate) struct StartArgs {
                 running here]"
     )]
     pub(crate) agent: Option<String>,
+    #[arg(long, value_name = "MODEL", help = "The model, such as opus or gpt-5.5 [default: the agent's own]")]
+    pub(crate) model: Option<String>,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]"
+    )]
+    pub(crate) mode: Option<String>,
     #[arg(
         long,
         value_name = "BRANCH",

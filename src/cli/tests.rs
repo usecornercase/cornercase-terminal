@@ -168,6 +168,14 @@ mod parsing {
     }
 
     #[test]
+    fn start_takes_a_model_and_a_mode() {
+        let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus"]).expect("parse");
+
+        let Some(Command::Control(Control::Start(start))) = cli.command else { panic!("not start") };
+        assert_eq!((start.mode.as_deref(), start.model.as_deref()), (Some("plan"), Some("opus")));
+    }
+
+    #[test]
     fn the_server_stays_out_of_the_help() {
         let help = Cli::command().render_help().to_string();
 

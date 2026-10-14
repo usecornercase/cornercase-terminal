@@ -66,7 +66,9 @@ pub(super) const SPLIT_HELP: &str = "Examples:
   cornercase split -- htop
   cornercase split --pane 7 --down -- tail -f server.log";
 pub(super) const START_HELP: &str =
-    "The agent starts with its command and arguments from settings → agents. If it asks whether
+    "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
+chosen there by another of the agent's modes, and --model adds the agent's own model flag (an older
+server refuses both rather than start the agent without them). If it asks whether
 you trust the folder, the question waits for your answer unless settings → agents accept it for
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
@@ -75,7 +77,8 @@ submitted, and the command prints the pane's id; it fails if the agent never sho
 
 Examples:
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
-  cornercase start codex --prompt-file task.md --wait --timeout 1800";
+  cornercase start codex --prompt-file task.md --wait --timeout 1800
+  cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'";
 pub(super) const SEND_HELP: &str =
     "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer

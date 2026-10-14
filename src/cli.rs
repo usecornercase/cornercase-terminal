@@ -256,8 +256,11 @@ fn run_start(start: StartArgs) -> Result<()> {
         )),
         (None, None) => None,
     };
+    let name = if start.model.is_some() || start.mode.is_some() { "start-with" } else { "start" };
     let request = control::Start {
         agent: start.agent,
+        model: start.model,
+        mode: start.mode,
         project: None,
         worktree: start.worktree,
         workspace: start.workspace,
@@ -268,7 +271,8 @@ fn run_start(start: StartArgs) -> Result<()> {
         timeout: start.timeout,
         focus: start.create.focus,
     };
-    say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
+    let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
+    say(ask(name, command)?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
 }
