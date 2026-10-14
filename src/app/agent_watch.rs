@@ -77,6 +77,9 @@ impl App {
                                 term.agent.give_up();
                             }
                             let notice = term.agent.update(activity, seen, now);
+                            if members.contains(&term.id) && term.agent.status() == Some(activity::Status::Done) {
+                                term.agent.see();
+                            }
                             let state = term.agent.state();
                             if let Some(kind) = term.context.kind()
                                 && let Some((pid, _)) = term.context.agent()
