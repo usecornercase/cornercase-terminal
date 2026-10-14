@@ -1,12 +1,14 @@
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use rustix::io::Errno;
-use rustix::process::{Pid, test_kill_process};
+use rustix::process::{Pid, Signal, kill_process_group, test_kill_process};
 
 pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files, peer_uid, started};
 
@@ -24,31 +26,45 @@ pub(crate) fn stop(mut child: Child) {
 }
 
 pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Result<Option<Output>> {
-    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let deadline = Instant::now() + timeout;
+    let mut child =
+        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0).spawn()?;
+    let group = i32::try_from(child.id()).ok().and_then(Pid::from_raw);
     let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
-    let Some(status) = wait_within(&mut child, timeout)? else { return Ok(None) };
-    Ok(Some(Output { status, stdout: stdout.join().unwrap_or_default(), stderr: stderr.join().unwrap_or_default() }))
+    let left = || deadline.saturating_duration_since(Instant::now());
+    let output = wait_until(&mut child, deadline)?.and_then(|status| {
+        let stdout = stdout.recv_timeout(left()).ok()?;
+        let stderr = stderr.recv_timeout(left()).ok()?;
+        Some(Output { status, stdout, stderr })
+    });
+    if output.is_none() {
+        if let Some(group) = group {
+            let _ = kill_process_group(group, Signal::KILL);
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    Ok(output)
 }
 
-fn drain(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
+fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = pipe {
             let _ = pipe.read_to_end(&mut bytes);
         }
-        bytes
-    })
+        let _ = tx.send(bytes);
+    });
+    rx
 }
 
-fn wait_within(child: &mut Child, timeout: Duration) -> io::Result<Option<ExitStatus>> {
-    let deadline = Instant::now() + timeout;
+fn wait_until(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
             return Ok(None);
         }
         thread::sleep(POLL);

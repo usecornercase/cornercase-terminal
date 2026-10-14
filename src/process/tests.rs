@@ -225,16 +225,33 @@ mod output_within {
         assert_eq!(output.status.code(), Some(3));
     }
 
-    #[test]
-    fn kills_a_command_that_hangs() {
+    fn gives_up_quickly(script: &str) {
         let started = Instant::now();
         let mut command = Command::new("/bin/sh");
-        command.args(["-c", "exec sleep 30"]);
+        command.args(["-c", script]);
 
         let output = output_within(&mut command, Duration::from_millis(300)).expect("ran");
 
         assert!(output.is_none());
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn kills_a_command_that_hangs() {
+        gives_up_quickly("exec sleep 30");
+    }
+
+    #[test]
+    fn a_child_left_holding_the_output_is_stopped_too() {
+        let tmp = crate::test_util::TempDir::new();
+        let pid_file = tmp.path().join("pid");
+
+        gives_up_quickly(&format!("sleep 30 & echo $! > '{}'; exit 0", pid_file.display()));
+
+        let pid: i32 = std::fs::read_to_string(&pid_file).expect("pid").trim().parse().expect("a pid");
+        crate::test_util::wait_until("the child it left is gone", || {
+            !alive(pid) || name(pid).is_none_or(|n| n != "sleep")
+        });
     }
 
     #[test]
