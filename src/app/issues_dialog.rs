@@ -608,6 +608,7 @@ impl App {
                 command: agents::command_line(&self.config, agent),
                 prompt: Some(issues::prompt(&self.config.prompt, issue, &branch)),
                 submit: self.config.submit,
+                trusted: false,
             },
         };
         let in_a_tab = match &place {

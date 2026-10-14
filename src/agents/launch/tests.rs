@@ -5,7 +5,12 @@ use super::*;
 const MS: Duration = Duration::from_millis(1);
 
 fn spec(submit: bool) -> Spec {
-    Spec { command: "claude --permission-mode plan".into(), prompt: Some("https://x.dev/7\nplease".into()), submit }
+    Spec {
+        command: "claude --permission-mode plan".into(),
+        prompt: Some("https://x.dev/7\nplease".into()),
+        submit,
+        trusted: false,
+    }
 }
 
 struct World {

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::run::{Kind, MAX_MESSAGES, Member, Message, Run};
 use super::store::{self, Origin};
-use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, builtin, command};
+use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage, branch, builtin, command, resume};
 use crate::agents::Known;
 use crate::config::Config;
 use crate::test_util::TempDir;
@@ -193,6 +193,39 @@ mod commands {
                  ../docs"
             )
         );
+    }
+
+    #[test]
+    fn a_model_in_the_settings_gives_way_to_the_roles() {
+        let mut config = Config::default();
+        config.agent_args.insert("codex".into(), vec!["--model".into(), "o3".into(), "--search".into()]);
+        let role = Role { agent: "codex".into(), model: Some("gpt-5.5".into()), ..Role::default() };
+        assert_eq!(
+            command(&config, &role).as_deref(),
+            Some("codex --dangerously-bypass-approvals-and-sandbox --search --model gpt-5.5")
+        );
+    }
+
+    #[test]
+    fn a_role_resumes_with_its_mode_model_and_environment() {
+        let role = Role {
+            agent: "claude".into(),
+            model: Some("opus".into()),
+            env: [("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string())].into(),
+            ..Role::default()
+        };
+        assert_eq!(
+            resume(&Config::default(), &role, "c1".into()).as_deref(),
+            Some("env CLAUDE_CODE_USE_BEDROCK=1 claude --dangerously-skip-permissions --model opus --resume c1")
+        );
+        assert_eq!(resume(&Config::default(), &Role { agent: "opencode".into(), ..Role::default() }, "c".into()), None);
+    }
+
+    #[test]
+    fn the_branch_is_a_slug_of_the_tasks_first_words() {
+        assert_eq!(branch("Fix the login form, then add a test for the empty password"), "fix-the-login-form-then-add");
+        assert_eq!(branch("¿Qué?"), "que");
+        assert_eq!(branch("!!!"), "flow");
     }
 
     #[test]
