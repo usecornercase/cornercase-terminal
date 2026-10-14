@@ -145,15 +145,15 @@ Over SSH, it's your local terminal that needs to allow it.
 - Only a tab you aren't looking at notifies you, and only when Claude Code runs in it; see [Notifications](../../guides/projects-workspaces-tabs/#notifications).
 - Check that **settings → UI → desktop notifications** isn't *off*. With *auto*, cornercase picks from your terminal's name; if it picks wrong, for example over SSH with a terminal that doesn't say its name, choose the one your terminal understands.
 - Your system must let your terminal show notifications: on macOS, in **System Settings → Notifications**.
+- **iTerm2** shows them only with *Notification Center Alerts* on, in **Settings → Profiles → Terminal**.
+- **foot** shows them with `notify-send`, which has to be installed.
+- Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour and VS Code are asked not to: look for the toast.
+- Inside tmux, screen or Zellij, cornercase only rings the bell, which your multiplexer decides what to do with.
 
 ### No sound plays
 
 - **settings → UI → sound** is off until you turn it on. The tab you are looking at never plays one, and a question answered within a second stays quiet, the same as a [notification](../../guides/projects-workspaces-tabs/#notifications).
 - The window needs `afplay` on macOS, or `pw-play`, `paplay` or `aplay` on Linux. A file you chose has to exist on the computer where that window is.
-- **iTerm2** shows them only with *Notification Center Alerts* on, in **Settings → Profiles → Terminal**.
-- **foot** shows them with `notify-send`, which has to be installed.
-- Ghostty on macOS, foot, Konsole and Warp don't show one while their window is in front, and kitty, Contour and VS Code are asked not to: look for the toast.
-- Inside tmux, screen or Zellij, cornercase only rings the bell, which your multiplexer decides what to do with.
 
 ### An image shows a message instead of the picture
 
