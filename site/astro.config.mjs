@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
+const discord = 'https://discord.gg/aYqCa4xC4R';
 const site = process.env.SITE_ORIGIN || 'https://usecornercase.dev';
 const base = process.env.SITE_BASE ?? '';
 
@@ -18,7 +19,10 @@ export default defineConfig({
         'A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse.',
       logo: { src: './src/assets/logo.svg', alt: '' },
       favicon: '/favicon.svg',
-      social: [{ icon: 'github', label: 'GitHub', href: repo }],
+      social: [
+        { icon: 'github', label: 'GitHub', href: repo },
+        { icon: 'discord', label: 'Discord', href: discord },
+      ],
       editLink: { baseUrl: `${repo}/edit/main/site/` },
       expressiveCode: {
         themes: ['catppuccin-mocha', 'catppuccin-latte'],

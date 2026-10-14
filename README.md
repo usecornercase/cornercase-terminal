@@ -4,12 +4,13 @@
 [![Release](https://img.shields.io/github/v/release/usecornercase/cornercase-terminal)](https://github.com/usecornercase/cornercase-terminal/releases/latest)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![Docs](https://img.shields.io/badge/docs-usecornercase.dev-875fff)](https://usecornercase.dev/docs/)
+[![Discord](https://img.shields.io/badge/chat-Discord-5865f2?logo=discord&logoColor=white)](https://discord.gg/aYqCa4xC4R)
 
 A terminal multiplexer built for running coding agents in parallel. Every agent gets its own git worktree and tab, the sidebar shows which ones are working, waiting or done, the diff sits next to the agent, and a background server keeps everything running when you close the window. Everything is a click: your keyboard stays with the program in the pane.
 
 ![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away, and when you close the terminal they keep working. A cornercase window shows seven projects in two groups, the three worktrees of web-shop with a Claude Code agent working in each, and a Claude Code conversation about dark mode.](site/public/readme.png)
 
-**[usecornercase.dev](https://usecornercase.dev)** · [First steps](https://usecornercase.dev/docs/first-steps/) · [Try the live simulation](https://usecornercase.dev/#demo)
+**[usecornercase.dev](https://usecornercase.dev)** · [First steps](https://usecornercase.dev/docs/first-steps/) · [Try the live simulation](https://usecornercase.dev/#demo) · [Discord](https://discord.gg/aYqCa4xC4R)
 
 ## Why
 
@@ -86,7 +87,7 @@ cornercase read --pane "$pane" --last-message   # what it said, from its own tra
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas are welcome on [Discord](https://discord.gg/aYqCa4xC4R). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
 
 ## License
 
