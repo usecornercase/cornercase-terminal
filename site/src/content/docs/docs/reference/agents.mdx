@@ -49,11 +49,38 @@ When you press **start**, cornercase uses, in this order:
 
 cornercase looks at the program in the foreground of the active pane, and compares the file names of its first two arguments with each agent's command. That way it recognises `/usr/local/bin/claude --resume` as `claude`, and also agents started through an interpreter, like `node …/gemini-cli/bin/gemini`, as `gemini`.
 
-Codex's npm wrapper, `node …/@openai/codex/bin/codex.js`, is recognised too. Its tabs show the model and [context use](../../guides/projects-workspaces-tabs/#how-full-the-context-is) from that pane's own rollout file, following the wrapper's native child, or by folder when Codex's background app-server writes the rollouts. They also show whether Codex is working, needs you or finished, from the same rollout and Codex's terminal title. The rollout format and the title are verified against Codex CLI 0.160.0.
+Codex's npm wrapper, `node …/@openai/codex/bin/codex.js`, is recognised too. Its tabs show the model and [context use](../../guides/projects-workspaces-tabs/#how-full-the-context-is) from that pane's own rollout file, following the wrapper's native child, or by folder when Codex's background app-server writes the rollouts. They also show whether Codex is working, needs you or finished, from OSC 7501 when emitted, otherwise the same rollout and Codex's terminal title. The rollout format and the title are verified against Codex CLI 0.160.0.
 
 ### What the agent is doing
 
-Tabs where Claude Code, Codex, Gemini CLI, opencode or Grok Build runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). cornercase recognises these agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so an opencode tab never shows `!`. Gemini uses its dynamic window title for status, and its session JSONL under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp/<project>/chats` for prompts, replies and context. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled in Gemini's settings for icons and notifications; a fixed or hidden title gives no status. Two Gemini using the same home in the same folder hide their conversation data. Grok Build is followed from `$GROK_HOME` (or `~/.grok`): the row in `active_sessions.json` for the pane's process, then that session's `events.jsonl`, `updates.jsonl`, `chat_history.jsonl`, `summary.json` and `signals.json`. A permission prompt or an open question or plan approval shows `!`; other tools, including a shell, stay working. A prompt typed while it works waits. Its `/` and `!` lines are local commands. Other agents don't get an icon yet.
+Tabs where Claude Code, Codex, Gemini CLI, opencode or Grok Build runs show whether it is working, needs you or finished, and the rows above them show what needs you; see [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). Under the tab's name they also show the model and [how full its context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). OSC 7501 reports take precedence for every recognised agent. Without them, cornercase recognises these five agents in every pane this way, every half second. For Claude it reads the session file Claude Code keeps for that process in `~/.claude/sessions` (or `$CLAUDE_CONFIG_DIR/sessions`) and the end of that session's transcript in `projects`; for Codex, the terminal title Codex sets and the rollout file above; for opencode, the database it keeps its sessions in (`~/.local/share/opencode/opencode.db`), which has no pending permissions, so without OSC 7501 an opencode tab never shows `!`. Gemini uses its dynamic window title for status, and its session JSONL under `<GEMINI_CLI_HOME or HOME>/.gemini/tmp/<project>/chats` for prompts, replies and context. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled in Gemini's settings for icons and notifications; a fixed or hidden title gives no status. Two Gemini using the same home in the same folder hide their conversation data. Grok Build is followed from `$GROK_HOME` (or `~/.grok`): the row in `active_sessions.json` for the pane's process, then that session's `events.jsonl`, `updates.jsonl`, `chat_history.jsonl`, `summary.json` and `signals.json`. A permission prompt or an open question or plan approval shows `!`; other tools, including a shell, stay working. A prompt typed while it works waits. Its `/` and `!` lines are local commands. Other recognised agents get status icons and notifications when they emit OSC 7501.
+
+### Program Status Protocol
+
+When a recognised agent emits [OSC 7501](https://www.superlogical.com/rex/docs/build/program-status), cornercase uses its reported state for the tab, the agents section, the working icon, desktop notifications and Telegram while away. It works for agents in the catalogue and [custom commands](#your-own-agents), even when cornercase has no session-file reader for them. No setting or hook is needed. Model, context and conversation resume still need an agent-specific reader.
+
+| Reported state | What cornercase shows |
+| --- | --- |
+| `idle` | Grey `○`, ready for a new prompt. Cancelling work with this state does not mark it finished. |
+| `working` | Yellow `◐`, or the spinner you selected. |
+| `blocked` | Orange `!`, waiting for permission, an answer or authentication. |
+| `done` | Green `✓` while unseen, cleared when you open the tab. |
+| `error` | Red `!`, failed, until another state replaces it or it is cleared. Scripts report `failed`. |
+| `clear` | Remove the record and return to the existing detection when no records remain. |
+
+The agent writes a sequence to its terminal, for example:
+
+```sh
+printf '\033]7501;state=working\033\\'
+printf '\033]7501;state=blocked:kind=permission\033\\'
+printf '\033]7501;state=done\033\\'
+```
+
+<Screen name="agent-failed" alt="A reported failure shows a red exclamation mark for the agent in its tab, the project row and the agents section" crop={[0, 0, 110, 44]} />
+
+BEL can end a sequence too. cornercase answers the protocol's support query, `OSC 7501 ; ?`. Records can use hierarchical `id` values for subtasks: blocked takes priority over error, done, working and idle; clearing an id removes its children too. Reports persist without a heartbeat. A shell prompt expires idle, working and blocked records, and a full terminal reset clears all of them. A state from an old process never overrides a new agent in the same pane.
+
+When no applicable report exists, the five readers above keep working as before. Invalid reports are ignored. A shell or build that emits the protocol is still a shell or build; the foreground command must be recognised as an agent.
 
 ## Modes and arguments
 
@@ -156,7 +183,7 @@ The command and the extra arguments are the ones in **settings → Agents**; the
 
 An agent left working stops when the computer goes to sleep: its process freezes and its request or build times out. Turn on **settings → Agents → keep awake** (`keep_awake`) and, while at least one agent is working, the computer does not go to sleep on its own. Once none is, cornercase waits 30 seconds, so agents that end and start turns back to back don't take and release it every few seconds, then lets the computer sleep as usual.
 
-- **What counts**: an agent whose status is working, the `◐` on its tab (or the spinner, with [working icon](../configuration/#working_icon) set to *spinner*). One waiting for you (`!`) does not, nor a Claude Code agent whose turn is over while a shell it started in the background still runs, so a dev server an agent left running doesn't keep the machine up all night. opencode never says it is waiting for you, so one at a permission prompt counts as working until you answer.
+- **What counts**: an agent whose status is working, the `◐` on its tab (or the spinner, with [working icon](../configuration/#working_icon) set to *spinner*). One waiting for you (`!`) does not, nor a Claude Code agent whose turn is over while a shell it started in the background still runs, so a dev server an agent left running doesn't keep the machine up all night. Without OSC 7501, opencode never says it is waiting for you, so one at a permission prompt counts as working until you answer.
 - **Claude Code on a Mac** already keeps the computer awake while it works, by itself. Grok Build can do the same with its own setting. Neither changes this one: cornercase still keeps one lock for every agent, and waiting for you does not hold it. The setting matters most for Codex, opencode and Gemini CLI, and on Linux.
 - **What it blocks**: only sleeping when idle. The display still turns off, the screen still locks, and sleep you ask for (the menu, closing the lid) still happens.
 - **Which machine**: the server's, where the agents run. With `cornercase remote` the other machine stays awake; the laptop showing the window may still sleep, and the window reconnects when it wakes.

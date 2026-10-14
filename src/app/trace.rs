@@ -3,7 +3,6 @@ use std::time::SystemTime;
 
 use super::layout::Side;
 use super::{App, Toast};
-use crate::agents;
 use crate::control::{self, Ids, What};
 use crate::log::{self, Level};
 use crate::project::{Hierarchy, Phase};
@@ -74,7 +73,7 @@ struct PaneNow<'a> {
 impl<'a> PaneNow<'a> {
     fn of(term: &'a Term) -> Self {
         Self {
-            agent: term.agent.agent().map(agents::Known::name),
+            agent: term.agent.agent(),
             state: term.agent.state(),
             job: term.job.as_ref().map(|job| (job.pid, job.program.as_str())),
         }

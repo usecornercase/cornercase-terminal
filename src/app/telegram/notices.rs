@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use super::{Asked, Route};
-use crate::agents::Known;
 use crate::agents::activity::{MOON, SHELL, Status};
 use crate::app::App;
 use crate::control::{Command, LastMessage};
@@ -47,7 +46,7 @@ pub(super) struct Agent {
 
 pub(super) fn icon(status: Option<Status>) -> &'static str {
     match status {
-        Some(Status::Waiting) => "!",
+        Some(Status::Waiting | Status::Failed) => "!",
         Some(Status::Done) => "✓",
         Some(Status::Pending) => "●",
         Some(Status::Working) => MOON,
@@ -91,7 +90,7 @@ impl App {
         let project = &self.projects[p];
         let workspace = &project.workspaces[w];
         let term = workspace.tabs[t].pane_by(pane)?;
-        let kind = term.agent.agent().map(Known::name)?.to_string();
+        let kind = term.agent.agent()?.to_string();
         let mut place = self.project_label(project);
         if project.workspaces.len() > 1 {
             place = format!("{place}{CRUMB_SEPARATOR}{}", workspace.label());
@@ -115,6 +114,7 @@ impl App {
         let mut notices = Vec::new();
         for term in self.projects.terms() {
             let Some(state) = term.agent.state() else { continue };
+            let state = if term.agent.reported_done() { "done" } else { state };
             seen.insert(term.id);
             let fresh =
                 Watch { state, since: now, settled: state, busy: false, question: None, asked: now, looked: now };
@@ -144,7 +144,10 @@ impl App {
                     watch.asked = now;
                     notices.push(Notice::Waiting(term.id));
                 }
-            } else if over && watch.busy {
+            } else if over
+                && !term.agent.reported_idle()
+                && (watch.busy || matches!(state, "done" | "failed") && watch.settled != state)
+            {
                 notices.push(Notice::Finished(term.id, state == SHELL));
             }
             watch.settled = state;
@@ -181,8 +184,14 @@ impl App {
 
     fn notice_finished(&mut self, pane: u64, shell: bool) {
         let Some(agent) = self.agent_at(pane) else { return };
-        let what = if shell { "ended its turn" } else { "finished" };
-        let mut header = format!("<b>✓ {} {what}</b> · {}", html::escape(&agent.kind), html::escape(&agent.place));
+        let (icon, what) = if agent.status == Some(Status::Failed) {
+            ("!", "failed")
+        } else if shell {
+            ("✓", "ended its turn")
+        } else {
+            ("✓", "finished")
+        };
+        let mut header = format!("<b>{icon} {} {what}</b> · {}", html::escape(&agent.kind), html::escape(&agent.place));
         if shell {
             header.push_str(" · a background shell still runs");
         }

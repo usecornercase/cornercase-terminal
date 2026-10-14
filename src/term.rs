@@ -2,6 +2,7 @@ pub(crate) mod emulator;
 pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
+mod status;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -43,6 +44,7 @@ pub(crate) struct Term {
     pub(crate) id: u64,
     pub(crate) emulator: Emulator,
     pub(crate) agent: activity::Pane,
+    pub(crate) status_agent: Option<(i32, String)>,
     pub(crate) context: context::Pane,
     pub(crate) memory: memory::Pane,
     pub(crate) resume: Option<AgentState>,
@@ -124,6 +126,7 @@ impl Term {
             id,
             emulator,
             agent: activity::Pane::default(),
+            status_agent: None,
             context: context::Pane::default(),
             memory: memory::Pane::default(),
             resume: None,
@@ -143,6 +146,13 @@ impl Term {
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.output_at = Instant::now();
+        let pid = self.foreground_pid();
+        let reporting = if self.interactive && pid == self.shell_pid() {
+            self.status_agent.as_ref().filter(|(pid, _)| process::alive(*pid)).map(|(pid, _)| *pid).or(pid)
+        } else {
+            pid
+        };
+        self.emulator.status_process(reporting);
         self.emulator.feed(bytes);
     }
 
@@ -209,7 +219,7 @@ impl Term {
     }
 
     fn seen_agent_screen(&self) -> Option<(Known, String)> {
-        let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return None };
+        let (Some(agent), Some(seen)) = (self.agent.agent().and_then(Known::of), self.input_seen) else { return None };
         (self.foreground_pid() == Some(seen)).then(|| (agent, self.emulator.screen_text().unwrap_or_default()))
     }
 

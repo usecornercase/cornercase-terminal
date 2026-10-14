@@ -66,7 +66,7 @@ mod marking {
     fn with_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
         let (mut app, rx, dirs) = app_with(1);
         let term = app.term_mut().expect("a pane");
-        term.agent.follow(Some(agents::Known::Claude));
+        term.agent.follow(Some(agents::Known::Claude.name()));
         term.agent.update(Some(Activity::Idle), true, Instant::now());
         (app, rx, dirs)
     }

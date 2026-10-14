@@ -32,6 +32,40 @@ fn style_of(output: &[u8]) -> Style {
     snapshot_of(output).rows[0][0].style
 }
 
+mod program_status {
+    use super::*;
+    use crate::agents::activity::Activity;
+    use crate::term::status::REPLY;
+
+    #[test]
+    fn every_split_of_a_sequence_is_accepted_without_drawing_it() {
+        let bytes = b"before\x1b]7501;state=blocked:kind=question\x1b\\after";
+        for at in 0..=bytes.len() {
+            let (mut emu, _) = emulator();
+            emu.feed(&bytes[..at]);
+            emu.feed(&bytes[at..]);
+            assert_eq!(emu.program_activity(), Some(Activity::Waiting), "split at {at}");
+            assert!(emu.snapshot().expect("snapshot").contents().starts_with("beforeafter"));
+        }
+    }
+
+    #[test]
+    fn query_replies_stay_in_order_with_ghostty_replies() {
+        assert_eq!(replies_to(b"\x1b]7501;?\x1b\\\x1b[5n"), format!("{}\x1b[0n", String::from_utf8_lossy(REPLY)));
+        assert_eq!(replies_to(b"\x1b[5n\x1b]7501;?\x07"), format!("\x1b[0n{}", String::from_utf8_lossy(REPLY)));
+    }
+
+    #[test]
+    fn a_query_split_byte_by_byte_gets_one_reply() {
+        let (mut emu, replies) = emulator();
+        for byte in b"\x1b]7501;?\x1b\\" {
+            emu.feed(&[*byte]);
+        }
+        assert_eq!(replies.borrow().as_slice(), REPLY);
+        assert_eq!(emu.program_activity(), None);
+    }
+}
+
 mod snapshot {
     use super::*;
 

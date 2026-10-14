@@ -324,7 +324,7 @@ fn read_last_message_gives_what_the_agent_wrote_last_and_whether_its_turn_is_ove
 fn the_record_of_another_agent_is_not_read() {
     let (mut agent, id) = known_conversation();
     let term = agent.app.projects.iter_mut().flat_map(Project::terms_mut).find(|t| t.id == id);
-    term.expect("the agent's pane").agent.follow(Some(crate::agents::Known::Codex));
+    term.expect("the agent's pane").agent.follow(Some(crate::agents::Known::Codex.name()));
 
     let message = error(now(&mut agent.app, None, last_message(id)));
 

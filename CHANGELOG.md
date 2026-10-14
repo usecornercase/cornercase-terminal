@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.91
+## 0.12.92
 
 - GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so GitLab links the merge request from it to the issue and, with its automatic issue closing on, closes the issue when the merge request reaches the default branch. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope; both can be changed later in **Settings → Issues → GitLab**. A token in `GITLAB_TOKEN` takes precedence instead, and is changed outside cornercase, then `cornercase kill-server`.
+
+## 0.12.91
+
+- Agents that report their state with OSC 7501 now drive the status icons, spinner and notifications directly. Other recognised agents, including custom commands, get status indicators when they emit the protocol. Agents without it keep their existing status detection.
+- A failed agent shows a red `!`, reports `failed` to scripts and sends a failure notification, including on Telegram while away.
 
 ## 0.12.90
 

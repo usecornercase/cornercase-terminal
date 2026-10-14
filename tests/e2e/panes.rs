@@ -19,7 +19,9 @@ fn the_wheel_scrolls_back_through_a_shells_output() {
     for _ in 0..80 {
         app.send(format!("\x1b[<64;{x};{y}M").as_bytes());
     }
-    app.wait_for("the first rows show with the badge", |s| s.contains("row-1 ") && s.contains(" more "));
+    app.wait_for("the first rows show with the badge", |s| {
+        s.lines().any(|row| row.trim_end().ends_with("row-1")) && s.contains(" more ")
+    });
 
     app.send(b"x");
     app.wait_for("a key brings the last rows back", |s| s.contains("row-200") && !s.contains(" more "));

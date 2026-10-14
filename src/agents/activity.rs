@@ -1,8 +1,6 @@
 use std::ops::RangeInclusive;
 use std::time::{Duration, Instant};
 
-use crate::agents::Known;
-
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 const NOTIFY_AFTER: Duration = Duration::from_secs(1);
 pub(crate) const SHELL: &str = "shell";
@@ -16,6 +14,9 @@ pub(crate) enum Activity {
     Shell,
     Waiting,
     Idle,
+    Ready,
+    Done,
+    Failed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -24,16 +25,17 @@ pub(crate) enum Status {
     Working,
     Done,
     Pending,
+    Failed,
     Waiting,
 }
 
 impl Status {
     pub(crate) fn needs_you(self) -> bool {
-        matches!(self, Self::Done | Self::Pending | Self::Waiting)
+        matches!(self, Self::Done | Self::Pending | Self::Failed | Self::Waiting)
     }
 
     fn notifies(self) -> bool {
-        matches!(self, Self::Done | Self::Waiting)
+        matches!(self, Self::Done | Self::Failed | Self::Waiting)
     }
 
     pub(crate) fn name(self) -> &'static str {
@@ -42,6 +44,7 @@ impl Status {
             Self::Working => "working",
             Self::Done => "done",
             Self::Pending => "pending",
+            Self::Failed => "failed",
             Self::Waiting => "waiting",
         }
     }
@@ -72,7 +75,7 @@ struct Marks {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct Pane {
-    agent: Option<Known>,
+    agent: Option<String>,
     activity: Option<Activity>,
     marks: Marks,
     restored: bool,
@@ -83,11 +86,11 @@ pub(crate) struct Pane {
 }
 
 impl Pane {
-    pub(crate) fn follow(&mut self, agent: Option<Known>) {
-        if self.agent != agent {
+    pub(crate) fn follow(&mut self, agent: Option<&str>) {
+        if self.agent.as_deref() != agent {
             let kept = Self { marks: self.marks, restored: true, notified: true, ..Self::default() };
             *self = if self.restored && self.agent.is_none() { kept } else { Self::default() };
-            self.agent = agent;
+            self.agent = agent.map(str::to_string);
         }
     }
 
@@ -100,12 +103,21 @@ impl Pane {
         let finished = matches!(self.activity, Some(Activity::Working | Activity::Shell | Activity::Waiting));
         if activity == Some(Activity::Working) {
             self.worked = Some(now);
-            self.marks.pending &= !matches!(self.activity, Some(Activity::Idle | Activity::Waiting));
+            self.marks.pending &= !matches!(
+                self.activity,
+                Some(Activity::Idle | Activity::Ready | Activity::Done | Activity::Failed | Activity::Waiting)
+            );
         }
         if activity.is_some() && self.activity.is_some() && activity != self.activity {
             self.moved = Some(now);
         }
-        self.marks.unseen = activity == Some(Activity::Idle) && !seen && (self.marks.unseen || finished);
+        self.marks.unseen = !seen
+            && match activity {
+                Some(Activity::Idle) => self.marks.unseen || finished,
+                Some(Activity::Ready) => self.marks.unseen,
+                Some(Activity::Done) => self.marks.unseen || self.activity != activity,
+                _ => false,
+            };
         self.activity = activity;
         let status = self.status();
         if status != before {
@@ -140,6 +152,18 @@ impl Pane {
         self.marks.unseen
     }
 
+    pub(crate) fn finished_seen(&self) -> bool {
+        self.reported_done() && !self.marks.unseen
+    }
+
+    pub(crate) fn reported_done(&self) -> bool {
+        self.activity == Some(Activity::Done)
+    }
+
+    pub(crate) fn reported_idle(&self) -> bool {
+        self.activity == Some(Activity::Ready)
+    }
+
     pub(crate) fn restore(&mut self, unseen: bool, pending: bool) {
         *self =
             Self { marks: Marks { unseen, pending }, restored: unseen || pending, notified: true, ..Self::default() };
@@ -151,8 +175,8 @@ impl Pane {
         }
     }
 
-    pub(crate) fn agent(&self) -> Option<Known> {
-        self.agent
+    pub(crate) fn agent(&self) -> Option<&str> {
+        self.agent.as_deref()
     }
 
     pub(crate) fn reacted(&self, since: Instant) -> bool {
@@ -171,9 +195,10 @@ impl Pane {
         Some(match self.activity? {
             Activity::Working | Activity::Shell => Status::Working,
             Activity::Waiting => Status::Waiting,
-            Activity::Idle if self.marks.pending => Status::Pending,
-            Activity::Idle if self.marks.unseen => Status::Done,
-            Activity::Idle => Status::Idle,
+            Activity::Failed => Status::Failed,
+            Activity::Idle | Activity::Ready | Activity::Done if self.marks.pending => Status::Pending,
+            Activity::Idle | Activity::Ready | Activity::Done if self.marks.unseen => Status::Done,
+            Activity::Idle | Activity::Ready | Activity::Done => Status::Idle,
         })
     }
 }

@@ -1,8 +1,17 @@
 use rstest::rstest;
 
-use super::{CANNOT_WATCH, holds_prompts};
+use super::{CANNOT_WATCH, Condition, holds_prompts};
 use crate::agents::Known;
-use crate::agents::activity::Status;
+use crate::agents::activity::{Activity, Pane, Status};
+
+#[test]
+fn a_failed_agent_has_ended_its_turn_and_an_idle_wait() {
+    let mut pane = Pane::default();
+    pane.update(Some(Activity::Failed), false, std::time::Instant::now());
+    assert_eq!(Condition::TurnOver.ended(&pane), Some("failed"));
+    assert_eq!(Condition::Idle.ended(&pane), Some("failed"));
+    assert_eq!(Condition::Waiting.ended(&pane), None);
+}
 
 #[test]
 fn the_wait_refusal_names_every_known_agent() {
