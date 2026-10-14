@@ -66,12 +66,25 @@ fn a_member_is_told_whether_it_may_edit() {
     let coder = Role { name: "coder".into(), edits: true, prompt: "Write code.".into(), ..Role::default() };
     assert_eq!(
         member(&coder),
-        "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree."
+        "Write code.\n\nYou are `coder` in this team, and you may edit files and commit in this worktree. Wait for \
+         the orchestrator's first message before doing anything."
     );
     let empty = Role { name: "reviewer".into(), ..Role::default() };
     assert_eq!(
         member(&empty),
         "You are `reviewer` in this team: do not edit files and do not commit. Wait for the orchestrator's first \
          message before doing anything."
+    );
+}
+
+#[test]
+fn a_built_in_member_is_told_to_wait_once_and_last() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = member(&flow.roles[1]);
+
+    assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
+    assert!(
+        text.ends_with("do not commit. Wait for the orchestrator's first message before doing anything."),
+        "{text}"
     );
 }

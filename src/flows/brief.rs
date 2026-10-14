@@ -3,16 +3,17 @@ use std::fmt::Write as _;
 use super::run::Member;
 use super::{End, Flow, ORCHESTRATOR, Role, Stage};
 
-const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
+pub(super) const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
 
 pub(crate) fn member(role: &Role) -> String {
     let prompt = role.prompt.trim();
+    let prompt = prompt.strip_suffix(WAIT_FIRST).map_or(prompt, str::trim_end);
     let told = if role.edits {
         format!("You are `{}` in this team, and you may edit files and commit in this worktree.", role.name)
     } else {
         format!("You are `{}` in this team: do not edit files and do not commit.", role.name)
     };
-    if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told}") }
+    if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
 
 pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -> String {
