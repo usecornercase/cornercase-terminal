@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use super::claude;
 use crate::term::bracketed;
 use crate::text::one_line;
 
@@ -23,6 +24,12 @@ pub(crate) struct Spec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Parked {
+    Trust,
+    Consent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     Shell,
     Agent,
@@ -43,7 +50,7 @@ pub(crate) struct Launch {
     trusted_screen: Option<String>,
     echo: String,
     undrawn: bool,
-    asked: bool,
+    parked: Option<Parked>,
 }
 
 pub(crate) struct Seen<'a> {
@@ -84,7 +91,7 @@ impl Launch {
             trusted_screen: None,
             echo: String::new(),
             undrawn: false,
-            asked: false,
+            parked: None,
         }
     }
 
@@ -97,19 +104,22 @@ impl Launch {
     }
 
     pub(crate) fn output(&mut self, now: Instant) {
-        if self.asked {
+        if self.parked.is_some() {
             self.since = now;
         }
         self.output = Some(now);
         self.undrawn = false;
-        self.asked = false;
+        self.parked = None;
     }
 
     pub(crate) fn stage(&self) -> &'static str {
         match self.stage {
             Stage::Shell => "shell",
-            Stage::Agent if self.asked => "trust prompt",
-            Stage::Agent => "agent",
+            Stage::Agent => match self.parked {
+                Some(Parked::Consent) => "consent",
+                Some(Parked::Trust) => "trust prompt",
+                None => "agent",
+            },
             Stage::Submit => "submit",
         }
     }
@@ -123,7 +133,7 @@ impl Launch {
     }
 
     pub(crate) fn waits_for_you(&self) -> bool {
-        self.asked
+        self.parked.is_some()
     }
 
     pub(crate) fn submits(&self) -> bool {
@@ -164,7 +174,7 @@ impl Launch {
                     Step::Wait
                 }
             }
-            Stage::Agent if self.asked => Step::Wait,
+            Stage::Agent if self.parked.is_some() => Step::Wait,
             Stage::Agent => {
                 let latest = now.duration_since(self.since) >= AGENT_LATEST;
                 if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
@@ -175,10 +185,15 @@ impl Launch {
                     self.undrawn = true;
                     return Step::Wait;
                 }
+                if claude::screen::bypass_consent(&screen) {
+                    self.next(Stage::Agent, now);
+                    self.parked = Some(Parked::Consent);
+                    return Step::Wait;
+                }
                 if (seen.trust_prompt)(&screen) {
                     if seen.trust == Trust::LeftToYou && !self.spec.trusted {
                         self.next(Stage::Agent, now);
-                        self.asked = true;
+                        self.parked = Some(Parked::Trust);
                         return Step::Wait;
                     }
                     if self.trusts < MAX_TRUSTS && self.trusted_screen.as_ref() != Some(&screen) {

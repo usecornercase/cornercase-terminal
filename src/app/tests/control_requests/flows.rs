@@ -11,6 +11,15 @@ use crate::test_util::git_repo;
 
 const STARTING: Duration = Duration::from_secs(30);
 
+const CONSENTING: &str = r#"#!/bin/sh
+log="LOG"
+printf 'start %s\n' "$*" >> "$log/order"
+printf '  WARNING: Claude Code running in Bypass Permissions mode\n\n  \342\235\257 1. No, exit\n    2. Yes, I accept\n'
+IFS= read -r line
+printf 'got %s\n' "$line" >> "$log/order"
+while [ -d "$log" ]; do sleep 0.1; done
+"#;
+
 const FAKE: &str = r#"#!/bin/sh
 log="LOG"
 printf 'start %s\n' "$*" >> "$log/order"
@@ -59,10 +68,14 @@ fn pair() -> Flow {
 
 impl Team {
     fn new() -> Self {
+        Self::with(FAKE)
+    }
+
+    fn with(script: &str) -> Self {
         let (repo, log, config, worktrees, bin) =
             (git_repo(&[("README", "hi")]), TempDir::new(), TempDir::new(), TempDir::new(), TempDir::new());
         let fake = bin.path().join("claude");
-        write_executable(&fake, &FAKE.replace("LOG", &log.path().display().to_string()));
+        write_executable(&fake, &script.replace("LOG", &log.path().display().to_string()));
         let settings = Config {
             worktrees_dir: worktrees.path().display().to_string(),
             agent_commands: [("claude".to_string(), fake.display().to_string())].into(),
@@ -175,6 +188,29 @@ fn every_agent_starts_without_asking_its_trust_is_answered_and_the_orchestrator_
     }
     assert!(order.iter().any(|l| l.starts_with("got Write it.") && l.contains("you may edit files")), "{order:#?}");
     assert!(order.iter().any(|l| l.starts_with("got Review it.") && l.contains("do not edit files")), "{order:#?}");
+}
+
+#[test]
+fn a_member_asked_to_accept_bypass_permissions_waits_for_you_and_holds_the_orchestrator_back() {
+    let mut team = Team::with(CONSENTING);
+    team.started();
+    let mut told = None;
+
+    wait_until_within("the user is told", STARTING, || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        told = toast(&team.app).filter(|text| text.contains("waits for you")).map(str::to_string);
+        told.is_some()
+    });
+
+    let told = told.expect("a toast");
+    assert!(told.contains("bypass permissions mode in its tab"), "{told}");
+    assert!(team.app.take_notifications().iter().any(|sent| sent.text.contains("waits for you")));
+    let later = Instant::now() + Duration::from_secs(2);
+    refreshing(&mut team.app, &team.rx, "a while passes", |_| Instant::now() >= later);
+    let order = team.order();
+    assert!(order.iter().all(|line| !line.starts_with("got")), "something was typed: {order:?}");
+    assert_eq!(order.iter().filter(|line| line.starts_with("start")).count(), 2, "{order:?}");
 }
 
 #[test]

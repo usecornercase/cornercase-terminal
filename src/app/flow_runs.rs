@@ -6,12 +6,14 @@ use ratatui::layout::Rect;
 use super::App;
 use super::toast::Toast;
 use crate::agents;
+use crate::agents::activity;
 use crate::agents::launch::{self, Launch};
 use crate::control::{MemberInfo, RunInfo};
 use crate::flows::progress::Progress;
 use crate::flows::run::{Member, Run};
 use crate::flows::{self, Flow, Role, brief, builtin, store};
 use crate::git;
+use crate::host::notify::{self, Notification};
 use crate::log;
 use crate::paths;
 use crate::project::search::Goto;
@@ -136,6 +138,20 @@ impl App {
             self.show_flow();
         }
         Ok(info)
+    }
+
+    pub(super) fn member_waits(&mut self, pane: u64) {
+        let Some((run, role)) = self.runs.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
+        let (workspace, role) = (run.workspace, role.to_string());
+        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
+        let project = &self.projects[p];
+        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let message = notify::clean(&format!(
+            "{role} waits for you in {place}: accept or refuse Claude Code's bypass permissions mode in its tab"
+        ));
+        log::info!("flow", "a member waits for you", workspace = workspace, role = role);
+        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
     }
 
     pub(super) fn run_failed(&mut self, message: &str) {

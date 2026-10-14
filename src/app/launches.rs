@@ -20,6 +20,7 @@ impl App {
         let regex = self.agents.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
+        let mut parked = Vec::new();
         let mut finished = Vec::new();
         let starting: Vec<u64> = self.agents.launches.iter().map(|launch| launch.term).collect();
         for (i, launch) in self.agents.launches.iter_mut().enumerate() {
@@ -46,6 +47,9 @@ impl App {
             let before = launch.stage();
             let step = launch.step(now, &mut seen);
             let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
+            if stage == "consent" && before != stage {
+                parked.push(pane);
+            }
             match &step {
                 Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
                 Step::Wait => {}
@@ -82,6 +86,9 @@ impl App {
             if let Some(key) = self.agents.launches.remove(i).key {
                 self.requests.launched(key, started);
             }
+        }
+        for pane in parked {
+            self.member_waits(pane);
         }
     }
 
