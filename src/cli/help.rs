@@ -136,10 +136,11 @@ Examples:
   cornercase read --tab 4 --last-message --json
   cornercase read --last-message --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
-    "By default it waits until the agent stops working: idle, done or waiting. A Claude Code agent
-whose turn is over while a background shell it started still runs counts as working, since it
-wakes up when the shell ends; --until turn-over also ends there, and prints shell. It then
-prints how it ended (idle, done, waiting, working, shell or quiet), or the line that matched.
+    "By default it waits until the agent stops working: idle, done, pending (marked for review) or
+waiting. A Claude Code agent whose turn is over while a background shell it started still runs
+counts as working, since it wakes up when the shell ends; --until turn-over also ends there, and
+prints shell. It then prints how it ended (idle, done, pending, waiting, working, shell or quiet),
+or the line that matched.
 Waiting for an agent needs Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane.
 Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
@@ -247,11 +248,11 @@ pub(super) const RESTART_HELP: &str =
     "It lists what runs in the terminals and asks first, since every program in them stops; agents
 resume their conversations afterwards. Every attached window reopens on the new server.
 
-With --when-idle, it waits until no agent is working before restarting: idle, done and waiting for
-you count as stopped, and so does a Claude Code agent whose turn is over while a shell it started
-in the background still runs. The server restarts in the same step it sees that, so no agent starts
-a turn in between, and every window shows that a restart is pending meanwhile, with a button that
-cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
+With --when-idle, it waits until no agent is working before restarting: idle, done, pending review
+and waiting for you count as stopped, and so does a Claude Code agent whose turn is over while a
+shell it started in the background still runs. The server restarts in the same step it sees that,
+so no agent starts a turn in between, and every window shows that a restart is pending meanwhile,
+with a button that cancels it. Programs that are not agents, such as a dev server, stop as with any restart. The pane
 this runs in never holds the restart. --timeout gives up with status 1 and the server keeps running,
 as it does when the command is interrupted.
 

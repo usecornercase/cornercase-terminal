@@ -67,7 +67,7 @@ Keys always go to the program in the active pane: there are no shortcuts to lear
 
 ```sh
 pane=$(cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit')
-cornercase wait --pane "$pane" --timeout 1800   # until the agent stops: idle, done or waiting
+cornercase wait --pane "$pane" --timeout 1800   # until the agent stops: idle, done, pending or waiting
 cornercase read --pane "$pane" --last-message   # what it said, from its own transcript
 ```
 

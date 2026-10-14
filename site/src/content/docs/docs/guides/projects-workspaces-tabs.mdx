@@ -239,7 +239,7 @@ Stats counts **only Claude Code, Codex, Gemini CLI, opencode and Grok Build runn
 | --- | --- |
 | agents started | Each agent process you start, including a manual resume. A conversation restored after a server restart counts no new start. |
 | prompts | Prompts the agent recorded, including scripts, issues, queued input and Claude's slash commands. Claude's `!` shell input is excluded. |
-| turns | Transitions from working or waiting to idle, done or a background shell. |
+| turns | Transitions from working or waiting to idle, done, pending review or a background shell. |
 | agent time | Time working, summed over agents. Background shells left running do not count. |
 | most at once | The largest number working at one read. |
 | waited for you | Time waiting for an answer or done in a tab you have not seen. opencode reports no waiting, so only its unseen done time counts. |
