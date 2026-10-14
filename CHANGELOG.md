@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.90
+
+- Play a sound when an agent in a tab you aren't looking at needs you or finishes. It is off until you turn on **Settings → UI → sound**. **needs you** and **finished** are different sounds: each is the built-in tone, or a file on the computer where the window is. Every open window plays it, including one attached with `cornercase remote`. A question answered within a second stays quiet, the same as the toast.
+
 ## 0.12.89
 
 - The buttons at the bottom of the sidebar can become a column of icons on the left edge, like an editor's activity bar: turn on **Settings → UI → icon bar**. Hover an icon to see its name. The number of changed files, the TODO dot and the Remote dot sit at the corner of their icons, and the lists get the rows the buttons took. The icons need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default.
