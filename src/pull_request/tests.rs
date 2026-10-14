@@ -107,6 +107,18 @@ mod checks {
         assert_eq!(ubuntu[0].url, "https://github.com/acme/web-shop/actions/runs/1001/job/2001");
     }
 
+    #[test]
+    fn a_run_that_has_not_started_yet_is_the_latest() {
+        let json = r#"{"number":1,"statusCheckRollup":[
+            {"__typename":"CheckRun","name":"t","workflowName":"CI","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-10-14T13:53:09Z"},
+            {"__typename":"CheckRun","name":"t","workflowName":"CI","status":"QUEUED","conclusion":"","startedAt":"0001-01-01T00:00:00Z"}]}"#;
+
+        let found = parsed(json);
+
+        assert_eq!(found.checks.len(), 1);
+        assert_eq!(found.checks[0].outcome, Outcome::Pending);
+    }
+
     #[rstest]
     #[case::passed("COMPLETED", "SUCCESS", Outcome::Passed)]
     #[case::neutral("COMPLETED", "NEUTRAL", Outcome::Skipped)]

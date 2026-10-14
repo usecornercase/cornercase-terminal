@@ -12,6 +12,8 @@ const NOT_FOUND: &str = "no pull requests found";
 
 const LOGGED_OUT: &str = "gh auth login";
 
+const NEVER: &str = "0001-01-01";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {
     Open,
@@ -203,7 +205,7 @@ enum RawCheck {
 }
 
 impl RawCheck {
-    fn check(self) -> Option<(Check, String)> {
+    fn check(self) -> Option<(Check, Option<String>)> {
         match self {
             Self::CheckRun { name, status, conclusion, details_url, workflow_name, started_at } => {
                 let completed = status.as_deref() == Some("COMPLETED");
@@ -221,7 +223,7 @@ impl RawCheck {
                     outcome,
                     url: details_url.unwrap_or_default(),
                 };
-                Some((check, started_at.unwrap_or_default()))
+                Some((check, started(started_at)))
             }
             Self::StatusContext { context, state, target_url, started_at } => {
                 let outcome = match state.as_deref() {
@@ -235,11 +237,15 @@ impl RawCheck {
                     outcome,
                     url: target_url.unwrap_or_default(),
                 };
-                Some((check, started_at.unwrap_or_default()))
+                Some((check, started(started_at)))
             }
             Self::Other => None,
         }
     }
+}
+
+fn started(at: Option<String>) -> Option<String> {
+    at.filter(|at| !at.is_empty() && !at.starts_with(NEVER))
 }
 
 impl From<Raw> for PullRequest {
@@ -250,9 +256,13 @@ impl From<Raw> for PullRequest {
             _ if raw.is_draft => State::Draft,
             _ => State::Open,
         };
-        let mut runs: Vec<(Check, String)> = raw.status_check_rollup.into_iter().filter_map(RawCheck::check).collect();
+        let mut runs: Vec<(Check, Option<String>)> =
+            raw.status_check_rollup.into_iter().filter_map(RawCheck::check).collect();
+        let newest_first = |started: &Option<String>| (started.is_none(), started.clone());
         runs.sort_by(|(a, a_started), (b, b_started)| {
-            (&a.workflow, &a.name).cmp(&(&b.workflow, &b.name)).then_with(|| b_started.cmp(a_started))
+            (&a.workflow, &a.name)
+                .cmp(&(&b.workflow, &b.name))
+                .then_with(|| newest_first(b_started).cmp(&newest_first(a_started)))
         });
         runs.dedup_by(|(later, _), (kept, _)| (&later.workflow, &later.name) == (&kept.workflow, &kept.name));
         let mut checks: Vec<Check> = runs.into_iter().map(|(check, _)| check).collect();
