@@ -78,6 +78,9 @@ impl App {
         let opened = result.map_err(|e| e.to_string()).and_then(|path| {
             let path = path.canonicalize().unwrap_or(path);
             let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
+            if self.projects[p].closing {
+                return Err(format!("project {project} is closing"));
+            }
             let w = self.worktree_workspace(p, path);
             self.open_run(p, w, starting, area)
         });

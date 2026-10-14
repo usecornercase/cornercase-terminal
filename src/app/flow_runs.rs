@@ -14,7 +14,7 @@ use crate::git;
 use crate::log;
 use crate::paths;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Tab};
+use crate::project::{Hierarchy, Phase, Tab};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::ui;
@@ -75,6 +75,9 @@ impl App {
             return Err("the flow needs a branch for its worktree".into());
         }
         let project = &self.projects[p];
+        if project.closing {
+            return Err(format!("project {} is closing", project.id));
+        }
         if !git::is_repo_root(&project.path) {
             return Err(format!(
                 "project {} is not the root of a git repository, so a flow cannot make its worktree",
@@ -85,7 +88,16 @@ impl App {
     }
 
     pub(super) fn open_run(&mut self, p: usize, w: usize, starting: Starting, area: Rect) -> Result<RunInfo, String> {
-        let id = self.projects[p].workspaces[w].id;
+        let (project, workspace) = (&self.projects[p], &self.projects[p].workspaces[w]);
+        let id = workspace.id;
+        if project.closing {
+            return Err(format!("project {} is closing", project.id));
+        }
+        match workspace.phase {
+            Phase::Open => {}
+            Phase::Removing(_) => return Err(format!("workspace {id} is being removed")),
+            Phase::Closing => return Err(format!("workspace {id} is closing")),
+        }
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }

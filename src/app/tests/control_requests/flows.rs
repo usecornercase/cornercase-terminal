@@ -1,8 +1,10 @@
 use super::*;
 use crate::agents::AgentState;
+use crate::app::flow_runs::Starting;
 use crate::control::RunInfo;
 use crate::flows::{Back, Flow, ORCHESTRATOR, Role, Stage, store};
 use crate::paths;
+use crate::project::Phase;
 use crate::test_util::git_repo;
 
 const STARTING: Duration = Duration::from_secs(30);
@@ -232,6 +234,53 @@ fn a_project_outside_git_cannot_run_a_flow() {
     let refused = error(now(&mut team.app, None, Command::FlowRun(run)));
 
     assert!(refused.contains("is not the root of a git repository"), "{refused}");
+}
+
+#[test]
+fn a_worktree_that_comes_back_once_its_project_is_closing_opens_nothing() {
+    let mut team = Team::new();
+    let project = team.app.projects[0].id;
+    let run = wire::FlowRun { name: "Pair".into(), prompt: "Fix the login form".into(), ..wire::FlowRun::default() };
+    ask(&mut team.app, None, Command::FlowRun(run));
+    assert_eq!(answers(&mut team.app), [], "git is still making the worktree");
+
+    team.app.close_project(project);
+    let mut got = Vec::new();
+    wait_until("git makes the worktree", || {
+        for event in team.rx.try_iter().filter(|event| matches!(event, AppEvent::Worktree(_))) {
+            team.app.handle_event(event, AREA).expect("the answer is handled");
+        }
+        got = answers(&mut team.app);
+        !got.is_empty()
+    });
+
+    let refused = error(got.remove(0));
+    assert_eq!(refused, format!("project {project} is closing"));
+    assert!(team.app.runs.is_empty());
+    let (p, _) = team.app.projects.workspace_index(team.app.projects[0].workspaces[0].id).expect("still closing");
+    assert!(team.app.projects[p].workspaces.iter().all(|w| w.tabs.len() <= 1), "a tab opened in a closing project");
+}
+
+#[rstest::rstest]
+#[case::a_workspace_being_removed(Some(Phase::Removing("main".into())), false, "is being removed")]
+#[case::a_closing_workspace(Some(Phase::Closing), false, "is closing")]
+#[case::a_closing_project(None, true, "is closing")]
+fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
+    #[case] phase: Option<Phase>,
+    #[case] closing: bool,
+    #[case] said: &str,
+) {
+    let mut team = Team::new();
+    if let Some(phase) = phase {
+        team.app.projects[0].workspaces[0].phase = phase;
+    }
+    team.app.projects[0].closing = closing;
+    let starting = Starting { flow: pair(), task: "Fix it".into(), branch: "main".into(), focus: false };
+
+    let refused = team.app.open_run(0, 0, starting, AREA).expect_err("refused");
+
+    assert!(refused.contains(said), "{refused}");
+    assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.len()), (1, 0));
 }
 
 #[test]
