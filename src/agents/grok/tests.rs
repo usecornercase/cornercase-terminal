@@ -277,6 +277,37 @@ fn switching_the_model_away_and_back_does_not_restore_the_percentage() {
 }
 
 #[test]
+fn a_summary_only_switch_back_does_not_restore_matching_signals() {
+    let events = r#"{"ts":"2026-10-13T21:10:01.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"primary"}
+{"ts":"2026-10-13T21:10:10.000Z","type":"turn_ended","outcome":"completed"}
+"#;
+    let updates = r#"{"timestamp":1791925810,"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"one","usage":{"inputTokens":20480,"outputTokens":1,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+"#;
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", events),
+        ("updates.jsonl", updates),
+        ("summary.json", r#"{"current_model_id":"grok-4.7","context_window":256000}"#),
+        ("signals.json", r#"{"contextWindowTokens":256000,"contextTokensUsed":20480,"primaryModelId":"grok-4.7"}"#),
+    ]);
+    let signals = session_dir(home.path(), &cwd).join("signals.json");
+    age(&signals, 1_791_925_900);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(found.context.as_ref().and_then(|ctx| ctx.percent), Some(8));
+    std::fs::write(found.path.join("summary.json"), r#"{"current_model_id":"grok-4.6","context_window":256000}"#)
+        .expect("away");
+    let away = session::follow(sleeper.pid(), Some(found)).expect("away");
+    assert_eq!(away.context.as_ref().and_then(|ctx| ctx.percent), None);
+    std::fs::write(away.path.join("summary.json"), r#"{"current_model_id":"grok-4.7","context_window":256000}"#)
+        .expect("back");
+    let back = session::follow(sleeper.pid(), Some(away)).expect("back");
+    assert_eq!(back.context.as_ref().and_then(|ctx| ctx.percent), None);
+    assert_eq!(
+        std::fs::metadata(&signals).expect("signals").modified().expect("mtime"),
+        UNIX_EPOCH + Duration::from_secs(1_791_925_900)
+    );
+}
+
+#[test]
 fn a_cancelled_turn_without_text_keeps_the_earlier_answer_time() {
     let (home, cwd) = home_with(&[
         ("events.jsonl", fixture!("grok/1.0.52/last-message-after-cancel-events.jsonl")),
@@ -368,6 +399,51 @@ fn a_quoted_reminder_is_still_a_prompt() {
     assert_eq!(prompt_count(&seen(home.path(), &cwd).1), 1);
 }
 
+fn prompt_line(ms: u64, index: u64, text: &str, synthetic: Option<bool>) -> String {
+    let mut update = json!({
+        "sessionUpdate": "user_message_chunk",
+        "content": {"type": "text", "text": text},
+        "_meta": {"promptIndex": index}
+    });
+    if let Some(flag) = synthetic {
+        update["_meta"]["syntheticPrompt"] = json!(flag);
+    }
+    let line = json!({
+        "timestamp": ms / 1000,
+        "params": {"_meta": {"agentTimestampMs": ms}, "update": update}
+    });
+    format!("{line}\n")
+}
+
+#[test]
+fn an_explicit_human_tag_confirms_the_later_submission_on_follow_and_on_recovery() {
+    let first = prompt_line(1_791_925_801_100, 0, "hello", Some(false));
+    let (home, cwd) = home_with(&[("updates.jsonl", &first)]);
+    let (sleeper, found) = seen(home.path(), &cwd);
+    assert_eq!(prompt_count(&found), 1);
+    let system =
+        prompt_line(1_791_925_820_100, 1, "<system-reminder> is the literal XML tag I need explained", Some(false));
+    let info = prompt_line(1_791_925_830_100, 2, "<user_info> is the literal tag I need explained", Some(false));
+    let bare = prompt_line(1_791_925_840_100, 3, "<system-reminder>\nkeep going", None);
+    let path = found.path.join("updates.jsonl");
+    std::fs::write(&path, format!("{first}{system}{info}{bare}")).expect("append");
+    let next = session::follow(sleeper.pid(), Some(found)).expect("appended");
+    let times: Vec<_> =
+        next.counted.iter().filter(|record| record.usage == Usage::Prompt).map(|record| record.at).collect();
+    assert_eq!(times.len(), 3);
+    let later = UNIX_EPOCH + Duration::from_millis(1_791_925_830_100);
+    let since = (UNIX_EPOCH + Duration::from_millis(1_791_925_801_100)) + Duration::from_millis(1);
+    assert_eq!(next.prompted, Some(later));
+    assert!(next.prompted.is_some_and(|at| at >= since));
+    assert!(times.iter().all(|at| *at != UNIX_EPOCH + Duration::from_millis(1_791_925_840_100)));
+    let recovered = prompt_line(1_791_925_850_100, 4, "<user_info> recovered", Some(false));
+    std::fs::write(&path, recovered).expect("reset");
+    let again = session::follow(sleeper.pid(), Some(next)).expect("recovered");
+    let recovered_at = UNIX_EPOCH + Duration::from_millis(1_791_925_850_100);
+    assert_eq!(again.prompted, Some(recovered_at));
+    assert!(again.counted.iter().any(|record| record.usage == Usage::Prompt && record.at == recovered_at));
+}
+
 #[test]
 fn a_rewritten_chat_keeps_the_prompt_from_the_same_poll() {
     let updates = r#"{"timestamp":1791925801,"params":{"_meta":{"eventId":"human-A","agentTimestampMs":1791925801100},"update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"small prompt"},"_meta":{"promptIndex":0}}}}
@@ -424,6 +500,37 @@ fn a_completed_worker_turn_does_not_confirm_the_parent() {
         found.context.as_ref().and_then(|ctx| ctx.percent),
         Some(crate::agents::context::percent(2000, 256_000))
     );
+}
+
+#[test]
+fn a_worker_completion_after_turn_ended_keeps_the_parent_percentage() {
+    let events = r#"{"ts":"2026-10-13T21:10:01.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"primary"}
+{"ts":"2026-10-13T21:10:05.000Z","type":"turn_ended","outcome":"completed"}
+{"ts":"2026-10-13T21:10:06.000Z","type":"turn_started","model_id":"grok-4.7","session_relationship":"worker"}
+{"ts":"2026-10-13T21:10:10.000Z","type":"turn_ended","outcome":"completed"}
+"#;
+    let updates = r#"{"timestamp":1791925804,"params":{"_meta":{"agentTimestampMs":1791925804500},"update":{"sessionUpdate":"turn_completed","prompt_id":"parent","usage":{"inputTokens":20480,"outputTokens":1,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+{"timestamp":1791925810,"params":{"_meta":{"agentTimestampMs":1791925810027},"update":{"sessionUpdate":"turn_completed","prompt_id":"worker","usage":{"inputTokens":128000,"outputTokens":9,"cachedReadTokens":0,"cacheCreationTokens":0,"modelCalls":1}}}}
+"#;
+    let (home, cwd) = home_with(&[
+        ("events.jsonl", events),
+        ("updates.jsonl", updates),
+        ("summary.json", r#"{"current_model_id":"grok-4.7","context_window":256000}"#),
+    ]);
+    let found = seen(home.path(), &cwd).1;
+    let outs = |records: &[crate::agents::context::counting::Record]| -> u64 {
+        records
+            .iter()
+            .map(|record| match record.usage {
+                Usage::Completed(tokens) => tokens.out,
+                _ => 0,
+            })
+            .sum()
+    };
+    assert_eq!(outs(&found.counted), 1);
+    assert_eq!(found.extras.iter().map(|(_, records)| outs(records)).sum::<u64>(), 9);
+    assert_eq!(found.context.as_ref().map(|ctx| ctx.model.as_str()), Some("grok-4.7"));
+    assert_eq!(found.context.as_ref().and_then(|ctx| ctx.percent), Some(8));
 }
 
 #[test]

@@ -390,7 +390,7 @@ impl Session {
         let usage = &body["usage"];
         let input_total = usage["inputTokens"].as_u64().unwrap_or(0);
         let cached = usage["cachedReadTokens"].as_u64().unwrap_or(0);
-        let turn = self.turns.iter().rev().find(|turn| turn.at <= at && turn.end.is_none_or(|end| at <= end));
+        let turn = self.turns.iter().rev().find(|turn| turn.at <= at);
         Reply {
             at,
             id: body["prompt_id"].as_str().map_or_else(|| Stamp(at).to_string(), str::to_string),
@@ -422,8 +422,16 @@ impl Session {
         let changed = model.as_ref().is_some_and(|model| {
             self.seen_model.as_ref().is_some_and(|seen| seen != model || self.seen_window != window)
         });
-        if changed && let Some(mark) = self.transition(model.as_deref()) {
-            self.boundary = Some(self.boundary.map_or(mark, |kept| kept.max(mark)));
+        if changed {
+            let model_changed = self.seen_model.as_deref() != model.as_deref();
+            if model_changed {
+                match self.fresh_turn(model.as_deref()) {
+                    Some(mark) => self.boundary = Some(self.boundary.map_or(mark, |kept| kept.max(mark))),
+                    None => self.invalidate_selection(),
+                }
+            } else if let Some(mark) = self.transition(model.as_deref()) {
+                self.boundary = Some(self.boundary.map_or(mark, |kept| kept.max(mark)));
+            }
         }
         if model.is_some() {
             self.seen_model.clone_from(&model);
@@ -434,6 +442,26 @@ impl Session {
         self.signals_used = signals["contextTokensUsed"].as_u64().unwrap_or(0);
         self.signals_model = signals["primaryModelId"].as_str().map(str::to_string);
         self.signals_at = std::fs::metadata(self.path.join("signals.json")).and_then(|info| info.modified()).ok();
+    }
+
+    fn fresh_turn(&self, model: Option<&str>) -> Option<SystemTime> {
+        let started = self
+            .turns
+            .iter()
+            .rev()
+            .find(|turn| model.is_some_and(|id| turn.model.as_deref() == Some(id)))
+            .map(|turn| turn.at)?;
+        self.boundary.is_none_or(|cut| started > cut).then_some(started)
+    }
+
+    fn invalidate_selection(&mut self) {
+        let mut mark = self.newest.as_ref().map(|reply| reply.at);
+        if let Some(at) = self.signals_at {
+            mark = Some(mark.map_or(at, |kept| kept.max(at)));
+        }
+        let Some(mark) = mark else { return };
+        let past = mark.checked_add(Duration::from_millis(1)).unwrap_or(mark);
+        self.boundary = Some(self.boundary.map_or(past, |kept| kept.max(past)));
     }
 
     fn transition(&self, model: Option<&str>) -> Option<SystemTime> {
@@ -694,13 +722,19 @@ fn newest_chunk(path: &Path) -> Option<Chunk> {
 
 fn human_chunk(update: &Value) -> Option<Chunk> {
     let body = &update["params"]["update"];
-    if body["sessionUpdate"].as_str() != Some("user_message_chunk") || synthetic(update) {
+    if body["sessionUpdate"].as_str() != Some("user_message_chunk") {
         return None;
     }
     let index = body["_meta"]["promptIndex"].as_u64()?;
-    let text = body["content"]["text"].as_str().unwrap_or_default();
-    if reminder_only(text) {
-        return None;
+    match explicit_synthetic(update) {
+        Some(true) => return None,
+        Some(false) => {}
+        None => {
+            let text = body["content"]["text"].as_str().unwrap_or_default();
+            if reminder_only(text) {
+                return None;
+            }
+        }
     }
     let at = update_time(update)?;
     let ms = stamp_ms(update).unwrap_or(0);
@@ -721,13 +755,10 @@ fn work_event(event: &Value) -> bool {
     )
 }
 
-fn synthetic(update: &Value) -> bool {
-    flag(update, "syntheticPrompt")
-}
-
-fn flag(update: &Value, key: &str) -> bool {
-    update["params"]["update"]["_meta"][key].as_bool().unwrap_or(false)
-        || update["params"]["_meta"][key].as_bool().unwrap_or(false)
+fn explicit_synthetic(update: &Value) -> Option<bool> {
+    update["params"]["update"]["_meta"]["syntheticPrompt"]
+        .as_bool()
+        .or_else(|| update["params"]["_meta"]["syntheticPrompt"].as_bool())
 }
 
 fn reminder_only(text: &str) -> bool {
