@@ -185,7 +185,9 @@ impl App {
     }
 
     pub(super) fn cancel_form(&mut self) {
-        if !self.overlay.as_ref().is_some_and(Overlay::busy) {
+        if matches!(self.overlay, Some(Overlay::Flows { .. })) {
+            self.close_flows();
+        } else if !self.overlay.as_ref().is_some_and(Overlay::busy) {
             self.overlay = None;
         }
     }
@@ -301,7 +303,7 @@ impl App {
     }
 }
 
-fn confirm_view(
+pub(super) fn confirm_view(
     title: &'static str,
     message: String,
     submit: &'static str,

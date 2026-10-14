@@ -39,6 +39,7 @@ impl App {
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
+            Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }
@@ -318,7 +319,7 @@ impl App {
         hit
     }
 
-    pub(super) fn handle_paste(&mut self, text: &str) {
+    pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
         if matches!(self.overlay, Some(Overlay::Keys(_))) {
             self.overlay = None;
         }
@@ -340,6 +341,10 @@ impl App {
         }
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.paste(text);
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::Flows { .. })) {
+            self.flows_paste(text, area);
             return;
         }
         if let Some(overlay) = &mut self.overlay {

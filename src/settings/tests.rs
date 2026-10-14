@@ -52,7 +52,7 @@ mod pages {
 
     #[rstest]
     #[case::worktrees(Page::Worktrees, &[""])]
-    #[case::agents(Page::Agents, &["Agent", "How each agent starts"])]
+    #[case::agents(Page::Agents, &["Agent", "How each agent starts", "Flows"])]
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
     #[case::remote(Page::Remote, &["Browser", "Telegram"])]

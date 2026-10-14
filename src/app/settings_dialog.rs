@@ -48,6 +48,7 @@ impl App {
         let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
         settings.awake = self.agents.awake.state().note();
         settings.pulls = self.pull_requests_note();
+        settings.flows = self.flows_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
         settings.telegram = self.telegram_settings();
@@ -142,6 +143,7 @@ impl App {
                 self.set_config(*config);
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
+            settings::Action::OpenFlows => self.open_flows(None),
             settings::Action::ForgetBrowsers => {
                 let forgotten = self.forget_browsers();
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {

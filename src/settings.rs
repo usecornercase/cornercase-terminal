@@ -48,6 +48,7 @@ pub(crate) enum Row {
     Trust,
     Resume,
     KeepAwake,
+    Flows,
     Remote,
     Browsers,
     Kind(String),
@@ -87,6 +88,7 @@ impl Row {
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
+            Self::Flows => "Flows",
         }
     }
 
@@ -99,7 +101,8 @@ impl Row {
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
-            | Self::AddAgent => Page::Agents,
+            | Self::AddAgent
+            | Self::Flows => Page::Agents,
             Self::Token(_)
             | Self::GitlabUrl
             | Self::JiraSite
@@ -225,6 +228,7 @@ pub(crate) enum Action {
     RemoveTelegram,
     PairTelegram,
     ForgetTelegram,
+    OpenFlows,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -279,6 +283,7 @@ pub(crate) struct Settings {
     pub(crate) capturing: bool,
     pub(crate) awake: String,
     pub(crate) pulls: String,
+    pub(crate) flows: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
     pub(crate) telegram: Telegram,
@@ -300,6 +305,7 @@ impl Settings {
             capturing: false,
             awake: String::new(),
             pulls: String::new(),
+            flows: String::new(),
             remote: String::new(),
             browsers: 0,
             telegram: Telegram::default(),
@@ -356,6 +362,7 @@ impl Settings {
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
+            Row::Flows,
             Row::Sidebar,
             Row::Tabs,
             Row::IconBar,

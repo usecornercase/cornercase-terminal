@@ -129,6 +129,9 @@ impl Settings {
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
+            Row::Flows => {
+                ("flows".into(), self.flows.clone(), "teams of agents that work through a plan".into(), false)
+            }
             Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
         };
         RowText { label, value, note, dangerous }

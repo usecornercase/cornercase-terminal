@@ -1,3 +1,4 @@
+pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
 pub(super) mod issues;
@@ -16,6 +17,7 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 
 use super::RemoteAccess;
 use super::View;
+use super::dialog::flows::{Flows, flows_area};
 use super::dialog::form::{Confirm, Form, form_area};
 use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
@@ -116,6 +118,7 @@ pub(crate) enum Overlay {
     Picker(Picker),
     Issues(Issues),
     Settings(Settings),
+    Flows(Box<Flows>),
     Search(Search),
     Keys(keys::Keys),
 }
@@ -133,6 +136,7 @@ impl Overlay {
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Issues(_) => Some(issues_area(area)),
             Self::Settings(_) => Some(settings_area(area)),
+            Self::Flows(_) => Some(flows_area(area)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }

@@ -68,6 +68,7 @@ mod event;
 mod events;
 mod files_panel;
 mod flow_runs;
+mod flows_dialog;
 mod hierarchy;
 mod images;
 mod input;
@@ -466,6 +467,7 @@ impl App {
             AppEvent::Files(event) => self.files_answered(event),
             AppEvent::Update(event) => self.update_answered(event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
+            AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Web(event) => self.web_event(event),
@@ -479,7 +481,7 @@ impl App {
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_key(key, area)?,
             Event::Mouse(ev) => self.handle_mouse(ev, area)?,
-            Event::Paste(text) => self.handle_paste(&text),
+            Event::Paste(text) => self.handle_paste(&text, area),
             _ => {}
         }
         Ok(())

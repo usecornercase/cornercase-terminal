@@ -33,6 +33,9 @@ pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
+pub(crate) use dialog::flows::{Flows, FlowsHit, flows_hit, flows_pick_rows, flows_text, flows_wide};
+#[cfg(test)]
+pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
 pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
@@ -59,8 +62,8 @@ pub(crate) use dialog::settings::{
 };
 #[cfg(test)]
 pub(crate) use dialog::settings::{
-    SettingsLine, settings_body, settings_done, settings_edit, settings_lines, settings_moves, settings_remove,
-    settings_restart, settings_row, settings_scroll, settings_tabs,
+    SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
+    settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
@@ -107,6 +110,7 @@ use agents_section::draw_agents;
 use chrome::{
     USAGE_LABEL, draw_bar, draw_border, draw_borders, draw_column_border, draw_footer, draw_issues_row, draw_search_bar,
 };
+use dialog::flows::draw_flows;
 use dialog::form::{draw_confirm, draw_form};
 use dialog::group_style::draw_group_style;
 use dialog::issues::draw_issues;
@@ -318,6 +322,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Picker(picker)) => draw_picker(f, view, picker),
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
+        Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}

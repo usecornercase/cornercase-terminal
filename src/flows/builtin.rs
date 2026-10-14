@@ -31,6 +31,9 @@ const REPRODUCER: &str = "You reproduce bugs in a team of coding agents working 
      orchestrator sends a bug, write the smallest test that fails because of it, run it to see it fail, and commit \
      it. Do not fix the bug. Answer with the test's name, how to run it and how it fails.";
 
+const MEMBER: &str = "You are part of a team of coding agents working in this git worktree. Another agent, the \
+     orchestrator, sends you the work and says what to answer with.";
+
 struct Agents {
     installed: Vec<Known>,
     main: Known,
@@ -134,10 +137,30 @@ pub(crate) fn flows(installed: &[Known], default: Option<Known>) -> Vec<Flow> {
     ]
 }
 
-pub(crate) fn for_config(config: &crate::config::Config) -> Vec<Flow> {
-    let installed: Vec<Known> = Known::ALL
+pub(crate) fn starter(installed: &[Known], default: Option<Known>) -> Flow {
+    let agents = Agents::new(installed, default);
+    let main = agents.main;
+    Flow {
+        name: "New flow".into(),
+        orchestrator: orchestrator(main),
+        roles: vec![role("coder", main, true, CODER), role("reviewer", agents.other(&[main]), false, REVIEWER)],
+        stages: vec![stage(&["coder"], None), stage(&["reviewer"], Some((1, "findings", 3)))],
+        end: End::PullRequest,
+        ..Flow::default()
+    }
+}
+
+pub(crate) fn member(name: &str, installed: &[Known], default: Option<Known>) -> Role {
+    role(name, Agents::new(installed, default).main, false, MEMBER)
+}
+
+pub(crate) fn installed(config: &crate::config::Config) -> Vec<Known> {
+    Known::ALL
         .into_iter()
         .filter(|kind| crate::agents::installed(&crate::agents::command(config, kind.name())))
-        .collect();
-    flows(&installed, Known::of(&config.agent))
+        .collect()
+}
+
+pub(crate) fn for_config(config: &crate::config::Config) -> Vec<Flow> {
+    flows(&installed(config), Known::of(&config.agent))
 }

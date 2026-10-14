@@ -8,6 +8,7 @@ use crate::agents::{self, Known};
 use crate::config::Config;
 
 pub(crate) mod builtin;
+pub(crate) mod dialog;
 pub(crate) mod run;
 pub(crate) mod store;
 
