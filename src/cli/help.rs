@@ -186,8 +186,8 @@ Examples:
   cornercase away --off";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a purple ● on its tab, and on its workspace, project and
-group rows, until it is marked as reviewed or its agent starts working on a new prompt. Looking at
-the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
+group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
+answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
 
 Examples:
