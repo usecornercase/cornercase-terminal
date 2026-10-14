@@ -15,32 +15,94 @@ fn sample() -> Flow {
 mod builtins {
     use super::*;
 
+    fn agents_of(flow: &Flow) -> Vec<(&str, &str)> {
+        std::iter::once(&flow.orchestrator).chain(&flow.roles).map(|r| (r.name.as_str(), r.agent.as_str())).collect()
+    }
+
+    fn every_set() -> Vec<Vec<Known>> {
+        (0..1 << Known::ALL.len())
+            .map(|bits: u32| {
+                Known::ALL.into_iter().enumerate().filter(|(i, _)| bits & (1 << i) != 0).map(|(_, k)| k).collect()
+            })
+            .collect()
+    }
+
     #[test]
-    fn every_built_in_flow_is_valid_whatever_is_installed() {
-        let sets: [&[Known]; 4] = [&Known::ALL, &[Known::Codex], &[], &[Known::Gemini, Known::Opencode]];
-        for installed in sets {
-            for default in [None, Some(Known::Claude), Some(Known::Codex)] {
-                for flow in builtin::flows(installed, default) {
-                    assert_eq!(flow.problems(), Vec::<String>::new(), "{} with {installed:?}", flow.name);
+    fn every_built_in_flow_is_valid_whenever_the_installed_agents_allow_it() {
+        for installed in every_set() {
+            for default in std::iter::once(None).chain(Known::ALL.map(Some)) {
+                let flows =
+                    builtin::flows(&installed, default).into_iter().chain([builtin::starter(&installed, default)]);
+                for flow in flows {
+                    let possible =
+                        installed.iter().any(|kind| !kind.one_per_folder()) || installed.len() >= flow.agents();
+                    let problems = flow.problems();
+                    let others: Vec<&String> = problems.iter().filter(|p| !p.contains("cannot tell two")).collect();
+                    let what = format!("{} with {installed:?} and {default:?}: {problems:?}", flow.name);
+                    assert!(others.is_empty(), "{what}");
+                    assert!(!possible || problems.is_empty(), "{what}");
                 }
             }
         }
     }
 
     #[test]
-    fn the_default_agent_orchestrates_and_reviewers_use_other_agents() {
+    fn the_default_agent_codes_and_one_that_shares_a_folder_takes_the_other_roles() {
         let flow = builtin::flows(&[Known::Claude, Known::Codex, Known::Gemini], Some(Known::Codex)).remove(0);
-        assert_eq!(flow.orchestrator.agent, "codex");
-        assert_eq!(flow.role("coder").map(|r| r.agent.as_str()), Some("codex"));
-        assert_eq!(flow.role("reviewer").map(|r| r.agent.as_str()), Some("claude"));
-        assert_eq!(flow.role("security").map(|r| r.agent.as_str()), Some("gemini"));
+        assert_eq!(
+            agents_of(&flow),
+            [
+                ("orchestrator", "claude"),
+                ("coder", "codex"),
+                ("reviewer", "claude"),
+                ("security", "gemini"),
+                ("tester", "claude")
+            ]
+        );
     }
 
     #[test]
-    fn with_one_agent_installed_every_role_uses_it() {
-        let flow = builtin::flows(&[Known::Gemini], Some(Known::Claude)).remove(0);
+    fn the_default_agent_orchestrates_when_it_can_share_a_folder() {
+        let flow = builtin::flows(&[Known::Claude, Known::Codex, Known::Gemini], Some(Known::Claude)).remove(0);
+        assert_eq!(
+            agents_of(&flow),
+            [
+                ("orchestrator", "claude"),
+                ("coder", "claude"),
+                ("reviewer", "codex"),
+                ("security", "gemini"),
+                ("tester", "claude")
+            ]
+        );
+    }
+
+    #[test]
+    fn without_an_agent_that_shares_a_folder_each_role_takes_another_one() {
+        let flow = builtin::starter(&[Known::Codex, Known::Gemini, Known::Opencode], Some(Known::Codex));
+        assert_eq!(agents_of(&flow), [("orchestrator", "opencode"), ("coder", "codex"), ("reviewer", "gemini")]);
+        assert_eq!(flow.problems(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn with_one_agent_installed_every_role_uses_it_and_says_why_it_cannot_run() {
+        let flow = builtin::flows(&[Known::Gemini], Some(Known::Claude)).remove(2);
         assert!(flow.roles.iter().all(|role| role.agent == "gemini"));
         assert_eq!(flow.orchestrator.agent, "gemini");
+        assert_eq!(
+            flow.problems(),
+            [
+                "Gemini CLI runs `orchestrator`, `coder` and `reviewer`, but cornercase cannot tell two Gemini CLI apart \
+              in one worktree: give all but one of them another agent"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_new_role_takes_an_agent_that_shares_a_folder_when_the_default_one_is_taken() {
+        let role = builtin::member("docs", &[Known::Claude, Known::Codex], Some(Known::Codex), &[Known::Codex]);
+        assert_eq!(role.agent, "claude");
+        let role = builtin::member("docs", &[Known::Claude, Known::Codex], Some(Known::Codex), &[Known::Claude]);
+        assert_eq!(role.agent, "codex");
     }
 }
 
@@ -62,8 +124,29 @@ mod problems {
         assert!(problems.contains(&"two roles are named `coder`".to_string()), "{problems:?}");
         assert!(problems.iter().any(|p| p.starts_with("`coder` runs `vim`")), "{problems:?}");
         flow.roles.pop();
-        flow.roles.push(Role { name: "idle".into(), agent: "codex".into(), ..Role::default() });
+        flow.roles.push(Role { name: "idle".into(), agent: "claude".into(), ..Role::default() });
         assert_eq!(flow.problems(), vec!["`idle` is in no stage".to_string()]);
+    }
+
+    #[test]
+    fn a_role_works_in_one_stage() {
+        let mut flow = sample();
+        flow.stages.push(Stage { roles: vec!["coder".into()], back: None });
+        assert_eq!(flow.problems(), vec!["`coder` is in stage 1 and stage 4; a role works in one stage".to_string()]);
+    }
+
+    #[rstest::rstest]
+    #[case::codex("codex", true)]
+    #[case::gemini("gemini", true)]
+    #[case::opencode("opencode", true)]
+    #[case::claude("claude", false)]
+    #[case::grok("grok", false)]
+    fn an_agent_found_by_its_folder_takes_one_role(#[case] agent: &str, #[case] refused: bool) {
+        let mut flow = sample();
+        flow.orchestrator.agent = agent.into();
+        flow.roles[2].agent = agent.into();
+        let problems: Vec<String> = flow.problems().into_iter().filter(|p| p.contains("cannot tell")).collect();
+        assert_eq!(problems.len(), usize::from(refused), "{problems:?}");
     }
 
     #[test]

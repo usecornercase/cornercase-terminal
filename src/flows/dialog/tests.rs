@@ -540,13 +540,13 @@ mod stages_and_loops {
     #[test]
     fn roles_are_checked_in_the_order_of_the_tabs() {
         let mut d = editing();
-        click_row(&mut d, Row::Stage(0));
-        click_row(&mut d, Row::Roles(0));
-        d.hit(Hit::Pick(3), ROOM);
-        d.hit(Hit::Pick(2), ROOM);
-        d.hit(Hit::Pick(0), ROOM);
-        assert_eq!(stages(&d)[0].0, roles(&["security", "tester"]));
-        assert_eq!(edit(&d).pick_marks(), Some(vec![false, false, true, true]));
+        click_row(&mut d, Row::Stage(1));
+        click_row(&mut d, Row::Roles(1));
+        d.hit(Hit::Pick(1), ROOM);
+        assert_eq!(stages(&d)[1].0, roles(&["security"]));
+        d.hit(Hit::Pick(1), ROOM);
+        assert_eq!(stages(&d)[1].0, roles(&["reviewer", "security"]));
+        assert_eq!(edit(&d).pick_marks(), Some(vec![None, Some(true), Some(true), None]));
         d.press(DONE);
         assert!(edit(&d).pick.is_none());
     }
@@ -554,10 +554,23 @@ mod stages_and_loops {
     #[test]
     fn a_new_stage_asks_for_its_roles() {
         let mut d = editing();
+        edit_mut(&mut d).remove_stage(2);
         click_row(&mut d, Row::AddStage);
-        assert_eq!(edit(&d).pick.as_ref().map(|p| p.row), Some(Row::Roles(3)));
+        assert_eq!(edit(&d).pick.as_ref().map(|p| p.row), Some(Row::Roles(2)));
+        d.hit(Hit::Pick(3), ROOM);
+        assert_eq!(stages(&d).last(), Some(&(roles(&["tester"]), None)));
+    }
+
+    #[test]
+    fn a_role_in_another_stage_is_offered_with_where_it_is_and_cannot_be_checked() {
+        let mut d = editing();
+        click_row(&mut d, Row::AddStage);
+        let notes: Vec<String> = edit(&d).pick_choices().iter().map(|c| c.note.clone()).collect();
+        assert_eq!(notes[0], "in stage 1: a role works in one stage");
         d.hit(Hit::Pick(0), ROOM);
-        assert_eq!(stages(&d).last(), Some(&(roles(&["coder"]), None)));
+        assert_eq!(stages(&d).last(), Some(&(Vec::new(), None)));
+        assert_eq!(d.hint(), "`coder` works in stage 1, and a role works in one stage");
+        assert_eq!(edit(&d).pick_marks(), Some(vec![None, None, None, None]));
     }
 
     #[test]

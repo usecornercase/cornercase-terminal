@@ -401,7 +401,7 @@ impl Editing {
         let i = self.flow.stages.len() - 1;
         self.open = Some(i);
         self.select_row(Row::Roles(i));
-        let items = self.role_choices();
+        let items = self.role_choices(i);
         self.pick = Some(Pick { row: Row::Roles(i), items, search: Search::default() });
     }
 
@@ -473,7 +473,11 @@ impl Editing {
             .map(|n| format!("role {n}"))
             .find(|n| !taken(n))
             .unwrap_or_default();
-        self.flow.roles.push(builtin::member(&name, &agents.installed, agents.default));
+        let taken: Vec<Known> = std::iter::once(&self.flow.orchestrator)
+            .chain(&self.flow.roles)
+            .filter_map(|role| Known::of(&role.agent))
+            .collect();
+        self.flow.roles.push(builtin::member(&name, &agents.installed, agents.default, &taken));
         self.flow.stages.push(Stage { roles: vec![name], back: None });
         self.go_to(Tab::Role(self.flow.roles.len() - 1));
         self.start_field(Row::RoleName, String::new());
@@ -504,10 +508,19 @@ impl Editing {
         }
     }
 
-    fn role_choices(&self) -> Vec<Choice> {
-        let choice =
-            |role: &Role| Choice { value: role.name.clone(), label: role.name.clone(), note: role.agent.clone() };
+    fn role_choices(&self, stage: usize) -> Vec<Choice> {
+        let choice = |role: &Role| {
+            let note = match self.stage_elsewhere(stage, &role.name) {
+                Some(other) => format!("in stage {}: a role works in one stage", other + 1),
+                None => role.agent.clone(),
+            };
+            Choice { value: role.name.clone(), label: role.name.clone(), note }
+        };
         self.flow.roles.iter().map(choice).collect()
+    }
+
+    fn stage_elsewhere(&self, stage: usize, name: &str) -> Option<usize> {
+        self.flow.stages.iter().enumerate().position(|(k, other)| k != stage && other.roles.iter().any(|r| r == name))
     }
 
     fn choices(&self, row: Row, agents: &Agents) -> Vec<Choice> {
@@ -521,7 +534,7 @@ impl Editing {
                 }
                 items
             }
-            Row::Roles(_) => self.role_choices(),
+            Row::Roles(i) => self.role_choices(i),
             Row::Back(i) => {
                 let never = choice(NEVER.into(), NEVER.into(), "the plan moves on");
                 let earlier = self.flow.stages.iter().take(i).enumerate().map(|(k, stage)| {
@@ -578,10 +591,12 @@ impl Editing {
         pick.items.iter().filter(|item| item.label.to_lowercase().contains(&needle)).collect()
     }
 
-    pub(crate) fn pick_marks(&self) -> Option<Vec<bool>> {
+    pub(crate) fn pick_marks(&self) -> Option<Vec<Option<bool>>> {
         let Some(Row::Roles(i)) = self.pick.as_ref().map(|pick| pick.row) else { return None };
         let stage = self.flow.stages.get(i)?;
-        Some(self.pick_choices().iter().map(|item| stage.roles.contains(&item.value)).collect())
+        let mark =
+            |item: &&Choice| self.stage_elsewhere(i, &item.value).is_none().then(|| stage.roles.contains(&item.value));
+        Some(self.pick_choices().iter().map(mark).collect())
     }
 
     pub(crate) fn choose(&mut self, index: Option<usize>) {
@@ -624,6 +639,10 @@ impl Editing {
     }
 
     fn toggle_role(&mut self, stage: usize, name: &str) {
+        if let Some(other) = self.stage_elsewhere(stage, name) {
+            self.notice = Some(format!("`{name}` works in stage {}, and a role works in one stage", other + 1));
+            return;
+        }
         let order: Vec<String> = self.flow.roles.iter().map(|role| role.name.clone()).collect();
         let Some(stage) = self.flow.stages.get_mut(stage) else { return };
         if stage.roles.iter().any(|role| role == name) {
