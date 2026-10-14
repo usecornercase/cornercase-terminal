@@ -32,7 +32,6 @@ impl App {
         store::list(builtin::for_config(&self.config), &paths::flows(&self.config_path), project.as_deref())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn start_run(
         &mut self,
         project: u64,

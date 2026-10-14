@@ -193,6 +193,11 @@ fn canonical(dir: &TempDir) -> PathBuf {
     dir.path().canonicalize().expect("canonicalize")
 }
 
+fn click_button(app: &mut App, area: Rect, labels: &[&str], rects: &[Rect], label: &str) {
+    let i = labels.iter().position(|b| *b == label).unwrap_or_else(|| panic!("no {label} button"));
+    click_in(app, rects[i].as_position(), area);
+}
+
 fn overlay_shown(app: &App, area: Rect) -> ui::Overlay {
     app.overlay.as_ref().and_then(|o| app.overlay_view(o, area)).expect("a dialog is shown")
 }

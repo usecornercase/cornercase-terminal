@@ -3,7 +3,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::Flow;
 use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, RowText, flow_row, permission_line};
 use super::store::{Listing, Origin, Saved};
-use crate::issues;
 use crate::todo::editor::Editor;
 
 pub(crate) const START: &str = "start";
@@ -129,9 +128,6 @@ impl Start {
     }
 
     pub(crate) fn hint(&self) -> String {
-        if let Some(notice) = &self.notice {
-            return notice.clone();
-        }
         match self.focus {
             Focus::List => "↑↓ picks a flow · tab moves to the prompt",
             Focus::Prompt => "what the team should do · enter starts a new line · tab moves to the branch",
@@ -191,7 +187,7 @@ impl Start {
 
     fn typed(&mut self) {
         if !self.named {
-            self.branch = issues::branch_from(&self.prompt.text());
+            self.branch = super::branch(&self.prompt.text());
         }
     }
 

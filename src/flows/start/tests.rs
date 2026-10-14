@@ -81,7 +81,7 @@ mod branches {
     fn the_branch_follows_the_first_words_of_the_prompt() {
         let mut s = start();
         type_text(&mut s, "Add a dark mode to the settings page, then make sure the contrast works");
-        assert_eq!(s.branch, "add-a-dark-mode-to-the-settings-page");
+        assert_eq!(s.branch, "add-a-dark-mode-to-the");
     }
 
     #[test]
@@ -95,6 +95,13 @@ mod branches {
         key(&mut s, KeyCode::BackTab);
         type_text(&mut s, " now");
         assert_eq!(s.branch, "add-dark-theme");
+    }
+
+    #[test]
+    fn a_prompt_without_words_gives_the_default_branch() {
+        let mut s = start();
+        type_text(&mut s, "!!!");
+        assert_eq!(s.branch, "flow");
     }
 
     #[test]
@@ -174,7 +181,7 @@ mod starting {
         let mut s = Start::new(7, "notes".into(), false, listing());
         type_text(&mut s, "Add dark mode");
         assert_eq!(s.press(START), Action::None);
-        assert_eq!(s.hint(), "a flow needs a project that is the root of a git repository");
+        assert_eq!(s.notice.as_deref(), Some("a flow needs a project that is the root of a git repository"));
         assert_eq!(
             s.warnings()[0],
             "notes is not the root of a git repository, and a flow works in a worktree of its own"
@@ -197,10 +204,14 @@ mod starting {
     fn an_empty_prompt_or_branch_is_refused() {
         let mut s = start();
         assert_eq!(s.press(START), Action::None);
-        assert_eq!(s.hint(), "say what the team should do in the prompt");
+        assert_eq!(s.notice.as_deref(), Some("say what the team should do in the prompt"));
         type_text(&mut s, "!!!");
+        key(&mut s, KeyCode::Tab);
+        for _ in 0.."flow".len() {
+            key(&mut s, KeyCode::Backspace);
+        }
         assert_eq!(s.press(START), Action::None);
-        assert_eq!(s.hint(), "the run needs a branch for its worktree");
+        assert_eq!(s.notice.as_deref(), Some("the run needs a branch for its worktree"));
     }
 
     #[test]

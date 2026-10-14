@@ -5,10 +5,8 @@ use super::App;
 use super::flows_dialog::settings_row;
 use super::input::wheel;
 use super::overlay::Overlay;
-use super::toast::Toast;
 use crate::flows::start::{Action, Hit, Room, Start};
 use crate::git;
-use crate::log::{self};
 use crate::project::Hierarchy;
 use crate::ui::{self, StartHit};
 
@@ -87,10 +85,14 @@ impl App {
             }
             Action::Edit(origin, name) => self.open_flows(Some((&origin, &name))),
             Action::Start { flow, task, branch } => {
-                let Some(Overlay::StartFlow { start, .. }) = self.overlay.take() else { return };
-                log::info!("flows", "start", flow = flow.name, project = start.project, branch = branch);
-                if let Err(why) = self.start_run(start.project, *flow, task, branch, true, area) {
-                    self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
+                let Some(project) = self.start_flow().map(|start| start.project) else { return };
+                match self.start_run(project, *flow, task, branch, true, area) {
+                    Ok(()) => self.overlay = None,
+                    Err(why) => {
+                        if let Some(start) = self.start_flow() {
+                            start.notice = Some(why);
+                        }
+                    }
                 }
             }
         }
@@ -113,6 +115,7 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         branch: start.branch.clone(),
         focus: start.focus,
         warnings: start.warnings(),
+        note: start.notice.clone().map(ui::Note::Error),
         hint: start.hint(),
         buttons: start.buttons(room),
         preview: start.selected().map(|saved| saved.flow.clone()),

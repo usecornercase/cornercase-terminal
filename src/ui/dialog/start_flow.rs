@@ -9,7 +9,7 @@ use super::flows::{
 };
 use super::issues::issue_buttons_in;
 use super::settings::{Columns, SettingsHit, SettingsRow, draw_rows, hit_in_rows};
-use super::{draw_input, form_inner};
+use super::{Note, draw_input, form_inner};
 use crate::flows::Flow;
 use crate::flows::start::{Focus, START};
 use crate::text::truncate_right;
@@ -72,6 +72,7 @@ pub(crate) struct StartFlow {
     pub(crate) branch: String,
     pub(crate) focus: Focus,
     pub(crate) warnings: Vec<String>,
+    pub(crate) note: Option<Note>,
     pub(crate) hint: String,
     pub(crate) buttons: Vec<&'static str>,
     pub(crate) preview: Option<Flow>,
@@ -152,7 +153,7 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
         cursor = typed;
     }
     draw_warnings(f, &start.warnings, warning_rows);
-    draw_hint(f, view, None, &start.hint, note);
+    draw_hint(f, view, start.note.as_ref(), &start.hint, note);
     draw_buttons(f, view, &start_buttons(area, warnings, &start.buttons), &start.buttons, START);
     if let Some(pos) = cursor {
         f.set_cursor_position(pos);

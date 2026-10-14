@@ -43,11 +43,9 @@ fn view(app: &App, area: Rect) -> ui::Flows {
     *view
 }
 
-fn button(app: &mut App, area: Rect, label: &str) {
+pub(super) fn button(app: &mut App, area: Rect, label: &str) {
     let view = view(app, area);
-    let i = view.buttons.iter().position(|b| *b == label).unwrap_or_else(|| panic!("no {label} button"));
-    let pos = ui::flows_buttons(area, view.warnings.len(), &view.buttons)[i].as_position();
-    click_in(app, pos, area);
+    click_button(app, area, &view.buttons, &ui::flows_buttons(area, view.warnings.len(), &view.buttons), label);
 }
 
 fn row_rect(app: &App, area: Rect, i: usize) -> Rect {

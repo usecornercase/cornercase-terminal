@@ -360,10 +360,6 @@ pub(crate) fn branch(issue: &Issue) -> String {
     if slug.is_empty() { prefix } else { format!("{prefix}-{slug}") }
 }
 
-pub(crate) fn branch_from(text: &str) -> String {
-    slug(&text.chars().take(SLUG_MAX * 4).collect::<String>(), SLUG_MAX)
-}
-
 pub(crate) fn workspace_name(issue: &Issue) -> String {
     crate::text::truncate_right(&format!("{} {}", issue.key, issue.title), NAME_MAX)
 }

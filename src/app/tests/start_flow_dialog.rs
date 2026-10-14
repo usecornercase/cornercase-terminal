@@ -10,7 +10,7 @@ const START_FLOW: &str = "start a flow…";
 
 struct Setup {
     app: App,
-    _rx: Receiver<AppEvent>,
+    rx: Receiver<AppEvent>,
     _config: TempDir,
     _project: TempDir,
 }
@@ -24,7 +24,7 @@ fn setup(repo: bool) -> Setup {
     for kind in Known::ALL {
         app.config.agent_commands.insert(kind.name().into(), "/nonexistent/agent".into());
     }
-    Setup { app, _rx: rx, _config: config, _project: project }
+    Setup { app, rx, _config: config, _project: project }
 }
 
 fn opened(repo: bool) -> Setup {
@@ -47,9 +47,7 @@ fn view(app: &App, area: Rect) -> ui::StartFlow {
 
 fn button(app: &mut App, area: Rect, label: &str) {
     let view = view(app, area);
-    let i = view.buttons.iter().position(|b| *b == label).unwrap_or_else(|| panic!("no {label} button"));
-    let pos = ui::start_buttons(area, view.warnings.len(), &view.buttons)[i].as_position();
-    click_in(app, pos, area);
+    click_button(app, area, &view.buttons, &ui::start_buttons(area, view.warnings.len(), &view.buttons), label);
 }
 
 fn type_in(app: &mut App, text: &str, area: Rect) {
@@ -129,19 +127,12 @@ mod the_dialog {
     }
 
     #[test]
-    fn start_hands_the_run_over_and_closes() {
-        let mut s = opened(true);
-        type_in(&mut s.app, "Add dark mode", WIDE);
-        button(&mut s.app, WIDE, START);
-        assert!(s.app.overlay.is_none());
-    }
-
-    #[test]
     fn outside_a_repository_it_says_so_and_does_not_start() {
         let mut s = opened(false);
         type_in(&mut s.app, "Add dark mode", WIDE);
         button(&mut s.app, WIDE, START);
-        assert_eq!(start(&s.app).hint(), "a flow needs a project that is the root of a git repository");
+        let refused = start(&s.app).notice.as_deref();
+        assert_eq!(refused, Some("a flow needs a project that is the root of a git repository"));
     }
 
     #[test]
@@ -174,10 +165,47 @@ mod the_dialog {
     }
 }
 
+mod running {
+    use super::*;
+
+    fn with_claude(s: &mut Setup) -> [TempDir; 2] {
+        let (worktrees, bin) = (TempDir::new(), TempDir::new());
+        let fake = bin.path().join("claude");
+        crate::test_util::write_executable(&fake, "#!/bin/sh\nexec sleep 60\n");
+        s.app.config.agent_commands.insert("claude".into(), fake.display().to_string());
+        s.app.config.worktrees_dir = worktrees.path().display().to_string();
+        [worktrees, bin]
+    }
+
+    #[test]
+    fn start_opens_the_team_in_its_worktree_and_shows_the_orchestrator() {
+        let mut s = opened(true);
+        let _dirs = with_claude(&mut s);
+        type_in(&mut s.app, "Fix the login form", WIDE);
+        button(&mut s.app, WIDE, START);
+        assert!(s.app.overlay.is_none());
+        pump_until(&mut s.app, &s.rx, "the team's tabs open", |a| !a.runs.is_empty());
+        let workspace = s.app.project().and_then(Project::workspace).expect("the run's workspace");
+        let tabs: Vec<String> = workspace.tabs.iter().map(|t| t.label(&s.app.config)).collect();
+        assert_eq!(git::branch(&workspace.path).as_deref(), Some("fix-the-login-form"));
+        assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
+        assert_eq!((workspace.active, s.app.runs[0].task.as_str()), (0, "Fix the login form"));
+    }
+
+    #[test]
+    fn a_refusal_stays_in_the_dialog_in_red() {
+        let mut s = opened(true);
+        type_in(&mut s.app, "Fix the login form", WIDE);
+        button(&mut s.app, WIDE, START);
+        let refused = start(&s.app).notice.clone().expect("the refusal");
+        assert!(refused.contains("cannot find on its PATH"), "{refused}");
+        let ui::Overlay::StartFlow(view) = overlay_shown(&s.app, WIDE) else { panic!("the dialog closed") };
+        assert_eq!((view.note, s.app.runs.len()), (Some(ui::Note::Error(refused)), 0));
+    }
+}
+
 fn flows_button(app: &mut App, label: &str) {
-    let ui::Overlay::Flows(view) = overlay_shown(app, WIDE) else { panic!("the flows dialog is not shown") };
-    let i = view.buttons.iter().position(|b| *b == label).unwrap_or_else(|| panic!("no {label} button"));
-    click_in(app, ui::flows_buttons(WIDE, view.warnings.len(), &view.buttons)[i].as_position(), WIDE);
+    flows_dialog::button(app, WIDE, label);
 }
 
 mod pages {

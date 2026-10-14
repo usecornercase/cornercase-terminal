@@ -68,7 +68,6 @@ mod event;
 mod events;
 mod files_panel;
 mod flow_runs;
-mod flow_start_stub;
 mod flows_dialog;
 mod hierarchy;
 mod images;
