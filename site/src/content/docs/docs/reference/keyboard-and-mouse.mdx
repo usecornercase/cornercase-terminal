@@ -23,7 +23,7 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Drag | A project, group, workspace or tab | Moves it within its list; a project also into or out of a group. `Esc` cancels. See [Reorder](../../guides/projects-workspaces-tabs/#reorder). |
 | Hover, then click `×` | Any project, workspace or tab row | Closes it. A project, and a workspace with its own worktree, ask first. In the [compact layout](../../guides/small-terminals/) the `×` always shows, and a tab or workspace asks first too. |
 | Hover, then click `×` | A group header | Asks, then deletes the group: **keep projects** leaves them open, ungrouped; **close projects** closes them too. |
-| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group**. In the compact layout the `⋯` always shows. |
+| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group**, and a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks). In the compact layout the `⋯` always shows. |
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Collapses or expands a project or workspace. A click on the rest of its row opens it and expands it. |
 | Wheel | The projects, workspaces or tree list | Scrolls the list. |
@@ -160,6 +160,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `f` `p` | Opens the search, like `/`. |
 | `g` `d` | Opens or closes the [changes panel](../../guides/changes/), with its filter ready to type. |
 | `g` `b` | Opens the changes panel and the list of branches to compare with. |
+| `g` `p` | Shows the [pull request](../../guides/worktrees/#pull-requests-and-their-checks) of the workspace and its checks, or says why there is none. |
 | `w` `n` / `w` `r` / `w` `x` | New workspace / renames the workspace / closes it, after asking (a worktree asks to remove it). |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `o` | Turns the [Telegram](../../guides/telegram/) away mode on or off, as **Remote** does. Without a paired phone, it opens the settings to set it up. |

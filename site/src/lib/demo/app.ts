@@ -92,6 +92,8 @@ const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neith
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
 
+const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
+
 export interface SettingsRow {
   id: string;
   section: string;
@@ -2269,6 +2271,7 @@ export class App {
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'away') this.openSettingsOn(4, 'telegram');
+    else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
     else if (a.kind === 'quit') this.quit();
   }
 
@@ -2313,6 +2316,7 @@ export class App {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
+        { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
       ];
     }
     if (page === 1) {
@@ -2479,6 +2483,8 @@ export class App {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;
+    } else if (row.id === 'pulls') {
+      o.notice = PULL_REQUESTS_NEED;
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;

@@ -163,6 +163,7 @@ export const page: Page = {
           ['Búsqueda', 'Cualquier proyecto, rama o pestaña, encontrado mientras escribes.'],
           ['Divisiones', 'Clic derecho, dividir. Arrastra para cambiar el tamaño. Y ya está.'],
           ['TODO, a mano', 'Tu lista, junto a las shells de las que trata.'],
+          ['Pull requests, al día', 'Cada worktree muestra su pull request y si sus checks pasan. ¿Falla uno? Pásaselo al agente.'],
         ],
       },
       {
