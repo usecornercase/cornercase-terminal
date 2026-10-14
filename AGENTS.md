@@ -94,6 +94,7 @@ src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tre
 src/state.rs      the saved session as JSON, its Widths schema, migrations and the mapping to and from the hierarchy (`ProjectState::of`/`restore`)
 src/telegram/     the bot: mod.rs (Bot API, updates, buttons, paired chat), html.rs (Markdown to Telegram HTML), link.rs (polling and sending threads)
 src/term.rs       a shell in a PTY, its Emulator, and the reader thread; term/emulator.rs wraps libghostty-vt and takes plain Snapshots for ui
+                  term/status.rs OSC 7501 reports, records and lifetimes; term/status/stream.rs bounded escape parsing
                   term/keys.rs KeyEvent -> bytes (Ghostty's encoder for special keys, legacy encoder for the rest); term/mouse.rs MouseEvent -> bytes in the protocol the program asked for; term/memory.rs how much memory a pane uses (its shell and descendants), measured on a thread
 src/todo/         the TODO list: mod.rs (ordering, undo, todos.json, panel state), editor.rs (a text field with a cursor, soft wrap)
 src/update.rs     update check against GitHub releases, download, checksum, binary swap; update/restart.rs what a server restart stops: running programs from a status Report, the confirmation texts

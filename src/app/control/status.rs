@@ -1,5 +1,4 @@
 use super::{Handled, json, none};
-use crate::agents::Known;
 use crate::agents::awake;
 use crate::app::App;
 use crate::control::{self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, Report, TabInfo, WorkspaceInfo};
@@ -69,7 +68,7 @@ impl App {
             id: term.id,
             path: term.cwd(),
             program: term.program(&self.config),
-            agent: term.agent.agent().map(Known::name).map(str::to_string),
+            agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
             dialog: term.dialog(),

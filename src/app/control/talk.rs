@@ -137,7 +137,7 @@ impl App {
     ) -> Handled {
         let pane = self.target(caller, last.pane, last.tab)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
-        let running = term.agent.agent().map(|agent| agent.name().to_string());
+        let running = term.agent.agent().map(str::to_string);
         let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
         let Some(agent) = running.as_deref().and_then(agents::Known::of) else {
             let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));

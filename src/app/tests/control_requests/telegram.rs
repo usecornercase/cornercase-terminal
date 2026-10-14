@@ -281,6 +281,46 @@ mod agents {
     }
 
     #[test]
+    fn a_protocol_failure_is_sent_as_a_failure_instead_of_a_finished_turn() {
+        let (mut agent, mut phone, id) = seen_agent();
+        away(&mut agent, &mut phone);
+        let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
+        term.feed(b"\x1b]7501;state=error\x07");
+        let (_, order) = phone.says_in_html(&mut agent, "the failure notice", "claude failed");
+        assert!(html(&order).starts_with("<b>! claude failed</b> · "));
+        assert!(button(&order, "screen").ends_with(&format!(":s:{id}")));
+    }
+
+    #[test]
+    fn an_explicit_done_messages_the_phone_even_without_a_working_sample_or_an_unseen_tab() {
+        let (mut agent, mut phone, id) = seen_agent();
+        away(&mut agent, &mut phone);
+        let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
+        term.feed(b"\x1b]7501;state=done\x07");
+        let (_, order) = phone.says_in_html(&mut agent, "the explicit finish", "claude finished");
+        assert!(html(&order).starts_with("<b>✓ claude finished</b> · "));
+    }
+
+    #[test]
+    fn reported_idle_cancels_a_turn_without_sending_a_finished_message() {
+        let (mut agent, mut phone, id) = seen_agent();
+        away(&mut agent, &mut phone);
+        let now = Instant::now();
+        for (offset, bytes) in [(1, b"working".as_slice()), (2, b"idle".as_slice())] {
+            let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
+            let mut report = b"\x1b]7501;state=".to_vec();
+            report.extend_from_slice(bytes);
+            report.push(0x07);
+            term.feed(&report);
+            let at = now + Duration::from_secs(offset);
+            agent.app.watch_agents(at);
+            agent.app.watch_telegram(at);
+        }
+        agent.app.watch_telegram(now + Duration::from_secs(4));
+        assert_eq!(phone.read(&mut agent.app), []);
+    }
+
+    #[test]
     fn a_text_reaches_the_only_agent_and_its_finished_turn_comes_back_with_its_message() {
         let (mut agent, mut phone, id) = seen_agent();
         away(&mut agent, &mut phone);

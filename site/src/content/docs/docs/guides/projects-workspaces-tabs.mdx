@@ -119,17 +119,18 @@ The shell is the one in your `SHELL` environment variable when the server starte
 
 ### What your agents are doing
 
-When Claude Code, Codex, Gemini CLI, opencode or Grok Build runs in a tab, an icon before the tab's name tells you what it is doing:
+An icon before the tab's name tells you what a recognised agent is doing when it reports OSC 7501, or when a reader is available for Claude Code, Codex, Gemini CLI, opencode or Grok Build:
 
 | Icon | Means |
 | --- | --- |
 | `◐` yellow | The agent is working. With **working icon** set to *spinner* in [settings → UI](../../reference/configuration/#ui), it is a spinner instead, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, turning about ten times a second. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
-| `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex, Gemini CLI and Grok Build. opencode never shows it. |
+| `!` orange | The agent needs you: it asks for permission or asks you a question. Any recognised agent reporting OSC 7501; otherwise Claude Code, Codex, Gemini CLI and Grok Build. |
+| `!` red | The agent reported a failure through OSC 7501. It stays until the agent reports another state or clears it. |
 | `●` purple | You marked the agent as pending review. It stays until you mark it as reviewed, send the agent a new prompt or answer its question; opening the tab does not take it off. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
-So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, `!` wins over `●`, and `●` over `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
+So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, orange `!` wins over red `!`, then `●`, then `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
 
 #### Pending review
 
@@ -137,14 +138,14 @@ When several agents finish at once, you rarely review them all straight away. Ri
 
 Both `●` and `✓` are saved with the session: after a restart or an update, an agent that comes back in its conversation comes back with its mark.
 
-cornercase reads what each agent reports about itself. Nothing is installed and none of the agents' settings change.
+cornercase uses [OSC 7501 reports](../../reference/agents/#program-status-protocol) first, including for other recognised agents. Without a report, it uses these readers. Nothing is installed and none of the agents' settings change.
 
 - **Claude Code**: the small file it keeps for each running session in `~/.claude/sessions` (or in `$CLAUDE_CONFIG_DIR/sessions`), the same one `claude agents --json` reads. Without that file, for example with an older Claude Code, cornercase falls back to the title Claude gives the terminal, which only tells working from idle.
 - **Codex**: the title Codex gives the terminal, which starts with a spinner while it works and with `[ ! ] Action Required` while it waits for an approval, and the session's rollout file (the one behind the [context line](#how-full-the-context-is)), which records when each turn starts and ends. If you take the activity out of Codex's terminal title (its `/title` setting), the tab still shows working and finished, but not `!`. Verified against Codex CLI 0.160.0.
 - **Gemini CLI**: its dynamic terminal title, `✦` or `⏲` while working, `✋` when action is required, `◇` when ready. Keep `ui.dynamicWindowTitle` enabled and `ui.hideWindowTitle` disabled: a fixed or hidden title gives no status or notifications. The session file cannot reliably distinguish working from finished.
 - **opencode**: the database where it saves its sessions, `~/.local/share/opencode/opencode.db`, the same one behind its [context line](#how-full-the-context-is). The tab is working from the moment you send a message until the reply ends or you interrupt it. opencode doesn't save a pending permission or question anywhere, so while it waits for you the tab still shows `◐` and you get no `!`; you are told when it finishes. Verified against opencode 1.18.35.
 
-A tab without one of these agents shows its shell instead, in grey, so every tab's name starts in the same column:
+A tab without an agent status shows its shell instead, in grey, so every tab's name starts in the same column:
 
 | Icon | Means |
 | --- | --- |

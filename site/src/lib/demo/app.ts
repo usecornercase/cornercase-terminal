@@ -502,7 +502,7 @@ export class App {
             if (measured) pane.memory = agent ? agent.memory : pane.shell.memory;
             followAgent(pane, agent?.name ?? null);
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
-            if (status && agent) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
+            if (status && agent) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
             else if (pane.since === now && !pane.notified) this.after(NOTIFY_AFTER, () => this.dirty());
           }
         }

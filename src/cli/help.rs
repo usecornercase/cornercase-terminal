@@ -21,7 +21,7 @@ Examples:
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
 pub(super) const STATUS_HELP: &str = "Each pane shows its program and folder, and for a coding agent what it is doing (working,
-waiting for an answer, done out of sight, idle), its model and how full its context is. `(you)`
+waiting for an answer, done out of sight, failed, idle), its model and how full its context is. `(you)`
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
@@ -136,13 +136,13 @@ Examples:
   cornercase read --tab 4 --last-message --json
   cornercase read --last-message --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
-    "By default it waits until the agent stops working: idle, done, pending (marked for review) or
+    "By default it waits until the agent stops working: idle, done, failed, pending (marked for review) or
 waiting. A Claude Code agent whose turn is over while a background shell it started still runs
 counts as working, since it wakes up when the shell ends; --until turn-over also ends there, and
-prints shell. It then prints how it ended (idle, done, pending, waiting, working, shell or quiet),
+prints shell. It then prints how it ended (idle, done, failed, pending, waiting, working, shell or quiet),
 or the line that matched.
-Waiting for an agent needs Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane.
-Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
+Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
+opencode or Grok Build in the pane. Without reports, Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once

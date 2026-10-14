@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
 
 pane_in() {
   cc status --json | node -e '
@@ -164,6 +164,15 @@ screen_sidebar_agents() {
   cc_wheel 'feat/dark-mode' down 1
   cc_wait '│   gpt-5.4 · 20%'
   cc_shot sidebar-agents
+}
+
+screen_agent_failed() {
+  agents_knobs
+  CC_BLOG_COMMAND='CC_AGENT_STATE=failed CC_AGENT_PERCENT=2 CC_AGENT_MODEL=claude-sonnet-5-5 claude'
+  cc_s1_at 110 44
+  cc_wait_status 'claude  failed  Sonnet 5.5'
+  cc_hover 'Workspaces'
+  cc_shot agent-failed
 }
 
 screen_compact_bar() {

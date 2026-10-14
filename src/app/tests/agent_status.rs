@@ -11,6 +11,8 @@ use crate::config;
 use crate::host::sound::{self, Cue, Kind};
 use crate::test_util::write_executable;
 
+mod osc;
+
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {
     let (mut app, rx, dirs) = app_with(1);
     let claude = FakeClaude::new();

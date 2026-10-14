@@ -64,6 +64,7 @@ pub(super) fn status_icon(muted: Color, status: Status, frame: Option<u8>) -> Sp
         }
         Status::Done => ("✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Status::Pending => ("●", Style::default().fg(BRAND_COLOR).add_modifier(Modifier::BOLD)),
+        Status::Failed => ("!", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
         Status::Waiting => ("!", Style::default().fg(WAITING_COLOR).add_modifier(Modifier::BOLD)),
     };
     Span::styled(glyph, style)
