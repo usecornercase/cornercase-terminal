@@ -422,12 +422,12 @@ impl Editing {
                 _ => {}
             }
         }
-        self.open = self.open.and_then(|open| match open.cmp(&i) {
-            std::cmp::Ordering::Less => Some(open),
-            std::cmp::Ordering::Equal => None,
-            std::cmp::Ordering::Greater => Some(open - 1),
-        });
         self.fix_loops();
+        self.follow(|k| match k.cmp(&i) {
+            std::cmp::Ordering::Less => Some(k),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some(k - 1),
+        });
         self.step(0);
     }
 
@@ -446,17 +446,39 @@ impl Editing {
                 }
             }
         }
-        self.open = self.open.map(|open| {
-            if open == i {
+        self.fix_loops();
+        self.follow(|k| {
+            Some(if k == i {
                 j
-            } else if open == j {
+            } else if k == j {
                 i
             } else {
-                open
-            }
+                k
+            })
         });
-        self.fix_loops();
         self.select_row(Row::Stage(j));
+    }
+
+    fn follow(&mut self, moved: impl Fn(usize) -> Option<usize>) {
+        self.open = self.open.and_then(&moved);
+        let Some(field) = &self.field else { return };
+        let row = match field.row {
+            Row::When(k) => moved(k).map(Row::When),
+            Row::AtMost(k) => moved(k).map(Row::AtMost),
+            _ => return,
+        };
+        let looping = |row: Row| match row {
+            Row::When(k) | Row::AtMost(k) => self.flow.stages.get(k).is_some_and(|stage| stage.back.is_some()),
+            _ => false,
+        };
+        match row.filter(|row| looping(*row)) {
+            Some(row) => {
+                if let Some(field) = &mut self.field {
+                    field.row = row;
+                }
+            }
+            None => self.field = None,
+        }
     }
 
     fn fix_loops(&mut self) {
