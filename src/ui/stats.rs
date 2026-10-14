@@ -47,15 +47,11 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     for row in 0..7 {
         let mut spans = vec![Span::raw(" ".repeat(width.saturating_sub(weeks * 2)))];
         for week in (0..weeks).rev() {
-            let level = levels[week * 7 + 6 - row];
-            spans.push(Span::styled(
-                if level.is_some() { "■ " } else { "  " },
-                Style::default().fg(colour(level.unwrap_or(0))),
-            ));
+            spans.push(Span::styled("■ ", Style::default().fg(colour(levels[week * 7 + 6 - row]))));
         }
         lines.push(Line::from(spans));
     }
-    let left = format!("{weeks} weeks · counting for {} days", stats.days);
+    let left = format!("{weeks} weeks · {}", stats.counting());
     let legend = vec![
         Span::styled("less · ", dim),
         Span::styled("■ ", Style::default().fg(colour(1))),

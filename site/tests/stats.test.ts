@@ -4,24 +4,28 @@ import { test } from 'node:test';
 
 import { fromFragment } from '../src/lib/stats/controller';
 import { cardGrid } from '../src/lib/stats/card';
-import { EXAMPLE, parse, shareLink } from '../src/lib/stats/model';
+import { EXAMPLE, ROWS, parse, shareLink } from '../src/lib/stats/model';
 import { Grid } from '../src/lib/term/grid';
 import { paint } from '../src/lib/term/paint';
 
-const fixture = JSON.parse(readFileSync('../tests/fixtures/stats/share-v1.txt', 'utf8'));
+const fixture = JSON.parse(readFileSync('../tests/fixtures/stats/share-v2.txt', 'utf8'));
 const fragment = new URL(fixture.link).hash;
+const older = JSON.parse(readFileSync('../tests/fixtures/stats/share-v1.txt', 'utf8'));
+const v1 = new URL(older.link).hash;
 
-test('the Rust share link is parsed without losing any values', () => {
-  const stats = parse(fragment);
-  assert.ok(stats);
-  assert.deepEqual(stats.windows, { '24h': fixture['24h'], '7d': fixture['7d'], all: fixture.all });
-  assert.equal(stats.days, fixture.days);
-  assert.deepEqual(stats.levels, fixture.levels);
-  assert.equal(shareLink(stats), fixture.link);
-});
+for (const [name, link] of [['Rust share link', fixture], ['link shared before v2', older]] as const) {
+  test(`the ${name} is parsed without losing any values`, () => {
+    const stats = parse(new URL(link.link).hash);
+    assert.ok(stats);
+    assert.deepEqual(stats.windows, { '24h': link['24h'], '7d': link['7d'], all: link.all });
+    assert.equal(stats.days, link.days);
+    assert.deepEqual(stats.levels, link.levels);
+    assert.equal(shareLink(stats), link.link);
+  });
+}
 
 for (const [name, hash] of [
-  ['too long', fragment + 'a'.repeat(512)],
+  ['too long', fragment + 'a'.repeat(1024)],
   ['trailing newline', fragment + '\n'],
   ['missing field', fragment.replace(/&7d=[^&]+/, '')],
   ['extra field', fragment + '&name=x'],
@@ -30,7 +34,9 @@ for (const [name, hash] of [
   ['markup', fragment.replace('24h=4.', '24h=<img>.')],
   ['invalid level', '#v1&24h=0.0.0.0.0.0&7d=0.0.0.0.0.0&all=0.0.0.0.0.0&days=1&map=4A'],
   ['nonzero spare bits', '#v1&24h=0.0.0.0.0.0&7d=0.0.0.0.0.0&all=0.0.0.0.0.0&days=1&map=AQ'],
-  ['wrong version', fragment.replace('#v1', '#v2')],
+  ['wrong version', fragment.replace('#v2', '#v3')],
+  ['v1 with v2 numbers', fragment.replace('#v2', '#v1')],
+  ['v2 with v1 numbers', v1.replace('#v1', '#v2')],
 ] as const) {
   test(`a ${name} link gives no card to draw`, () => { assert.equal(parse(hash), null); assert.equal(fromFragment(hash), null); });
 }
@@ -44,13 +50,30 @@ test('the example opens on seven days and switching changes the card grid', () =
   assert.equal(fromFragment(fragment)?.example, false);
 });
 
-test('the fixture card keeps private counters out of its terminal grid', () => {
+test('the card shows the rows of the Stats tab in its order', () => {
   const stats = parse(fragment); assert.ok(stats);
   const grid = cardGrid(stats, '7d');
-  assert.equal(grid.line(2).trim(), '│   agents started        31                                                                       │');
-  assert.match(grid.plain(), /agent time\s+41h 03m/);
-  for (const text of ['waited', 'cache', 'turns', 'claude', 'codex']) assert.equal(grid.plain().includes(text), false);
-  assert.equal(cardGrid(EXAMPLE, '7d').at(94, 9)?.ch, '■');
+  const shown = Array.from({ length: 9 }, (_, i) => grid.line(i + 2).slice(4, 31).replace(/\s+/g, ' ').trim());
+  assert.deepEqual(shown, ['agents started 31', 'prompts 402', 'turns 377', 'agent time 41h 03m', 'most at once 7', 'waited for you 3h 40m', 'tokens out 3.1M', 'tokens in 11M', 'tokens from cache 310M']);
+  assert.deepEqual(ROWS.map(([label]) => label), ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache']);
+  assert.equal(grid.at(30, 7)?.ch, 'm');
+  for (const text of ['claude', 'codex']) assert.equal(grid.plain().includes(text), false);
+});
+
+test('a card from a link shared before v2 shows the five numbers it holds', () => {
+  const stats = parse(v1); assert.ok(stats);
+  const plain = cardGrid(stats, '7d').plain();
+  assert.match(plain, /agent time\s+41h 03m/);
+  for (const text of ['waited', 'cache', 'turns']) assert.equal(plain.includes(text), false);
+});
+
+test('every heatmap block is drawn, also those before counting began', () => {
+  const grid = cardGrid({ ...EXAMPLE, days: 1, levels: [3, 1] }, '7d');
+  const squares = Array.from({ length: 7 }, (_, row) => Array.from({ length: 26 }, (_, week) => grid.at(44 + week * 2, 3 + row)?.ch).join('')).join('');
+  assert.equal(squares, '■'.repeat(182));
+  assert.equal(grid.at(94, 9)?.fg, 141);
+  assert.equal(grid.at(94, 8)?.fg, 60);
+  assert.equal(grid.at(44, 3)?.fg, 239);
 });
 
 test('a heatmap square is a snapped shape with equal sides', () => {

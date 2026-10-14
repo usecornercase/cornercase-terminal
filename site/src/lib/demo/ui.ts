@@ -1,4 +1,4 @@
-import { factor, duration, ramp } from '../stats/model';
+import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
 import type { AgentRow, App } from './app';
@@ -65,7 +65,7 @@ import {
   FILES_LABEL,
   todoDot,
 } from './layout';
-import { USAGE, STATS, STATS_COLUMNS, type UsageWindow } from './data';
+import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
 import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
@@ -1140,17 +1140,18 @@ export class Painter {
     lines.push([]);
     const col = Math.max(0, Math.floor((width - 20) / 3));
     lines.push([seg(' '.repeat(18) + ['24 h', '7 days', 'total'].map((s) => s.padStart(col)).join(' '), DARK)]);
-    ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache'].forEach((label, i) => {
-      lines.push([seg(label.padEnd(18) + STATS_COLUMNS.map((c) => c[i].padStart(col)).join(' '))]);
+    const columns = (['24h', '7d', 'all'] as const).map((window) => statRows(STATS.windows[window]));
+    columns[0].forEach(([label], i) => {
+      lines.push([seg(label.padEnd(18) + columns.map((c) => c[i][1].padStart(col)).join(' '))]);
     });
     lines.push([]);
     const weeks = Math.min(26, Math.floor(width / 2));
     for (let row = 0; row < 7; row++) {
       const line: Line = [seg(' '.repeat(Math.max(0, width - weeks * 2)))];
-      for (let week = weeks - 1; week >= 0; week--) { const level = STATS.levels[week * 7 + 6 - row]; line.push(seg(level === undefined ? '  ' : '■ ', { fg: level === 0 ? this.lineColour : ramp[level] })); }
+      for (let week = weeks - 1; week >= 0; week--) { const level = STATS.levels[week * 7 + 6 - row] ?? 0; line.push(seg('■ ', { fg: level === 0 ? this.lineColour : ramp[level] })); }
       lines.push(line);
     }
-    const left = `${weeks} weeks · counting for ${STATS.days} days`;
+    const left = `${weeks} weeks · ${counting(STATS.days)}`;
     const legend: Line = [seg('less · ', DARK), ...[1,2,3,4].map((level) => seg('■ ', { fg: ramp[level] })), seg('more', DARK)];
     if (left.length + 19 > width) lines.push([seg(left, DARK)], legend);
     else lines.push([seg(left + ' '.repeat(width - left.length - 19), DARK), ...legend]);

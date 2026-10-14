@@ -124,7 +124,7 @@ fn heatmap_blocks_go_back_from_the_hour_and_use_nonzero_quartiles() {
     }
     let view = stats.view(at(1_000));
     assert_eq!(view.blocks.iter().take(5).map(|b| b.agent_seconds).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 0.0]);
-    assert_eq!(view.levels(1), [Some(1), Some(2), Some(3), Some(4), Some(0), Some(0), None]);
+    assert_eq!(view.levels(1), [1, 2, 3, 4, 0, 0, 0]);
 }
 #[test]
 fn the_first_incomplete_day_has_a_heatmap_square() {
@@ -132,8 +132,22 @@ fn the_first_incomplete_day_has_a_heatmap_square() {
     stats.add(at(1_000), Known::Claude, Counts { agent_ms: 1000, ..Counts::default() });
     let view = stats.view(at(1_000));
     assert_eq!(view.days, 0);
-    assert_eq!(view.levels(1), [Some(1), None, None, None, None, None, None]);
+    assert_eq!(view.levels(1), [1, 0, 0, 0, 0, 0, 0]);
     assert!(view.share_link().ends_with("&days=0&map=IA"));
+}
+#[test]
+fn blocks_before_counting_began_are_drawn_empty() {
+    let mut stats = Stats::new(at(1_000 - 30));
+    stats.add(at(1_000), Known::Claude, Counts { agent_ms: 1000, ..Counts::default() });
+    stats.add(at(1_000 - 24), Known::Claude, Counts { agent_ms: 3000, ..Counts::default() });
+    let view = stats.view(at(1_000));
+    assert_eq!(view.levels(WEEKS).len(), BLOCKS);
+    assert!(view.levels(WEEKS)[2..].iter().all(|level| *level == 0));
+    let text = view.text();
+    let map: Vec<&str> = text.lines().skip(13).take(7).collect();
+    assert!(map.iter().all(|row| row.chars().count() == WEEKS), "{map:?}");
+    assert_eq!(map.iter().map(|row| row.matches('·').count()).sum::<usize>(), BLOCKS - 2);
+    assert!(text.ends_with("counting for 1 day"));
 }
 
 #[test]
@@ -228,7 +242,7 @@ fn count_and_token_formats_fit_the_table() {
 }
 pub(crate) fn example(now: SystemTime) -> Stats {
     let fixture: serde_json::Value =
-        serde_json::from_str(crate::test_util::fixture!("stats/share-v1.txt")).expect("fixture");
+        serde_json::from_str(crate::test_util::fixture!("stats/share-v2.txt")).expect("fixture");
     let mut stats = Stats::new(now.checked_sub(Duration::from_hours(2640)).expect("counting start"));
     let bucket = |name: &str| {
         let a: Vec<u64> =
@@ -238,10 +252,10 @@ pub(crate) fn example(now: SystemTime) -> Stats {
                 Counts {
                     agents: a[0],
                     prompts: a[1],
-                    turns: a[1].saturating_sub(3),
+                    turns: a[6],
                     agent_ms: a[2] * 1000,
-                    tokens: Tokens { input: a[5] * 3, out: a[5], cache_read: a[5] * 100, ..Tokens::default() },
-                    ..Counts::default()
+                    waited_ms: a[7] * 1000,
+                    tokens: Tokens { input: a[8], out: a[5], cache_read: a[9], ..Tokens::default() },
                 },
                 Counts::default(),
                 Counts::default(),
@@ -284,7 +298,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
 #[test]
 fn sharing_matches_the_site_contract() {
     let fixture: serde_json::Value =
-        serde_json::from_str(crate::test_util::fixture!("stats/share-v1.txt")).expect("fixture");
+        serde_json::from_str(crate::test_util::fixture!("stats/share-v2.txt")).expect("fixture");
     let now = at(10_000);
     let stats = example(now);
     assert_eq!(share_link(&stats, now), fixture["link"].as_str().expect("link"));

@@ -501,6 +501,6 @@ fn stats_asks_the_running_server_for_all_three_output_formats() {
     let json: serde_json::Value = serde_json::from_str(&app.session.says(&["stats", "--json"])).expect("stats JSON");
     assert_eq!(json["windows"]["total"]["agents"], 0);
     assert_eq!(json["blocks"].as_array().expect("blocks").len(), 182);
-    assert!(app.session.says(&["stats", "--share"]).starts_with("https://usecornercase.dev/stats/#v1&24h="));
+    assert!(app.session.says(&["stats", "--share"]).starts_with("https://usecornercase.dev/stats/#v2&24h="));
     assert!(!app.session.dir.join("stats.json").exists());
 }

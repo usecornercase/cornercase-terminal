@@ -1,18 +1,16 @@
 import { Grid, BOLD, rect } from '../term/grid';
 import { CanvasView } from '../term/canvas';
-import { type Stats, type WindowName, LABELS, count, duration, tokens, factor, ramp } from './model';
+import { type Stats, type WindowName, LABELS, counting, duration, factor, ramp, rows } from './model';
 
 export function cardGrid(stats: Stats, window: WindowName): Grid {
   const grid = new Grid(100, 16);
   const n = stats.windows[window];
   grid.box(rect(0, 0, 100, 16), { fg: 239 }, 'Usage and stats', { add: BOLD });
-  const rows = [['agents started', count(n[0])], ['prompts', count(n[1])], ['agent time', duration(n[2])], ['most at once', count(n[4])], ['tokens out', tokens(n[5])]];
-  rows.forEach(([label, value], i) => { grid.text(4, i + 2, label, { fg: 8 }); grid.text(28 - value.length, i + 2, value, { add: BOLD }); });
+  rows(n).forEach(([label, value], i) => { grid.text(4, i + 2, label, { fg: 8 }); grid.text(31 - value.length, i + 2, value, { add: BOLD }); });
   const weeks = 26;
   for (let row = 0; row < 7; row++) for (let week = 0; week < weeks; week++) {
     const i = (weeks - 1 - week) * 7 + 6 - row;
-    const level = stats.levels[i];
-    if (level !== undefined) grid.put(44 + week * 2, 3 + row, '■', { fg: ramp[level] });
+    grid.put(44 + week * 2, 3 + row, '■', { fg: ramp[stats.levels[i] ?? 0] });
   }
   grid.text(77, 11, 'less · ', { fg: 8 });
   for (let level = 1; level <= 4; level++) grid.put(82 + level * 2, 11, '■', { fg: ramp[level] });
@@ -53,6 +51,6 @@ export function drawCard(canvas: HTMLCanvasElement, stats: Stats, window: Window
   ctx.beginPath(); ctx.roundRect(60 + cw / 2, y + ch / 2, 1080 - cw, h - ch, cw / 2); ctx.fill();
   ctx.drawImage(terminal, 60, y, 1080, h);
   ctx.font = '400 18px "Geist Variable"'; ctx.fillStyle = '#aaa2ba';
-  ctx.fillText(`counting for ${stats.days} days`, 62, preview ? 588 : 634);
+  ctx.fillText(counting(stats.days), 62, preview ? 588 : 634);
   ctx.textAlign = 'right'; ctx.fillStyle = '#cfc4ec'; ctx.fillText('usecornercase.dev', 1138, preview ? 588 : 634);
 }

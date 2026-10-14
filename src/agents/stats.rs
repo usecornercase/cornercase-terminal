@@ -534,25 +534,24 @@ impl View {
             ]
         })
     }
-    pub(crate) fn levels(&self, weeks: usize) -> Vec<Option<u8>> {
+    pub(crate) fn levels(&self, weeks: usize) -> Vec<u8> {
         let shown = weeks.min(WEEKS) * 7;
-        let days = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX).min(shown);
-        let mut positive: Vec<f64> =
-            self.blocks.iter().take(days).map(|b| b.agent_seconds).filter(|n| *n > 0.0).collect();
+        let seconds = |i: usize| self.blocks.get(i).map_or(0.0, |b| b.agent_seconds);
+        let mut positive: Vec<f64> = (0..shown).map(seconds).filter(|n| *n > 0.0).collect();
         positive.sort_by(f64::total_cmp);
         (0..shown)
             .map(|i| {
-                if i >= days {
-                    return None;
-                }
-                let n = self.blocks[i].agent_seconds;
+                let n = seconds(i);
                 if n <= 0.0 || positive.is_empty() {
-                    return Some(0);
+                    return 0;
                 }
                 let thresholds = [1, 2, 3].map(|q| positive[(positive.len() * q).div_ceil(4).saturating_sub(1)]);
-                Some(1 + u8::try_from(thresholds.iter().filter(|&&t| n > t).count()).unwrap_or(3))
+                1 + u8::try_from(thresholds.iter().filter(|&&t| n > t).count()).unwrap_or(3)
             })
             .collect()
+    }
+    pub(crate) fn counting(&self) -> String {
+        format!("counting for {} day{}", self.days, if self.days == 1 { "" } else { "s" })
     }
     pub(crate) fn text(&self) -> String {
         let mut out = self.headline(false);
@@ -567,37 +566,40 @@ impl View {
         for row in 0..7 {
             for week in (0..WEEKS).rev() {
                 out.push(match levels[week * 7 + (6 - row)] {
-                    None => ' ',
-                    Some(0) => '·',
-                    Some(1) => '░',
-                    Some(2) => '▒',
-                    Some(3) => '▓',
+                    0 => '·',
+                    1 => '░',
+                    2 => '▒',
+                    3 => '▓',
                     _ => '█',
                 });
             }
             out.push('\n');
         }
-        let _ =
-            write!(out, "last 26 weeks, one block per 24 h, the newest bottom right · counting for {} days", self.days);
+        let _ = write!(out, "last 26 weeks, one block per 24 h, the newest bottom right · {}", self.counting());
         out
     }
     pub(crate) fn share_link(&self) -> String {
-        let mut link = format!("{SHARE_BASE}#v1");
+        let mut link = format!("{SHARE_BASE}#v2");
         for (key, name) in [("24h", "24h"), ("7d", "7d"), ("total", "all")] {
             let w = &self.windows[key];
             let c = &w.counts;
             let _ = write!(
                 link,
-                "&{name}={}.{}.{}.{}.{}.{}",
+                "&{name}={}.{}.{}.{}.{}.{}.{}.{}.{}.{}",
                 c.agents,
                 c.prompts,
                 whole_seconds(c.agent_seconds),
                 whole_seconds(w.busy_seconds),
                 w.most_at_once,
-                c.tokens.out
+                c.tokens.out,
+                c.turns,
+                whole_seconds(c.waited_seconds),
+                c.tokens.input.saturating_add(c.tokens.cache_write),
+                c.tokens.cache_read
             );
         }
-        let levels: Vec<u8> = self.levels(WEEKS).into_iter().flatten().collect();
+        let counted = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX);
+        let levels: Vec<u8> = self.levels(WEEKS).into_iter().take(counted).collect();
         let mut bytes = vec![0_u8; (levels.len() * 3).div_ceil(8)];
         for (i, level) in levels.into_iter().enumerate() {
             for bit in 0..3 {
