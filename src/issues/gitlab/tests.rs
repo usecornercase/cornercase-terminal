@@ -312,6 +312,7 @@ mod remotes {
         let base = "https://acme.dev/gitlab/";
         assert_eq!(found(base, &[("origin", "https://acme.dev/gitlab/team/shop.git")]).as_deref(), Some("team/shop"));
         assert_eq!(found(base, &[("origin", "git@acme.dev:gitlab/shop.git")]).as_deref(), Some("gitlab/shop"));
+        assert_eq!(found(base, &[("origin", "https://acme.dev/gitlab-other/team/shop.git")]), None);
     }
 
     #[test]

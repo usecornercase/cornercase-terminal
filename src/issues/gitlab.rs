@@ -275,9 +275,12 @@ fn project_of(base: &str, remotes: &[Remote]) -> Option<String> {
     remotes
         .iter()
         .filter(|r| r.host == host || r.host.ends_with(&format!(".{host}")))
-        .map(|r| {
-            let inside = (r.web && !prefix.is_empty()).then(|| r.path.strip_prefix(&format!("{prefix}/"))).flatten();
-            inside.unwrap_or(&r.path).to_string()
+        .filter_map(|r| {
+            if r.web && !prefix.is_empty() {
+                r.path.strip_prefix(&format!("{prefix}/")).map(str::to_string)
+            } else {
+                Some(r.path.clone())
+            }
         })
         .find(|path| path.contains('/'))
 }
