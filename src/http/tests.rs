@@ -31,9 +31,17 @@ fn get_follows_redirects_unless_asked_not_to() {
     let url = format!("{}/here", server.url());
 
     let followed = get(&SERVICE, &url, &[], &[]).expect("get");
-    let stayed = get_without_redirects(&SERVICE, &url, &[], &[]).expect("get without redirects");
+    let stayed = get_without_redirects(&SERVICE, &url, &[], &[("Token", "t0k")]).err().map(|e| e.to_string());
 
-    assert_eq!((followed.status, stayed.status, target.requests().len()), (200, 302, 1));
+    assert_eq!(followed.status, 200);
+    assert_eq!(
+        stayed.as_deref(),
+        Some(
+            "Tracker answered 302 with a redirect, which is not followed so the token is not sent elsewhere: use the \
+             address it leads to"
+        )
+    );
+    assert_eq!(target.requests().len(), 1);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{FakeHttp, TempDir, decoded, git};
+use crate::test_util::{FakeHttp, TempDir, decoded, git, redirected};
 
 const USER: &str = r#"{"id":7,"username":"ana","name":"Ana Pérez"}"#;
 const ISSUES: &str = "GET /api/v4/projects/acme%2Fshop/issues";
@@ -69,16 +69,15 @@ fn whoami_failures_say_why(#[case] status: u16, #[case] body: &'static str, #[ca
 
 #[test]
 fn a_redirect_is_not_followed_so_the_token_stays_on_the_server() {
-    let elsewhere = FakeHttp::start(vec![("GET /api/v4/user", 200, USER.to_string())]);
-    let server = FakeHttp::start(vec![("GET /api/v4/user", 302, format!("{}/api/v4/user", elsewhere.url()))]);
+    let (server, elsewhere) = redirected("GET /api/v4/user");
 
     let err = api(&server, &TempDir::new()).whoami().err().map(|e| e.to_string());
 
     assert_eq!(
         err.as_deref(),
         Some(
-            "GitLab answered 302 with a redirect, which is not followed so the token stays on this server: set the \
-             GitLab URL to the address it leads to"
+            "GitLab answered 302 with a redirect, which is not followed so the token is not sent elsewhere: use the \
+             address it leads to"
         )
     );
     assert_eq!(elsewhere.requests(), Vec::<String>::new());

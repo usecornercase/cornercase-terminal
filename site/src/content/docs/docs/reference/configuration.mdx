@@ -257,7 +257,7 @@ A [JQL](https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-
 
 #### `plane_url`
 
-The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Set from the settings modal.
+The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Requests carry your API key, so they don't follow redirects: enter the address the server ends up at. Set from the settings modal.
 
 #### `plane_workspace`
 

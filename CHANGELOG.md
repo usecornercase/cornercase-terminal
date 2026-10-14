@@ -5,6 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.12.92
 
 - GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so GitLab links the merge request from it to the issue and, with its automatic issue closing on, closes the issue when the merge request reaches the default branch. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope; both can be changed later in **Settings → Issues → GitLab**. A token in `GITLAB_TOKEN` takes precedence instead, and is changed outside cornercase, then `cornercase kill-server`.
+- Shortcut and Plane no longer follow a redirect with your token: a server that answers with one is reported in the list, so the token is never sent to another address.
 
 ## 0.12.91
 

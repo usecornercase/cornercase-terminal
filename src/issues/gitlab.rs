@@ -221,13 +221,6 @@ fn detail(node: &Value, comments: Vec<Comment>) -> Detail {
 }
 
 fn failure(answer: &Answer) -> Error {
-    if (300..400).contains(&answer.status) {
-        return Error::Api(format!(
-            "GitLab answered {} with a redirect, which is not followed so the token stays on this server: set the \
-             GitLab URL to the address it leads to",
-            answer.status
-        ));
-    }
     let message = ["/message", "/error_description", "/error"].iter().find_map(|p| {
         let value = answer.json.pointer(p)?;
         let text = value.as_str().map_or_else(|| value.to_string(), String::from);

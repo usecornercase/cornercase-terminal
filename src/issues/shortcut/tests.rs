@@ -35,6 +35,15 @@ fn whoami_reads_the_mention_and_the_workspace() {
 }
 
 #[test]
+fn a_redirect_is_not_followed_so_the_token_stays_on_the_server() {
+    let (server, elsewhere) = crate::test_util::redirected("GET /api/v3/member");
+    let base = api_url(&server);
+    let err = Api { base: &base, token: "t0k" }.whoami().err().map(|e| e.to_string());
+    assert!(err.as_deref().is_some_and(|e| e.starts_with("Shortcut answered 302 with a redirect")), "{err:?}");
+    assert_eq!(elsewhere.requests(), Vec::<String>::new());
+}
+
+#[test]
 fn a_rejected_token_says_so() {
     let server = FakeHttp::start(vec![("GET /api/v3/member", 401, "{}")]);
     let base = api_url(&server);

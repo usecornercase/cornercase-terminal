@@ -41,7 +41,7 @@ pub(crate) fn endpoints(url: &str, api: Option<&str>) -> (String, String) {
 impl Api {
     fn get(&self, path: &str, query: &[(&str, &str)], missing: &str) -> Result<Value> {
         let url = format!("{}{path}", self.base.trim_end_matches('/'));
-        let answer = http::get(&SERVICE, &url, query, &[("X-API-Key", &self.token)])?;
+        let answer = http::get_without_redirects(&SERVICE, &url, query, &[("X-API-Key", &self.token)])?;
         into_json(answer, missing, failure)
     }
 

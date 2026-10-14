@@ -33,7 +33,7 @@ impl Lookups {
 
 impl Api<'_> {
     fn request(&self, url: &str, query: &[(&str, &str)], what: &str) -> Result<Value> {
-        let answer = http::get(&SERVICE, url, query, &[("Shortcut-Token", self.token)])?;
+        let answer = http::get_without_redirects(&SERVICE, url, query, &[("Shortcut-Token", self.token)])?;
         if answer.status == 404 {
             return Err(Error::Api(format!("{what} not found")));
         }

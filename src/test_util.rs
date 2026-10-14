@@ -350,6 +350,13 @@ impl FakeHttp {
     }
 }
 
+pub(crate) fn redirected(route: &'static str) -> (FakeHttp, FakeHttp) {
+    let elsewhere = FakeHttp::start(vec![(route, 200, "{}".to_string())]);
+    let path = route.split_once(' ').map_or(route, |(_, path)| path);
+    let server = FakeHttp::start(vec![(route, 302, format!("{}{path}", elsewhere.url()))]);
+    (server, elsewhere)
+}
+
 impl Drop for FakeHttp {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);

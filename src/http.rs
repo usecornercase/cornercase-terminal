@@ -50,7 +50,15 @@ pub(crate) fn get_without_redirects(
     query: &[(&str, &str)],
     headers: &[(&str, &str)],
 ) -> Result<Answer> {
-    get_with(&following(TIMEOUT, 0), service, url, query, headers)
+    let answer = get_with(&following(TIMEOUT, 0), service, url, query, headers)?;
+    if (300..400).contains(&answer.status) {
+        return Err(Error::Api(format!(
+            "{} answered {} with a redirect, which is not followed so the token is not sent elsewhere: use the \
+             address it leads to",
+            service.name, answer.status
+        )));
+    }
+    Ok(answer)
 }
 
 fn get_with(
