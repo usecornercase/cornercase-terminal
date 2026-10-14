@@ -223,6 +223,48 @@ fn a_flow_with_problems_an_unknown_name_and_a_branch_already_running_one_are_ref
 }
 
 #[test]
+fn two_projects_start_runs_on_branches_of_the_same_name_at_once() {
+    let mut team = Team::new();
+    let other = git_repo(&[("README", "hi")]);
+    team.app.open_project(other.path().to_path_buf(), AREA).expect("open it");
+    let run = |project: u64| {
+        let prompt = "Fix the login form".into();
+        Command::FlowRun(wire::FlowRun {
+            name: "Pair".into(),
+            prompt,
+            project: Some(project),
+            ..wire::FlowRun::default()
+        })
+    };
+    let (first, second) = (team.app.projects[0].id, team.app.projects[1].id);
+
+    ask(&mut team.app, None, run(first));
+    ask(&mut team.app, None, run(second));
+
+    assert_eq!(answers(&mut team.app), [], "both wait for git");
+    let mut got = Vec::new();
+    wait_until("git makes both worktrees", || {
+        drain(&mut team.app, &team.rx);
+        got.extend(answers(&mut team.app));
+        got.len() == 2
+    });
+    let runs: Vec<RunInfo> = got
+        .into_iter()
+        .map(|answer| {
+            serde_json::from_value(match answer {
+                Response::Ok(value) => value,
+                Response::Error(message) => panic!("a run did not start: {message}"),
+            })
+            .expect("a run")
+        })
+        .collect();
+    let mut projects: Vec<u64> = runs.iter().map(|run| run.project).collect();
+    projects.sort_unstable();
+    assert_eq!(projects, [first, second]);
+    assert!(runs.iter().all(|run| run.branch == "fix-the-login-form"));
+}
+
+#[test]
 fn a_project_outside_git_cannot_run_a_flow() {
     let mut team = Team::new();
     let plain = TempDir::new();

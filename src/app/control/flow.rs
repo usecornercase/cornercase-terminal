@@ -52,7 +52,7 @@ impl App {
         starting.branch = starting.branch.trim().to_string();
         self.run_refusal(p, &starting)?;
         let branch = starting.branch.clone();
-        let busy = |pending: &Pending| matches!(&pending.stage, Stage::Run(other) if other.branch == branch);
+        let busy = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, starting) if *other == project && starting.branch == branch);
         if self.requests.pending.iter().any(busy) {
             return Err(format!("a flow is already starting on branch {branch}"));
         }
@@ -62,7 +62,7 @@ impl App {
         }
         let key = self.requests.key();
         self.spawn_worktree(p, branch, None, Some(key));
-        let stage = Stage::Run(Box::new(starting));
+        let stage = Stage::Run(project, Box::new(starting));
         self.requests.pending.push(Pending { client, key, timeout: None, done: Done::default(), stage });
         Ok(None)
     }

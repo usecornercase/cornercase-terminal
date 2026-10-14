@@ -81,7 +81,7 @@ struct Pending {
 
 enum Stage {
     Worktree(Then),
-    Run(Box<Starting>),
+    Run(u64, Box<Starting>),
     Removing { force: bool },
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
