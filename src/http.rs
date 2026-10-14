@@ -53,17 +53,26 @@ pub(crate) fn post_within(service: &Service, url: &str, body: &Value, timeout: D
 }
 
 pub(crate) fn download(service: &Service, url: &str) -> Result<Vec<u8>> {
-    let mut response = reached(service, agent(DOWNLOAD_TIMEOUT).get(url).call(), DOWNLOAD_TIMEOUT)?;
+    download_within(service, url, DOWNLOAD_LIMIT, DOWNLOAD_TIMEOUT)
+}
+
+pub(crate) fn download_within(service: &Service, url: &str, limit: u64, timeout: Duration) -> Result<Vec<u8>> {
+    let https = url.starts_with("https://");
+    let agent: Agent = Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .https_only(https)
+        .build()
+        .into();
+    let mut response = reached(service, agent.get(url).call(), timeout)?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(Error::Api(format!("{} answered {status} for {url}", service.name)));
     }
-    response
-        .body_mut()
-        .with_config()
-        .limit(DOWNLOAD_LIMIT)
-        .read_to_vec()
-        .map_err(|e| Error::Api(format!("could not download from {}: {e}", service.name)))
+    response.body_mut().with_config().limit(limit).read_to_vec().map_err(|e| match e {
+        ureq::Error::BodyExceedsLimit(_) => Error::Api(format!("{} sent more than {} KiB", service.name, limit / 1024)),
+        e => Error::Api(format!("could not download from {}: {e}", service.name)),
+    })
 }
 
 fn reached(

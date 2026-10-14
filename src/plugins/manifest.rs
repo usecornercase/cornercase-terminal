@@ -211,19 +211,27 @@ impl Manifest {
     }
 
     pub(crate) fn asks(&self) -> String {
-        if self.permissions.is_empty() {
+        Self::asking(&self.permissions)
+    }
+
+    pub(crate) fn asking(permissions: &[String]) -> String {
+        if permissions.is_empty() {
             "declares no permissions".into()
         } else {
-            format!("asks for {}", self.permissions.join(", "))
+            format!("asks for {}", permissions.join(", "))
         }
     }
 }
 
-fn valid_id(field: &str, id: &str) -> Result<(), String> {
+pub(crate) fn is_id(id: &str) -> bool {
     let mut chars = id.chars();
     let first = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
     let rest = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
-    if first && rest && id.len() <= MAX_ID {
+    first && rest && id.len() <= MAX_ID
+}
+
+fn valid_id(field: &str, id: &str) -> Result<(), String> {
+    if is_id(id) {
         return Ok(());
     }
     Err(format!(

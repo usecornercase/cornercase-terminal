@@ -212,3 +212,150 @@ mod services {
         assert!(!process::alive(pid));
     }
 }
+
+mod catalogue {
+    use serde_json::json;
+
+    use super::*;
+    use crate::settings::{Catalogue, Row};
+    use crate::test_util::{FakeHttp, fixture};
+
+    fn index() -> String {
+        let mut index: serde_json::Value = serde_json::from_str(fixture!("plugins/index-v1.json")).expect("fixture");
+        index["plugins"][1]["id"] = json!("acme.notes");
+        index["plugins"].as_array_mut().expect("list").push(json!({
+            "id": "acme.later",
+            "name": "Later",
+            "description": "Needs a newer cornercase",
+            "repo": "acme/later",
+            "commit": "fedcba9876543210fedcba9876543210fedcba98",
+            "version": "2.0.0",
+            "min_cornercase": "999.0.0"
+        }));
+        index.to_string()
+    }
+
+    fn served(status: u16, body: String) -> (Plugged, FakeHttp) {
+        let server = FakeHttp::start(vec![("GET /plugins/index.json", status, body)]);
+        let mut p = plugged(false);
+        p.app.plugins.catalogue_url = format!("{}/plugins/index.json", server.url());
+        p.app.open_settings_on(&Row::Catalogue);
+        (p, server)
+    }
+
+    fn settings(app: &App) -> &Settings {
+        let Some(Overlay::Settings(s)) = &app.overlay else { panic!("settings are open") };
+        s
+    }
+
+    fn open(p: &mut Plugged) {
+        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+        let (app, rx) = (&mut p.app, &p.rx);
+        wait_until("the catalogue answers", || {
+            drain(app, rx);
+            !matches!(settings(app).catalogue, Catalogue::Loading)
+        });
+    }
+
+    fn row(app: &App, id: &str) -> (String, String, String) {
+        let text = settings(app).row_text(&Row::Available(id.into()));
+        (text.label, text.value, text.note)
+    }
+
+    #[test]
+    fn nothing_is_fetched_until_the_catalogue_is_opened() {
+        let (mut p, server) = served(200, index());
+        render(&mut p.app, AREA);
+        p.app.refresh(Instant::now());
+        drain(&mut p.app, &p.rx);
+
+        assert!(server.requests().is_empty());
+        assert_eq!(settings(&p.app).catalogue, Catalogue::Closed);
+        assert_eq!(settings(&p.app).row_text(&Row::Catalogue).value, "show");
+    }
+
+    #[test]
+    fn opening_it_lists_the_entries_and_marks_what_is_installed_or_cannot_install() {
+        let (mut p, server) = served(200, index());
+
+        open(&mut p);
+
+        assert_eq!(server.requests().len(), 1);
+        let rows = settings(&p.app).rows();
+        let available: Vec<&Row> = rows.iter().filter(|row| row.section() == "Available").collect();
+        assert_eq!(available.len(), 4);
+        assert_eq!(
+            row(&p.app, "example.hello"),
+            (
+                "Hello 0.1.0".into(),
+                "install".into(),
+                "An example entry: adds show pane id to the pane menu · asks for status, notify".into()
+            )
+        );
+        assert_eq!(row(&p.app, "acme.notes").1, "installed");
+        assert!(row(&p.app, "acme.notes").2.starts_with("linked from "));
+        assert_eq!(
+            row(&p.app, "acme.later"),
+            ("Later 2.0.0".into(), "cannot install".into(), "needs cornercase 999.0.0 or later".into())
+        );
+    }
+
+    #[test]
+    fn a_failed_fetch_says_why_in_the_view() {
+        let (mut p, _server) = served(200, "{\"version\": 7, \"plugins\": []}".into());
+
+        open(&mut p);
+
+        let text = settings(&p.app).row_text(&Row::Catalogue);
+        assert_eq!(text.value, "try again");
+        assert!(text.note.contains("version 7"), "{}", text.note);
+        assert!(text.dangerous);
+    }
+
+    #[test]
+    fn an_entry_opens_a_preview_and_nothing_installs_until_it_is_confirmed() {
+        let (mut p, _server) = served(200, index());
+        open(&mut p);
+        let i = settings(&p.app).rows().iter().position(|r| *r == Row::Available("example.hello".into()));
+        if let Some(Overlay::Settings(s)) = &mut p.app.overlay {
+            s.select(i.expect("listed"));
+        }
+
+        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+
+        let Some(ui::Overlay::Update(dialog)) = p.app.overlay_view(p.app.overlay.as_ref().expect("open"), AREA)
+        else {
+            panic!("the install dialog is open");
+        };
+        let notes: Vec<String> = dialog.notes.iter().map(ToString::to_string).collect();
+        assert_eq!((dialog.title, dialog.submit), ("Install plugin", "install"));
+        assert!(dialog.message.starts_with("Install Hello 0.1.0?"), "{}", dialog.message);
+        assert!(
+            notes.iter().any(|l| l.contains("github.com/example/cornercase-hello/plugin at v0.1.0")),
+            "{notes:?}"
+        );
+        assert!(notes.iter().any(|l| l.contains("status, notify")), "{notes:?}");
+        assert_eq!(Registry::load(&paths::plugins(&p.app.config_path)).entries.len(), 1);
+
+        send_key(&mut p.app, KeyCode::Esc, KeyModifiers::NONE);
+
+        assert_eq!(settings(&p.app).rows()[settings(&p.app).cursor], Row::Available("example.hello".into()));
+    }
+
+    #[test]
+    fn an_entry_that_cannot_install_only_says_why() {
+        let (mut p, _server) = served(200, index());
+        open(&mut p);
+        let i = settings(&p.app).rows().iter().position(|r| *r == Row::Available("acme.later".into()));
+        if let Some(Overlay::Settings(s)) = &mut p.app.overlay {
+            s.select(i.expect("listed"));
+        }
+
+        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+
+        assert_eq!(
+            settings(&p.app).notice.as_deref(),
+            Some("Later 2.0.0 cannot install: needs cornercase 999.0.0 or later")
+        );
+    }
+}

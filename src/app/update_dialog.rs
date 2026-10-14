@@ -148,7 +148,7 @@ impl App {
     }
 
     pub(super) fn scroll_update(&mut self, delta: isize, area: Rect) {
-        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart)) {
+        if matches!(self.overlay, Some(Overlay::Update(_) | Overlay::Restart | Overlay::InstallPlugin(_))) {
             let lines = self.update_notes(area).len();
             self.update.scroll = ui::update_scroll(area, lines, self.update.scroll.saturating_add_signed(delta));
         }
@@ -156,6 +156,9 @@ impl App {
 
     pub(super) fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
+        if let Some(Overlay::InstallPlugin(installing)) = &self.overlay {
+            return Self::install_notes(&installing.entry, width);
+        }
         if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
             return markdown::render(&restart::confirmation(Some(&self.update.restart_list)), width);
         }

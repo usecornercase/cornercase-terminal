@@ -55,6 +55,8 @@ pub(crate) enum Row {
     TelegramChat,
     Plugin(String),
     NoPlugins,
+    Catalogue,
+    Available(String),
 }
 
 impl Row {
@@ -81,6 +83,7 @@ impl Row {
             Self::Remote | Self::Browsers => "Browser",
             Self::TelegramBot | Self::TelegramChat => "Telegram",
             Self::Plugin(_) | Self::NoPlugins => "Installed",
+            Self::Catalogue | Self::Available(_) => "Available",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(_) => "Accounts",
@@ -121,7 +124,7 @@ impl Row {
             | Self::Updates
             | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::TelegramBot | Self::TelegramChat => Page::Remote,
-            Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
+            Self::Plugin(_) | Self::NoPlugins | Self::Catalogue | Self::Available(_) => Page::Plugins,
         }
     }
 }
@@ -229,6 +232,8 @@ pub(crate) enum Action {
     PairTelegram,
     ForgetTelegram,
     Plugin(String, bool),
+    OpenCatalogue,
+    InstallPlugin(String),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -246,6 +251,24 @@ pub(crate) struct PluginRow {
     pub(crate) on: bool,
     pub(crate) note: String,
     pub(crate) broken: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum Catalogue {
+    #[default]
+    Closed,
+    Loading,
+    Failed(String),
+    Loaded(Vec<AvailableRow>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AvailableRow {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) value: String,
+    pub(crate) note: String,
+    pub(crate) installable: bool,
 }
 
 #[derive(Debug)]
@@ -295,6 +318,7 @@ pub(crate) struct Settings {
     pub(crate) browsers: usize,
     pub(crate) telegram: Telegram,
     pub(crate) plugins: Vec<PluginRow>,
+    pub(crate) catalogue: Catalogue,
 }
 
 impl Settings {
@@ -316,6 +340,7 @@ impl Settings {
             browsers: 0,
             telegram: Telegram::default(),
             plugins: Vec::new(),
+            catalogue: Catalogue::Closed,
         }
     }
 
@@ -394,6 +419,10 @@ impl Settings {
         rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
         if self.plugins.is_empty() {
             rows.push(Row::NoPlugins);
+        }
+        rows.push(Row::Catalogue);
+        if let Catalogue::Loaded(available) = &self.catalogue {
+            rows.extend(available.iter().map(|plugin| Row::Available(plugin.id.clone())));
         }
         rows.retain(|row| row.page() == self.page);
         rows

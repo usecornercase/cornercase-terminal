@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "example.hello",
+      "name": "Hello",
+      "description": "An example entry: adds show pane id to the pane menu",
+      "repo": "example/cornercase-hello",
+      "path": "plugin",
+      "ref": "v0.1.0",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "version": "0.1.0",
+      "min_cornercase": "0.12.91",
+      "platforms": ["macos", "linux"],
+      "permissions": ["status", "notify"],
+      "sha256": {
+        "aarch64-apple-darwin": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "example.minimal",
+      "name": "Minimal",
+      "description": "An example entry with only the required fields",
+      "repo": "example/minimal",
+      "commit": "89abcdef0123456789abcdef0123456789abcdef",
+      "version": "1.0.0"
+    }
+  ]
+}
