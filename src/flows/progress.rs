@@ -48,6 +48,19 @@ impl Progress {
         progress
     }
 
+    pub(crate) fn resumed(flow: &Flow, active: Option<usize>, rounds: &[u32]) -> Self {
+        let stages = flow.stages.len();
+        Self {
+            active: active.filter(|stage| *stage < stages),
+            rounds: rounds.iter().copied().take(stages).collect(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn all_rounds(&self) -> &[u32] {
+        &self.rounds
+    }
+
     pub(crate) fn rounds(&self, stage: usize) -> u32 {
         self.rounds.get(stage).copied().unwrap_or_default()
     }

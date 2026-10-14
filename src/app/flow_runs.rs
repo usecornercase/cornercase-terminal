@@ -8,6 +8,7 @@ use super::toast::Toast;
 use crate::agents;
 use crate::agents::launch::{self, Launch};
 use crate::control::{MemberInfo, RunInfo};
+use crate::flows::progress::Progress;
 use crate::flows::run::{Member, Run};
 use crate::flows::{self, Flow, Role, brief, builtin, store};
 use crate::git;
@@ -172,6 +173,7 @@ impl App {
     pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)]) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
         run.id = self.take_id();
+        run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {
             let found = tabs.iter().find(|(t, _)| *t == seat.tab).and_then(|(_, tab)| tab.panes.get(seat.pane));
             if let Some(term) = found {

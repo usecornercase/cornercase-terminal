@@ -2,6 +2,20 @@ use super::flow_panel::team;
 use super::*;
 use crate::agents::AgentState;
 use crate::flows::ORCHESTRATOR;
+use crate::flows::progress::Edge;
+use crate::flows::run::{Kind, Message};
+
+fn send(app: &mut App, to: &str) {
+    let message = Message {
+        from: ORCHESTRATOR.into(),
+        to: to.into(),
+        kind: Kind::Send,
+        text: None,
+        bytes: 0,
+        at: Instant::now(),
+    };
+    app.runs[0].record(message);
+}
 
 fn screen(app: &App, pane: u64) -> String {
     app.projects.pane_by(pane).and_then(|term| term.emulator.screen_text().ok()).unwrap_or_default()
@@ -32,4 +46,21 @@ fn a_pane_where_another_agent_ran_resumes_that_agent_and_its_orchestrator_is_not
             && screen(a, coder).contains("codex resume c-coder")
             && screen(a, tester).contains("claude --dangerously-skip-permissions --resume c-tester")
     });
+}
+
+#[test]
+fn the_plan_goes_on_where_it_stood_after_a_restart() {
+    let (mut app, _rx, _dir) = team();
+    for to in ["coder", "reviewer", "coder", "reviewer"] {
+        send(&mut app, to);
+    }
+    let (mut again, _rx) = new_app(no_config());
+
+    assert!(again.restore(&app.state(), AREA));
+    send(&mut again, "tester");
+
+    let progress = &again.runs[0].progress;
+    assert_eq!((progress.active, progress.rounds(1)), (Some(2), 1));
+    assert_eq!(progress.last.as_ref().map(|step| step.edge), Some(Edge::Forward(1)));
+    assert_eq!(progress.outside, None);
 }
