@@ -3,14 +3,15 @@ use crate::flows::run::{Member, Run};
 use crate::flows::{Flow, ORCHESTRATOR};
 
 #[rstest]
-#[case::a_member_that_finishes(Some("coder"), "idle", false)]
-#[case::a_member_that_needs_you(Some("coder"), "waiting", true)]
-#[case::the_orchestrator_that_finishes(Some(ORCHESTRATOR), "idle", true)]
-#[case::an_agent_in_no_run(None, "idle", true)]
-fn in_a_flow_a_member_finishing_a_turn_tells_no_one(
+#[case::a_member_that_finishes(Some("coder"), "idle", false, Status::Idle)]
+#[case::a_member_that_needs_you(Some("coder"), "waiting", true, Status::Waiting)]
+#[case::the_orchestrator_that_finishes(Some(ORCHESTRATOR), "idle", true, Status::Done)]
+#[case::an_agent_in_no_run(None, "idle", true, Status::Done)]
+fn in_a_flow_a_member_finishing_a_turn_tells_no_one_and_leaves_no_mark(
     #[case] role: Option<&str>,
     #[case] status: &str,
     #[case] told: bool,
+    #[case] shown: Status,
 ) {
     let mut w = Watched::start(agents::Known::Claude, true);
     if let Some(role) = role {
@@ -24,6 +25,7 @@ fn in_a_flow_a_member_finishing_a_turn_tells_no_one(
 
     let (toast, notifications) = w.told();
     assert_eq!((toast.is_some(), !notifications.is_empty()), (told, told), "{toast:?} {notifications:?}");
+    assert_eq!(tab_term(&w.app, 0, 0).agent.status(), Some(shown));
 }
 
 #[test]

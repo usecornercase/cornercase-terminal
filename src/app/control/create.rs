@@ -209,12 +209,14 @@ impl App {
             .requests
             .pending
             .iter()
-            .position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_) | Stage::Run(_)));
+            .position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_) | Stage::Run(..)));
         let Some(i) = found else { return };
         let mut pending = self.requests.pending.remove(i);
         let then = match std::mem::replace(&mut pending.stage, Stage::launch(None)) {
             Stage::Worktree(then) => then,
-            Stage::Run(starting) => return self.flow_worktree_ready(pending.client, project, result, *starting, area),
+            Stage::Run(_, starting) => {
+                return self.flow_worktree_ready(pending.client, project, result, *starting, area);
+            }
             _ => return,
         };
         match self.open_worktree(project, result, then, area, &mut pending) {

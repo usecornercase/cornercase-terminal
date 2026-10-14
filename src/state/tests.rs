@@ -33,6 +33,7 @@ fn state(dirs: &[&str]) -> State {
         changes: None,
         todo: false,
         files: false,
+        flow: false,
     }
 }
 
@@ -148,6 +149,7 @@ mod file {
             changes: Some(ChangesState { open: true, mode: Mode::All, scope: Some(Scope::Every) }),
             todo: true,
             files: true,
+            flow: false,
         };
         let fixture = crate::test_util::fixture!("session/v5.json");
         let dir = TempDir::new();

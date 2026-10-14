@@ -3,16 +3,17 @@ use std::fmt::Write as _;
 use super::run::Member;
 use super::{End, Flow, ORCHESTRATOR, Role, Stage};
 
-const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
+pub(super) const WAIT_FIRST: &str = "Wait for the orchestrator's first message before doing anything.";
 
 pub(crate) fn member(role: &Role) -> String {
     let prompt = role.prompt.trim();
+    let prompt = prompt.strip_suffix(WAIT_FIRST).map_or(prompt, str::trim_end);
     let told = if role.edits {
         format!("You are `{}` in this team, and you may edit files and commit in this worktree.", role.name)
     } else {
         format!("You are `{}` in this team: do not edit files and do not commit.", role.name)
     };
-    if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told}") }
+    if prompt.is_empty() { format!("{told} {WAIT_FIRST}") } else { format!("{prompt}\n\n{told} {WAIT_FIRST}") }
 }
 
 pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -> String {
@@ -126,10 +127,11 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>) -> String {
          `cornercase wait --all {panes} --until turn-over --timeout 300`.\n\
          - Send work with `cornercase send --pane N --enter 'the full instruction'`: one self-contained message \
          saying what to do and what to answer with. An agent knows only what you send it.\n\
-         - Wait with `cornercase wait --pane N --until turn-over --timeout 500` (several agents: one wait with a \
-         `--pane` each and `--any` or `--all`), in the foreground, with a `--timeout` shorter than your own time \
-         limit for a command, and run it again when it times out. Never wait in the background: that ends your \
-         turn, and cornercase then shows you as finished while your team works.\n\
+         - Wait in the foreground with `cornercase wait --pane N --until turn-over --timeout 300` (several agents: \
+         one wait with a `--pane` each and `--any` or `--all`). Give your shell tool a time limit longer than \
+         `--timeout` when it takes one (Claude Code's Bash stops a command after 2 minutes unless told), else use a \
+         `--timeout` under its limit; when the wait times out, run it again. Never wait in the background: that \
+         ends your turn, and cornercase then shows you as finished while your team works.\n\
          - Read what agents answered with `cornercase read --last-message --pane N` (a `--pane` each for several), \
          not their screens.\n\
          - If `send` fails with `not confirmed`, run `cornercase read --pane N` before sending again: the agent may \

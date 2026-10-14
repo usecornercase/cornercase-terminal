@@ -480,6 +480,8 @@ pub(crate) struct RunInfo {
     pub(crate) workspace: u64,
     pub(crate) branch: String,
     pub(crate) members: Vec<MemberInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) note: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

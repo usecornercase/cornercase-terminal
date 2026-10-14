@@ -13,6 +13,11 @@ pub(in crate::agents) fn input_box(screen: &str) -> Option<bool> {
     Some(box_rule(&screen.lines().collect::<Vec<_>>()).is_some())
 }
 
+pub(in crate::agents) fn bypass_consent(screen: &str) -> bool {
+    let compact: String = screen.chars().filter(|c| !c.is_whitespace()).collect();
+    compact.contains("BypassPermissionsmode") && compact.contains("Yes,Iaccept")
+}
+
 pub(in crate::agents) fn survey(screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().collect();
     let Some(rule) = box_rule(&lines) else { return false };

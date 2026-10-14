@@ -15,7 +15,7 @@ const CLIENT: u64 = 7;
 const TALL: Rect = Rect { x: 0, y: 0, width: 120, height: 60 };
 const ROLES: [&str; 5] = [ORCHESTRATOR, "coder", "reviewer", "security", "tester"];
 
-fn team() -> (App, Receiver<AppEvent>, TempDir) {
+pub(super) fn team() -> (App, Receiver<AppEvent>, TempDir) {
     let dir = TempDir::new();
     let (mut app, rx) = app_in(dir.path(), no_config());
     let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
@@ -218,6 +218,40 @@ mod recording {
         app.flow_answered(CLIENT, &Ok(json!({ "text": "No findings." })));
         let expected = (ORCHESTRATOR.into(), "reviewer".into(), Kind::Read, Some("No findings.".into()));
         assert_eq!(messages(&app), vec![expected]);
+    }
+
+    #[rstest::rstest]
+    #[case::its_run_went_and_another_started(true)]
+    #[case::its_client_left(false)]
+    fn a_last_message_read_is_dropped_once(#[case] replaced: bool) {
+        let (mut app, _rx, _dir) = team();
+        let last = wire::LastMessage { pane: Some(pane(&app, "reviewer")), ..wire::LastMessage::default() };
+        let noted = app.flow_steps(Some(pane(&app, ORCHESTRATOR)), &Command::LastMessage(last), Instant::now());
+        app.flow_requested(CLIENT, noted, true);
+        if replaced {
+            let mut next = app.runs.remove(0);
+            next.id += 1;
+            app.runs.push(next);
+        } else {
+            app.forget(CLIENT);
+        }
+
+        app.flow_answered(CLIENT, &Ok(json!({ "text": "No findings." })));
+
+        assert_eq!(messages(&app), Vec::new());
+    }
+
+    #[test]
+    fn the_open_flow_panel_comes_back_after_a_restart() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let saved = app.state();
+        assert!(saved.flow);
+        let (mut again, _rx) = new_app(no_config());
+
+        assert!(again.restore(&saved, AREA));
+
+        assert_eq!((again.runs.len(), again.side), (1, Some(Side::Flow)));
     }
 
     #[test]

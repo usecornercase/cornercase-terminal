@@ -1,7 +1,6 @@
+use super::brief::WAIT_FIRST;
 use super::{Back, End, Flow, ORCHESTRATOR, Role, Stage};
 use crate::agents::Known;
-
-const WAIT: &str = "Wait for the orchestrator's first message before doing anything.";
 
 const ORCHESTRATE: &str = "Keep every message to an agent self-contained: say what to do and what to answer with. \
      Pass findings and failures on word for word, with the agent that found them.";
@@ -82,7 +81,7 @@ fn role(name: &str, agent: Known, edits: bool, prompt: &str) -> Role {
         name: name.to_string(),
         agent: agent.name().to_string(),
         edits,
-        prompt: format!("{prompt} {WAIT}"),
+        prompt: format!("{prompt} {WAIT_FIRST}"),
         ..Role::default()
     }
 }

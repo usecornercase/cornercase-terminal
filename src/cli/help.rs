@@ -208,15 +208,19 @@ Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login";
 pub(super) const FLOW_RUN_HELP: &str =
-    "It makes the worktree (or uses the workspace already on that branch, if it runs no flow), opens
-a tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
+    "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
+tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
 its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
 pass --focus.
 
+Without --worktree, the branch comes from the task's first words, with a short suffix when that
+says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
+project's default or the one its own folder is on is refused: a flow works on a branch of its own.
+
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. A flow with the same name in several places runs the project's, else yours, else the
-built-in one.
+by a tab. A name is looked up in the built-in flows, then yours, then the project's, so a project's
+flow never stands in for another of the same name; the command says so on stderr when it happens.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

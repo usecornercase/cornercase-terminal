@@ -43,6 +43,8 @@ pub(crate) struct State {
     pub(crate) todo: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) flow: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +105,10 @@ pub(crate) struct RunState {
     pub(crate) task: String,
     #[serde(default)]
     pub(crate) members: Vec<SeatState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) stage: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) rounds: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,7 +128,13 @@ impl RunState {
             .iter()
             .filter_map(|m| place(m.pane).map(|(tab, pane)| SeatState { role: m.role.clone(), tab, pane }))
             .collect();
-        Self { flow: run.flow.clone(), task: run.task.clone(), members }
+        Self {
+            flow: run.flow.clone(),
+            task: run.task.clone(),
+            members,
+            stage: run.progress.active,
+            rounds: run.progress.all_rounds().to_vec(),
+        }
     }
 
     pub(crate) fn role_at(&self, tab: usize, pane: usize) -> Option<&crate::flows::Role> {
@@ -315,6 +327,7 @@ impl From<V2State> for State {
             changes: None,
             todo: false,
             files: false,
+            flow: false,
         }
     }
 }

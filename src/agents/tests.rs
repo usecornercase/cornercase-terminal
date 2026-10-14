@@ -195,12 +195,20 @@ mod arguments {
     }
 
     #[rstest]
-    #[case::added(&["-v"], &["-v", "--model", "opus"])]
-    #[case::replaced(&["--model", "haiku", "-v"], &["-v", "--model", "opus"])]
-    #[case::replaced_with_equals(&["--model=haiku", "-v"], &["-v", "--model", "opus"])]
-    fn a_model_replaces_the_one_in_the_arguments(#[case] args: &[&str], #[case] expected: &[&str]) {
-        assert_eq!(with_model("claude", strings(args), Some("opus")), strings(expected));
-        assert_eq!(with_model("claude", strings(args), Some(" ")), strings(args));
+    #[case::added("claude", &["-v"], &["-v", "--model", "opus"])]
+    #[case::replaced("claude", &["--model", "haiku", "-v"], &["-v", "--model", "opus"])]
+    #[case::replaced_with_equals("claude", &["--model=haiku", "-v"], &["-v", "--model", "opus"])]
+    #[case::claude_has_no_short_flag("claude", &["-m", "x"], &["-m", "x", "--model", "opus"])]
+    #[case::short("codex", &["-m", "o3", "--search"], &["--search", "--model", "opus"])]
+    #[case::short_with_equals("gemini", &["-m=pro", "-y"], &["-y", "--model", "opus"])]
+    #[case::every_spelling("grok", &["-m", "a", "--model", "b", "--model=c", "-m=d", "-v"], &["-v", "--model", "opus"])]
+    fn a_model_replaces_every_spelling_of_the_one_in_the_arguments(
+        #[case] kind: &str,
+        #[case] args: &[&str],
+        #[case] expected: &[&str],
+    ) {
+        assert_eq!(with_model(kind, strings(args), Some("opus")), strings(expected));
+        assert_eq!(with_model(kind, strings(args), Some(" ")), strings(args));
         assert_eq!(with_model("aider", strings(args), Some("opus")), strings(args));
     }
 

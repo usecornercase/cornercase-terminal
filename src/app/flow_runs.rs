@@ -6,15 +6,18 @@ use ratatui::layout::Rect;
 use super::App;
 use super::toast::Toast;
 use crate::agents;
+use crate::agents::activity;
 use crate::agents::launch::{self, Launch};
 use crate::control::{MemberInfo, RunInfo};
+use crate::flows::progress::Progress;
 use crate::flows::run::{Member, Run};
 use crate::flows::{self, Flow, Role, brief, builtin, store};
 use crate::git;
+use crate::host::notify::{self, Notification};
 use crate::log;
 use crate::paths;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, Tab};
+use crate::project::{Hierarchy, Phase, Tab};
 use crate::state::RunState;
 use crate::term::Term;
 use crate::ui;
@@ -24,6 +27,7 @@ pub(super) struct Starting {
     pub(super) task: String,
     pub(super) branch: String,
     pub(super) focus: bool,
+    pub(super) note: Option<String>,
 }
 
 impl App {
@@ -41,7 +45,8 @@ impl App {
         focus: bool,
         area: Rect,
     ) -> Result<(), String> {
-        self.run_flow(None, project, Starting { flow, task, branch, focus }, area).map(drop)
+        let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
+        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area).map(drop)
     }
 
     pub(super) fn run_refusal(&self, p: usize, starting: &Starting) -> Result<(), String> {
@@ -71,10 +76,10 @@ impl App {
         if starting.task.trim().is_empty() {
             return Err("the flow needs a task: say what the team should do".into());
         }
-        if starting.branch.trim().is_empty() {
-            return Err("the flow needs a branch for its worktree".into());
-        }
         let project = &self.projects[p];
+        if project.closing {
+            return Err(format!("project {} is closing", project.id));
+        }
         if !git::is_repo_root(&project.path) {
             return Err(format!(
                 "project {} is not the root of a git repository, so a flow cannot make its worktree",
@@ -85,20 +90,35 @@ impl App {
     }
 
     pub(super) fn open_run(&mut self, p: usize, w: usize, starting: Starting, area: Rect) -> Result<RunInfo, String> {
-        let id = self.projects[p].workspaces[w].id;
+        let (project, workspace) = (&self.projects[p], &self.projects[p].workspaces[w]);
+        let id = workspace.id;
+        if project.closing {
+            return Err(format!("project {} is closing", project.id));
+        }
+        match workspace.phase {
+            Phase::Open => {}
+            Phase::Removing(_) => return Err(format!("workspace {id} is being removed")),
+            Phase::Closing => return Err(format!("workspace {id} is closing")),
+        }
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus } = starting;
+        let Starting { flow, task, branch, focus, note } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
-        let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new() };
-        for role in &roles {
-            let t = self.push_tab(p, w, area, Some(role.name.clone())).map_err(|e| e.to_string())?;
-            let tab = &self.projects[p].workspaces[w].tabs[t];
-            let pane = tab.pane().map_or(0, |term| term.id);
+        run.id = self.take_id();
+        let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
+        let path = self.projects[p].workspaces[w].path.clone();
+        let mut terms = Vec::with_capacity(roles.len());
+        for _ in &roles {
+            terms.push(self.spawn(area, path.clone()).map_err(|e| e.to_string())?);
+        }
+        for (role, term) in roles.iter().zip(terms) {
+            let pane = term.id;
+            let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
             run.members.push(Member { role: role.name.clone(), pane });
             info.members.push(MemberInfo { role: role.name.clone(), agent: role.agent.clone(), tab: tab.id, pane });
+            self.projects[p].workspaces[w].tabs.push(tab);
         }
         let now = Instant::now();
         let mut team = Vec::new();
@@ -118,6 +138,20 @@ impl App {
             self.show_flow();
         }
         Ok(info)
+    }
+
+    pub(super) fn member_waits(&mut self, pane: u64) {
+        let Some((run, role)) = self.runs.iter().find_map(|run| Some((run, run.role_of(pane)?))) else { return };
+        let (workspace, role) = (run.workspace, role.to_string());
+        let Some((p, w)) = self.projects.workspace_index(workspace) else { return };
+        let project = &self.projects[p];
+        let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
+        let message = notify::clean(&format!(
+            "{role} waits for you in {place}: accept or refuse Claude Code's bypass permissions mode in its tab"
+        ));
+        log::info!("flow", "a member waits for you", workspace = workspace, role = role);
+        self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
+        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(activity::Status::Waiting)));
     }
 
     pub(super) fn run_failed(&mut self, message: &str) {
@@ -147,17 +181,20 @@ impl App {
             }
             kept
         });
+        self.forget_flow_reads(None);
     }
 
     pub(super) fn resume_line(&self, role: Option<&Role>, agent: &agents::AgentState) -> Option<String> {
         match role {
-            Some(role) => flows::resume(&self.config, role, agent.conversation.clone()),
-            None => agents::resume_line(&self.config, agent),
+            Some(role) if role.agent == agent.kind => flows::resume(&self.config, role, agent.conversation.clone()),
+            _ => agents::resume_line(&self.config, agent),
         }
     }
 
     pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)]) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
+        run.id = self.take_id();
+        run.progress = Progress::resumed(&run.flow, saved.stage, &saved.rounds);
         for seat in &saved.members {
             let found = tabs.iter().find(|(t, _)| *t == seat.tab).and_then(|(_, tab)| tab.panes.get(seat.pane));
             if let Some(term) = found {
@@ -173,7 +210,10 @@ impl App {
     }
 
     fn brief_again(&mut self, run: &Run, term: &Term) {
-        let Some(agent) = term.resume.as_ref().filter(|_| term.resuming.is_some() && !term.agent.pending()) else {
+        let briefed = |agent: &&agents::AgentState| agent.kind == run.flow.orchestrator.agent;
+        let Some(agent) =
+            term.resume.as_ref().filter(|_| term.resuming.is_some() && !term.agent.pending()).filter(briefed)
+        else {
             return;
         };
         let Some(line) = self.resume_line(Some(&run.flow.orchestrator), agent) else { return };

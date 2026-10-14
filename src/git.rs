@@ -19,6 +19,14 @@ pub(crate) fn origin_head(dir: &Path) -> Option<String> {
     head.trim().strip_prefix("ref:")?.trim().strip_prefix("refs/remotes/origin/").map(str::to_string)
 }
 
+pub(crate) fn has_branch(dir: &Path, name: &str) -> bool {
+    let Some(common) = common_dir(dir) else { return false };
+    let reference = format!("refs/heads/{name}");
+    common.join(&reference).is_file()
+        || std::fs::read_to_string(common.join("packed-refs"))
+            .is_ok_and(|refs| refs.lines().any(|line| line.split_whitespace().nth(1) == Some(reference.as_str())))
+}
+
 pub(crate) fn has_remote(dir: &Path) -> bool {
     let Some(config) = common_dir(dir).and_then(|common| std::fs::read_to_string(common.join("config")).ok()) else {
         return false;

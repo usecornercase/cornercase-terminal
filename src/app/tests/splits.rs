@@ -527,6 +527,7 @@ fn a_tab_saved_without_a_layout_puts_its_panes_side_by_side() {
         changes: None,
         todo: false,
         files: false,
+        flow: false,
     };
 
     app.restore(&saved, AREA);

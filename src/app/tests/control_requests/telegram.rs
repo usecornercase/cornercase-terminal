@@ -302,9 +302,10 @@ mod agents {
     }
 
     #[rstest::rstest]
-    #[case::a_flow_member(true, false)]
-    #[case::an_agent_in_no_flow(false, true)]
-    fn a_flow_member_finishing_a_turn_messages_no_one(#[case] member: bool, #[case] sent: bool) {
+    #[case::a_flow_member(true, "done", false)]
+    #[case::a_flow_member_that_fails(true, "error", true)]
+    #[case::an_agent_in_no_flow(false, "done", true)]
+    fn a_flow_member_finishing_a_turn_messages_no_one(#[case] member: bool, #[case] state: &str, #[case] sent: bool) {
         use crate::flows::run::{Member, Run};
         let (mut agent, mut phone, id) = seen_agent();
         away(&mut agent, &mut phone);
@@ -314,7 +315,7 @@ mod agents {
             agent.app.runs.push(run);
         }
         let term = agent.app.projects.pane_by_mut(id).expect("agent's pane");
-        term.feed(b"\x1b]7501;state=done\x07");
+        term.feed(format!("\x1b]7501;state={state}\x07").as_bytes());
         let now = Instant::now();
         for offset in [1, 3] {
             let at = now + Duration::from_secs(offset);

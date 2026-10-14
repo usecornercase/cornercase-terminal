@@ -197,6 +197,24 @@ fn a_launch_waiting_for_you_needs_no_polling_until_the_agent_prints() {
 }
 
 #[test]
+fn never_answers_claudes_bypass_consent_even_when_trusted() {
+    let consent = "Claude Code running in Bypass Permissions mode\n❯ 1. No, exit\n  2. Yes, I accept";
+    let t0 = Instant::now();
+    let mut launch = Launch::new(1, Spec { trusted: true, ..spec(true) }, t0);
+    launch.output(t0);
+    step(&mut launch, t0 + 300 * MS, &shell());
+    let t = t0 + 300 * MS;
+
+    assert_eq!(step(&mut launch, t + AGENT_QUIET, &agent(consent)), Step::Wait);
+    assert_eq!(step(&mut launch, t + 10 * AGENT_LATEST, &agent(consent)), Step::Wait);
+    assert_eq!((launch.waits_for_you(), launch.stage()), (true, "consent"));
+
+    launch.output(t + 11 * AGENT_LATEST);
+
+    assert_eq!(launch.stage(), "agent");
+}
+
+#[test]
 fn an_answer_given_much_later_still_gets_its_quiet_second() {
     let (mut launch, t) = started(false);
     step(&mut launch, t + AGENT_QUIET, &asking_you("Do you trust the files?"));

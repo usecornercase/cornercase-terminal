@@ -32,6 +32,7 @@ pub(crate) struct Member {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Run {
+    pub(crate) id: u64,
     pub(crate) workspace: u64,
     pub(crate) flow: Flow,
     pub(crate) task: String,
@@ -42,7 +43,15 @@ pub(crate) struct Run {
 
 impl Run {
     pub(crate) fn new(workspace: u64, flow: Flow, task: String) -> Self {
-        Self { workspace, flow, task, members: Vec::new(), messages: VecDeque::new(), progress: Progress::default() }
+        Self {
+            id: 0,
+            workspace,
+            flow,
+            task,
+            members: Vec::new(),
+            messages: VecDeque::new(),
+            progress: Progress::default(),
+        }
     }
 
     pub(crate) fn role_of(&self, pane: u64) -> Option<&str> {

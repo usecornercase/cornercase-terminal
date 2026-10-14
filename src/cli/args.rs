@@ -516,7 +516,7 @@ pub(crate) struct FlowRunArgs {
         long,
         value_name = "BRANCH",
         value_parser = branch,
-        help = "The worktree's branch, made when missing [default: from the task's first words]"
+        help = "The worktree's branch, made when missing [default: from the task's first words, made unique]"
     )]
     pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]

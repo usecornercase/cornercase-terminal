@@ -146,7 +146,7 @@ impl App {
                     notices.push(Notice::Waiting(term.id));
                 }
             } else if over
-                && !members.contains(&term.id)
+                && !(members.contains(&term.id) && state != "failed")
                 && !term.agent.reported_idle()
                 && (watch.busy || matches!(state, "done" | "failed") && watch.settled != state)
             {

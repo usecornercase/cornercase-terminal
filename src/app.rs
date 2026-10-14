@@ -399,6 +399,7 @@ impl App {
             changes,
             todo: self.side == Some(Side::Todo),
             files: self.side == Some(Side::Files),
+            flow: self.side == Some(Side::Flow),
         }
     }
 
@@ -455,6 +456,9 @@ impl App {
             self.projects.push(project);
         }
         self.sync_worktrees();
+        if saved.flow {
+            self.show_flow();
+        }
         if !missed.is_empty() {
             self.toast = Some(Toast::new(not_restored(&missed), ui::ToastIcon::Bug));
         }

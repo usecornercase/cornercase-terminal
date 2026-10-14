@@ -46,6 +46,16 @@ impl Known {
         }
     }
 
+    pub(crate) fn model_alias(self) -> Option<&'static str> {
+        match self {
+            Self::Claude => claude::MODEL_ALIAS,
+            Self::Codex => codex::MODEL_ALIAS,
+            Self::Gemini => gemini::MODEL_ALIAS,
+            Self::Opencode => opencode::MODEL_ALIAS,
+            Self::Grok => grok::MODEL_ALIAS,
+        }
+    }
+
     pub(crate) fn model_flag(self) -> &'static str {
         match self {
             Self::Claude => claude::MODEL_FLAG,

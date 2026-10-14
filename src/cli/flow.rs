@@ -27,7 +27,11 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             if run.create.print.json {
                 return print_json(&value);
             }
-            print_out(&started(&answer(value)?))
+            let run: RunInfo = answer(value)?;
+            if let Some(note) = &run.note {
+                eprintln!("{note}");
+            }
+            print_out(&started(&run))
         }
     }
 }

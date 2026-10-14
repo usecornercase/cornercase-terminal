@@ -81,7 +81,7 @@ struct Pending {
 
 enum Stage {
     Worktree(Then),
-    Run(Box<Starting>),
+    Run(u64, Box<Starting>),
     Removing { force: bool },
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
@@ -217,6 +217,7 @@ impl App {
             );
         }
         self.events.forget(client);
+        self.forget_flow_reads(Some(client));
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }

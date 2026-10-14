@@ -16,6 +16,7 @@ pub(crate) mod store;
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const MAX_ROLES: usize = 8;
+pub(crate) const FALLBACK_BRANCH: &str = "flow";
 const BRANCH_WORDS: usize = 8;
 const BRANCH_MAX: usize = 40;
 
@@ -230,8 +231,15 @@ fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String
     let modes = agents::modes(config, name);
     let mut args: Vec<String> = kind.unattended().iter().map(|a| (*a).to_string()).collect();
     args.extend(agents::extra_args(name, &agents::args(config, name), &modes));
-    let mut args = agents::with_model(name, args, role.model.as_deref());
-    args.extend(role.args.iter().cloned());
+    let chosen = role.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
+    if chosen.is_some() || agents::names_model(name, &role.args) {
+        args = agents::without_model(name, &args);
+    }
+    let mut args = agents::with_model(name, args, chosen);
+    match chosen {
+        Some(_) => args.extend(agents::without_model(name, &role.args)),
+        None => args.extend(role.args.iter().cloned()),
+    }
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
         words.push("env".to_string());
@@ -259,7 +267,7 @@ pub(crate) fn resume(config: &Config, role: &Role, conversation: String) -> Opti
 pub(crate) fn branch(task: &str) -> String {
     let words: Vec<&str> = task.split_whitespace().take(BRANCH_WORDS).collect();
     let slug = crate::issues::slug(&words.join(" "), BRANCH_MAX);
-    if slug.is_empty() { "flow".to_string() } else { slug }
+    if slug.is_empty() { FALLBACK_BRANCH.to_string() } else { slug }
 }
 
 #[cfg(test)]
