@@ -86,6 +86,18 @@ fn a_model_missing_from_models_dev_shows_its_id_alone() {
 }
 
 #[test]
+fn the_catalogue_lists_every_model_as_provider_and_id() {
+    let models = Models::new();
+    let ids = ids_in(&models.dir.path().join("models.json"));
+    assert_eq!(ids, ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"]);
+}
+
+#[test]
+fn a_missing_catalogue_lists_nothing() {
+    assert_eq!(ids_in(Path::new("/nonexistent/models.json")), Vec::<String>::new());
+}
+
+#[test]
 fn messages_that_cannot_be_read_are_skipped() {
     assert_eq!(Models::new().read(&[REPLY, "{broken", "[]"]).context, Some(shown("DeepSeek V4 Pro", Some(12))));
 }

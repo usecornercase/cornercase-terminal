@@ -12,6 +12,8 @@ pub(in crate::agents) const NAME: &str = "codex";
 pub(in crate::agents) const TITLE: &str = "Codex";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-bypass-approvals-and-sandbox"];
+pub(in crate::agents) const MODELS: &[&str] = &[];
+pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("read only", &["--sandbox", "read-only"]),
     ("workspace write", &["--sandbox", "workspace-write"]),

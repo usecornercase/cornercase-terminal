@@ -92,6 +92,28 @@ fn read_model(path: &Path, provider: &str, model: &str) -> Option<Model> {
     })
 }
 
+pub(in crate::agents) fn model_ids() -> Vec<String> {
+    let var = |name| std::env::var_os(name).filter(|value| !value.is_empty()).map(PathBuf::from);
+    let path = var("OPENCODE_MODELS_PATH").or_else(|| {
+        let cache = var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|home| home.join(".cache")))?;
+        Some(cache.join(NAME).join("models.json"))
+    });
+    path.map(|path| ids_in(&path)).unwrap_or_default()
+}
+
+fn ids_in(path: &Path) -> Vec<String> {
+    let Ok(file) = File::open(path) else { return Vec::new() };
+    let Ok(providers) = serde_json::from_reader::<_, HashMap<String, Provider>>(BufReader::new(file)) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = providers
+        .into_iter()
+        .flat_map(|(provider, ids)| ids.models.into_keys().map(move |model| format!("{provider}/{model}")))
+        .collect();
+    ids.sort();
+    ids
+}
+
 pub(in crate::agents) fn look(pid: i32, since: SystemTime, models: &mut Models) -> Option<Session> {
     let (holder, database) = database(pid)?;
     let cwd = folder(holder)?;

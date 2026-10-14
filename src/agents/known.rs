@@ -66,6 +66,26 @@ impl Known {
         }
     }
 
+    pub(crate) fn models(self) -> &'static [&'static str] {
+        match self {
+            Self::Claude => claude::MODELS,
+            Self::Codex => codex::MODELS,
+            Self::Gemini => gemini::MODELS,
+            Self::Opencode => opencode::MODELS,
+            Self::Grok => grok::MODELS,
+        }
+    }
+
+    pub(crate) fn catalogue(self) -> Option<fn() -> Vec<String>> {
+        match self {
+            Self::Claude => claude::CATALOGUE,
+            Self::Codex => codex::CATALOGUE,
+            Self::Gemini => gemini::CATALOGUE,
+            Self::Opencode => opencode::CATALOGUE,
+            Self::Grok => grok::CATALOGUE,
+        }
+    }
+
     pub(crate) fn normalized(self, args: &[String]) -> Vec<String> {
         match self {
             Self::Claude => claude::normalized(args),

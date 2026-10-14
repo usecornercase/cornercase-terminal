@@ -10,6 +10,8 @@ pub(in crate::agents) const NAME: &str = "gemini";
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--yolo", "--skip-trust"];
+pub(in crate::agents) const MODELS: &[&str] = &[];
+pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("auto edit", &["--approval-mode", "auto_edit"]),
     ("plan", &["--approval-mode", "plan"]),
