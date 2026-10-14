@@ -10,6 +10,7 @@ mod chrome;
 mod dialog;
 mod drop;
 pub(crate) mod files;
+pub(crate) mod flow;
 mod icons;
 pub(crate) mod keys;
 mod layout;
