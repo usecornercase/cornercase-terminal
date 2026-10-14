@@ -28,6 +28,9 @@ pub(super) struct Watch {
     since: Instant,
     settled: &'static str,
     busy: bool,
+    question: Option<String>,
+    asked: Instant,
+    looked: Instant,
 }
 
 enum Notice {
@@ -64,6 +67,16 @@ fn label(text: &str) -> String {
 fn with_screen(header: &str, screen: &str, lines: usize) -> String {
     let screen = html::pre(&excerpt(screen, lines), html::room(header));
     format!("{header}\n{screen}")
+}
+
+fn question(screen: &str) -> Option<String> {
+    if telegram::choices(screen).is_empty() {
+        return None;
+    }
+    let rows = excerpt(screen, EXCERPT);
+    let rows: Vec<&str> =
+        rows.lines().map(|row| row.trim_matches(|c: char| c.is_whitespace() || telegram::MARKS.contains(c))).collect();
+    Some(rows.join("\n"))
 }
 
 fn excerpt(screen: &str, lines: usize) -> String {
@@ -103,7 +116,8 @@ impl App {
         for term in self.projects.terms() {
             let Some(state) = term.agent.state() else { continue };
             seen.insert(term.id);
-            let fresh = Watch { state, since: now, settled: state, busy: false };
+            let fresh =
+                Watch { state, since: now, settled: state, busy: false, question: None, asked: now, looked: now };
             let watch = self.telegram.watches.entry(term.id).or_insert(fresh);
             if watch.state != state {
                 watch.state = state;
@@ -115,7 +129,21 @@ impl App {
                 continue;
             }
             if state == WAITING && watch.settled != WAITING {
+                watch.question = question(&term.emulator.screen_text().unwrap_or_default());
+                watch.asked = now;
                 notices.push(Notice::Waiting(term.id));
+            } else if state == WAITING
+                && term.input_at.is_some_and(|input| input > watch.asked)
+                && term.output_at > watch.looked
+                && now.saturating_duration_since(term.output_at) >= SETTLE
+            {
+                watch.looked = now;
+                let next = question(&term.emulator.screen_text().unwrap_or_default());
+                if next.is_some() && next != watch.question {
+                    watch.question = next;
+                    watch.asked = now;
+                    notices.push(Notice::Waiting(term.id));
+                }
             } else if over && watch.busy {
                 notices.push(Notice::Finished(term.id, state == SHELL));
             }
