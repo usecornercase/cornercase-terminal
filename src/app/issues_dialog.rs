@@ -313,6 +313,7 @@ impl App {
             }
             Action::Read(issue) => self.read_issue(issue),
             Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, area),
+            Action::StartFlow(issue, place) => self.start_issue_flow(&issue, place),
             Action::LoadPeople(sources) => {
                 for source in sources {
                     self.load_people(source);
@@ -594,6 +595,20 @@ impl App {
         self.act(action, area)
     }
 
+    fn issue_task(&self, issue: &Issue) -> (String, String) {
+        let branch = issues::branch(issue);
+        let prompt = issues::prompt(&self.config.prompt, issue, &branch);
+        (branch, prompt)
+    }
+
+    fn start_issue_flow(&mut self, issue: &Issue, place: Option<Place>) {
+        let Some(browsing) = self.browser_project() else { return };
+        let project = place.map_or(browsing, |place| place.project);
+        let (branch, prompt) = self.issue_task(issue);
+        let start = self.start_flow_in(project).map(|s| s.for_issue(issues::workspace_name(issue), &prompt, branch));
+        self.open_start_flow(start);
+    }
+
     fn start_issue(&mut self, issue: &Issue, agent: &str, place: Option<Place>, area: Rect) -> Result<()> {
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
@@ -601,12 +616,12 @@ impl App {
             self.overlay = None;
             return Ok(());
         };
-        let branch = issues::branch(issue);
+        let (branch, prompt) = self.issue_task(issue);
         let start = Start {
             name: issues::workspace_name(issue),
             spec: launch::Spec {
                 command: agents::command_line(&self.config, agent),
-                prompt: Some(issues::prompt(&self.config.prompt, issue, &branch)),
+                prompt: Some(prompt),
                 submit: self.config.submit,
                 trusted: false,
             },

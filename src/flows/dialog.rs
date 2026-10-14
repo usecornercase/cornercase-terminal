@@ -128,6 +128,7 @@ pub(crate) struct Dialog {
     pub(crate) confirm: Option<Confirm>,
     pub(crate) notice: Option<String>,
     pub(crate) agents: Agents,
+    pub(crate) last: Option<Origin>,
 }
 
 impl Dialog {
@@ -140,6 +141,7 @@ impl Dialog {
             confirm: None,
             notice: None,
             agents,
+            last: None,
         }
     }
 
@@ -196,7 +198,9 @@ impl Dialog {
             Origin::Project(_) => Place::Project,
         };
         let path = saved.origin.path().map(PathBuf::from);
-        self.edit = Some(Box::new(Editing::new(saved.flow.clone(), place, path)));
+        let (origin, flow) = (saved.origin.clone(), saved.flow.clone());
+        self.last = Some(origin);
+        self.edit = Some(Box::new(Editing::new(flow, place, path)));
         self.notice = None;
     }
 
@@ -232,6 +236,10 @@ impl Dialog {
 
     pub(crate) fn saved(&mut self, path: PathBuf) {
         if let Some(edit) = &mut self.edit {
+            self.last = Some(match edit.place {
+                Place::Yours => Origin::User(path.clone()),
+                Place::Project => Origin::Project(path.clone()),
+            });
             edit.saved(path);
             self.notice = Some(format!("saved {}", edit.flow.name.trim()));
         }
@@ -310,27 +318,7 @@ impl Dialog {
     }
 
     pub(crate) fn list_rows(&self) -> Vec<RowText> {
-        let flows = self.flows.iter().map(|saved| {
-            let problems = saved.flow.problems();
-            let section = match saved.origin {
-                Origin::BuiltIn => "Built in",
-                Origin::User(_) => "Yours",
-                Origin::Project(_) => "This project",
-            };
-            let (value, note) = match problems.as_slice() {
-                [] => (agents_count(&saved.flow), plan_summary(&saved.flow)),
-                [only] => (only.clone(), String::new()),
-                [first, rest @ ..] => (format!("{first} (+{} more)", rest.len()), String::new()),
-            };
-            RowText {
-                section,
-                label: saved.flow.name.clone(),
-                value,
-                note,
-                red: !problems.is_empty(),
-                ..RowText::default()
-            }
-        });
+        let flows = self.flows.iter().map(flow_row);
         let broken = self.broken.iter().map(|(path, reason)| RowText {
             section: "Unreadable files",
             label: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -377,9 +365,7 @@ impl Dialog {
 
     pub(crate) fn warnings(&self) -> Vec<String> {
         let Some(edit) = &self.edit else { return Vec::new() };
-        let agents = edit.flow.agents();
-        let run = if agents == 1 { "agent runs" } else { "agents run" };
-        std::iter::once(format!("{agents} {run} without asking for permission")).chain(edit.flow.problems()).collect()
+        std::iter::once(permission_line(&edit.flow)).chain(edit.flow.problems()).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {
@@ -426,6 +412,27 @@ impl Dialog {
         let Some(kind) = self.edit.as_ref().and_then(|edit| edit.model_pick()) else { return Action::None };
         if self.agents.wants(kind) { Action::ReadModels(kind) } else { Action::None }
     }
+}
+
+pub(crate) fn flow_row(saved: &Saved) -> RowText {
+    let problems = saved.flow.problems();
+    let section = match saved.origin {
+        Origin::BuiltIn => "Built in",
+        Origin::User(_) => "Yours",
+        Origin::Project(_) => "This project",
+    };
+    let (value, note) = match problems.as_slice() {
+        [] => (agents_count(&saved.flow), plan_summary(&saved.flow)),
+        [only] => (only.clone(), String::new()),
+        [first, rest @ ..] => (format!("{first} (+{} more)", rest.len()), String::new()),
+    };
+    RowText { section, label: saved.flow.name.clone(), value, note, red: !problems.is_empty(), ..RowText::default() }
+}
+
+pub(crate) fn permission_line(flow: &Flow) -> String {
+    let agents = flow.agents();
+    let run = if agents == 1 { "agent runs" } else { "agents run" };
+    format!("{agents} {run} without asking for permission")
 }
 
 pub(crate) fn agents_count(flow: &Flow) -> String {

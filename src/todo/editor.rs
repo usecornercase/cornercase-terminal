@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Editor {
     chars: Vec<char>,
@@ -129,6 +131,26 @@ impl Editor {
         let lines = self.lines(width);
         let line = lines.iter().rposition(|l| l.start <= self.cursor).unwrap_or(0);
         (line, self.cursor - lines.get(line).map_or(0, |l| l.start))
+    }
+
+    pub(crate) fn key(&mut self, key: KeyEvent, width: usize, height: usize) -> bool {
+        match key.code {
+            KeyCode::Enter => self.newline(),
+            KeyCode::Backspace => self.backspace(),
+            KeyCode::Delete => self.delete(),
+            KeyCode::Left => self.left(),
+            KeyCode::Right => self.right(),
+            KeyCode::Up => self.up(width),
+            KeyCode::Down => self.down(width),
+            KeyCode::Home => self.line_home(width),
+            KeyCode::End => self.line_end(width),
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                self.insert(c.encode_utf8(&mut [0; 4]));
+            }
+            _ => return false,
+        }
+        self.reveal(width, height);
+        true
     }
 
     pub(crate) fn reveal(&mut self, width: usize, height: usize) {

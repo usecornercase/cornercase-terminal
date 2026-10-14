@@ -90,6 +90,7 @@ mod session;
 mod settings_dialog;
 mod shortcuts;
 mod sidebar;
+mod start_flow_dialog;
 mod tab_bar;
 mod tabs;
 mod telegram;
@@ -154,7 +155,6 @@ pub(crate) struct App {
     usage_timeout: Duration,
     confirm_within: Duration,
     todos: Todos,
-    #[allow(dead_code)]
     runs: Vec<crate::flows::run::Run>,
     flow: flow_panel::FlowPanel,
     todo: todo::Panel,

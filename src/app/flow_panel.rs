@@ -51,7 +51,7 @@ fn lines(message: &Message, width: usize, muted: Color) -> Vec<Line<'static>> {
         Kind::Keys => "keys pressed",
         Kind::Read => "read",
         Kind::Wait => "waited for",
-        Kind::Send | Kind::Start => "sent",
+        Kind::Send => "sent",
     };
     let mut out = vec![Line::from(Span::styled(what, Style::default().fg(muted))), Line::default()];
     let Some(text) = message.text.as_deref() else {

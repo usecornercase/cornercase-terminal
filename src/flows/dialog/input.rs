@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::edit::{Editing, Row, Text};
+use super::edit::{Editing, Row};
 use super::{Action, Dialog, Hit, Room};
 
 impl Dialog {
@@ -20,7 +20,7 @@ impl Dialog {
             if key.code == KeyCode::Esc {
                 edit.text = None;
             } else {
-                text_key(text, key, typing, room);
+                text.editor.key(key, room.width, room.height);
             }
             return Action::None;
         }
@@ -145,25 +145,6 @@ impl Dialog {
             edit.step(delta);
         }
     }
-}
-
-fn text_key(text: &mut Text, key: KeyEvent, typing: bool, room: Room) {
-    let editor = &mut text.editor;
-    let width = room.width;
-    match key.code {
-        KeyCode::Enter => editor.newline(),
-        KeyCode::Backspace => editor.backspace(),
-        KeyCode::Delete => editor.delete(),
-        KeyCode::Left => editor.left(),
-        KeyCode::Right => editor.right(),
-        KeyCode::Up => editor.up(width),
-        KeyCode::Down => editor.down(width),
-        KeyCode::Home => editor.line_home(width),
-        KeyCode::End => editor.line_end(width),
-        KeyCode::Char(c) if typing => editor.insert(c.encode_utf8(&mut [0; 4])),
-        _ => return,
-    }
-    editor.reveal(width, room.height);
 }
 
 fn pick_key(edit: &mut Editing, key: KeyEvent, typing: bool, room: Room) {

@@ -6,6 +6,7 @@ pub(super) mod menu;
 pub(super) mod picker;
 pub(super) mod search;
 pub(super) mod settings;
+pub(super) mod start_flow;
 pub(super) mod update;
 pub(super) mod usage;
 
@@ -23,6 +24,7 @@ use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
+use super::dialog::start_flow::StartFlow;
 use super::dialog::update::Update;
 use super::dialog::usage::{Usage, usage_area};
 use super::keys;
@@ -119,6 +121,7 @@ pub(crate) enum Overlay {
     Issues(Issues),
     Settings(Settings),
     Flows(Box<Flows>),
+    StartFlow(Box<StartFlow>),
     Search(Search),
     Keys(keys::Keys),
 }
@@ -136,7 +139,7 @@ impl Overlay {
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Issues(_) => Some(issues_area(area)),
             Self::Settings(_) => Some(settings_area(area)),
-            Self::Flows(_) => Some(flows_area(area)),
+            Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }

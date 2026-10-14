@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -12,12 +10,13 @@ pub(crate) mod builtin;
 pub(crate) mod dialog;
 pub(crate) mod progress;
 pub(crate) mod run;
+pub(crate) mod start;
 pub(crate) mod store;
 
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const MAX_ROLES: usize = 8;
-const BRANCH_WORDS: usize = 6;
+const BRANCH_WORDS: usize = 8;
 const BRANCH_MAX: usize = 40;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,6 +166,8 @@ impl Flow {
                     out.push(format!("stage {number} names `{name}`, which is not a role"));
                 } else if stage.roles[..j].contains(name) {
                     out.push(format!("stage {number} names `{name}` twice"));
+                } else if let Some(k) = self.stages[..i].iter().position(|earlier| earlier.roles.contains(name)) {
+                    out.push(format!("`{name}` is in stage {} and stage {number}; a role works in one stage", k + 1));
                 }
             }
             if let Some(back) = &stage.back {

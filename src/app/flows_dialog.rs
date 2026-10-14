@@ -9,11 +9,12 @@ use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
 use crate::agents::Known;
-use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Room};
+use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Room, RowText};
 use crate::flows::store::{self, Origin};
 use crate::flows::{Flow, builtin};
 use crate::log::{self, Job, Level};
 use crate::paths;
+use crate::project::Hierarchy;
 use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;
@@ -114,11 +115,20 @@ impl App {
         match action {
             Action::None => {}
             Action::Close => {
-                let Some(Overlay::Flows { back, .. }) = self.overlay.take() else { return };
+                let Some(Overlay::Flows { dialog, back }) = self.overlay.take() else { return };
                 self.overlay = back.map(|back| *back);
                 let note = self.flows_note();
-                if let Some(Overlay::Settings(settings)) = &mut self.overlay {
-                    settings.flows = note;
+                let starting = match &self.overlay {
+                    Some(Overlay::StartFlow { start, .. }) => Some(start.project),
+                    _ => None,
+                };
+                let listing = starting.map(|project| self.flow_listing(self.project_path(project).as_deref()));
+                match (&mut self.overlay, listing) {
+                    (Some(Overlay::Settings(settings)), _) => settings.flows = note,
+                    (Some(Overlay::StartFlow { start, .. }), Some(listing)) => {
+                        start.set_listing(listing, dialog.last.as_ref());
+                    }
+                    _ => {}
                 }
             }
             Action::Save { flow, place, previous } => {
@@ -145,6 +155,10 @@ impl App {
             }
             Action::ReadModels(kind) => self.read_models(kind),
         }
+    }
+
+    fn project_path(&self, project: u64) -> Option<PathBuf> {
+        self.projects.project_index(project).map(|p| self.projects[p].path.clone())
     }
 
     fn flows_dir(&self, place: Place) -> Result<PathBuf, String> {
@@ -216,6 +230,18 @@ fn room(dialog: &Dialog, area: Rect) -> Room {
     }
 }
 
+pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
+    ui::SettingsRow {
+        section: text.section,
+        label: text.label.clone(),
+        value: text.value.clone(),
+        note: text.note.clone(),
+        dangerous: text.red,
+        removable: text.removable,
+        movable: text.movable,
+    }
+}
+
 pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     if let Some((title, message, submit)) = dialog.confirm_text() {
         return confirm_view(title, message, submit, None);
@@ -223,18 +249,7 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     let room = room(dialog, area);
     let edit = dialog.edit.as_deref();
     let texts = edit.map_or_else(|| dialog.list_rows(), |edit| edit.row_texts(&dialog.agents));
-    let rows = texts
-        .iter()
-        .map(|t| ui::SettingsRow {
-            section: t.section,
-            label: t.label.clone(),
-            value: t.value.clone(),
-            note: t.note.clone(),
-            dangerous: t.red,
-            removable: t.removable,
-            movable: t.movable,
-        })
-        .collect();
+    let rows = texts.iter().map(settings_row).collect();
     let pick = edit.and_then(|edit| {
         let pick = edit.pick.as_ref()?;
         let choices = edit.pick_choices();
@@ -244,8 +259,9 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
             .enumerate()
             .map(|(i, choice)| {
                 let label = match marks.as_ref().and_then(|m| m.get(i)) {
-                    Some(true) => format!("[x] {}", choice.label),
-                    Some(false) => format!("[ ] {}", choice.label),
+                    Some(Some(true)) => format!("[x] {}", choice.label),
+                    Some(Some(false)) => format!("[ ] {}", choice.label),
+                    Some(None) => format!("    {}", choice.label),
                     None => choice.label.clone(),
                 };
                 (label, choice.note.clone(), false)
@@ -268,8 +284,6 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         heading,
         tabs: edit.map(Editing::tabs).unwrap_or_default(),
         tab: edit.map_or(0, Editing::tab_index),
-        removable: texts.iter().map(|t| t.removable).collect(),
-        movable: texts.iter().map(|t| t.movable).collect(),
         rows,
         cursor: edit.map_or(dialog.cursor, |e| e.cursor),
         label: if edit.is_some() { FORM_LABEL } else { LIST_LABEL },

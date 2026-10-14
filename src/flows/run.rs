@@ -8,7 +8,6 @@ pub(crate) const MAX_MESSAGES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
-    Start,
     Send,
     Keys,
     Read,

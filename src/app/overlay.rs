@@ -9,12 +9,14 @@ use super::menus::MenuAction;
 use super::menus::Target;
 use super::pull_requests::{COPY_LINK, DONE};
 use super::settings_dialog::settings_view;
+use super::start_flow_dialog::start_flow_view;
 use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
 use crate::changes::BranchPicker;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
 use crate::flows::progress::Edge;
+use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
 use crate::list::Search;
@@ -61,6 +63,7 @@ pub(super) enum Overlay {
     NewWorkspace { project: u64, input: String, worktree: Option<bool>, error: Option<String>, creating: bool },
     Settings(Box<Settings>),
     Flows { dialog: Box<Dialog>, back: Option<Box<Overlay>> },
+    StartFlow { start: Box<Start>, back: Option<Box<Overlay>> },
     Rename { target: Target, input: String },
     RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
     Picker { picker: Picker, group: Option<u64> },
@@ -91,6 +94,7 @@ impl Overlay {
             Self::NewWorkspace { .. } => "new workspace",
             Self::Settings(_) => "settings",
             Self::Flows { .. } => "flows",
+            Self::StartFlow { .. } => "start flow",
             Self::Rename { .. } => "rename",
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
@@ -174,6 +178,7 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::Flows { .. }) => self.flows_mouse(ev, pos, area),
+            Some(Overlay::StartFlow { .. }) => self.start_flow_mouse(ev, pos, area),
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
@@ -209,6 +214,7 @@ impl App {
             }
             Overlay::Settings(s) => ui::Overlay::Settings(settings_view(s)),
             Overlay::Flows { dialog, .. } => flows_view(dialog, area),
+            Overlay::StartFlow { start, .. } => start_flow_view(start, area),
             Overlay::Rename { target, input } => Self::rename_view(*target, input),
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.remove_view(*project, *workspace, *check, lock.as_ref(), overlay.submit_label())

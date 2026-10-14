@@ -32,7 +32,6 @@ impl App {
         store::list(builtin::for_config(&self.config), &paths::flows(&self.config_path), project.as_deref())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn start_run(
         &mut self,
         project: u64,
@@ -116,6 +115,7 @@ impl App {
         self.runs.push(run);
         if focus && let Some(first) = info.members.first() {
             self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });
+            self.show_flow();
         }
         Ok(info)
     }
@@ -128,6 +128,11 @@ impl App {
     fn flow_spec(&self, role: &Role, prompt: String) -> launch::Spec {
         let command = flows::command(&self.config, role).unwrap_or_default();
         launch::Spec { command, prompt: Some(prompt), submit: true, trusted: true }
+    }
+
+    pub(super) fn run_panes(&self, orchestrators: bool) -> Vec<u64> {
+        let members = self.runs.iter().flat_map(|run| &run.members);
+        members.filter(|m| (m.role == flows::ORCHESTRATOR) == orchestrators).map(|m| m.pane).collect()
     }
 
     pub(super) fn forget_runs(&mut self) {

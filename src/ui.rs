@@ -66,6 +66,9 @@ pub(crate) use dialog::settings::{
     SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
+pub(crate) use dialog::start_flow::{StartFlow, StartHit, start_hit, start_prompt};
+#[cfg(test)]
+pub(crate) use dialog::start_flow::{start_buttons, start_list};
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
@@ -119,6 +122,7 @@ use dialog::menu::draw_menu;
 use dialog::picker::draw_picker;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
+use dialog::start_flow::draw_start_flow;
 use dialog::update::draw_update;
 use dialog::usage::draw_usage;
 use dialog::{FORM_WIDTH, draw_submit, form_inner};
@@ -327,6 +331,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Issues(issues)) => draw_issues(f, view, issues),
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
+        Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}

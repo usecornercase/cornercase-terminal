@@ -1,9 +1,10 @@
-use super::{Action, Browser, Pick, Place, Screen, Step, Tab};
+use super::{Action, After, Browser, Pick, Place, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Button {
     Start,
+    Flow,
     Agent,
     Where,
     Done,
@@ -25,6 +26,7 @@ impl Button {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Start => "start",
+            Self::Flow => "start a flow",
             Self::Agent => "agent…",
             Self::Where => "where…",
             Self::Done => "done",
@@ -54,7 +56,7 @@ impl Browser {
         }
         match &self.screen {
             Screen::Detail { raw, issue, .. } => {
-                let mut buttons = vec![Button::Start, Button::Agent];
+                let mut buttons = vec![Button::Start, Button::Flow, Button::Agent];
                 if !issue.source.in_repository() && self.places.len() > 1 {
                     buttons.push(Button::Where);
                 }
@@ -120,12 +122,19 @@ impl Browser {
                     None => Action::None,
                 },
             },
+            Button::Flow => match &self.screen {
+                Screen::Detail { issue, .. } => {
+                    let issue = (**issue).clone();
+                    self.start_flow(issue)
+                }
+                Screen::List => Action::None,
+            },
             Button::Agent => {
-                self.open_picker(Pick::Agent, false);
+                self.open_picker(Pick::Agent, After::Nothing);
                 Action::None
             }
             Button::Where => {
-                self.open_picker(Pick::Place, false);
+                self.open_picker(Pick::Place, After::Nothing);
                 Action::None
             }
             Button::Done => self.close_people(),
@@ -201,16 +210,25 @@ impl Browser {
 
     pub(super) fn start(&mut self, issue: Issue) -> Action {
         if self.needs_place(&issue) {
-            self.open_picker(Pick::Place, true);
+            self.open_picker(Pick::Place, After::Start);
             return Action::None;
         }
         if let Some(kind) = self.agents.pick() {
             let place = self.place_for(&issue).cloned();
             Action::Start(issue, kind, place)
         } else {
-            self.open_picker(Pick::Agent, true);
+            self.open_picker(Pick::Agent, After::Start);
             Action::None
         }
+    }
+
+    pub(super) fn start_flow(&mut self, issue: Issue) -> Action {
+        if self.needs_place(&issue) {
+            self.open_picker(Pick::Place, After::Flow);
+            return Action::None;
+        }
+        let place = self.place_for(&issue).cloned();
+        Action::StartFlow(issue, place)
     }
 
     fn needs_place(&self, issue: &Issue) -> bool {

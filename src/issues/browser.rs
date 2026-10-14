@@ -143,11 +143,18 @@ pub(crate) enum Pick {
     Person(Source, usize),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum After {
+    Nothing,
+    Start,
+    Flow,
+}
+
 #[derive(Debug)]
 pub(crate) struct Picker {
     pub(crate) pick: Pick,
     pub(crate) search: Search,
-    pub(super) then_start: bool,
+    pub(super) after: After,
 }
 
 pub(crate) struct Choice {
@@ -170,6 +177,7 @@ pub(crate) enum Action {
     Load(Vec<Source>),
     Read(Issue),
     Start(Issue, String, Option<Place>),
+    StartFlow(Issue, Option<Place>),
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
     SavePlane { workspace: String },

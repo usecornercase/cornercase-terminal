@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use super::{Action, Browser, Pick, Tab};
+use super::{Action, After, Browser, Pick, Tab};
 use crate::issues::{Person, Source, Who};
 
 const PEOPLE_LABEL_MAX: usize = 40;
@@ -69,7 +69,7 @@ impl Browser {
             KeyCode::Down => *cursor = (*cursor + 1).min(rows.len().saturating_sub(1)),
             KeyCode::Enter => {
                 if let Some((source, field)) = rows.get(*cursor).copied() {
-                    self.open_picker(Pick::Person(source, field), false);
+                    self.open_picker(Pick::Person(source, field), After::Nothing);
                 }
             }
             _ => {}

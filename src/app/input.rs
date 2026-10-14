@@ -40,6 +40,7 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
+            Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }
@@ -349,6 +350,10 @@ impl App {
         }
         if matches!(self.overlay, Some(Overlay::Flows { .. })) {
             self.flows_paste(text, area);
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::StartFlow { .. })) {
+            self.start_flow_paste(text, area);
             return;
         }
         if let Some(overlay) = &mut self.overlay {
