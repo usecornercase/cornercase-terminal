@@ -390,6 +390,22 @@ mod agents {
     }
 
     #[test]
+    fn a_question_drawn_before_the_input_is_not_taken_for_its_answer() {
+        let mut agent = Agent::new();
+        let mut phone = Phone::paired(&mut agent.app);
+        let (id, _, _) = asking(&mut agent, &mut phone);
+
+        let term = agent.app.projects.pane_by_mut(id).expect("the pane");
+        term.feed(b"\x1b[H\x1b[2JQuestion 9 of 2\r\n\xe2\x9d\xaf 1. Yes\r\n  2. No\r\n");
+        term.input_at = Some(Instant::now() + Duration::from_millis(10));
+        let settled = Instant::now() + Duration::from_millis(2_500);
+        agent.refreshing("the input settles", |_| Instant::now() >= settled);
+        phone.read(&mut agent.app);
+
+        assert_eq!(questions(&phone), 1);
+    }
+
+    #[test]
     fn nothing_is_sent_while_not_away() {
         let mut agent = Agent::new();
         let mut phone = Phone::paired(&mut agent.app);

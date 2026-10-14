@@ -133,7 +133,7 @@ impl App {
                 watch.asked = now;
                 notices.push(Notice::Waiting(term.id));
             } else if state == WAITING
-                && term.input_at.is_some_and(|input| input > watch.asked)
+                && term.input_at.is_some_and(|input| input > watch.asked && term.output_at > input)
                 && term.output_at > watch.looked
                 && now.saturating_duration_since(term.output_at) >= SETTLE
             {
