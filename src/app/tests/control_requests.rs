@@ -259,6 +259,7 @@ mod events;
 mod flows;
 mod gemini;
 mod grok;
+mod one_folder;
 mod talking;
 mod telegram;
 mod worktrees;

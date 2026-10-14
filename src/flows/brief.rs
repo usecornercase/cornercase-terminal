@@ -133,7 +133,8 @@ fn rules(flow: &Flow, members: &[Member], own: Option<u64>) -> String {
          `--timeout` under its limit; when the wait times out, run it again. Never wait in the background: that \
          ends your turn, and cornercase then shows you as finished while your team works.\n\
          - Read what agents answered with `cornercase read --last-message --pane N` (a `--pane` each for several), \
-         not their screens.\n\
+         not their screens. If it fails for an agent (its record cannot be found), read its screen with \
+         `cornercase read --pane N --lines 300` and take the answer from there.\n\
          - If `send` fails with `not confirmed`, run `cornercase read --pane N` before sending again: the agent may \
          have it.\n\
          - Never edit files, commit or run the project's checks yourself: the roles do that.\n\

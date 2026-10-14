@@ -74,7 +74,8 @@ impl App {
             .as_deref()
             .and_then(agents::Known::of)
             .is_some_and(|agent| send.text.as_deref().is_some_and(|text| agent.local_command(text)));
-        let confirm = (send.enter && !local && self.watched_agent(term).is_ok()).then(SystemTime::now);
+        let confirm = (send.enter && !local && self.watched_agent(term).is_ok() && !self.record_hidden(term))
+            .then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(caller, pane, until)?;
@@ -94,6 +95,19 @@ impl App {
         }
         let stage = Stage::Launch { confirm, wait };
         Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), stage, timeout))
+    }
+
+    fn record_hidden(&self, term: &term::Term) -> bool {
+        let Some(kind) = term.agent.agent().and_then(agents::Known::of) else { return false };
+        if !kind.record_by_folder() || term.context.record_for(kind).is_some() {
+            return false;
+        }
+        let folder = term.cwd();
+        self.projects
+            .iter()
+            .flat_map(|project| &project.workspaces)
+            .flat_map(crate::project::Workspace::terms)
+            .any(|other| other.id != term.id && other.agent.agent() == Some(kind.name()) && other.cwd() == folder)
     }
 
     pub(super) fn keys_request(&mut self, caller: Option<u64>, keys: &control::Keys, now: Instant) -> Handled {

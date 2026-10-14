@@ -96,13 +96,23 @@ impl Known {
         }
     }
 
-    pub(crate) fn one_per_folder(self) -> bool {
+    pub(crate) fn status_by_folder(self) -> bool {
         match self {
-            Self::Claude => claude::ONE_PER_FOLDER,
-            Self::Codex => codex::ONE_PER_FOLDER,
-            Self::Gemini => gemini::ONE_PER_FOLDER,
-            Self::Opencode => opencode::ONE_PER_FOLDER,
-            Self::Grok => grok::ONE_PER_FOLDER,
+            Self::Claude => claude::STATUS_BY_FOLDER,
+            Self::Codex => codex::STATUS_BY_FOLDER,
+            Self::Gemini => gemini::STATUS_BY_FOLDER,
+            Self::Opencode => opencode::STATUS_BY_FOLDER,
+            Self::Grok => grok::STATUS_BY_FOLDER,
+        }
+    }
+
+    pub(crate) fn record_by_folder(self) -> bool {
+        match self {
+            Self::Claude => claude::RECORD_BY_FOLDER,
+            Self::Codex => codex::RECORD_BY_FOLDER,
+            Self::Gemini => gemini::RECORD_BY_FOLDER,
+            Self::Opencode => opencode::RECORD_BY_FOLDER,
+            Self::Grok => grok::RECORD_BY_FOLDER,
         }
     }
 

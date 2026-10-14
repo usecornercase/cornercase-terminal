@@ -44,6 +44,19 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
 }
 
 #[test]
+fn an_answer_whose_record_cannot_be_found_is_read_from_the_screen() {
+    let flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+    let text = brief(&flow, "Fix the login form", "fix-login", &members());
+    assert!(
+        text.contains(
+            "If it fails for an agent (its record cannot be found), read its screen with `cornercase read --pane N \
+             --lines 300` and take the answer from there."
+        ),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_flow_that_leaves_the_commits_says_not_to_push() {
     let mut flow = builtin::flows(&[Known::Codex], None).remove(2);
     flow.end = End::Commits;

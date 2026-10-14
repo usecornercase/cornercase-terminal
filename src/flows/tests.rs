@@ -35,7 +35,7 @@ mod builtins {
                     builtin::flows(&installed, default).into_iter().chain([builtin::starter(&installed, default)]);
                 for flow in flows {
                     let possible =
-                        installed.iter().any(|kind| !kind.one_per_folder()) || installed.len() >= flow.agents();
+                        installed.iter().any(|kind| !kind.status_by_folder()) || installed.len() >= flow.agents();
                     let problems = flow.problems();
                     let others: Vec<&String> = problems.iter().filter(|p| !p.contains("cannot tell two")).collect();
                     let what = format!("{} with {installed:?} and {default:?}: {problems:?}", flow.name);
@@ -47,15 +47,33 @@ mod builtins {
     }
 
     #[test]
-    fn the_default_agent_codes_and_one_that_shares_a_folder_takes_the_other_roles() {
+    fn codex_and_gemini_take_several_roles() {
         let flow = builtin::flows(&[Known::Claude, Known::Codex, Known::Gemini], Some(Known::Codex)).remove(0);
         assert_eq!(
             agents_of(&flow),
             [
-                ("orchestrator", "claude"),
+                ("orchestrator", "codex"),
                 ("coder", "codex"),
                 ("reviewer", "claude"),
                 ("security", "gemini"),
+                ("tester", "codex")
+            ]
+        );
+        let flow = builtin::flows(&[Known::Gemini], None).remove(2);
+        assert!(agents_of(&flow).iter().all(|(_, agent)| *agent == "gemini"));
+        assert_eq!(flow.problems(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn opencode_codes_and_an_agent_that_shares_a_folder_takes_the_other_roles() {
+        let flow = builtin::flows(&[Known::Claude, Known::Codex, Known::Opencode], Some(Known::Opencode)).remove(0);
+        assert_eq!(
+            agents_of(&flow),
+            [
+                ("orchestrator", "claude"),
+                ("coder", "opencode"),
+                ("reviewer", "claude"),
+                ("security", "codex"),
                 ("tester", "claude")
             ]
         );
@@ -77,31 +95,24 @@ mod builtins {
     }
 
     #[test]
-    fn without_an_agent_that_shares_a_folder_each_role_takes_another_one() {
-        let flow = builtin::starter(&[Known::Codex, Known::Gemini, Known::Opencode], Some(Known::Codex));
-        assert_eq!(agents_of(&flow), [("orchestrator", "opencode"), ("coder", "codex"), ("reviewer", "gemini")]);
-        assert_eq!(flow.problems(), Vec::<String>::new());
-    }
-
-    #[test]
-    fn with_one_agent_installed_every_role_uses_it_and_says_why_it_cannot_run() {
-        let flow = builtin::flows(&[Known::Gemini], Some(Known::Claude)).remove(2);
-        assert!(flow.roles.iter().all(|role| role.agent == "gemini"));
-        assert_eq!(flow.orchestrator.agent, "gemini");
+    fn with_only_opencode_installed_every_role_uses_it_and_says_why_it_cannot_run() {
+        let flow = builtin::flows(&[Known::Opencode], Some(Known::Claude)).remove(2);
+        assert!(agents_of(&flow).iter().all(|(_, agent)| *agent == "opencode"));
         assert_eq!(
             flow.problems(),
-            [
-                "Gemini CLI runs `orchestrator`, `coder` and `reviewer`, but cornercase cannot tell two Gemini CLI apart \
-              in one worktree: give all but one of them another agent"
-            ]
+            ["opencode runs `orchestrator`, `coder` and `reviewer`, but cornercase reads opencode's status from its \
+                 folder and cannot tell two apart in one worktree: give all but one of them another agent"]
         );
     }
 
     #[test]
-    fn a_new_role_takes_an_agent_that_shares_a_folder_when_the_default_one_is_taken() {
-        let role = builtin::member("docs", &[Known::Claude, Known::Codex], Some(Known::Codex), &[Known::Codex]);
+    fn a_new_role_takes_an_agent_that_shares_a_folder_when_opencode_is_taken() {
+        let installed = [Known::Claude, Known::Opencode];
+        let role = builtin::member("docs", &installed, Some(Known::Opencode), &[Known::Opencode]);
         assert_eq!(role.agent, "claude");
-        let role = builtin::member("docs", &[Known::Claude, Known::Codex], Some(Known::Codex), &[Known::Claude]);
+        let role = builtin::member("docs", &installed, Some(Known::Opencode), &[Known::Claude]);
+        assert_eq!(role.agent, "opencode");
+        let role = builtin::member("docs", &[Known::Codex], Some(Known::Codex), &[Known::Codex]);
         assert_eq!(role.agent, "codex");
     }
 }
@@ -136,12 +147,12 @@ mod problems {
     }
 
     #[rstest::rstest]
-    #[case::codex("codex", true)]
-    #[case::gemini("gemini", true)]
+    #[case::codex("codex", false)]
+    #[case::gemini("gemini", false)]
     #[case::opencode("opencode", true)]
     #[case::claude("claude", false)]
     #[case::grok("grok", false)]
-    fn an_agent_found_by_its_folder_takes_one_role(#[case] agent: &str, #[case] refused: bool) {
+    fn only_opencode_takes_one_role(#[case] agent: &str, #[case] refused: bool) {
         let mut flow = sample();
         flow.orchestrator.agent = agent.into();
         flow.roles[2].agent = agent.into();

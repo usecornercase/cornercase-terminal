@@ -49,12 +49,10 @@ impl Agents {
     }
 
     fn free(&self, wanted: Known, taken: &[Known]) -> Known {
-        if !wanted.one_per_folder() || !taken.contains(&wanted) {
+        if !wanted.status_by_folder() || !taken.contains(&wanted) {
             return wanted;
         }
-        let sharer = self.installed.iter().copied().find(|kind| !kind.one_per_folder());
-        let unused = self.installed.iter().copied().find(|kind| !taken.contains(kind));
-        sharer.or(unused).unwrap_or(wanted)
+        self.installed.iter().copied().find(|kind| !kind.status_by_folder()).unwrap_or(wanted)
     }
 
     fn spread(&self, mut flow: Flow) -> Flow {

@@ -6,7 +6,13 @@ fn names_and_order_keep_the_saved_stats_positions() {
 }
 
 #[test]
-fn agents_whose_records_are_found_by_folder_take_one_role_per_worktree() {
-    let alone: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.one_per_folder()).collect();
-    assert_eq!(alone, [Known::Codex, Known::Gemini, Known::Opencode]);
+fn only_opencode_finds_its_status_by_its_folder() {
+    let by_folder: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.status_by_folder()).collect();
+    assert_eq!(by_folder, [Known::Opencode]);
+}
+
+#[test]
+fn codex_gemini_and_opencode_find_their_records_by_their_folder() {
+    let by_folder: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.record_by_folder()).collect();
+    assert_eq!(by_folder, [Known::Codex, Known::Gemini, Known::Opencode]);
 }
