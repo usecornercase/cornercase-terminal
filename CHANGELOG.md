@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.95
+
+- **Flows** start a whole team of agents on an issue or a prompt. A flow is a saved team and the plan it follows: an orchestrator agent, and roles such as coder, reviewer, security and tester, each with its own agent, model and effort. The plan is a list of stages, which can work in parallel and go back when there are findings. Choose ` start a flow ` next to ` start ` in an issue, **start a flow…** in `+ New`, or `w s` with a prefix key. cornercase makes a worktree, opens a tab per role and starts every agent there, and the orchestrator runs the plan with cornercase's own commands, from the first message to the pull request.
+- Four flows come built in (**Full issue**, **Cross review**, **Quick**, **Bug, test first**), with the agents you have installed. Make your own in **Settings → Agents → flows**: stages, roles, agents, models, efforts and prompts, with the plan drawn beside them. Yours are saved in `flows/` next to `config.json`, and a project's in its `.cornercase/flows/`.
+- The new **Flow** panel draws the plan as boxes and arrows and lights it up as the work moves: the box of an agent at work, the arrow the work went along, the rounds of each loop. Click a box to go to that agent, or an arrow to read the last message sent along it. It opens when a flow starts, and from the workspace's menu (**show flow**), the icon bar or `w f`.
+- Every agent of a flow runs without asking for permission, so nothing stops the team halfway; the dialogs say so in red, and also show what a project's flow sets on its agents. Claude Code's one-time consent to that mode is still yours to give.
+- `cornercase flow list` and `cornercase flow run` start flows from scripts and agents, and `cornercase start` takes `--model`, `--mode` and `--effort`.
+- opencode has two modes in **Settings → Agents**: plan, and auto (which skips its permission prompts).
+- Text fields with long prompts take line breaks, and wide characters (Chinese, Japanese, emoji) no longer put the cursor in the wrong place, in the TODO panel too.
+
 ## 0.12.94
 
 - No changes in the app. The Telegram bot's shared parts (the notices, replies, away, `/status` and `/new`) no longer depend on Telegram, so a second chat app can use them.
