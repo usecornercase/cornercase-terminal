@@ -1,4 +1,4 @@
-import { drawQueue, drawQueueForm, queueFormArea } from './queue';
+import { drawQueue, drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
@@ -185,8 +185,8 @@ const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 export class Painter {
   readonly regions: Region[] = [];
   cursor: Cursor | null = null;
-  private surface: number;
-  private hoverSurface: number;
+  readonly surface: number;
+  readonly hoverSurface: number;
   readonly lineColour: number;
 
   constructor(
@@ -987,7 +987,7 @@ export class Painter {
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
-    if (o.kind === 'queue') { this.dialogBackdrop(queueFormArea(this.app.cols, this.app.rows)); return drawQueueForm(this, o); }
+    if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }
@@ -1030,7 +1030,7 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void): void {
+  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void): void {
     const cancel = intersect(rect(right(row) - buttonWidth('cancel'), row.y, buttonWidth('cancel'), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
     this.submitButton(ok, submit, onSubmit);

@@ -1,4 +1,5 @@
 use super::*;
+use crate::queue::form::When;
 use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
 
@@ -223,8 +224,8 @@ mod forms {
             let Some(Overlay::Queue(form)) = &app.overlay else { panic!("queue form") };
             assert!(form.prompt.text().contains("Fix login"));
             assert_eq!(form.branch.text(), issues::branch(&issue));
-            assert!(form.worktree);
-            app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            assert!(form.worktree());
+            app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
             assert!(app.overlay.is_none());
             assert_eq!(app.side, Some(Side::Queue));
         }
@@ -242,8 +243,9 @@ mod forms {
         click(&mut app, Position::new(row.x + 1, row.y + 1));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
         form.prompt = todo::editor::Editor::new("fix logout instead");
-        form.at = todo::editor::Editor::new("in 3h");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        form.when = When::In.combo();
+        form.amount = todo::editor::Editor::new("3");
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert_eq!(app.queued.queue.entry(id).expect("edited").task.prompt, "fix logout instead");
         let row = ui::queue::rows(panel, &app.queue_view()).item(0);
         click(&mut app, Position::new(row.right() - 2, row.y + 1));
@@ -291,8 +293,8 @@ mod resets {
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = todo::editor::Editor::new("fix login");
-        form.at = todo::editor::Editor::new("claude reset");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        form.when = When::ClaudeReset.combo();
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         pump_until(
             &mut app,
             &rx,
@@ -324,10 +326,10 @@ mod guarantees {
         );
         app.new_queue_form(Some(id));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        assert_eq!(form.kinds[form.agent], original.agent);
-        assert_eq!(form.modes[form.mode], "careful");
+        assert_eq!(form.agent.label(), Some(original.agent.as_str()));
+        assert_eq!(form.mode.label(), Some("careful"));
         form.prompt = todo::editor::Editor::new("fix logout instead");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert!(app.overlay.is_none());
         let edited = &app.queued.queue.entry(id).expect("edited").task;
         assert_eq!(
@@ -350,7 +352,7 @@ mod guarantees {
         app.new_queue_form(Some(id));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = todo::editor::Editor::new("fix logout instead");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert!(app.overlay.is_none());
         let edited = &app.queued.queue.entry(id).expect("edited").task;
         assert_eq!((&edited.mode, &edited.command), (&original.mode, &original.command));
@@ -415,7 +417,7 @@ mod destinations {
         } else {
             app.projects[0].workspaces.clear();
         }
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert!(matches!(&app.overlay, Some(Overlay::Queue(form)) if form.error.is_some()));
         assert_eq!(app.queued.queue.entries, []);
     }
@@ -430,9 +432,9 @@ mod destinations {
         app.projects[0].active = 1;
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
-        assert_eq!(form.places[form.place].place.workspace_id, Some(workspace_id));
+        assert_eq!(form.choice().expect("a place").place.workspace_id, Some(workspace_id));
         form.prompt = todo::editor::Editor::new("fix login");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         let id = app.queued.queue.entries[0].id;
         app.projects[0].workspaces[1].name = Some("renamed notes".into());
         app.run_queued(id, Instant::now()).expect("start in the same workspace");
@@ -446,8 +448,10 @@ mod destinations {
         task.place.project = PathBuf::from("/nonexistent/queued-project");
         let id = app.queued.queue.add(task).expect("add");
         app.new_queue_form(Some(id));
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(matches!(&app.overlay, Some(Overlay::Queue(form)) if !form.place_confirmed && form.error.is_some()));
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        assert!(
+            matches!(&app.overlay, Some(Overlay::Queue(form)) if form.place.chosen().is_none() && form.error.is_some())
+        );
         assert_eq!(
             app.queued.queue.entry(id).expect("entry").task.place.project,
             PathBuf::from("/nonexistent/queued-project")
@@ -458,7 +462,7 @@ mod destinations {
 mod panel {
     use super::*;
     use crate::app::queue_panel::CLIENTS;
-    use crate::queue::form::Field;
+    use crate::queue::form::Control;
 
     fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>, Rect) {
         let (mut app, rx, repo, config, worktrees) = queued_app();
@@ -517,22 +521,22 @@ mod panel {
         let (mut app, _rx, _dirs, _panel) = opened();
         app.new_queue_form(None);
         let field = |app: &App| match &app.overlay {
-            Some(Overlay::Queue(form)) => form.field,
+            Some(Overlay::Queue(form)) => form.focus,
             _ => panic!("form"),
         };
-        app.queue_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-        assert_eq!(field(&app), Field::Branch);
-        app.queue_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(field(&app), Field::Prompt);
+        app.queue_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT), AREA);
+        assert_eq!(field(&app), Control::Mode);
+        app.queue_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), AREA);
+        assert_eq!(field(&app), Control::Prompt);
     }
 
     #[test]
     fn a_click_in_a_scrolled_prompt_lands_on_the_line_it_shows() {
         let (mut app, _rx, _dirs, _panel) = opened();
         app.new_queue_form(None);
-        let field = ui::queue_form::field(AREA, Field::Prompt);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = todo::editor::Editor::new(&"word ".repeat(80));
+        let field = ui::queue_form::text(AREA, form, Control::Prompt);
         let start = ui::queue_form::first_line(&form.prompt, field);
         assert!(start > 0);
         click(&mut app, Position::new(field.x, field.y));
@@ -549,5 +553,47 @@ mod panel {
         app.queue_form_done(Err("the plan probe failed".into()));
         assert!(matches!(app.overlay, Some(Overlay::Usage)));
         assert!(app.toast.as_ref().is_some_and(|t| t.message.contains("the plan probe failed")));
+    }
+}
+
+mod lists {
+    use super::*;
+    use crate::queue::form::{Control, Form};
+
+    fn form(app: &App) -> Form {
+        match &app.overlay {
+            Some(Overlay::Queue(form)) => (**form).clone(),
+            _ => panic!("the schedule form"),
+        }
+    }
+
+    #[test]
+    fn a_click_opens_a_list_and_another_click_picks_from_it() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        app.new_queue_form(None);
+        let when = ui::queue_form::rect(AREA, &form(&app), Control::When);
+        click(&mut app, when.as_position());
+        assert_eq!(form(&app).opened(), Some(Control::When));
+        let list = ui::queue_form::list(AREA, &form(&app)).expect("an open list");
+        click(&mut app, Position::new(list.x + 2, list.y + 3));
+        let f = form(&app);
+        assert_eq!((f.opened(), f.kind(), f.controls()[2]), (None, When::On, Control::Date));
+    }
+
+    #[test]
+    fn choosing_another_agent_offers_its_modes() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        app.config.agent_modes.insert("fake".into(), [("careful".into(), vec!["--careful".into()])].into());
+        app.new_queue_form(None);
+        let Some(Overlay::Queue(f)) = &mut app.overlay else { panic!("form") };
+        f.agent.choose(0);
+        f.focus = Control::Agent;
+        for c in "fak".chars() {
+            app.queue_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE), AREA);
+        }
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        let f = form(&app);
+        assert_eq!(f.agent.label(), Some("fake"));
+        assert_eq!(f.mode.options(), ["default", "careful"]);
     }
 }

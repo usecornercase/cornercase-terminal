@@ -1,5 +1,8 @@
 use super::*;
-use crate::queue::State;
+use crate::list::Combo;
+use crate::queue::form::{Choice, Control, Form, When};
+use crate::queue::{Place, State};
+use crate::todo::editor::Editor;
 
 fn queued_view() -> View<'static> {
     let mut view = view(&["shop"]);
@@ -38,20 +41,20 @@ fn renders_pending_started_failed_and_missed_in_compact_mode() {
     insta::assert_snapshot!(render_sized(&view, 70, 28).backend());
 }
 
-fn form(prompt: &str, note: Option<&str>) -> queue_form::Form {
-    queue_form::Form {
-        prompt: crate::todo::editor::Editor::new(prompt),
-        at: crate::todo::editor::Editor::new("claude reset"),
-        branch: crate::todo::editor::Editor::new("fix-login"),
-        field: crate::queue::form::Field::At,
-        zone: "Europe/Madrid".into(),
-        place: "shop · root".into(),
-        agent: "claude".into(),
-        mode: "plan".into(),
-        worktree: true,
-        note: note.map(str::to_string),
-        busy: false,
-    }
+fn form(prompt: &str, note: Option<&str>) -> Form {
+    let places = vec![
+        Choice { label: "shop · root".into(), place: Place::default(), worktree: true },
+        Choice { label: "shop › main".into(), place: Place::default(), worktree: false },
+    ];
+    let mut form =
+        Form::new(places, Some(0), vec!["auto".into(), "claude".into()], 1, "Europe/Madrid".into(), "2026-10-14");
+    form.prompt = Editor::new(prompt);
+    form.open_in.choose(1);
+    form.branch = Editor::new("fix-login");
+    form.mode = Combo::new(vec!["default".into(), "plan".into()], Some(1));
+    form.focus = Control::When;
+    form.error = note.map(str::to_string);
+    form
 }
 
 fn lines(t: &Terminal<TestBackend>) -> Vec<String> {
@@ -59,38 +62,64 @@ fn lines(t: &Terminal<TestBackend>) -> Vec<String> {
     (area.y..area.bottom()).map(|y| row_text(t, Rect { y, height: 1, ..area })).collect()
 }
 
+fn shown(form: Form, width: u16, height: u16) -> Terminal<TestBackend> {
+    let mut view = queued_view();
+    view.overlay = Some(Overlay::Queue(Box::new(form)));
+    render_sized(&view, width, height)
+}
+
 #[test]
 fn renders_the_schedule_form() {
-    let mut view = queued_view();
-    view.overlay = Some(Overlay::Queue(form("Fix the login form", None)));
-    insta::assert_snapshot!(render_sized(&view, 100, 24).backend());
+    insta::assert_snapshot!(shown(form("Fix the login form", None), 100, 24).backend());
+}
+
+#[test]
+fn renders_the_kinds_of_time_in_an_open_list() {
+    let mut f = form("Fix the login form", None);
+    f.when.open();
+    insta::assert_snapshot!(shown(f, 100, 24).backend());
+}
+
+#[test]
+fn a_date_shows_its_day_and_its_clock_and_a_tab_shows_no_branch() {
+    let mut f = form("Fix the login form", None);
+    f.when = When::On.combo();
+    f.open_in.choose(0);
+    let lines = lines(&shown(f, 100, 24));
+    assert!(lines.iter().any(|l| l.contains("When      on ")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("2026-10-14   09:00")), "{lines:#?}");
+    assert!(!lines.iter().any(|l| l.contains("fix-login")), "{lines:#?}");
+}
+
+#[test]
+fn the_open_list_counts_as_part_of_the_dialog() {
+    let mut f = form("fix", None);
+    f.place.open();
+    let screen = Rect::new(0, 0, 100, 12);
+    let list = queue_form::list(screen, &f).expect("an open list");
+    assert_eq!(queue_form::area_with_list(screen, &f), queue_form::area(screen).union(list));
 }
 
 #[rstest]
-#[case::two_rows_short(20)]
-#[case::one_row_short(21)]
+#[case::two_rows_short(16)]
+#[case::one_row_short(17)]
 fn a_short_form_shows_its_error_above_the_buttons(#[case] height: u16) {
-    let mut view = view(&[]);
-    view.overlay = Some(Overlay::Queue(form("fix", Some("choose a time in the future"))));
-    let lines = lines(&render_sized(&view, 100, height));
+    let lines = lines(&shown(form("fix", Some("choose a time in the future")), 100, height));
     let note = lines.iter().position(|l| l.contains("choose a time in the future")).expect("the note shows");
     let buttons = lines.iter().position(|l| l.contains(" schedule ") && l.contains(" cancel ")).expect("the buttons");
     assert!(note < buttons, "{lines:#?}");
 }
 
 #[test]
-fn a_tiny_form_keeps_its_reset_buttons_off_its_border() {
-    let mut view = view(&[]);
-    view.overlay = Some(Overlay::Queue(form("fix", None)));
-    let lines = lines(&render_sized(&view, 100, 8));
-    assert!(lines.iter().all(|l| !l.contains("reset")), "{lines:#?}");
+fn a_tiny_form_keeps_its_rows_inside_its_border() {
+    let lines = lines(&shown(form("fix", None), 100, 8));
+    let bottom = lines.iter().rposition(|l| l.contains('╰')).expect("the bottom border");
+    assert!(!lines[bottom].contains("Mode") && !lines[bottom].contains("Agent"), "{lines:#?}");
 }
 
 #[test]
 fn a_prompt_with_line_breaks_stays_on_its_rows() {
-    let mut view = view(&[]);
-    view.overlay = Some(Overlay::Queue(form("first line\nsecond line", None)));
-    let lines = lines(&render_sized(&view, 100, 24));
+    let lines = lines(&shown(form("first line\nsecond line", None), 100, 24));
     assert!(lines.iter().any(|l| l.contains("first line↵second line")), "{lines:#?}");
 }
 
@@ -136,4 +165,16 @@ fn the_pending_count_stays_visible_with_no_project_open() {
     view.queue_pending = 2;
     let areas = layout(AREA, Widths::default());
     assert!(row_text(&render(&view), areas.queue_button).contains("Queue 2"));
+}
+
+#[test]
+fn the_panel_buttons_light_up_under_the_pointer() {
+    let mut view = queued_view();
+    let panel = full_layout(Rect::new(0, 0, 140, 28), Widths::default(), true, view.sidebar, false, false).changes;
+    let rows = crate::ui::queue::rows(panel, view.queue.as_ref().expect("queue"));
+    let (add, first) = (rows.button(), rows.item(0));
+    for pos in [Position::new(add.x + 2, add.y), Position::new(first.right() - 6, first.y + 3)] {
+        view.hover = Some(pos);
+        assert_eq!(render_sized(&view, 140, 28).backend().buffer()[(pos.x, pos.y)].bg, Color::Cyan, "{pos:?}");
+    }
 }

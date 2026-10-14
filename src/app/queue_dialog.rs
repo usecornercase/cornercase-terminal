@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
@@ -9,9 +9,10 @@ use crate::agents;
 use crate::control::QueueAdd;
 use crate::git;
 use crate::issues::{self, Issue, browser::Place};
+use crate::list::{COMBO_ROWS, Combo};
 use crate::project::Hierarchy;
 use crate::queue;
-use crate::queue::form::{Choice, Field, Form};
+use crate::queue::form::{Choice, Control, Form, Step, When};
 use crate::todo::editor::Editor;
 use crate::ui;
 
@@ -52,7 +53,7 @@ impl App {
                 })
             })
             .unwrap_or_default();
-        let place_confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
+        let confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
         let kinds = self.queue_kinds(entry.as_ref());
         let agent = entry
             .as_ref()
@@ -62,41 +63,31 @@ impl App {
             || if self.queued.zone.is_empty() { queue::clock::local_zone() } else { self.queued.zone.clone() },
             |entry| entry.task.zone.clone(),
         );
-        let form = Form {
-            id,
-            label: entry
-                .as_ref()
-                .filter(|entry| entry.task.label != entry.task.prompt.lines().next().unwrap_or_default())
-                .map(|entry| entry.task.label.clone()),
-            prompt: Editor::new(entry.as_ref().map_or("", |entry| &entry.task.prompt)),
-            at: Editor::new(
-                &entry.as_ref().map_or_else(|| "in 2h".into(), |entry| queue::clock::display(entry.task.at, &zone)),
-            ),
-            branch: Editor::new(
-                entry.as_ref().and_then(|entry| entry.task.place.branch.as_deref()).unwrap_or_default(),
-            ),
-            field: Field::Prompt,
-            zone,
-            places,
-            place,
-            place_confirmed,
-            kinds,
-            agent,
-            modes: vec!["default".into()],
-            mode: 0,
-            worktree: entry.as_ref().is_some_and(|entry| entry.task.place.branch.is_some()),
-            busy: false,
-            error: None,
-        };
+        let at = entry.as_ref().map_or_else(crate::time::now, |entry| entry.task.at);
+        let shown = queue::clock::display(at, &zone);
+        let (date, clock) = shown.split_once(' ').unwrap_or((&shown, "09:00"));
+        let mut form = Form::new(places, confirmed.then_some(place), kinds, agent, zone.clone(), date);
+        if let Some(entry) = &entry {
+            form.id = id;
+            form.label = (entry.task.label != entry.task.prompt.lines().next().unwrap_or_default())
+                .then(|| entry.task.label.clone());
+            form.prompt = Editor::new(&entry.task.prompt);
+            form.when = When::On.combo();
+            form.clock = Editor::new(clock);
+            form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
+            form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
+        }
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
         if let Some(Overlay::Queue(form)) = &mut self.overlay
             && let Some(mode) = entry.as_ref().and_then(|entry| entry.task.mode.as_ref())
         {
-            form.mode = form.modes.iter().position(|name| name == mode).unwrap_or_else(|| {
-                form.modes.push(mode.clone());
-                form.modes.len() - 1
+            let mut modes = form.mode.options().to_vec();
+            let chosen = modes.iter().position(|name| name == mode).unwrap_or_else(|| {
+                modes.push(mode.clone());
+                modes.len() - 1
             });
+            form.mode = Combo::new(modes, Some(chosen));
         }
     }
 
@@ -165,101 +156,102 @@ impl App {
             form.label = Some(format!("{} {}", issue.key, issue.title));
             form.prompt = Editor::new(&prompt);
             form.branch = Editor::new(&branch);
-            form.field = Field::At;
-            form.agent = form.kinds.iter().position(|kind| kind == agent).unwrap_or_default();
+            form.focus = Control::When;
+            if let Some(i) = form.agent.options().iter().position(|kind| kind == agent) {
+                form.agent.choose(i);
+            }
             let path = project.and_then(|id| self.projects.project_index(id)).map(|p| &self.projects[p].path);
-            form.place_confirmed = false;
             let workspace = place
                 .as_ref()
                 .and_then(|place| place.workspace)
                 .and_then(|id| self.projects.workspace_index(id))
                 .map(|(p, w)| &self.projects[p].workspaces[w]);
-            if let Some(index) = form.places.iter().position(|choice| {
+            let found = form.places.iter().position(|choice| {
                 Some(&choice.place.project) == path
                     && choice.place.workspace_id == workspace.map(|workspace| workspace.id)
-            }) {
-                form.place = index;
-                form.place_confirmed = true;
-            }
-            form.worktree =
+            });
+            form.place = Combo::new(form.place.options().to_vec(), found);
+            let worktree =
                 place.map_or_else(|| path.is_some_and(|path| git::is_repo_root(path)), |place| place.worktree);
+            form.open_in.choose(usize::from(worktree));
         }
         self.queue_modes();
     }
 
     fn queue_modes(&mut self) {
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
-        let selected = form.kinds.get(form.agent).cloned();
+        let selected = form.agent.label().map(str::to_string);
         let kind = self.agent_kind(None, selected.filter(|kind| kind != agents::AUTO)).unwrap_or_default();
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
-        form.modes = std::iter::once("default".into())
+        let modes = std::iter::once("default".into())
             .chain(agents::modes(&self.config, &kind).into_iter().map(|(name, _)| name))
             .collect();
-        form.mode = 0;
+        form.mode = Combo::new(modes, Some(0));
     }
 
-    pub(super) fn queue_key(&mut self, key: KeyEvent) {
+    pub(super) fn queue_key(&mut self, key: KeyEvent, area: Rect) {
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
         if form.busy {
             return;
         }
-        match key.code {
-            KeyCode::Esc => self.overlay = None,
-            KeyCode::Enter => self.submit_queue(),
-            KeyCode::Tab => form.field = form.field.next(),
-            KeyCode::BackTab => form.field = form.field.previous(),
-            _ => {
-                let area = self.queued.area.unwrap_or(Rect::new(0, 0, 72, 22));
-                let width = usize::from(ui::queue_form::field(area, form.field).width.max(1));
-                form.key(key, width);
-            }
+        let width = usize::from(ui::queue_form::text(area, form, form.focus).width.max(1));
+        let rows = ui::queue_form::list(area, form).map_or(COMBO_ROWS, ui::combo::rows);
+        match form.key(key, width, rows) {
+            Step::Submit => self.submit_queue(),
+            Step::Cancel => self.overlay = None,
+            Step::Chose(control) => self.queue_chose(control),
+            Step::None => {}
+        }
+    }
+
+    fn queue_chose(&mut self, control: Control) {
+        if control == Control::Agent {
+            self.queue_modes();
         }
     }
 
     pub(super) fn queue_form_mouse(&mut self, event: MouseEvent, pos: Position, area: Rect) {
-        if event.kind != MouseEventKind::Down(MouseButton::Left) {
-            return;
-        }
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
         if form.busy {
             return;
         }
-        match ui::queue_form::hit(area, pos) {
+        if let Some(delta) = super::input::wheel(event.kind) {
+            let rows = ui::queue_form::list(area, form).map(ui::combo::rows);
+            if let (Some(open), Some(rows)) = (form.opened(), rows) {
+                form.combo(open).into_iter().for_each(|combo| combo.scroll_by(delta, rows));
+            }
+            return;
+        }
+        if event.kind != MouseEventKind::Down(MouseButton::Left) {
+            return;
+        }
+        match ui::queue_form::hit(area, form, pos) {
             Some(ui::queue_form::Hit::Cancel) => self.overlay = None,
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
-            Some(ui::queue_form::Hit::Field(field, row, col)) => {
-                form.field = field;
-                let r = ui::queue_form::field(area, field);
-                let editor = form.editor();
-                let line = ui::queue_form::first_line(editor, r) + row;
-                editor.place(usize::from(r.width.max(1)), line, col);
-            }
-            Some(ui::queue_form::Hit::Place) => {
-                if form.place_confirmed {
-                    form.place = (form.place + 1) % form.places.len().max(1);
-                }
-                form.place_confirmed = !form.places.is_empty();
-                if !form.places.get(form.place).is_some_and(|place| place.worktree) {
-                    form.worktree = false;
+            Some(ui::queue_form::Hit::Close) | None => form.close_lists(),
+            Some(ui::queue_form::Hit::Choose(i)) => {
+                let Some(open) = form.opened() else { return };
+                let changed = form.combo(open).is_some_and(|combo| {
+                    let changed = combo.chosen() != Some(i);
+                    combo.choose(i);
+                    changed
+                });
+                if changed {
+                    form.chose(open);
+                    self.queue_chose(open);
                 }
             }
-            Some(ui::queue_form::Hit::Agent) => {
-                form.agent = (form.agent + 1) % form.kinds.len().max(1);
-                self.queue_modes();
+            Some(ui::queue_form::Hit::Control(control, row, col)) => {
+                let r = ui::queue_form::text(area, form, control);
+                let opening = form.combo_of(control).is_some_and(|combo| !combo.is_open());
+                form.focus_on(control);
+                if let Some(editor) = form.editor(control) {
+                    let line = ui::queue_form::first_line(editor, r) + row;
+                    editor.place(usize::from(r.width.max(1)), line, col);
+                } else if opening {
+                    form.combo(control).into_iter().for_each(Combo::open);
+                }
             }
-            Some(ui::queue_form::Hit::Mode) => form.mode = (form.mode + 1) % form.modes.len().max(1),
-            Some(ui::queue_form::Hit::Worktree) if form.places.get(form.place).is_some_and(|place| place.worktree) => {
-                form.worktree = !form.worktree;
-            }
-            Some(ui::queue_form::Hit::ClaudeReset) => {
-                form.at = Editor::new("claude reset");
-                form.field = Field::At;
-            }
-            Some(ui::queue_form::Hit::CodexReset) => {
-                form.at = Editor::new("codex reset");
-                form.field = Field::At;
-            }
-            _ => {}
         }
     }
 
@@ -268,12 +260,13 @@ impl App {
         if form.busy {
             return;
         }
-        if !form.place_confirmed {
-            self.queue_form_done(Err("choose an open place before scheduling".into()));
-            return;
-        }
-        let Some(place) = form.places.get(form.place) else {
-            self.queue_form_done(Err("open a project before scheduling an agent".into()));
+        let Some(place) = form.choice() else {
+            let reason = if form.places.is_empty() {
+                "open a project before scheduling an agent"
+            } else {
+                "choose an open place before scheduling"
+            };
+            self.queue_form_done(Err(reason.into()));
             return;
         };
         let Some(project) =
@@ -291,20 +284,21 @@ impl App {
             self.queue_form_done(Err("the selected workspace closed; choose an open place".into()));
             return;
         }
-        let agent = form.kinds.get(form.agent).cloned();
-        let captured_default = form.modes[form.mode] == "default"
+        let agent = form.agent.label().map(str::to_string);
+        let mode = form.mode.label().unwrap_or("default").to_string();
+        let captured_default = mode == "default"
             && form
                 .id
                 .and_then(|id| self.queued.queue.entry(id))
                 .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
         let add = QueueAdd {
-            at: form.at.text(),
+            at: form.at(),
             zone: form.zone.clone(),
             agent,
-            mode: (!captured_default).then(|| form.modes[form.mode].clone()),
+            mode: (!captured_default).then_some(mode),
             project: Some(project.id),
             workspace: workspace.map(|workspace| workspace.id),
-            worktree: form.worktree.then(|| form.branch.text()),
+            worktree: form.worktree().then(|| form.branch.text()),
             prompt: Some(form.prompt.text()),
             label: form.label.clone(),
             submit: form.id.is_none().then_some(true),
@@ -347,23 +341,7 @@ impl App {
         }
     }
 
-    pub(super) fn queue_form_view(form: &Form) -> ui::queue_form::Form {
-        ui::queue_form::Form {
-            prompt: form.prompt.clone(),
-            at: form.at.clone(),
-            branch: form.branch.clone(),
-            field: form.field,
-            zone: form.zone.clone(),
-            place: if form.place_confirmed {
-                form.places.get(form.place).map_or_else(|| "no open project".into(), |place| place.label.clone())
-            } else {
-                "choose an open place…".into()
-            },
-            agent: form.kinds.get(form.agent).cloned().unwrap_or_default(),
-            mode: form.modes.get(form.mode).cloned().unwrap_or_default(),
-            worktree: form.worktree,
-            busy: form.busy,
-            note: if form.busy { Some("reading the plan reset…".into()) } else { form.error.clone() },
-        }
+    pub(super) fn queue_form_view(form: &Form) -> Box<Form> {
+        Box::new(form.clone())
     }
 }

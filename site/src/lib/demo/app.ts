@@ -1,9 +1,10 @@
-import { queueTime, queueWhen, type QueueEntry, type QueueForm } from './queue';
+import { type QueueChoice, type QueueEntry, type QueueForm, type QueueList, isList, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueTextRect, queueTime, queueWhen, queueWorktree, whenCombo } from './queue';
+import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
 import { type Demo, demo as english } from '../../i18n/en';
 import type { Cursor } from '../term/canvas';
-import { BOLD, Grid, type Rect, contains } from '../term/grid';
+import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
@@ -3118,7 +3119,17 @@ export class App {
       if (issue && label === 'schedule') {
         this.openQueueForm();
         const form = this.overlay;
-        if (form?.kind === 'queue') { form.project = o.project; form.workspace = null; form.prompt = issue.url; form.label = `${issue.key} ${issue.title}`; form.branch = this.branchFor(issue); form.worktree = !!this.projects.find((p) => p.id === o.project)?.repo; form.agent = this.pickedAgent(o) ?? 'claude'; form.field = 'at'; form.cursor = form.at.length; }
+        if (form?.kind === 'queue') {
+          form.prompt = issue.url;
+          form.label = `${issue.key} ${issue.title}`;
+          form.branch = this.branchFor(issue);
+          form.focus = 'when';
+          const agent = form.agent.options.indexOf(this.pickedAgent(o) ?? 'claude');
+          if (agent >= 0) chooseCombo(form.agent, agent);
+          form.place = combo(form.place.options, form.places.findIndex((choice) => choice.project === o.project && choice.workspace === null));
+          chooseCombo(form.openIn, this.projects.find((p) => p.id === o.project)?.repo ? 1 : 0);
+          this.queueModes(form);
+        }
       } else if (issue) this.startIssue(issue, o);
     }
   }
@@ -3226,42 +3237,82 @@ export class App {
       }
       return;
     }
+    const places = this.queuePlaces();
+    const matching = entry ? places.flatMap((choice, i) => (choice.project === entry.project && choice.workspace === entry.workspace ? [i] : [])) : [];
     const project = this.project();
-    this.overlay = { kind: 'queue', id: entry?.id, prompt: entry?.prompt ?? '', label: entry && entry.label !== entry.prompt ? entry.label : undefined, at: entry ? queueWhen(entry.at) : 'in 2h', branch: entry?.branch ?? '', project: entry?.project ?? project?.id ?? 0, workspace: entry ? entry.workspace : this.workspace()?.id ?? null, agent: entry?.agent ?? this.config.agent, mode: entry?.mode ?? '', worktree: !!entry?.branch, field: 'prompt', cursor: [...(entry?.prompt ?? '')].length };
-    this.dirty();
-  }
-
-  queuePlace(o: QueueForm): void {
-    const places = this.projects.flatMap((project) => [{ project: project.id, workspace: null as number | null }, ...project.workspaces.map((workspace) => ({ project: project.id, workspace: workspace.id }))]);
-    const at = places.findIndex((place) => place.project === o.project && place.workspace === o.workspace);
-    const next = places[(at + 1) % places.length];
-    if (next) { o.project = next.project; o.workspace = next.workspace; o.worktree = false; }
-    this.dirty();
-  }
-
-  queueAgent(o: QueueForm): void {
+    const workspace = this.workspace();
+    const current = places.findIndex((choice) => choice.project === project?.id && choice.workspace === (workspace?.id ?? null));
+    const place = matching[0] ?? Math.max(0, current);
+    const confirmed = entry ? matching.length === 1 : places.length > 0;
     const kinds = ['auto', ...AGENTS.map(([kind]) => kind)];
-    o.agent = kinds[(kinds.indexOf(o.agent) + 1) % kinds.length];
-    o.mode = '';
+    if (entry && !kinds.includes(entry.agent)) kinds.push(entry.agent);
+    const agent = entry ? Math.max(0, kinds.indexOf(entry.agent)) : 0;
+    const [date, clock] = queueWhen(entry?.at ?? this.now()).split(' ');
+    const o = queueForm(places, confirmed ? place : null, kinds, agent, Intl.DateTimeFormat().resolvedOptions().timeZone, date);
+    if (entry) {
+      o.id = entry.id;
+      o.label = entry.label !== entry.prompt ? entry.label : undefined;
+      o.prompt = entry.prompt;
+      o.when = whenCombo('on');
+      o.clock = clock;
+      chooseCombo(o.openIn, entry.branch ? 1 : 0);
+      o.branch = entry.branch;
+    }
+    o.cursor = [...o.prompt].length;
+    this.overlay = o;
+    this.queueModes(o);
+    if (entry?.mode) {
+      const modes = [...o.mode.options];
+      if (!modes.includes(entry.mode)) modes.push(entry.mode);
+      o.mode = combo(modes, modes.indexOf(entry.mode));
+    }
     this.dirty();
   }
 
-  queueMode(o: QueueForm): void {
-    const modes = ['', ...(MODES[o.agent] ?? []).map(([name]) => name)];
-    o.mode = modes[(modes.indexOf(o.mode) + 1) % modes.length];
+  private queuePlaces(): QueueChoice[] {
+    return this.projects.flatMap((project) => {
+      const open = project.workspaces.filter((workspace) => !workspace.removing);
+      const named = (workspace: Workspace) => (open.filter((other) => workspaceLabel(other) === workspaceLabel(workspace)).length > 1 ? ` (workspace ${workspace.id})` : '');
+      return [
+        { label: `${projectLabel(project)} · root`, project: project.id, workspace: null, worktree: project.repo },
+        ...open.map((workspace) => ({ label: `${projectLabel(project)} › ${workspaceLabel(workspace)}${named(workspace)}`, project: project.id, workspace: workspace.id, worktree: false })),
+      ];
+    });
+  }
+
+  private queueModes(o: QueueForm): void {
+    const picked = comboLabel(o.agent);
+    const kind = picked && picked !== 'auto' ? picked : this.config.agent === 'auto' ? 'claude' : this.config.agent;
+    o.mode = combo(['default', ...(MODES[kind] ?? []).map(([name]) => name)], 0);
+  }
+
+  queueChoose(o: QueueForm, control: QueueList, i: number): void {
+    const changed = o[control].chosen !== i;
+    chooseCombo(o[control], i);
+    if (changed) {
+      queueChose(o, control);
+      if (control === 'agent') this.queueModes(o);
+    }
     this.dirty();
   }
 
   submitQueue(): void {
     const o = this.overlay;
     if (o?.kind !== 'queue') return;
-    const at = queueTime(o.at, this.now());
-    if (!o.prompt.trim() || !at || (o.worktree && !o.branch.trim())) {
-      o.error = !o.prompt.trim() ? 'The prompt is empty' : !at ? 'Choose a future time or a delay' : 'The worktree branch needs a name';
+    const place = queueChoice(o);
+    const at = queueTime(queueAt(o), this.now());
+    const worktree = queueWorktree(o);
+    const error = !place
+      ? o.places.length ? 'choose an open place before scheduling' : 'open a project before scheduling an agent'
+      : !o.prompt.trim() ? 'the prompt is empty' : !at ? 'choose a time in the future' : worktree && !o.branch.trim() ? 'the worktree branch needs a name' : null;
+    if (error || !place || !at) {
+      o.error = error ?? undefined;
       this.dirty();
       return;
     }
-    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: o.project, workspace: o.workspace, branch: o.worktree ? o.branch : '', agent: o.agent === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : o.agent, mode: o.mode, command: '', state: 'pending' };
+    const picked = comboLabel(o.agent) ?? 'auto';
+    const chosenMode = comboLabel(o.mode) ?? 'default';
+    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, workspace: place.workspace, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending' };
     const old = this.queued.find((item) => item.id === entry.id);
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
@@ -3297,26 +3348,16 @@ export class App {
   }
 
   private queueKey(o: QueueForm, k: Key): boolean {
-    if (k.key === 'Escape') { this.closeOverlay(); return true; }
-    if (k.key === 'Enter') { this.submitQueue(); return true; }
-    if (k.key === 'Tab') {
-      o.field = o.field === 'prompt' ? 'at' : o.field === 'at' ? 'branch' : 'prompt';
-      o.cursor = [...o[o.field]].length;
-    } else {
-      const chars = [...o[o.field]];
-      if (k.key === 'Backspace' && o.cursor > 0) chars.splice(--o.cursor, 1);
-      else if (k.key === 'Delete') chars.splice(o.cursor, 1);
-      else if (k.key === 'ArrowLeft') o.cursor = Math.max(0, o.cursor - 1);
-      else if (k.key === 'ArrowRight') o.cursor = Math.min(chars.length, o.cursor + 1);
-      else if (k.key === 'Home') o.cursor = 0;
-      else if (k.key === 'End') o.cursor = chars.length;
-      else if (this.typed(k)) { chars.splice(o.cursor++, 0, k.key); }
-      o[o.field] = chars.join('');
-    }
-    o.error = undefined;
+    const screen = rect(0, 0, this.cols, this.rows);
+    const width = Math.max(1, queueTextRect(screen, o, o.focus).w);
+    const step = queueFormKey(o, k, width, queueListRows(screen, o));
+    if (step === 'cancel') this.closeOverlay();
+    else if (step === 'submit') this.submitQueue();
+    else if (step === 'agent') this.queueModes(o);
     this.dirty();
     return true;
   }
+
 
   launch(pane: Pane, kind: string, prompt: string, trust = this.config.trust, captured?: string, submit?: boolean): void {
     const command = captured ?? this.agentCommand(kind);
@@ -3608,7 +3649,16 @@ export class App {
     if (this.overlay?.kind === 'keys') this.overlay = null;
     const o = this.overlay;
     if (o) {
-      if (o.kind === 'queue') { o[o.field] += text.replace(/\s+/g, ' '); o.cursor = [...o[o.field]].length; }
+      if (o.kind === 'queue') {
+        const focus = o.focus;
+        if (!isList(focus) && !queueOpened(o)) {
+          const chars = [...o[focus]];
+          const typed = [...text.replace(/\s+/g, ' ')];
+          chars.splice(o.cursor, 0, ...typed);
+          o[focus] = chars.join('');
+          o.cursor += typed.length;
+        }
+      }
       else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;

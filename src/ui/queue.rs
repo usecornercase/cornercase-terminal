@@ -5,7 +5,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
 use super::Rows;
-use super::widgets::{draw_button, hovered_at};
+use super::widgets::{action_style, draw_button, draw_close, hovered_at};
 use crate::queue::State;
 use crate::text::truncate_right;
 
@@ -115,8 +115,10 @@ pub(super) fn draw(
         &title,
         style.add_modifier(Modifier::BOLD),
     );
-    draw_button(f, close(area), "", "×", style);
-    draw_button(f, clear(area, view), "", "clear started", style);
+    draw_close(f.buffer_mut(), close(area), hover, muted);
+    let clear = clear(area, view);
+    let clear_style = if hovered_at(hover, clear) { Style::default().fg(Color::Black).bg(Color::Cyan) } else { style };
+    draw_button(f, clear, "", "clear started", clear_style);
     let rows = rows(area, view);
     for (i, entry) in view.entries.iter().enumerate() {
         let row = rows.item(i);
@@ -159,11 +161,17 @@ pub(super) fn draw(
                 r,
             );
         }
+        let bg = if lit { Style::default().bg(super::hover_colour(light)) } else { Style::default() };
         if lit || compact {
-            draw_button(f, remove(row), "", "×", style);
+            let r = remove(row);
+            let remove_style =
+                if hovered_at(hover, r) { bg.fg(Color::Red).add_modifier(Modifier::BOLD) } else { bg.fg(muted) };
+            draw_button(f, r, "", "×", remove_style);
         }
         if !matches!(entry.state, State::Starting | State::Started { .. }) {
-            draw_button(f, run(row), "", "start now", Style::default().fg(Color::Cyan));
+            let r = run(row);
+            let run_style = if hovered_at(hover, r) { action_style(true) } else { bg.fg(Color::Cyan) };
+            draw_button(f, r, "", "start now", run_style);
         }
     }
     let (above, below) = rows.hidden();
@@ -175,5 +183,5 @@ pub(super) fn draw(
             f.render_widget(Paragraph::new(Span::styled(text, style)), r);
         }
     }
-    draw_button(f, rows.button(), "", "+ New", Style::default().fg(Color::Cyan));
+    draw_button(f, rows.button(), "", "+ New", action_style(hovered_at(hover, rows.button())));
 }

@@ -13,25 +13,27 @@ Click **`Queue n`** below `Files` to open the queue in the right column. In a sm
 
 In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. GitHub, GitLab, Shortcut, Linear, Jira and Plane issues use your configured [prompt template](../../reference/prompt/).
 
-For a free prompt, click **`+ New`** in the queue. Type the prompt, click the time field, and select the place, agent and mode. Click the place, agent or mode row to cycle through the choices. A repository root can use a new worktree: enable **`New worktree`** and type its branch below. A chosen workspace gets a new tab. An issue already supplies its usual branch name.
+For a free prompt, click **`+ New`** in the queue and type the prompt. Then choose **When**, **Where**, the **Agent** and its **Mode**: each is a list that opens below it on a click, or with `Space`, `↑` or `↓` when it has the keys. Pick an option with a click or the arrows and `Enter`; typing filters a long list, such as the places. In a repository root, **Open in** chooses a **new tab** or a **new worktree**, and a new worktree asks for its branch beside it. A workspace always gets a new tab. An issue already supplies its usual branch name.
 
-<Screen name="queue-form" alt="The schedule form with prompt, time, place, agent, mode and worktree branch fields, and Claude and Codex reset buttons" caption="Choose a time or the next five-hour plan reset." />
+<Screen name="queue-form" alt="The schedule form with the prompt, When set to in 2 hours, Where, Open in a new worktree with its branch, Agent and Mode" caption="Choose a kind of time first, then its values." />
 
-The time field accepts:
+**When** asks the kind of time first, then shows only the values it needs on the row below:
 
-| Input | When it starts |
-| --- | --- |
-| `14:30` | The next 14:30, today or tomorrow. |
-| `tomorrow 9:00` | Tomorrow at 9:00. |
-| `2026-10-20 09:00` | That date at 9:00. |
-| `in 30m`, `in 2h` | After that delay. |
-| `claude reset`, `codex reset` | At the next reset of that agent's five-hour plan window. |
+| When | Values | It starts |
+| --- | --- | --- |
+| `at` | a clock, `14:30` | The next 14:30, today or tomorrow. |
+| `tomorrow at` | a clock | Tomorrow at that time. |
+| `on` | a date, `2026-10-20`, and a clock | That date at that time. |
+| `in` | a number and minutes, hours or days | After that delay. |
+| `Claude reset`, `Codex reset` | none | At the next reset of that agent's five-hour plan window. |
+
+The commands take the same times as text: `14:30`, `tomorrow 9:00`, `2026-10-20 09:00`, `in 30m`, `in 2h`, `claude reset` and `codex reset`.
 
 Clock times use the zone shown in the form, supplied by the client that opened it, including a remote terminal or browser. Dates use that zone's daylight saving rules. A local time that does not exist or occurs twice is rejected; choose another time or a delay. A time such as `02:30` that has already passed today means tomorrow, even on the day the clocks change. The entry is saved as an absolute UTC instant.
 
 A reset choice runs the existing plan usage probe on the server when you save. It freezes the returned reset time; it does not keep polling or follow later changes to the window. If the probe fails or reports no future five-hour reset, the form shows the reason and keeps your text.
 
-Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form. Click a field to edit it, use the arrow keys, `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` and `Shift+Tab` move between text fields. A line break in a prompt from a template or `--prompt` shows as `↵`.
+Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form (with a list open, `Enter` picks and `Esc` closes only the list). Click a text field to edit it, use the arrow keys, `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` and `Shift+Tab` move between the fields and lists. A line break in a prompt from a template or `--prompt` shows as `↵`.
 
 **Queued launches always accept the agent's folder trust question**, even with `accept_trust_prompts` off. This lets unattended starts proceed. The form states this before saving. Immediate starts keep your global trust setting. Agent approval modes remain the ones you selected. Queued launches submit their stored prompt automatically, even when automatic submission for immediate issue starts is off.
 

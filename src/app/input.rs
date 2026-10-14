@@ -37,9 +37,7 @@ impl App {
             None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
-            Some(Overlay::Queue(_)) => {
-                self.queue_key(key);
-            }
+            Some(Overlay::Queue(_)) => self.queue_key(key, area),
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::Usage) => {
@@ -344,8 +342,9 @@ impl App {
             return;
         }
         if let Some(Overlay::Queue(form)) = &mut self.overlay {
-            if !form.busy {
-                form.editor().insert(text);
+            let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
+            if let Some(editor) = form.editor(focus).filter(|_| idle) {
+                editor.insert(text);
             }
             return;
         }

@@ -149,6 +149,7 @@ mod agents_section;
 mod borders;
 mod buttons;
 mod changes_layout;
+mod combobox;
 mod compact;
 mod dialogs;
 mod draw;
