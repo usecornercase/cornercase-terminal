@@ -506,6 +506,37 @@ mod agents_section {
     }
 }
 
+mod working_icon {
+    use super::*;
+
+    #[test]
+    fn starts_on_the_moon() {
+        let mut s = settings();
+        s.open_page(Page::Ui);
+        let row = s.row_text(&Row::WorkingIcon);
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("working icon", "moon"));
+    }
+
+    #[test]
+    fn the_spinner_is_picked_from_a_list() {
+        let mut s = settings();
+        go_to(&mut s, &Row::WorkingIcon);
+        press(&mut s, KeyCode::Enter);
+        type_text(&mut s, "spin");
+        let config = saved(press(&mut s, KeyCode::Enter));
+        assert_eq!((config.working_icon.as_str(), config.spinner()), ("spinner", true));
+    }
+
+    #[test]
+    fn the_list_starts_on_the_current_choice() {
+        let mut s = settings();
+        s.config.working_icon = "spinner".into();
+        go_to(&mut s, &Row::WorkingIcon);
+        press(&mut s, KeyCode::Enter);
+        assert_eq!(s.pick_selected().map(|i| s.pick_choices()[i].value.as_str()), Some("spinner"));
+    }
+}
+
 mod remote {
     use super::*;
 
@@ -593,7 +624,7 @@ mod agent_tabs {
         let mut s = settings();
         s.config.context = false;
         s.open_page(Page::Ui);
-        let texts: Vec<RowText> = s.rows()[6..9].iter().map(|row| s.row_text(row)).collect();
+        let texts: Vec<RowText> = s.rows()[7..10].iter().map(|row| s.row_text(row)).collect();
         let rows: Vec<(&str, &str)> = texts.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
@@ -612,6 +643,7 @@ mod sidebar {
                 Row::Sidebar,
                 Row::Tabs,
                 Row::AgentsSection,
+                Row::WorkingIcon,
                 Row::Counts,
                 Row::TodoDot,
                 Row::DimPanes,

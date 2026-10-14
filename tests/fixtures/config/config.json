@@ -39,6 +39,7 @@
   "sidebar": "tree",
   "tabs": "top",
   "agents_section": true,
+  "working_icon": "spinner",
   "counts": false,
   "todo_dot": false,
   "dim_inactive_panes": false,

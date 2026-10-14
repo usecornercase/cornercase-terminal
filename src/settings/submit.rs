@@ -31,6 +31,10 @@ impl Settings {
                 let notice = format!("tabs: {value}");
                 self.save(Config { tabs: value, ..self.config.clone() }, notice)
             }
+            Row::WorkingIcon => {
+                let notice = format!("working icon: {value}");
+                self.save(Config { working_icon: value, ..self.config.clone() }, notice)
+            }
             Row::Notifications => {
                 let notice = format!("desktop notifications: {value}");
                 self.save(Config { desktop_notifications: value, ..self.config.clone() }, notice)

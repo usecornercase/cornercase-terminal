@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/tree_drawing.rs
-assertion_line: 5318
 expression: "render_sized(&v, W, TALL.height).backend()"
 ---
 "  ⌕ search p…  │                                                                                    "
@@ -12,7 +11,7 @@ expression: "render_sized(&v, W, TALL.height).backend()"
 "  ▾ ● work     │                                                                                    "
 "    ▾ corn…    │                                                                                    "
 "      ▾ ma…    │                                                                                    "
-"▌     ├ ⠋ claud│                                                                                    "
+"▌     ├ ◐ claud│                                                                                    "
 "▌     │   23%  │                                                                                    "
 "      ├ › zsh  │                                                                                    "
 "      └ + Tab  │                                                                                    "

@@ -312,7 +312,8 @@ impl App {
     pub(crate) fn tick(&self, now: Instant) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
-        let spin = self.agent_working().then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
+        let spin = (self.config.spinner() && self.agent_working())
+            .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
         [drag, launch, spin, self.next_request(now)].into_iter().flatten().min()
     }
 
@@ -560,7 +561,7 @@ impl App {
         let tabs = self.projects.tabs();
         let attention = activity::attention(tabs.filter(|t| Some(t.id) != visible).map(Tab::status));
         let elapsed = now.saturating_duration_since(self.booted);
-        let spin = if self.agent_working() { activity::spin_frame(elapsed) } else { 0 };
+        let spin = self.config.spinner().then(|| if self.agent_working() { activity::spin_frame(elapsed) } else { 0 });
         let moved = self.row_drag().filter(|d| d.moved).zip(self.hover);
         let drag = moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),

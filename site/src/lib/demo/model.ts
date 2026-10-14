@@ -166,6 +166,7 @@ export interface Config {
   sidebar: string;
   tabs: string;
   agentsSection: boolean;
+  workingIcon: string;
   counts: boolean;
   todoDot: boolean;
   dim: boolean;
@@ -197,6 +198,7 @@ export const defaultConfig = (): Config => ({
   sidebar: 'projects_on_top',
   tabs: 'sidebar',
   agentsSection: false,
+  workingIcon: 'moon',
   counts: true,
   todoDot: true,
   dim: true,

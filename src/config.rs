@@ -88,6 +88,32 @@ impl Tabs {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum WorkingIcon {
+    #[default]
+    Moon,
+    Spinner,
+}
+
+impl WorkingIcon {
+    const ALL: [Self; 2] = [Self::Moon, Self::Spinner];
+
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Moon => "moon",
+            Self::Spinner => "spinner",
+        }
+    }
+
+    pub(crate) fn choices() -> Vec<(&'static str, &'static str)> {
+        vec![(Self::Moon.id(), "◐, still while the agent works"), (Self::Spinner.id(), "⠋, turning ten times a second")]
+    }
+
+    pub(crate) fn from_setting(setting: &str) -> Self {
+        from_setting(&Self::ALL, Self::id, setting)
+    }
+}
+
 pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
@@ -122,6 +148,7 @@ pub(crate) struct Config {
     pub(crate) sidebar: String,
     pub(crate) tabs: String,
     pub(crate) agents_section: bool,
+    pub(crate) working_icon: String,
     pub(crate) counts: bool,
     pub(crate) todo_dot: bool,
     pub(crate) dim_inactive_panes: bool,
@@ -161,6 +188,7 @@ impl Default for Config {
             sidebar: Sidebar::default().id().into(),
             tabs: Tabs::default().id().into(),
             agents_section: false,
+            working_icon: WorkingIcon::default().id().into(),
             counts: true,
             todo_dot: true,
             dim_inactive_panes: true,
@@ -187,6 +215,10 @@ impl Config {
 
     pub(crate) fn prefix(&self) -> Option<Prefix> {
         Prefix::parse(&self.prefix_key)
+    }
+
+    pub(crate) fn spinner(&self) -> bool {
+        WorkingIcon::from_setting(&self.working_icon) == WorkingIcon::Spinner
     }
 
     pub(crate) fn fetch_every(&self) -> Option<Duration> {

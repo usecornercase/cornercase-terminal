@@ -29,6 +29,7 @@
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "agents_section": false,
+  "working_icon": "moon",
   "counts": true,
   "todo_dot": true,
   "dim_inactive_panes": true,

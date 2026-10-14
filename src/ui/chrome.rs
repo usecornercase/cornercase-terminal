@@ -231,7 +231,7 @@ fn todo_icon(pending: bool, width: u16, style: Style) -> Line<'static> {
 fn menu_label(
     muted: Color,
     attention: Option<Status>,
-    frame: u8,
+    frame: Option<u8>,
     width: u16,
     style: Style,
     lit: bool,

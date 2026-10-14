@@ -177,14 +177,14 @@ pub(crate) struct TabEntry {
 }
 
 impl TabEntry {
-    pub(crate) fn icon(&self, muted: Color, frame: u8) -> Span<'static> {
+    pub(crate) fn icon(&self, muted: Color, frame: Option<u8>) -> Span<'static> {
         match self.status {
             Some(status) => status_icon(muted, status, frame),
             None => Span::styled(if self.running { PROGRAM_ICON } else { SHELL_ICON }, dim(muted)),
         }
     }
 
-    pub(crate) fn prefix(&self, muted: Color, bg: Style, frame: u8) -> [Span<'static>; 2] {
+    pub(crate) fn prefix(&self, muted: Color, bg: Style, frame: Option<u8>) -> [Span<'static>; 2] {
         let icon = self.icon(muted, frame);
         [Span::styled(icon.content, bg.patch(icon.style)), Span::styled(" ", bg)]
     }

@@ -42,3 +42,31 @@ test('Settings lists Grok with its modes and the agent picker offers it', () => 
   assert.ok(picker?.items.some((item) => item.value === 'grok' && item.note === 'grok'));
   app.destroy();
 });
+
+test('A working agent shows the moon, and turns once the spinner is picked in settings', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(140, 40);
+  world(app);
+  const icon = (): string | undefined => {
+    app.render();
+    return [...'◐⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'].find((glyph) => app.textAt(`├ ${glyph} claude`) !== null);
+  };
+  const moon = [icon()];
+  app.advance(100);
+  moon.push(icon());
+  app.openSettings();
+  app.settingsPage(3);
+  app.settingsClick(app.settingsRows(3).findIndex((row) => row.id === 'working'));
+  const pick = app.overlay?.kind === 'settings' ? app.overlay.pick : undefined;
+  assert.deepEqual(pick?.items.map((item) => item.value), ['moon', 'spinner']);
+  app.choosePick(1);
+  assert.equal(app.config.workingIcon, 'spinner');
+  app.closeOverlay();
+  const frames = [icon()];
+  app.advance(100);
+  frames.push(icon());
+  assert.deepEqual(moon, ['◐', '◐']);
+  assert.ok(frames.every((frame) => frame && frame !== '◐') && frames[0] !== frames[1], frames.join(' '));
+  app.destroy();
+});

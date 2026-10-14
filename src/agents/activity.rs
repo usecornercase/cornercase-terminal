@@ -6,6 +6,7 @@ use crate::agents::Known;
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 const NOTIFY_AFTER: Duration = Duration::from_secs(1);
 pub(crate) const SHELL: &str = "shell";
+pub(crate) const MOON: &str = "◐";
 pub(crate) const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 pub(crate) const SPIN_EVERY: Duration = Duration::from_millis(100);
 

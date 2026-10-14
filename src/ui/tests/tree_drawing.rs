@@ -89,7 +89,7 @@ fn a_narrow_column_cuts_the_names() {
 
 #[test]
 fn the_active_tab_holds_the_mark() {
-    assert_eq!(line(&with_tree(), TreeRow::Tab(1, 0, 0)), "▌     ├ ⠋ claude");
+    assert_eq!(line(&with_tree(), TreeRow::Tab(1, 0, 0)), "▌     ├ ◐ claude");
 }
 
 #[test]

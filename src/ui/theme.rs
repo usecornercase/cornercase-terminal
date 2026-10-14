@@ -55,12 +55,12 @@ pub(crate) fn muted(theme: &HostTheme) -> Color {
     }
 }
 
-pub(super) fn status_icon(muted: Color, status: Status, frame: u8) -> Span<'static> {
+pub(super) fn status_icon(muted: Color, status: Status, frame: Option<u8>) -> Span<'static> {
     let (glyph, style) = match status {
         Status::Idle => ("○", Style::default().fg(muted)),
         Status::Working => {
-            let index = usize::from(frame) % activity::SPINNER.len();
-            (activity::SPINNER[index], Style::default().fg(Color::Yellow))
+            let glyph = frame.map_or(activity::MOON, |f| activity::SPINNER[usize::from(f) % activity::SPINNER.len()]);
+            (glyph, Style::default().fg(Color::Yellow))
         }
         Status::Done => ("✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Status::Waiting => ("!", Style::default().fg(WAITING_COLOR).add_modifier(Modifier::BOLD)),

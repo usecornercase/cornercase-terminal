@@ -78,7 +78,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; and prefix key off"
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; and prefix key off"
   crop={[2, 4, 106, 18]}
 />
 
@@ -87,6 +87,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
 | **agents section** | List every Claude Code, Codex, Gemini CLI, opencode and Grok Build, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **working icon** | What a working agent's tab shows: *moon* (the default), a still yellow `◐`, or *spinner*, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` turning about ten times a second. Also in the tab bar and the agents section. See [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a collapsed group holds. On by default. |
 | **TODO dot** | Show a grey `●` next to the [TODO](../../guides/todo/) button while items are left to do. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
@@ -164,6 +165,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "agents_section": false,
+  "working_icon": "moon",
   "counts": true,
   "todo_dot": true,
   "dim_inactive_panes": true,
@@ -205,6 +207,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`tabs`](#tabs) | string | `"sidebar"` |
 | [`agents_section`](#agents_section) | boolean | `false` |
+| [`working_icon`](#working_icon) | string | `"moon"` |
 | [`counts`](#counts) | boolean | `true` |
 | [`todo_dot`](#todo_dot) | boolean | `true` |
 | [`dim_inactive_panes`](#dim_inactive_panes) | boolean | `true` |
@@ -312,6 +315,10 @@ Where a workspace's tabs are listed: `"sidebar"` under their workspace, in the w
 #### `agents_section`
 
 Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI, opencode and Grok Build running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+
+#### `working_icon`
+
+What the tab of a working agent shows, also in the tab bar and the agents section: `"moon"`, a still `◐`, or `"spinner"`, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` turning about ten times a second. An unknown value counts as the default, `"moon"`. See [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing).
 
 #### `counts`
 

@@ -65,15 +65,25 @@ fn second_row(app: &mut App) -> (u16, String) {
     (r.height, below.trim_end().to_string())
 }
 
-#[test]
-fn a_working_agent_wakes_the_spinner_and_an_idle_one_does_not() {
+#[rstest]
+#[case::the_moon("moon", "◐", false)]
+#[case::the_spinner("spinner", "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", true)]
+fn a_working_agent_shows_the_chosen_icon_and_only_the_spinner_wakes_the_loop(
+    #[case] icon: &str,
+    #[case] glyphs: &str,
+    #[case] spins: bool,
+) {
     let (mut app, rx, _dirs, claude) = working_claude();
+    app.config.working_icon = icon.into();
+    let r = row_rect(&app, WorkspaceRow::Tab(0, 0));
+    let row = text(&render(&mut app, AREA), r);
     let working = app.tick(Instant::now());
     claude.signal("finish");
     watch_until(&mut app, &rx, "claude finishes in sight", |a| status(a, 0, 0) == Some(Status::Idle));
 
     let spinning = working.is_some_and(|wait| !wait.is_zero() && wait <= activity::SPIN_EVERY);
-    assert_eq!((spinning, app.tick(Instant::now())), (true, None));
+    let shown = row.chars().any(|c| glyphs.contains(c));
+    assert_eq!((shown, spinning, app.tick(Instant::now())), (true, spins, None));
 }
 
 #[test]

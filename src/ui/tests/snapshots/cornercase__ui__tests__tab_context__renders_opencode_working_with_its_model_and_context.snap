@@ -7,7 +7,7 @@ expression: render(&view).backend()
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ shop (1)                     │  login                  │                                          "
-"                               │▌ ├ ⠋ opencode           │                                          "
+"                               │▌ ├ ◐ opencode           │                                          "
 "  + New                        │▌ │   DeepSeek V4… · 12% │                                          "
 "                               │  ├ › nvim               │                                          "
 "                               │  └ + Tab                │                no tab open               "

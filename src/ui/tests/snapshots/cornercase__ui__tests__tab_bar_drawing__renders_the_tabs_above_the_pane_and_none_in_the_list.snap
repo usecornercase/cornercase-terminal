@@ -2,7 +2,7 @@
 source: src/ui/tests/tab_bar_drawing.rs
 expression: render(&with_bar()).backend()
 ---
-"  ⌕ search projects, workspaces, tabs                    │  ⠋ claude      › zsh      +              "
+"  ⌕ search projects, workspaces, tabs                    │  ◐ claude      › zsh      +              "
 "                                                         │  Opus 5.5 · 15%                          "
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "

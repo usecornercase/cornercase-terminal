@@ -173,6 +173,10 @@ export const TABS: [Tabs, string][] = [
   ['sidebar', 'under their workspace in the sidebar'],
   ['top', "in a bar above the pane, only the active workspace's"],
 ];
+export const WORKING_ICONS: [string, string][] = [
+  ['moon', '◐, still while the agent works'],
+  ['spinner', '⠋, turning ten times a second'],
+];
 export const MIN_STACK_SECTION = 5;
 const STACK_FOOTER = 6;
 const STACKED_KEEP = 2 * MIN_STACK_SECTION + 1;

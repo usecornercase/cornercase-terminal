@@ -1,5 +1,5 @@
 use crate::agents;
-use crate::config::{Config, Sidebar, Tabs};
+use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
 use crate::shortcuts::Prefix;
 
 use super::{Page, Row, RowText, Settings, Status};
@@ -69,6 +69,12 @@ impl Settings {
                 let value = if config.agents_section { "[x] shown" } else { "[ ] hidden" };
                 ("agents section".into(), value.into(), "every running agent in the sidebar".into(), false)
             }
+            Row::WorkingIcon => (
+                "working icon".into(),
+                WorkingIcon::from_setting(&config.working_icon).id().into(),
+                "on the tab of an agent that is working".into(),
+                false,
+            ),
             Row::Counts => {
                 let value = if config.counts { "[x] shown" } else { "[ ] hidden" };
                 ("counts".into(), value.into(), "what a project or collapsed group holds, such as (3)".into(), false)
@@ -174,6 +180,7 @@ impl Settings {
             Row::DefaultAgent => "Which agent takes an issue by default?".to_string(),
             Row::Sidebar => "How should projects, workspaces and tabs be laid out?".to_string(),
             Row::Tabs => "Where should a workspace's tabs go?".to_string(),
+            Row::WorkingIcon => "What should a working agent's tab show?".to_string(),
             Row::Notifications => "How should your terminal notify you?".to_string(),
             Row::Kind(kind) => format!("How should {kind} start?"),
             _ => "Which agent do you want to set up?".to_string(),

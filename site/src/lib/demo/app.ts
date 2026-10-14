@@ -17,6 +17,7 @@ import {
   SIDEBARS,
   Strip,
   TABS,
+  WORKING_ICONS,
   type Sidebar,
   type SidebarRow,
   type TreeRow,
@@ -455,11 +456,15 @@ export class App {
 
   private spinIcons(): void {
     const working = this.projects.some((p) => p.workspaces.some((w) => w.tabs.some((t) => tabStatus(t) === 'working')));
-    if (!working || this.spinTimer) return;
+    if (!working || !this.spinning() || this.spinTimer) return;
     this.spinTimer = this.after(100, () => {
       this.spinTimer = null;
       this.dirty();
     });
+  }
+
+  spinning(): boolean {
+    return this.config.workingIcon === 'spinner';
   }
 
   private keepAwake(): void {
@@ -2324,6 +2329,7 @@ export class App {
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'how projects, workspaces and tabs are laid out' },
       { id: 'tabs', section: '', label: 'tabs', value: this.tabsOnTop() ? 'top' : 'sidebar', note: "where a workspace's tabs are listed" },
       { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
+      { id: 'working', section: '', label: 'working icon', value: c.workingIcon, note: 'on the tab of an agent that is working' },
       { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or collapsed group holds, such as (3)' },
       { id: 'todoDot', section: '', label: 'TODO dot', value: c.todoDot ? '[x] shown' : '[ ] hidden', note: 'while items are pending' },
       { id: 'dim', section: '', label: 'inactive panes', value: c.dim ? '[x] dimmed' : '[ ] as bright as the active one', note: 'in a split tab' },
@@ -2403,6 +2409,9 @@ export class App {
       const items = TABS.map(([value, note]) => ({ value, note }));
       const current = this.tabsOnTop() ? 'top' : 'sidebar';
       o.pick = { row: row.id, title: "Where should a workspace's tabs go?", items, selected: Math.max(0, items.findIndex((i) => i.value === current)), filter: '' };
+    } else if (row.id === 'working') {
+      const items = WORKING_ICONS.map(([value, note]) => ({ value, note }));
+      o.pick = { row: row.id, title: "What should a working agent's tab show?", items, selected: Math.max(0, items.findIndex((i) => i.value === c.workingIcon)), filter: '' };
     } else if (row.id === 'notify') {
       const items = NOTIFY_CHOICES.map(([value, note]) => ({ value, note }));
       o.pick = { row: row.id, title: 'How should your terminal notify you?', items, selected: Math.max(0, items.findIndex((i) => i.value === c.notify)), filter: '' };
@@ -2517,6 +2526,9 @@ export class App {
     } else if (row === 'tabs') {
       c.tabs = item.value;
       o.notice = `tabs: ${item.value}`;
+    } else if (row === 'working') {
+      c.workingIcon = item.value;
+      o.notice = `working icon: ${item.value}`;
     } else if (row === 'notify') {
       c.notify = item.value;
       o.notice = `desktop notifications: ${item.value}`;

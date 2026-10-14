@@ -154,7 +154,7 @@ pub(crate) struct View<'a> {
     pub(crate) todo_pending: bool,
     pub(crate) files: Option<files::View>,
     pub(crate) attention: Option<Status>,
-    pub(crate) spin: u8,
+    pub(crate) spin: Option<u8>,
     pub(crate) drag: Option<Drag>,
     pub(crate) tree: Option<TreeView>,
     pub(crate) agents: Option<AgentsView>,

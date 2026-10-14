@@ -47,6 +47,7 @@ mod file {
             sidebar: "tree".into(),
             tabs: "top".into(),
             agents_section: true,
+            working_icon: "spinner".into(),
             counts: false,
             todo_dot: false,
             dim_inactive_panes: false,

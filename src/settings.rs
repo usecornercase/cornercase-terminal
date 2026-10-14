@@ -24,6 +24,7 @@ pub(crate) enum Row {
     Sidebar,
     Tabs,
     AgentsSection,
+    WorkingIcon,
     Counts,
     TodoDot,
     DimPanes,
@@ -64,6 +65,7 @@ impl Row {
             | Self::Sidebar
             | Self::Tabs
             | Self::AgentsSection
+            | Self::WorkingIcon
             | Self::Counts
             | Self::TodoDot
             | Self::DimPanes
@@ -103,6 +105,7 @@ impl Row {
             Self::Sidebar
             | Self::Tabs
             | Self::AgentsSection
+            | Self::WorkingIcon
             | Self::Counts
             | Self::TodoDot
             | Self::DimPanes
@@ -345,6 +348,7 @@ impl Settings {
             Row::Sidebar,
             Row::Tabs,
             Row::AgentsSection,
+            Row::WorkingIcon,
             Row::Counts,
             Row::TodoDot,
             Row::DimPanes,

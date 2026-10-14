@@ -39,4 +39,4 @@ export function rich(text: string): Part[] {
     });
 }
 
-export const GLYPHS = { working: '⠋', waiting: '!', done: '✓' };
+export const GLYPHS = { working: '◐', waiting: '!', done: '✓' };
