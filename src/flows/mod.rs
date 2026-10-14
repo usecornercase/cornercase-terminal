@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::agents::{self, Known};
 use crate::config::Config;
 
+pub(crate) mod brief;
 pub(crate) mod builtin;
 pub(crate) mod dialog;
 pub(crate) mod run;
@@ -16,6 +17,8 @@ pub(crate) mod store;
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const MAX_ROLES: usize = 8;
+const BRANCH_WORDS: usize = 6;
+const BRANCH_MAX: usize = 40;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -195,16 +198,13 @@ fn role_problems(role: &Role, name: &str) -> Vec<String> {
     out
 }
 
-pub(crate) fn command(config: &Config, role: &Role) -> Option<String> {
+fn parts(config: &Config, role: &Role) -> Option<(Known, Vec<String>, Vec<String>)> {
     let kind = Known::of(&role.agent)?;
     let name = kind.name();
     let modes = agents::modes(config, name);
     let mut args: Vec<String> = kind.unattended().iter().map(|a| (*a).to_string()).collect();
     args.extend(agents::extra_args(name, &agents::args(config, name), &modes));
-    if let Some(model) = role.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
-        args.push(kind.model_flag().to_string());
-        args.push(model.to_string());
-    }
+    let mut args = agents::with_model(name, args, role.model.as_deref());
     args.extend(role.args.iter().cloned());
     let mut words: Vec<String> = Vec::new();
     if !role.env.is_empty() {
@@ -212,8 +212,28 @@ pub(crate) fn command(config: &Config, role: &Role) -> Option<String> {
         words.extend(role.env.iter().map(|(key, value)| format!("{key}={value}")));
     }
     words.push(agents::command(config, name));
-    words.extend(args);
-    Some(words.iter().map(|word| agents::quote(word)).collect::<Vec<_>>().join(" "))
+    Some((kind, words, args))
+}
+
+fn quoted(words: impl IntoIterator<Item = String>) -> String {
+    words.into_iter().map(|word| agents::quote(&word)).collect::<Vec<_>>().join(" ")
+}
+
+pub(crate) fn command(config: &Config, role: &Role) -> Option<String> {
+    let (_, words, args) = parts(config, role)?;
+    Some(quoted(words.into_iter().chain(args)))
+}
+
+pub(crate) fn resume(config: &Config, role: &Role, conversation: String) -> Option<String> {
+    let (kind, words, args) = parts(config, role)?;
+    let args = kind.resume(args, conversation)?;
+    Some(quoted(words.into_iter().chain(args)))
+}
+
+pub(crate) fn branch(task: &str) -> String {
+    let words: Vec<&str> = task.split_whitespace().take(BRANCH_WORDS).collect();
+    let slug = crate::issues::slug(&words.join(" "), BRANCH_MAX);
+    if slug.is_empty() { "flow".to_string() } else { slug }
 }
 
 #[cfg(test)]

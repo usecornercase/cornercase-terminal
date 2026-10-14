@@ -75,6 +75,7 @@ mod file {
                         active: 0,
                         base: Some("main".into()),
                         collapsed: true,
+                        run: None,
                     }],
                     active: 0,
                     collapsed: false,
@@ -124,6 +125,7 @@ mod file {
                         active: 0,
                         base: None,
                         collapsed: false,
+                        run: None,
                     }],
                     active: 0,
                     collapsed: true,
@@ -465,7 +467,7 @@ mod mapping {
         project.workspaces = vec![first, Workspace::new(3, "/p/w".into(), Some("w".into()), true)];
         project.active = 1;
         project.collapsed = true;
-        let saved = ProjectState::of(&project, Some(2));
+        let saved = ProjectState::of(&project, Some(2), &[]);
         assert_eq!((saved.group, saved.active, saved.collapsed), (Some(2), 1, true));
         assert_eq!(saved.name.as_deref(), Some("name"));
         assert_eq!(saved.workspaces.len(), 2);
@@ -480,7 +482,7 @@ mod mapping {
         let restored =
             workspace.restore(4, "/p".into(), vec![Tab::restored(5, None, vec![spawn_term(6, &[], None).0], None)]);
         assert_eq!(restored.active, 0);
-        let project = ProjectState::of(&Project::new(1, "/p".into(), None), None);
+        let project = ProjectState::of(&Project::new(1, "/p".into(), None), None, &[]);
         let project = ProjectState { active: 9, ..project };
         assert_eq!(project.restore(1, "/p".into(), Some(7), vec![restored]).active, 0);
         assert_eq!(saved_tab(2, 9).restore(8, vec![spawn_term(9, &[], None).0, spawn_term(10, &[], None).0]).active, 1);
@@ -490,9 +492,36 @@ mod mapping {
     fn a_restored_project_keeps_its_name_group_and_fold() {
         let mut project = Project::new(1, "/p".into(), Some("name".into()));
         project.collapsed = true;
-        let saved = ProjectState::of(&project, Some(0));
+        let saved = ProjectState::of(&project, Some(0), &[]);
         let back = saved.restore(8, "/q".into(), Some(7), Vec::new());
         assert_eq!((back.id, back.group, back.collapsed), (8, Some(7), true));
         assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), Path::new("/q")));
+    }
+
+    #[test]
+    fn a_run_is_saved_with_the_place_of_each_role_and_comes_back_from_json() {
+        use crate::flows::run::{Member, Run};
+
+        let mut workspace = Workspace::new(2, "/p/w".into(), None, true);
+        workspace.tabs = vec![Tab::new(3, Some("orchestrator".into()), spawn_term(4, &[], None).0), split_tab()];
+        let mut flow = crate::flows::builtin::flows(&[crate::agents::Known::Claude], None).remove(2);
+        flow.notes = "notes".into();
+        let mut run = Run::new(2, flow.clone(), "fix it".into());
+        run.members = [("orchestrator", 4), ("coder", 7), ("reviewer", 99)]
+            .into_iter()
+            .map(|(role, pane)| Member { role: role.into(), pane })
+            .collect();
+
+        let saved = WorkspaceState::of(&workspace, Some(&run));
+
+        let state = saved.run.as_ref().expect("the run");
+        let seats: Vec<(&str, usize, usize)> = state.members.iter().map(|s| (s.role.as_str(), s.tab, s.pane)).collect();
+        assert_eq!(seats, [("orchestrator", 0, 0), ("coder", 1, 1)]);
+        assert_eq!((&state.flow, state.task.as_str()), (&flow, "fix it"));
+        assert_eq!(state.role_at(1, 1).map(|role| role.name.as_str()), Some("coder"));
+        assert_eq!(state.role_at(1, 0), None);
+        let text = serde_json::to_string(&saved).expect("json");
+        assert_eq!(serde_json::from_str::<WorkspaceState>(&text).expect("read back"), saved);
+        assert_eq!(WorkspaceState::of(&workspace, None).run, None);
     }
 }

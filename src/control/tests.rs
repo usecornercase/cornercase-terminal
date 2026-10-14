@@ -59,6 +59,9 @@ fn every_command_is_listed_by_name() {
         Command::Stats(Stats::default()),
         Command::Away(Away::default()),
         Command::Mark(Mark::default()),
+        Command::StartWith(Start::default()),
+        Command::FlowList(FlowList::default()),
+        Command::FlowRun(FlowRun::default()),
     ];
 
     let names: Vec<String> = commands
@@ -87,6 +90,7 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
         Command::Notify(Notify { text: secret.into() }),
         Command::Todo(Todo::Add(secret.into())),
+        Command::FlowRun(FlowRun { name: "Quick".into(), prompt: secret.into(), ..FlowRun::default() }),
     ];
 
     for command in commands {

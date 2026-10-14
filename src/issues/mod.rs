@@ -381,7 +381,7 @@ fn fold(c: char) -> char {
     }
 }
 
-fn slug(text: &str, max: usize) -> String {
+pub(crate) fn slug(text: &str, max: usize) -> String {
     let mut slug = String::new();
     for c in text.chars().flat_map(char::to_lowercase).map(fold) {
         if c.is_ascii_alphanumeric() {

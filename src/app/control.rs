@@ -1,6 +1,7 @@
 mod arrange;
 mod close;
 mod create;
+mod flow;
 mod idle_restart;
 mod status;
 mod talk;
@@ -16,6 +17,7 @@ use serde_json::Value;
 use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
+use crate::app::flow_runs::Starting;
 use crate::app::telegram::CLIENTS as TELEGRAM_CLIENTS;
 use crate::control::{self, Command, Done, Ids, Item, Request, Response};
 use crate::error;
@@ -79,6 +81,7 @@ struct Pending {
 
 enum Stage {
     Worktree(Then),
+    Run(Box<Starting>),
     Removing { force: bool },
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
@@ -267,7 +270,7 @@ impl App {
             Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),
             Command::Split(split) => self.split_request(client, caller, split, area, now),
-            Command::Start(start) => self.start_request(client, caller, start, area, now),
+            Command::Start(start) | Command::StartWith(start) => self.start_request(client, caller, start, area, now),
             Command::Send(send) => self.send_request(client, caller, send, now),
             Command::Keys(keys) => self.keys_request(caller, &keys, now),
             Command::Read(read) => self.read_request(caller, &read),
@@ -283,6 +286,8 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off),
             Command::Mark(mark) => self.mark_request(caller, &mark),
+            Command::FlowList(list) => self.flow_list_request(caller, &list),
+            Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
         }
     }
 

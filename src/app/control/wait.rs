@@ -218,7 +218,7 @@ impl App {
 
     fn waiting_on(&self, stage: &Stage, pane: u64) -> String {
         let watch = match stage {
-            Stage::Worktree(_) => return "git is still creating the worktree".into(),
+            Stage::Worktree(_) | Stage::Run(_) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),

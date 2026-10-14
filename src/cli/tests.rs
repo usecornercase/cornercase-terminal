@@ -95,6 +95,8 @@ mod parsing {
     #[case::a_branch_and_a_project_to_rename(&["rename", "--worktree", "x", "--project", "1", "y"])]
     #[case::a_blank_branch(&["close", "--worktree", " "])]
     #[case::an_unknown_command(&["frobnicate"])]
+    #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
+    #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
     fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
         assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
     }
@@ -165,6 +167,27 @@ mod parsing {
 
         let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
         assert_eq!((read.tabs, read.last_message, read.print.json), (vec![4], true, true));
+    }
+
+    #[test]
+    fn a_flow_runs_by_name_with_its_task_and_branch() {
+        let cli = parse(&["flow", "run", "Full issue", "--prompt", "Fix it", "--worktree", "fix", "--focus", "--json"]);
+
+        let Some(Command::Control(Control::Flow(flow))) = cli.expect("parse").command else { panic!("not flow") };
+        let args::FlowAction::Run(run) = flow.action else { panic!("not run") };
+        assert_eq!(
+            (run.name.as_str(), run.prompt.as_deref(), run.worktree.as_deref()),
+            ("Full issue", Some("Fix it"), Some("fix"))
+        );
+        assert!(run.create.focus && run.create.print.json);
+    }
+
+    #[test]
+    fn start_takes_a_model_and_a_mode() {
+        let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus"]).expect("parse");
+
+        let Some(Command::Control(Control::Start(start))) = cli.command else { panic!("not start") };
+        assert_eq!((start.mode.as_deref(), start.model.as_deref()), (Some("plan"), Some("opus")));
     }
 
     #[test]
@@ -435,6 +458,61 @@ mod output {
         };
 
         assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
+    }
+}
+
+mod flows {
+    use super::flow::{listing, started};
+    use crate::control::{BrokenFlow, FlowInfo, Flows, MemberInfo, RoleInfo, RunInfo};
+
+    fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
+        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), edits }
+    }
+
+    #[test]
+    fn the_list_names_each_flow_its_origin_its_roles_and_its_problems() {
+        let flows = Flows {
+            flows: vec![
+                FlowInfo {
+                    name: "Quick".into(),
+                    origin: "built-in".into(),
+                    description: "A coder and a reviewer.".into(),
+                    roles: vec![
+                        role("orchestrator", "claude", None, false),
+                        role("coder", "codex", Some("gpt-5.5"), true),
+                    ],
+                    ..FlowInfo::default()
+                },
+                FlowInfo {
+                    name: "Mine".into(),
+                    origin: "project".into(),
+                    path: Some("/r/.cornercase/flows/mine.toml".into()),
+                    roles: vec![role("orchestrator", "vim", None, false)],
+                    problems: vec!["the flow has no stages".into()],
+                    ..FlowInfo::default()
+                },
+            ],
+            broken: vec![BrokenFlow { path: "/c/flows/x.toml".into(), error: "expected `=`".into() }],
+        };
+
+        assert_eq!(
+            listing(&flows),
+            "Quick (built in)\n  A coder and a reviewer.\n  orchestrator: claude, coder: codex · gpt-5.5 (edits)\n\
+             Mine (this project, /r/.cornercase/flows/mine.toml)\n  orchestrator: vim\n  cannot run: the flow has no \
+             stages\ncannot read /c/flows/x.toml: expected `=`\n"
+        );
+    }
+
+    #[test]
+    fn a_run_prints_its_workspace_then_a_pane_and_a_role_per_line() {
+        let member = |role: &str, pane| MemberInfo { role: role.into(), agent: "claude".into(), tab: 0, pane };
+        let run = RunInfo {
+            workspace: 9,
+            members: vec![member("orchestrator", 12), member("second reviewer", 14)],
+            ..RunInfo::default()
+        };
+
+        assert_eq!(started(&run), "9\n12\torchestrator\n14\tsecond reviewer\n");
     }
 }
 

@@ -48,6 +48,7 @@ pub(crate) enum Command {
     NewTab(NewTab),
     Split(Split),
     Start(Start),
+    StartWith(Start),
     Send(SendText),
     Keys(Keys),
     Read(Read),
@@ -64,6 +65,8 @@ pub(crate) enum Command {
     Stats(Stats),
     Away(Away),
     Mark(Mark),
+    FlowList(FlowList),
+    FlowRun(FlowRun),
 }
 
 impl Command {
@@ -91,6 +94,9 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
+            Self::StartWith(_) => 22,
+            Self::FlowList(_) => 23,
+            Self::FlowRun(_) => 24,
         }]
     }
 
@@ -113,8 +119,9 @@ impl Command {
                 fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
                 fields.add("focus", split.focus);
             }
-            Self::Start(start) => {
-                fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
+            Self::Start(start) | Self::StartWith(start) => {
+                fields.maybe("agent", start.agent.as_ref()).maybe("model", start.model.as_ref());
+                fields.maybe("mode", start.mode.as_ref()).maybe("worktree", start.worktree.as_ref());
                 fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
@@ -176,11 +183,18 @@ impl Command {
             Self::Mark(mark) => {
                 fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
             }
+            Self::FlowList(list) => {
+                fields.maybe("project", list.project);
+            }
+            Self::FlowRun(run) => {
+                fields.add("flow", &run.name).maybe("worktree", run.worktree.as_ref()).maybe("project", run.project);
+                fields.add("prompt_bytes", run.prompt.len()).add("focus", run.focus);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 22] = [
+    pub(crate) const NAMES: [&str; 25] = [
         "status",
         "open",
         "new-workspace",
@@ -203,6 +217,9 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "start-with",
+        "flow-list",
+        "flow-run",
     ];
 }
 
@@ -279,6 +296,8 @@ pub(crate) struct Split {
 #[serde(default)]
 pub(crate) struct Start {
     pub(crate) agent: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) mode: Option<String>,
     pub(crate) project: Option<u64>,
     pub(crate) worktree: Option<String>,
     pub(crate) workspace: Option<u64>,
@@ -402,6 +421,74 @@ pub(crate) struct Mark {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
     pub(crate) reviewed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowList {
+    pub(crate) project: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowRun {
+    pub(crate) name: String,
+    pub(crate) prompt: String,
+    pub(crate) worktree: Option<String>,
+    pub(crate) project: Option<u64>,
+    pub(crate) focus: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Flows {
+    pub(crate) flows: Vec<FlowInfo>,
+    pub(crate) broken: Vec<BrokenFlow>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowInfo {
+    pub(crate) name: String,
+    pub(crate) origin: String,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) description: String,
+    pub(crate) roles: Vec<RoleInfo>,
+    pub(crate) problems: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RoleInfo {
+    pub(crate) role: String,
+    pub(crate) agent: String,
+    pub(crate) model: Option<String>,
+    pub(crate) edits: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct BrokenFlow {
+    pub(crate) path: PathBuf,
+    pub(crate) error: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct RunInfo {
+    pub(crate) project: u64,
+    pub(crate) workspace: u64,
+    pub(crate) branch: String,
+    pub(crate) members: Vec<MemberInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MemberInfo {
+    pub(crate) role: String,
+    pub(crate) agent: String,
+    pub(crate) tab: u64,
+    pub(crate) pane: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

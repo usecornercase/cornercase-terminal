@@ -623,6 +623,7 @@ impl App {
                 command: agents::command_line(&self.config, agent),
                 prompt: Some(prompt),
                 submit: self.config.submit,
+                trusted: false,
             },
         };
         let in_a_tab = match &place {
