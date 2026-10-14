@@ -197,17 +197,19 @@ impl Builder {
         self.cx.saturating_sub(width / 2).max(self.left)
     }
 
+    fn row(&self, k: usize, width: u16) -> Vec<u16> {
+        let k16 = u16::try_from(k.max(1)).unwrap_or(u16::MAX);
+        let x0 = self.centred(width.saturating_mul(k16).saturating_add(GAP_X * (k16 - 1)));
+        (0..k16).map(|i| x0 + i * (width + GAP_X)).collect()
+    }
+
     fn stage(&mut self, stage: usize, k: usize) -> (Shape, Vec<Rect>) {
         let shape = shape(k, self.room, self.preferred);
         let mut rects = Vec::new();
         match shape {
             Shape::Row(width) => {
-                let k16 = u16::try_from(k.max(1)).unwrap_or(u16::MAX);
-                let total = width.saturating_mul(k16).saturating_add(GAP_X * (k16 - 1));
-                let mut x = self.centred(total);
-                for index in 0..k.max(1) {
+                for (index, x) in self.row(k, width).into_iter().enumerate() {
                     rects.push(self.place(Place::Role { stage, index }, x, width));
-                    x = x.saturating_add(width + GAP_X);
                 }
                 self.y += BOX_HEIGHT;
             }
@@ -262,10 +264,7 @@ impl Builder {
         let y = self.y;
         match shape {
             Shape::Row(width) => {
-                let k16 = u16::try_from(k.max(1)).unwrap_or(u16::MAX);
-                let total = width.saturating_mul(k16).saturating_add(GAP_X * (k16 - 1));
-                let x0 = self.centred(total);
-                let centres: Vec<u16> = (0..k16).map(|i| x0 + i * (width + GAP_X) + width / 2).collect();
+                let centres: Vec<u16> = self.row(k, width).into_iter().map(|x| x + width / 2).collect();
                 if centres == [self.cx] {
                     self.geometry.arrow((self.cx, y), "▼", edge, false);
                     self.y += 1;

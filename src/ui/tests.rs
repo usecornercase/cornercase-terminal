@@ -61,6 +61,8 @@ fn view(names: &[&str]) -> View<'static> {
         changes: None,
         changes_button: None,
         todo: None,
+        flow: None,
+        flow_run: false,
         todo_dot: true,
         todo_pending: false,
         files: None,

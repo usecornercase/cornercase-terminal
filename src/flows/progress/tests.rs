@@ -112,7 +112,7 @@ mod arrows {
         assert_eq!(p.travelling(at).map(|(_, done)| done), Some(0.0));
         assert_eq!(p.travelling(at + TRAVEL / 2).map(|(_, done)| done), Some(0.5));
         assert_eq!(p.travelling(at + TRAVEL), None);
-        assert_eq!(p.travelling(at - Duration::from_millis(1)), None);
+        assert_eq!(p.travelling(s.start), None);
     }
 }
 

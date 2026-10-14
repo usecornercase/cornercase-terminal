@@ -197,7 +197,8 @@ mod live {
     fn a_dot_travels_along_the_arrow_for_a_second() {
         let (moving, _) = diagram(&["coder", "reviewer"], Duration::from_millis(500));
         let (still, _) = diagram(&["coder", "reviewer"], Duration::from_millis(1500));
-        assert_eq!((moving.travelling(), still.travelling()), (true, false));
+        let dot = |d: &Diagram| d.live.as_ref().and_then(|l| l.lit.as_ref()).and_then(|lit| lit.dot);
+        assert_eq!((dot(&moving), dot(&still)), (Some(0.5), None));
         assert!(find(&render(&moving, 46), "●").is_some());
         assert_eq!(find(&render(&still, 46), "●"), None);
     }

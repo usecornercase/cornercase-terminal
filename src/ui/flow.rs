@@ -5,6 +5,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
+pub(crate) use super::todo::close;
+use super::todo::header;
 use super::{dim, draw_close, put};
 use crate::agents::activity::Status;
 use crate::flows::progress::{Edge, Progress};
@@ -146,10 +148,10 @@ impl Diagram {
         }
     }
 
-    pub(crate) fn live(mut self, progress: &Progress, state: impl Fn(&str) -> State, now: Instant) -> Self {
-        self.orchestrator.state = Some(state(ORCHESTRATOR));
+    pub(crate) fn live(mut self, progress: &Progress, of: impl Fn(&str) -> State, now: Instant) -> Self {
+        self.orchestrator.state = Some(of(ORCHESTRATOR));
         for node in self.stages.iter_mut().flatten() {
-            node.state = Some(state(&node.role));
+            node.state = Some(of(&node.role));
         }
         for (stage, back) in self.loops.iter_mut().enumerate() {
             if let Some(back) = back {
@@ -174,10 +176,6 @@ impl Diagram {
         let ended = self.orchestrator.state == Some(State::Agent(Some(Status::Pending)));
         self.live = Some(Live { lit, outside: progress.outside, ended, messages });
         self
-    }
-
-    pub(crate) fn travelling(&self) -> bool {
-        self.live.as_ref().and_then(|l| l.lit.as_ref()).is_some_and(|lit| lit.dot.is_some())
     }
 
     fn edges(&self) -> Vec<Edge> {
@@ -249,15 +247,6 @@ pub(crate) struct View {
     pub(crate) task: String,
     pub(crate) diagram: Diagram,
     pub(crate) scroll: u16,
-}
-
-fn header(area: Rect) -> Rect {
-    Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1).intersection(area)
-}
-
-pub(crate) fn close(area: Rect) -> Rect {
-    let row = header(area);
-    Rect::new(row.right().saturating_sub(3), row.y, 3, 1).intersection(row)
 }
 
 pub(crate) fn body(area: Rect) -> Rect {
