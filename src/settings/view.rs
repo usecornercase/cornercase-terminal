@@ -19,6 +19,9 @@ impl Settings {
     }
 
     fn plugin_row(&self, row: &Row) -> (String, String, String, bool) {
+        if matches!(row, Row::Catalogue | Row::Available(_)) {
+            return self.catalogue_row(row);
+        }
         let Row::Plugin(id) = row else {
             return ("no plugins yet".into(), String::new(), NO_PLUGINS.into(), false);
         };
@@ -35,7 +38,9 @@ impl Settings {
 
     fn catalogue_row(&self, row: &Row) -> (String, String, String, bool) {
         if let Row::Available(id) = row {
-            let Catalogue::Loaded(available) = &self.catalogue else { return (id.clone(), String::new(), String::new(), false) };
+            let Catalogue::Loaded(available) = &self.catalogue else {
+                return (id.clone(), String::new(), String::new(), false);
+            };
             return available.iter().find(|plugin| plugin.id == *id).map_or_else(
                 || (id.clone(), String::new(), String::new(), false),
                 |plugin| (plugin.label.clone(), plugin.value.clone(), plugin.note.clone(), false),
@@ -167,8 +172,7 @@ impl Settings {
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
             Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
-            Row::Plugin(_) | Row::NoPlugins => self.plugin_row(row),
-            Row::Catalogue | Row::Available(_) => self.catalogue_row(row),
+            Row::Plugin(_) | Row::NoPlugins | Row::Catalogue | Row::Available(_) => self.plugin_row(row),
         };
         RowText { label, value, note, dangerous }
     }

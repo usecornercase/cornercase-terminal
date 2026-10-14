@@ -218,7 +218,7 @@ mod catalogue {
 
     use super::*;
     use crate::settings::{Catalogue, Row};
-    use crate::test_util::{FakeHttp, fixture};
+    use crate::test_util::{FakeHttp, fixture, git_repo};
 
     fn index() -> String {
         let mut index: serde_json::Value = serde_json::from_str(fixture!("plugins/index-v1.json")).expect("fixture");
@@ -257,6 +257,14 @@ mod catalogue {
         });
     }
 
+    fn choose(p: &mut Plugged, id: &str) {
+        let i = settings(&p.app).rows().iter().position(|r| *r == Row::Available(id.into()));
+        if let Some(Overlay::Settings(s)) = &mut p.app.overlay {
+            s.select(i.expect("listed"));
+        }
+        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+    }
+
     fn row(app: &App, id: &str) -> (String, String, String) {
         let text = settings(app).row_text(&Row::Available(id.into()));
         (text.label, text.value, text.note)
@@ -269,7 +277,7 @@ mod catalogue {
         p.app.refresh(Instant::now());
         drain(&mut p.app, &p.rx);
 
-        assert!(server.requests().is_empty());
+        assert_eq!(server.requests(), Vec::<String>::new());
         assert_eq!(settings(&p.app).catalogue, Catalogue::Closed);
         assert_eq!(settings(&p.app).row_text(&Row::Catalogue).value, "show");
     }
@@ -312,46 +320,127 @@ mod catalogue {
         assert!(text.dangerous);
     }
 
-    #[test]
-    fn an_entry_opens_a_preview_and_nothing_installs_until_it_is_confirmed() {
-        let (mut p, _server) = served(200, index());
+    const HELLO: &str = r#"id = "example.hello"
+name = "Hello"
+version = "0.1.0"
+permissions = ["status"]
+
+[[actions]]
+id = "id"
+title = "show pane id"
+contexts = ["pane"]
+command = ["./show-id"]
+"#;
+
+    struct Hub {
+        _repo: TempDir,
+        dir: TempDir,
+        commit: String,
+    }
+
+    fn hub() -> Hub {
+        let repo = git_repo(&[(FILE, HELLO), ("show-id", "#!/bin/sh\necho $CORNERCASE_PANE\n")]);
+        let out = std::process::Command::new("git")
+            .args(["-C", &repo.path().display().to_string(), "rev-parse", "HEAD"])
+            .output()
+            .expect("git");
+        let commit = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let dir = TempDir::new();
+        std::fs::create_dir(dir.path().join("example")).expect("owner");
+        std::os::unix::fs::symlink(repo.path(), dir.path().join("example/cornercase-hello")).expect("link");
+        Hub { _repo: repo, dir, commit }
+    }
+
+    fn served_from(hub: &Hub, commit: &str) -> (Plugged, FakeHttp) {
+        let mut index: serde_json::Value = serde_json::from_str(&index()).expect("index");
+        index["plugins"][0]["commit"] = json!(commit);
+        index["plugins"][0]["sha256"] = json!({});
+        let (mut p, server) = served(200, index.to_string());
+        p.app.plugins.github = hub.dir.path().display().to_string();
         open(&mut p);
-        let i = settings(&p.app).rows().iter().position(|r| *r == Row::Available("example.hello".into()));
-        if let Some(Overlay::Settings(s)) = &mut p.app.overlay {
-            s.select(i.expect("listed"));
-        }
+        choose(&mut p, "example.hello");
+        (p, server)
+    }
 
-        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
-
-        let Some(ui::Overlay::Update(dialog)) = p.app.overlay_view(p.app.overlay.as_ref().expect("open"), AREA)
-        else {
+    fn dialog(app: &App) -> ui::Update {
+        let Some(ui::Overlay::Update(dialog)) = app.overlay_view(app.overlay.as_ref().expect("open"), AREA) else {
             panic!("the install dialog is open");
         };
-        let notes: Vec<String> = dialog.notes.iter().map(ToString::to_string).collect();
+        dialog
+    }
+
+    fn settled(p: &mut Plugged) -> ui::Update {
+        let (app, rx) = (&mut p.app, &p.rx);
+        wait_until("the dialog settles", || {
+            drain(app, rx);
+            !matches!(dialog(app).note, Some(ui::Note::Busy(_)))
+        });
+        dialog(&p.app)
+    }
+
+    fn notes(dialog: &ui::Update) -> String {
+        dialog.notes.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")
+    }
+
+    #[test]
+    fn an_entry_shows_every_command_before_anything_is_installed() {
+        let hub = hub();
+        let (mut p, _server) = served_from(&hub, &hub.commit.clone());
+
+        let dialog = settled(&mut p);
+
+        let notes = notes(&dialog);
         assert_eq!((dialog.title, dialog.submit), ("Install plugin", "install"));
         assert!(dialog.message.starts_with("Install Hello 0.1.0?"), "{}", dialog.message);
-        assert!(
-            notes.iter().any(|l| l.contains("github.com/example/cornercase-hello/plugin at v0.1.0")),
-            "{notes:?}"
-        );
-        assert!(notes.iter().any(|l| l.contains("status, notify")), "{notes:?}");
+        assert!(notes.contains("Listed in the catalogue"), "{notes}");
+        assert!(notes.contains("action id (pane): ./show-id"), "{notes}");
+        assert!(notes.contains(&hub.commit), "{notes}");
         assert_eq!(Registry::load(&paths::plugins(&p.app.config_path)).entries.len(), 1);
 
         send_key(&mut p.app, KeyCode::Esc, KeyModifiers::NONE);
 
         assert_eq!(settings(&p.app).rows()[settings(&p.app).cursor], Row::Available("example.hello".into()));
+        assert_eq!(Registry::load(&paths::plugins(&p.app.config_path)).entries.len(), 1);
+    }
+
+    #[test]
+    fn confirming_installs_it_turned_off() {
+        let hub = hub();
+        let (mut p, _server) = served_from(&hub, &hub.commit.clone());
+        settled(&mut p);
+
+        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+        let (app, rx) = (&mut p.app, &p.rx);
+        wait_until("it is installed", || {
+            drain(app, rx);
+            matches!(app.overlay, Some(Overlay::Settings(_)))
+        });
+
+        let registry = Registry::load(&paths::plugins(&p.app.config_path));
+        let hello = registry.entries.iter().find(|e| e.id == "example.hello").expect("installed");
+        assert!(!hello.enabled);
+        assert!(hello.source.describe().contains(&hub.commit[..12]));
+        assert_eq!(settings(&p.app).notice.as_deref(), Some("Hello is installed and off; enter turns it on"));
+    }
+
+    #[test]
+    fn a_commit_other_than_the_reviewed_one_is_refused() {
+        let hub = hub();
+        let (mut p, _server) = served_from(&hub, "0123456789abcdef0123456789abcdef01234567");
+
+        let dialog = settled(&mut p);
+
+        assert_eq!(dialog.submit, "try again");
+        assert!(matches!(dialog.note, Some(ui::Note::Error(_))));
+        assert_eq!(Registry::load(&paths::plugins(&p.app.config_path)).entries.len(), 1);
     }
 
     #[test]
     fn an_entry_that_cannot_install_only_says_why() {
         let (mut p, _server) = served(200, index());
         open(&mut p);
-        let i = settings(&p.app).rows().iter().position(|r| *r == Row::Available("acme.later".into()));
-        if let Some(Overlay::Settings(s)) = &mut p.app.overlay {
-            s.select(i.expect("listed"));
-        }
 
-        send_key(&mut p.app, KeyCode::Enter, KeyModifiers::NONE);
+        choose(&mut p, "acme.later");
 
         assert_eq!(
             settings(&p.app).notice.as_deref(),

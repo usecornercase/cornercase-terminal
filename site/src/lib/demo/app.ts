@@ -88,7 +88,9 @@ import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, pla
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
-const NO_PLUGINS = '`cornercase plugin link <folder>` adds one, then enter turns it on here';
+const NO_PLUGINS = 'install one from the catalogue below, or `cornercase plugin link <folder>` adds your own';
+const CATALOGUE_NOTE = 'plugins reviewed for cornercase; enter fetches the list from usecornercase.dev';
+const NO_CATALOGUE_ENTRIES = 'no plugins listed yet; usecornercase.dev/plugins says how to submit one';
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor Telegram';
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
@@ -379,6 +381,7 @@ export class App {
   }
 
   virtual = false;
+  catalogueShown = false;
   light = false;
   theme: Theme = defaultTheme;
   private clockNow = 0;
@@ -2339,7 +2342,12 @@ export class App {
       return rows;
     }
     if (page === 5) {
-      return [{ id: 'plugins', section: 'Installed', label: 'no plugins yet', value: '', note: NO_PLUGINS }];
+      return [
+        { id: 'plugins', section: 'Installed', label: 'no plugins yet', value: '', note: NO_PLUGINS },
+        this.catalogueShown
+          ? { id: 'catalogue', section: 'Available', label: 'catalogue', value: 'refresh', note: NO_CATALOGUE_ENTRIES }
+          : { id: 'catalogue', section: 'Available', label: 'catalogue', value: 'show', note: CATALOGUE_NOTE },
+      ];
     }
     if (page === 4) {
       return [
@@ -2486,6 +2494,8 @@ export class App {
       o.notice = ICON_BAR_NEEDS;
     } else if (row.id === 'plugins') {
       o.notice = NO_PLUGINS;
+    } else if (row.id === 'catalogue') {
+      this.catalogueShown = true;
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;

@@ -6,7 +6,6 @@
       "name": "Hello",
       "description": "An example entry: adds show pane id to the pane menu",
       "repo": "example/cornercase-hello",
-      "path": "plugin",
       "ref": "v0.1.0",
       "commit": "0123456789abcdef0123456789abcdef01234567",
       "version": "0.1.0",

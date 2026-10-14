@@ -5,16 +5,20 @@ use super::App;
 use super::event::AppEvent;
 use super::overlay::Overlay;
 use super::plugins::PluginEvent;
-use crate::error::{Error, Result};
+use super::toast::Toast;
+use crate::error::Result;
 use crate::highlight::markdown;
 use crate::log::{self, Job, Level};
 use crate::plugins::catalogue::{self, Entry, Index, Mark, clean};
+use crate::plugins::install::{self, Fetched};
+use crate::plugins::registry::short;
 use crate::plugins::{Places, Registry};
 use crate::settings::{self, AvailableRow, Row};
 use crate::ui;
 
 const TITLE: &str = "Install plugin";
 pub(super) const INSTALL_SUBMIT: &str = "install";
+const RETRY_SUBMIT: &str = "try again";
 
 #[derive(Debug, Default)]
 pub(super) enum Fetch {
@@ -31,20 +35,12 @@ pub(super) struct Installing {
     pub(super) step: Step,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub(super) enum Step {
-    Ask,
+    Fetching,
+    Review(Box<Fetched>),
     Installing,
     Failed(String),
-}
-
-fn install(places: &Places, entry: &Entry) -> Result<String> {
-    let _ = places;
-    Err(Error::Plugin(format!(
-        "this cornercase cannot install plugins yet; clone {} at {} and `cornercase plugin link` it",
-        entry.github(),
-        &entry.commit[..7]
-    )))
 }
 
 fn escape(text: &str) -> String {
@@ -57,34 +53,37 @@ fn escape(text: &str) -> String {
     })
 }
 
-fn preview(entry: &Entry) -> String {
+fn listed(entry: &Entry) -> String {
     let at = if entry.reference.is_empty() {
-        format!("commit {}", &entry.commit[..12])
+        format!("commit {}", short(&entry.commit))
     } else {
-        format!("{} (commit {})", escape(&entry.reference), &entry.commit[..12])
+        format!("{} (commit {})", escape(&entry.reference), short(&entry.commit))
     };
-    let platforms = if entry.platforms.is_empty() { "every platform".into() } else { entry.platforms.join(", ") };
-    let asks = if entry.permissions.is_empty() {
-        "nothing".to_string()
-    } else {
-        entry.permissions.iter().map(|p| escape(p)).collect::<Vec<_>>().join(", ")
-    };
-    let mut lines = vec![
-        format!("**From** github.com/{} at {at}", escape(&entry.source())),
-        format!("**Version** {}", escape(&entry.version)),
-        format!("**Runs on** {platforms}"),
-        format!("**Asks for** {asks}, shown and not enforced"),
-    ];
-    if !entry.sha256.is_empty() {
-        let targets: Vec<&str> = entry.sha256.keys().map(String::as_str).collect();
-        lines.push(format!("**Downloads checked** by sha256 for {}", targets.join(", ")));
+    format!(
+        "Listed in the catalogue: {} {} from github.com/{} at {at}.",
+        escape(&entry.name),
+        escape(&entry.version),
+        entry.repo
+    )
+}
+
+fn notes(installing: &Installing) -> String {
+    let mut lines = vec![listed(&installing.entry)];
+    match &installing.step {
+        Step::Review(fetched) => lines.extend(fetched.preview().iter().map(|line| escape(line))),
+        Step::Fetching | Step::Installing | Step::Failed(_) => lines.push(
+            "Fetching it shows every command it will run before anything is installed. Nothing in it runs until \
+             you confirm."
+                .into(),
+        ),
     }
-    lines.push(
-        "Reviewed for cornercase at this commit. It is added turned off: nothing in it runs until you turn it on \
-         under Installed. A plugin runs as you and can type into every terminal."
-            .into(),
-    );
     lines.join("\n\n")
+}
+
+fn fetch(places: &Places, github: &str, entry: &Entry) -> std::result::Result<Fetched, String> {
+    let fetched = install::fetch(&entry.origin(github), places)?;
+    entry.matches(&fetched.commit, &fetched.manifest)?;
+    Ok(fetched)
 }
 
 fn available_row(entry: &Entry, installed: &[crate::plugins::registry::Entry]) -> AvailableRow {
@@ -153,56 +152,100 @@ impl App {
         if entry.mark(&installed) != Mark::Available {
             return;
         }
+        let entry = entry.clone();
         self.update.scroll = 0;
-        self.overlay = Some(Overlay::InstallPlugin(Box::new(Installing { entry: entry.clone(), step: Step::Ask })));
+        self.start_fetch(entry);
     }
 
-    pub(super) fn install_notes(entry: &Entry, width: usize) -> Vec<Line<'static>> {
-        markdown::render(&preview(entry), width)
+    fn start_fetch(&mut self, entry: Entry) {
+        let (places, fetching) = (self.plugins.places.clone(), entry.clone());
+        let github = self.plugins.github.clone();
+        let id = entry.id.clone();
+        let job = Job::new(Level::Info, "plugins", "fetch").with("plugin", &id).with("commit", short(&entry.commit));
+        self.spawn_job(
+            job,
+            move || Ok(fetch(&places, &github, &fetching)),
+            move |result, _| {
+                let result = result.unwrap_or_else(|e| Err(e.to_string())).map(Box::new);
+                Some(AppEvent::Plugin(PluginEvent::Fetched { id, result }))
+            },
+        );
+        self.overlay = Some(Overlay::InstallPlugin(Box::new(Installing { entry, step: Step::Fetching })));
+    }
+
+    pub(super) fn plugin_fetched(&mut self, id: &str, result: std::result::Result<Box<Fetched>, String>) {
+        let Some(Overlay::InstallPlugin(installing)) = &mut self.overlay else { return };
+        if installing.entry.id != id || !matches!(installing.step, Step::Fetching) {
+            return;
+        }
+        installing.step = match result {
+            Ok(fetched) => Step::Review(fetched),
+            Err(e) => Step::Failed(clean(&e)),
+        };
+        self.update.scroll = 0;
+    }
+
+    pub(super) fn install_notes(installing: &Installing, width: usize) -> Vec<Line<'static>> {
+        markdown::render(&notes(installing), width)
     }
 
     pub(super) fn install_view(&self, installing: &Installing, area: Rect) -> ui::Overlay {
         let entry = &installing.entry;
         let note = match &installing.step {
-            Step::Ask => None,
+            Step::Fetching => Some(ui::Note::Busy("fetching…")),
+            Step::Review(_) => None,
             Step::Installing => Some(ui::Note::Busy("installing…")),
             Step::Failed(e) => Some(ui::Note::Error(e.clone())),
         };
+        let submit = if matches!(installing.step, Step::Failed(_)) { RETRY_SUBMIT } else { INSTALL_SUBMIT };
         ui::Overlay::Update(ui::Update {
             title: TITLE,
             message: format!("Install {} {}? {}", clean(&entry.name), clean(&entry.version), clean(&entry.description)),
             notes: self.update_notes(area),
             scroll: self.update.scroll,
             note,
-            submit: INSTALL_SUBMIT,
+            submit,
             cancel: ui::CANCEL_LABEL,
         })
     }
 
     pub(super) fn submit_install(&mut self, installing: Installing) -> Option<Overlay> {
-        if installing.step == Step::Installing {
-            return Some(Overlay::InstallPlugin(Box::new(installing)));
-        }
-        let (places, entry) = (self.plugins.places.clone(), installing.entry.clone());
+        let Installing { entry, step } = installing;
+        let fetched = match step {
+            Step::Review(fetched) => fetched,
+            Step::Failed(_) => {
+                self.start_fetch(entry);
+                return self.overlay.take();
+            }
+            step @ (Step::Fetching | Step::Installing) => {
+                return Some(Overlay::InstallPlugin(Box::new(Installing { entry, step })));
+            }
+        };
+        let places = self.plugins.places.clone();
         let id = entry.id.clone();
-        let job = Job::new(Level::Info, "plugins", "install").with("plugin", &id).with("commit", &entry.commit);
+        let job = Job::new(Level::Info, "plugins", "install").with("plugin", &id).with("commit", short(&entry.commit));
         self.spawn_job(
             job,
-            move || install(&places, &entry),
-            move |result, _| Some(AppEvent::Plugin(PluginEvent::Installed { id, result })),
+            move || Ok(install::install(*fetched, &places)),
+            move |result, _| {
+                let result = result.unwrap_or_else(|e| Err(e.to_string())).map(|installed| installed.manifest.name);
+                Some(AppEvent::Plugin(PluginEvent::Installed { id, result }))
+            },
         );
-        Some(Overlay::InstallPlugin(Box::new(Installing { step: Step::Installing, ..installing })))
+        Some(Overlay::InstallPlugin(Box::new(Installing { entry, step: Step::Installing })))
     }
 
-    pub(super) fn plugin_installed(&mut self, id: &str, result: Result<String>) {
+    pub(super) fn plugin_installed(&mut self, id: &str, result: std::result::Result<String, String>) {
         let still_open = matches!(&self.overlay, Some(Overlay::InstallPlugin(i)) if i.entry.id == id);
         match result {
             Ok(name) => {
                 log::info!("plugins", "installed", plugin = id);
+                self.toast =
+                    Some(Toast::new(format!("{} is installed, turned off", clean(&name)), ui::ToastIcon::Check));
                 if still_open {
                     self.open_settings_on(&Row::Plugin(id.to_string()));
                     if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                        s.notice = Some(format!("{name} is installed and off; enter turns it on"));
+                        s.notice = Some(format!("{} is installed and off; enter turns it on", clean(&name)));
                     }
                 }
             }
@@ -210,7 +253,7 @@ impl App {
                 if let Some(Overlay::InstallPlugin(installing)) = &mut self.overlay
                     && still_open
                 {
-                    installing.step = Step::Failed(e.to_string());
+                    installing.step = Step::Failed(clean(&e));
                 }
             }
         }

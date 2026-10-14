@@ -147,7 +147,7 @@ impl Overlay {
             || matches!(self, Self::Issues(b) if b.starting)
             || matches!(self, Self::Settings(s) if s.busy())
             || matches!(self, Self::Update(UpdateStep::Updating))
-            || matches!(self, Self::InstallPlugin(i) if i.step == Step::Installing)
+            || matches!(self, Self::InstallPlugin(i) if matches!(i.step, Step::Installing))
     }
 }
 

@@ -12,6 +12,7 @@ use crate::control;
 use crate::error::{Error, Result};
 use crate::log::{self, Job, Level};
 use crate::plugins::catalogue::{self, Index};
+use crate::plugins::install::Fetched;
 use crate::plugins::manifest::Action;
 use crate::plugins::{Context, Kind, Places, Plugin, Registry, Supervisor, Watch, run};
 use crate::project::Hierarchy;
@@ -52,7 +53,8 @@ impl Spot {
 pub(crate) enum PluginEvent {
     Failed { plugin: String, title: String, reason: String },
     Catalogue(Result<Index>),
-    Installed { id: String, result: Result<String> },
+    Fetched { id: String, result: std::result::Result<Box<Fetched>, String> },
+    Installed { id: String, result: std::result::Result<String, String> },
 }
 
 impl PluginEvent {
@@ -60,6 +62,7 @@ impl PluginEvent {
         match self {
             Self::Failed { .. } => "plugin action",
             Self::Catalogue(_) => "plugin catalogue",
+            Self::Fetched { .. } => "plugin fetched",
             Self::Installed { .. } => "plugin installed",
         }
     }
@@ -69,6 +72,7 @@ pub(super) struct Plugins {
     pub(super) places: Places,
     pub(super) catalogue: Fetch,
     pub(super) catalogue_url: String,
+    pub(super) github: String,
     watch: Watch,
     loaded: Vec<Plugin>,
     revision: u32,
@@ -84,6 +88,7 @@ impl Plugins {
             places,
             catalogue: Fetch::Closed,
             catalogue_url: catalogue::url(),
+            github: catalogue::GITHUB.into(),
             loaded: Vec::new(),
             revision: 0,
             checked: None,
@@ -259,6 +264,7 @@ impl App {
                 self.toast = Some(super::Toast::new(message, ui::ToastIcon::Bug));
             }
             PluginEvent::Catalogue(fetched) => self.catalogue_fetched(fetched),
+            PluginEvent::Fetched { id, result } => self.plugin_fetched(&id, result),
             PluginEvent::Installed { id, result } => self.plugin_installed(&id, result),
         }
     }

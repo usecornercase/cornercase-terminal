@@ -28,11 +28,7 @@ mod parsing {
 
         let hello = &index.plugins[0];
         assert_eq!(index.version, 1);
-        assert_eq!((hello.id.as_str(), hello.repo.as_str(), hello.path.as_str()), (
-            "example.hello",
-            "example/cornercase-hello",
-            "plugin"
-        ));
+        assert_eq!((hello.id.as_str(), hello.repo.as_str()), ("example.hello", "example/cornercase-hello"));
         assert_eq!(hello.reference, "v0.1.0");
         assert_eq!(hello.permissions, ["status", "notify"]);
         assert_eq!(hello.sha256.len(), 1);
@@ -77,8 +73,7 @@ mod parsing {
     #[case::three_parts("repo", json!("example/hello/more"))]
     #[case::owner_with_dash("repo", json!("-example/hello"))]
     #[case::dot_repo("repo", json!("example/.."))]
-    #[case::climbing_path("path", json!("../elsewhere"))]
-    #[case::absolute_path("path", json!("/etc"))]
+    #[case::option_repo("repo", json!("example/-u"))]
     #[case::option_ref("ref", json!("--upload-pack=x"))]
     #[case::escape_in_name("name", json!("Hello\u{1b}[31m"))]
     #[case::bidi_in_description("description", json!("safe \u{202e}txt.exe"))]

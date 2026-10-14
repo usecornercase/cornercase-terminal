@@ -5,12 +5,14 @@ use serde::Deserialize;
 
 use super::manifest::{self, Manifest};
 use super::registry::Entry as Installed;
+use super::source::Origin;
 use crate::error::{Error, Result};
 use crate::http::{self, Service};
 use crate::version;
 
 pub(crate) const URL: &str = "https://usecornercase.dev/plugins/index.json";
 pub(crate) const URL_ENV: &str = "CORNERCASE_PLUGIN_INDEX";
+pub(crate) const GITHUB: &str = "https://github.com/";
 pub(crate) const VERSION: u32 = 1;
 pub(crate) const MAX_BYTES: u64 = 1024 * 1024;
 const MAX_PLUGINS: usize = 500;
@@ -33,8 +35,6 @@ pub(crate) struct Entry {
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) repo: String,
-    #[serde(default)]
-    pub(crate) path: String,
     #[serde(default, rename = "ref")]
     pub(crate) reference: String,
     pub(crate) commit: String,
@@ -94,7 +94,8 @@ pub(crate) fn clean(text: &str) -> String {
 }
 
 fn unsafe_char(c: char) -> bool {
-    c.is_control() || matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{feff}')
+    c.is_control()
+        || matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{feff}')
 }
 
 fn text(field: &str, value: &str, max: usize, empty: bool) -> std::result::Result<(), String> {
@@ -123,22 +124,10 @@ pub(crate) fn valid_repo(repo: &str) -> bool {
         && !owner.starts_with('-')
         && owner.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
     let name_ok = (1..=100).contains(&name.len())
-        && name != "."
-        && name != ".."
-        && !name.ends_with(".git")
+        && !name.starts_with(['-', '.'])
+        && std::path::Path::new(name).extension().is_none_or(|e| !e.eq_ignore_ascii_case("git"))
         && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b));
     owner_ok && name_ok
-}
-
-fn valid_path(path: &str) -> bool {
-    path.is_empty()
-        || (path.len() <= 200
-            && path.split('/').all(|part| {
-                !part.is_empty()
-                    && part != "."
-                    && part != ".."
-                    && part.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
-            }))
 }
 
 fn valid_ref(reference: &str) -> bool {
@@ -159,9 +148,6 @@ impl Entry {
         text("version", &self.version, 32, false)?;
         if !valid_repo(&self.repo) {
             return Err("`repo` must be `owner/repo` on github.com".into());
-        }
-        if !valid_path(&self.path) {
-            return Err("`path` must be a folder inside the repository".into());
         }
         if !valid_ref(&self.reference) {
             return Err("`ref` must be a tag or a branch name".into());
@@ -188,12 +174,28 @@ impl Entry {
         Ok(())
     }
 
-    pub(crate) fn github(&self) -> String {
-        format!("https://github.com/{}", self.repo)
+    pub(crate) fn origin(&self, github: &str) -> Origin {
+        let url = if github.starts_with('/') {
+            format!("{github}/{}", self.repo)
+        } else {
+            format!("{github}{}.git", self.repo)
+        };
+        Origin { repo: self.repo.clone(), url, reference: Some(self.commit.clone()) }
     }
 
-    pub(crate) fn source(&self) -> String {
-        if self.path.is_empty() { self.repo.clone() } else { format!("{}/{}", self.repo, self.path) }
+    pub(crate) fn matches(&self, commit: &str, manifest: &Manifest) -> std::result::Result<(), String> {
+        if commit != self.commit {
+            return Err(format!("{} gave commit {commit}, not the reviewed {}", self.repo, self.commit));
+        }
+        if manifest.id != self.id {
+            return Err(format!("{} holds the plugin `{}`, not `{}`", self.repo, clean(&manifest.id), self.id));
+        }
+        for (target, sum) in &self.sha256 {
+            if manifest.download.get(target).is_none_or(|download| !download.sha256.eq_ignore_ascii_case(sum)) {
+                return Err(format!("its download for {target} is not the one reviewed"));
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn mark(&self, installed: &[Installed]) -> Mark {

@@ -157,7 +157,7 @@ impl App {
     pub(super) fn update_notes(&self, area: Rect) -> Vec<Line<'static>> {
         let width = usize::from(ui::update_notes(area).width);
         if let Some(Overlay::InstallPlugin(installing)) = &self.overlay {
-            return Self::install_notes(&installing.entry, width);
+            return Self::install_notes(installing, width);
         }
         if self.overlay.as_ref().is_some_and(Overlay::lists_running) {
             return markdown::render(&restart::confirmation(Some(&self.update.restart_list)), width);
