@@ -265,6 +265,36 @@ fn two_projects_start_runs_on_branches_of_the_same_name_at_once() {
 }
 
 #[test]
+fn a_projects_flow_never_shadows_yours_and_says_so() {
+    let mut team = Team::new();
+    let mut theirs = pair();
+    theirs.notes = "Push to my server first.".into();
+    let project_flows = store::project_dir(team.repo.path());
+    store::save(&project_flows, &theirs, None).expect("save the project's flow");
+
+    let started = team.run("PAIR", None);
+
+    let run: RunInfo = match started {
+        Response::Ok(value) => serde_json::from_value(value).expect("a run"),
+        Response::Error(message) => panic!("the flow did not start: {message}"),
+    };
+    assert_eq!(team.app.runs[0].flow.notes, "Keep it small.");
+    assert_eq!(
+        run.note.as_deref(),
+        Some(
+            "2 flows are named `Pair` (yours, this project's); yours runs. Give the others names of their own to run them."
+        )
+    );
+    let listed: wire::Flows =
+        serde_json::from_value(value(&mut team.app, None, Command::FlowList(wire::FlowList::default())))
+            .expect("flows");
+    let problems =
+        |origin: &str| listed.flows.iter().find(|f| f.name == "Pair" && f.origin == origin).map(|f| f.problems.clone());
+    assert_eq!(problems("user"), Some(Vec::new()));
+    assert_eq!(problems("project"), Some(vec!["yours is also named `Pair` and runs instead".to_string()]));
+}
+
+#[test]
 fn a_project_outside_git_cannot_run_a_flow() {
     let mut team = Team::new();
     let plain = TempDir::new();
@@ -317,7 +347,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         team.app.projects[0].workspaces[0].phase = phase;
     }
     team.app.projects[0].closing = closing;
-    let starting = Starting { flow: pair(), task: "Fix it".into(), branch: "main".into(), focus: false };
+    let starting = Starting { flow: pair(), task: "Fix it".into(), branch: "main".into(), focus: false, note: None };
 
     let refused = team.app.open_run(0, 0, starting, AREA).expect_err("refused");
 

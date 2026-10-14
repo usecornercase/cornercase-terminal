@@ -24,6 +24,7 @@ pub(super) struct Starting {
     pub(super) task: String,
     pub(super) branch: String,
     pub(super) focus: bool,
+    pub(super) note: Option<String>,
 }
 
 impl App {
@@ -41,7 +42,7 @@ impl App {
         focus: bool,
         area: Rect,
     ) -> Result<(), String> {
-        self.run_flow(None, project, Starting { flow, task, branch, focus }, area).map(drop)
+        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area).map(drop)
     }
 
     pub(super) fn run_refusal(&self, p: usize, starting: &Starting) -> Result<(), String> {
@@ -101,11 +102,11 @@ impl App {
         if self.runs.iter().any(|run| run.workspace == id) {
             return Err(format!("workspace {id} already runs a flow, and a workspace runs one at a time"));
         }
-        let Starting { flow, task, branch, focus } = starting;
+        let Starting { flow, task, branch, focus, note } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
-        let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new() };
+        let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
         for role in &roles {
             let t = self.push_tab(p, w, area, Some(role.name.clone())).map_err(|e| e.to_string())?;
             let tab = &self.projects[p].workspaces[w].tabs[t];

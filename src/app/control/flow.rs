@@ -7,7 +7,7 @@ use crate::app::App;
 use crate::app::flow_runs::Starting;
 use crate::control::{self, BrokenFlow, Done, FlowInfo, Flows, RoleInfo};
 use crate::error;
-use crate::flows::store::{Listing, Origin};
+use crate::flows::store::{Listing, Origin, Saved};
 use crate::flows::{self, Flow, Role};
 use crate::project::Hierarchy;
 
@@ -18,7 +18,19 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let flows = listing.flows.iter().map(|saved| flow_info(&saved.flow, &saved.origin)).collect();
+        let flows = listing
+            .flows
+            .iter()
+            .map(|saved| {
+                let mut info = flow_info(&saved.flow, &saved.origin);
+                let first = named(&listing, &saved.flow.name).next();
+                if let Some(first) = first.filter(|first| first.origin != saved.origin) {
+                    let runs = whose(&first.origin);
+                    info.problems.push(format!("{runs} is also named `{}` and runs instead", saved.flow.name));
+                }
+                info
+            })
+            .collect();
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken })))
     }
@@ -35,9 +47,9 @@ impl App {
             Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
             None => self.here(caller).project.ok_or(NO_PROJECT)?,
         };
-        let flow = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
+        let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
         let branch = run.worktree.filter(|b| !b.trim().is_empty()).unwrap_or_else(|| flows::branch(&run.prompt));
-        let starting = Starting { flow, task: run.prompt, branch, focus: run.focus };
+        let starting = Starting { flow, task: run.prompt, branch, focus: run.focus, note };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
     }
 
@@ -114,16 +126,38 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
     }
 }
 
-fn pick(listing: &Listing, name: &str) -> Result<Flow, String> {
+fn named<'a>(listing: &'a Listing, name: &str) -> impl Iterator<Item = &'a Saved> {
+    let name = name.trim().to_lowercase();
+    listing.flows.iter().filter(move |saved| saved.flow.name.trim().to_lowercase() == name)
+}
+
+fn whose(origin: &Origin) -> &'static str {
+    match origin {
+        Origin::BuiltIn => "the built-in one",
+        Origin::User(_) => "yours",
+        Origin::Project(_) => "this project's",
+    }
+}
+
+fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String> {
     let name = name.trim();
-    let found = listing
-        .flows
-        .iter()
-        .rev()
-        .find(|saved| saved.flow.name == name)
-        .or_else(|| listing.flows.iter().rev().find(|saved| saved.flow.name.to_lowercase() == name.to_lowercase()));
-    found.map(|saved| saved.flow.clone()).ok_or_else(|| {
+    let found: Vec<&Saved> = named(listing, name).collect();
+    let Some(first) = found.first() else {
         let names: Vec<&str> = listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
-        format!("there is no flow named `{name}`; the flows are {} (`cornercase flow list`)", names.join(", "))
-    })
+        return Err(format!(
+            "there is no flow named `{name}`; the flows are {} (`cornercase flow list`)",
+            names.join(", ")
+        ));
+    };
+    let note = (found.len() > 1).then(|| {
+        let places: Vec<&str> = found.iter().map(|saved| whose(&saved.origin)).collect();
+        format!(
+            "{} flows are named `{}` ({}); {} runs. Give the others names of their own to run them.",
+            found.len(),
+            first.flow.name,
+            places.join(", "),
+            whose(&first.origin)
+        )
+    });
+    Ok((first.flow.clone(), note))
 }
