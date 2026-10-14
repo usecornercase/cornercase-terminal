@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.86
+
+- The stats heatmap always shows its 26 weeks: days without agent work are grey squares, also the ones before cornercase started counting, so a few days of work no longer look like loose squares.
+- The shared stats card shows the same rows as the Stats tab: turns, time waiting for you, tokens in and tokens from cache join the ones it had. Links shared before keep opening, with the numbers they hold.
+
 ## 0.12.85
 
 - Grok Build is followed like the other agents. A tab shows when it is working, when it needs you and when it has finished, plus the model and how full its context is, including after a turn that called the model more than once. The working icon spins, as it does for the other agents.
