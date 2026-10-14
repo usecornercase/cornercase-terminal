@@ -1,0 +1,182 @@
+use std::time::{Duration, Instant};
+
+use super::*;
+use crate::agents::Known;
+use crate::flows::{ORCHESTRATOR, builtin};
+
+fn full_issue() -> Flow {
+    builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0)
+}
+
+struct Script {
+    flow: Flow,
+    start: Instant,
+    messages: Vec<Message>,
+}
+
+impl Script {
+    fn new() -> Self {
+        Self { flow: full_issue(), start: Instant::now(), messages: Vec::new() }
+    }
+
+    fn with(mut self, kind: Kind, from: &str, to: &str) -> Self {
+        let at = self.start + Duration::from_secs(u64::try_from(self.messages.len()).expect("few messages"));
+        let text = Some(format!("{from} to {to}"));
+        self.messages.push(Message { from: from.into(), to: to.into(), kind, text, bytes: 0, at });
+        self
+    }
+
+    fn send(self, to: &str) -> Self {
+        self.with(Kind::Send, ORCHESTRATOR, to)
+    }
+
+    fn progress(&self) -> Progress {
+        Progress::of(&self.flow, &self.messages)
+    }
+}
+
+mod the_active_stage {
+    use super::*;
+
+    #[test]
+    fn nothing_is_active_before_the_first_send() {
+        assert_eq!(Script::new().progress(), Progress::default());
+    }
+
+    #[test]
+    fn the_stage_of_the_role_that_last_got_a_send() {
+        let p = Script::new().send("coder").send("reviewer").progress();
+        assert_eq!((p.active, p.holder.as_deref()), (Some(1), Some("reviewer")));
+    }
+
+    #[test]
+    fn reads_keys_and_waits_do_not_move_the_work() {
+        let p = Script::new()
+            .send("coder")
+            .with(Kind::Read, ORCHESTRATOR, "reviewer")
+            .with(Kind::Wait, ORCHESTRATOR, "tester")
+            .with(Kind::Keys, ORCHESTRATOR, "security")
+            .progress();
+        assert_eq!((p.active, p.last), (Some(0), None));
+    }
+
+    #[test]
+    fn a_send_to_the_orchestrator_does_not_move_the_work() {
+        let p = Script::new().send("coder").with(Kind::Send, "coder", ORCHESTRATOR).progress();
+        assert_eq!((p.active, p.holder.as_deref()), (Some(0), Some("coder")));
+    }
+}
+
+mod arrows {
+    use super::*;
+
+    #[test]
+    fn the_first_send_into_the_first_stage_moves_along_no_arrow() {
+        assert_eq!(Script::new().send("coder").progress().last, None);
+    }
+
+    #[test]
+    fn a_send_into_the_next_stage_moves_along_its_arrow() {
+        let s = Script::new().send("coder").send("reviewer");
+        let last = s.progress().last.expect("a step");
+        assert_eq!((last.edge, last.from.as_deref(), last.to.as_str()), (Edge::Forward(0), Some("coder"), "reviewer"));
+        assert_eq!(last.at, s.messages[1].at);
+    }
+
+    #[test]
+    fn the_second_role_of_a_parallel_stage_takes_the_same_arrow() {
+        let last = Script::new().send("coder").send("reviewer").send("security").progress().last.expect("a step");
+        assert_eq!((last.edge, last.from.as_deref(), last.to.as_str()), (Edge::Forward(0), Some("coder"), "security"));
+    }
+
+    #[test]
+    fn a_follow_up_to_the_same_role_moves_nothing() {
+        let s = Script::new().send("coder").send("reviewer").send("reviewer");
+        assert_eq!(s.progress().last.expect("a step").at, s.messages[1].at);
+    }
+
+    #[test]
+    fn the_last_message_along_each_arrow_is_kept() {
+        let s = Script::new().send("coder").send("reviewer").send("security").send("tester");
+        let p = s.progress();
+        assert_eq!(p.along(Edge::Forward(0)).and_then(|m| m.text.as_deref()), Some("orchestrator to security"));
+        assert_eq!(p.along(Edge::Forward(1)).and_then(|m| m.text.as_deref()), Some("orchestrator to tester"));
+        assert_eq!(p.along(Edge::Loop(1)), None);
+    }
+
+    #[test]
+    fn a_step_travels_for_a_second() {
+        let s = Script::new().send("coder").send("reviewer");
+        let p = s.progress();
+        let at = s.messages[1].at;
+        assert_eq!(p.travelling(at).map(|(_, done)| done), Some(0.0));
+        assert_eq!(p.travelling(at + TRAVEL / 2).map(|(_, done)| done), Some(0.5));
+        assert_eq!(p.travelling(at + TRAVEL), None);
+        assert_eq!(p.travelling(at - Duration::from_millis(1)), None);
+    }
+}
+
+mod loops {
+    use super::*;
+
+    #[test]
+    fn a_send_back_to_the_loop_target_is_a_round() {
+        let p = Script::new().send("coder").send("reviewer").send("coder").progress();
+        assert_eq!((p.rounds(1), p.last.map(|l| l.edge)), (1, Some(Edge::Loop(1))));
+    }
+
+    #[test]
+    fn rounds_add_up_for_each_loop() {
+        let p = Script::new()
+            .send("coder")
+            .send("reviewer")
+            .send("coder")
+            .send("security")
+            .send("coder")
+            .send("reviewer")
+            .send("tester")
+            .send("coder")
+            .progress();
+        assert_eq!((p.rounds(1), p.rounds(2), p.outside), (2, 1, None));
+    }
+
+    #[test]
+    fn rounds_past_the_limit_still_count() {
+        let mut s = Script::new().send("coder");
+        for _ in 0..4 {
+            s = s.send("reviewer").send("coder");
+        }
+        assert_eq!(s.progress().rounds(1), 4);
+    }
+}
+
+mod outside_the_plan {
+    use super::*;
+
+    #[test]
+    fn skipping_a_stage_is_outside_the_plan() {
+        let p = Script::new().send("coder").send("tester").progress();
+        let outside = Edge::Outside { from: Some(0), to: 2 };
+        assert_eq!((p.outside, p.last.map(|l| l.edge), p.active), (Some(outside), Some(outside), Some(2)));
+    }
+
+    #[test]
+    fn going_back_where_no_loop_goes_is_outside_the_plan() {
+        let mut s = Script::new().send("reproducer");
+        s.flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(3);
+        let p = s.send("coder").send("reproducer").progress();
+        assert_eq!(p.outside, Some(Edge::Outside { from: Some(1), to: 0 }));
+    }
+
+    #[test]
+    fn starting_anywhere_but_the_first_stage_is_outside_the_plan() {
+        let p = Script::new().send("reviewer").progress();
+        assert_eq!(p.outside, Some(Edge::Outside { from: None, to: 1 }));
+    }
+
+    #[test]
+    fn the_last_step_outside_the_plan_stays_after_the_work_goes_on() {
+        let p = Script::new().send("coder").send("tester").send("coder").progress();
+        assert_eq!((p.outside, p.rounds(2)), (Some(Edge::Outside { from: Some(0), to: 2 }), 1));
+    }
+}
