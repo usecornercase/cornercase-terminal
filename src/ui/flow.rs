@@ -205,15 +205,15 @@ impl Diagram {
     }
 
     fn natural_width(&self) -> u16 {
-        let geometry = layout(self, u16::MAX / 4);
-        let right = geometry.boxes.iter().map(|b| b.rect.right()).max().unwrap_or(0);
-        let left = geometry.boxes.iter().map(|b| b.rect.x).min().unwrap_or(0);
+        let preferred = geometry::preferred(self);
+        let rows = self.stages.iter().map(|nodes| geometry::row_width(nodes.len(), preferred));
+        let boxes = rows.max().unwrap_or(0).max(preferred);
         let label = self.loops.iter().flatten().map(|b| b.labels(self.live.is_some())[0].chars().count()).max();
         let label = u16::try_from(label.map_or(0, |n| 2 * (n + 3))).unwrap_or(u16::MAX);
         let lanes = 2 * u16::try_from(self.loops.iter().flatten().count()).unwrap_or(0);
         let outside = if self.outside().is_some() { 2 } else { 0 };
         let end = 2 * (u16::try_from(self.end.chars().count()).unwrap_or(0) + 2);
-        (right - left).max(label).max(end) + lanes + outside
+        boxes.max(label).max(end) + lanes + outside
     }
 
     fn fit(&self, width: u16) -> u16 {

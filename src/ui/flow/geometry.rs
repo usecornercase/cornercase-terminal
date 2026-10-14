@@ -146,7 +146,12 @@ fn natural(node: &Node) -> u16 {
     width_of(&node.role).max(width_of(&node.text)).saturating_add(6)
 }
 
-fn preferred(d: &Diagram) -> u16 {
+pub(super) fn row_width(k: usize, width: u16) -> u16 {
+    let k = u16::try_from(k.max(1)).unwrap_or(u16::MAX);
+    width.saturating_mul(k).saturating_add(GAP_X * (k - 1))
+}
+
+pub(super) fn preferred(d: &Diagram) -> u16 {
     let widest = d.stages.iter().flatten().chain([&d.orchestrator]).map(natural).max().unwrap_or(0);
     widest.clamp(MIN_PREFERRED, MAX_PREFERRED)
 }
@@ -198,9 +203,8 @@ impl Builder {
     }
 
     fn row(&self, k: usize, width: u16) -> Vec<u16> {
-        let k16 = u16::try_from(k.max(1)).unwrap_or(u16::MAX);
-        let x0 = self.centred(width.saturating_mul(k16).saturating_add(GAP_X * (k16 - 1)));
-        (0..k16).map(|i| x0 + i * (width + GAP_X)).collect()
+        let x0 = self.centred(row_width(k, width));
+        (0..u16::try_from(k.max(1)).unwrap_or(u16::MAX)).map(|i| x0 + i * (width + GAP_X)).collect()
     }
 
     fn stage(&mut self, stage: usize, k: usize) -> (Shape, Vec<Rect>) {
