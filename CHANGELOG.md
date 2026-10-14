@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.88
+
+- Mark an agent as **pending review** when you want to check its work later: right-click its tab or its pane and pick **mark as pending review**, or press `m` in the keys menu. Its tab, workspace, project and group show a purple `●` that stays when you look at it, until you pick **mark as reviewed** or send the agent a new prompt.
+- Marked agents, and the `✓` of agents that finished while you were elsewhere, now come back after a restart or an update, with the agent's conversation.
+- Scripts and agents can do the same with `cornercase mark` (`--reviewed` to take the mark off); `status`, `wait` and `events` show the state as `pending`.
+
 ## 0.12.87
 
 - A working agent shows the still `◐` again, as before 0.12.84. The spinner is still there: choose it in **Settings → UI → working icon**, or set `"working_icon": "spinner"` in `config.json`.
