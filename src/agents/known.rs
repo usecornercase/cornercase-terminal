@@ -86,6 +86,16 @@ impl Known {
         }
     }
 
+    pub(crate) fn one_per_folder(self) -> bool {
+        match self {
+            Self::Claude => claude::ONE_PER_FOLDER,
+            Self::Codex => codex::ONE_PER_FOLDER,
+            Self::Gemini => gemini::ONE_PER_FOLDER,
+            Self::Opencode => opencode::ONE_PER_FOLDER,
+            Self::Grok => grok::ONE_PER_FOLDER,
+        }
+    }
+
     pub(crate) fn normalized(self, args: &[String]) -> Vec<String> {
         match self {
             Self::Claude => claude::normalized(args),

@@ -48,6 +48,33 @@ impl Agents {
     fn other(&self, avoid: &[Known]) -> Known {
         self.installed.iter().copied().find(|kind| !avoid.contains(kind)).unwrap_or(self.main)
     }
+
+    fn free(&self, wanted: Known, taken: &[Known]) -> Known {
+        if !wanted.one_per_folder() || !taken.contains(&wanted) {
+            return wanted;
+        }
+        let sharer = self.installed.iter().copied().find(|kind| !kind.one_per_folder());
+        let unused = self.installed.iter().copied().find(|kind| !taken.contains(kind));
+        sharer.or(unused).unwrap_or(wanted)
+    }
+
+    fn spread(&self, mut flow: Flow) -> Flow {
+        let mut order: Vec<usize> = (0..flow.roles.len()).collect();
+        order.sort_by_key(|&i| !flow.roles[i].edits);
+        let mut taken: Vec<Known> = Vec::new();
+        let members = order.into_iter().map(Some).chain([None]);
+        for member in members {
+            let role = match member {
+                Some(i) => &mut flow.roles[i],
+                None => &mut flow.orchestrator,
+            };
+            let Some(wanted) = Known::of(&role.agent) else { continue };
+            let agent = self.free(wanted, &taken);
+            agent.name().clone_into(&mut role.agent);
+            taken.push(agent);
+        }
+        flow
+    }
 }
 
 fn role(name: &str, agent: Known, edits: bool, prompt: &str) -> Role {
@@ -73,6 +100,10 @@ fn stage(roles: &[&str], back: Option<(usize, &str, u32)>) -> Stage {
 
 pub(crate) fn flows(installed: &[Known], default: Option<Known>) -> Vec<Flow> {
     let agents = Agents::new(installed, default);
+    planned(&agents).into_iter().map(|flow| agents.spread(flow)).collect()
+}
+
+fn planned(agents: &Agents) -> Vec<Flow> {
     let main = agents.main;
     let second = agents.other(&[main]);
     let third = agents.other(&[main, second]);
@@ -140,18 +171,19 @@ pub(crate) fn flows(installed: &[Known], default: Option<Known>) -> Vec<Flow> {
 pub(crate) fn starter(installed: &[Known], default: Option<Known>) -> Flow {
     let agents = Agents::new(installed, default);
     let main = agents.main;
-    Flow {
+    agents.spread(Flow {
         name: "New flow".into(),
         orchestrator: orchestrator(main),
         roles: vec![role("coder", main, true, CODER), role("reviewer", agents.other(&[main]), false, REVIEWER)],
         stages: vec![stage(&["coder"], None), stage(&["reviewer"], Some((1, "findings", 3)))],
         end: End::PullRequest,
         ..Flow::default()
-    }
+    })
 }
 
-pub(crate) fn member(name: &str, installed: &[Known], default: Option<Known>) -> Role {
-    role(name, Agents::new(installed, default).main, false, MEMBER)
+pub(crate) fn member(name: &str, installed: &[Known], default: Option<Known>, taken: &[Known]) -> Role {
+    let agents = Agents::new(installed, default);
+    role(name, agents.free(agents.main, taken), false, MEMBER)
 }
 
 pub(crate) fn installed(config: &crate::config::Config) -> Vec<Known> {

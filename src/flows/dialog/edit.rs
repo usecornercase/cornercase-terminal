@@ -473,7 +473,11 @@ impl Editing {
             .map(|n| format!("role {n}"))
             .find(|n| !taken(n))
             .unwrap_or_default();
-        self.flow.roles.push(builtin::member(&name, &agents.installed, agents.default));
+        let taken: Vec<Known> = std::iter::once(&self.flow.orchestrator)
+            .chain(&self.flow.roles)
+            .filter_map(|role| Known::of(&role.agent))
+            .collect();
+        self.flow.roles.push(builtin::member(&name, &agents.installed, agents.default, &taken));
         self.flow.stages.push(Stage { roles: vec![name], back: None });
         self.go_to(Tab::Role(self.flow.roles.len() - 1));
         self.start_field(Row::RoleName, String::new());

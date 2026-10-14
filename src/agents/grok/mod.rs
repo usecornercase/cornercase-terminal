@@ -10,6 +10,7 @@ pub(in crate::agents) const NAME: &str = "grok";
 pub(in crate::agents) const TITLE: &str = "Grok Build";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--always-approve"];
+pub(in crate::agents) const ONE_PER_FOLDER: bool = false;
 pub(in crate::agents) const MODELS: &[&str] = &[];
 pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[

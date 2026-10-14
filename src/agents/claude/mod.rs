@@ -14,6 +14,7 @@ pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const TITLE: &str = "Claude Code";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-skip-permissions"];
+pub(in crate::agents) const ONE_PER_FOLDER: bool = false;
 pub(in crate::agents) const MODELS: &[&str] = &["opus", "sonnet", "haiku"];
 pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[

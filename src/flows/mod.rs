@@ -156,6 +156,7 @@ impl Flow {
         if self.stages.is_empty() {
             out.push("the flow has no stages".to_string());
         }
+        out.extend(self.folder_problems());
         for (i, stage) in self.stages.iter().enumerate() {
             let number = i + 1;
             if stage.roles.is_empty() {
@@ -180,6 +181,30 @@ impl Flow {
             }
         }
         out
+    }
+}
+
+impl Flow {
+    fn folder_problems(&self) -> Vec<String> {
+        let members: Vec<&Role> = std::iter::once(&self.orchestrator).chain(&self.roles).collect();
+        Known::ALL
+            .into_iter()
+            .filter(|kind| kind.one_per_folder())
+            .filter_map(|kind| {
+                let names: Vec<String> = members
+                    .iter()
+                    .filter(|role| role.agent == kind.name())
+                    .map(|role| format!("`{}`", role.name.trim()))
+                    .collect();
+                let (last, rest) = names.split_last().filter(|(_, rest)| !rest.is_empty())?;
+                let title = kind.title();
+                Some(format!(
+                    "{title} runs {} and {last}, but cornercase cannot tell two {title} apart in one worktree: \
+                     give all but one of them another agent",
+                    rest.join(", ")
+                ))
+            })
+            .collect()
     }
 }
 
