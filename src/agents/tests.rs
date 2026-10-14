@@ -212,16 +212,50 @@ mod arguments {
         assert_eq!(with_model("aider", strings(args), Some("opus")), strings(args));
     }
 
+    #[rstest]
+    #[case::claude("claude", &["--effort", "low", "-v", "--effort=max"], &["-v", "--effort", "high"])]
+    #[case::grok_and_its_alias("grok", &["--reasoning-effort", "low", "--effort=max", "-v"], &["-v", "--reasoning-effort", "high"])]
+    #[case::codex_config(
+        "codex",
+        &["-c", "model_reasoning_effort=low", "-c", "model=o3", "--config=model_reasoning_effort=low", "-cmodel_reasoning_effort=x"],
+        &["-c", "model=o3", "-c", "model_reasoning_effort=high"]
+    )]
+    #[case::codex_long_config("codex", &["--config", "model_reasoning_effort=low"], &["-c", "model_reasoning_effort=high"])]
+    #[case::gemini_has_none("gemini", &["--effort", "low"], &["--effort", "low"])]
+    fn an_effort_replaces_every_spelling_of_the_one_in_the_arguments(
+        #[case] kind: &str,
+        #[case] args: &[&str],
+        #[case] expected: &[&str],
+    ) {
+        assert_eq!(with_effort(kind, strings(args), Some("high")), strings(expected));
+        assert_eq!(with_effort(kind, strings(args), None), strings(args));
+    }
+
+    #[test]
+    fn a_start_takes_an_effort_the_agent_knows() {
+        let c = config();
+        assert_eq!(start_line(&c, "claude", None, None, Some("high")).as_deref(), Ok("claude --effort high"));
+        assert_eq!(
+            start_line(&c, "codex", None, None, Some("high")).as_deref(),
+            Ok("codex -c model_reasoning_effort=high")
+        );
+        assert_eq!(
+            start_line(&c, "claude", None, None, Some("huge")),
+            Err("claude has no effort `huge`; its levels are `low`, `medium`, `high`, `xhigh`, `max`".into())
+        );
+        assert_eq!(start_line(&c, "gemini", None, None, Some("high")), Err("gemini has no effort switch".into()));
+    }
+
     #[test]
     fn a_start_picks_a_mode_and_a_model_over_the_settings() {
         let mut c = config();
         c.agent_args.insert("claude".into(), strings(&["--permission-mode", "auto", "--model", "haiku", "-v"]));
         assert_eq!(
-            start_line(&c, "claude", None, None).as_deref(),
+            start_line(&c, "claude", None, None, None).as_deref(),
             Ok("claude --permission-mode auto --model haiku -v")
         );
         assert_eq!(
-            start_line(&c, "claude", Some("plan"), Some("opus")).as_deref(),
+            start_line(&c, "claude", Some("plan"), Some("opus"), None).as_deref(),
             Ok("claude --permission-mode plan -v --model opus")
         );
     }
@@ -230,16 +264,16 @@ mod arguments {
     fn a_start_with_a_mode_or_model_it_does_not_know_names_what_it_knows() {
         let c = config();
         assert_eq!(
-            start_line(&c, "codex", Some("yolo"), None),
+            start_line(&c, "codex", Some("yolo"), None, None),
             Err("codex has no mode `yolo`; its modes are `read only`, `workspace write`, `no sandbox, no approvals \
                  (dangerous)`"
                 .into())
         );
         assert_eq!(
-            start_line(&c, "aider", Some("plan"), None),
+            start_line(&c, "aider", Some("plan"), None, None),
             Err("aider has no modes in cornercase; add some with agent_modes in config.json".into())
         );
-        let refused = start_line(&c, "aider", None, Some("gpt")).expect_err("aider takes no model");
+        let refused = start_line(&c, "aider", None, Some("gpt"), None).expect_err("aider takes no model");
         assert_eq!(
             refused,
             "cornercase passes a model to claude, codex, gemini, opencode, grok only; give aider its model in agent_args"

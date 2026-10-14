@@ -10,6 +10,11 @@ pub(in crate::agents) const NAME: &str = "grok";
 pub(in crate::agents) const TITLE: &str = "Grok Build";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
+    levels: &["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+    flags: &["--reasoning-effort", "--effort"],
+    config: None,
+});
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--always-approve"];
 pub(in crate::agents) const ONE_PER_FOLDER: bool = false;
 pub(in crate::agents) const MODELS: &[&str] = &[];

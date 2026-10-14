@@ -154,6 +154,7 @@ fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
         agent: Some("claude".into()),
         mode: Some("plan".into()),
         model: Some("opus".into()),
+        effort: Some("high".into()),
         ..wire::Start::default()
     };
 
@@ -161,7 +162,7 @@ fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
 
     refreshing(&mut app, &rx, "the agent starts", |_| log.exists());
     let typed = std::fs::read_to_string(&log).expect("the arguments");
-    assert_eq!(typed.trim(), "--permission-mode plan --model opus");
+    assert_eq!(typed.trim(), "--permission-mode plan --model opus --effort high");
 }
 
 #[test]

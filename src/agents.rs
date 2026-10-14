@@ -163,6 +163,66 @@ pub(crate) fn without_model(kind: &str, args: &[String]) -> Vec<String> {
     out
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Effort {
+    pub(crate) levels: &'static [&'static str],
+    pub(crate) flags: &'static [&'static str],
+    pub(crate) config: Option<&'static str>,
+}
+
+impl Effort {
+    fn args(self, level: &str) -> Vec<String> {
+        match (self.flags.first(), self.config) {
+            (Some(flag), _) => vec![(*flag).to_string(), level.to_string()],
+            (None, Some(key)) => vec!["-c".to_string(), format!("{key}={level}")],
+            (None, None) => Vec::new(),
+        }
+    }
+
+    fn keyed(self, text: &str) -> bool {
+        self.config.is_some_and(|key| text.strip_prefix(key).is_some_and(|rest| rest.starts_with('=')))
+    }
+}
+
+pub(crate) fn effort_levels(kind: &str) -> Option<&'static [&'static str]> {
+    Known::of(kind).and_then(Known::effort).map(|effort| effort.levels)
+}
+
+pub(crate) fn without_effort(kind: &str, args: &[String]) -> Vec<String> {
+    let Some(effort) = Known::of(kind).and_then(Known::effort) else { return args.to_vec() };
+    let mut out = Vec::with_capacity(args.len());
+    let mut args = args.iter().peekable();
+    while let Some(arg) = args.next() {
+        let flag = effort.flags.contains(&arg.as_str());
+        let config = matches!(arg.as_str(), "-c" | "--config") && args.peek().is_some_and(|next| effort.keyed(next));
+        if flag || config {
+            args.next();
+        } else if !effort.flags.iter().any(|flag| arg.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')))
+            && !["--config=", "-c=", "-c"]
+                .iter()
+                .any(|prefix| arg.strip_prefix(prefix).is_some_and(|r| effort.keyed(r)))
+        {
+            out.push(arg.clone());
+        }
+    }
+    out
+}
+
+pub(crate) fn names_effort(kind: &str, args: &[String]) -> bool {
+    without_effort(kind, args).len() != args.len()
+}
+
+pub(crate) fn with_effort(kind: &str, args: Vec<String>, level: Option<&str>) -> Vec<String> {
+    let (Some(effort), Some(level)) =
+        (Known::of(kind).and_then(Known::effort), level.map(str::trim).filter(|l| !l.is_empty()))
+    else {
+        return args;
+    };
+    let mut out = without_effort(kind, &args);
+    out.extend(effort.args(level));
+    out
+}
+
 pub(crate) fn names_model(kind: &str, args: &[String]) -> bool {
     without_model(kind, args).len() != args.len()
 }
@@ -230,6 +290,7 @@ pub(crate) fn start_line(
     kind: &str,
     mode: Option<&str>,
     model: Option<&str>,
+    effort: Option<&str>,
 ) -> Result<String, String> {
     let mut chosen = args(config, kind);
     if let Some(name) = mode {
@@ -248,7 +309,21 @@ pub(crate) fn start_line(
         let known = Known::ALL.map(Known::name).join(", ");
         return Err(format!("cornercase passes a model to {known} only; give {kind} its model in agent_args"));
     }
-    Ok(line(config, kind, with_model(kind, chosen, model)))
+    let effort = effort.map(str::trim).filter(|level| !level.is_empty());
+    if let Some(refusal) = effort.and_then(|level| effort_refusal(kind, level)) {
+        return Err(refusal);
+    }
+    Ok(line(config, kind, with_effort(kind, with_model(kind, chosen, model), effort)))
+}
+
+pub(crate) fn effort_refusal(kind: &str, level: &str) -> Option<String> {
+    match effort_levels(kind) {
+        None => Some(format!("{kind} has no effort switch")),
+        Some(levels) if !levels.contains(&level) => {
+            Some(format!("{kind} has no effort `{level}`; its levels are `{}`", levels.join("`, `")))
+        }
+        Some(_) => None,
+    }
 }
 
 pub(crate) fn resume_line(config: &Config, agent: &AgentState) -> Option<String> {

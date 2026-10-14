@@ -213,6 +213,12 @@ pub(crate) struct StartArgs {
     pub(crate) mode: Option<String>,
     #[arg(
         long,
+        value_name = "LEVEL",
+        help = "The agent's effort, such as high: Claude Code, Codex and Grok Build take one [default: the agent's own]"
+    )]
+    pub(crate) effort: Option<String>,
+    #[arg(
+        long,
         value_name = "BRANCH",
         conflicts_with = "workspace",
         help = "Start it in the worktree of this branch, made when missing"
