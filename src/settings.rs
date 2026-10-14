@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use crate::agents;
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_ISSUE_TABS};
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
-const TAB_IDS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
+const TAB_IDS: [&str; 7] = DEFAULT_ISSUE_TABS;
 const EXTRA_ARGS: &str = "extra arguments…";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +34,7 @@ pub(crate) enum Row {
     Updates,
     Prefix,
     Token(Source),
+    GitlabUrl,
     JiraSite,
     JiraEmail,
     JiraJql,
@@ -79,6 +80,7 @@ impl Row {
             Self::TelegramBot | Self::TelegramChat => "Telegram",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
+            Self::Token(Source::Gitlab) | Self::GitlabUrl => "GitLab",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
@@ -97,6 +99,7 @@ impl Row {
             | Self::Kind(_)
             | Self::AddAgent => Page::Agents,
             Self::Token(_)
+            | Self::GitlabUrl
             | Self::JiraSite
             | Self::JiraEmail
             | Self::JiraJql
@@ -340,6 +343,7 @@ impl Settings {
                 Source::Plane => {
                     rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
                 }
+                Source::Gitlab => rows.extend([Row::GitlabUrl, Row::Token(Source::Gitlab)]),
                 _ => rows.push(Row::Token(*source)),
             }
         }

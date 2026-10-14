@@ -25,6 +25,7 @@ fn browser() -> Browser {
         jira_site: String::new(),
         jira_email: String::new(),
         plane_workspace: String::new(),
+        gitlab_url: String::new(),
         screen: Screen::List,
         starting: false,
         error: None,
@@ -114,12 +115,13 @@ mod tabs {
     use super::*;
 
     #[test]
-    fn are_all_six_by_default() {
+    fn are_all_seven_by_default() {
         assert_eq!(
             tabs(&[]),
             [
                 Tab::All,
                 Tab::One(Source::Github),
+                Tab::One(Source::Gitlab),
                 Tab::One(Source::Shortcut),
                 Tab::One(Source::Linear),
                 Tab::One(Source::Jira),
@@ -171,8 +173,23 @@ mod tabs {
     #[test]
     fn a_click_on_a_tab_switches_to_it() {
         let mut b = browser();
-        click(&mut b, IssuesHit::Tab(2));
+        click(&mut b, IssuesHit::Tab(3));
         assert_eq!(b.current(), Tab::One(Source::Shortcut));
+    }
+
+    #[test]
+    fn gitlab_is_asked_once_connected() {
+        let mut b = browser();
+        b.connected(Source::Gitlab, Connection { from_env: true, account: None });
+        assert_eq!(b.needs_load(), Action::Load(vec![Source::Github, Source::Gitlab]));
+    }
+
+    #[test]
+    fn outside_git_gitlab_is_not_asked_either() {
+        let mut b = Browser { github: false, ..browser() };
+        b.connected(Source::Gitlab, Connection { from_env: true, account: None });
+        b.connected(Source::Linear, Connection { from_env: true, account: None });
+        assert_eq!(b.needs_load(), Action::Load(vec![Source::Linear]));
     }
 }
 
@@ -479,6 +496,67 @@ mod tokens {
         }
     }
 
+    mod gitlab {
+        use super::*;
+
+        fn on_gitlab() -> Browser {
+            let mut b = browser();
+            b.tab_to(Tab::One(Source::Gitlab));
+            b
+        }
+
+        #[test]
+        fn asks_the_server_first_with_the_saved_one_typed() {
+            let mut b = on_gitlab();
+            b.gitlab_url = "https://gitlab.acme.dev".into();
+            assert_eq!((field(&b), b.labels()), (("server", "https://gitlab.acme.dev".into()), vec!["next", "cancel"]));
+        }
+
+        #[test]
+        fn an_empty_server_is_saved_and_then_the_token_is_asked() {
+            let mut b = on_gitlab();
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::SaveGitlab { url: String::new() });
+            assert_eq!((field(&b), b.labels()), (("access token", String::new()), vec!["connect", "back", "cancel"]));
+        }
+
+        #[test]
+        fn a_typed_server_is_saved_without_its_last_slash() {
+            let mut b = on_gitlab();
+            type_text(&mut b, "https://gitlab.acme.dev/");
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::SaveGitlab { url: "https://gitlab.acme.dev".into() });
+            assert_eq!(b.gitlab_url, "https://gitlab.acme.dev");
+        }
+
+        #[test]
+        fn a_bad_server_stays_with_its_error() {
+            let mut b = on_gitlab();
+            type_text(&mut b, "gitlab.acme.dev");
+            let action = press(&mut b, KeyCode::Enter);
+            let error = b.forms.get(&Source::Gitlab).and_then(|f| f.error.clone());
+            let expected = "a URL starts with https://, such as https://gitlab.acme.dev";
+            assert_eq!((action, field(&b).0, error.as_deref()), (Action::None, "server", Some(expected)));
+        }
+
+        #[test]
+        fn the_token_is_hidden_and_checked() {
+            let mut b = on_gitlab();
+            press(&mut b, KeyCode::Enter);
+            type_text(&mut b, "glpat");
+            assert_eq!(field(&b), ("access token", "•••••".into()));
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Gitlab, Secret("glpat".into())));
+        }
+
+        #[test]
+        fn back_returns_to_the_server() {
+            let mut b = on_gitlab();
+            b.gitlab_url = "https://gitlab.acme.dev".into();
+            press(&mut b, KeyCode::Enter);
+            let pos = button(&b, "back");
+            click(&mut b, pos);
+            assert_eq!(field(&b), ("server", "https://gitlab.acme.dev".into()));
+        }
+    }
+
     #[test]
     fn disconnect_asks_to_forget_the_token() {
         let mut b = on_shortcut();
@@ -685,6 +763,17 @@ mod place {
         press(&mut b, KeyCode::Down);
         press(&mut b, KeyCode::Enter);
         assert_eq!((story.contains(&"where…"), b.labels().contains(&"where…")), (true, false));
+    }
+
+    #[test]
+    fn a_gitlab_issue_starts_in_its_repository_like_a_github_one() {
+        let mut b = Browser { places: vec![shop(), notes()], ..browser() };
+        b.connected(Source::Gitlab, Connection { from_env: true, account: None });
+        b.tab_to(Tab::One(Source::Gitlab));
+        b.loaded(Source::Gitlab, &Query::default(), Ok(vec![issue(Source::Gitlab, 5, "Checkout fails")]));
+        press(&mut b, KeyCode::Enter);
+        assert!(!b.labels().contains(&"where…"), "{:?}", b.labels());
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#5"));
     }
 
     #[test]

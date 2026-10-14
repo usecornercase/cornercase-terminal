@@ -60,7 +60,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 <Screen
   name="settings-issues"
   crop={[2, 4, 106, 26]}
-  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; and the sources shown: All, GitHub, Shortcut, Linear, Jira and Plane, with move arrows on the hovered row"
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; the GitLab section with its URL on gitlab.com and its access token not connected; and the sources shown: All, GitHub, GitLab, Shortcut, Linear, Jira and Plane, with move arrows on the hovered row"
 />
 
 | Row | What it sets |
@@ -72,6 +72,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
 | **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
 | **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
+| **GitLab URL** | The address of a self-hosted GitLab server, such as `https://gitlab.acme.dev`. Empty means gitlab.com. The GitLab tab of the issue browser asks for it before the token. |
+| **GitLab access token** | Like the tokens above; it is checked against the server set in **GitLab URL**. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### UI
@@ -143,7 +145,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
-  "issue_tabs": ["all", "github", "shortcut", "linear", "jira", "plane"],
+  "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"],
+  "gitlab_url": "",
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",
@@ -188,7 +191,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | --- | --- | --- |
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
-| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira", "plane"]` |
+| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"]` |
+| [`gitlab_url`](#gitlab_url) | string | `""` |
 | [`jira_site`](#jira_site) | string | `""` |
 | [`jira_email`](#jira_email) | string | `""` |
 | [`jira_jql`](#jira_jql) | string | `""` |
@@ -233,7 +237,11 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 
 #### `issue_tabs`
 
-The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all six. A list saved before Jira existed gets `jira` added at the end once, and one saved before Plane existed gets `plane`.
+The tabs of the issue browser, in order. Accepts `all`, `github`, `gitlab`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all seven. A list saved before Jira existed gets `jira` added at the end once, one saved before Plane existed gets `plane`, and one saved before GitLab existed gets `gitlab` right after `github` (at the end without it).
+
+#### `gitlab_url`
+
+The address of your GitLab server, such as `"https://gitlab.acme.dev"`, or one under a path such as `"https://acme.dev/gitlab"`; a trailing `/` is dropped. Empty is gitlab.com. The GitLab tab lists the issues of the project whose remote is on this server. Set from the issue browser or the settings modal. The token is never stored here: it goes in `secrets.json` or comes from `GITLAB_TOKEN` (see [Files and environment](../files-and-environment/)).
 
 #### `jira_site`
 

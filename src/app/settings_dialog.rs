@@ -27,6 +27,9 @@ impl App {
         if plane(&config) != plane(&self.config) {
             self.forget_issues(Source::Plane);
         }
+        if config.gitlab_url != self.config.gitlab_url {
+            self.forget_issues(Source::Gitlab);
+        }
         self.config = config;
     }
 

@@ -82,6 +82,7 @@ pub(crate) enum Step {
     Site,
     Email,
     Workspace,
+    Server,
     #[default]
     Token,
 }
@@ -172,6 +173,7 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
     SavePlane { workspace: String },
+    SaveGitlab { url: String },
     Disconnect(Source),
     Copy(String),
     SetDefaultAgent(String),
@@ -199,6 +201,7 @@ pub(crate) struct Browser {
     pub(crate) jira_site: String,
     pub(crate) jira_email: String,
     pub(crate) plane_workspace: String,
+    pub(crate) gitlab_url: String,
     pub(crate) screen: Screen,
     pub(crate) starting: bool,
     pub(crate) error: Option<String>,
@@ -225,7 +228,8 @@ impl Browser {
     }
 
     fn can_list(&self, source: Source) -> bool {
-        if source == Source::Github { self.github } else { self.connections.contains_key(&source) }
+        let connected = source == Source::Github || self.connections.contains_key(&source);
+        connected && (self.github || !source.in_repository())
     }
 
     pub(crate) fn sources(&self) -> Vec<Source> {

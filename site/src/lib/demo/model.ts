@@ -122,7 +122,7 @@ export interface IssuesOverlay {
   loading: boolean;
   busy?: string;
   notice?: string;
-  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'token' };
+  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'server' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
 }
@@ -180,7 +180,8 @@ export interface Config {
   prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
-  accounts: { shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
+  accounts: { gitlab: boolean; shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
+  gitlabUrl: string;
   jiraSite: string;
   jiraEmail: string;
   jiraJql: string;
@@ -211,8 +212,9 @@ export const defaultConfig = (): Config => ({
   updates: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
-  sources: ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'],
-  accounts: { shortcut: false, linear: false, jira: false, plane: false },
+  sources: ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'],
+  accounts: { gitlab: false, shortcut: false, linear: false, jira: false, plane: false },
+  gitlabUrl: '',
   jiraSite: '',
   jiraEmail: '',
   jiraJql: '',

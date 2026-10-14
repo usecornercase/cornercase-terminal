@@ -118,7 +118,7 @@ pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
-pub(crate) const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
+pub(crate) const DEFAULT_ISSUE_TABS: [&str; 7] = ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,6 +128,7 @@ pub(crate) struct Config {
     pub(crate) worktrees_dir: String,
     pub(crate) fetch_minutes: u64,
     pub(crate) issue_tabs: Vec<String>,
+    pub(crate) gitlab_url: String,
     pub(crate) jira_site: String,
     pub(crate) jira_email: String,
     pub(crate) jira_jql: String,
@@ -169,6 +170,7 @@ impl Default for Config {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
             issue_tabs: DEFAULT_ISSUE_TABS.map(String::from).to_vec(),
+            gitlab_url: String::new(),
             jira_site: String::new(),
             jira_email: String::new(),
             jira_jql: String::new(),
@@ -245,18 +247,22 @@ fn migrate(keys: &mut Map<String, Value>) {
     if let Some(context) = keys.get("context").cloned() {
         keys.entry("model").or_insert(context);
     }
-    if !keys.contains_key("jira_site")
-        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
-        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("jira")))
-    {
-        tabs.push(Value::String("jira".into()));
+    add_tab(keys, "jira_site", "jira", None);
+    add_tab(keys, "plane_workspace", "plane", None);
+    add_tab(keys, "gitlab_url", "gitlab", Some("github"));
+}
+
+fn add_tab(keys: &mut Map<String, Value>, written_since: &str, tab: &str, after: Option<&str>) {
+    if keys.contains_key(written_since) {
+        return;
     }
-    if !keys.contains_key("plane_workspace")
-        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
-        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("plane")))
-    {
-        tabs.push(Value::String("plane".into()));
+    let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs") else { return };
+    let named = |value: &Value, name: &str| value.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case(name));
+    if tabs.iter().any(|t| named(t, tab)) {
+        return;
     }
+    let at = after.and_then(|after| tabs.iter().position(|t| named(t, after))).map_or(tabs.len(), |i| i + 1);
+    tabs.insert(at, Value::String(tab.into()));
 }
 
 pub(crate) fn save(path: &Path, config: &Config) -> io::Result<()> {

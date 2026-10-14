@@ -28,6 +28,7 @@ impl Settings {
                 }
                 self.start_edit(row, String::new())
             }
+            Row::GitlabUrl => self.start_edit(row, self.config.gitlab_url.clone()),
             Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
             Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
             Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),

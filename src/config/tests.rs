@@ -25,7 +25,8 @@ mod file {
         let expected = Config {
             worktrees_dir: "worktrees".into(),
             fetch_minutes: 12,
-            issue_tabs: vec!["shortcut".into(), "github".into()],
+            issue_tabs: vec!["shortcut".into(), "github".into(), "gitlab".into()],
+            gitlab_url: "https://gitlab.acme.dev".into(),
             jira_site: "acme.atlassian.net".into(),
             jira_email: "ana@acme.dev".into(),
             jira_jql: "project = SHOP".into(),
@@ -155,18 +156,29 @@ mod added_tabs {
     }
 
     #[rstest]
-    #[case::a_list_from_before_jira(r#"{"issue_tabs": ["linear", "all"]}"#, &["linear", "all", "jira", "plane"])]
+    #[case::a_list_from_before_jira(
+        r#"{"issue_tabs": ["linear", "all"]}"#,
+        &["linear", "all", "jira", "plane", "gitlab"]
+    )]
     #[case::a_list_from_before_plane(
         r#"{"issue_tabs": ["linear", "all"], "jira_site": ""}"#,
-        &["linear", "all", "plane"]
+        &["linear", "all", "plane", "gitlab"]
     )]
-    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane"])]
+    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane", "gitlab"])]
     #[case::plane_already_there(
         r#"{"issue_tabs": ["Plane", "all"], "jira_site": ""}"#,
-        &["Plane", "all"]
+        &["Plane", "all", "gitlab"]
+    )]
+    #[case::gitlab_goes_after_github(
+        r#"{"issue_tabs": ["all", "GitHub", "linear"], "jira_site": "", "plane_workspace": ""}"#,
+        &["all", "GitHub", "gitlab", "linear"]
+    )]
+    #[case::gitlab_already_there(
+        r#"{"issue_tabs": ["gitlab", "all"], "jira_site": "", "plane_workspace": ""}"#,
+        &["gitlab", "all"]
     )]
     #[case::hidden_since(
-        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": ""}"#,
+        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": "", "gitlab_url": ""}"#,
         &["all"]
     )]
     #[case::no_list("{}", &DEFAULT_ISSUE_TABS)]

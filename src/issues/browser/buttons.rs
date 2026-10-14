@@ -55,7 +55,7 @@ impl Browser {
         match &self.screen {
             Screen::Detail { raw, issue, .. } => {
                 let mut buttons = vec![Button::Start, Button::Agent];
-                if issue.source != Source::Github && self.places.len() > 1 {
+                if !issue.source.in_repository() && self.places.len() > 1 {
                     buttons.push(Button::Where);
                 }
                 if self.agents.chosen.is_some() && self.agents.chosen != self.agents.default {
@@ -65,9 +65,11 @@ impl Browser {
                 buttons
             }
             Screen::List => match self.token_form().map(|source| self.form_step(source)) {
-                Some(Step::Site | Step::Workspace) => vec![Button::Next, Button::Cancel],
+                Some(Step::Site | Step::Workspace | Step::Server) => vec![Button::Next, Button::Cancel],
                 Some(Step::Email) => vec![Button::Next, Button::Back, Button::Cancel],
-                Some(Step::Token) if matches!(self.token_form(), Some(Source::Jira | Source::Plane)) => {
+                Some(Step::Token)
+                    if matches!(self.token_form(), Some(Source::Jira | Source::Plane | Source::Gitlab)) =>
+                {
                     vec![Button::Connect, Button::Back, Button::Cancel]
                 }
                 Some(Step::Token) => vec![Button::Connect, Button::Cancel],
@@ -212,7 +214,7 @@ impl Browser {
     }
 
     fn needs_place(&self, issue: &Issue) -> bool {
-        issue.source != Source::Github && self.places.len() > 1 && self.place.is_none()
+        !issue.source.in_repository() && self.places.len() > 1 && self.place.is_none()
     }
 
     fn ready_to_start(&self, issue: &Issue) -> bool {
@@ -220,6 +222,6 @@ impl Browser {
     }
 
     pub(crate) fn place_for(&self, issue: &Issue) -> Option<&Place> {
-        (issue.source != Source::Github).then(|| self.places.get(self.place.unwrap_or(self.here))).flatten()
+        (!issue.source.in_repository()).then(|| self.places.get(self.place.unwrap_or(self.here))).flatten()
     }
 }

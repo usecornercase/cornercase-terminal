@@ -261,7 +261,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   ],
 };
 
-export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira' | 'plane';
+export type SourceId = 'github' | 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
 
 export interface Issue {
   source: SourceId;
@@ -321,6 +321,32 @@ export const ISSUES: Issue[] = [
   gh(471, 'Add Apple Pay to the checkout', ['feature'], 'ana', '15d', 'Behind a feature flag first.', true),
   gh(468, 'Flaky test: returns::label_is_printed', ['ci'], 'luis', '22d', 'Fails about once in twenty runs on CI.'),
   gh(455, 'Rate-limit the public returns endpoint', ['security'], 'marta', '1mo', 'Ten requests per minute per IP is plenty.'),
+  {
+    source: 'gitlab',
+    number: 36,
+    key: '#36',
+    title: 'Cache the product images at the edge',
+    labels: ['performance'],
+    state: 'open',
+    author: 'marta',
+    age: '2d',
+    url: 'https://gitlab.com/acme/web-shop/-/issues/36',
+    body: 'Product pages spend most of their time loading images.\n\n- [ ] Serve them with a long `Cache-Control`\n- [ ] Purge on upload',
+    mine: true,
+  },
+  {
+    source: 'gitlab',
+    number: 41,
+    key: '#41',
+    title: 'Track abandoned carts',
+    labels: ['analytics'],
+    state: 'open',
+    author: 'luis',
+    age: '6d',
+    url: 'https://gitlab.com/acme/web-shop/-/issues/41',
+    body: 'Send an event when a cart with items is left for an hour.',
+    mine: false,
+  },
   {
     source: 'shortcut',
     number: 48,

@@ -3,8 +3,10 @@
   "fetch_minutes": 12,
   "issue_tabs": [
     "shortcut",
-    "github"
+    "github",
+    "gitlab"
   ],
+  "gitlab_url": "https://gitlab.acme.dev",
   "jira_site": "acme.atlassian.net",
   "jira_email": "ana@acme.dev",
   "jira_jql": "project = SHOP",

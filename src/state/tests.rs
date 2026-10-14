@@ -136,6 +136,7 @@ mod file {
                 closed: true,
                 people: People {
                     github: [Who::Me, Who::Person("ana".into())],
+                    gitlab: [Who::Person("luis".into()), Who::Me],
                     shortcut: [Who::User { id: "u-1".into(), name: "Bo".into() }, Who::Anyone],
                     linear: [Who::Anyone, Who::Me],
                     jira: [Who::Person("zoe".into()), Who::Anyone],

@@ -126,10 +126,16 @@ export interface SearchResult {
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
 
-type Remote = 'shortcut' | 'linear' | 'jira' | 'plane';
+type Remote = 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
+  gitlab: {
+    name: 'GitLab',
+    token: 'access token',
+    env: 'GITLAB_TOKEN',
+    help: 'Create a personal access token with the read_api scope in GitLab under Edit profile → Access tokens, paste it here and press Enter.',
+  },
   shortcut: {
     name: 'Shortcut',
     token: 'API token',
@@ -165,12 +171,15 @@ function checkWorkspace(input: string): [string, string?] {
   return [slug];
 }
 
-function checkUrl(input: string): [string, string?] {
+function checkUrl(input: string, example = 'https://plane.acme.dev'): [string, string?] {
   const url = input.trim().replace(/\/+$/, '');
   if (!url) return [''];
   const m = url.match(/^https?:\/\/([^/\s]+)/);
-  return m && !/\s/.test(url) ? [url] : ['', 'a URL starts with https://, such as https://plane.acme.dev'];
+  return m && !/\s/.test(url) ? [url] : ['', `a URL starts with https://, such as ${example}`];
 }
+
+const GITLAB_EXAMPLE = 'https://gitlab.acme.dev';
+const gitlabServer = (url: string) => url || 'https://gitlab.com';
 
 function checkSite(input: string): [string, string?] {
   const host = (input.trim().split('://').pop() ?? '').split('/')[0].replace(/\.+$/, '').toLowerCase();
@@ -2359,8 +2368,10 @@ export class App {
         { id: 'plane-url', section: 'Plane', label: 'Plane URL', value: c.planeUrl || 'Plane Cloud', note: 'for a self-hosted server' },
         token('plane', 'Plane'),
         { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
+        { id: 'gitlab-url', section: 'GitLab', label: 'GitLab URL', value: c.gitlabUrl || 'gitlab.com', note: 'for a self-hosted server' },
+        token('gitlab', 'GitLab'),
       ];
-      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -2493,6 +2504,8 @@ export class App {
       o.edit = { row: row.id, label: 'Plane workspace, the part after app.plane.so/, such as acme', input: c.planeWorkspace, token: false };
     } else if (row.id === 'plane-url') {
       o.edit = { row: row.id, label: 'Plane URL for a self-hosted server (empty is Plane Cloud)', input: c.planeUrl, token: false };
+    } else if (row.id === 'gitlab-url') {
+      o.edit = { row: row.id, label: 'GitLab URL for a self-hosted server (empty is gitlab.com)', input: c.gitlabUrl, token: false };
     } else if (row.id === 'plane-filter') {
       o.edit = { row: row.id, label: 'Plane filter (query parameters, such as priority=high)', input: c.planeFilter, token: false };
     } else if (row.id.startsWith('src:')) {
@@ -2659,6 +2672,14 @@ export class App {
           ? value ? `Plane workspace: ${value}` : 'the Plane workspace was cleared'
           : value ? `Plane server: ${value}` : 'Plane is the cloud at app.plane.so';
       }
+    } else if (edit.row === 'gitlab-url') {
+      const [value, error] = checkUrl(edit.input, GITLAB_EXAMPLE);
+      if (error) edit.error = error;
+      else {
+        this.config.gitlabUrl = value;
+        o.edit = undefined;
+        o.notice = value ? `GitLab server: ${value}` : 'GitLab is gitlab.com';
+      }
     } else if (edit.row === 'plane-filter') {
       this.config.planeFilter = edit.input.trim();
       o.edit = undefined;
@@ -2722,12 +2743,14 @@ export class App {
   }
 
   private accountOf(source: Remote): string {
+    if (source === 'gitlab') return `@you in ${gitlabServer(this.config.gitlabUrl).replace(/^https?:\/\//, '')}`;
     return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
 
   private freshToken(source: string): IssuesOverlay['token'] {
     if (source === 'jira') return { input: this.config.jiraSite, checking: false, step: 'site' };
     if (source === 'plane') return { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+    if (source === 'gitlab') return { input: this.config.gitlabUrl, checking: false, step: 'server' };
     return { input: '', checking: false };
   }
 
@@ -2735,7 +2758,7 @@ export class App {
     const source = this.issuesSource(o);
     const p = this.projects.find((x) => x.id === o.project);
     const github = !!p?.repo;
-    const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s]);
+    const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s] && (s !== 'gitlab' || github));
     const f = o.filter.trim().toLowerCase();
     const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
@@ -2745,7 +2768,7 @@ export class App {
   }
 
   branchFor(i: Issue): string {
-    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.key;
+    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'gitlab' ? `${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.key;
     const s = slug(i.title, 40);
     return s ? `${prefix}-${s}` : prefix;
   }
@@ -2852,6 +2875,9 @@ export class App {
       if (step === 'workspace') {
         help.push("Type your Plane workspace, the part after the server's name, such as acme.", 'Then press Enter.');
         [label, input] = ['workspace', o.token.input];
+      } else if (step === 'server') {
+        help.push(`Type the URL of your GitLab server, such as ${GITLAB_EXAMPLE}, and press Enter.`, 'Leave it empty for gitlab.com.');
+        [label, input] = ['server', o.token.input];
       } else if (step === 'site') {
         help.push('Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.');
         [label, input] = ['site', o.token.input];
@@ -2861,6 +2887,7 @@ export class App {
       } else {
         if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
         if (source === 'plane') help.push(`Connecting to the Plane workspace ${this.config.planeWorkspace}.`, '');
+        if (source === 'gitlab') help.push(`Connecting to ${gitlabServer(this.config.gitlabUrl)}.`, '');
         help.push(remote.help);
       }
       help.push(
@@ -2869,9 +2896,11 @@ export class App {
           ? `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${remote.env}, when set, takes precedence.`
           : source === 'plane'
             ? 'The workspace is saved in your settings.'
-            : 'The site and the email are saved in your settings.',
+            : source === 'gitlab'
+              ? 'The server is saved in your settings.'
+              : 'The site and the email are saved in your settings.',
       );
-      const back = (step !== 'site' && source === 'jira') || (step === 'token' && source === 'plane') ? ['back'] : [];
+      const back = (step !== 'site' && source === 'jira') || (step === 'token' && (source === 'plane' || source === 'gitlab')) ? ['back'] : [];
       return {
         tabs,
         toggles,
@@ -2895,10 +2924,10 @@ export class App {
       ? ''
       : o.filter
         ? 'no matches'
-        : source === 'github' && !p?.repo
+        : (source === 'github' || source === 'gitlab') && !p?.repo
           ? 'this project is not in a git repository'
           : nothing
-            ? 'nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs'
+            ? 'nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs'
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
@@ -2909,7 +2938,7 @@ export class App {
       items: list.map((i) => ({
         key: i.key,
         title: i.title,
-        meta: [i.source === 'github' ? '' : i.state, i.labels.join(', '), i.author, i.age].filter(Boolean).join(' · '),
+        meta: [i.source === 'github' || i.source === 'gitlab' ? '' : i.state, i.labels.join(', '), i.author, i.age].filter(Boolean).join(' · '),
       })),
       selected,
       scroll: o.scroll,
@@ -2986,6 +3015,10 @@ export class App {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
       return this.dirty();
     }
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'gitlab') {
+      o.token = { input: this.config.gitlabUrl, checking: false, step: 'server' };
+      return this.dirty();
+    }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site' && o.token.step !== 'workspace') {
       const email = o.token.step === 'token';
       o.token = { input: email ? this.config.jiraEmail : this.config.jiraSite, checking: false, step: email ? 'email' : 'site' };
@@ -3051,6 +3084,15 @@ export class App {
     if (o?.kind !== 'issues') return;
     const source = this.issuesSource(o) as Remote;
     const input = o.token.input.trim();
+    if (o.token.step === 'server') {
+      const [value, error] = checkUrl(input, GITLAB_EXAMPLE);
+      if (error) o.token.error = error;
+      else {
+        this.config.gitlabUrl = value;
+        o.token = { input: '', checking: false, step: 'token' };
+      }
+      return this.dirty();
+    }
     if (o.token.step === 'workspace') {
       const [value, error] = checkWorkspace(input);
       if (error) o.token.error = error;

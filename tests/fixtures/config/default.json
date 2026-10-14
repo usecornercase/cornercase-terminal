@@ -4,11 +4,13 @@
   "issue_tabs": [
     "all",
     "github",
+    "gitlab",
     "shortcut",
     "linear",
     "jira",
     "plane"
   ],
+  "gitlab_url": "",
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",

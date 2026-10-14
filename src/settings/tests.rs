@@ -226,6 +226,14 @@ mod telegram {
 mod tokens {
     use super::*;
 
+    fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
+        go_to(s, row);
+        press(s, KeyCode::Enter);
+        s.edit.iter_mut().for_each(|e| e.input.clear());
+        type_text(s, text);
+        press(s, KeyCode::Enter)
+    }
+
     #[test]
     fn a_pasted_token_is_checked() {
         let mut s = settings();
@@ -278,14 +286,6 @@ mod tokens {
             let mut s = settings();
             s.tokens.push((Source::Jira, Status::Missing));
             s
-        }
-
-        fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
-            go_to(s, row);
-            press(s, KeyCode::Enter);
-            s.edit.iter_mut().for_each(|e| e.input.clear());
-            type_text(s, text);
-            press(s, KeyCode::Enter)
         }
 
         #[test]
@@ -350,14 +350,6 @@ mod tokens {
             let mut s = settings();
             s.tokens.push((Source::Plane, Status::Missing));
             s
-        }
-
-        fn edit(s: &mut Settings, row: &Row, text: &str) -> Action {
-            go_to(s, row);
-            press(s, KeyCode::Enter);
-            s.edit.iter_mut().for_each(|e| e.input.clear());
-            type_text(s, text);
-            press(s, KeyCode::Enter)
         }
 
         #[test]
@@ -437,6 +429,72 @@ mod tokens {
         }
     }
 
+    mod gitlab {
+        use super::*;
+
+        fn with_gitlab() -> Settings {
+            let mut s = settings();
+            s.tokens.push((Source::Gitlab, Status::Missing));
+            s
+        }
+
+        #[test]
+        fn has_its_own_section_after_the_accounts() {
+            let mut s = with_gitlab();
+            s.open_page(Page::Issues);
+            let rows: Vec<(&str, Row)> = s.rows().into_iter().map(|r| (r.section(), r)).take(4).collect();
+            assert_eq!(
+                rows,
+                [
+                    ("Accounts", Row::Token(Source::Shortcut)),
+                    ("Accounts", Row::Token(Source::Linear)),
+                    ("GitLab", Row::GitlabUrl),
+                    ("GitLab", Row::Token(Source::Gitlab))
+                ]
+            );
+        }
+
+        #[test]
+        fn an_empty_url_is_gitlab_com() {
+            let s = with_gitlab();
+            let row = s.row_text(&Row::GitlabUrl);
+            assert_eq!((row.label.as_str(), row.value.as_str()), ("GitLab URL", "gitlab.com"));
+        }
+
+        #[test]
+        fn the_url_is_saved_without_its_trailing_slash() {
+            let mut s = with_gitlab();
+            let config = saved(edit(&mut s, &Row::GitlabUrl, "https://gitlab.acme.dev/"));
+            assert_eq!(
+                (config.gitlab_url.as_str(), s.notice.as_deref()),
+                ("https://gitlab.acme.dev", Some("GitLab server: https://gitlab.acme.dev"))
+            );
+        }
+
+        #[test]
+        fn a_bad_url_stays_in_the_field() {
+            let mut s = with_gitlab();
+            assert_eq!(edit(&mut s, &Row::GitlabUrl, "gitlab.acme.dev"), Action::None);
+            let error = s.edit.and_then(|e| e.error);
+            assert_eq!(error.as_deref(), Some("a URL starts with https://, such as https://gitlab.acme.dev"));
+        }
+
+        #[test]
+        fn an_empty_url_goes_back_to_gitlab_com() {
+            let mut s = with_gitlab();
+            s.config.gitlab_url = "https://gitlab.acme.dev".into();
+            assert_eq!(saved(edit(&mut s, &Row::GitlabUrl, "")).gitlab_url, "");
+            assert_eq!(s.notice.as_deref(), Some("GitLab is gitlab.com"));
+        }
+
+        #[test]
+        fn the_token_is_checked_without_anything_else_set() {
+            let mut s = with_gitlab();
+            let action = edit(&mut s, &Row::Token(Source::Gitlab), "glpat");
+            assert_eq!(action, Action::CheckToken(Source::Gitlab, Secret("glpat".into())));
+        }
+    }
+
     #[test]
     fn are_never_shown() {
         let mut s = settings();
@@ -454,7 +512,8 @@ mod tabs {
     fn enter_hides_a_tab() {
         let mut s = settings();
         go_to(&mut s, &Row::Tab("shortcut"));
-        assert_eq!(saved(press(&mut s, KeyCode::Enter)).issue_tabs, ["all", "github", "linear", "jira", "plane"]);
+        let tabs = saved(press(&mut s, KeyCode::Enter)).issue_tabs;
+        assert_eq!(tabs, ["all", "github", "gitlab", "linear", "jira", "plane"]);
     }
 
     #[test]
@@ -478,7 +537,7 @@ mod tabs {
         let mut s = settings();
         go_to(&mut s, &Row::Tab("linear"));
         let config = saved(key(&mut s, KeyCode::Up, KeyModifiers::SHIFT));
-        assert_eq!(config.issue_tabs, ["all", "github", "linear", "shortcut", "jira", "plane"]);
+        assert_eq!(config.issue_tabs, ["all", "github", "gitlab", "linear", "shortcut", "jira", "plane"]);
         assert_eq!(s.row(), Some(Row::Tab("linear")));
     }
 }

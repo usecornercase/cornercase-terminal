@@ -1,5 +1,6 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::issues::Source;
 use crate::shortcuts::Prefix;
 
 use super::{Page, Row, RowText, Settings, Status};
@@ -40,20 +41,14 @@ impl Settings {
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
-            Row::Token(source) => {
-                let label = format!("{} {}", source.name(), source.token_name());
-                let (value, note) = match self.status(*source) {
-                    Some(Status::Saved(Some(account))) => (account.describe(), "saved".to_string()),
-                    Some(Status::Saved(None)) => ("connected".into(), "saved".into()),
-                    Some(Status::Env) => {
-                        ("connected".into(), format!("from {}", source.token_env().unwrap_or_default()))
-                    }
-                    _ => ("not connected".into(), "enter pastes one".into()),
-                };
-                (label, value, note, false)
-            }
-            Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
-            Row::PlaneWorkspace | Row::PlaneUrl | Row::PlaneFilter => plane_row(config, row),
+            Row::Token(source) => self.token_row(*source),
+            Row::GitlabUrl
+            | Row::JiraSite
+            | Row::JiraEmail
+            | Row::JiraJql
+            | Row::PlaneWorkspace
+            | Row::PlaneUrl
+            | Row::PlaneFilter => tracker_row(config, row),
             Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
@@ -128,11 +123,23 @@ impl Settings {
         RowText { label, value, note, dangerous }
     }
 
+    fn token_row(&self, source: Source) -> (String, String, String, bool) {
+        let label = format!("{} {}", source.name(), source.token_name());
+        let (value, note) = match self.status(source) {
+            Some(Status::Saved(Some(account))) => (account.describe(), "saved".to_string()),
+            Some(Status::Saved(None)) => ("connected".into(), "saved".into()),
+            Some(Status::Env) => ("connected".into(), format!("from {}", source.token_env().unwrap_or_default())),
+            _ => ("not connected".into(), "enter pastes one".into()),
+        };
+        (label, value, note, false)
+    }
+
     fn tab_row(&self, id: &str) -> (String, String, String, bool) {
         let on = self.shown_tabs().contains(&id);
         let name = match id {
             "all" => "All",
             "github" => "GitHub",
+            "gitlab" => "GitLab",
             "shortcut" => "Shortcut",
             "linear" => "Linear",
             "jira" => "Jira",
@@ -161,6 +168,7 @@ impl Settings {
                 Row::Folder => "worktrees folder".to_string(),
                 Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
                 Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
+                Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
                 Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
                 Row::JiraEmail => "Jira email".to_string(),
                 Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
@@ -224,18 +232,12 @@ fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     (label.into(), value.into(), note.into(), false)
 }
 
-fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let (label, value, empty, note) = match row {
+        Row::GitlabUrl => ("GitLab URL", &config.gitlab_url, "gitlab.com", "for a self-hosted server"),
         Row::JiraSite => ("Jira site", &config.jira_site, "not set", "such as acme.atlassian.net"),
         Row::JiraEmail => ("Jira email", &config.jira_email, "not set", "the one you sign in with"),
-        _ => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
-    };
-    let value = if value.is_empty() { empty.to_string() } else { value.clone() };
-    (label.into(), value, note.into(), false)
-}
-
-fn plane_row(config: &Config, row: &Row) -> (String, String, String, bool) {
-    let (label, value, empty, note) = match row {
+        Row::JiraJql => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
         Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
         Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
         _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),

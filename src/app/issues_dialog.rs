@@ -21,7 +21,8 @@ use crate::issues::browser::{
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::secrets;
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, gitlab, jira, linear, plane,
+    shortcut,
 };
 use crate::list::Search;
 use crate::log::{self, Job, Level};
@@ -164,6 +165,11 @@ impl App {
         Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
     }
 
+    fn gitlab(&self, token: String, project: Option<u64>) -> gitlab::Api {
+        let dir = project.and_then(|id| self.projects.project_index(id)).map(|p| self.projects[p].path.clone());
+        gitlab::Api { base: gitlab::server(&self.config.gitlab_url), token, dir: dir.unwrap_or_default() }
+    }
+
     fn connected(&self, source: Source) -> Option<bool> {
         let (token, from_env) = self.token(source)?;
         let configured = match source {
@@ -188,6 +194,7 @@ impl App {
             }
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
             Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
+            Source::Gitlab => Some(Client::Gitlab(self.gitlab(self.token(source)?.0, Some(project)))),
         }
     }
 
@@ -240,6 +247,7 @@ impl App {
             jira_site: self.config.jira_site.clone(),
             jira_email: self.config.jira_email.clone(),
             plane_workspace: self.config.plane_workspace.clone(),
+            gitlab_url: self.config.gitlab_url.clone(),
             screen: Screen::List,
             starting: false,
             error: None,
@@ -331,6 +339,10 @@ impl App {
                 let config = Config { plane_workspace: workspace, ..self.config.clone() };
                 return self.save_connection(Source::Plane, config, area);
             }
+            Action::SaveGitlab { url } => {
+                let config = Config { gitlab_url: url, ..self.config.clone() };
+                return self.save_connection(Source::Gitlab, config, area);
+            }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
                 self.outbox.host_writes.push(clipboard::osc52(&url));
@@ -343,7 +355,8 @@ impl App {
     }
 
     pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
-        let project = (source == Source::Github)
+        let project = source
+            .in_repository()
             .then(|| self.projects.project_index(project).map(|p| self.projects[p].path.clone()))
             .flatten();
         CacheKey { source, project, query: query.clone() }
@@ -370,7 +383,7 @@ impl App {
 
     pub(super) fn people_loaded(&mut self, project: u64, source: Source, result: Result<Vec<Person>>) {
         if let Ok(people) = &result {
-            self.issues.people_cache.insert((source, (source == Source::Github).then_some(project)), people.clone());
+            self.issues.people_cache.insert((source, source.in_repository().then_some(project)), people.clone());
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay
             && b.project == project
@@ -483,6 +496,7 @@ impl App {
             Source::Linear => Ok(Client::Linear { url: self.issues.apis.linear.clone(), token: token.0.clone() }),
             Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
             Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
+            Source::Gitlab => Ok(Client::Gitlab(self.gitlab(token.0.clone(), None))),
         };
         let client = match client {
             Ok(client) => client,
@@ -772,12 +786,20 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
             help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
             help.push("Then press Enter.".into());
         }
+        Step::Server => {
+            help.push("Type the URL of your GitLab server, such as https://gitlab.acme.dev, and press Enter.".into());
+            help.push("Leave it empty for gitlab.com.".into());
+        }
         Step::Token => {
             match source {
                 Source::Jira => help
                     .extend([format!("Signing in to {} as {}.", browser.jira_site, browser.jira_email), String::new()]),
                 Source::Plane => {
                     let line = format!("Connecting to the Plane workspace {}.", browser.plane_workspace);
+                    help.extend([line, String::new()]);
+                }
+                Source::Gitlab => {
+                    let line = format!("Connecting to {}.", gitlab::server(&browser.gitlab_url));
                     help.extend([line, String::new()]);
                 }
                 _ => {}
@@ -796,6 +818,9 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
         }
         _ if source == Source::Plane => {
             help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
+        _ if source == Source::Gitlab => {
+            help.extend([String::new(), "The server is saved in your settings.".into()]);
         }
         _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
     }
@@ -820,10 +845,10 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
         "no matches".to_string()
     } else if loading || error.is_some() {
         String::new()
-    } else if browser.current() == Tab::One(Source::Github) && !browser.github {
+    } else if matches!(browser.current(), Tab::One(source) if source.in_repository()) && !browser.github {
         "this project is not in a git repository".into()
     } else if browser.sources().is_empty() {
-        "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
+        "nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs".into()
     } else if browser.closed {
         "no issues".into()
     } else {

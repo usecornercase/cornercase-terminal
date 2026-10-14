@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Secret, Source, jira, plane};
+use crate::issues::{Secret, Source, gitlab, jira, plane};
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
 
@@ -141,6 +141,7 @@ impl Settings {
                 self.checking.push(source);
                 Action::CheckToken(source, Secret(token))
             }
+            Row::GitlabUrl => self.submit_checked(gitlab::check_url, gitlab_url),
             Row::JiraSite => self.submit_checked(jira::check_site, |config, value| {
                 let notice =
                     if value.is_empty() { "the Jira site was cleared".into() } else { format!("Jira site: {value}") };
@@ -193,6 +194,11 @@ impl Settings {
             _ => Action::None,
         }
     }
+}
+
+fn gitlab_url(config: &Config, value: String) -> (Config, String) {
+    let notice = if value.is_empty() { "GitLab is gitlab.com".into() } else { format!("GitLab server: {value}") };
+    (Config { gitlab_url: value, ..config.clone() }, notice)
 }
 
 fn starts_with(kind: &str, args: &[String]) -> String {

@@ -809,3 +809,85 @@ mod plane {
         assert_eq!(result.err().map(|e| e.to_string()).as_deref(), Some("set the Plane workspace first"));
     }
 }
+
+mod gitlab {
+    use super::*;
+
+    const USER: &str = r#"{"id":7,"username":"ana","name":"Ana"}"#;
+    const ISSUES: &str = r#"[{"iid":5,"title":"Checkout fails","state":"opened","author":{"username":"ana"},
+                "updated_at":"2026-09-30T00:00:00Z","web_url":"https://gitlab.acme.dev/acme/shop/-/issues/5"}]"#;
+    const ISSUE: &str = r#"{"iid":5,"title":"Checkout fails","state":"opened","description":"It **fails**."}"#;
+
+    fn gitlab(s: &mut Setup) -> FakeHttp {
+        let server = FakeHttp::start(vec![
+            ("GET /api/v4/user", 200, USER),
+            ("GET /api/v4/projects/acme%2Fshop/issues", 200, ISSUES),
+            ("GET /api/v4/projects/acme%2Fshop/issues/5", 200, ISSUE),
+            ("GET /api/v4/projects/acme%2Fshop/issues/5/notes", 200, "[]"),
+        ]);
+        let remote = format!("{}/acme/shop.git", server.url());
+        crate::test_util::git(&s.app.projects[0].path, &["remote", "add", "origin", &remote]);
+        server
+    }
+
+    fn connected(s: &mut Setup) -> FakeHttp {
+        let server = gitlab(s);
+        s.app.config.gitlab_url = server.url();
+        s.app.issues.env_tokens.insert(Source::Gitlab, "env-token".into());
+        to_tab_after_open(s, IssueTab::One(Source::Gitlab));
+        pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Gitlab));
+        server
+    }
+
+    #[test]
+    fn connecting_saves_the_server_then_the_token_and_lists_the_remote_project() {
+        let mut s = setup(true, "echo '[]'");
+        let server = gitlab(&mut s);
+
+        to_tab_after_open(&mut s, IssueTab::One(Source::Gitlab));
+        type_text(&mut s.app, &server.url());
+        enter(&mut s);
+        let config = config::load(&s.config.path().join("config.json"));
+        type_text(&mut s.app, "glpat");
+        enter(&mut s);
+
+        pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Gitlab));
+        assert_eq!(shown(&s.app), ["#5"]);
+        assert_eq!(config.gitlab_url, server.url());
+        assert_eq!(secrets::read(&secrets_file(&s), "gitlab_token").as_deref(), Some("glpat"));
+        assert!(server.request(0).to_lowercase().contains("private-token: glpat"), "{}", server.request(0));
+    }
+
+    #[test]
+    fn a_token_from_the_environment_lists_at_once() {
+        let mut s = setup(true, "echo '[]'");
+        let _server = connected(&mut s);
+        assert_eq!(shown(&s.app), ["#5"]);
+    }
+
+    #[test]
+    fn an_issue_starts_in_a_worktree_named_after_its_number() {
+        let mut s = setup(true, "echo '[]'");
+        let _server = connected(&mut s);
+
+        enter(&mut s);
+        enter(&mut s);
+
+        pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
+        let workspace = &s.app.projects[0].workspaces[1];
+        assert_eq!(
+            (workspace.label(), git::branch(&workspace.path)),
+            ("#5 Checkout fails".into(), Some("5-checkout-fails".into()))
+        );
+    }
+
+    #[test]
+    fn another_server_forgets_the_account_of_the_old_one() {
+        let mut s = setup(false, "echo '[]'");
+        accounts_with_linear(&mut s, Source::Gitlab, "gitlab.com");
+
+        s.app.set_config(Config { gitlab_url: "https://gitlab.acme.dev".into(), ..s.app.config.clone() });
+
+        assert_only_linear(&s);
+    }
+}
