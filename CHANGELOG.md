@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.87
+
+- A working agent shows the still `◐` again, as before 0.12.84. The spinner is still there: choose it in **Settings → UI → working icon**, or set `"working_icon": "spinner"` in `config.json`.
+
 ## 0.12.86
 
 - The stats heatmap always shows its 26 weeks: days without agent work are grey squares, also the ones before cornercase started counting, so a few days of work no longer look like loose squares.
