@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/activity.rs
-assertion_line: 121
 expression: "render_sized(&with_bar(None), W, 24).backend()"
 ---
 "   │   search projects, workspaces, tabs                    │                                      "
@@ -12,7 +11,7 @@ expression: "render_sized(&with_bar(None), W, 24).backend()"
 "   │  + New                        │                         │                                      "
 "  │                               │                         │                                      "
 "  󰧟│                               │                         │                                      "
-"   │                               │                         │                                      "
+" 󰥔 │                               │                         │                                      "
 "   │                               │                         │                                      "
 "   │                               │                         │              no tab open             "
 "   │                               │                         │       + Tab opens a shell here       "

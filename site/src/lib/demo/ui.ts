@@ -1,3 +1,4 @@
+import { drawQueue, drawQueueForm, queueFormArea } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
@@ -313,6 +314,7 @@ export class Painter {
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
+    else if (app.queueOpen && !isEmpty(areas.changes)) drawQueue(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
     this.overlay(areas);
@@ -534,7 +536,10 @@ export class Painter {
     }
     const showChanges = hasChanges(app.workspace());
     const showFiles = !!app.project();
-    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
+    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - areas.queueButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
+    const q = areas.queueButton;
+    this.band(q, [seg(centered(`Q ${app.queued.filter((entry) => entry.state === 'pending').length}`, q.w))], app.queueOpen || this.sidebarHovered(q) ? PRESSED : { fg: 8, bg: this.surface });
+    this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
     const todo = areas.todoButton;
     this.band(todo, todoIcon(app.config.todoDot && app.todo.pending() > 0, todo.w), app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
     this.region({ r: todo, click: () => app.toggleTodo(), cursor: 'pointer' });
@@ -937,6 +942,9 @@ export class Painter {
       this.region({ r, click: () => app.toggleChanges(), cursor: 'pointer' });
     }
     if (!areas.compact) {
+      const q = areas.queueButton;
+      this.button(q, '', `Queue ${app.queued.filter((entry) => entry.state === 'pending').length}`, this.buttonStyle(q, app.queueOpen ? { fg: 6, add: BOLD } : DARK, 6));
+      this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
       const r = areas.todoButton;
       this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
       const dot = todoDot(areas);
@@ -978,6 +986,7 @@ export class Painter {
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
+    if (o.kind === 'queue') { this.dialogBackdrop(queueFormArea(this.app.cols, this.app.rows)); return drawQueueForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }

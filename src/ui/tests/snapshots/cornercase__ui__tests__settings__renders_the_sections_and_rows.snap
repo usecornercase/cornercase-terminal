@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/settings.rs
-assertion_line: 7283
 expression: render(&with(settings(1))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: render(&with(settings(1))).backend()
 " ─│ enter changes the selected setting                                                           │  "
 "  │                                                                              restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

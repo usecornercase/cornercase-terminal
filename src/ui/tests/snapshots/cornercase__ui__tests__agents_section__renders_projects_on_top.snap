@@ -29,6 +29,7 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, entries()), W,\nTALL.he
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
 "  Files                  TODO  │                                                                    "
+" Queue 0                       │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "

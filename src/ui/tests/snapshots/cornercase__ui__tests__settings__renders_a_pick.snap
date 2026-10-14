@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/settings.rs
-assertion_line: 7299
 expression: "render(&with(Settings { pick: Some(pick), ..agents })).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: "render(&with(Settings { pick: Some(pick), ..agents })).backend()"
 " ─│ enter changes the selected setting                                                           │  "
 "  │                                                                              restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

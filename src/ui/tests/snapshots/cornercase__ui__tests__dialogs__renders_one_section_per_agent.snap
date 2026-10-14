@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/dialogs.rs
-assertion_line: 6910
 expression: "render_sized(&with(Overlay::Usage(usage)), W, TALL).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -36,4 +35,4 @@ expression: "render_sized(&with(Overlay::Usage(usage)), W, TALL).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

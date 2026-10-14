@@ -25,6 +25,7 @@ pub(super) struct Scrolls {
 pub(super) enum Side {
     Changes,
     Todo,
+    Queue,
     Files,
 }
 
@@ -42,7 +43,7 @@ impl App {
     pub(super) fn panel_shown(&self) -> bool {
         match self.side {
             Some(Side::Changes) => self.changes_shown(),
-            Some(Side::Todo) => true,
+            Some(Side::Todo | Side::Queue) => true,
             Some(Side::Files) => self.files_shown(),
             None => false,
         }
@@ -56,7 +57,7 @@ impl App {
             Some(Side::Changes) => self.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.files.close(),
-            None => {}
+            Some(Side::Queue) | None => {}
         }
         self.side = side;
     }
@@ -86,6 +87,7 @@ impl App {
     }
 
     pub(super) fn follow(&mut self, area: Rect) {
+        self.queued.area = Some(area);
         let areas = self.layout(area);
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;

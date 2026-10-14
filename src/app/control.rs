@@ -2,6 +2,7 @@ mod arrange;
 mod close;
 mod create;
 mod idle_restart;
+mod queue;
 mod status;
 mod talk;
 mod wait;
@@ -245,6 +246,9 @@ impl App {
                 }
             }
         }
+        if self.queue_answered(client, &reply) {
+            return;
+        }
         if client >= TELEGRAM_CLIENTS {
             self.telegram_answered(client, reply);
             return;
@@ -278,6 +282,7 @@ impl App {
             Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
+            Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
@@ -297,6 +302,7 @@ impl App {
         let Some(mut launch) = launch else { return Some(json(&done)) };
         let key = self.requests.key();
         launch.key = Some(key);
+        launch.trust = self.queued.running.contains_key(&client).then_some(agents::launch::Trust::Accepted);
         self.agents.launches.push(launch);
         self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage });
         None

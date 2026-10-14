@@ -1,10 +1,9 @@
 ---
 source: src/ui/tests/compact.rs
-assertion_line: 5766
 expression: render_small(&v).backend()
 ---
 "                                                                                "
-"   ≡     cornercase › feat/login › claude                     ▤      ☐      ⌕   "
+"   ≡     cornercase › feat/login › claude              ▤     Q 0     ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

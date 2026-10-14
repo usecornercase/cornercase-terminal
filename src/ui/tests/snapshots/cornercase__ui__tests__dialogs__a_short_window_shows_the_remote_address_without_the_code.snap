@@ -19,4 +19,4 @@ expression: "render(&with(Overlay::Remote(remote_access(Some(PAIR_URL))))).backe
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

@@ -28,6 +28,7 @@ fn browser() -> Browser {
         gitlab_url: String::new(),
         screen: Screen::List,
         starting: false,
+        scheduling: false,
         error: None,
         notice: None,
         secrets_path: "~/.config/cornercase/secrets.json".into(),
@@ -349,7 +350,7 @@ mod tokens {
         b.connected(Source::Shortcut, Connection { from_env: false, account: None });
         assert_eq!(
             (b.needs_load(), b.labels()),
-            (Action::Load(vec![Source::Shortcut]), vec!["start", "refresh", "disconnect", "cancel"])
+            (Action::Load(vec![Source::Shortcut]), vec!["start", "schedule", "refresh", "disconnect", "cancel"])
         );
     }
 
@@ -357,7 +358,7 @@ mod tokens {
     fn a_token_from_the_environment_cannot_be_disconnected() {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: true, account: None });
-        assert_eq!(b.labels(), ["start", "refresh", "cancel"]);
+        assert_eq!(b.labels(), ["start", "schedule", "refresh", "cancel"]);
     }
 
     fn field(b: &Browser) -> (&'static str, String) {
@@ -586,12 +587,12 @@ pub(crate) mod buttons {
 
     #[test]
     fn the_issue_offers_raw_copy_and_back_after_the_agent() {
-        assert_eq!(reading().labels(), ["start", "agent…", "raw", "copy url", "back"]);
+        assert_eq!(reading().labels(), ["start", "schedule", "agent…", "raw", "copy url", "back"]);
     }
 
     #[test]
     fn the_list_offers_refresh() {
-        assert_eq!(with_lists().labels(), ["start", "refresh", "cancel"]);
+        assert_eq!(with_lists().labels(), ["start", "schedule", "refresh", "cancel"]);
     }
 
     #[test]

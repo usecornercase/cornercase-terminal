@@ -134,10 +134,37 @@ impl Api {
         Ok(people)
     }
 
-    pub(crate) fn view(&self, number: u64) -> Result<Detail> {
-        let project = self.project()?;
-        let path = Self::project_path(&project, &format!("/issues/{number}"));
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        let (node, _) = if key.starts_with("https://") || key.starts_with("http://") {
+            let relative = key.strip_prefix(&format!("{}/", self.base.trim_end_matches('/'))).ok_or_else(|| {
+                Error::Api("the GitLab issue URL is on a different server than the connected tracker".into())
+            })?;
+            let (project, number) = relative
+                .split_once("/-/issues/")
+                .ok_or_else(|| Error::Api("the GitLab issue URL has no project and issue number".into()))?;
+            let number = number
+                .trim_end_matches('/')
+                .parse()
+                .map_err(|_| Error::Api("the GitLab issue URL has an invalid number".into()))?;
+            self.node_in(project, number)?
+        } else {
+            self.node(key.parse().map_err(|_| Error::Api("GitLab needs a numeric issue key".into()))?)?
+        };
+        issue(&node).ok_or_else(|| Error::Api(format!("issue {key} has no number")))
+    }
+
+    fn node(&self, number: u64) -> Result<(Value, String)> {
+        self.node_in(&self.project()?, number)
+    }
+
+    fn node_in(&self, project: &str, number: u64) -> Result<(Value, String)> {
+        let path = Self::project_path(project, &format!("/issues/{number}"));
         let node = self.get(&path, &[], &format!("issue #{number} not found in {project}"))?;
+        Ok((node, path))
+    }
+
+    pub(crate) fn view(&self, number: u64) -> Result<Detail> {
+        let (node, path) = self.node(number)?;
         let per_page = PAGE.to_string();
         let params = [("sort", "asc"), ("order_by", "created_at"), ("per_page", per_page.as_str())];
         let notes = self.get(&format!("{path}/notes"), &params, "the comments were not found")?;

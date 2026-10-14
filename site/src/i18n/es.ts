@@ -155,6 +155,7 @@ export const page: Page = {
           ['Uso y estadísticas', 'Los límites de tus planes y el trabajo que tus agentes hicieron en paralelo.'],
           ['En Telegram', '¿Lejos del escritorio? Tus agentes te escriben allí. Respondes y les llega.'],
           ['Worktrees, en orden', 'Cada línea de trabajo tiene su propia rama y carpeta. Las que creas en otro sitio también aparecen.'],
+          ['Agentes programados', 'Programa una issue o un prompt para después, o para el próximo reinicio del plan.'],
         ],
       },
       {

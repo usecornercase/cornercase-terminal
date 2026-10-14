@@ -118,9 +118,22 @@ impl Api {
         Ok(Listed { account: Some(account), issues })
     }
 
-    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        let mut node = self.node(key)?;
+        if node["identifier"].as_str().is_none_or(str::is_empty) {
+            node["identifier"] = Value::String(key.to_string());
+        }
+        self.issue(&node, &names(&self.members()?))
+            .ok_or_else(|| Error::Api(format!("work item {key} has no readable key")))
+    }
+
+    fn node(&self, key: &str) -> Result<Value> {
         let path = self.workspace_path(&format!("/work-items/{}/", path_segment(key)));
-        let node = self.get(&path, &[("expand", EXPAND)], &format!("work item {key} not found"))?;
+        self.get(&path, &[("expand", EXPAND)], &format!("work item {key} not found"))
+    }
+
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+        let node = self.node(key)?;
         let names = names(&self.members().unwrap_or_default());
         let comments = self.comments(&node, &names)?;
         Ok(detail(&node, &names, comments))

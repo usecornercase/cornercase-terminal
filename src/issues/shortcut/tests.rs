@@ -152,6 +152,7 @@ fn view_reads_the_description_tasks_and_comments() {
     let base = api_url(&server);
 
     let detail = Api { base: &base, token: "t0k" }.view(482).expect("view");
+    assert_eq!(Api { base: &base, token: "t0k" }.find(482).expect("find for queue").title, "Returns page crashes");
 
     assert_eq!(
         detail.info,

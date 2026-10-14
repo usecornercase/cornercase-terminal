@@ -385,3 +385,7 @@ The instructions tell agents to use the commands only when you ask them to open 
 ## Security
 
 As before, only your own user can reach the server's socket. But whoever reaches it can type into every shell, so a coding agent that can run `cornercase` can run anything in any pane, and run commands outside its own sandbox through another pane. Keep the socket out of reach of agents you sandbox: run them in a container or under another user without access to it, or don't give them a shell inside cornercase.
+
+## Queue work for later
+
+`cornercase queue add --at 'in 2h' --agent claude --prompt 'Fix the login form'` schedules work and prints its persistent id. Use `--issue URL_OR_KEY` for an issue, `--workspace ID` for a tab, or `--worktree BRANCH` for a worktree. `--at 'claude reset'` and `--at 'codex reset'` use the next five-hour plan reset. `queue list --json`, `queue edit ID --at TIME`, `queue remove ID` and `queue run ID` inspect and manage it. See [Queue agents](../queue/) for formats and flags. Queued launches accept folder trust prompts automatically.

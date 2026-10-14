@@ -118,7 +118,16 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let glyphs = view.glyphs();
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     let r = areas.todo_button;
-    let mut right = areas.search_button.width + r.width;
+    let mut right = areas.search_button.width + r.width + areas.queue_button.width;
+    let queue = areas.queue_button;
+    let queue_style =
+        if view.queue.is_some() || sidebar_hovered(view, queue) { pressed } else { surface.fg(view.muted) };
+    draw_band(
+        f,
+        queue,
+        Span::styled(centered(&format!("Q {}", view.queue_pending), queue.width), queue_style),
+        queue_style,
+    );
     let lit = view.todo.is_some() || sidebar_hovered(view, r);
     let style = if lit { pressed } else { surface.fg(view.muted) };
     draw_band(f, r, todo_icon(glyphs, view.todo_dot && view.todo_pending, r.width, style), style);
@@ -194,9 +203,14 @@ pub(super) fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
         draw_panel_button(f, view, changes_button(areas.issues, &button.label), &button.label, button.open);
     }
     if !areas.compact() {
+        draw_queue_button(f, view, areas);
         draw_todo_button(f, view, areas);
         draw_panel_button(f, view, areas.files_button, files::LABEL, view.files.is_some());
     }
+}
+
+pub(super) fn draw_queue_button(f: &mut Frame, view: &View, areas: &Areas) {
+    draw_panel_button(f, view, areas.queue_button, &format!("Queue {}", view.queue_pending), view.queue.is_some());
 }
 
 fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: bool) {

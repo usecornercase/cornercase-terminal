@@ -19,4 +19,4 @@ expression: render(&with_details(opus(17))).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

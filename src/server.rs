@@ -29,6 +29,7 @@ use crate::panics;
 use crate::paths;
 use crate::persist::{self, Saver};
 use crate::protocol::{self, ClientMessage, Hello, ServerMessage};
+use crate::queue;
 use crate::state;
 use crate::todo;
 use crate::version;
@@ -201,6 +202,7 @@ type Screen = Terminal<CropBackend>;
 struct Client {
     id: u64,
     size: Option<(u16, u16)>,
+    zone: String,
     used: u64,
     notify: Channel,
     pointer: Option<pointer::Terminal>,
@@ -276,6 +278,7 @@ struct Server {
     session: PathBuf,
     saver: Saver<state::State>,
     todo_saver: Saver<todo::Saved>,
+    queue_saver: Saver<queue::Saved>,
     stats_saver: crate::agents::stats::Saver,
     restart: Option<PathBuf>,
     tx: Sender<ServerEvent>,
@@ -320,6 +323,8 @@ pub(crate) fn run() -> Result<()> {
     let todos = todo::load(&paths::todos(&session));
     let todo_saver = Saver::new(paths::todos(&session), Some(todos.saved()));
     app.set_todos(todos);
+    app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
+    app.set_queue_path(paths::queue(&session));
     let stats = crate::agents::stats::load(&paths::stats(&session), SystemTime::now());
     log::info!(
         "stats",
@@ -416,6 +421,7 @@ fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>)
 
 impl Server {
     fn new(app: App, session: PathBuf, todo_saver: Saver<todo::Saved>, tx: Sender<ServerEvent>) -> Self {
+        let queue_saver = Saver::new(paths::queue(&session), None);
         let stats_saver = crate::agents::stats::Saver::new(paths::stats(&session), app.stats().revision());
         Self {
             app,
@@ -428,6 +434,7 @@ impl Server {
             saver: Saver::new(session.clone(), None),
             session,
             todo_saver,
+            queue_saver,
             stats_saver,
             restart: None,
             tx,
@@ -568,6 +575,11 @@ impl Server {
             Ok(false) => {}
             Err(e) => log::error!("stats", "failed to save", error = e),
         }
+        match self.queue_saver.observe(self.app.queue_saved(), now) {
+            Ok(true) => log::debug!("server", "queue saved"),
+            Ok(false) => {}
+            Err(e) => log::error!("server", "failed to save the queue", error = e),
+        }
         match self.todo_saver.observe(self.app.todos_saved(), now) {
             Ok(true) => log::debug!("server", "todo list saved"),
             Ok(false) => {}
@@ -705,6 +717,7 @@ impl Server {
         self.clients.push(Client {
             id,
             size: None,
+            zone: "UTC".into(),
             used: 0,
             notify,
             pointer: None,
@@ -748,6 +761,7 @@ impl Server {
         let Some(client) = self.client_mut(id) else { return };
         client.size = Some((hello.cols, hello.rows));
         client.notify = hello.notify;
+        client.zone = hello.zone;
         client.pointer = hello.pointer;
         let background = hello.theme.background.map(|c| (c.r, c.g, c.b));
         client.graphics = Graphics::new(id, hello.graphics, background);
@@ -801,6 +815,12 @@ impl Server {
             self.fit(None);
         }
         let Some(area) = self.area else { return };
+        let zone = self
+            .clients
+            .iter()
+            .find(|client| client.id == id)
+            .map_or_else(|| "UTC".into(), |client| client.zone.clone());
+        self.app.set_queue_zone(zone);
         if let Err(e) = self.app.handle_event(AppEvent::Input(ev), area) {
             log::warning!("app", "input failed", error = e);
         }
@@ -875,6 +895,11 @@ impl Server {
             && let Err(e) = persist::save(&self.session, &self.app.state())
         {
             log::error!("server", "failed to save the session", error = e);
+        }
+        if let Err(e) =
+            self.queue_saver.observe(self.app.queue_saved(), Instant::now()).and_then(|_| self.queue_saver.flush())
+        {
+            log::error!("server", "failed to save the queue", error = e);
         }
         for client in self.clients.drain(..) {
             client.send(self.restart.clone().map_or(ServerMessage::Shutdown, ServerMessage::Restart));

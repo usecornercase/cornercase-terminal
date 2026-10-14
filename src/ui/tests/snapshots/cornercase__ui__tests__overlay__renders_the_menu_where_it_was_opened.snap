@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/overlay.rs
-assertion_line: 7051
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: render(&v).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

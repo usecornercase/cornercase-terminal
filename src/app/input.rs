@@ -37,6 +37,9 @@ impl App {
             None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
+            Some(Overlay::Queue(_)) => {
+                self.queue_key(key);
+            }
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
             Some(Overlay::Usage) => {
@@ -85,15 +88,7 @@ impl App {
             self.files.unfocus();
         }
         if in_panel {
-            match self.side {
-                Some(Side::Todo) => {
-                    self.todo_mouse(ev, pos, areas.changes, area);
-                    return Ok(());
-                }
-                Some(Side::Files) => return self.files_mouse(ev, pos, areas.changes, area),
-                Some(Side::Changes) => return self.changes_mouse(ev, pos, areas.changes, area),
-                None => {}
-            }
+            return self.side_mouse(ev, pos, areas.changes, area);
         }
         if let Some(delta) = wheel(ev.kind)
             && self.scroll_column(&areas, pos, delta)
@@ -165,6 +160,17 @@ impl App {
         self.main_mouse(ev, pos, &areas, area)
     }
 
+    fn side_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
+        match self.side {
+            Some(Side::Queue) => self.queue_mouse(ev, pos, panel, area),
+            Some(Side::Todo) => self.todo_mouse(ev, pos, panel, area),
+            Some(Side::Files) => return self.files_mouse(ev, pos, panel, area),
+            Some(Side::Changes) => return self.changes_mouse(ev, pos, panel, area),
+            None => {}
+        }
+        Ok(())
+    }
+
     fn main_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> Result<()> {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
@@ -194,6 +200,8 @@ impl App {
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
+        } else if areas.queue_button.contains(pos) {
+            Self::toggle_queue
         } else if todo.contains(pos) {
             Self::toggle_todo
         } else if files.contains(pos) {
@@ -283,6 +291,7 @@ impl App {
             ui::ActivityItem::Changes => self.toggle_changes(),
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
+            ui::ActivityItem::Queue => self.toggle_queue(),
             ui::ActivityItem::Update => self.open_update(),
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Usage => self.open_usage(),
@@ -332,6 +341,12 @@ impl App {
         }
         if let Some(Overlay::Branches(picker)) = &mut self.overlay {
             text.chars().filter(|c| !c.is_control()).for_each(|c| picker.push(c));
+            return;
+        }
+        if let Some(Overlay::Queue(form)) = &mut self.overlay {
+            if !form.busy {
+                form.editor().insert(text);
+            }
             return;
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay {

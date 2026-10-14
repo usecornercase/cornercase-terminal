@@ -61,6 +61,8 @@ fn view(names: &[&str]) -> View<'static> {
         changes: None,
         changes_button: None,
         todo: None,
+        queue: None,
+        queue_pending: 0,
         todo_dot: true,
         todo_pending: false,
         files: None,
@@ -157,6 +159,7 @@ mod layout;
 mod muted;
 mod overlay;
 mod picker;
+mod queue;
 mod reorder;
 mod row_hover;
 mod scrollback;

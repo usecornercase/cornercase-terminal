@@ -112,8 +112,19 @@ mod a_bug {
         let _ = server.handle(ServerEvent::Accepted(ours));
         let (version, build, theme) = (protocol::VERSION, version::build_id(), HostTheme::default());
         let (notify, probe) = (Channel::Bell, String::new());
-        let hello =
-            Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, pointer, graphics, probe };
+        let hello = Hello {
+            version,
+            build,
+            cols: COLS,
+            rows: ROWS,
+            theme,
+            notify,
+            terminal: None,
+            pointer,
+            graphics,
+            probe,
+            zone: "UTC".into(),
+        };
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
@@ -318,6 +329,7 @@ mod streaming {
         let graphics = Graphics::default();
         (
             Client {
+                zone: "UTC".into(),
                 id: 1,
                 size: None,
                 used: 0,

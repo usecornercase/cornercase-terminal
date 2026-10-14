@@ -4,6 +4,7 @@ use crate::issues::{Issue, Source, Who};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Button {
     Start,
+    Schedule,
     Agent,
     Where,
     Done,
@@ -25,6 +26,7 @@ impl Button {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Start => "start",
+            Self::Schedule => "schedule",
             Self::Agent => "agent…",
             Self::Where => "where…",
             Self::Done => "done",
@@ -54,7 +56,7 @@ impl Browser {
         }
         match &self.screen {
             Screen::Detail { raw, issue, .. } => {
-                let mut buttons = vec![Button::Start, Button::Agent];
+                let mut buttons = vec![Button::Start, Button::Schedule, Button::Agent];
                 if !issue.source.in_repository() && self.places.len() > 1 {
                     buttons.push(Button::Where);
                 }
@@ -79,7 +81,7 @@ impl Browser {
     }
 
     fn list_buttons(&self) -> Vec<Button> {
-        let mut buttons = vec![Button::Start, Button::Refresh];
+        let mut buttons = vec![Button::Start, Button::Schedule, Button::Refresh];
         if let Tab::One(source) = self.current()
             && self.connections.get(&source).is_some_and(|c| !c.from_env)
         {
@@ -105,21 +107,24 @@ impl Browser {
 
     pub(super) fn press(&mut self, button: Button) -> Action {
         match button {
-            Button::Start => match &self.screen {
-                Screen::Detail { issue, .. } => {
-                    let issue = (**issue).clone();
-                    self.start(issue)
-                }
-                Screen::List => match self.selected() {
-                    Some(issue) if self.ready_to_start(&issue) => self.start(issue),
-                    Some(issue) => {
-                        let read = self.read(issue.clone());
-                        let _ = self.start(issue);
-                        read
+            Button::Start | Button::Schedule => {
+                self.scheduling = button == Button::Schedule;
+                match &self.screen {
+                    Screen::Detail { issue, .. } => {
+                        let issue = (**issue).clone();
+                        self.start(issue)
                     }
-                    None => Action::None,
-                },
-            },
+                    Screen::List => match self.selected() {
+                        Some(issue) if self.ready_to_start(&issue) => self.start(issue),
+                        Some(issue) => {
+                            let read = self.read(issue.clone());
+                            let _ = self.start(issue);
+                            read
+                        }
+                        None => Action::None,
+                    },
+                }
+            }
             Button::Agent => {
                 self.open_picker(Pick::Agent, false);
                 Action::None
@@ -206,7 +211,7 @@ impl Browser {
         }
         if let Some(kind) = self.agents.pick() {
             let place = self.place_for(&issue).cloned();
-            Action::Start(issue, kind, place)
+            if self.scheduling { Action::Schedule(issue, kind, place) } else { Action::Start(issue, kind, place) }
         } else {
             self.open_picker(Pick::Agent, true);
             Action::None

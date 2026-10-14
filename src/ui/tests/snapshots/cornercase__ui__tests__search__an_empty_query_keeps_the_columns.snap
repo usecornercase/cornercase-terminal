@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/search.rs
-assertion_line: 7589
 expression: "render(&with(search(\"\", Vec::new()))).backend()"
 ---
 "  ⌕                                                      │                                          "
@@ -20,4 +19,4 @@ expression: "render(&with(search(\"\", Vec::new()))).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

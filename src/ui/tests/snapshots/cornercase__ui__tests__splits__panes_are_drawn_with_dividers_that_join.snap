@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/splits.rs
-assertion_line: 6898
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │ $ left              │ $ top              "
@@ -20,4 +19,4 @@ expression: render(&v).backend()
 " ───────────────────────────── │                         │                     │                    "
 "  Settings                     │                         │                     │                    "
 "  Usage                        │                         │                     │                    "
-"  Quit                         │                         │                     │                    "
+"  Quit                         │ Queue 0                 │                     │                    "

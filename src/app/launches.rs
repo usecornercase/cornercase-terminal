@@ -37,7 +37,7 @@ impl App {
                 application_cursor,
                 screen: &mut screen,
                 trust_prompt: &asks,
-                trust,
+                trust: launch.trust.unwrap_or(trust),
             };
             let before = launch.stage();
             let step = launch.step(now, &mut seen);

@@ -3,7 +3,7 @@ source: src/ui/tests/tab_context.rs
 expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
-"   ≡     shop › login › claude                                ▤      ☐      ⌕   "
+"   ≡     shop › login › claude                         ▤     Q 0     ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

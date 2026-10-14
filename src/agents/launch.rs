@@ -32,6 +32,7 @@ enum Stage {
 pub(crate) struct Launch {
     pub(crate) term: u64,
     pub(crate) key: Option<u64>,
+    pub(crate) trust: Option<Trust>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -72,6 +73,7 @@ impl Launch {
         Self {
             term,
             key: None,
+            trust: None,
             spec,
             agent: true,
             stage: Stage::Shell,

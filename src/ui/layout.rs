@@ -16,7 +16,7 @@ pub const COMPACT_WIDTH: u16 = 90;
 
 pub const COMPACT_PITCH: u16 = 3;
 
-const STACK_FOOTER: u16 = 6;
+const STACK_FOOTER: u16 = 7;
 
 pub(super) const COMPACT_BUTTON_WIDTH: u16 = 7;
 
@@ -93,6 +93,7 @@ pub struct Areas {
     pub(crate) changes_border: Rect,
     pub(crate) changes_button: Rect,
     pub todo_button: Rect,
+    pub(crate) queue_button: Rect,
     pub(crate) files_button: Rect,
     pub(crate) tab_bar: Rect,
 }
@@ -199,9 +200,9 @@ fn projects_column(r: Rect, icons: bool) -> [Rect; 6] {
     [title, list, separator, settings, usage, quit]
 }
 
-fn workspaces_column(r: Rect, icons: bool) -> [Rect; 5] {
+fn workspaces_column(r: Rect, icons: bool) -> [Rect; 6] {
     let footer = u16::from(!icons);
-    let [title, _, list, separator, issues, todo, _] = Layout::vertical([
+    let [title, _, list, separator, issues, todo, queue] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(GAP),
         Constraint::Min(1),
@@ -211,7 +212,7 @@ fn workspaces_column(r: Rect, icons: bool) -> [Rect; 5] {
         Constraint::Length(footer),
     ])
     .areas(r);
-    [title, list, separator, issues, todo]
+    [title, list, separator, issues, todo, queue]
 }
 
 fn below_header(r: Rect) -> Rect {
@@ -296,7 +297,7 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
     let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
     let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
     let [title, list] = if agents { section(lists) } else { [title, list] };
-    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
+    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo, queue] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)), icons);
     Areas {
         pitch: 1,
@@ -327,6 +328,7 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button: Rect::default(),
         todo_button: changes_button(todo, TODO_LABEL),
+        queue_button: queue,
         files_button: files_button(todo),
         ..agents_areas
     }
@@ -348,8 +350,8 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool, icons: bool) 
     let room = stack_room(inner, icons);
     let footer_y = inner.bottom().saturating_sub(stack_footer(icons)).max(room.y);
     let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
-    let [separator, issues, todo, settings, usage, quit] =
-        if icons { [Rect::default(); 6] } else { Layout::vertical([Constraint::Length(1); 6]).areas(footer) };
+    let [separator, issues, todo, queue, settings, usage, quit] =
+        if icons { [Rect::default(); 7] } else { Layout::vertical([Constraint::Length(1); 7]).areas(footer) };
     let frame = Areas {
         pitch: 1,
         search,
@@ -364,6 +366,7 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool, icons: bool) 
         pane,
         projects_border: right_edge(column),
         todo_button: changes_button(todo, TODO_LABEL),
+        queue_button: queue,
         files_button: files_button(todo),
         ..Areas::default()
     };
@@ -420,8 +423,10 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
     let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
     let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
     let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
-    let files_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
-    let files_button = Rect { x: todo_button.x - files_width, width: files_width, ..bar };
+    let queue_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
+    let queue_button = Rect { x: todo_button.x - queue_width, width: queue_width, ..bar };
+    let files_width = COMPACT_BUTTON_WIDTH.min(queue_button.x.saturating_sub(bar.x));
+    let files_button = Rect { x: queue_button.x - files_width, width: files_width, ..bar };
     let changes_width = COMPACT_BUTTON_WIDTH.min(files_button.x.saturating_sub(bar.x));
     let changes_button = Rect { x: files_button.x - changes_width, width: changes_width, ..bar };
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
@@ -479,6 +484,7 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button,
         todo_button,
+        queue_button,
         files_button,
         tab_bar: Rect::default(),
     }

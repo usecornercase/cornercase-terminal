@@ -1,3 +1,5 @@
+pub(crate) mod queue;
+
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -113,6 +115,8 @@ pub(crate) enum Control {
     Mark(MarkArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
+    #[command(about = "Schedule issues or prompts for later; queued agents accept folder trust prompts")]
+    Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
 }

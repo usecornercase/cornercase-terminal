@@ -10,8 +10,8 @@ fn tree() -> Areas {
 fn one_list_runs_from_its_title_to_the_footer() {
     let a = tree();
     assert_eq!(
-        (a.title.y, a.list.y, a.list.bottom(), a.separator.y, a.issues.y, a.todo_button.y, a.quit.y),
-        (HEADER_HEIGHT, HEADER_HEIGHT + 2, 24, 24, 25, 26, 29)
+        (a.title.y, a.list.y, a.list.bottom(), a.separator.y, a.issues.y, a.todo_button.y, a.queue_button.y, a.quit.y),
+        (HEADER_HEIGHT, HEADER_HEIGHT + 2, 23, 23, 24, 25, 26, 29)
     );
 }
 

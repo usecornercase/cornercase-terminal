@@ -18,6 +18,7 @@ use crate::{log, server, update::restart};
 
 mod args;
 mod help;
+mod queue;
 mod read;
 mod status;
 mod update;
@@ -143,6 +144,7 @@ fn run_control(command: Control) -> Result<bool> {
             say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
         }
         Control::Start(start) => run_start(start),
+        Control::Queue(queue) => queue::run(queue.action),
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
             let Target { pane, tab } = send.target;

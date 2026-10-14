@@ -22,6 +22,7 @@ pub mod host;
 pub(crate) mod issues;
 pub mod project;
 pub(crate) mod pull_request;
+pub(crate) mod queue;
 pub(crate) mod settings;
 pub(crate) mod shortcuts;
 pub mod state;

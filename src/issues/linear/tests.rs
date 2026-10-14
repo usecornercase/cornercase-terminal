@@ -124,10 +124,11 @@ fn view_reads_the_description_sub_issues_and_comments() {
             "comments":{{"nodes":[{{"body":"later","createdAt":"2026-09-21T00:00:00Z","user":null,"botActor":{{"name":"GitHub"}}}},
             {{"body":"first","createdAt":"2026-09-20T00:00:00Z","user":{{"displayName":"bo"}}}}]}}}}"#
     );
-    let server = server(vec![format!(r#"{{"data":{{"issue":{node}}}}}"#)]);
+    let server = server(vec![format!(r#"{{"data":{{"issue":{node}}}}}"#); 2]);
     let url = url(&server);
 
     let detail = Api { url: &url, token: "k" }.view("ENG-123").expect("view");
+    assert_eq!(Api { url: &url, token: "k" }.find("ENG-123").expect("find for queue").key, "ENG-123");
 
     assert_eq!(
         detail.info,

@@ -60,6 +60,7 @@ pub(super) enum Overlay {
     RemoveWorkspace { project: u64, workspace: u64, check: Check, lock: Option<worktree::Lock> },
     Picker { picker: Picker, group: Option<u64> },
     Issues(Box<Browser>),
+    Queue(Box<crate::queue::form::Form>),
     Search(Search),
     Update(UpdateStep),
     Restart,
@@ -88,6 +89,7 @@ impl Overlay {
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
+            Self::Queue(_) => "queue",
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage => "usage",
@@ -144,7 +146,8 @@ impl Overlay {
     }
 
     pub(super) fn busy(&self) -> bool {
-        matches!(self, Self::NewWorkspace { creating: true, .. })
+        matches!(self, Self::Queue(form) if form.busy)
+            || matches!(self, Self::NewWorkspace { creating: true, .. })
             || matches!(self, Self::Issues(b) if b.starting)
             || matches!(self, Self::Settings(s) if s.busy())
             || matches!(self, Self::Update(UpdateStep::Updating))
@@ -163,6 +166,7 @@ impl App {
             Some(Overlay::Search(_)) => self.search_mouse(ev, pos, area),
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
+            Some(Overlay::Queue(_)) => self.queue_form_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
@@ -208,6 +212,7 @@ impl App {
             Overlay::ClosePane { pane } => self.close_pane_view(*pane)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), home),
+            Overlay::Queue(form) => ui::Overlay::Queue(Self::queue_form_view(form)),
             Overlay::Issues(b) => view(b, room(area), time::now()),
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),

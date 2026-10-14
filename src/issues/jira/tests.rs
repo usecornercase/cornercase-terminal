@@ -191,6 +191,7 @@ fn view_reads_the_description_sub_tasks_and_comments() {
     let server = FakeHttp::start(vec![("GET /rest/api/3/issue/SHOP-482", 200, node)]);
 
     let detail = api(&server, "").view("SHOP-482").expect("view");
+    assert_eq!(api(&server, "").find("SHOP-482").expect("find for queue").title, "Returns page crashes");
 
     assert_eq!(
         detail.info,

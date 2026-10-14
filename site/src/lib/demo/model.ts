@@ -152,6 +152,7 @@ export type Overlay =
   | { kind: 'restart'; scroll: number }
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
+  | import('./queue').QueueForm
   | SettingsOverlay
   | IssuesOverlay;
 

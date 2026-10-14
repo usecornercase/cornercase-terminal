@@ -1,10 +1,9 @@
 ---
 source: src/ui/tests/agents_section.rs
-assertion_line: 8385
 expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
-"   ≡     website › default › codex                            ▤      ☐      ⌕   "
+"   ≡     website › default › codex                     ▤     Q 0     ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

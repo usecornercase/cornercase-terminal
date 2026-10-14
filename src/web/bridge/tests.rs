@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn the_page_theme_becomes_the_host_theme() {
     let theme = Theme {
+        zone: "Europe/Madrid".into(),
         foreground: Some("#e0e0e0".into()),
         background: Some("#101820".into()),
         palette: vec!["#000000".into(), "#cc0000".into(), "bad".into()],

@@ -8,12 +8,14 @@ mod agents_section;
 pub(crate) mod changes;
 mod chrome;
 mod dialog;
+pub(crate) use dialog::queue as queue_form;
 mod drop;
 pub(crate) mod files;
 mod icons;
 pub(crate) mod keys;
 mod layout;
 mod pane;
+pub(crate) mod queue;
 pub(crate) mod remote;
 pub(crate) mod remote_access;
 mod rows;
@@ -155,6 +157,8 @@ pub(crate) struct View<'a> {
     pub(crate) remote: Option<bool>,
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
+    pub(crate) queue: Option<queue::View>,
+    pub(crate) queue_pending: usize,
     pub(crate) todo: Option<todo::View>,
     pub(crate) todo_dot: bool,
     pub(crate) todo_pending: bool,
@@ -246,7 +250,7 @@ impl View<'_> {
 }
 
 pub(crate) fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
+    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.queue.is_some();
     let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
         .with_tab_bar(view.tab_bar.is_some())
         .shown(view.nav);
@@ -289,12 +293,18 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     if view.has_project && [areas.workspaces_separator, areas.issues].iter().any(|r| !r.is_empty()) {
         draw_issues_row(f, view, &areas);
     }
+    if !view.has_project && !areas.compact() {
+        chrome::draw_queue_button(f, view, &areas);
+    }
     if panel && !areas.changes.is_empty() {
         f.render_widget(Clear, areas.changes);
         let border = areas.changes_border;
         draw_column_border(f, view.line(), border);
         draw_border(f, view, border, Border::Changes);
         let hover = view.hover.filter(|_| view.overlay.is_none());
+        if let Some(queue) = &view.queue {
+            queue::draw(f, areas.changes, queue, hover, view.muted, areas.compact(), view.light);
+        }
         match (&view.changes, &view.todo, &view.files) {
             (Some(changes), _, _) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
             (None, Some(todo), _) => todo::draw(f, areas.changes, todo, hover),
@@ -310,6 +320,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     match &view.overlay {
         Some(Overlay::Menu { at, items }) => draw_menu(f, view, *at, items),
         Some(Overlay::Form(form)) => draw_form(f, view, form),
+        Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
         Some(Overlay::Update(update)) => draw_update(f, view, update),

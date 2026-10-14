@@ -1,0 +1,70 @@
+---
+title: Queue agents
+description: Schedule issues and prompts for a clock time, a delay or the next plan reset.
+---
+
+import Screen from '../../../../components/Screen.astro';
+
+Click **`Queue n`** below `TODO` to open the queue in the right column. In a small terminal, **`Q n`** in the top bar opens it over the pane. The number counts pending entries. Changes, files, TODO and the queue share that column: opening one closes the others.
+
+<Screen name="queue" alt="The queue panel with pending, started, failed and missed agents, and buttons to start now, clear started and add a new entry" caption="See what is scheduled and what ran while you were away." />
+
+## Schedule an issue or a prompt
+
+In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. GitHub, GitLab, Shortcut, Linear, Jira and Plane issues use your configured [prompt template](../../reference/prompt/).
+
+For a free prompt, click **`+ new`** in the queue. Type the prompt, click the time field, and select the place, agent and mode. Click the place, agent or mode row to cycle through the choices. A repository root can use a new worktree: enable **`New worktree`** and type its branch below. A chosen workspace gets a new tab. An issue already supplies its usual branch name.
+
+<Screen name="queue-form" alt="The schedule form with prompt, time, place, agent, mode and worktree branch fields, and Claude and Codex reset buttons" caption="Choose a time or the next five-hour plan reset." />
+
+The time field accepts:
+
+| Input | When it starts |
+| --- | --- |
+| `14:30` | The next 14:30, today or tomorrow. |
+| `tomorrow 9:00` | Tomorrow at 9:00. |
+| `2026-10-20 09:00` | That date at 9:00. |
+| `in 30m`, `in 2h` | After that delay. |
+| `claude reset`, `codex reset` | At the next reset of that agent's five-hour plan window. |
+
+Clock times use the zone shown in the form, supplied by the client that opened it, including a remote terminal or browser. Dates use that zone's daylight saving rules. A local time that does not exist or occurs twice is rejected; choose another time or a delay. The entry is saved as an absolute UTC instant.
+
+A reset choice runs the existing plan usage probe on the server when you save. It freezes the returned reset time; it does not keep polling or follow later changes to the window. If the probe fails or reports no future five-hour reset, the form shows the reason and keeps your text.
+
+Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form. Click a field to edit it, use the arrow keys, `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` moves between text fields.
+
+**Queued launches always accept the agent's folder trust question**, even with `accept_trust_prompts` off. This lets unattended starts proceed. The form states this before saving. Immediate starts keep your global trust setting. Agent approval modes remain the ones you selected.
+
+## When entries run
+
+The server starts every due entry, with no concurrency limit. Entries at the same instant start in insertion order. Each uses the normal worktree, tab and agent launch path and leaves the active pane selected. A toast and desktop notification announce success or failure.
+
+The server must be running, with its session opened at least once after a restart. Closing the UI leaves scheduled work running. The queue does not wake a sleeping machine or start a stopped server.
+
+An entry more than ten minutes late becomes **`missed`** and waits for you. Waking or restarting within ten minutes still starts it. Missed and failed entries have **`start now`**; pending entries do too. Click a pending, missed or failed row to edit and reschedule it, or its **`×`** to remove it. An entry shows `starting` while its worktree or agent is being prepared; it cannot be cancelled or edited then.
+
+Started entries stay until **`clear started`** or **`×`** removes them. Click one to jump to its pane while it is still open in that server. After a restart, its historical pane link is unavailable; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
+
+The agent command, mode, prompt and destination are captured when scheduled. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
+
+## Commands
+
+```sh
+cornercase queue add --at 'in 2h' --agent claude --prompt 'Fix the login form'
+cornercase queue add --at 'tomorrow 9:00' --agent codex --worktree fix-login --prompt 'Fix the login form'
+cornercase queue add --at 'claude reset' --agent claude --issue https://github.com/acme/shop/issues/482
+cornercase queue add --at 14:30 --agent codex --source linear --issue ENG-123 --workspace 12
+cornercase queue list
+cornercase queue list --json
+cornercase queue edit 1 --at 'in 3h' --prompt 'Fix logout too'
+cornercase queue run 1
+cornercase queue remove 1
+```
+
+`add` prints the entry's persistent id. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs. `--mode` names a configured agent mode, and `--name` sets the entry and tab name. `add`, `edit` and `list` support `--json`.
+
+## Storage
+
+`queue.json` lives next to `session.json`, with its own format version. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue.
+
+The queue is independent of the [TODO list](../todo/). Entries run once; recurring schedules are not supported.

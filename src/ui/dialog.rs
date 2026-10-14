@@ -3,6 +3,7 @@ pub(super) mod group_style;
 pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
+pub(crate) mod queue;
 pub(super) mod search;
 pub(super) mod settings;
 pub(super) mod update;
@@ -108,6 +109,7 @@ pub(crate) enum Note {
 pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String> },
     Form(Form),
+    Queue(queue::Form),
     GroupStyle(GroupEntry),
     Confirm(Confirm),
     Update(Update),
@@ -127,6 +129,7 @@ impl Overlay {
 
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
+            Self::Queue(_) => Some(queue::area(area)),
             Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),

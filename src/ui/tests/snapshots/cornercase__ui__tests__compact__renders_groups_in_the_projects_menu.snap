@@ -1,10 +1,9 @@
 ---
 source: src/ui/tests/compact.rs
-assertion_line: 5771
 expression: "render_small(&with_groups(in_a_project(Some(Nav::Projects)))).backend()"
 ---
 "                                                                                "
-"   ≡     shop › feat/login › claude                           ▤      ☐      ⌕   "
+"   ≡     shop › feat/login › claude                    ▤     Q 0     ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

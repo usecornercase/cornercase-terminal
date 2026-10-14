@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/picker.rs
-assertion_line: 7217
 expression: render(&with(picker(None))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -20,4 +19,4 @@ expression: render(&with(picker(None))).backend()
 " ─────────────│ enter opens ~/projects                                               │              "
 "  Settings    │                                                       open   cancel  │              "
 "  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  Quit                         │                         │                                          "
+"  Quit                         │ Queue 0                 │                                          "

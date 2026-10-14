@@ -180,7 +180,7 @@ impl App {
         configured.then_some(from_env)
     }
 
-    fn client(&self, source: Source, project: u64) -> Option<Client> {
+    pub(super) fn client(&self, source: Source, project: u64) -> Option<Client> {
         match source {
             Source::Github => {
                 let dir = self.projects.get(self.projects.project_index(project)?)?.path.clone();
@@ -250,6 +250,7 @@ impl App {
             gitlab_url: self.config.gitlab_url.clone(),
             screen: Screen::List,
             starting: false,
+            scheduling: false,
             error: None,
             notice: None,
             secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
@@ -312,6 +313,7 @@ impl App {
                 }
             }
             Action::Read(issue) => self.read_issue(issue),
+            Action::Schedule(issue, agent, place) => self.schedule_issue(&issue, &agent, place),
             Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, area),
             Action::LoadPeople(sources) => {
                 for source in sources {

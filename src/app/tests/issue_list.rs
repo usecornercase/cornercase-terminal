@@ -32,7 +32,7 @@ const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels
 const STORIES: &str = r#"{"data":[{"id":482,"name":"Returns page crashes","app_url":"https://app.shortcut.com/acme/story/482",
             "updated_at":"2026-09-30T00:00:00Z"}],"next":null}"#;
 
-const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
+pub(super) const FAKE_AGENT: &str = "#!/bin/sh\nprintf 'Do you trust the files in this folder?\\n'\nread answer\n\
             printf '%s' \"$answer\" > answered\nprintf '\\033[2J\\033[H'\n\
             printf 'agent ready> '\nread line\nprintf '%s' \"$line\" > got\n";
 
@@ -389,7 +389,8 @@ mod starting {
         let mut s = listing();
         open_loaded(&mut s, Source::Github);
         send_key(&mut s.app, KeyCode::Down, KeyModifiers::NONE);
-        click(&mut s.app, ui::issue_buttons(ui::issues_area(AREA), &["start", "refresh", "cancel"])[0].as_position());
+        let start = ui::issue_buttons(ui::issues_area(AREA), &browser(&s.app).labels())[0];
+        click(&mut s.app, start.as_position());
         pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
         assert_eq!(s.app.projects[0].workspaces[1].label(), "#3 Dark mode");
     }

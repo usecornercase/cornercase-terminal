@@ -63,6 +63,10 @@ pub(crate) fn todos(state: &Path) -> PathBuf {
     state.with_file_name(TODOS_FILE)
 }
 
+pub(crate) fn queue(session: &Path) -> PathBuf {
+    session.with_file_name("queue.json")
+}
+
 pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
 }
