@@ -2,6 +2,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
+use super::flow_panel::COPY;
 use super::flows_dialog::flows_view;
 use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
@@ -14,6 +15,7 @@ use super::worktrees::Check;
 use crate::changes::BranchPicker;
 use crate::error::Result;
 use crate::flows::dialog::Dialog;
+use crate::flows::progress::Edge;
 use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
@@ -74,6 +76,7 @@ pub(super) enum Overlay {
     Telegram,
     Branches(BranchPicker),
     PullRequest { workspace: u64, scroll: usize },
+    FlowMessage { workspace: u64, edge: Edge, scroll: usize },
     Keys(Option<KeysGroup>),
 }
 
@@ -104,6 +107,7 @@ impl Overlay {
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
             Self::PullRequest { .. } => "pull request",
+            Self::FlowMessage { .. } => "flow message",
             Self::Keys(_) => "keys",
         }
     }
@@ -124,6 +128,7 @@ impl Overlay {
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
             Self::PullRequest { .. } => COPY_LINK,
+            Self::FlowMessage { .. } => COPY,
             _ => CREATE_SUBMIT,
         }
     }
@@ -131,7 +136,7 @@ impl Overlay {
     pub(super) fn cancel_label(&self) -> &'static str {
         match self {
             Self::Update(UpdateStep::Installed) => LATER,
-            Self::PullRequest { .. } => DONE,
+            Self::PullRequest { .. } | Self::FlowMessage { .. } => DONE,
             _ => ui::CANCEL_LABEL,
         }
     }
@@ -177,6 +182,7 @@ impl App {
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
+            Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Telegram) => self.telegram_mouse(ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
@@ -229,6 +235,9 @@ impl App {
             Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
+            Overlay::FlowMessage { workspace, edge, scroll } => {
+                self.flow_message_view(*workspace, *edge, *scroll, area)?
+            }
         })
     }
 }

@@ -1,0 +1,20 @@
+---
+source: src/ui/flow/tests.rs
+expression: "render(&d, 46).backend()"
+---
+"            ╭─ orchestrator ────╮             "
+"            │ claude            │             "
+"            ╰───────────────────╯             "
+"                                              "
+"            ╭─ coder ───────────╮             "
+"            │ claude            │◀───────────╮"
+"            ╰─────────┬─────────╯            │"
+"                      │ findings · at most 3 │"
+"          ╭───────────┴──────────╮           │"
+"          ▼                      ▼           │"
+"╭─ reviewer ────────╮  ╭─ second reviewer ─╮ │"
+"│ codex             │  │ gemini            │─╯"
+"╰─────────┬─────────╯  ╰─────────┬─────────╯  "
+"          ╰───────────┬──────────╯            "
+"                      ▼                       "
+"                      ◆ open a pull request   "

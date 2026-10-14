@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 
 use super::Flow;
+use super::progress::Progress;
 
 pub(crate) const MAX_MESSAGES: usize = 256;
 
@@ -37,11 +38,12 @@ pub(crate) struct Run {
     pub(crate) task: String,
     pub(crate) members: Vec<Member>,
     pub(crate) messages: VecDeque<Message>,
+    pub(crate) progress: Progress,
 }
 
 impl Run {
     pub(crate) fn new(workspace: u64, flow: Flow, task: String) -> Self {
-        Self { workspace, flow, task, members: Vec::new(), messages: VecDeque::new() }
+        Self { workspace, flow, task, members: Vec::new(), messages: VecDeque::new(), progress: Progress::default() }
     }
 
     pub(crate) fn role_of(&self, pane: u64) -> Option<&str> {
@@ -53,6 +55,7 @@ impl Run {
     }
 
     pub(crate) fn record(&mut self, message: Message) {
+        self.progress.step(&self.flow, &message);
         if self.messages.len() == MAX_MESSAGES {
             self.messages.pop_front();
         }

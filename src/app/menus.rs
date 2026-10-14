@@ -87,6 +87,7 @@ pub(super) enum MenuAction {
     Pane(u64, PaneAction),
     Mark(Marked, bool),
     PullRequest(u64),
+    ShowFlow(u64),
     Browser,
     Away,
     StartFlow,
@@ -132,6 +133,7 @@ impl App {
             MenuAction::PullRequest(workspace) => {
                 self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
             }
+            MenuAction::ShowFlow(_) => "show flow".into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
             MenuAction::Away if !self.telegram.ready() => "set up Telegram…".into(),
@@ -146,7 +148,11 @@ impl App {
             Target::Workspace(_, workspace) => self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace)),
             Target::Group(_) | Target::Project(_) => None,
         };
-        std::iter::once(MenuAction::Rename(target)).chain(more).collect()
+        let flow = match target {
+            Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
+            _ => None,
+        };
+        std::iter::once(MenuAction::Rename(target)).chain(more).chain(flow).collect()
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -195,6 +201,7 @@ impl App {
                 self.mark(marked, pending);
             }
             MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
+            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away => self.toggle_away(),

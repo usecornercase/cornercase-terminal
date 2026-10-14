@@ -39,20 +39,37 @@ fn start_rows(area: Rect, warnings: usize) -> [Rect; 8] {
     [heading, top, label, prompt, branch, warnings, note, buttons]
 }
 
+fn columns(area: Rect, warnings: usize, preview: bool) -> (Rect, Option<Rect>) {
+    let [_, top, _, prompt, ..] = start_rows(area, warnings);
+    beside(area, Rect { height: prompt.bottom().saturating_sub(top.y), ..top }, preview)
+}
+
+fn left(rect: Rect, column: Rect) -> Rect {
+    Rect { x: column.x, width: column.width, ..rect }
+}
+
 pub(crate) fn start_list(area: Rect, warnings: usize, preview: bool) -> Rect {
-    beside(area, start_rows(area, warnings)[1], preview).0
+    left(start_rows(area, warnings)[1], columns(area, warnings, preview).0)
 }
 
 pub(crate) fn start_preview(area: Rect, warnings: usize, preview: bool, diagram: bool) -> Option<Rect> {
-    match beside(area, start_rows(area, warnings)[1], preview) {
+    match columns(area, warnings, preview) {
         (_, Some(beside)) => Some(beside),
-        (top, None) if preview && diagram => Some(top),
+        (_, None) if preview && diagram => Some(start_rows(area, warnings)[1]),
         _ => None,
     }
 }
 
-pub(crate) fn start_prompt(area: Rect, warnings: usize) -> Rect {
-    text_inside(start_rows(area, warnings)[3])
+fn prompt_label(area: Rect, warnings: usize, preview: bool) -> Rect {
+    left(start_rows(area, warnings)[2], columns(area, warnings, preview).0)
+}
+
+fn prompt_area(area: Rect, warnings: usize, preview: bool) -> Rect {
+    left(start_rows(area, warnings)[3], columns(area, warnings, preview).0)
+}
+
+pub(crate) fn start_prompt(area: Rect, warnings: usize, preview: bool) -> Rect {
+    text_inside(prompt_area(area, warnings, preview))
 }
 
 pub(crate) fn start_branch(area: Rect, warnings: usize) -> Rect {
@@ -107,7 +124,7 @@ pub(crate) fn start_hit(area: Rect, view: &StartFlow, pos: Position) -> Option<S
     if let Some(i) = start_buttons(area, warnings, &view.buttons).iter().position(|r| r.contains(pos)) {
         return Some(StartHit::Button(i));
     }
-    let prompt = start_prompt(area, warnings);
+    let prompt = start_prompt(area, warnings, view.preview.is_some());
     if prompt.contains(pos) {
         return Some(StartHit::Prompt { line: usize::from(pos.y - prompt.y), col: usize::from(pos.x - prompt.x) });
     }
@@ -129,12 +146,14 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, &start.title), r);
     let warnings = start.warnings.len();
-    let [heading, _, label, prompt, branch, warning_rows, note, _] = start_rows(area, warnings);
+    let [heading, _, _, _, branch, warning_rows, note, _] = start_rows(area, warnings);
+    let preview = start.preview.is_some();
+    let (label, prompt) = (prompt_label(area, warnings, preview), prompt_area(area, warnings, preview));
     let dim = Style::default().fg(view.muted);
     let heading_text = truncate_right(&start.heading, usize::from(heading.width));
     f.render_widget(Paragraph::new(Span::styled(heading_text, dim.add_modifier(Modifier::BOLD))), heading);
     if let Some(preview) = start.preview_area(area) {
-        draw_preview(f, view, preview);
+        draw_preview(f, view, preview, start.preview.as_ref());
     }
     if !start.list_hidden(area) {
         let columns = Columns { label: LIST_LABEL, fill: true };

@@ -83,7 +83,7 @@ mod entries {
         let mut s = setup(true);
         s.app.config.prefix_key = "ctrl+]".into();
         send_key(&mut s.app, KeyCode::Char(']'), KeyModifiers::CONTROL);
-        type_text(&mut s.app, "wf");
+        type_text(&mut s.app, "ws");
         assert_eq!(start(&s.app).project, s.app.projects[0].id);
     }
 
@@ -190,6 +190,7 @@ mod running {
         assert_eq!(git::branch(&workspace.path).as_deref(), Some("fix-the-login-form"));
         assert_eq!(tabs, ["orchestrator", "coder", "reviewer", "security", "tester"]);
         assert_eq!((workspace.active, s.app.runs[0].task.as_str()), (0, "Fix the login form"));
+        assert_eq!(s.app.side, Some(Side::Flow));
     }
 
     #[test]

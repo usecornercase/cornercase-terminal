@@ -136,6 +136,7 @@ pub(crate) enum Action {
     Changes,
     Base,
     PullRequest,
+    Flow,
     NewWorkspace,
     StartFlow,
     RenameWorkspace,
@@ -235,10 +236,11 @@ const GIT: [Item; 3] = [
     run("p", "pull request and its checks", Action::PullRequest),
 ];
 
-const WORKSPACE: [Item; 4] = [
+const WORKSPACE: [Item; 5] = [
     run("n", "new workspace", Action::NewWorkspace),
-    run("f", "start a flow", Action::StartFlow),
+    run("s", "start a flow", Action::StartFlow),
     run("r", "rename workspace", Action::RenameWorkspace),
+    run("f", "flow of this workspace", Action::Flow),
     run("x", "close workspace", Action::CloseWorkspace),
 ];
 

@@ -28,6 +28,8 @@ pub(crate) fn glyphs(nerd: bool) -> &'static Glyphs {
 
 pub(crate) const ISSUES: &str = "\u{eb0c}";
 
+pub(crate) const FLOW: &str = "\u{ebb9}";
+
 pub(crate) const UPDATE: &str = "\u{eac2}";
 
 pub(crate) const REMOTE: &str = "\u{eb3a}";

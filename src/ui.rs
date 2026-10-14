@@ -10,6 +10,7 @@ mod chrome;
 mod dialog;
 mod drop;
 pub(crate) mod files;
+pub(crate) mod flow;
 mod icons;
 pub(crate) mod keys;
 mod layout;
@@ -164,6 +165,8 @@ pub(crate) struct View<'a> {
     pub(crate) changes: Option<changes::View>,
     pub(crate) changes_button: Option<ChangesButton>,
     pub(crate) todo: Option<todo::View>,
+    pub(crate) flow: Option<flow::View>,
+    pub(crate) flow_run: bool,
     pub(crate) todo_dot: bool,
     pub(crate) todo_pending: bool,
     pub(crate) files: Option<files::View>,
@@ -254,7 +257,7 @@ impl View<'_> {
 }
 
 pub(crate) fn draw(f: &mut Frame, view: &View) {
-    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
+    let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some() || view.flow.is_some();
     let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
         .with_tab_bar(view.tab_bar.is_some())
         .shown(view.nav);
@@ -303,11 +306,12 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         draw_column_border(f, view.line(), border);
         draw_border(f, view, border, Border::Changes);
         let hover = view.hover.filter(|_| view.overlay.is_none());
-        match (&view.changes, &view.todo, &view.files) {
-            (Some(changes), _, _) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
-            (None, Some(todo), _) => todo::draw(f, areas.changes, todo, hover),
-            (None, None, Some(files)) => files::draw(f, areas.changes, files, hover),
-            (None, None, None) => {}
+        match (&view.changes, &view.todo, &view.files, &view.flow) {
+            (Some(changes), ..) => changes::draw(f, areas.changes, changes, hover.filter(|_| view.drag.is_none())),
+            (None, Some(todo), ..) => todo::draw(f, areas.changes, todo, hover),
+            (None, None, Some(files), _) => files::draw(f, areas.changes, files, hover),
+            (None, None, None, Some(flow)) => flow::draw(f, areas.changes, flow, hover.filter(|_| view.drag.is_none())),
+            (None, None, None, None) => {}
         }
     }
     activity::draw_tooltip(f, view, areas.activity);

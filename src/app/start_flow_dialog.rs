@@ -53,7 +53,7 @@ impl App {
         let Some(start) = self.start_flow() else { return };
         let room = room(start, area);
         if let Some(delta) = wheel(ev.kind) {
-            if ui::start_prompt(area, start.warnings().len()).contains(pos) {
+            if ui::start_prompt(area, start.warnings().len(), start.selected().is_some()).contains(pos) {
                 start.scroll_prompt(delta, room);
             } else {
                 start.scroll_list(delta.signum());
@@ -100,7 +100,7 @@ impl App {
 }
 
 fn room(start: &Start, area: Rect) -> Room {
-    let prompt = ui::start_prompt(area, start.warnings().len());
+    let prompt = ui::start_prompt(area, start.warnings().len(), start.selected().is_some());
     Room { width: usize::from(prompt.width), height: usize::from(prompt.height), wide: ui::flows_wide(area) }
 }
 

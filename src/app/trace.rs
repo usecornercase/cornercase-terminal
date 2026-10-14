@@ -382,6 +382,7 @@ impl App {
             Some(Side::Changes) => Some("changes"),
             Some(Side::Todo) => Some("todo"),
             Some(Side::Files) => Some("files"),
+            Some(Side::Flow) => Some("flow"),
             None => None,
         };
         if panel != self.seen.panel {

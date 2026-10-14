@@ -1,5 +1,5 @@
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph};
@@ -14,6 +14,7 @@ use crate::flows::Flow;
 use crate::text::truncate_right;
 use crate::todo::editor::Editor;
 use crate::ui::View;
+use crate::ui::flow::{Diagram, draw_diagram};
 use crate::ui::widgets::overlay_block;
 
 const FLOWS_WIDTH: u16 = 140;
@@ -179,7 +180,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
     }
     if let Some(preview) = flows.preview_area(area) {
-        draw_preview(f, view, preview);
+        draw_preview(f, view, preview, flows.preview.as_ref());
     }
     if let Some(editor) = &flows.text {
         cursor = draw_text(f, view, body, editor);
@@ -235,9 +236,13 @@ pub(in crate::ui) fn draw_warnings(f: &mut Frame, warnings: &[String], r: Rect) 
     }
 }
 
-pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect) {
+pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, flow: Option<&Flow>) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
+    if let Some(flow) = flow {
+        let diagram = Diagram::plan(flow, view.muted, view.light);
+        draw_diagram(f.buffer_mut(), r.inner(Margin::new(1, 1)), &diagram, 0, None);
+    }
 }
 
 pub(in crate::ui) fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &Editor) -> Option<Position> {

@@ -64,7 +64,7 @@ fn height(n: usize) -> u16 {
     u16::try_from(n).unwrap_or(u16::MAX)
 }
 
-fn header(area: Rect) -> Rect {
+pub(super) fn header(area: Rect) -> Rect {
     Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1).intersection(area)
 }
 

@@ -115,6 +115,7 @@ impl App {
         self.runs.push(run);
         if focus && let Some(first) = info.members.first() {
             self.goto(Goto::Place { project: info.project, workspace: Some(id), tab: Some(first.tab) });
+            self.show_flow();
         }
         Ok(info)
     }

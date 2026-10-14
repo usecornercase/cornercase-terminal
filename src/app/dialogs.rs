@@ -179,6 +179,8 @@ impl App {
     fn scroll_dialog(&mut self, delta: isize, area: Rect) {
         if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
             self.scroll_pull_request(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
+            self.scroll_flow_message(delta, area);
         } else {
             self.scroll_update(delta, area);
         }
@@ -213,6 +215,7 @@ impl App {
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
+            Overlay::FlowMessage { workspace, edge, .. } => self.submit_flow_message(workspace, edge),
             busy => Some(busy),
         };
         Ok(())

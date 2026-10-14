@@ -26,6 +26,7 @@ pub(super) enum Side {
     Changes,
     Todo,
     Files,
+    Flow,
 }
 
 impl App {
@@ -44,6 +45,7 @@ impl App {
             Some(Side::Changes) => self.changes_shown(),
             Some(Side::Todo) => true,
             Some(Side::Files) => self.files_shown(),
+            Some(Side::Flow) => self.has_run(),
             None => false,
         }
     }
@@ -56,7 +58,7 @@ impl App {
             Some(Side::Changes) => self.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.files.close(),
-            None => {}
+            Some(Side::Flow) | None => {}
         }
         self.side = side;
     }
