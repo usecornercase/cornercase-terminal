@@ -61,3 +61,14 @@ test('an http GitLab server on another machine is saved with a warning', () => {
   assert.ok(app.textAt('Careful: the address starts with http://, so the token travels unencrypted.'));
   app.destroy();
 });
+
+test('a host name that starts like a loopback address still gets the warning', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.issuesTab(app.config.sources.indexOf('gitlab'));
+  type(app, 'http://127.example.com');
+  inputKey(app, key('Enter'));
+  app.render();
+  assert.ok(app.textAt('Careful: the address starts with http://, so the token travels unencrypted.'));
+  app.destroy();
+});

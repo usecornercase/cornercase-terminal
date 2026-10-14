@@ -338,6 +338,7 @@ fn an_empty_server_is_gitlab_com(#[case] url: &str, #[case] expected: &str) {
 #[case::http_with_a_port("http://10.0.0.5:8080", true)]
 #[case::localhost("http://localhost:8080", false)]
 #[case::loopback_address("http://127.0.0.1:3000", false)]
+#[case::a_name_starting_like_one("http://127.example.com", true)]
 #[case::ipv6_loopback("http://[::1]:3000", false)]
 #[case::another_ipv6_address("http://[fd00::1]:3000", true)]
 #[case::gitlab_com("", false)]

@@ -187,7 +187,7 @@ function unencrypted(url: string): boolean {
   if (!m) return false;
   const host = m[1].toLowerCase();
   const name = host.split(':')[0];
-  return !(name === 'localhost' || name.startsWith('127.') || host.startsWith('[::1]'));
+  return !(name === 'localhost' || /^127(\.\d{1,3}){3}$/.test(name) || host.startsWith('[::1]'));
 }
 
 function checkSite(input: string): [string, string?] {

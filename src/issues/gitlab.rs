@@ -42,7 +42,8 @@ pub(crate) fn unencrypted(url: &str) -> bool {
     let authority = rest.split('/').next().unwrap_or_default();
     let host = authority.rsplit('@').next().unwrap_or(authority).to_ascii_lowercase();
     let name = host.split(':').next().unwrap_or_default();
-    !(name == "localhost" || name.starts_with("127.") || host.starts_with("[::1]"))
+    let numeric = name.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback());
+    !(name == "localhost" || numeric || host.starts_with("[::1]"))
 }
 
 pub(crate) const UNENCRYPTED: &str = "the address starts with http://, so the token travels unencrypted";

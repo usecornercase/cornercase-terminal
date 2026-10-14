@@ -210,7 +210,7 @@ In a repository, the issue gets its own worktree on a branch named after it:
 | Jira | SHOP-77 Returns page crashes | `SHOP-77-returns-page-crashes` |
 | Plane | ENG-42 Fix login redirect | `ENG-42-fix-login-redirect` |
 
-GitLab branches start with the issue's number and a dash, GitLab's own convention: a merge request from such a branch gets `Closes #482` in its description, so the issue closes when the work is merged.
+GitLab branches start with the issue's number and a dash, GitLab's own convention: a merge request from such a branch gets `Closes #482` in its description, so, with the project's automatic issue closing on (GitLab's default), the issue closes when the merge request is merged into the default branch.
 
 The title part is lowercased, accents become plain letters, everything else becomes dashes, and it is cut at a word boundary to at most 40 characters. The workspace is named after the issue's key and title, like `#482 Returns page crashes on empty addr…`.
 
