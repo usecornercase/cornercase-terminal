@@ -134,6 +134,7 @@ fn a_click_on_a_tab_shows_its_rows() {
         [
             Row::Sidebar,
             Row::Tabs,
+            Row::IconBar,
             Row::AgentsSection,
             Row::WorkingIcon,
             Row::Counts,

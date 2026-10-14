@@ -70,6 +70,7 @@ fn view(names: &[&str]) -> View<'static> {
         tree: None,
         agents: None,
         counts: true,
+        icons: false,
         tab_bar: None,
     }
 }
@@ -140,6 +141,7 @@ fn close_x() -> u16 {
     list().right() - 2
 }
 
+mod activity;
 mod agent_status;
 mod agents_section;
 mod borders;

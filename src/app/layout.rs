@@ -34,7 +34,8 @@ impl App {
     }
 
     pub(super) fn layout(&self, area: Rect) -> ui::Areas {
-        ui::full_layout(area, self.widths, self.panel_shown(), self.sidebar(), self.config.agents_section)
+        let (panel, sidebar) = (self.panel_shown(), self.sidebar());
+        ui::full_layout(area, self.widths, panel, sidebar, self.config.agents_section, self.config.icon_bar)
             .with_tab_bar(config::Tabs::from_setting(&self.config.tabs) == config::Tabs::Top)
     }
 

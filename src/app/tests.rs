@@ -411,6 +411,7 @@ mod click_outside;
 mod compact;
 mod context_menu;
 mod groups;
+mod icon_bar;
 mod keys;
 mod lock_text;
 mod muted_text;

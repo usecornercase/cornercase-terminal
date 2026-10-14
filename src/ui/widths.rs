@@ -97,14 +97,14 @@ impl Widths {
     }
 
     #[must_use]
-    pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool) -> Self {
+    pub(crate) fn stacked_dragged(self, border: Border, pos: Position, area: Rect, agents: bool, icons: bool) -> Self {
         match border {
             Border::Projects => {
                 let max = columns_room(area.width).max(MIN_COLUMN_WIDTH);
                 Self { projects: pos.x.saturating_add(1).clamp(MIN_COLUMN_WIDTH, max), ..self }
             }
             Border::Stack => {
-                let mut room = stack_room(area);
+                let mut room = stack_room(area, icons);
                 if agents {
                     let [rest, ..] = split_agents(Rect { height: room.height + 1, ..room }, self, STACKED_KEEP);
                     room.height = rest.height.saturating_sub(1);

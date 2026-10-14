@@ -6,6 +6,8 @@ use super::{Page, Row, RowText, Settings, Status};
 
 const RESUME_NOTE: &str = "Claude Code, Codex, Gemini and Grok, in their tabs";
 
+const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
+
 impl Settings {
     fn keep_awake_row(&self) -> (String, String, String, bool) {
         let value = if self.config.keep_awake { "[x] while an agent works" } else { "[ ] never" };
@@ -91,7 +93,7 @@ impl Settings {
                 let value = if detail.on(config) { "[x] shown" } else { "[ ] hidden" };
                 (detail.label().into(), value.into(), detail.note().into(), false)
             }
-            Row::Sidebar | Row::Tabs => layout_row(config, row),
+            Row::Sidebar | Row::Tabs | Row::IconBar => layout_row(config, row),
             Row::Notifications => (
                 "desktop notifications".into(),
                 config.desktop_notifications.clone(),
@@ -211,10 +213,13 @@ impl Settings {
 }
 
 fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
-    let (label, value, note) = if *row == Row::Tabs {
-        ("tabs", Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed")
-    } else {
-        ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out")
+    let (label, value, note) = match row {
+        Row::Tabs => ("tabs", Tabs::from_setting(&config.tabs).id(), "where a workspace's tabs are listed"),
+        Row::IconBar => {
+            let value = if config.icon_bar { "[x] on the left" } else { "[ ] off" };
+            ("icon bar", value, ICON_BAR_NOTE)
+        }
+        _ => ("sidebar", Sidebar::from_setting(&config.sidebar).id(), "how projects, workspaces and tabs are laid out"),
     };
     (label.into(), value.into(), note.into(), false)
 }

@@ -38,6 +38,7 @@
   "gh": "fake-gh",
   "sidebar": "tree",
   "tabs": "top",
+  "icon_bar": true,
   "agents_section": true,
   "working_icon": "spinner",
   "counts": false,

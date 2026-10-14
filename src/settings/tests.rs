@@ -591,6 +591,24 @@ mod counts {
     }
 }
 
+mod icon_bar {
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_off() {
+        let mut s = settings();
+        let before = s.config.icon_bar;
+        go_to(&mut s, &Row::IconBar);
+        assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).icon_bar), (false, true));
+    }
+
+    #[test]
+    fn says_it_needs_a_nerd_font() {
+        let text = settings().row_text(&Row::IconBar);
+        assert_eq!((text.value.as_str(), text.note.contains("Nerd Font")), ("[ ] off", true));
+    }
+}
+
 mod todo_dot {
     use super::*;
 
@@ -624,7 +642,7 @@ mod agent_tabs {
         let mut s = settings();
         s.config.context = false;
         s.open_page(Page::Ui);
-        let texts: Vec<RowText> = s.rows()[7..10].iter().map(|row| s.row_text(row)).collect();
+        let texts: Vec<RowText> = s.rows()[8..11].iter().map(|row| s.row_text(row)).collect();
         let rows: Vec<(&str, &str)> = texts.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect();
         assert_eq!(rows, [("model", "[x] shown"), ("context", "[ ] hidden"), ("memory", "[ ] hidden")]);
     }
@@ -642,6 +660,7 @@ mod sidebar {
             [
                 Row::Sidebar,
                 Row::Tabs,
+                Row::IconBar,
                 Row::AgentsSection,
                 Row::WorkingIcon,
                 Row::Counts,

@@ -111,17 +111,17 @@ impl App {
     }
 
     pub(super) fn changes_label(&self) -> Option<String> {
+        self.changes_files().map(changes_label)
+    }
+
+    pub(super) fn changes_files(&self) -> Option<usize> {
         let target = self.changes_target()?;
         let model = if self.changes.scope == changes::Scope::Every && self.changes_shown() {
             self.changes.summary(target.workspace)
         } else {
             self.changes.model(target.workspace, target.base.as_deref())
         };
-        let files = model.and_then(changes::Model::diff).map(|d| d.files.len());
-        Some(match files {
-            Some(n) if n > 0 => format!("{CHANGES_LABEL} {n}"),
-            _ => CHANGES_LABEL.to_string(),
-        })
+        Some(model.and_then(changes::Model::diff).map_or(0, |d| d.files.len()))
     }
 
     pub(super) fn toggle_changes(&mut self) {
@@ -237,6 +237,7 @@ impl App {
             muted: ui::muted(&self.theme),
             tints: Tints::of(&self.theme),
             filter,
+            glyphs: ui::glyphs(self.config.icon_bar),
         })
     }
 
@@ -370,4 +371,8 @@ impl App {
             self.changes.set_gap(workspace, file, hunk, lines);
         }
     }
+}
+
+pub(super) fn changes_label(files: usize) -> String {
+    if files > 0 { format!("{CHANGES_LABEL} {files}") } else { CHANGES_LABEL.to_string() }
 }

@@ -46,6 +46,7 @@ mod file {
             gh: "fake-gh".into(),
             sidebar: "tree".into(),
             tabs: "top".into(),
+            icon_bar: true,
             agents_section: true,
             working_icon: "spinner".into(),
             counts: false,

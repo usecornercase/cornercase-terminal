@@ -125,15 +125,18 @@ impl App {
 
     pub(super) fn drag_border(&mut self, border: ui::Border, ev: MouseEvent, area: Rect) {
         if ev.kind == MouseEventKind::Drag(MouseButton::Left) {
+            let bar = self.layout(area).activity.width;
             let main = Rect { width: self.widths.main_width(area.width, self.panel_shown()), ..area };
+            let main = Rect { x: main.x + bar, width: main.width.saturating_sub(bar), ..main };
+            let column = ev.column.saturating_sub(bar);
             self.widths = match border {
                 ui::Border::Changes => self.widths.dragged(border, ev.column, area.width),
                 ui::Border::Agents => self.agents_dragged(ev.row, area),
                 _ if self.sidebar().stacked() => {
-                    let pos = Position::new(ev.column, ev.row);
-                    self.widths.stacked_dragged(border, pos, main, self.config.agents_section)
+                    let pos = Position::new(column, ev.row);
+                    self.widths.stacked_dragged(border, pos, main, self.config.agents_section, self.config.icon_bar)
                 }
-                _ => self.widths.dragged(border, ev.column, main.width),
+                _ => self.widths.dragged(border, column, main.width),
             };
             self.border_click = None;
         } else {
@@ -145,7 +148,7 @@ impl App {
         let bottom = self.layout(area).agents.bottom();
         let wanted = state::Widths { agents: Some(bottom.saturating_sub(row.saturating_add(1))), ..self.widths };
         let (panel, sidebar) = (self.panel_shown(), self.sidebar());
-        let rows = ui::full_layout(area, wanted, panel, sidebar, true).agents.height;
+        let rows = ui::full_layout(area, wanted, panel, sidebar, true, self.config.icon_bar).agents.height;
         state::Widths { agents: Some(rows), ..wanted }
     }
 }

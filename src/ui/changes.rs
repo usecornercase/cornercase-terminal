@@ -7,6 +7,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
+use super::icons::Glyphs;
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::Body;
 use crate::changes::diff::{Diff, File, Kind, Line, Segments, Status};
@@ -22,7 +23,6 @@ const VIEWED_WIDTH: u16 = 3;
 const LOADING: &str = "reading changes…";
 const COLLAPSE_ALL: &str = "collapse all";
 const EXPAND_ALL: &str = "expand all";
-const FILTER_ICON: &str = "⌕";
 const FILTER_PLACEHOLDER: &str = "path, *.test.js, !*.snap";
 const NO_FILE_MATCHES: &str = "no file matches";
 const BUTTON_WIDTH: u16 = 3;
@@ -64,6 +64,7 @@ pub(crate) struct View {
     pub(crate) muted: Color,
     pub(crate) tints: Tints,
     pub(crate) filter: Option<FilterView>,
+    pub(crate) glyphs: &'static Glyphs,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -423,7 +424,7 @@ fn draw_tabs(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>)
     let r = filter_button(area);
     let style =
         if hovered(hover, r) || view.filter.is_some() { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
-    put(buf, r.x + 1, r.y, FILTER_ICON, style, r.right());
+    put(buf, r.x + 1, r.y, view.glyphs.filter, style, r.right());
     draw_close(buf, close(area), hover, view.muted);
 }
 
@@ -448,7 +449,7 @@ fn draw_field(
     put(buf, clear.x + 1, clear.y, "×", style, clear.right());
     let end = clear.x;
     let accent = if filter.focused { Color::Cyan } else { view.muted };
-    let start = put(buf, row.x + 1, row.y, FILTER_ICON, Style::default().fg(accent), end) + 1;
+    let start = put(buf, row.x + 1, row.y, view.glyphs.filter, Style::default().fg(accent), end) + 1;
     let room = usize::from(end.saturating_sub(start + 1));
     if filter.query.is_empty() {
         put(buf, start, row.y, &cut(FILTER_PLACEHOLDER, room), dim(view.muted), end);

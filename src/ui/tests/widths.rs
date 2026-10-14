@@ -117,19 +117,20 @@ fn a_room_too_short_for_both_lists_is_split_in_half() {
 
 #[test]
 fn dragging_the_line_puts_it_under_the_mouse() {
-    let widths = Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED, false);
+    let widths =
+        Widths::default().stacked_dragged(Border::Stack, Position::new(5, HEADER_HEIGHT + 12), STACKED, false, false);
     assert_eq!(widths.stack, Some(12));
 }
 
 #[test]
 fn the_stacked_column_can_take_the_room_of_the_workspaces_column() {
-    let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(59, 6), STACKED, false);
+    let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(59, 6), STACKED, false, false);
     assert_eq!(widths.projects, 60);
 }
 
 #[test]
 fn the_stacked_column_leaves_room_for_the_pane() {
-    let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(W - 1, 6), STACKED, false);
+    let widths = Widths::default().stacked_dragged(Border::Projects, Position::new(W - 1, 6), STACKED, false, false);
     assert_eq!(widths.stacked_width(W), W - PANE_PADDING - MIN_PANE_WIDTH);
 }
 

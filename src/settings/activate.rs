@@ -39,6 +39,10 @@ impl Settings {
             Row::Submit => {
                 self.flip(|c| &mut c.submit, ["the prompt is sent for you", "the prompt is typed; you press Enter"])
             }
+            Row::IconBar => self.flip(
+                |c| &mut c.icon_bar,
+                ["the buttons are icons on the left", "the buttons are back under the lists"],
+            ),
             Row::AgentsSection => self.flip(
                 |c| &mut c.agents_section,
                 ["the sidebar lists every agent", "the sidebar no longer lists agents"],

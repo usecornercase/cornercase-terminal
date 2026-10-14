@@ -308,6 +308,7 @@ impl App {
             light: self.theme.is_light() == Some(true),
             muted: ui::muted(&self.theme),
             tint: Tints::of(&self.theme).removed,
+            glyphs: ui::glyphs(self.config.icon_bar),
         })
     }
 

@@ -9,6 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::changes::{Action, buttons, close};
+use super::icons::Glyphs;
 use super::{action_style, dim, draw_close, hovered_at as hovered, put};
 use crate::changes::diff::Status;
 use crate::files::disk::{Body, Content};
@@ -28,10 +29,8 @@ const READING: &str = "reading…";
 const BINARY: &str = "a binary file";
 const GONE: &str = "this file is gone";
 const BLANK: &str = "an empty file";
-const SEARCH_ICON: &str = "⌕";
 const NAME_PLACEHOLDER: &str = "file names";
 const TEXT_PLACEHOLDER: &str = "text in the files";
-const NAME_ICON: &str = "▤";
 const UNREADABLE: &str = "cannot read this image";
 const LIT: Style = Style::new().fg(Color::Black).bg(Color::Yellow);
 const IMAGE_ACTIONS: [Action; 2] = [Action::Ask, Action::Copy];
@@ -45,6 +44,7 @@ pub(crate) struct View {
     pub(crate) light: bool,
     pub(crate) muted: Color,
     pub(crate) tint: Option<Color>,
+    pub(crate) glyphs: &'static Glyphs,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -370,7 +370,7 @@ fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) 
     } else {
         dim(view.muted)
     };
-    put(buf, mode.x, mode.y, &format!(" {NAME_ICON} "), style, mode.right());
+    put(buf, mode.x, mode.y, &format!(" {} ", view.glyphs.names), style, mode.right());
     let x = clear(area);
     let style =
         if hovered(hover, x) { Style::default().fg(Color::Red).add_modifier(Modifier::BOLD) } else { dim(view.muted) };
@@ -378,7 +378,7 @@ fn draw_bar(buf: &mut Buffer, area: Rect, view: &View, hover: Option<Position>) 
         put(buf, x.x + 1, x.y, "×", style, x.right());
     }
     let accent = if bar.focused { Color::Cyan } else { view.muted };
-    let start = put(buf, row.x + 1, row.y, SEARCH_ICON, Style::default().fg(accent), x.x) + 1;
+    let start = put(buf, row.x + 1, row.y, view.glyphs.search, Style::default().fg(accent), x.x) + 1;
     let room = usize::from(x.x.saturating_sub(start + 1));
     if bar.query.is_empty() {
         let placeholder = if names { NAME_PLACEHOLDER } else { TEXT_PLACEHOLDER };

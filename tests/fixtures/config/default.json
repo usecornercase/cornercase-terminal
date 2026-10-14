@@ -28,6 +28,7 @@
   "gh": "gh",
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
+  "icon_bar": false,
   "agents_section": false,
   "working_icon": "moon",
   "counts": true,

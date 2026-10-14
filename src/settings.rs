@@ -23,6 +23,7 @@ pub(crate) enum Row {
     Fetch,
     Sidebar,
     Tabs,
+    IconBar,
     AgentsSection,
     WorkingIcon,
     Counts,
@@ -64,6 +65,7 @@ impl Row {
             | Self::Fetch
             | Self::Sidebar
             | Self::Tabs
+            | Self::IconBar
             | Self::AgentsSection
             | Self::WorkingIcon
             | Self::Counts
@@ -104,6 +106,7 @@ impl Row {
             | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
+            | Self::IconBar
             | Self::AgentsSection
             | Self::WorkingIcon
             | Self::Counts
@@ -347,6 +350,7 @@ impl Settings {
             Row::AddAgent,
             Row::Sidebar,
             Row::Tabs,
+            Row::IconBar,
             Row::AgentsSection,
             Row::WorkingIcon,
             Row::Counts,

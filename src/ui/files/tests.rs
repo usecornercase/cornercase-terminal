@@ -27,6 +27,7 @@ fn tree() -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
+        glyphs: &crate::ui::icons::PLAIN,
     }
 }
 
@@ -63,6 +64,7 @@ fn opened(selection: Option<(u32, u32)>, unfolded: &[u32]) -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
+        glyphs: &crate::ui::icons::PLAIN,
     }
 }
 
@@ -100,6 +102,7 @@ fn searched(mode: Mode, rows: Vec<Found>, selected: Option<usize>) -> View {
         light: false,
         muted: Color::DarkGray,
         tint: None,
+        glyphs: &crate::ui::icons::PLAIN,
     }
 }
 

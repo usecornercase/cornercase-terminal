@@ -137,7 +137,7 @@ impl App {
             self.agents_mouse(&areas, pos, ev.kind, area);
             return Ok(());
         }
-        if self.footer_mouse(&areas, pos, left) {
+        if self.activity_mouse(&areas, pos, left, area)? || self.footer_mouse(&areas, pos, left) {
             return Ok(());
         }
         if areas.list.contains(pos) {
@@ -258,6 +258,45 @@ impl App {
         self.scroll.followed = Focus::default();
     }
 
+    pub(super) fn activity_shown(&self) -> ui::ActivityShown {
+        ui::ActivityShown {
+            issues: self.issues_available(),
+            changes: self.changes_label().is_some(),
+            files: self.project().is_some(),
+            update: self.update_label().is_some(),
+            remote: self.remote_button().is_some(),
+        }
+    }
+
+    fn activity_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool, area: Rect) -> Result<bool> {
+        let Some(item) = ui::activity_hit(areas.activity, self.activity_shown(), pos) else { return Ok(false) };
+        if left {
+            self.activity_click(item, pos, area)?;
+        }
+        Ok(true)
+    }
+
+    fn activity_click(&mut self, item: ui::ActivityItem, pos: Position, area: Rect) -> Result<()> {
+        self.nav = None;
+        match item {
+            ui::ActivityItem::Issues => return self.open_issues(area),
+            ui::ActivityItem::Changes => self.toggle_changes(),
+            ui::ActivityItem::Files => self.toggle_files(),
+            ui::ActivityItem::Todo => self.toggle_todo(),
+            ui::ActivityItem::Update => self.open_update(),
+            ui::ActivityItem::Remote => self.open_remote_menu(pos),
+            ui::ActivityItem::Usage => self.open_usage(),
+            ui::ActivityItem::Settings => self.open_settings(),
+            ui::ActivityItem::Quit => self.outbox.detach = true,
+        }
+        Ok(())
+    }
+
+    fn open_remote_menu(&mut self, at: Position) {
+        let actions = vec![super::menus::MenuAction::Browser, super::menus::MenuAction::Away];
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
     fn footer_mouse(&mut self, areas: &ui::Areas, pos: Position, left: bool) -> bool {
         let update = self.update_label().is_some_and(|label| ui::update_button(areas.settings, &label).contains(pos));
         let remote = self.remote_button().is_some_and(|on| ui::remote_button(areas.usage, on).contains(pos));
@@ -267,8 +306,7 @@ impl App {
             if update {
                 self.open_update();
             } else if remote {
-                let actions = vec![super::menus::MenuAction::Browser, super::menus::MenuAction::Away];
-                self.overlay = Some(Overlay::Menu { at: pos, actions });
+                self.open_remote_menu(pos);
             } else if areas.quit.contains(pos) {
                 self.outbox.detach = true;
             } else if areas.usage.contains(pos) {

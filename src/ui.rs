@@ -3,12 +3,14 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::Clear;
 
+mod activity;
 mod agents_section;
 pub(crate) mod changes;
 mod chrome;
 mod dialog;
 mod drop;
 pub(crate) mod files;
+mod icons;
 pub(crate) mod keys;
 mod layout;
 mod pane;
@@ -26,6 +28,9 @@ mod widgets;
 mod widths;
 mod workspaces;
 
+#[cfg(test)]
+pub(crate) use activity::items as activity_items;
+pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
@@ -63,6 +68,7 @@ pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
+pub(crate) use icons::glyphs;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::{Nav, full_layout};
 pub(crate) use pane::{TabView, scrollback_badge};
@@ -159,6 +165,7 @@ pub(crate) struct View<'a> {
     pub(crate) tree: Option<TreeView>,
     pub(crate) agents: Option<AgentsView>,
     pub(crate) counts: bool,
+    pub(crate) icons: bool,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
 }
 
@@ -172,6 +179,10 @@ impl View<'_> {
     pub(crate) fn tab_lines(&self) -> TabLines {
         let lines = self.workspaces.iter().map(|w| w.tabs.iter().map(|t| t.details.lines()).collect()).collect();
         TabLines::new(lines, self.tab_bar.is_none())
+    }
+
+    fn glyphs(&self) -> &'static icons::Glyphs {
+        glyphs(self.icons)
     }
 
     fn surface(&self) -> Color {
@@ -236,7 +247,7 @@ impl View<'_> {
 
 pub(crate) fn draw(f: &mut Frame, view: &View) {
     let panel = view.changes.is_some() || view.todo.is_some() || view.files.is_some();
-    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some())
+    let areas = full_layout(f.area(), view.widths, panel, view.sidebar, view.agents.is_some(), view.icons)
         .with_tab_bar(view.tab_bar.is_some())
         .shown(view.nav);
     if let Some(bar) = view.tab_bar.as_ref().filter(|_| view.has_project && !areas.tab_bar.is_empty()) {
@@ -259,6 +270,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         draw_separator(f, view.line(), areas.stack_border);
         draw_borders(f, view, &areas);
         draw_search_bar(f, view, areas.search);
+        activity::draw(f, view, areas.activity);
     }
     if areas.tree {
         draw_tree(f, view, &areas);
@@ -290,6 +302,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
             (None, None, None) => {}
         }
     }
+    activity::draw_tooltip(f, view, areas.activity);
     if view.overlay.as_ref().is_some_and(Overlay::is_modal) {
         let area = f.area();
         f.buffer_mut().set_style(area, Style::default().add_modifier(Modifier::DIM));

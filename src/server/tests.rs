@@ -482,9 +482,16 @@ mod showing_images {
     }
 
     fn settings() -> Position {
-        ui::full_layout(Rect::new(0, 0, 100, 20), state::Widths::default(), true, config::Sidebar::default(), false)
-            .settings
-            .as_position()
+        ui::full_layout(
+            Rect::new(0, 0, 100, 20),
+            state::Widths::default(),
+            true,
+            config::Sidebar::default(),
+            false,
+            false,
+        )
+        .settings
+        .as_position()
     }
 
     #[test]
@@ -556,7 +563,7 @@ mod pointing {
         let mut attached = Attached::new();
         let mut window = attached.join_with(Support::default(), Some(pointer::Terminal::Kitty));
         let area = Rect::new(0, 0, COLS, ROWS);
-        let layout = ui::full_layout(area, state::Widths::default(), false, config::Sidebar::default(), false);
+        let layout = ui::full_layout(area, state::Widths::default(), false, config::Sidebar::default(), false, false);
         let border = layout.border(ui::Border::Projects);
         let server = &mut attached.server;
         server.draw();

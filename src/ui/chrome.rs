@@ -6,6 +6,7 @@ use ratatui::widgets::{Block, Paragraph};
 
 use super::View;
 use super::files;
+use super::icons::Glyphs;
 use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
 use super::pane::wordmark;
 use super::remote_access;
@@ -16,11 +17,10 @@ use super::widgets::{
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 
+#[cfg(test)]
 pub(super) const SEARCH_ICON: &str = " ⌕ ";
 
 pub(super) const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
-
-const MENU_ICON: &str = "≡";
 
 pub(super) const BACK_LABEL: &str = "‹ Projects";
 
@@ -28,18 +28,13 @@ pub(super) const ISSUES_LABEL: &str = "Issues";
 
 pub(super) const USAGE_LABEL: &str = "Usage";
 
-const CHANGES_ICON: &str = "±";
-
-const TODO_ICON: &str = "☐";
-
-const FILES_ICON: &str = "▤";
-
 pub(crate) const TODO_LABEL: &str = "TODO";
 
 const TODO_DOT: &str = "●";
 
 pub(crate) struct ChangesButton {
     pub(crate) label: String,
+    pub(crate) files: usize,
     pub(crate) open: bool,
 }
 
@@ -90,23 +85,25 @@ pub(super) fn draw_border(f: &mut Frame, view: &View, r: Rect, border: Border) {
 pub(super) fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
     let dim = Style::default().fg(view.muted);
     let accent = Style::default().fg(Color::Cyan);
+    let search_icon = format!(" {} ", view.glyphs().search);
+    let icon_width = search_icon.chars().count();
     let line = if let Some(search) = view.search() {
-        let max = usize::from(r.width).saturating_sub(SEARCH_ICON.chars().count() + 1);
+        let max = usize::from(r.width).saturating_sub(icon_width + 1);
         let query = truncate_left(&search.query, max);
-        let cursor = SEARCH_ICON.chars().count() + query.chars().count();
+        let cursor = icon_width + query.chars().count();
         if let Ok(offset) = u16::try_from(cursor)
             && offset < r.width
         {
             f.set_cursor_position(Position::new(r.x + offset, r.y));
         }
         Line::from(vec![
-            Span::styled(SEARCH_ICON, accent),
+            Span::styled(search_icon, accent),
             Span::styled(query, Style::default().add_modifier(Modifier::BOLD)),
         ])
     } else {
         let icon = if sidebar_hovered(view, r) { accent } else { dim };
-        let room = usize::from(r.width).saturating_sub(SEARCH_ICON.chars().count() + 1);
-        Line::from(vec![Span::styled(SEARCH_ICON, icon), Span::styled(truncate_right(SEARCH_PLACEHOLDER, room), dim)])
+        let room = usize::from(r.width).saturating_sub(icon_width + 1);
+        Line::from(vec![Span::styled(search_icon, icon), Span::styled(truncate_right(SEARCH_PLACEHOLDER, room), dim)])
     };
     f.render_widget(Paragraph::new(line).style(Style::default().bg(view.surface())), r);
 }
@@ -118,34 +115,36 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
         draw_search_bar(f, view, middle(areas.bar));
         return;
     }
+    let glyphs = view.glyphs();
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     let r = areas.todo_button;
     let mut right = areas.search_button.width + r.width;
     let lit = view.todo.is_some() || sidebar_hovered(view, r);
     let style = if lit { pressed } else { surface.fg(view.muted) };
-    draw_band(f, r, todo_icon(view.todo_dot && view.todo_pending, r.width, style), style);
+    draw_band(f, r, todo_icon(glyphs, view.todo_dot && view.todo_pending, r.width, style), style);
     if view.has_project {
         let r = areas.files_button;
         right += r.width;
         let style = if view.files.is_some() || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
-        draw_band(f, r, Span::styled(centered(FILES_ICON, r.width), style), style);
+        draw_band(f, r, Span::styled(centered(glyphs.files, r.width), style), style);
     }
     if let Some(button) = &view.changes_button {
         let r = areas.changes_button;
         right += r.width;
         let style = if button.open || sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
-        draw_band(f, r, Span::styled(centered(CHANGES_ICON, r.width), style), style);
+        draw_band(f, r, Span::styled(centered(glyphs.changes, r.width), style), style);
     }
     let menu = Rect { width: areas.bar.width.saturating_sub(right), ..areas.bar };
     let icon = Rect { width: COMPACT_BUTTON_WIDTH.min(menu.width), ..menu };
     let lit = view.nav.is_some() || sidebar_hovered(view, menu);
     let style = if lit { pressed } else { surface.fg(Color::Cyan) };
-    draw_band(f, icon, menu_label(view.muted, view.attention, view.spin, icon.width, style, lit), style);
+    let label = menu_label(glyphs, view.muted, view.attention, view.spin, icon.width, (style, lit));
+    draw_band(f, icon, label, style);
     let crumbs = Rect { x: icon.right() + 2, width: menu.width.saturating_sub(icon.width + 2), ..middle(menu) };
     f.render_widget(Paragraph::new(Line::from(breadcrumb(view, usize::from(crumbs.width)))), crumbs);
     let r = areas.search_button;
     let style = if sidebar_hovered(view, r) { pressed } else { surface.fg(view.muted) };
-    draw_band(f, r, Span::styled(centered(SEARCH_ICON.trim(), r.width), style), style);
+    draw_band(f, r, Span::styled(centered(glyphs.search, r.width), style), style);
 }
 
 fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
@@ -216,33 +215,35 @@ fn draw_todo_button(f: &mut Frame, view: &View, areas: &Areas) {
     }
 }
 
-fn todo_icon(pending: bool, width: u16, style: Style) -> Line<'static> {
+fn todo_icon(glyphs: &Glyphs, pending: bool, width: u16, style: Style) -> Line<'static> {
+    let icon = glyphs.todo;
     if !pending {
-        return Line::from(Span::styled(centered(TODO_ICON, width), style));
+        return Line::from(Span::styled(centered(icon, width), style));
     }
     let width = usize::from(width);
     let left = width.saturating_sub(1) / 2;
     Line::from(Span::styled(
-        format!("{}{TODO_ICON} {TODO_DOT}{}", " ".repeat(left), " ".repeat(width.saturating_sub(left + 3))),
+        format!("{}{icon} {TODO_DOT}{}", " ".repeat(left), " ".repeat(width.saturating_sub(left + 3))),
         style,
     ))
 }
 
 fn menu_label(
+    glyphs: &Glyphs,
     muted: Color,
     attention: Option<Status>,
     frame: Option<u8>,
     width: u16,
-    style: Style,
-    lit: bool,
+    (style, lit): (Style, bool),
 ) -> Line<'static> {
-    let Some(status) = attention else { return Line::from(Span::styled(centered(MENU_ICON, width), style)) };
+    let menu = glyphs.menu;
+    let Some(status) = attention else { return Line::from(Span::styled(centered(menu, width), style)) };
     let width = usize::from(width);
     let left = width.saturating_sub(1) / 2;
     let badge = status_icon(muted, status, frame);
     let badge = if lit { Span::styled(badge.content, style) } else { badge };
     Line::from(vec![
-        Span::styled(format!("{}{MENU_ICON} ", " ".repeat(left)), style),
+        Span::styled(format!("{}{menu} ", " ".repeat(left)), style),
         badge,
         Span::styled(" ".repeat(width.saturating_sub(left + 3)), style),
     ])

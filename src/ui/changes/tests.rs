@@ -61,6 +61,7 @@ fn sample() -> View {
         muted: Color::DarkGray,
         tints: TINTS,
         filter: None,
+        glyphs: &crate::ui::icons::PLAIN,
     }
 }
 
