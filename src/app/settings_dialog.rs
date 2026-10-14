@@ -143,7 +143,7 @@ impl App {
                 self.set_config(*config);
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
-            settings::Action::OpenFlows => self.open_flows(None),
+            settings::Action::OpenFlows => self.open_flows(None, None),
             settings::Action::ForgetBrowsers => {
                 let forgotten = self.forget_browsers();
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {

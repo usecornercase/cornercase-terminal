@@ -215,6 +215,23 @@ mod starting {
     }
 
     #[test]
+    fn a_project_flow_says_in_red_what_env_and_args_it_sets() {
+        let mut listing = listing();
+        let mut flow = listing.flows[4].flow.clone();
+        flow.roles[0].env.insert("NODE_OPTIONS".into(), "--require ./x.js".into());
+        flow.roles[1].args = vec!["--foo".into(), "a b".into()];
+        listing.flows[4].flow = flow.clone();
+        listing.flows.push(Saved { flow, origin: Origin::Project(PathBuf::from("/repo/.cornercase/flows/mine.toml")) });
+        let mut s = Start::new(7, "web-shop".into(), true, listing);
+        let risk = "this project's flow sets NODE_OPTIONS for `coder` and passes --foo 'a b' to `reviewer`; they run \
+                    without asking, so check them";
+        s.select(5);
+        assert_eq!(s.warnings()[1], risk);
+        s.select(4);
+        assert!(!s.warnings().iter().any(|w| w.starts_with("this project's flow")));
+    }
+
+    #[test]
     fn edit_names_the_selected_flow() {
         let mut s = start();
         s.select(4);
@@ -238,6 +255,30 @@ mod starting {
         s.select(4);
         s.set_listing(listing(), None);
         assert_eq!(s.cursor, 4);
+    }
+}
+
+mod waiting {
+    use super::*;
+
+    #[test]
+    fn while_the_run_starts_nothing_changes_the_dialog() {
+        let mut s = ready();
+        s.waiting = true;
+        assert_eq!(key(&mut s, KeyCode::Esc), Action::None);
+        type_text(&mut s, "x");
+        s.paste("y", ROOM);
+        assert_eq!(s.hit(Hit::Button(CANCEL), ROOM), Action::None);
+        assert_eq!(s.prompt.text(), "Add dark mode");
+    }
+
+    #[test]
+    fn a_failure_is_said_and_the_dialog_answers_again() {
+        let mut s = ready();
+        s.waiting = true;
+        s.failed("branch is checked out elsewhere");
+        assert_eq!(s.notice.as_deref(), Some("the flow did not start: branch is checked out elsewhere"));
+        assert_eq!(key(&mut s, KeyCode::Esc), Action::Close);
     }
 }
 

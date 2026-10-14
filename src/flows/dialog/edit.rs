@@ -104,6 +104,10 @@ impl Editing {
         }
     }
 
+    pub(crate) fn is_project_flow(&self) -> bool {
+        self.place == Place::Project || self.original_place == Place::Project
+    }
+
     pub(crate) fn dirty(&self) -> bool {
         self.flow != self.original
             || self.place != self.original_place

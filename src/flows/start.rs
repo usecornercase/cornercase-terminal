@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::Flow;
-use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, RowText, flow_row, permission_line};
+use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, RowText, flow_row, permission_line, project_risks};
 use super::store::{Listing, Origin, Saved};
 use crate::todo::editor::Editor;
 
@@ -38,6 +38,10 @@ pub(crate) struct Room {
 }
 
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts: repository root, branch typed, diagram shown, run starting"
+)]
 pub(crate) struct Start {
     pub(crate) project: u64,
     pub(crate) project_name: String,
@@ -51,6 +55,7 @@ pub(crate) struct Start {
     pub(crate) focus: Focus,
     pub(crate) diagram: bool,
     pub(crate) notice: Option<String>,
+    pub(crate) waiting: bool,
 }
 
 impl Start {
@@ -68,6 +73,7 @@ impl Start {
             focus: Focus::Prompt,
             diagram: false,
             notice: None,
+            waiting: false,
         };
         start.cursor = start.flows.iter().position(|saved| saved.flow.problems().is_empty()).unwrap_or(0);
         start
@@ -122,6 +128,9 @@ impl Start {
         }
         if let Some(saved) = self.selected() {
             out.push(permission_line(&saved.flow));
+            if matches!(saved.origin, Origin::Project(_)) {
+                out.extend(project_risks(&saved.flow));
+            }
             out.extend(saved.flow.problems());
         }
         out
@@ -206,6 +215,9 @@ impl Start {
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Action {
+        if self.waiting {
+            return Action::None;
+        }
         self.notice = None;
         let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         match key.code {
@@ -242,6 +254,9 @@ impl Start {
     }
 
     pub(crate) fn paste(&mut self, text: &str, room: Room) {
+        if self.waiting {
+            return;
+        }
         match self.focus {
             Focus::Prompt | Focus::List => {
                 self.focus = Focus::Prompt;
@@ -257,6 +272,9 @@ impl Start {
     }
 
     pub(crate) fn hit(&mut self, hit: Hit, room: Room) -> Action {
+        if self.waiting {
+            return Action::None;
+        }
         self.notice = None;
         match hit {
             Hit::Row(i) => {
@@ -272,6 +290,11 @@ impl Start {
             Hit::Button(label) => return self.press(label),
         }
         Action::None
+    }
+
+    pub(crate) fn failed(&mut self, why: &str) {
+        self.waiting = false;
+        self.notice = Some(format!("the flow did not start: {why}"));
     }
 
     pub(crate) fn scroll_prompt(&mut self, delta: isize, room: Room) {

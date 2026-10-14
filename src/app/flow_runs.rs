@@ -122,7 +122,9 @@ impl App {
 
     pub(super) fn run_failed(&mut self, message: &str) {
         log::warning!("flow", "the run did not start", error = message);
-        self.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
+        if !self.start_flow_settled(Some(message)) {
+            self.toast = Some(Toast::new(format!("the flow did not start: {message}"), ui::ToastIcon::Bug));
+        }
     }
 
     fn flow_spec(&self, role: &Role, prompt: String) -> launch::Spec {
