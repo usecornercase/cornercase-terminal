@@ -21,6 +21,7 @@ pub(crate) mod graphics;
 pub(crate) mod highlight;
 pub mod host;
 pub(crate) mod issues;
+pub(crate) mod messenger;
 pub mod project;
 pub(crate) mod pull_request;
 pub(crate) mod settings;

@@ -2,10 +2,44 @@ use std::fmt::Write as _;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
+use crate::messenger::Markup;
+
 pub(crate) const LIMIT: usize = 4000;
 pub(crate) const MAX: usize = 4096;
 const MOST: usize = 4;
 const CUT: &str = "… the rest is in cornercase";
+
+pub(crate) struct Html;
+
+impl Markup for Html {
+    fn escape(&self, text: &str) -> String {
+        escape(text)
+    }
+
+    fn bold(&self, text: &str) -> String {
+        format!("<b>{text}</b>")
+    }
+
+    fn pre(&self, text: &str, room: usize) -> String {
+        pre(text, room)
+    }
+
+    fn room(&self, header: &str) -> usize {
+        room(header)
+    }
+
+    fn fits(&self, header: &str, part: &str) -> bool {
+        fits(header, part)
+    }
+
+    fn markdown(&self, source: &str) -> Vec<String> {
+        markdown(source)
+    }
+
+    fn lines(&self, lines: &[String]) -> Vec<String> {
+        self::lines(lines)
+    }
+}
 
 pub(crate) fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

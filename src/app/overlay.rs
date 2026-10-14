@@ -20,6 +20,7 @@ use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
 use crate::list::Search;
+use crate::messenger::Via;
 use crate::project::picker::Picker;
 use crate::settings::Settings;
 use crate::shortcuts::Group as KeysGroup;
@@ -73,7 +74,7 @@ pub(super) enum Overlay {
     Restart,
     Usage,
     Remote,
-    Telegram,
+    Pairing(Via),
     Branches(BranchPicker),
     PullRequest { workspace: u64, scroll: usize },
     FlowMessage { workspace: u64, edge: Edge, to: Option<String>, scroll: usize },
@@ -103,7 +104,7 @@ impl Overlay {
             Self::Update(_) => "update",
             Self::Usage => "usage",
             Self::Remote => "remote",
-            Self::Telegram => "telegram",
+            Self::Pairing(via) => via.target(),
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
             Self::PullRequest { .. } => "pull request",
@@ -185,7 +186,7 @@ impl App {
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
-            Some(Overlay::Telegram) => self.telegram_mouse(ev, pos, area),
+            Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
             Some(Overlay::Keys(group)) => return self.keys_mouse(*group, ev, pos, area),
             Some(
@@ -233,7 +234,7 @@ impl App {
             Overlay::Restart => self.restart_view(area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
-            Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),
+            Overlay::Pairing(via) => ui::Overlay::Remote(self.pairing_view(*via)),
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
             Overlay::FlowMessage { workspace, edge, to, scroll } => {

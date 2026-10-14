@@ -5,6 +5,7 @@ use super::App;
 use super::overlay::Overlay;
 use crate::error::Result;
 use crate::log::{self};
+use crate::messenger::Via;
 use crate::project::Hierarchy;
 use crate::project::group;
 use crate::project::split::Dir;
@@ -89,7 +90,7 @@ pub(super) enum MenuAction {
     PullRequest(u64),
     ShowFlow(u64),
     Browser,
-    Away,
+    Away(Via),
     StartFlow,
 }
 
@@ -136,9 +137,9 @@ impl App {
             MenuAction::ShowFlow(_) => "show flow".into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
-            MenuAction::Away if !self.telegram.ready() => "set up Telegram…".into(),
-            MenuAction::Away if self.telegram.away => "stop messaging on Telegram".into(),
-            MenuAction::Away => "continue on Telegram".into(),
+            MenuAction::Away(via) if !self.messenger(via).ready() => format!("set up {}…", via.name()),
+            MenuAction::Away(via) if self.messenger(via).away => format!("stop messaging on {}", via.name()),
+            MenuAction::Away(via) => format!("continue on {}", via.name()),
         }
     }
 
@@ -204,7 +205,7 @@ impl App {
             MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
-            MenuAction::Away => self.toggle_away(),
+            MenuAction::Away(via) => self.toggle_away(via),
         }
         Ok(())
     }

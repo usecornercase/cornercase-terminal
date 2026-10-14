@@ -207,8 +207,8 @@ impl App {
     }
 
     pub(super) fn remote_button(&self) -> Option<bool> {
-        let set_up = self.config.remote || self.telegram.bot().is_some();
-        set_up.then_some(self.remote.browsers > 0 || self.telegram.away)
+        let set_up = self.config.remote || self.messengers.iter().any(|messenger| messenger.bot().is_some());
+        set_up.then_some(self.remote.browsers > 0 || self.away_anywhere())
     }
 
     pub(super) fn remote_view(&self) -> ui::RemoteAccess {
