@@ -48,8 +48,9 @@ pub(super) fn listing(flows: &Flows) -> String {
             .iter()
             .map(|role| {
                 let model = role.model.as_deref().map(|m| format!(" · {m}")).unwrap_or_default();
+                let effort = role.effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
                 let edits = if role.edits { " (edits)" } else { "" };
-                format!("{}: {}{model}{edits}", role.role, role.agent)
+                format!("{}: {}{model}{effort}{edits}", role.role, role.agent)
             })
             .collect();
         let _ = writeln!(out, "  {}", roles.join(", "));

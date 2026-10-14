@@ -215,7 +215,9 @@ impl App {
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
             Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
-            Overlay::FlowMessage { workspace, edge, .. } => self.submit_flow_message(workspace, edge),
+            Overlay::FlowMessage { workspace, edge, to, .. } => {
+                self.submit_flow_message(workspace, edge, to.as_deref())
+            }
             busy => Some(busy),
         };
         Ok(())

@@ -47,7 +47,7 @@ fn view(app: &App, area: Rect) -> ui::StartFlow {
 
 fn button(app: &mut App, area: Rect, label: &str) {
     let view = view(app, area);
-    click_button(app, area, &view.buttons, &ui::start_buttons(area, view.warnings.len(), &view.buttons), label);
+    click_button(app, area, &view.buttons, &ui::start_buttons(area, view.shape(), &view.buttons), label);
 }
 
 fn type_in(app: &mut App, text: &str, area: Rect) {
@@ -121,9 +121,18 @@ mod the_dialog {
     #[test]
     fn a_click_on_a_flow_selects_it() {
         let mut s = opened(true);
-        let list = ui::start_list(WIDE, view(&s.app, WIDE).warnings.len(), true);
+        let list = ui::start_list(WIDE, view(&s.app, WIDE).shape());
         click_in(&mut s.app, Position::new(list.x + 4, list.y + 3), WIDE);
         assert_eq!(selected(&s.app), "Quick");
+    }
+
+    #[test]
+    fn the_list_takes_its_rows_and_the_prompt_the_rest() {
+        let s = opened(true);
+        let view = view(&s.app, WIDE);
+        let (list, prompt) = (ui::start_list(WIDE, view.shape()), ui::start_prompt(WIDE, view.shape()));
+        assert_eq!((list.height, prompt.y - list.bottom()), (5, 2));
+        assert!(prompt.height > list.height);
     }
 
     #[test]

@@ -17,7 +17,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 ## What a flow is
 
 - **An orchestrator**: an agent (Claude Code, Codex…) that reads what the others answer and decides what comes next. cornercase never parses a verdict out of an agent's text: the orchestrator does, the way you would.
-- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model, extra arguments and environment variables, whether it may edit files, and its prompt. Each role gets a tab of its own.
+- **Roles**: a name (`coder`, `reviewer`…), an agent, optionally a model and an effort, extra arguments and environment variables, whether it may edit files, and its prompt. Each role gets a tab of its own.
 - **Stages**: the plan, in order. A stage holds one role, or several working in parallel (`reviewer + security`). A stage can send the work **back** to an earlier one when there are problems, at most a number of times (`findings → 1 · at most 3`).
 - **The end**: open a pull request, or leave the commits on the branch.
 - **Notes**: free text the orchestrator gets with its plan, such as *do not change the public API without asking*.
@@ -56,7 +56,7 @@ Starting a flow:
 
 1. Makes the worktree, or uses the workspace already on that branch if it runs no flow.
 2. Opens one tab per role, named after it, the orchestrator first.
-3. Starts each agent with its model, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit files is told so in its prompt.
+3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit files is told so in its prompt.
 4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
 The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
@@ -65,7 +65,7 @@ The whole team starts at once, so the tabs and the diagram are complete from the
 A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto` and Grok Build with `--always-approve`. The start dialog and the editor say so in red (`5 agents run without asking for permission`). Start flows in repositories you trust, and read what they did before you merge it.
 </Aside>
 
-A run lives in its workspace: closing the workspace closes the run. It is saved with the [session](../sessions/), so after a restart the agents [resume their conversations](../sessions/#agents-resume-their-conversations) in their tabs, each in its role's mode and model, and the orchestrator is told its team's new pane ids.
+A run lives in its workspace: closing the workspace closes the run. It is saved with the [session](../sessions/), so after a restart the agents [resume their conversations](../sessions/#agents-resume-their-conversations) in their tabs, each in its role's mode, model and effort, and the orchestrator is told its team's new pane ids.
 
 ## The Flow panel
 
@@ -84,7 +84,7 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
   crop={[95, 0, 45, 24]}
 />
 
-**What it draws.** The orchestrator sits on top, apart, since it moves the work. The stages go top to bottom, the roles of a parallel stage side by side (stacked under a bracket when the panel is too narrow), and each loop is an arrow up the right side into the stage it returns to, labelled with what sends the work back and its rounds (`findings · 1/3`). The end is `◆ open a pull request` or `◆ leave the commits`. Each box names its role in its own colour, then its agent and model.
+**What it draws.** The orchestrator sits on top, apart, since it moves the work. The stages go top to bottom, the roles of a parallel stage side by side (stacked under a bracket when the panel is too narrow), and each loop is an arrow up the right side into the stage it returns to, labelled with what sends the work back and its rounds (`findings · 1/3`). The end is `◆ open a pull request` or `◆ leave the commits`. Each box names its role in its own colour, then its agent, model and effort (`claude · opus · high`).
 
 **What lights up.**
 
@@ -97,7 +97,7 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 **How it knows.** From what really happens, not from what the agents say: every `cornercase` command run in a pane carries that pane's id, so the orchestrator's `send`, `keys`, `read --last-message` and `wait` are steps between real panes. A `send` into the next stage is that stage's arrow; a `send` into the stage a loop goes back to is a round of that loop; anything else is outside the plan.
 
-**Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; the arrows that carried a message light up under the mouse. The wheel scrolls a diagram taller than the panel.
+**Clicks.** Click a box to go to its tab. Click an arrow, or a loop's label, to read the last message sent along it, with a **`copy`** button; where an arrow splits into a parallel stage, each branch shows the message its own role got. The arrows that carried a message light up under the mouse, a branch with the way it took. The wheel scrolls a diagram taller than the panel.
 
 The messages are kept in memory only, at most the first 32 KiB of each: they never reach the [log](../../help/troubleshooting/#the-server-log), which keeps their sizes, nor the saved session. After a restart the panel shows the plan and the agents' status again, without the history.
 
@@ -122,7 +122,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 />
 
 - **The Flow tab**: the name, a description, where it is saved (yours, or the project's), the stages, the final action and the notes. Click a stage to open it: **roles** (several work side by side), **goes back** (never, or to an earlier stage), **when** (what sends it back, such as `findings`) and **at most** (how many times). Hover a stage to move it with **`↑`** **`↓`** or remove it with **`×`**; **`+ stage`** adds one.
-- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, and its **prompt**. Renaming a role renames it in every stage.
+- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **effort** (the agent's default, or one of its levels: Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex `minimal` to `xhigh`; Grok Build `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Gemini CLI and opencode have no effort switch), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, and its **prompt**. Renaming a role renames it in every stage.
 - **Prompts and notes** open a larger editor: `Enter` starts a new line, **`save`** keeps the text, **`cancel`** or `Esc` drops it.
 
 **`save`** refuses while the flow has problems, listed in red under the form (a role in no stage, a loop that goes forward, an agent cornercase cannot start…). Renaming a flow renames its file. Closing a flow with unsaved changes asks first.
@@ -135,7 +135,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 | Yours | `flows/` next to [`config.json`](../../reference/files-and-environment/): `~/.config/cornercase/flows/`. |
 | A project's | `.cornercase/flows/` in its repository. Commit them to share a flow with your team. |
 
-Each flow is a TOML file named after it, so long prompts read well in a repository. A flow with the same name in several places runs the project's, else yours, else the built-in one. A file cornercase cannot read is listed with its error, and can be deleted from the dialog.
+Each flow is a TOML file named after it, so long prompts read well in a repository. A name is looked up in the built-in flows, then yours, then the project's, so a project's flow, which comes with the repository you cloned, never stands in for a built-in flow or yours of the same name: give it a name of its own to run it. `flow list` and `flow run` say so when a name is in several places. A file cornercase cannot read is listed with its error, and can be deleted from the dialog.
 
 ```toml title=".cornercase/flows/quick-review.toml"
 name = "Quick review"
@@ -150,6 +150,7 @@ prompt = "Keep every message to an agent self-contained."
 name = "coder"
 agent = "codex"
 model = "gpt-5.5"
+effort = "high"
 edits = true
 prompt = """
 Implement what the orchestrator asks, run the checks and commit locally.
@@ -179,7 +180,7 @@ cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
 ```
 
-`flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model` and `--mode` to start a single agent with a model and a mode of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 ## What is not covered
 

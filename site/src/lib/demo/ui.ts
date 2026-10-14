@@ -1221,7 +1221,7 @@ export class Painter {
     this.dialogBackdrop(r);
     this.box(r, 'Message');
     const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
-    this.span(c.x, c.y, truncateRight(`${message.from} → ${message.to}`, c.w), {});
+    this.span(c.x, c.y, truncateRight(`${message.from} → ${message.to} · sent`, c.w), {});
     const notes = updateNotes(app.cols, app.rows);
     const lines = app.flowMessageLines(notes.w);
     const first = Math.min(scroll, Math.max(0, lines.length - notes.h));

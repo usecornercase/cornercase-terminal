@@ -184,10 +184,11 @@ mod parsing {
 
     #[test]
     fn start_takes_a_model_and_a_mode() {
-        let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus"]).expect("parse");
+        let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus", "--effort", "high"]).expect("parse");
 
         let Some(Command::Control(Control::Start(start))) = cli.command else { panic!("not start") };
-        assert_eq!((start.mode.as_deref(), start.model.as_deref()), (Some("plan"), Some("opus")));
+        let chosen = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
+        assert_eq!(chosen, (Some("plan"), Some("opus"), Some("high")));
     }
 
     #[test]
@@ -466,7 +467,7 @@ mod flows {
     use crate::control::{BrokenFlow, FlowInfo, Flows, MemberInfo, RoleInfo, RunInfo};
 
     fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
-        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), edits }
+        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), effort: None, edits }
     }
 
     #[test]

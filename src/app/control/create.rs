@@ -132,7 +132,8 @@ impl App {
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
         let kind = self.agent_kind(caller, start.agent)?;
         let prompt = start.prompt.filter(|p| !p.trim().is_empty());
-        let command = agents::start_line(&self.config, &kind, start.mode.as_deref(), start.model.as_deref())?;
+        let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
+        let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
         let spec = launch::Spec { command, prompt, submit: true, trusted: false };
         let name = name_of(start.name);
         let (p, w) = if let Some(id) = start.workspace {

@@ -140,6 +140,24 @@ mod problems {
     }
 
     #[test]
+    fn an_effort_must_be_one_the_agent_takes() {
+        let mut flow = sample();
+        flow.roles[0].effort = Some("high".into());
+        assert_eq!(flow.problems(), Vec::<String>::new());
+        flow.roles[0].effort = Some("huge".into());
+        let huge = "`coder`: claude has no effort `huge`; its levels are `low`, `medium`, `high`, `xhigh`, `max`";
+        assert_eq!(flow.problems(), vec![huge.to_string()]);
+        flow.roles[0].effort = None;
+        flow.roles[2].agent = "gemini".into();
+        flow.roles[2].effort = Some("high".into());
+        assert!(
+            flow.problems().contains(&"`security`: gemini has no effort switch".to_string()),
+            "{:?}",
+            flow.problems()
+        );
+    }
+
+    #[test]
     fn a_role_works_in_one_stage() {
         let mut flow = sample();
         flow.stages.push(Stage { roles: vec!["coder".into()], back: None });
@@ -182,8 +200,14 @@ mod files {
     fn a_flow_survives_a_round_trip_through_toml() {
         for flow in builtin::flows(&Known::ALL, None) {
             let text = store::to_text(&flow).expect("serialize");
+            assert!(!text.contains("effort"), "{text}");
             assert_eq!(store::parse(&text).expect("parse"), flow);
         }
+        let mut flow = sample();
+        flow.roles[0].effort = Some("xhigh".into());
+        let text = store::to_text(&flow).expect("serialize");
+        assert!(text.contains("effort = \"xhigh\""), "{text}");
+        assert_eq!(store::parse(&text).expect("parse"), flow);
     }
 
     #[test]
@@ -319,6 +343,29 @@ mod commands {
         };
         let line = command(&config, &role).expect("a known agent");
         assert_eq!(line, format!("codex --dangerously-bypass-approvals-and-sandbox {expected}"));
+    }
+
+    #[rstest::rstest]
+    #[case::an_effort_beats_every_other(Some("high"), &["--effort", "low", "-v"], "--effort high -v")]
+    #[case::args_beat_the_settings(None, &["--effort=low", "-v"], "--effort=low -v")]
+    #[case::the_settings_stay_otherwise(None, &["-v"], "--effort max -v")]
+    fn a_role_effort_then_its_arguments_beat_the_settings_effort(
+        #[case] effort: Option<&str>,
+        #[case] args: &[&str],
+        #[case] expected: &str,
+    ) {
+        let mut config = Config::default();
+        config.agent_args.insert("claude".into(), vec!["--effort".into(), "max".into()]);
+        let role = Role {
+            agent: "claude".into(),
+            effort: effort.map(str::to_string),
+            args: args.iter().map(|a| (*a).to_string()).collect(),
+            ..Role::default()
+        };
+        let line = command(&config, &role).expect("a known agent");
+        assert_eq!(line, format!("claude --dangerously-skip-permissions {expected}"));
+        let resumed = resume(&config, &role, "c1".into()).expect("claude resumes");
+        assert_eq!(resumed, format!("claude --dangerously-skip-permissions {expected} --resume c1"));
     }
 
     #[test]

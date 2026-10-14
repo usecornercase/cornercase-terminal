@@ -66,7 +66,7 @@ pub(crate) use dialog::settings::{
     SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
-pub(crate) use dialog::start_flow::{StartFlow, StartHit, start_hit, start_prompt};
+pub(crate) use dialog::start_flow::{Shape as StartShape, StartFlow, StartHit, start_hit, start_prompt};
 #[cfg(test)]
 pub(crate) use dialog::start_flow::{start_buttons, start_list};
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};

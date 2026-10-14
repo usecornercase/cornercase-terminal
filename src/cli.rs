@@ -262,11 +262,13 @@ fn read_prompt(prompt: Option<String>, file: Option<PathBuf>) -> Result<Option<S
 
 fn run_start(start: StartArgs) -> Result<()> {
     let prompt = read_prompt(start.prompt, start.prompt_file)?;
-    let name = if start.model.is_some() || start.mode.is_some() { "start-with" } else { "start" };
+    let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
+    let name = if chosen { "start-with" } else { "start" };
     let request = control::Start {
         agent: start.agent,
         model: start.model,
         mode: start.mode,
+        effort: start.effort,
         project: None,
         worktree: start.worktree,
         workspace: start.workspace,

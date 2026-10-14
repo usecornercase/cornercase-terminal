@@ -14,6 +14,7 @@ fn members() -> Vec<Member> {
 fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
     let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
     flow.roles[1].model = Some("gpt-5.5".into());
+    flow.roles[1].effort = Some("high".into());
     flow.notes = "Do not change the public API.".into();
     let text = brief(&flow, "Fix the login form\n", "fix-login", &members());
 
@@ -21,7 +22,7 @@ fn the_brief_holds_the_task_the_team_the_plan_and_the_end() {
     assert!(text.contains("on branch fix-login"), "{text}");
     assert!(text.contains("## Task\n\nFix the login form\n\n## Team"), "{text}");
     assert!(text.contains("- coder (pane 14): claude, edits files\n"), "{text}");
-    assert!(text.contains("- reviewer (pane 15): codex · gpt-5.5, must not edit files\n"), "{text}");
+    assert!(text.contains("- reviewer (pane 15): codex · gpt-5.5 · high, must not edit files\n"), "{text}");
     assert!(text.contains("- you, the orchestrator (pane 12): claude\n"), "{text}");
     assert!(text.contains("1. coder.\n"), "{text}");
     assert!(

@@ -429,7 +429,7 @@ mod roles_tabs {
     fn the_orchestrator_tab_has_no_name_edits_or_delete() {
         let mut d = editing();
         d.hit(Hit::Tab(1), ROOM);
-        assert_eq!(edit(&d).rows(), [Row::Agent, Row::Model, Row::Args, Row::Env, Row::Prompt]);
+        assert_eq!(edit(&d).rows(), [Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt]);
         assert_eq!(d.buttons(ROOM), [SAVE, DONE]);
     }
 
@@ -523,6 +523,35 @@ mod models {
         click_row(&mut d, Row::Model);
         d.hit(Hit::Pick(0), ROOM);
         assert_eq!(edit(&d).flow.roles[0].model, None);
+    }
+
+    #[test]
+    fn an_effort_is_one_of_the_agents_levels_and_goes_with_its_agent() {
+        let mut d = editing();
+        d.hit(Hit::Tab(2), ROOM);
+        click_row(&mut d, Row::Effort);
+        assert_eq!(labels(&d), [DEFAULT_MODEL, "low", "medium", "high", "xhigh", "max"]);
+        d.hit(Hit::Pick(3), ROOM);
+        assert_eq!(edit(&d).flow.roles[0].effort.as_deref(), Some("high"));
+        click_row(&mut d, Row::Effort);
+        d.hit(Hit::Pick(0), ROOM);
+        assert_eq!(edit(&d).flow.roles[0].effort, None);
+        edit_mut(&mut d).flow.roles[0].effort = Some("max".into());
+        click_row(&mut d, Row::Agent);
+        d.hit(Hit::Pick(1), ROOM);
+        assert_eq!((edit(&d).flow.roles[0].agent.as_str(), edit(&d).flow.roles[0].effort.as_deref()), ("codex", None));
+    }
+
+    #[test]
+    fn an_agent_without_an_effort_switch_says_so_and_offers_nothing() {
+        let mut d = editing();
+        d.hit(Hit::Tab(2), ROOM);
+        edit_mut(&mut d).flow.roles[0].agent = "gemini".into();
+        click_row(&mut d, Row::Effort);
+        assert!(edit(&d).pick.is_none());
+        let rows = edit(&d).row_texts(&d.agents);
+        let effort = rows.iter().find(|row| row.label == "effort").expect("the effort row");
+        assert_eq!((effort.value.as_str(), effort.note.as_str()), ("none", "gemini has no effort switch"));
     }
 
     #[test]

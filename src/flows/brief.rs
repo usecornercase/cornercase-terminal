@@ -28,11 +28,11 @@ pub(crate) fn brief(flow: &Flow, task: &str, branch: &str, members: &[Member]) -
     for role in &flow.roles {
         let at = pane(&role.name).map_or_else(|| "no pane".to_string(), |id| format!("pane {id}"));
         let edits = if role.edits { "edits files" } else { "must not edit files" };
-        let _ = writeln!(out, "- {} ({at}): {}, {edits}", role.name, agent(role));
+        let _ = writeln!(out, "- {} ({at}): {}, {edits}", role.name, role.summary());
     }
     let own = pane(ORCHESTRATOR);
     let you = own.map_or_else(String::new, |id| format!(" (pane {id})"));
-    let _ = writeln!(out, "- you, the orchestrator{you}: {}", agent(&flow.orchestrator));
+    let _ = writeln!(out, "- you, the orchestrator{you}: {}", flow.orchestrator.summary());
     out.push_str(
         "\n## Plan\n\nRun the stages in order. At each stage, send each of its roles what it needs (the task, what \
          the stages before produced) and wait for all their answers.\n\n",
@@ -62,13 +62,6 @@ pub(crate) fn restored(members: &[Member]) -> String {
          do nothing else.",
         team.join(", ")
     )
-}
-
-fn agent(role: &Role) -> String {
-    match role.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
-        Some(model) => format!("{} · {model}", role.agent),
-        None => role.agent.clone(),
-    }
 }
 
 fn names(roles: &[String]) -> String {

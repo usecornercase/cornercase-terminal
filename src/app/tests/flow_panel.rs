@@ -298,13 +298,28 @@ mod clicks {
         assert_eq!(*edge, Edge::Forward(0));
         let Some(ui::Overlay::Update(view)) = app.overlay_view(overlay, TALL) else { panic!("not drawn") };
         let notes: Vec<String> = view.notes.iter().map(ToString::to_string).collect();
-        assert_eq!(
-            (view.message.as_str(), notes.last().map(String::as_str)),
-            ("orchestrator → reviewer", Some("review the fix"))
-        );
+        assert_eq!((view.message.as_str(), notes), ("orchestrator → reviewer · sent", vec!["review the fix".into()]));
         send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         assert_eq!(app.take_host_writes(), vec![clipboard::osc52("review the fix")]);
         assert!(app.overlay.is_none());
+    }
+
+    #[test]
+    fn a_branch_shows_the_message_its_own_role_got() {
+        let (mut app, _rx, _dir) = team();
+        send(&mut app, ORCHESTRATOR, "coder", "fix the login");
+        send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
+        send(&mut app, ORCHESTRATOR, "security", "look for holes");
+        app.show_flow();
+        let opened = |app: &mut App, branch: &str| {
+            let at = spot(app, branch);
+            click_in(app, Position { x: at.x + 1, ..at }, TALL);
+            let overlay = app.overlay.take().expect("a message dialog");
+            let Some(ui::Overlay::Update(view)) = app.overlay_view(&overlay, TALL) else { panic!("not drawn") };
+            (view.message, view.notes.iter().map(ToString::to_string).collect::<Vec<_>>())
+        };
+        assert_eq!(opened(&mut app, "├▶"), ("orchestrator → reviewer · sent".into(), vec!["review the fix".into()]));
+        assert_eq!(opened(&mut app, "╰▶"), ("orchestrator → security · sent".into(), vec!["look for holes".into()]));
     }
 
     #[test]
@@ -312,8 +327,8 @@ mod clicks {
         let (mut app, _rx, _dir) = team();
         send(&mut app, ORCHESTRATOR, "coder", "fix the login");
         send(&mut app, ORCHESTRATOR, "reviewer", "review the fix");
-        app.overlay =
-            Some(Overlay::FlowMessage { workspace: app.runs[0].workspace, edge: Edge::Forward(0), scroll: 0 });
+        let workspace = app.runs[0].workspace;
+        app.overlay = Some(Overlay::FlowMessage { workspace, edge: Edge::Forward(0), to: None, scroll: 0 });
         app.runs.clear();
         app.refresh(Instant::now());
         assert!(app.overlay.is_none());

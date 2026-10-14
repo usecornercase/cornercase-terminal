@@ -76,7 +76,7 @@ pub(super) enum Overlay {
     Telegram,
     Branches(BranchPicker),
     PullRequest { workspace: u64, scroll: usize },
-    FlowMessage { workspace: u64, edge: Edge, scroll: usize },
+    FlowMessage { workspace: u64, edge: Edge, to: Option<String>, scroll: usize },
     Keys(Option<KeysGroup>),
 }
 
@@ -236,8 +236,8 @@ impl App {
             Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
-            Overlay::FlowMessage { workspace, edge, scroll } => {
-                self.flow_message_view(*workspace, *edge, *scroll, area)?
+            Overlay::FlowMessage { workspace, edge, to, scroll } => {
+                self.flow_message_view(*workspace, (*edge, to.as_deref()), *scroll, area)?
             }
         })
     }
