@@ -12,6 +12,8 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const TITLE: &str = "Claude Code";
+pub(in crate::agents) const MODEL_FLAG: &str = "--model";
+pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-skip-permissions"];
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("accept edits", &["--permission-mode", "acceptEdits"]),
     ("auto", &["--permission-mode", "auto"]),

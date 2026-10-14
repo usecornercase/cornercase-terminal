@@ -44,6 +44,10 @@ pub(crate) fn secrets(config_path: &Path) -> PathBuf {
     config_path.with_file_name(SECRETS_FILE)
 }
 
+pub(crate) fn flows(config: &Path) -> PathBuf {
+    config.with_file_name("flows")
+}
+
 pub(crate) fn browsers(config: &Path) -> PathBuf {
     config.with_file_name("browsers.json")
 }

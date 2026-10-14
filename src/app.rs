@@ -67,6 +67,7 @@ mod dialogs;
 mod event;
 mod events;
 mod files_panel;
+mod flow_runs;
 mod hierarchy;
 mod images;
 mod input;
@@ -151,6 +152,8 @@ pub(crate) struct App {
     usage_timeout: Duration,
     confirm_within: Duration,
     todos: Todos,
+    #[allow(dead_code)]
+    runs: Vec<crate::flows::run::Run>,
     todo: todo::Panel,
     files: files::Panel,
     images: images::Payloads,
@@ -206,6 +209,7 @@ impl App {
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
             todos: Todos::default(),
+            runs: Vec::new(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
             images: images::Payloads::default(),

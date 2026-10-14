@@ -51,6 +51,7 @@ signal-hook = "0.4.4"
 similar = "3.2.0"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 thiserror = "2.0.21"
+toml = "1.1.8"
 tungstenite = "0.30.0"
 ureq = "3.4.2"
 

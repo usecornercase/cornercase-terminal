@@ -56,6 +56,8 @@ pub enum Error {
     CodeWorkspace { path: PathBuf, reason: String },
     #[error("cannot read `{}`: {cause}", path.display())]
     Record { path: PathBuf, cause: String },
+    #[error("cannot use the flow `{}`: {reason}", path.display())]
+    FlowFile { path: PathBuf, reason: String },
     #[error("`{0}` already exists")]
     PathExists(PathBuf),
     #[error("no cornercase server is running")]

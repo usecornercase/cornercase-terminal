@@ -7,6 +7,8 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "opencode";
 pub(in crate::agents) const TITLE: &str = "opencode";
+pub(in crate::agents) const MODEL_FLAG: &str = "--model";
+pub(in crate::agents) const UNATTENDED: &[&str] = &["--auto"];
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[];
 pub(in crate::agents) const HOLDS_PROMPTS: bool = false;
 pub(in crate::agents) const RUNS_AS: bool = false;

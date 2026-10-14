@@ -46,6 +46,26 @@ impl Known {
         }
     }
 
+    pub(crate) fn model_flag(self) -> &'static str {
+        match self {
+            Self::Claude => claude::MODEL_FLAG,
+            Self::Codex => codex::MODEL_FLAG,
+            Self::Gemini => gemini::MODEL_FLAG,
+            Self::Opencode => opencode::MODEL_FLAG,
+            Self::Grok => grok::MODEL_FLAG,
+        }
+    }
+
+    pub(crate) fn unattended(self) -> &'static [&'static str] {
+        match self {
+            Self::Claude => claude::UNATTENDED,
+            Self::Codex => codex::UNATTENDED,
+            Self::Gemini => gemini::UNATTENDED,
+            Self::Opencode => opencode::UNATTENDED,
+            Self::Grok => grok::UNATTENDED,
+        }
+    }
+
     pub(crate) fn normalized(self, args: &[String]) -> Vec<String> {
         match self {
             Self::Claude => claude::normalized(args),
