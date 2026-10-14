@@ -421,7 +421,9 @@ fn spawn_client_reader(id: u64, mut stream: UnixStream, tx: Sender<ServerEvent>)
 
 impl Server {
     fn new(app: App, session: PathBuf, todo_saver: Saver<todo::Saved>, tx: Sender<ServerEvent>) -> Self {
-        let queue_saver = Saver::new(paths::queue(&session), None);
+        let queue_path = paths::queue(&session);
+        let queue_baseline = queue::read_saved(&queue_path).unwrap_or_else(|| app.queue_saved());
+        let queue_saver = Saver::new(queue_path, Some(queue_baseline));
         let stats_saver = crate::agents::stats::Saver::new(paths::stats(&session), app.stats().revision());
         Self {
             app,

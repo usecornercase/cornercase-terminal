@@ -125,6 +125,48 @@ mod starts {
 mod forms {
     use super::*;
 
+    #[rstest::rstest]
+    #[case::repository(true)]
+    #[case::plain_folder(false)]
+    fn issue_lookup_keeps_the_name_and_creates_a_worktree_only_in_a_repository(#[case] repository: bool) {
+        let (mut app, rx, _repo, config, _worktrees) = queued_app();
+        let folder = TempDir::new();
+        if !repository {
+            app.projects[0].path = folder.path().to_path_buf();
+            app.projects[0].workspaces[0].path = folder.path().to_path_buf();
+        }
+        let gh = crate::test_util::fake_gh(
+            config.path(),
+            "cat <<'JSON'\n{\"number\":7,\"title\":\"Fix login\",\"state\":\"OPEN\",\"labels\":[],\"assignees\":[],\"author\":{\"login\":\"ana\"},\"updatedAt\":\"\",\"url\":\"https://github.com/acme/shop/issues/7\"}\nJSON",
+        );
+        app.config.gh = gh.display().to_string();
+        let add = crate::control::QueueAdd {
+            at: "in 2h".into(),
+            agent: Some("fake".into()),
+            project: Some(app.projects[0].id),
+            issue: Some("#7".into()),
+            label: Some("login fix".into()),
+            ..crate::control::QueueAdd::default()
+        };
+        assert_eq!(app.add_queue_request(None, None, None, &add).expect("prepare issue"), None);
+        pump_until(&mut app, &rx, "the issue is queued", |app| app.queued.queue.pending() == 1);
+        let entry = &app.queued.queue.entries[0];
+        assert_eq!(entry.task.label, "login fix");
+        assert_eq!(entry.task.place.branch.is_some(), repository);
+        assert!(entry.task.submit);
+        if !repository {
+            let id = entry.id;
+            let prompt = crate::text::one_line(&entry.task.prompt);
+            app.run_queued(id, Instant::now()).expect("start a tab in the plain folder");
+            refreshing(&mut app, &rx, "the queued tab starts", |app| {
+                matches!(app.queued.queue.entry(id).expect("entry").state, QueueState::Started { .. })
+            });
+            wait_until("the fake receives the issue prompt", || folder.path().join("got").exists());
+            assert_eq!(std::fs::read_to_string(folder.path().join("got")).expect("prompt"), prompt);
+            assert_eq!(app.projects[0].workspaces[0].tabs.len(), 2);
+        }
+    }
+
     #[test]
     fn queues_each_trackers_issue_with_its_prompt_and_branch() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
@@ -147,6 +189,7 @@ mod forms {
             assert_eq!(app.side, Some(Side::Queue));
         }
         assert_eq!(app.queued.queue.pending(), Source::ALL.len());
+        assert!(app.queued.queue.entries.iter().all(|entry| entry.task.submit));
     }
 
     #[test]
@@ -222,6 +265,57 @@ mod resets {
 
 mod guarantees {
     use super::*;
+
+    #[test]
+    fn editing_keeps_an_agent_and_mode_removed_from_settings() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        app.config.agent_modes.insert("fake".into(), [("careful".into(), vec!["--careful".into()])].into());
+        app.config.agent_args.insert("fake".into(), vec!["--careful".into()]);
+        let mut original = task(&app, time::now() + 3600, None);
+        original.mode = Some("careful".into());
+        let id = app.queued.queue.add(original.clone()).expect("add");
+        app.config.agent_commands.remove("fake");
+        app.config.agent_modes.remove("fake");
+        app.add_queue_request(None, None, Some(id), &crate::control::QueueAdd::default()).expect("keep captured agent");
+        let edited = &app.queued.queue.entry(id).expect("entry").task;
+        assert_eq!(
+            (&edited.agent, &edited.mode, &edited.command),
+            (&original.agent, &original.mode, &original.command)
+        );
+        app.new_queue_form(Some(id));
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
+        assert_eq!(form.kinds[form.agent], original.agent);
+        assert_eq!(form.modes[form.mode], "careful");
+        form.prompt = todo::editor::Editor::new("fix logout instead");
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.overlay.is_none());
+        let edited = &app.queued.queue.entry(id).expect("edited").task;
+        assert_eq!(
+            (&edited.agent, &edited.mode, &edited.command),
+            (&original.agent, &original.mode, &original.command)
+        );
+    }
+
+    #[test]
+    fn editing_keeps_no_mode_when_the_default_mode_changes() {
+        let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+        let original = task(&app, time::now() + 3600, None);
+        let id = app.queued.queue.add(original.clone()).expect("add");
+        app.config.agent_modes.insert("fake".into(), [("careful".into(), vec!["--careful".into()])].into());
+        app.config.agent_args.insert("fake".into(), vec!["--careful".into()]);
+        app.config.submit = false;
+        app.add_queue_request(None, None, Some(id), &crate::control::QueueAdd::default()).expect("keep captured mode");
+        let edited = &app.queued.queue.entry(id).expect("entry").task;
+        assert_eq!((&edited.mode, &edited.command), (&original.mode, &original.command));
+        app.new_queue_form(Some(id));
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
+        form.prompt = todo::editor::Editor::new("fix logout instead");
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.overlay.is_none());
+        let edited = &app.queued.queue.entry(id).expect("edited").task;
+        assert_eq!((&edited.mode, &edited.command), (&original.mode, &original.command));
+        assert_eq!(edited.submit, original.submit);
+    }
 
     #[test]
     fn records_an_interrupted_start_before_creating_a_terminal() {

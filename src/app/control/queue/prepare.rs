@@ -2,33 +2,50 @@ use crate::agents;
 use crate::app::App;
 use crate::control::QueueAdd;
 use crate::git;
+use crate::issues::{Client, Source};
 use crate::project::Hierarchy;
 use crate::queue::{Entry, Place, Task};
 
 impl App {
+    pub(super) fn queue_issue(&self, project: u64, add: &QueueAdd) -> Result<Option<(Client, String)>, String> {
+        add.issue
+            .as_ref()
+            .map(|text| {
+                let connected: Vec<_> =
+                    Source::REMOTE.into_iter().filter(|source| self.client(*source, project).is_some()).collect();
+                let (source, key) = crate::queue::issue::locator(text, add.source.as_deref(), &connected)
+                    .map_err(|error| error.to_string())?;
+                let api = self.client(source, project).ok_or_else(|| format!("{} is not connected", source.name()))?;
+                Ok((api, key))
+            })
+            .transpose()
+    }
+
     pub(super) fn queue_task(
         &mut self,
         caller: Option<u64>,
         add: &QueueAdd,
         old: Option<&Entry>,
     ) -> Result<Task, String> {
-        let agent = self.agent_kind(
-            caller,
-            add.agent
-                .clone()
-                .filter(|agent| agent != agents::AUTO)
-                .or_else(|| old.filter(|_| add.agent.is_none()).map(|entry| entry.task.agent.clone())),
+        let agent = old.filter(|entry| add.agent.as_ref().is_none_or(|agent| *agent == entry.task.agent)).map_or_else(
+            || self.agent_kind(caller, add.agent.clone().filter(|agent| agent != agents::AUTO)),
+            |entry| Ok(entry.task.agent.clone()),
         )?;
         let mut config = self.config.clone();
         let mode = match add.mode.as_deref() {
             Some("default") => agents::mode_of(&agent, &agents::args(&config, &agent), &agents::modes(&config, &agent)),
             Some(mode) => Some(mode.to_string()),
-            None => old
-                .filter(|entry| entry.task.agent == agent)
-                .and_then(|entry| entry.task.mode.clone())
-                .or_else(|| agents::mode_of(&agent, &agents::args(&config, &agent), &agents::modes(&config, &agent))),
+            None => old.filter(|entry| entry.task.agent == agent).map_or_else(
+                || agents::mode_of(&agent, &agents::args(&config, &agent), &agents::modes(&config, &agent)),
+                |entry| entry.task.mode.clone(),
+            ),
         };
-        if let Some(mode) = &mode {
+        let preserve = old.filter(|entry| {
+            entry.task.agent == agent && entry.task.mode == mode && add.agent.as_deref() != Some(agents::AUTO)
+        });
+        if preserve.is_none()
+            && let Some(mode) = &mode
+        {
             let modes = agents::modes(&config, &agent);
             if !modes.iter().any(|(name, _)| name == mode) {
                 return Err(format!("unknown {agent} mode {mode}"));
@@ -47,9 +64,6 @@ impl App {
             label.clone_from(&old.task.label);
         }
         label = crate::text::one_line(&label.chars().filter(|character| !character.is_control()).collect::<String>());
-        let preserve = old.filter(|entry| {
-            entry.task.agent == agent && entry.task.mode == mode && add.agent.as_deref() != Some(agents::AUTO)
-        });
         let command =
             preserve.map_or_else(|| agents::command_line(&config, &agent), |entry| entry.task.command.clone());
         let program = preserve.map_or_else(|| agents::command(&config, &agent), |entry| entry.task.program.clone());

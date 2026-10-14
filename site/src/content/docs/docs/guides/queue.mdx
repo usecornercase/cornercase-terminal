@@ -33,7 +33,7 @@ A reset choice runs the existing plan usage probe on the server when you save. I
 
 Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the form. Click a field to edit it, use the arrow keys, `Home`, `End`, `Backspace` and `Delete`, or paste text. `Tab` moves between text fields.
 
-**Queued launches always accept the agent's folder trust question**, even with `accept_trust_prompts` off. This lets unattended starts proceed. The form states this before saving. Immediate starts keep your global trust setting. Agent approval modes remain the ones you selected.
+**Queued launches always accept the agent's folder trust question**, even with `accept_trust_prompts` off. This lets unattended starts proceed. The form states this before saving. Immediate starts keep your global trust setting. Agent approval modes remain the ones you selected. Queued launches submit their stored prompt automatically, even when automatic submission for immediate issue starts is off.
 
 ## When entries run
 
@@ -45,7 +45,7 @@ An entry more than ten minutes late becomes **`missed`** and waits for you. Waki
 
 Started entries stay until **`clear started`** or **`×`** removes them. Click one to jump to its pane while it is still open in that server. After a restart, its historical pane link is unavailable; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
 
-The agent command, mode, prompt and destination are captured when scheduled. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
+The agent command, mode, prompt and destination are captured when scheduled. Editing the prompt or time keeps that agent and mode, even if their settings changed or a custom agent was removed; choosing another agent or mode captures its current command. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
 
 ## Commands
 
@@ -57,14 +57,15 @@ cornercase queue add --at 14:30 --agent codex --source linear --issue ENG-123 --
 cornercase queue list
 cornercase queue list --json
 cornercase queue edit 1 --at 'in 3h' --prompt 'Fix logout too'
+cornercase queue edit 1 --name 'Login follow-up'
 cornercase queue run 1
 cornercase queue remove 1
 ```
 
-`add` prints the entry's persistent id. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs. `--mode` names a configured agent mode, and `--name` sets the entry and tab name. `add`, `edit` and `list` support `--json`.
+`add` prints the entry's persistent id. `--workspace` selects an open workspace; `--project` selects an open project root; `--worktree` selects or creates a branch in that project. Without a destination, a prompt uses the current workspace and an issue uses its usual worktree when the project is a repository root. Use `--source` for ambiguous keys and self-hosted tracker URLs. `--mode` names a configured agent mode, and `--name` sets the entry and tab name. `edit` can omit `--at` to keep the exact scheduled instant. `add`, `edit` and `list` support `--json`.
 
 ## Storage
 
-`queue.json` lives next to `session.json`, with its own format version. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue.
+`queue.json` lives next to `session.json`, with its own format version. For a custom socket whose session is `server.json`, the queue is `server.queue.json`, keeping different servers in the same folder separate. Its entry ids survive restarts and are not reused when an entry is removed. The server saves changes after they settle and flushes the queue on shutdown. A missing, corrupt or unsupported-version file starts an empty queue. An unreadable file is kept unchanged until you change the queue.
 
 The queue is independent of the [TODO list](../todo/). Entries run once; recurring schedules are not supported.

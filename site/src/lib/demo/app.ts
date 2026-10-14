@@ -3280,7 +3280,7 @@ export class App {
     workspace.tabs.push(tab);
     entry.state = 'started';
     entry.pane = pane.id;
-    this.launch(pane, entry.agent, entry.prompt, true, entry.command);
+    this.launch(pane, entry.agent, entry.prompt, true, entry.command, true);
     this.notify(`started queued agent ${entry.id}`);
     this.dirty();
   }
@@ -3307,7 +3307,7 @@ export class App {
     return true;
   }
 
-  launch(pane: Pane, kind: string, prompt: string, trust = this.config.trust, captured?: string): void {
+  launch(pane: Pane, kind: string, prompt: string, trust = this.config.trust, captured?: string, submit?: boolean): void {
     const command = captured ?? this.agentCommand(kind);
     this.after(300, () => {
       this.emit('narrate', this.narration.starting(command));
@@ -3331,7 +3331,7 @@ export class App {
         stage = 'pasted';
         this.after(450, () => {
           agent.paste(prompt);
-          if (this.config.submit) {
+          if (submit ?? this.config.submit) {
             this.emit('narrate', this.narration.sent);
             this.after(350, () => agent.key({ key: 'Enter' }));
           } else this.emit('narrate', this.narration.prompt);

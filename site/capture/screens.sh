@@ -748,7 +748,7 @@ screen_queue() {
     const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
     const entries = labels.map((label, i) => ({id:i+1,at:Math.floor(Date.now()/3600000)*3600+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
     fs.writeFileSync(path, JSON.stringify({version:1,next_id:4,entries}));
-  ' "$CC_RUN/queue.json" "$CC_HOME"
+  ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
   cc_wait 'web-shop'
   cc_click 'Queue 1'

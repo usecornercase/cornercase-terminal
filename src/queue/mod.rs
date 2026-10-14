@@ -144,13 +144,18 @@ pub(crate) fn missing(id: u64) -> String {
     format!("there is no queue entry {id}; `cornercase queue list` lists them")
 }
 
-pub(crate) fn load(path: &Path, now: i64) -> Queue {
+pub(crate) fn read_saved(path: &Path) -> Option<Saved> {
     let saved = std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice::<Saved>(&bytes).ok());
-    let Some(saved) = saved.filter(|saved| saved.version == VERSION) else { return Queue::default() };
+    let saved = saved.filter(|saved| saved.version == VERSION)?;
     let mut ids = HashSet::new();
     if saved.entries.iter().any(|entry| entry.id == 0 || !ids.insert(entry.id)) {
-        return Queue::default();
+        return None;
     }
+    Some(saved)
+}
+
+pub(crate) fn load(path: &Path, now: i64) -> Queue {
+    let Some(saved) = read_saved(path) else { return Queue::default() };
     let mut queue = Queue { entries: saved.entries, next_id: saved.next_id };
     queue.next_id = queue.entries.iter().map(|entry| entry.id).max().unwrap_or_default().max(queue.next_id);
     queue.sort();

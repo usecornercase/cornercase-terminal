@@ -16,7 +16,7 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
         QueueAction::Add(add) | QueueAction::Edit { add, id: _ } => {
             let json = add.print.json;
             let add = control::QueueAdd {
-                at: add.at,
+                at: add.at.unwrap_or_default(),
                 zone: clock::local_zone(),
                 agent: add.agent,
                 mode: add.mode,

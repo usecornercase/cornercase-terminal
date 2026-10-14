@@ -29,7 +29,7 @@ pub(crate) enum QueueAction {
 #[derive(Debug, Args)]
 pub(crate) struct QueueAdd {
     #[arg(long, help = "Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, claude reset or codex reset")]
-    pub(crate) at: String,
+    pub(crate) at: Option<String>,
     #[arg(long, help = "Agent name, or auto to use the current default or running agent")]
     pub(crate) agent: Option<String>,
     #[arg(long, help = "One of the agent's configured modes")]

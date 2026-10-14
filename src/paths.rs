@@ -64,7 +64,11 @@ pub(crate) fn todos(state: &Path) -> PathBuf {
 }
 
 pub(crate) fn queue(session: &Path) -> PathBuf {
-    session.with_file_name("queue.json")
+    if session.file_name().is_some_and(|name| name == "session.json") {
+        session.with_file_name("queue.json")
+    } else {
+        session.with_extension("queue.json")
+    }
 }
 
 pub(crate) fn stats(session: &Path) -> PathBuf {

@@ -53,7 +53,7 @@ impl App {
             })
             .unwrap_or_default();
         let place_confirmed = if entry.is_some() { matching.len() == 1 } else { !places.is_empty() };
-        let kinds: Vec<_> = std::iter::once(agents::AUTO.to_string()).chain(agents::kinds(&self.config)).collect();
+        let kinds = self.queue_kinds(entry.as_ref());
         let agent = entry
             .as_ref()
             .and_then(|entry| kinds.iter().position(|kind| *kind == entry.task.agent))
@@ -90,13 +90,24 @@ impl App {
         };
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
-        if let Some(Overlay::Queue(form)) = &mut self.overlay {
-            form.mode = entry
-                .as_ref()
-                .and_then(|entry| entry.task.mode.as_ref())
-                .and_then(|mode| form.modes.iter().position(|name| name == mode))
-                .unwrap_or_default();
+        if let Some(Overlay::Queue(form)) = &mut self.overlay
+            && let Some(mode) = entry.as_ref().and_then(|entry| entry.task.mode.as_ref())
+        {
+            form.mode = form.modes.iter().position(|name| name == mode).unwrap_or_else(|| {
+                form.modes.push(mode.clone());
+                form.modes.len() - 1
+            });
         }
+    }
+
+    fn queue_kinds(&self, entry: Option<&queue::Entry>) -> Vec<String> {
+        let mut kinds: Vec<_> = std::iter::once(agents::AUTO.to_string()).chain(agents::kinds(&self.config)).collect();
+        if let Some(entry) = entry
+            && !kinds.contains(&entry.task.agent)
+        {
+            kinds.push(entry.task.agent.clone());
+        }
+        kinds
     }
 
     fn queue_places(&self) -> Vec<Choice> {
@@ -282,17 +293,23 @@ impl App {
             self.queue_form_done(Err("the selected workspace closed; choose an open place".into()));
             return;
         }
+        let agent = form.kinds.get(form.agent).cloned();
+        let captured_default = form.modes[form.mode] == "default"
+            && form
+                .id
+                .and_then(|id| self.queued.queue.entry(id))
+                .is_some_and(|entry| agent.as_ref() == Some(&entry.task.agent) && entry.task.mode.is_none());
         let add = QueueAdd {
             at: form.at.text(),
             zone: form.zone.clone(),
-            agent: form.kinds.get(form.agent).cloned(),
-            mode: Some(form.modes[form.mode].clone()),
+            agent,
+            mode: (!captured_default).then(|| form.modes[form.mode].clone()),
             project: Some(project.id),
             workspace: workspace.map(|workspace| workspace.id),
             worktree: form.worktree.then(|| form.branch.text()),
             prompt: Some(form.prompt.text()),
             label: form.label.clone(),
-            submit: Some(self.config.submit),
+            submit: form.id.is_none().then_some(true),
             ..QueueAdd::default()
         };
         let id = form.id;

@@ -12,7 +12,7 @@ use crate::app::App;
 use crate::app::queue_panel::{CLIENTS, QueueEvent};
 use crate::control::{self, QueueAdd};
 use crate::error::Error;
-use crate::issues::{self, Source};
+use crate::issues;
 use crate::log::{Job, Level};
 use crate::queue::{self, Place, State};
 
@@ -78,26 +78,14 @@ impl App {
         let project = self
             .projects
             .iter()
-            .find(|project| project.path == task.place.project)
+            .find(|project| !project.closing && project.path == task.place.project)
             .ok_or("the queued project is closed")?
             .id;
-        let issue = add
-            .issue
-            .as_ref()
-            .map(|text| {
-                let connected: Vec<_> =
-                    Source::REMOTE.into_iter().filter(|source| self.client(*source, project).is_some()).collect();
-                let (source, key) = queue::issue::locator(text, add.source.as_deref(), &connected)
-                    .map_err(|error| error.to_string())?;
-                let api = self.client(source, project).ok_or_else(|| format!("{} is not connected", source.name()))?;
-                Ok::<_, String>((api, key))
-            })
-            .transpose()?;
+        let issue = self.queue_issue(project, add)?;
         if issue.is_none() && task.prompt.trim().is_empty() {
             return Err("a queue entry needs --prompt or --issue".into());
         }
         let template = self.config.prompt.clone();
-        let submit = self.config.submit;
         let reset = reset_agent(&at)?;
         let probe = reset.map(|agent| (agent, agents::command(&self.config, agent.name()), self.usage_timeout));
         let clock = crate::time::now();
@@ -125,6 +113,8 @@ impl App {
                 stage: Stage::Reading,
             });
         }
+        let named = add.label.is_some();
+        let repo_root = crate::git::is_repo_root(&task.place.project);
         let job = Job::new(Level::Info, "queue", "prepare");
         self.spawn_job(
             job,
@@ -133,9 +123,10 @@ impl App {
                     let issue = queue::issue::find(&api, &key)?;
                     let branch = issues::branch(&issue);
                     task.prompt = issues::prompt(&template, &issue, &branch);
-                    task.label = format!("{} {}", issue.key, issue.title);
-                    task.submit = submit;
-                    if task.place.branch.is_none() && task.place.workspace.is_none() {
+                    if !named {
+                        task.label = format!("{} {}", issue.key, issue.title);
+                    }
+                    if repo_root && task.place.branch.is_none() && task.place.workspace.is_none() {
                         task.place.branch = Some(branch);
                     }
                 }

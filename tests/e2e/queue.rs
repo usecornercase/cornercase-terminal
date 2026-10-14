@@ -17,6 +17,11 @@ fn queue_commands_add_list_edit_and_remove_without_starting_an_agent() {
     let edited: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("edited JSON");
     assert_eq!(edited["entries"][0]["prompt"], "fix logout");
     assert!(edited["entries"][0]["at"].as_i64().expect("new time") > entry["at"].as_i64().expect("old time"));
+    app.session.says(&["queue", "edit", &id, "--name", "logout fix"]);
+    let renamed: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("renamed JSON");
+    assert_eq!(renamed["entries"][0]["label"], "logout fix");
+    assert_eq!(renamed["entries"][0]["at"], edited["entries"][0]["at"]);
+    assert_eq!(renamed["entries"][0]["prompt"], edited["entries"][0]["prompt"]);
     app.session.says(&["queue", "remove", &id]);
     let list: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("empty JSON");
     assert_eq!(list["entries"], serde_json::json!([]));

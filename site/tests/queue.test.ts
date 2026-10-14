@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
+import { Agent } from '../src/lib/demo/programs';
 import { inputKey } from '../src/lib/demo/client';
 import { world } from '../src/lib/demo/world';
 
@@ -58,6 +59,7 @@ for (const cols of [140, 70]) {
 test('entries due together start separate agents without starting early or moving focus', () => {
   const app = appAt(140);
   app.config.trust = false;
+  app.config.submit = false;
   const before = app.tab()?.id;
   for (const branch of ['first-queued', 'second-queued']) {
     app.openQueueForm();
@@ -73,6 +75,12 @@ test('entries due together start separate agents without starting early or movin
   assert.ok(app.queued.every((entry) => entry.state === 'started'));
   assert.notEqual(app.queued[0].pane, app.queued[1].pane);
   assert.equal(app.tab()?.id, before);
+  app.advance(4000);
+  const panes = app.projects.flatMap((project) => project.workspaces.flatMap((workspace) => workspace.tabs.flatMap((tab) => tab.panes)));
+  for (const entry of app.queued) {
+    const agent = panes.find((pane) => pane.id === entry.pane)?.shell.fg;
+    assert.ok(agent instanceof Agent && agent.working);
+  }
   app.destroy();
 });
 
