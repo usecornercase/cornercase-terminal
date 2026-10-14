@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.89
+
+- The buttons at the bottom of the sidebar can become a column of icons on the left edge, like an editor's activity bar: turn on **Settings → UI → icon bar**. Hover an icon to see its name. The number of changed files, the TODO dot and the Remote dot sit at the corner of their icons, and the lists get the rows the buttons took. The icons need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default.
+
 ## 0.12.88
 
 - Mark an agent as **pending review** when you want to check its work later: right-click its tab, its pane or its row in the agents section and pick **mark as pending review**, or press `m` in the keys menu. Its tab, workspace, project and group show a purple `●` that stays when you look at it, until you pick **mark as reviewed**, send the agent a new prompt or answer its question.
