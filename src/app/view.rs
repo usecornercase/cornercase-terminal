@@ -45,6 +45,7 @@ impl App {
             name: w.label(),
             tabs: w.tabs.iter().map(|t| self.tab_entry(t)).collect(),
             behind: w.behind,
+            pull: self.pull_mark(w),
             removing: w.removing(),
         }
     }
@@ -69,6 +70,7 @@ impl App {
                     name: if named { workspace.label() } else { String::new() },
                     tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
                     behind: workspace.behind,
+                    pull: self.pull_mark(workspace),
                     removing: workspace.removing(),
                 }
             };

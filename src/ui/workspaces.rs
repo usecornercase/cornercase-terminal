@@ -14,10 +14,11 @@ use super::rows::{
     Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, row_button,
     row_close_button, row_menu_button, row_rect,
 };
-use super::theme::{severity_color, status_icon};
+use super::theme::{pull_tag, severity_color, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle};
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
+use crate::pull_request::Mark;
 use crate::text::truncate_right;
 
 const SHELL_ICON: &str = "›";
@@ -164,6 +165,7 @@ pub(crate) struct WorkspaceEntry {
     pub(crate) name: String,
     pub(crate) tabs: Vec<TabEntry>,
     pub(crate) behind: u32,
+    pub(crate) pull: Option<Mark>,
     pub(crate) removing: bool,
 }
 
@@ -344,10 +346,11 @@ pub(super) fn draw_workspace_band(
             .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
             .flatten()
             .map(|status| status_icon(view.muted, status, view.spin));
+        let pull = entry.pull.map(|mark| pull_tag(view.muted, mark));
         let behind = Some(entry.behind)
             .filter(|n| *n > 0)
             .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-        Tags::fit(badge.into_iter().chain(behind).collect(), room)
+        Tags::fit(badge.into_iter().chain(pull).chain(behind).collect(), room)
     };
     let name = truncate_right(&entry.name, room.saturating_sub(marks.reserved()));
     let used = name.chars().count();

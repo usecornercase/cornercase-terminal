@@ -86,18 +86,6 @@ mod commands {
     }
 
     #[test]
-    fn a_command_that_hangs_is_killed() {
-        let dir = TempDir::new();
-        let program = fake(&dir, "exec sleep 30");
-        let mut child = Command::new(&program).stdin(Stdio::null()).spawn().expect("started");
-
-        let status = wait(&mut child, Duration::from_millis(300)).expect("waited");
-
-        assert_eq!(status, None);
-        assert!(child.try_wait().expect("reaped").is_some());
-    }
-
-    #[test]
     fn a_missing_program_is_not_installed() {
         assert_eq!(status(Path::new("/nonexistent/tailscale")), Err(Problem::NotInstalled));
     }

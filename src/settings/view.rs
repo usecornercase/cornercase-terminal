@@ -14,6 +14,27 @@ impl Settings {
         ("keep awake".into(), value.into(), self.awake.clone(), false)
     }
 
+    fn worktrees_row(&self, row: &Row) -> (String, String, String, bool) {
+        let config = &self.config;
+        match row {
+            Row::Folder => (
+                "worktrees folder".to_string(),
+                config.worktrees_dir.clone(),
+                "new worktrees go in <folder>/<repo>/<branch>".to_string(),
+                false,
+            ),
+            Row::Fetch => {
+                let value =
+                    if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
+                ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
+            }
+            _ => {
+                let value = if config.pull_requests { "[x] shown" } else { "[ ] hidden" };
+                ("pull requests".into(), value.into(), self.pulls.clone(), false)
+            }
+        }
+    }
+
     fn telegram_row(&self, row: &Row) -> (String, String, String, bool) {
         if *row == Row::TelegramBot {
             let note = if self.telegram.checking { "checking…".into() } else { self.telegram.note.clone() };
@@ -29,17 +50,7 @@ impl Settings {
     pub(crate) fn row_text(&self, row: &Row) -> RowText {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
-            Row::Folder => (
-                "worktrees folder".to_string(),
-                config.worktrees_dir.clone(),
-                "new worktrees go in <folder>/<repo>/<branch>".to_string(),
-                false,
-            ),
-            Row::Fetch => {
-                let value =
-                    if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
-                ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
-            }
+            Row::Folder | Row::Fetch | Row::PullRequests => self.worktrees_row(row),
             Row::Token(source) => {
                 let label = format!("{} {}", source.name(), source.token_name());
                 let (value, note) = match self.status(*source) {

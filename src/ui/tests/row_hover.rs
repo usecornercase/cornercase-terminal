@@ -30,6 +30,7 @@ fn sample(light: bool) -> View<'static> {
             name: "login".into(),
             tabs: vec!["claude".into(), "nvim".into()],
             behind: 3,
+            pull: None,
             removing: false,
         }],
         active_tab: Some(0),

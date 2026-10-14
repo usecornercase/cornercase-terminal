@@ -4,7 +4,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::picker::picker_area;
-use super::{Note, buttons_in, draw_dialog_buttons, draw_note, form_inner};
+use super::{Note, buttons_in, draw_dialog_buttons, draw_note, draw_secondary, form_inner, left_of};
 use crate::ui::View;
 use crate::ui::widgets::overlay_block;
 
@@ -30,6 +30,11 @@ pub(crate) fn update_buttons(area: Rect, submit: &str, cancel: &str) -> [Rect; 2
     buttons_in(update_rows(picker_area(area))[3], submit, cancel)
 }
 
+pub(crate) fn update_extra(area: Rect, submit: &str, cancel: &str, extra: &str) -> Rect {
+    let [submit, _] = update_buttons(area, submit, cancel);
+    left_of(update_rows(picker_area(area))[3], submit, extra)
+}
+
 pub(crate) fn update_scroll(area: Rect, lines: usize, scroll: usize) -> usize {
     scroll.min(lines.saturating_sub(usize::from(update_notes(area).height)))
 }
@@ -41,6 +46,7 @@ pub(crate) struct Update {
     pub(crate) scroll: usize,
     pub(crate) note: Option<Note>,
     pub(crate) submit: &'static str,
+    pub(crate) extra: Option<&'static str>,
     pub(crate) cancel: &'static str,
 }
 
@@ -55,4 +61,7 @@ pub(in crate::ui) fn draw_update(f: &mut Frame, view: &View, update: &Update) {
     f.render_widget(Paragraph::new(visible), notes);
     draw_note(f, view.muted, update.note.as_ref(), note);
     draw_dialog_buttons(f, view, update_buttons(f.area(), update.submit, update.cancel), update.submit, update.cancel);
+    if let Some(extra) = update.extra {
+        draw_secondary(f, view, update_extra(f.area(), update.submit, update.cancel, extra), extra);
+    }
 }

@@ -1,4 +1,5 @@
 pub mod error;
+pub(crate) mod gh;
 pub(crate) mod http;
 pub(crate) mod list;
 pub(crate) mod log;
@@ -20,6 +21,7 @@ pub(crate) mod highlight;
 pub mod host;
 pub(crate) mod issues;
 pub mod project;
+pub(crate) mod pull_request;
 pub(crate) mod settings;
 pub(crate) mod shortcuts;
 pub mod state;

@@ -6,13 +6,38 @@ use std::path::{Path, PathBuf};
 const SHORT_SHA_LEN: usize = 7;
 
 pub(crate) fn branch(dir: &Path) -> Option<String> {
-    let head = std::fs::read_to_string(git_dir(dir)?.join("HEAD")).ok()?;
-    let head = head.trim();
-    if let Some(reference) = head.strip_prefix("ref:") {
-        let reference = reference.trim();
-        return Some(reference.strip_prefix("refs/heads/").unwrap_or(reference).to_string());
-    }
-    head.get(..SHORT_SHA_LEN).map(str::to_string)
+    let head = read_head(dir)?;
+    on_branch(&head).or_else(|| head.get(..SHORT_SHA_LEN)).map(str::to_string)
+}
+
+pub(crate) fn checked_out(dir: &Path) -> Option<String> {
+    on_branch(&read_head(dir)?).map(str::to_string)
+}
+
+pub(crate) fn origin_head(dir: &Path) -> Option<String> {
+    let head = std::fs::read_to_string(common_dir(dir)?.join("refs/remotes/origin/HEAD")).ok()?;
+    head.trim().strip_prefix("ref:")?.trim().strip_prefix("refs/remotes/origin/").map(str::to_string)
+}
+
+pub(crate) fn has_remote(dir: &Path) -> bool {
+    let Some(config) = common_dir(dir).and_then(|common| std::fs::read_to_string(common.join("config")).ok()) else {
+        return false;
+    };
+    config.lines().any(|line| line.trim_start().starts_with("[remote "))
+}
+
+fn common_dir(dir: &Path) -> Option<PathBuf> {
+    let git = git_dir(dir)?;
+    Some(std::fs::read_to_string(git.join("commondir")).map_or_else(|_| git.clone(), |c| git.join(c.trim())))
+}
+
+fn read_head(dir: &Path) -> Option<String> {
+    Some(std::fs::read_to_string(git_dir(dir)?.join("HEAD")).ok()?.trim().to_string())
+}
+
+fn on_branch(head: &str) -> Option<&str> {
+    let reference = head.strip_prefix("ref:")?.trim();
+    Some(reference.strip_prefix("refs/heads/").unwrap_or(reference))
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ mod file {
         let expected = Config {
             worktrees_dir: "worktrees".into(),
             fetch_minutes: 12,
+            pull_requests: false,
             issue_tabs: vec!["shortcut".into(), "github".into()],
             jira_site: "acme.atlassian.net".into(),
             jira_email: "ana@acme.dev".into(),

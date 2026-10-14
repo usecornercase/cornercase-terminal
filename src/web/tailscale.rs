@@ -1,17 +1,17 @@
 use std::fmt;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::process::{Command, Output};
+use std::time::Duration;
 
 use serde_json::Value;
+
+use crate::process;
 
 pub(crate) const HTTPS_PORT: u16 = 8443;
 pub(crate) const ADMIN_DNS: &str = "https://login.tailscale.com/admin/dns";
 const APP_BINARY: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
 const TIMEOUT: Duration = Duration::from_secs(15);
-const POLL: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Node {
@@ -95,45 +95,12 @@ pub(crate) fn parse_status(text: &str) -> Result<Node, Problem> {
     Ok(Node { host, login })
 }
 
-fn drain(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
-    thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes);
-        }
-        bytes
-    })
-}
-
-fn wait(child: &mut Child, timeout: Duration) -> io::Result<Option<std::process::ExitStatus>> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(None);
-        }
-        thread::sleep(POLL);
-    }
-}
-
 fn run(program: &Path, args: &[&str]) -> Result<Output, Problem> {
-    let spawned =
-        Command::new(program).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn();
-    let mut child = match spawned {
-        Ok(child) => child,
+    let output = match process::output_within(Command::new(program).args(args), TIMEOUT) {
+        Ok(Some(output)) => output,
+        Ok(None) => return Err(Problem::Failed(format!("no answer within {} s", TIMEOUT.as_secs()))),
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(Problem::NotInstalled),
         Err(e) => return Err(Problem::Failed(e.to_string())),
-    };
-    let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
-    let status = wait(&mut child, TIMEOUT).map_err(|e| Problem::Failed(e.to_string()))?;
-    let output = Output {
-        status: status.ok_or_else(|| Problem::Failed(format!("no answer within {} s", TIMEOUT.as_secs())))?,
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
     };
     if output.status.success() {
         return Ok(output);

@@ -4,6 +4,7 @@ use ratatui::text::Span;
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::host::theme::HostTheme;
+use crate::pull_request::{Ci, Mark, Outcome, State};
 
 pub(super) const BRAND_COLOR: Color = Color::Indexed(99);
 
@@ -68,4 +69,33 @@ pub(super) fn status_icon(muted: Color, status: Status, frame: Option<u8>) -> Sp
         Status::Waiting => ("!", Style::default().fg(WAITING_COLOR).add_modifier(Modifier::BOLD)),
     };
     Span::styled(glyph, style)
+}
+
+pub(crate) fn outcome_icon(muted: Color, outcome: Outcome) -> Span<'static> {
+    let (glyph, colour) = match outcome {
+        Outcome::Failed => ("✗", Color::Red),
+        Outcome::Pending => ("•", Color::Yellow),
+        Outcome::Passed => ("✓", Color::Green),
+        Outcome::Skipped => ("-", muted),
+    };
+    Span::styled(glyph, Style::default().fg(colour))
+}
+
+pub(super) fn pull_tag(muted: Color, mark: Mark) -> Span<'static> {
+    let number = format!("#{}", mark.number);
+    let (text, style) = match (mark.state, mark.ci) {
+        (State::Merged, _) => (number, Style::default().fg(BRAND_COLOR)),
+        (State::Closed, _) => (number, Style::default().fg(muted).add_modifier(Modifier::CROSSED_OUT)),
+        (_, None) => (number, Style::default().fg(muted)),
+        (_, Some(ci)) => {
+            let outcome = match ci {
+                Ci::Failing => Outcome::Failed,
+                Ci::Pending => Outcome::Pending,
+                Ci::Passing => Outcome::Passed,
+            };
+            let icon = outcome_icon(muted, outcome);
+            (format!("{number}{}", icon.content), icon.style)
+        }
+    };
+    Span::styled(text, style)
 }

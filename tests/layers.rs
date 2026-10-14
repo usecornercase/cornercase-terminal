@@ -5,7 +5,7 @@ use std::{
 };
 
 const LEAVES: &[&str] =
-    &["error", "http", "list", "log", "panics", "paths", "persist", "process", "text", "time", "version"];
+    &["error", "gh", "http", "list", "log", "panics", "paths", "persist", "process", "text", "time", "version"];
 
 const APP_EXCEPTIONS: &[&str] = &[];
 const UI_EXCEPTIONS: &[&str] = &[];

@@ -746,8 +746,20 @@ pub struct WorkspaceInfo {
     pub(crate) branch: Option<String>,
     pub(crate) worktree: bool,
     pub(crate) behind: u32,
+    pub(crate) pull_request: Option<PullRequestInfo>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PullRequestInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
+    pub(crate) state: String,
+    pub(crate) checks: Option<String>,
+    pub(crate) failed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Error;
 use crate::test_util::{TempDir, fake_gh};
 
 const LIST: &str = r#"[{"author":{"login":"ana","is_bot":false},"labels":[{"name":"bug","color":"d73a4a"}],

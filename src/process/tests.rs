@@ -207,3 +207,40 @@ mod status {
         assert_eq!(status_footprint(text), expected);
     }
 }
+
+mod output_within {
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    #[test]
+    fn gives_what_the_command_printed_and_its_status() {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "echo out; echo err >&2; exit 3"]);
+
+        let output = output_within(&mut command, Duration::from_secs(5)).expect("ran").expect("in time");
+
+        assert_eq!((output.stdout.as_slice(), output.stderr.as_slice()), (&b"out\n"[..], &b"err\n"[..]));
+        assert_eq!(output.status.code(), Some(3));
+    }
+
+    #[test]
+    fn kills_a_command_that_hangs() {
+        let started = Instant::now();
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "exec sleep 30"]);
+
+        let output = output_within(&mut command, Duration::from_millis(300)).expect("ran");
+
+        assert!(output.is_none());
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_missing_program_is_an_error() {
+        let error = output_within(&mut Command::new("/nonexistent/program"), Duration::from_secs(1)).expect_err("none");
+
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+}

@@ -21,6 +21,7 @@ pub(crate) enum Status {
 pub(crate) enum Row {
     Folder,
     Fetch,
+    PullRequests,
     Sidebar,
     Tabs,
     IconBar,
@@ -63,6 +64,7 @@ impl Row {
         match self {
             Self::Folder
             | Self::Fetch
+            | Self::PullRequests
             | Self::Sidebar
             | Self::Tabs
             | Self::IconBar
@@ -88,7 +90,7 @@ impl Row {
 
     pub(crate) fn page(&self) -> Page {
         match self {
-            Self::Folder | Self::Fetch => Page::Worktrees,
+            Self::Folder | Self::Fetch | Self::PullRequests => Page::Worktrees,
             Self::DefaultAgent
             | Self::Submit
             | Self::Trust
@@ -273,6 +275,7 @@ pub(crate) struct Settings {
     pub(crate) notice: Option<String>,
     pub(crate) capturing: bool,
     pub(crate) awake: String,
+    pub(crate) pulls: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
     pub(crate) telegram: Telegram,
@@ -293,6 +296,7 @@ impl Settings {
             notice: None,
             capturing: false,
             awake: String::new(),
+            pulls: String::new(),
             remote: String::new(),
             browsers: 0,
             telegram: Telegram::default(),
@@ -333,7 +337,7 @@ impl Settings {
     pub(crate) fn rows(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
-        let mut rows = vec![Row::Folder, Row::Fetch];
+        let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests];
         for (source, _) in &self.tokens {
             match source {
                 Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),

@@ -127,6 +127,7 @@ pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 pub(crate) struct Config {
     pub(crate) worktrees_dir: String,
     pub(crate) fetch_minutes: u64,
+    pub(crate) pull_requests: bool,
     pub(crate) issue_tabs: Vec<String>,
     pub(crate) jira_site: String,
     pub(crate) jira_email: String,
@@ -168,6 +169,7 @@ impl Default for Config {
         Self {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
+            pull_requests: true,
             issue_tabs: DEFAULT_ISSUE_TABS.map(String::from).to_vec(),
             jira_site: String::new(),
             jira_email: String::new(),

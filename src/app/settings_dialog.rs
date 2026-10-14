@@ -44,6 +44,7 @@ impl App {
             .collect();
         let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
         settings.awake = self.agents.awake.state().note();
+        settings.pulls = self.pull_requests_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
         settings.telegram = self.telegram_settings();

@@ -6,11 +6,11 @@ use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::{
     CANCEL_LABEL, FORM_WIDTH, INPUT_PROMPT, Note, buttons_in, draw_dialog_buttons, draw_note, draw_secondary,
-    form_inner,
+    form_inner, left_of,
 };
 use crate::text::truncate_left;
 use crate::ui::View;
-use crate::ui::widgets::{button_width, hovered, overlay_block};
+use crate::ui::widgets::{hovered, overlay_block};
 
 const FORM_HEIGHT: u16 = 10;
 
@@ -43,11 +43,8 @@ pub fn form_buttons(form: Rect, submit: &str) -> [Rect; 2] {
 }
 
 pub(crate) fn form_extra_button(form: Rect, submit: &str, extra: &str) -> Rect {
-    let row = form_rows(form)[5];
     let [submit, _] = form_buttons(form, submit);
-    let right = submit.x.saturating_sub(1).max(row.x);
-    let x = right.saturating_sub(button_width(extra)).max(row.x);
-    Rect { x, width: right - x, ..row }
+    left_of(form_rows(form)[5], submit, extra)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

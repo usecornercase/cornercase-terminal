@@ -1,8 +1,9 @@
-use std::io;
+use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::process::Child;
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use rustix::io::Errno;
 use rustix::process::{Pid, test_kill_process};
@@ -11,6 +12,8 @@ pub(crate) use imp::{all, args, children, cwd, env, footprint, name, open_files,
 
 const MAX_DESCENDANTS: usize = 256;
 
+const POLL: Duration = Duration::from_millis(20);
+
 pub(crate) fn reap(mut child: Child) {
     thread::spawn(move || child.wait());
 }
@@ -18,6 +21,38 @@ pub(crate) fn reap(mut child: Child) {
 pub(crate) fn stop(mut child: Child) {
     let _ = child.kill();
     reap(child);
+}
+
+pub(crate) fn output_within(command: &mut Command, timeout: Duration) -> io::Result<Option<Output>> {
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let (stdout, stderr) = (drain(child.stdout.take()), drain(child.stderr.take()));
+    let Some(status) = wait_within(&mut child, timeout)? else { return Ok(None) };
+    Ok(Some(Output { status, stdout: stdout.join().unwrap_or_default(), stderr: stderr.join().unwrap_or_default() }))
+}
+
+fn drain(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
+fn wait_within(child: &mut Child, timeout: Duration) -> io::Result<Option<ExitStatus>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        thread::sleep(POLL);
+    }
 }
 
 pub(crate) fn alive(pid: i32) -> bool {

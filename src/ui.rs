@@ -62,7 +62,7 @@ pub(crate) use dialog::settings::{
     SettingsLine, settings_body, settings_done, settings_edit, settings_lines, settings_moves, settings_remove,
     settings_restart, settings_row, settings_scroll, settings_tabs,
 };
-pub(crate) use dialog::update::{Update, update_buttons, update_notes, update_scroll};
+pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};
 #[cfg(test)]
 pub(crate) use dialog::usage::usage_area;
 pub(crate) use dialog::usage::{Usage, UsageSection, UsageWindow, usage_done, usage_share, usage_tabs};
@@ -79,7 +79,7 @@ pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
-pub(crate) use theme::muted;
+pub(crate) use theme::{muted, outcome_icon};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
