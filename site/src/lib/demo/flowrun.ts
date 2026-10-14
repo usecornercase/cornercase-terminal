@@ -126,10 +126,6 @@ function play(app: App, run: Run): void {
         () => true,
         () => {
           if (own) markPane(own, false);
-          for (const m of run.members) {
-            const member = app.findPane(m.pane)?.pane;
-            if (member) member.unseen = false;
-          }
           run.progress = new Progress();
           run.messages = [];
           begin();

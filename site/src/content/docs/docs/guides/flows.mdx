@@ -10,7 +10,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 
 <Screen
   name="flow-run"
-  alt="cornercase running the Full issue flow on issue #482 in the web-shop project: the sidebar lists the run's workspace with one tab per role (orchestrator and reviewer working, coder and security done, tester idle), the pane shows the orchestrator's log (sending issue #482 to coder, asking reviewer and security, reviewer found 1 problem: back to coder, asking reviewer to check again), and the Flow panel on the right draws the plan: the orchestrator on top with a heavy border, the coder with a done mark, the reviewer with a heavy border and the security reviewer side by side, the tester, the loop back to the coder labelled findings · 1/3 and the end, open a pull request"
+  alt="cornercase running the Full issue flow on issue #482 in the web-shop project: the sidebar lists the run's workspace with one tab per role (orchestrator and reviewer working, coder, security and tester idle, since a role's finished turn is the orchestrator's to read), the pane shows the orchestrator's log (sending issue #482 to coder, asking reviewer and security, reviewer found 1 problem: back to coder, asking reviewer to check again), and the Flow panel on the right draws the plan: the orchestrator on top with a heavy border, the coder idle, the reviewer with a heavy border and the security reviewer side by side, the tester, the loop back to the coder labelled findings · 1/3 and the end, open a pull request"
   caption="The Full issue flow on issue #482: the reviewer checks the fix again after one round of findings."
 />
 
@@ -50,16 +50,16 @@ A flow works in a worktree of its own, so its project must be the root of a git 
   crop={[2, 1, 136, 36]}
 />
 
-The dialog lists the flows on the left (built in, yours and the project's) and draws the selected one's diagram on the right. Below them go the **prompt** (what the team should do; `Enter` starts a new line, `Tab` moves to the branch), the **branch**, which follows the prompt's first words until you type one, and a red line with how many agents run without asking for permission. **`edit`** opens the selected flow in the [Flows dialog](#edit-flows) and brings you back; **`start`** starts it, shows the orchestrator's tab and opens the [Flow panel](#the-flow-panel).
+The dialog lists the flows on the left (built in, yours and the project's) and draws the selected one's diagram on the right. Below them go the **prompt** (what the team should do; `Enter` starts a new line, `Tab` moves to the branch), the **branch**, which follows the prompt's first words until you type one (cornercase adds a short suffix when those words give nothing, a default branch or a branch already taken, so two runs of one task never share a branch; a branch you type is refused when it is `main`, `master`, the project's default or the one its own folder is on), and a red line with how many agents run without asking for permission. **`edit`** opens the selected flow in the [Flows dialog](#edit-flows) and brings you back; **`start`** starts it, shows the orchestrator's tab and opens the [Flow panel](#the-flow-panel).
 
 Starting a flow:
 
-1. Makes the worktree, or uses the workspace already on that branch if it runs no flow.
+1. Makes the worktree, or uses a worktree already on that branch if it runs no flow.
 2. Opens one tab per role, named after it, the orchestrator first.
 3. Starts each agent with its model, its effort, its arguments and its role prompt, which tells it to wait for the orchestrator's first message, and answers its question about trusting the new folder. A role that may not edit files is told so in its prompt.
 4. Starts the orchestrator last, once its team is up, with a brief cornercase writes: the task, the team with each role's pane id, the stages in words, the flow's notes, the rules for driving agents (wait before sending, one self-contained message at a time, read the last message rather than the screen, never answer another agent's permission prompt), the final action, and `cornercase mark` on its own pane when it is done, so the run shows as [pending review](../projects-workspaces-tabs/#pending-review).
 
-The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
+The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
 
 <Aside type="caution" title="Every agent runs without asking for permission">
 A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto` and Grok Build with `--always-approve`. The start dialog and the editor say so in red (`5 agents run without asking for permission`). Start flows in repositories you trust, and read what they did before you merge it.
@@ -79,7 +79,7 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 <Screen
   name="flow-run"
-  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder done, the reviewer working with a heavy border and the security reviewer done side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request"
+  alt="The Flow panel alone: Full issue and the first line of the task in its header, the orchestrator's box with a heavy border, the coder idle, the reviewer working with a heavy border and the security reviewer idle side by side, the tester idle, a loop from the reviewers back to the coder labelled findings · 1/3, another from the tester labelled failures · 0/2, and the end, open a pull request"
   caption="The plan, live: who works, where the work went last, and how many rounds each loop took."
   crop={[95, 0, 45, 24]}
 />
@@ -88,7 +88,7 @@ It takes the column on the right that the [changes](../changes/), [files](../fil
 
 **What lights up.**
 
-- Each box shows its agent's status, as the tabs do: `◐` working, `!` waiting for you, `✓` done, `○` idle. A role whose tab was closed says `closed`.
+- Each box shows its agent's status, as the tabs do: `◐` working, `!` waiting for you, `○` idle, and `✓` done for the orchestrator (a role's finished turn shows as idle). A role whose tab was closed says `closed`.
 - A role that works gets a heavy border (`┏━┓`) in its colour.
 - The arrow the work last moved along takes the colour of the role it came from, and a `●` travels along it for a second when a message goes through.
 - A loop counts its rounds, and turns orange past its limit.
