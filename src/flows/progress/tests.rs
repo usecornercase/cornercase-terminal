@@ -50,6 +50,12 @@ mod the_active_stage {
     }
 
     #[test]
+    fn a_member_writing_to_another_member_does_not_move_the_work() {
+        let p = Script::new().send("coder").with(Kind::Send, "coder", "tester").progress();
+        assert_eq!((p.active, p.holder.as_deref(), p.outside), (Some(0), Some("coder"), None));
+    }
+
+    #[test]
     fn reads_keys_and_waits_do_not_move_the_work() {
         let p = Script::new()
             .send("coder")

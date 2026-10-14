@@ -62,7 +62,7 @@ impl Progress {
     }
 
     pub(crate) fn step(&mut self, flow: &Flow, message: &Message) {
-        if message.kind != Kind::Send {
+        if message.kind != Kind::Send || message.from != super::ORCHESTRATOR {
             return;
         }
         let Some(target) = flow.stage_of(&message.to) else { return };
