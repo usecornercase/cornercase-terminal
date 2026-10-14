@@ -344,6 +344,67 @@ mod agents {
         assert!(matches!(&pressed.1, Order::Answer { text, .. } if text == "sent esc to claude"), "{pressed:?}");
     }
 
+    fn asking(agent: &mut Agent, phone: &mut Phone) -> (u64, i64, Order) {
+        let id = agent.start(Some("two questions"));
+        away(agent, phone);
+        agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
+        agent.finish();
+        let (notice, order) = phone.says_in_html(agent, "the first question", "Question 1 of 2");
+        (id, notice, order)
+    }
+
+    fn questions(phone: &Phone) -> usize {
+        let sent = phone.seen.iter().filter(|(_, order)| matches!(order, Order::Send { .. }));
+        sent.filter(|(_, order)| html(order).starts_with("<b>! claude needs you</b>")).count()
+    }
+
+    #[test]
+    fn the_next_question_comes_once_a_button_answers_the_first() {
+        let mut agent = Agent::new();
+        let mut phone = Phone::paired(&mut agent.app);
+        let (_, notice, first) = asking(&mut agent, &mut phone);
+
+        Phone::taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
+        let (_, second) = phone.says_in_html(&mut agent, "the second question", "Question 2 of 2");
+
+        assert!(html(&second).starts_with("<b>! claude needs you</b> · "), "{}", html(&second));
+        assert_eq!(button(&second, "2 · No"), button(&first, "2 · No"));
+        assert_eq!(questions(&phone), 2);
+    }
+
+    #[test]
+    fn a_redraw_of_the_same_question_sends_nothing() {
+        let mut agent = Agent::new();
+        let mut phone = Phone::paired(&mut agent.app);
+        let (id, notice, first) = asking(&mut agent, &mut phone);
+
+        done(now(&mut agent.app, None, press_keys(id, &["x"])));
+        let settled = Instant::now() + Duration::from_millis(2_500);
+        agent.refreshing("the redraw settles", |_| Instant::now() >= settled);
+        phone.read(&mut agent.app);
+        let after_redraw = questions(&phone);
+        Phone::taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
+        phone.says_in_html(&mut agent, "the second question", "Question 2 of 2");
+
+        assert_eq!(after_redraw, 1);
+    }
+
+    #[test]
+    fn a_question_drawn_before_the_input_is_not_taken_for_its_answer() {
+        let mut agent = Agent::new();
+        let mut phone = Phone::paired(&mut agent.app);
+        let (id, _, _) = asking(&mut agent, &mut phone);
+
+        let term = agent.app.projects.pane_by_mut(id).expect("the pane");
+        term.feed(b"\x1b[H\x1b[2JQuestion 9 of 2\r\n\xe2\x9d\xaf 1. Yes\r\n  2. No\r\n");
+        term.input_at = Some(Instant::now() + Duration::from_millis(10));
+        let settled = Instant::now() + Duration::from_millis(2_500);
+        agent.refreshing("the input settles", |_| Instant::now() >= settled);
+        phone.read(&mut agent.app);
+
+        assert_eq!(questions(&phone), 1);
+    }
+
     #[test]
     fn nothing_is_sent_while_not_away() {
         let mut agent = Agent::new();

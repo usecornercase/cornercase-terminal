@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.90
+## 0.12.91
 
 - Play a sound when an agent in a tab you aren't looking at needs you or finishes. It is off until you turn on **Settings → UI → sound**. **needs you** and **finished** are different sounds: each is the built-in tone, or a file on the computer where the window is. Every open window plays it, including one attached with `cornercase remote`. A question answered within a second stays quiet, the same as the toast.
+
+## 0.12.90
+
+- On Telegram, answering a question from its buttons now brings the agent's next question, with its own buttons, when it asks several in a row or shows another permission prompt right away. Before, only the first one came.
 
 ## 0.12.89
 
