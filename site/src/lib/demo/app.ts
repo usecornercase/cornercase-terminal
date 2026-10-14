@@ -537,6 +537,7 @@ export class App {
             followAgent(pane, agent?.name ?? null);
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
             const member = this.runs.some((r) => r.members.slice(1).some((m) => m.pane === pane.id));
+            if (member && pane.unseen && !pane.pending) pane.unseen = false;
             if (status && agent && !(member && status === 'done')) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
             else if (pane.since === now && !pane.notified) this.after(NOTIFY_AFTER, () => this.dirty());
           }

@@ -91,7 +91,7 @@ test('the run plays while its panel shows: working boxes, a round, then the end'
   assert.ok(end);
   const run = app.runs[0];
   const done = () => run.members.slice(1).filter((m) => app.findPane(m.pane)?.pane.unseen).length;
-  assert.ok(done() > 0);
+  assert.equal(done(), 0);
   playUntil(app, '┏━ coder', 60000);
   assert.deepEqual([done(), run.messages.length], [0, 1]);
   app.destroy();

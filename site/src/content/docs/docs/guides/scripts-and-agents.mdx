@@ -156,7 +156,7 @@ cornercase flow run Quick --prompt 'Fix the login form'
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --json
 ```
 
-`flow list` prints each [flow](../flows/), built in, yours and the project's, with its description, its roles and their agents, and what keeps it from running, if anything; files it cannot read are listed with their error. `flow run` starts one as the window's **start** does: it makes the worktree (from `--worktree`, else from the task's first words), opens a tab per role, starts every agent without permission prompts and answers their trust questions, and starts the orchestrator last with its brief. It answers once the tabs exist, while the agents are still starting: the workspace's id, then one line per role with its pane's id and the role's name, separated by a tab.
+`flow list` prints each [flow](../flows/), built in, yours and the project's, with its description, its roles with their agents, models and efforts, and what keeps it from running, if anything; files it cannot read are listed with their error. `flow run` starts one as the window's **start** does: it makes the worktree (from `--worktree`, else from the task's first words, with a short suffix when they give nothing, a default branch or a branch already taken), opens a tab per role, starts every agent without permission prompts and answers their trust questions, and starts the orchestrator last with its brief. It answers once the tabs exist, while the agents are still starting: the workspace's id, then one line per role with its pane's id and the role's name, separated by a tab.
 
 ```text
 8
@@ -166,8 +166,8 @@ cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --j
 ```
 
 - The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input).
-- The flows of the project the command runs in, else the shown one, else `--project ID`, are found too. A name found in several places runs the project's, else yours, else the built-in one; an unknown name lists the flows.
-- It refuses before anything opens a flow with problems, an agent that is not installed, a project that is not the root of a git repository, and a branch whose workspace already runs a flow.
+- The flows of the project the command runs in, else the shown one, else `--project ID`, are found too. A name is looked up in the built-in flows, then yours, then the project's, so a project's flow, which comes with the repository, never stands in for another of the same name; the command says so on standard error when a name is in several places. An unknown name lists the flows.
+- It refuses before anything opens a flow with problems, an agent that is not installed, a project that is not the root of a git repository, a branch that already runs a flow, and a `--worktree` that is `main`, `master`, the project's default branch or the one its own folder is on: a flow works on a branch of its own.
 - Nothing changes in the window unless you pass `--focus`, which shows the orchestrator's tab and opens the [Flow panel](../flows/#the-flow-panel).
 
 ### Talk to a pane
