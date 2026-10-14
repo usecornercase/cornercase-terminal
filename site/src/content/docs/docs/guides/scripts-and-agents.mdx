@@ -45,6 +45,7 @@ group 9  personal  collapsed
 | `new-tab` | Opens a tab, optionally typing a command into it. Prints the pane's id. |
 | `split` | Splits a pane right, or down, optionally typing a command. Prints the new pane's id. |
 | `start [AGENT]` | Starts a coding agent in a new tab and gives it a prompt. Prints the pane's id. |
+| `flow list`, `flow run NAME` | Lists the [flows](../flows/), or starts one: a team of agents in a worktree, run by an orchestrator agent. |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
@@ -144,7 +145,30 @@ git diff | cornercase start claude --prompt-file -
 - **Which agent**: the one you name (`claude`, `codex`, `gemini` or any [other kind](../../reference/agents/)); without one, the default from **settings → Agents**, or, when that is *auto*, the agent running in the pane the command runs in.
 - **Where**: a new tab in the workspace the command runs in; in another workspace with `--workspace ID`; or with `--worktree BRANCH`, in the workspace on that branch, made as a new worktree when there is none.
 - `--name` names the tab, `--prompt` gives the prompt and `--prompt-file` reads it from a file, or from standard input with `-`. Without a prompt, the agent just starts.
+- `--model` starts it with that model, through the agent's own flag (`--model opus`, `--model gpt-5.5`), replacing a model set in its arguments. `--mode` picks another of the agent's modes, as **settings → Agents** lists them (`--mode plan`), instead of the one chosen there. A mode the agent lacks is refused with the list of its modes. A server older than these options refuses them rather than start the agent with the settings' mode, which could be one that never asks.
 - `--wait` then waits like [`wait`](#wait) does, and prints how it ended on a second line. `--until` with one of `wait`'s states (`idle`, `working`, `waiting`, `shell`, `turn-over`) waits for that one instead.
+
+### Start a flow
+
+```sh
+cornercase flow list
+cornercase flow run Quick --prompt 'Fix the login form'
+cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login --json
+```
+
+`flow list` prints each [flow](../flows/), built in, yours and the project's, with its description, its roles and their agents, and what keeps it from running, if anything; files it cannot read are listed with their error. `flow run` starts one as the window's **start** does: it makes the worktree (from `--worktree`, else from the task's first words), opens a tab per role, starts every agent without permission prompts and answers their trust questions, and starts the orchestrator last with its brief. It answers once the tabs exist, while the agents are still starting: the workspace's id, then one line per role with its pane's id and the role's name, separated by a tab.
+
+```text
+8
+10	orchestrator
+12	coder
+14	reviewer
+```
+
+- The task comes from `--prompt`, or from a file with `--prompt-file` (`-` reads standard input).
+- The flows of the project the command runs in, else the shown one, else `--project ID`, are found too. A name found in several places runs the project's, else yours, else the built-in one; an unknown name lists the flows.
+- It refuses before anything opens a flow with problems, an agent that is not installed, a project that is not the root of a git repository, and a branch whose workspace already runs a flow.
+- Nothing changes in the window unless you pass `--focus`, which shows the orchestrator's tab.
 
 ### Talk to a pane
 

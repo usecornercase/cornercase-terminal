@@ -68,6 +68,7 @@ export default defineConfig({
             { label: 'Files panel', slug: 'docs/guides/files' },
             { label: 'TODO list', slug: 'docs/guides/todo' },
             { label: 'Issues and agents', slug: 'docs/guides/issues-and-agents' },
+            { label: 'Flows', slug: 'docs/guides/flows' },
             { label: 'Scripts and agents', slug: 'docs/guides/scripts-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },

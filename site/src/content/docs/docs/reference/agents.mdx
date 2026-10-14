@@ -15,7 +15,7 @@ cornercase starts coding agents for you when you start an [issue](../../guides/i
 | `claude` | `claude` | yes |
 | `codex` | `codex` | yes |
 | `gemini` | `gemini` | yes |
-| `opencode` | `opencode` | |
+| `opencode` | `opencode` | yes |
 | `grok` | `grok` | yes |
 | `cursor` | `cursor-agent` | |
 | `copilot` | `copilot` | |
@@ -98,6 +98,8 @@ Each agent starts with its command followed by its arguments, `agent_args` in `c
 | `gemini` | auto edit | `--approval-mode auto_edit` |
 | | plan | `--approval-mode plan` |
 | | yolo (dangerous) | `--yolo` |
+| `opencode` | plan | `--agent plan` |
+| | auto (dangerous) | `--auto` |
 | `grok` | accept edits | `--permission-mode acceptEdits` |
 | | auto | `--permission-mode auto` |
 | | always approve (dangerous) | `--always-approve` |

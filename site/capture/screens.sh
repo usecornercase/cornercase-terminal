@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting flow-run flows-list flows-edit"
 
 pane_in() {
   cc status --json | node -e '
@@ -382,7 +382,7 @@ screen_issue_agent_picker() {
 
 screen_issue_started() {
   open_issue_482
-  cc_click 'start   agent…'
+  cc_click 'start   '
   cc_wait 'aider'
   cc_click 'claude    claude'
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
@@ -734,4 +734,62 @@ JS
   cc_click 'Usage'
   cc_wait 'in parallel'
   cc_shot usage-stats
+}
+
+flow_482() {
+  cc_s1_at 140 38
+  cc flow run 'Full issue' --prompt 'Fix https://github.com/acme/web-shop/issues/482: the returns page crashes on an empty address.' --worktree issue-482-returns-page-crashes-on-empty-address --focus >/dev/null
+  cc_wait 'Sending issue #482 to coder' 60
+}
+
+screen_flow_run() {
+  flow_482
+  cc_rclick 'issue-482-returns-page…'
+  cc_click 'show flow'
+  cc_wait 'findings · 1/3' 60
+  cc_wait 'waiting for reviewer…' 30
+  cc_wheel 'feat/dark-mode' down 3
+  cc_hover 'Workspaces'
+  cc_wait '├ ○ tester'
+  i=0
+  while cc_text | grep -qF 'finished in'; do
+    i=$((i + 1))
+    [ "$i" -lt 100 ] || { echo "capture: the toast never went"; cc_text; exit 1; }
+    sleep 0.1
+  done
+  cc_shot flow-run
+}
+
+flows_open() {
+  cc_config '{}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Settings'
+  cc_click 'Agents'
+  cc_click 'flows'
+  cc_wait 'Built in'
+}
+
+screen_flows_list() {
+  flows_open
+  cc_click 'duplicate   new'
+  cc_wait 'saved in'
+  cc_click 'done'
+  cc_wait 'Full issue copy'
+  CC_ROWS=24
+  tmux -L "$CC_TMUX" resize-window -x 140 -y 24
+  cc_wait 'edit   duplicate'
+  cc_hover '╭─ Flows'
+  cc_shot flows-list
+}
+
+screen_flows_edit() {
+  flows_open
+  cc_click 'duplicate   new'
+  cc_wait 'saved in'
+  cc_click '▸ 2'
+  cc_wait 'goes back'
+  cc_hover '╭─ Flows'
+  cc_shot flows-edit
 }

@@ -69,6 +69,10 @@ Claude Code, Codex, Gemini CLI, opencode and Grok Build tabs show their model an
     Read a GitHub or GitLab issue, Shortcut story, Linear issue, Jira issue or Plane work item, press **start**, and an agent picks it up in its own worktree.
     [More about issues →](guides/issues-and-agents/)
   </Card>
+  <Card title="A team per issue" icon="random">
+    Start a flow: a coder, reviewers of other providers and a tester, run by an orchestrator agent in their own worktree. The Flow panel draws the plan and lights it up as the work moves.
+    [More about flows →](guides/flows/)
+  </Card>
   <Card title="Scripts and agents" icon="puzzle">
     A command line drives the running cornercase: open tabs, type into panes, start agents in their own worktrees, wait for them and read what they wrote.
     [More about scripts and agents →](guides/scripts-and-agents/)
@@ -89,7 +93,7 @@ Claude Code, Codex, Gemini CLI, opencode and Grok Build tabs show their model an
 
 ## A few deliberate choices
 
-**Mouse first.** Out of the box cornercase has no keyboard shortcuts of its own. Keys always reach the program in the active pane, so `Ctrl+B`, `Alt` combinations and everything your editor or agent uses keep working. Inside a dialog, `Enter` confirms and `Esc` cancels, and while the changes, files or TODO panel is open, `Esc` closes it. Shortcuts are there if you want them, behind a [prefix key](reference/keyboard-and-mouse/#keyboard-shortcuts) you choose.
+**Mouse first.** Out of the box cornercase has no keyboard shortcuts of its own. Keys always reach the program in the active pane, so `Ctrl+B`, `Alt` combinations and everything your editor or agent uses keep working. Inside a dialog, `Enter` confirms and `Esc` cancels, and while the changes, files, TODO or Flow panel is open, `Esc` closes it. Shortcuts are there if you want them, behind a [prefix key](reference/keyboard-and-mouse/#keyboard-shortcuts) you choose.
 
 **A real terminal inside.** Panes are emulated with [libghostty-vt](https://github.com/ghostty-org/ghostty), the core of the Ghostty terminal. It answers the queries that programs like nvim, fzf, htop and full-screen agents wait for, supports the kitty keyboard protocol, and reflows text when a pane is resized.
 

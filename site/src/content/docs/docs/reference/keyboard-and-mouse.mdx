@@ -6,7 +6,7 @@ description: Every mouse gesture cornercase understands, the optional prefix key
 import { Aside } from '@astrojs/starlight/components';
 import Screen from '../../../../components/Screen.astro';
 
-cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row, a border or a divider, or while the changes, files or TODO panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
+cornercase is driven with the mouse. Out of the box it has **no keyboard shortcuts** of its own: outside of its dialogs, the changes panel's filter field, the files panel's search bar and the TODO panel's text field (and `Esc` while you drag a row, a border or a divider, or while the changes, files, TODO or Flow panel is open), every key you press goes to the program in the active pane. That's a deliberate choice, so that nothing you type is ever taken away from your shell, your editor or your agent: `Ctrl+B`, `Ctrl+A`, `Alt` and `Option` combinations all reach them untouched.
 
 If your hands would rather stay on the keyboard, or your terminal can't send clicks, you can turn on a **prefix key** that opens a menu of [keyboard shortcuts](#keyboard-shortcuts). It takes that one key, and only once you choose it.
 
@@ -17,13 +17,13 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Gesture | Where | Does |
 | --- | --- | --- |
 | Click | A project, workspace or tab | Makes it active. |
-| Click | `+ New` | Opens a menu: **open project** (a folder) or **new group**. |
+| Click | `+ New` | Opens a menu: **open project** (a folder), **new group**, or, with a project open, **start a flow…** (see [Flows](../../guides/flows/#start-a-flow)). |
 | Click | `+ New workspace`, `+ Tab` | Opens a workspace or a shell. |
 | Click | A group header | Collapses or expands the group. |
 | Drag | A project, group, workspace or tab | Moves it within its list; a project also into or out of a group. `Esc` cancels. See [Reorder](../../guides/projects-workspaces-tabs/#reorder). |
 | Hover, then click `×` | Any project, workspace or tab row | Closes it. A project, and a workspace with its own worktree, ask first. In the [compact layout](../../guides/small-terminals/) the `×` always shows, and a tab or workspace asks first too. |
 | Hover, then click `×` | A group header | Asks, then deletes the group: **keep projects** leaves them open, ungrouped; **close projects** closes them too. |
-| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group**, and a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks). In the compact layout the `⋯` always shows. |
+| Right-click, or hover and click `⋯` | A project, workspace or tab | Opens its menu, to **rename** it; a project's menu can also **move to group**, a workspace with a pull request shows **pull request #n**, its [checks](../../guides/worktrees/#pull-requests-and-their-checks), and a workspace running a flow shows **show flow**, its [Flow panel](../../guides/flows/#the-flow-panel). In the compact layout the `⋯` always shows. |
 | Right-click, or hover and click `⋯` | A group header | Opens its menu: **add project**, **rename group**, **icon and colour**, **delete group** (which asks first). |
 | Click | `▸` / `▾` in the [tree](../../guides/projects-workspaces-tabs/#the-tree) | Collapses or expands a project or workspace. A click on the rest of its row opens it and expands it. |
 | Wheel | The projects, workspaces or tree list | Scrolls the list. |
@@ -119,6 +119,18 @@ See [Files panel](../../guides/files/).
 
 See [TODO list](../../guides/todo/).
 
+### Flow panel
+
+| Gesture | Where | Does |
+| --- | --- | --- |
+| Click | A role's box | Shows its tab and focuses its pane. |
+| Click | An arrow, or a loop's label | Shows the last message sent along it, with **`copy`**. Only the arrows that carried a message light up under the mouse. |
+| Click | `×` | Closes the panel. |
+| Wheel | The diagram | Scrolls it, when it is taller than the panel. |
+| Drag, double-click | The panel's left border | Resizes it, gives it back its automatic width. |
+
+See [Flows](../../guides/flows/#the-flow-panel).
+
 ### Dialogs and lists
 
 Click buttons and rows to use them. In lists (the folder picker, the issue browser, the settings, search results) and in an update's release notes, the wheel scrolls. A right-click menu closes when you click anywhere else, and so do the search and every dialog, as its cancel button would, so whatever you typed in it is dropped. A dialog that is busy (creating a worktree, installing an update, checking a token, starting an issue) stays open until it is done.
@@ -162,6 +174,8 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `g` `b` | Opens the changes panel and the list of branches to compare with. |
 | `g` `p` | Shows the [pull request](../../guides/worktrees/#pull-requests-and-their-checks) of the workspace and its checks, or says why there is none. |
 | `w` `n` / `w` `r` / `w` `x` | New workspace / renames the workspace / closes it, after asking (a worktree asks to remove it). |
+| `w` `s` | [Starts a flow](../../guides/flows/#start-a-flow) in the project on screen. |
+| `w` `f` | Opens or closes the [Flow panel](../../guides/flows/#the-flow-panel) of the workspace's run, or says it runs no flow. |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `o` | Turns the [Telegram](../../guides/telegram/) away mode on or off, as **Remote** does. Without a paired phone, it opens the settings to set it up. |
 | `q` | Quits the window. Everything keeps running, as with **Quit**. |
@@ -187,7 +201,10 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it, or closes the panel when the field is empty. A click in a pane gives the keys back too. |
 | Files panel search | Type to search. `↑` `↓` pick a result. `Enter` opens it. `Esc` clears the search and gives the keys back to your program, or closes the panel when the bar is empty. A click in a pane gives them back too and keeps the search. |
 | TODO field | Type, paste. `←` `→` move the cursor, `↑` `↓` move across the lines of a long item, `Home` `End` go to its start and end, `Backspace` `Delete` delete. `Enter` saves (a new item keeps the field open for the next one), `Esc` cancels, or closes the panel when the field is empty. A click outside the field saves it and gives the keys back. |
-| Changes, files or TODO panel | `Esc` closes it, as its `×` does, unless one of its fields above has text. That `Esc` does not reach your program; the next one does. |
+| Changes, files, TODO or Flow panel | `Esc` closes it, as its `×` does, unless one of its fields above has text. That `Esc` does not reach your program; the next one does. |
+| Flows dialog | `↑` `↓` select a flow, `Enter` opens it, `Delete` deletes it (after asking). On a flow: `↑` `↓` select a row, `Enter` or `Space` change it or open a stage, `Tab` `→` / `Shift+Tab` `←` switch tabs, `Shift+↑` `Shift+↓` move a stage, `Delete` removes it. `Esc` goes back to the list, then closes; with unsaved changes it asks first. |
+| A prompt or the notes, in the Flows dialog | Type, paste. `Enter` starts a new line, the arrows, `Home` and `End` move, `Backspace` `Delete` delete. **`save`** keeps the text, `Esc` drops it. |
+| Start a flow | `Tab` / `Shift+Tab` move between the list, the prompt and the branch. In the prompt `Enter` starts a new line; in the branch it starts the flow. `Esc` closes. |
 | Branch to compare with | Type to filter. `↑` `↓` select. `Enter` picks the selected branch. `Esc` closes. |
 | Settings | `Enter` or `Space` change the selected row. `↑` `↓` select. `Tab` `→` / `Shift+Tab` `←` switch tabs. `Shift+↑` `Shift+↓` reorder sources. `Delete` removes a saved token. `Esc` closes. |
 | Update | `↑` `↓` scroll the release notes. `Enter` presses the dialog's first button: **update**, **try again**, **restart now** or **copy command**. `Esc` closes it, except while downloading, like **cancel** or, once the update is installed, **later**. |

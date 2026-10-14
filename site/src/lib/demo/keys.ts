@@ -27,6 +27,8 @@ export type KeysAction =
   | { kind: 'base' }
   | { kind: 'pullRequest' }
   | { kind: 'newWorkspace' }
+  | { kind: 'startFlow' }
+  | { kind: 'flow' }
   | { kind: 'renameWorkspace' }
   | { kind: 'closeWorkspace' }
   | { kind: 'issues' }
@@ -89,7 +91,9 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
   ],
   workspace: [
     run('n', 'new workspace', { kind: 'newWorkspace' }),
+    run('s', 'start a flow', { kind: 'startFlow' }),
     run('r', 'rename workspace', { kind: 'renameWorkspace' }),
+    run('f', 'flow of this workspace', { kind: 'flow' }),
     run('x', 'close workspace', { kind: 'closeWorkspace' }),
   ],
 };

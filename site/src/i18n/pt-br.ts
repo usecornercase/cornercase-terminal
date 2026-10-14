@@ -151,6 +151,7 @@ export const page: Page = {
         name: 'Para seus agentes',
         items: [
           ['Status, modelo e contexto', 'Trabalhando, precisa de você ou pronto, embaixo de cada aba. E o modelo e quanto do contexto já foi usado.'],
+          ['Flows, uma equipe por tarefa', 'Um agente programa, outros revisam e testam, e um orquestrador os dirige, a partir de um modelo. O painel Flow mostra o trabalho andando.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
           ['No Telegram', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
@@ -251,5 +252,7 @@ export const demo: Demo = {
     prompt: 'A issue está no prompt. Clique no painel e aperte Enter para enviá-la.',
     detached: (shells) => `Saiu, mas nada parou: seus ${shells} shells continuam rodando, agentes incluídos.`,
     attached: 'E voltamos. Os mesmos projetos, as mesmas abas, tudo ainda rodando.',
+    flowHint: 'Este worktree roda um flow, uma equipe de agentes. Clique com o botão direito nele e escolha show flow para ver o plano.',
+    flow: 'O flow Full issue: um agente orquestrador passa o trabalho de um papel a outro. As caixas acendem enquanto trabalham. Clique em uma para ver a aba dela, numa seta para ler o que passou por ela.',
   },
 };
