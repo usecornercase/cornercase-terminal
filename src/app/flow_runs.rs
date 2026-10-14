@@ -130,6 +130,11 @@ impl App {
         launch::Spec { command, prompt: Some(prompt), submit: true, trusted: true }
     }
 
+    pub(super) fn run_panes(&self, orchestrators: bool) -> Vec<u64> {
+        let members = self.runs.iter().flat_map(|run| &run.members);
+        members.filter(|m| (m.role == flows::ORCHESTRATOR) == orchestrators).map(|m| m.pane).collect()
+    }
+
     pub(super) fn forget_runs(&mut self) {
         let projects = &self.projects;
         let open = |id: u64| projects.workspace_index(id).is_some_and(|(p, w)| projects[p].workspaces[w].open());

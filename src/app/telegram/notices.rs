@@ -112,6 +112,7 @@ impl App {
         }
         let mut seen = HashSet::new();
         let mut notices = Vec::new();
+        let members = self.run_panes(false);
         for term in self.projects.terms() {
             let Some(state) = term.agent.state() else { continue };
             let state = if term.agent.reported_done() { "done" } else { state };
@@ -145,6 +146,7 @@ impl App {
                     notices.push(Notice::Waiting(term.id));
                 }
             } else if over
+                && !members.contains(&term.id)
                 && !term.agent.reported_idle()
                 && (watch.busy || matches!(state, "done" | "failed") && watch.settled != state)
             {
