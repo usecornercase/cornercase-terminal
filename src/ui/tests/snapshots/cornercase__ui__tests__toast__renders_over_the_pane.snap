@@ -19,4 +19,4 @@ expression: render(&v).backend()
 " ───────────────────────────── │                         │                ╭───────────────────────╮ "
 "  Settings                     │                         │                │ ✓ copied to clipboard │ "
 "  Usage                        │                         │                ╰───────────────────────╯ "
-"  Quit                         │ Queue 0                 │                                          "
+"  Quit                         │  Queue 0                │                                          "

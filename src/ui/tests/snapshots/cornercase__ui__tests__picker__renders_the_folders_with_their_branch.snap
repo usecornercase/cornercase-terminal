@@ -19,4 +19,4 @@ expression: render(&with(picker(None))).backend()
 " ─────────────│ enter opens ~/projects                                               │              "
 "  Settings    │                                                       open   cancel  │              "
 "  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  Quit                         │ Queue 0                 │                                          "
+"  Quit                         │  Queue 0                │                                          "

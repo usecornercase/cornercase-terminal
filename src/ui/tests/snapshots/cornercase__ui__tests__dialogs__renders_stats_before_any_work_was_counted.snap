@@ -39,4 +39,4 @@ expression: "render_sized(&with(Overlay::Usage(stats_usage(true))), W, 38).backe
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │ Queue 0                 │                                          "
+"  Quit                         │  Queue 0                │                                          "

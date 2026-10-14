@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use crate::host::clipboard;
+use crate::queue;
 use crate::todo::{self};
 use crate::ui::{self};
 
@@ -19,11 +20,17 @@ pub(super) const COPIED: &str = "copied to clipboard";
 pub(super) const NOT_READING: &str = "the program in this pane is not reading what it gets";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Undo {
+    Todos(todo::Removed),
+    Queue(Vec<queue::Entry>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Toast {
     pub(super) message: String,
     pub(super) icon: ui::ToastIcon,
     pub(super) at: Instant,
-    pub(super) undo: Option<todo::Removed>,
+    pub(super) undo: Option<Undo>,
 }
 
 impl Toast {
@@ -57,7 +64,8 @@ impl App {
             return false;
         }
         match self.toast.take() {
-            Some(Toast { undo: Some(removed), .. }) => self.todos.restore(removed),
+            Some(Toast { undo: Some(Undo::Todos(removed)), .. }) => self.todos.restore(removed),
+            Some(Toast { undo: Some(Undo::Queue(entries)), .. }) => self.queued.queue.restore(entries),
             Some(Toast { icon: ui::ToastIcon::Restart, .. }) => self.cancel_restarts(),
             _ => {}
         }

@@ -58,6 +58,10 @@ pub(crate) fn issue_toggles(issues: Rect, labels: &[&str]) -> Vec<Rect> {
     right_aligned(issues_rows(issues)[0], labels, toggle_width, 2)
 }
 
+pub(crate) fn issue_buttons_width(issues: Rect) -> u16 {
+    issues_rows(issues)[4].width
+}
+
 pub fn issue_buttons(issues: Rect, labels: &[&str]) -> Vec<Rect> {
     issue_buttons_in(issues_rows(issues)[4], labels)
 }

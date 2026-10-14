@@ -22,6 +22,7 @@ impl Browser {
                 KeyCode::Esc | KeyCode::Left => self.screen = Screen::List,
                 KeyCode::Enter => {
                     let issue = (**issue).clone();
+                    self.scheduling = false;
                     return self.start(issue);
                 }
                 KeyCode::Up => self.scroll_detail(-1, room),
@@ -117,7 +118,7 @@ impl Browser {
                             self.open_picker(Pick::Person(source, field), false);
                         }
                     }
-                    Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                    Some(IssuesHit::Button(i)) => return self.press(self.buttons(room.buttons)[i]),
                     _ => {}
                 },
                 _ => {}
@@ -130,7 +131,7 @@ impl Browser {
                 MouseEventKind::ScrollDown => self.scroll_detail(WHEEL_ROWS, room),
                 MouseEventKind::Down(MouseButton::Left) => {
                     if let Some(IssuesHit::Button(i)) = hit {
-                        return self.press(self.buttons()[i]);
+                        return self.press(self.buttons(room.buttons)[i]);
                     }
                 }
                 _ => {}
@@ -154,7 +155,7 @@ impl Browser {
                         return self.read(issue);
                     }
                 }
-                Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                Some(IssuesHit::Button(i)) => return self.press(self.buttons(room.buttons)[i]),
                 None => {}
             },
             _ => {}

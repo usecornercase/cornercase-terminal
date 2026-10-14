@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::App;
 use super::layout::Side;
-use super::toast::Toast;
+use super::toast::{Toast, Undo};
 use crate::agents::launch;
 use crate::control;
 use crate::host::notify::Notification;
@@ -99,6 +99,12 @@ impl App {
         self.queue_notice(&format!("queued agent {id} failed: {reason}"), ui::ToastIcon::Bug);
     }
 
+    fn queue_removed(&mut self, message: String, removed: Vec<queue::Entry>) {
+        if !removed.is_empty() {
+            self.toast = Some(Toast { undo: Some(Undo::Queue(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
+        }
+    }
+
     fn queue_notice(&mut self, message: &str, icon: ui::ToastIcon) {
         self.toast = Some(Toast::new(message, icon));
         self.outbox.notifications.extend(Notification::new(message, &self.config.desktop_notifications));
@@ -172,12 +178,15 @@ impl App {
         match ui::queue::hit(panel, &view, pos) {
             Some(ui::queue::Hit::Close) => self.close_panel(),
             Some(ui::queue::Hit::New) => self.new_queue_form(None),
-            Some(ui::queue::Hit::Clear) => self.queued.queue.clear_started(),
+            Some(ui::queue::Hit::Clear) => {
+                let cleared = self.queued.queue.clear_started();
+                self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
+            }
             Some(ui::queue::Hit::Remove(id)) => {
                 if self.queued.running.values().any(|running| *running == id) {
-                    self.queue_notice("this entry is already starting", ui::ToastIcon::Bug);
-                } else {
-                    let _ = self.queued.queue.remove(id);
+                    self.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
+                } else if let Ok(entry) = self.queued.queue.remove(id) {
+                    self.queue_removed(format!("removed queue entry {id}"), vec![entry]);
                 }
             }
             Some(ui::queue::Hit::Run(id)) => {
@@ -185,17 +194,13 @@ impl App {
                     self.fail_queued(id, &reason);
                 }
             }
-            Some(ui::queue::Hit::Entry(id)) => {
-                if let Some(entry) = self.queued.queue.entry(id) {
-                    if let State::Started { pane, server } = &entry.state {
-                        if server == control::server_token() {
-                            self.focus_queued(*pane, area);
-                        }
-                    } else {
-                        self.new_queue_form(Some(id));
-                    }
+            Some(ui::queue::Hit::Entry(id)) => match self.queued.queue.entry(id).map(|entry| &entry.state) {
+                Some(State::Started { pane, server }) if server == control::server_token() => {
+                    self.focus_queued(*pane, area);
                 }
-            }
+                Some(State::Started { .. } | State::Starting) | None => {}
+                Some(_) => self.new_queue_form(Some(id)),
+            },
             None => {}
         }
     }

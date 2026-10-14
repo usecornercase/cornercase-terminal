@@ -532,12 +532,22 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean):
     agentsButton: shown(rect(right(title) - agentsWidth, title.y, agentsWidth, pitch)),
     changes: changes ? below : EMPTY,
     changesBorder: EMPTY,
-    changesButton: rect(Math.max(0, cols - searchWidth - 4 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH)), pitch),
-    filesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),
-    queueButton: rect(Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH)), pitch),
+    changesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),
+    filesButton: rect(Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH)), pitch),
+    queueButton: footer,
     todoButton: rect(Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth)), pitch),
     tabBar: EMPTY,
   };
+}
+
+export function queueLabel(pending: number): string {
+  return `Queue ${pending}`;
+}
+
+export function queueButton(areas: Areas, pending: number): Rect {
+  const w = queueLabel(pending).length + 2;
+  const row = areas.queueButton;
+  return areas.compact ? intersect(rect(right(row) - w - 1, row.y, w, row.h), row) : intersect(rect(row.x + 1, row.y, w, row.h), row);
 }
 
 export class Rows {

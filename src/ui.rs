@@ -43,7 +43,7 @@ pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_detail, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issues_hit, issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
 #[cfg(test)]
@@ -72,7 +72,7 @@ pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use icons::glyphs;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
-pub(crate) use layout::{Nav, full_layout};
+pub(crate) use layout::{Nav, full_layout, queue_button};
 pub(crate) use pane::{TabView, scrollback_badge};
 pub(crate) use remote_access::{RemoteAccess, TELEGRAM_TITLE, button as remote_button, done as remote_done};
 pub use rows::row_close_button;

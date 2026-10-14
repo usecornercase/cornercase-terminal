@@ -3,7 +3,7 @@ source: src/ui/tests/dialogs.rs
 expression: "render_sized(&with(Overlay::Usage(stats_usage(false))), 46, 38).backend()"
 ---
 "                                              "
-"   ≡     cornercase        Q 0     ☐      ⌕   "
+"   ≡     cornercase                ☐      ⌕   "
 "                                              "
 "                                              "
 "╭─ Usage ────────────────────────────────────╮"

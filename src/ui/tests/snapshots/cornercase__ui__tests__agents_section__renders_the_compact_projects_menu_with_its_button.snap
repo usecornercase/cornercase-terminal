@@ -3,7 +3,7 @@ source: src/ui/tests/agents_section.rs
 expression: "render_sized(&v, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
-"   ≡     website › default › codex                     ▤     Q 0     ☐      ⌕   "
+"   ≡     website › default › codex                            ▤      ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

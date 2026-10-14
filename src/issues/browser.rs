@@ -23,6 +23,7 @@ pub(crate) struct Room {
     pub(crate) list_rows: usize,
     pub(crate) detail_rows: usize,
     pub(crate) detail_width: usize,
+    pub(crate) buttons: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

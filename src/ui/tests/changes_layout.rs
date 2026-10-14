@@ -22,8 +22,8 @@ fn a_compact_panel_covers_the_screen_below_the_bar() {
     let small = Rect { width: 80, ..BIG };
     let a = layout_with(small, Widths::default(), true, Sidebar::SideBySide);
     assert_eq!(
-        (a.changes, a.changes_button.right(), a.files_button.right(), a.queue_button.right(), a.todo_button.right()),
-        (a.pane, a.files_button.x, a.queue_button.x, a.todo_button.x, a.search_button.x)
+        (a.changes, a.changes_button.right(), a.files_button.right(), a.todo_button.right()),
+        (a.pane, a.files_button.x, a.todo_button.x, a.search_button.x)
     );
 }
 

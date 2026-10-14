@@ -7,7 +7,7 @@ use ratatui::widgets::{Block, Paragraph};
 use super::View;
 use super::files;
 use super::icons::Glyphs;
-use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
+use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button, queue_button, queue_label};
 use super::pane::wordmark;
 use super::remote_access;
 use super::theme::status_icon;
@@ -118,16 +118,7 @@ pub(super) fn draw_bar(f: &mut Frame, view: &View, areas: &Areas) {
     let glyphs = view.glyphs();
     let pressed = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     let r = areas.todo_button;
-    let mut right = areas.search_button.width + r.width + areas.queue_button.width;
-    let queue = areas.queue_button;
-    let queue_style =
-        if view.queue.is_some() || sidebar_hovered(view, queue) { pressed } else { surface.fg(view.muted) };
-    draw_band(
-        f,
-        queue,
-        Span::styled(centered(&format!("Q {}", view.queue_pending), queue.width), queue_style),
-        queue_style,
-    );
+    let mut right = areas.search_button.width + r.width;
     let lit = view.todo.is_some() || sidebar_hovered(view, r);
     let style = if lit { pressed } else { surface.fg(view.muted) };
     draw_band(f, r, todo_icon(glyphs, view.todo_dot && view.todo_pending, r.width, style), style);
@@ -189,11 +180,12 @@ pub(super) fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     let changes = view.changes_button.as_ref().filter(|_| !areas.compact());
     if view.issues {
         draw_separator(f, view.line(), areas.workspaces_separator);
-        let issues = match changes {
-            Some(button) => {
-                let start = changes_button(areas.issues, &button.label).x;
-                Rect { width: start.saturating_sub(areas.issues.x), ..areas.issues }
-            }
+        let end = match changes {
+            Some(button) => Some(changes_button(areas.issues, &button.label).x),
+            None => areas.compact().then(|| queue_button(areas, view.queue_pending).x),
+        };
+        let issues = match end {
+            Some(start) => Rect { width: start.saturating_sub(areas.issues.x), ..areas.issues },
             None => areas.issues,
         };
         let style = button_style(view, issues, Style::default().fg(view.muted), Color::Cyan);
@@ -202,15 +194,16 @@ pub(super) fn draw_issues_row(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(button) = changes {
         draw_panel_button(f, view, changes_button(areas.issues, &button.label), &button.label, button.open);
     }
+    draw_queue_button(f, view, areas);
     if !areas.compact() {
-        draw_queue_button(f, view, areas);
         draw_todo_button(f, view, areas);
         draw_panel_button(f, view, areas.files_button, files::LABEL, view.files.is_some());
     }
 }
 
 pub(super) fn draw_queue_button(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_panel_button(f, view, areas.queue_button, &format!("Queue {}", view.queue_pending), view.queue.is_some());
+    let r = queue_button(areas, view.queue_pending);
+    draw_panel_button(f, view, r, &queue_label(view.queue_pending), view.queue.is_some());
 }
 
 fn draw_panel_button(f: &mut Frame, view: &View, r: Rect, label: &str, open: bool) {

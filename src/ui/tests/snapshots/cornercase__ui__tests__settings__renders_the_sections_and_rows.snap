@@ -19,4 +19,4 @@ expression: render(&with(settings(1))).backend()
 " ─│ enter changes the selected setting                                                           │  "
 "  │                                                                              restart   done  │  "
 "  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  "
-"  Quit                         │ Queue 0                 │                                          "
+"  Quit                         │  Queue 0                │                                          "

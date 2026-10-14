@@ -177,8 +177,7 @@ screen_agent_failed() {
 
 screen_compact_bar() {
   cc_s1_at 64 35
-  cc_wait 'web-shop › main'
-  cc_wait 'Q 0'
+  cc_wait 'web-shop › main › nvim'
   cc_shot compact-bar
 }
 
@@ -186,6 +185,7 @@ screen_compact_menu_workspaces() {
   cc_s1_at 64 35
   cc_click '≡'
   cc_wait '‹ Projects'
+  cc_wait 'Queue 0'
   cc_shot compact-menu-workspaces
 }
 
@@ -763,8 +763,8 @@ screen_queue_form() {
   cc_start 110 38
   cc_wait 'web-shop'
   cc_click 'Queue 0'
-  cc_wait '+ new'
-  cc_click '+ new'
+  cc_wait '+ New'
+  cc_click '+ New'
   cc_wait 'Schedule an agent'
   cc_type 'Fix the login form'
   cc_hover 'Workspaces'

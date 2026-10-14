@@ -4,11 +4,28 @@ use jiff::{Timestamp, ToSpan};
 
 pub(crate) fn local_zone() -> String {
     let now = jiff::Zoned::now();
-    now.time_zone().iana_name().map_or_else(|| now.offset().to_string(), str::to_string)
+    let tz = std::env::var("TZ").ok();
+    let etc = std::fs::read_to_string("/etc/timezone").ok();
+    now.time_zone()
+        .iana_name()
+        .map(str::to_string)
+        .or_else(|| named([tz.as_deref(), etc.as_deref()]))
+        .unwrap_or_else(|| now.offset().to_string())
+}
+
+fn named<const N: usize>(candidates: [Option<&str>; N]) -> Option<String> {
+    candidates.into_iter().flatten().find_map(|text| {
+        let text = text.trim().trim_start_matches(':');
+        let text = text.rsplit_once("zoneinfo/").map_or(text, |(_, name)| name);
+        (!text.is_empty() && zone(text).is_ok()).then(|| text.to_string())
+    })
 }
 
 fn zone(name: &str) -> Result<TimeZone, String> {
-    jiff::fmt::temporal::DateTimeParser::new().parse_time_zone(name).map_err(|error| error.to_string())
+    jiff::fmt::temporal::DateTimeParser::new()
+        .parse_time_zone(name)
+        .or_else(|_| TimeZone::posix(name))
+        .map_err(|error| error.to_string())
 }
 
 fn time(text: &str) -> Result<Time, String> {
@@ -41,18 +58,16 @@ pub(crate) fn parse(text: &str, name: &str, now: i64) -> Result<i64, String> {
             .ok_or_else(|| "the delay is too long".into());
     }
     let zone = zone(name)?;
-    let today = Timestamp::from_second(now).map_err(|error| error.to_string())?.to_zoned(zone.clone()).date();
+    let here = Timestamp::from_second(now).map_err(|error| error.to_string())?.to_zoned(zone.clone()).datetime();
+    let today = here.date();
     let datetime = if let Some(clock) = text.strip_prefix("tomorrow ") {
         today.checked_add(1.day()).map_err(|error| error.to_string())?.to_datetime(time(clock)?)
     } else if text.contains(' ') {
         let (date, clock) = text.split_once(' ').ok_or("use 2026-10-08 09:00")?;
         date.parse::<jiff::civil::Date>().map_err(|error| error.to_string())?.to_datetime(time(clock)?)
     } else {
-        let mut datetime = today.to_datetime(time(text)?);
-        if instant(&zone, datetime)? <= now {
-            datetime = datetime.checked_add(1.day()).map_err(|error| error.to_string())?;
-        }
-        datetime
+        let datetime = today.to_datetime(time(text)?);
+        if datetime <= here { datetime.checked_add(1.day()).map_err(|error| error.to_string())? } else { datetime }
     };
     let at = instant(&zone, datetime)?;
     if at <= now {

@@ -125,7 +125,7 @@ pub(super) fn draw(
         }
         let lit = hovered_at(hover, row);
         if lit {
-            f.buffer_mut().set_style(row, Style::default().bg(Color::DarkGray));
+            f.buffer_mut().set_style(row, Style::default().bg(super::hover_colour(light)));
         }
         let width = usize::from(row.width.saturating_sub(2));
         for (line, text, colour) in [
@@ -175,5 +175,5 @@ pub(super) fn draw(
             f.render_widget(Paragraph::new(Span::styled(text, style)), r);
         }
     }
-    draw_button(f, rows.button(), "", "+ new", Style::default().fg(Color::Cyan));
+    draw_button(f, rows.button(), "", "+ New", Style::default().fg(Color::Cyan));
 }

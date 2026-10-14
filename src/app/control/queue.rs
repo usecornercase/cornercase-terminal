@@ -114,19 +114,20 @@ impl App {
             });
         }
         let named = add.label.is_some();
+        let follow = add.worktree.is_none();
         let repo_root = crate::git::is_repo_root(&task.place.project);
         let job = Job::new(Level::Info, "queue", "prepare");
         self.spawn_job(
             job,
             move || {
-                if let Some((api, key)) = issue {
-                    let issue = queue::issue::find(&api, &key)?;
+                if let Some((api, locator)) = issue {
+                    let issue = queue::issue::find(&api, &locator)?;
                     let branch = issues::branch(&issue);
                     task.prompt = issues::prompt(&template, &issue, &branch);
                     if !named {
                         task.label = format!("{} {}", issue.key, issue.title);
                     }
-                    if repo_root && task.place.branch.is_none() && task.place.workspace.is_none() {
+                    if repo_root && task.place.workspace.is_none() && (follow || task.place.branch.is_none()) {
                         task.place.branch = Some(branch);
                     }
                 }

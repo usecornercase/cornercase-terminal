@@ -1,10 +1,48 @@
+use std::fmt::Write;
+
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::args::queue::QueueAction;
 use super::{ask, print_json};
 use crate::control;
-use crate::error::Result;
-use crate::queue::{Entry, State, clock};
+use crate::error::{Error, Result};
+use crate::queue::clock;
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Listed {
+    id: u64,
+    at: i64,
+    label: String,
+    agent: String,
+    state: String,
+    pane: Option<u64>,
+    server: Option<String>,
+    reason: Option<String>,
+}
+
+impl Listed {
+    fn status(&self) -> String {
+        match (self.state.as_str(), self.pane, &self.reason) {
+            ("started", Some(pane), _) => {
+                format!("started · pane {pane} · server {}", self.server.as_deref().unwrap_or_default())
+            }
+            ("failed", _, Some(reason)) => format!("failed: {reason}"),
+            (state, ..) => state.to_string(),
+        }
+    }
+}
+
+fn lines(value: &Value, zone: &str) -> String {
+    let mut out = String::new();
+    for entry in value["entries"].as_array().into_iter().flatten() {
+        let entry = Listed::deserialize(entry).unwrap_or_default();
+        let at = clock::display(entry.at, zone);
+        let _ = writeln!(out, "{} {at} {} {} · {}", entry.id, entry.status(), entry.label, entry.agent);
+    }
+    out
+}
 
 pub(super) fn run(action: QueueAction) -> Result<()> {
     let list = matches!(action, QueueAction::List(_));
@@ -14,6 +52,12 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
     };
     let (command, json) = match action {
         QueueAction::Add(add) | QueueAction::Edit { add, id: _ } => {
+            if edit.is_none() && add.at.is_none() {
+                return Err(Error::WrongUsage("queue add needs --at".into()));
+            }
+            if edit.is_none() && add.prompt.is_none() && add.issue.is_none() {
+                return Err(Error::WrongUsage("queue add needs --prompt or --issue".into()));
+            }
             let json = add.print.json;
             let add = control::QueueAdd {
                 at: add.at.unwrap_or_default(),
@@ -46,30 +90,13 @@ pub(super) fn run(action: QueueAction) -> Result<()> {
         return print_json(&value);
     }
     if list {
-        let entries: Vec<Entry> = serde_json::from_value(value.get("entries").cloned().unwrap_or(Value::Null))
-            .map_err(|error| crate::error::Error::Control(error.to_string()))?;
-        let zone = clock::local_zone();
-        for entry in entries {
-            let status = match &entry.state {
-                State::Pending => "pending".into(),
-                State::Starting => "starting".into(),
-                State::Missed => "missed".into(),
-                State::Started { pane, server } => format!("started · pane {pane} · server {server}"),
-                State::Failed { reason } => format!("failed: {reason}"),
-            };
-            println!(
-                "{} {} {} {} · {}",
-                entry.id,
-                clock::display(entry.task.at, &zone),
-                status,
-                entry.task.label,
-                entry.task.agent
-            );
-        }
-        return Ok(());
+        return super::print_out(&lines(&value, &clock::local_zone()));
     }
     if let Some(id) = value.get("id").and_then(Value::as_u64) {
         println!("{id}");
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

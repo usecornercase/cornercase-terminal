@@ -206,13 +206,8 @@ impl App {
         match key.code {
             KeyCode::Esc => self.overlay = None,
             KeyCode::Enter => self.submit_queue(),
-            KeyCode::Tab | KeyCode::BackTab => {
-                form.field = match form.field {
-                    Field::Prompt => Field::At,
-                    Field::At => Field::Branch,
-                    Field::Branch => Field::Prompt,
-                }
-            }
+            KeyCode::Tab => form.field = form.field.next(),
+            KeyCode::BackTab => form.field = form.field.previous(),
             _ => {
                 let area = self.queued.area.unwrap_or(Rect::new(0, 0, 72, 22));
                 let width = usize::from(ui::queue_form::field(area, form.field).width.max(1));
@@ -232,9 +227,12 @@ impl App {
         match ui::queue_form::hit(area, pos) {
             Some(ui::queue_form::Hit::Cancel) => self.overlay = None,
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
-            Some(ui::queue_form::Hit::Field(field, line, col)) => {
+            Some(ui::queue_form::Hit::Field(field, row, col)) => {
                 form.field = field;
-                form.editor().place(usize::from(ui::queue_form::field(area, field).width.max(1)), line, col);
+                let r = ui::queue_form::field(area, field);
+                let editor = form.editor();
+                let line = ui::queue_form::first_line(editor, r) + row;
+                editor.place(usize::from(r.width.max(1)), line, col);
             }
             Some(ui::queue_form::Hit::Place) => {
                 if form.place_confirmed {
@@ -327,17 +325,24 @@ impl App {
     }
 
     pub(super) fn queue_form_done(&mut self, reply: Result<u64, String>) {
-        match reply {
-            Ok(id) => {
-                self.overlay = None;
+        let form = match &mut self.overlay {
+            Some(Overlay::Queue(form)) => Some(form),
+            _ => None,
+        };
+        match (reply, form) {
+            (Ok(id), form) => {
+                if form.is_some() {
+                    self.overlay = None;
+                }
                 self.show_side(Some(Side::Queue));
                 self.toast = Some(Toast::new(format!("scheduled queue entry {id}"), ui::ToastIcon::Check));
             }
-            Err(reason) => {
-                if let Some(Overlay::Queue(form)) = &mut self.overlay {
-                    form.busy = false;
-                    form.error = Some(reason);
-                }
+            (Err(reason), Some(form)) => {
+                form.busy = false;
+                form.error = Some(reason);
+            }
+            (Err(reason), None) => {
+                self.toast = Some(Toast::new(format!("could not schedule: {reason}"), ui::ToastIcon::Bug));
             }
         }
     }

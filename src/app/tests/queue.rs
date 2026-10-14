@@ -125,6 +125,53 @@ mod starts {
 mod forms {
     use super::*;
 
+    fn issue_gh(app: &mut App, config: &TempDir) {
+        let gh = crate::test_util::fake_gh(
+            config.path(),
+            "cat <<JSON\n{\"number\":$3,\"title\":\"Fix login $3\",\"state\":\"OPEN\",\"labels\":[],\"assignees\":[],\"author\":{\"login\":\"ana\"},\"updatedAt\":\"\",\"url\":\"https://github.com/acme/shop/issues/$3\"}\nJSON",
+        );
+        app.config.gh = gh.display().to_string();
+    }
+
+    fn issue_add(app: &App, issue: &str) -> crate::control::QueueAdd {
+        crate::control::QueueAdd {
+            at: "in 2h".into(),
+            agent: Some("fake".into()),
+            project: Some(app.projects[0].id),
+            issue: Some(issue.into()),
+            ..crate::control::QueueAdd::default()
+        }
+    }
+
+    #[test]
+    fn editing_the_issue_moves_the_entry_to_the_new_issues_branch() {
+        let (mut app, rx, _repo, config, _worktrees) = queued_app();
+        issue_gh(&mut app, &config);
+        app.add_queue_request(None, None, None, &issue_add(&app, "#7")).expect("prepare issue 7");
+        pump_until(&mut app, &rx, "issue 7 is queued", |app| app.queued.queue.pending() == 1);
+        let id = app.queued.queue.entries[0].id;
+        let edit = crate::control::QueueAdd { at: String::new(), project: None, ..issue_add(&app, "#9") };
+        app.add_queue_request(None, None, Some(id), &edit).expect("prepare issue 9");
+        pump_until(&mut app, &rx, "issue 9 replaces it", |app| {
+            app.queued.queue.entries[0].task.label.starts_with("#9")
+        });
+        let entry = &app.queued.queue.entries[0];
+        assert_eq!(entry.task.place.branch.as_deref(), Some("issue-9-fix-login-9"));
+        assert!(entry.task.prompt.ends_with("/issues/9"), "{}", entry.task.prompt);
+    }
+
+    #[test]
+    fn an_issue_url_of_another_repository_is_refused() {
+        let (mut app, rx, _repo, config, _worktrees) = queued_app();
+        issue_gh(&mut app, &config);
+        let add = issue_add(&app, "https://github.com/other/shop/issues/7");
+        app.add_queue_request(None, None, None, &add).expect("prepare the issue");
+        pump_until(&mut app, &rx, "the lookup answers", |app| app.toast.is_some());
+        let toast = app.toast.as_ref().expect("toast");
+        assert!(toast.message.contains("not an issue of this project's GitHub"), "{}", toast.message);
+        assert_eq!(app.queued.queue.entries, []);
+    }
+
     #[rstest::rstest]
     #[case::repository(true)]
     #[case::plain_folder(false)]
@@ -135,18 +182,11 @@ mod forms {
             app.projects[0].path = folder.path().to_path_buf();
             app.projects[0].workspaces[0].path = folder.path().to_path_buf();
         }
-        let gh = crate::test_util::fake_gh(
-            config.path(),
-            "cat <<'JSON'\n{\"number\":7,\"title\":\"Fix login\",\"state\":\"OPEN\",\"labels\":[],\"assignees\":[],\"author\":{\"login\":\"ana\"},\"updatedAt\":\"\",\"url\":\"https://github.com/acme/shop/issues/7\"}\nJSON",
-        );
-        app.config.gh = gh.display().to_string();
+        issue_gh(&mut app, &config);
         let add = crate::control::QueueAdd {
-            at: "in 2h".into(),
-            agent: Some("fake".into()),
-            project: Some(app.projects[0].id),
-            issue: Some("#7".into()),
             label: Some("login fix".into()),
-            ..crate::control::QueueAdd::default()
+            source: Some("github".into()),
+            ..issue_add(&app, "#7")
         };
         assert_eq!(app.add_queue_request(None, None, None, &add).expect("prepare issue"), None);
         pump_until(&mut app, &rx, "the issue is queued", |app| app.queued.queue.pending() == 1);
@@ -412,5 +452,102 @@ mod destinations {
             app.queued.queue.entry(id).expect("entry").task.place.project,
             PathBuf::from("/nonexistent/queued-project")
         );
+    }
+}
+
+mod panel {
+    use super::*;
+    use crate::app::queue_panel::CLIENTS;
+    use crate::queue::form::Field;
+
+    fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>, Rect) {
+        let (mut app, rx, repo, config, worktrees) = queued_app();
+        app.toggle_queue();
+        let panel = app.layout(AREA).changes;
+        (app, rx, vec![repo, config, worktrees], panel)
+    }
+
+    fn row(app: &App, panel: Rect, i: usize) -> Rect {
+        ui::queue::rows(panel, &app.queue_view()).item(i)
+    }
+
+    fn undo(app: &mut App) {
+        let button = ui::toast_button(AREA, app.toast.as_ref().expect("an undo toast").view());
+        click(app, button.as_position());
+    }
+
+    #[test]
+    fn removing_an_entry_and_clearing_started_ones_can_be_undone() {
+        let (mut app, _rx, _dirs, panel) = opened();
+        let pending = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("pending");
+        let started = app.queued.queue.add(task(&app, time::now() + 7200, None)).expect("started");
+        app.queued.queue.entry_mut(started).expect("entry").state =
+            QueueState::Started { pane: 1, server: crate::control::server_token().into() };
+        let before = app.queued.queue.entries.clone();
+
+        let first = row(&app, panel, 0);
+        click(&mut app, Position::new(first.right() - 2, first.y + 1));
+        assert_eq!(app.queued.queue.entries.iter().map(|e| e.id).collect::<Vec<_>>(), [started]);
+        undo(&mut app);
+        assert_eq!(app.queued.queue.entries, before);
+
+        let clear = ui::queue::clear(panel, &app.queue_view());
+        click(&mut app, clear.as_position());
+        assert_eq!(app.queued.queue.entries.iter().map(|e| e.id).collect::<Vec<_>>(), [pending]);
+        undo(&mut app);
+        assert_eq!(app.queued.queue.entries, before);
+    }
+
+    #[test]
+    fn a_starting_entry_opens_no_form_and_cannot_be_removed() {
+        let (mut app, _rx, _dirs, panel) = opened();
+        let id = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("add");
+        app.queued.queue.entry_mut(id).expect("entry").state = QueueState::Starting;
+        app.queued.running.insert(CLIENTS + 1, id);
+        let r = row(&app, panel, 0);
+        click(&mut app, Position::new(r.x + 1, r.y + 1));
+        assert!(app.overlay.is_none());
+        click(&mut app, Position::new(r.right() - 2, r.y + 1));
+        assert_eq!(app.queued.queue.entries.len(), 1);
+        assert_eq!(app.outbox.notifications.len(), 0);
+    }
+
+    #[test]
+    fn shift_tab_goes_back_through_the_fields() {
+        let (mut app, _rx, _dirs, _panel) = opened();
+        app.new_queue_form(None);
+        let field = |app: &App| match &app.overlay {
+            Some(Overlay::Queue(form)) => form.field,
+            _ => panic!("form"),
+        };
+        app.queue_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+        assert_eq!(field(&app), Field::Branch);
+        app.queue_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(field(&app), Field::Prompt);
+    }
+
+    #[test]
+    fn a_click_in_a_scrolled_prompt_lands_on_the_line_it_shows() {
+        let (mut app, _rx, _dirs, _panel) = opened();
+        app.new_queue_form(None);
+        let field = ui::queue_form::field(AREA, Field::Prompt);
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
+        form.prompt = todo::editor::Editor::new(&"word ".repeat(80));
+        let start = ui::queue_form::first_line(&form.prompt, field);
+        assert!(start > 0);
+        click(&mut app, Position::new(field.x, field.y));
+        let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };
+        assert_eq!(form.prompt.position(usize::from(field.width)), (start, 0));
+    }
+
+    #[test]
+    fn a_late_answer_for_a_form_that_is_gone_leaves_other_dialogs_and_says_why() {
+        let (mut app, _rx, _dirs, _panel) = opened();
+        app.overlay = Some(Overlay::Usage);
+        app.queue_form_done(Ok(7));
+        assert!(matches!(app.overlay, Some(Overlay::Usage)));
+        app.queue_form_done(Err("the plan probe failed".into()));
+        assert!(matches!(app.overlay, Some(Overlay::Usage)));
+        assert!(app.toast.as_ref().is_some_and(|t| t.message.contains("the plan probe failed")));
     }
 }

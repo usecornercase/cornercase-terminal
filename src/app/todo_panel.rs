@@ -4,6 +4,7 @@ use ratatui::layout::{Position, Rect};
 use super::input::wheel;
 use super::interaction::{Drag, Grab, RowDrag};
 use super::layout::Side;
+use super::toast::Undo;
 use super::{App, Toast};
 use crate::todo::editor::Editor;
 use crate::todo::{Field, Removed};
@@ -159,7 +160,7 @@ impl App {
     }
 
     fn removed_todos(&mut self, message: String, removed: Removed) {
-        self.toast = Some(Toast { undo: Some(removed), ..Toast::new(message, ui::ToastIcon::Check) });
+        self.toast = Some(Toast { undo: Some(Undo::Todos(removed)), ..Toast::new(message, ui::ToastIcon::Check) });
     }
 
     pub(super) fn click_todo(&mut self, id: u64, row: Rect, pos: Position, area: Rect) {

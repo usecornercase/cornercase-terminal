@@ -3,7 +3,7 @@ source: src/ui/tests/compact.rs
 expression: render_small(&in_a_project(None)).backend()
 ---
 "                                                                                "
-"   ≡     cornercase › feat/login › claude              ▤     Q 0     ☐      ⌕   "
+"   ≡     cornercase › feat/login › claude                     ▤      ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

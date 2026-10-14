@@ -165,6 +165,7 @@ impl Areas {
                 workspaces_list: hidden,
                 workspaces_separator: hidden,
                 issues: hidden,
+                queue_button: hidden,
                 back: if nav == Some(Nav::Agents) { projects.back } else { hidden },
                 ..projects
             }
@@ -423,10 +424,8 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
     let search_button = Rect { x: bar.right() - search_width, width: search_width, ..bar };
     let todo_width = COMPACT_BUTTON_WIDTH.min(search_button.x.saturating_sub(bar.x));
     let todo_button = Rect { x: search_button.x - todo_width, width: todo_width, ..bar };
-    let queue_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
-    let queue_button = Rect { x: todo_button.x - queue_width, width: queue_width, ..bar };
-    let files_width = COMPACT_BUTTON_WIDTH.min(queue_button.x.saturating_sub(bar.x));
-    let files_button = Rect { x: queue_button.x - files_width, width: files_width, ..bar };
+    let files_width = COMPACT_BUTTON_WIDTH.min(todo_button.x.saturating_sub(bar.x));
+    let files_button = Rect { x: todo_button.x - files_width, width: files_width, ..bar };
     let changes_width = COMPACT_BUTTON_WIDTH.min(files_button.x.saturating_sub(bar.x));
     let changes_button = Rect { x: files_button.x - changes_width, width: changes_width, ..bar };
     let [_, menu] = Layout::vertical([Constraint::Length(GAP), Constraint::Min(0)]).areas(below);
@@ -484,7 +483,7 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button,
         todo_button,
-        queue_button,
+        queue_button: issues,
         files_button,
         tab_bar: Rect::default(),
     }
@@ -497,4 +496,18 @@ pub fn changes_button(issues: Rect, label: &str) -> Rect {
 
 pub(crate) fn files_button(row: Rect) -> Rect {
     Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
+}
+
+pub(crate) fn queue_label(pending: usize) -> String {
+    format!("Queue {pending}")
+}
+
+pub(crate) fn queue_button(areas: &Areas, pending: usize) -> Rect {
+    let label = queue_label(pending);
+    let row = areas.queue_button;
+    if areas.compact() {
+        changes_button(row, &label)
+    } else {
+        Rect { x: row.x.saturating_add(1), width: button_width(&label), ..row }.intersection(row)
+    }
 }

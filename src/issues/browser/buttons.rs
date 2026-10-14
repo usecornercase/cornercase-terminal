@@ -47,7 +47,16 @@ impl Button {
 }
 
 impl Browser {
-    pub(super) fn buttons(&self) -> Vec<Button> {
+    pub(super) fn buttons(&self, width: usize) -> Vec<Button> {
+        let mut buttons = self.every_button();
+        let needed: usize = buttons.iter().map(|button| button.label().chars().count() + 3).sum();
+        if needed > width.saturating_add(1) {
+            buttons.retain(|button| *button != Button::Schedule);
+        }
+        buttons
+    }
+
+    fn every_button(&self) -> Vec<Button> {
         if self.picker.is_some() {
             return vec![Button::Choose, Button::Back];
         }
@@ -91,8 +100,8 @@ impl Browser {
         buttons
     }
 
-    pub(crate) fn labels(&self) -> Vec<&'static str> {
-        self.buttons().into_iter().map(Button::label).collect()
+    pub(crate) fn labels(&self, width: usize) -> Vec<&'static str> {
+        self.buttons(width).into_iter().map(Button::label).collect()
     }
 
     pub(crate) fn tab_names(&self) -> Vec<&'static str> {

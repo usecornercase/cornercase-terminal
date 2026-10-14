@@ -17,7 +17,7 @@ for (const cols of [140, 70]) {
     const app = appAt(cols);
     app.toggleQueue();
     app.render();
-    assert.ok(app.textAt('+ new'));
+    assert.ok(app.textAt('+ New'));
     app.openQueueForm();
     const form = app.overlay;
     assert.equal(form?.kind, 'queue');
@@ -96,5 +96,37 @@ test('an issue schedule carries its title and branch into the queue form', () =>
   form.at = 'claude reset';
   app.submitQueue();
   assert.equal(app.queued[0].at, app.now() + 2 * 3600000);
+  app.destroy();
+});
+
+test('in compact mode the queue button sits beside Issues and the bar keeps its room', () => {
+  const app = appAt(60);
+  app.render();
+  assert.equal(app.textAt('Q 0'), null);
+  app.nav = 'workspaces';
+  app.render();
+  const issues = app.textAt('Issues');
+  const queue = app.textAt('Queue 0');
+  assert.ok(issues && queue);
+  assert.equal(queue.y, issues.y);
+  assert.ok(queue.x > issues.x);
+  app.pointerDown(queue.x + 1, queue.y, 0);
+  app.pointerUp();
+  assert.equal(app.queueOpen, true);
+  app.destroy();
+});
+
+test('a removed queue entry comes back with undo', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  const form = app.overlay;
+  if (form?.kind !== 'queue') throw new Error('form');
+  form.prompt = 'Fix the login'; form.at = 'in 1h'; form.agent = 'claude';
+  app.submitQueue();
+  const before = [...app.queued];
+  app.removeQueued((entry) => entry.id === before[0].id, `removed queue entry ${before[0].id}`);
+  assert.equal(app.queued.length, 0);
+  app.toast?.undo?.();
+  assert.deepEqual(app.queued, before);
   app.destroy();
 });

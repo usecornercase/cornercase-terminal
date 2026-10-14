@@ -4,9 +4,10 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.94
 
-- Schedule issues or prompts for later from **Queue**, the **schedule** button in Issues, or `cornercase queue add`. Choose a clock time, a date, a delay such as `in 2h`, or the next Claude/Codex five-hour plan reset, and pick the agent, mode and destination: a project root, a workspace tab or a worktree. Clock times use your client's time zone, including remote terminals and browsers.
+- Schedule issues or prompts for later from **Queue** (under **Files**, or next to **Issues** in the menu on a small screen), the **schedule** button in Issues, or `cornercase queue add`. Choose a clock time, a date, a delay such as `in 2h`, or the next Claude/Codex five-hour plan reset, and pick the agent, mode and destination: a project root, a workspace tab or a worktree. Clock times use your client's time zone, including remote terminals and browsers.
 - Every due entry starts together, without moving your active pane. Queued starts submit the stored prompt automatically and always accept the agent's folder trust question, so they can run unattended; immediate starts keep your existing trust setting.
-- The queue survives server restarts and keeps started entries so you can see what ran. Edit, remove or start entries now, and clear the started history. Work more than ten minutes late is marked **missed** and waits for you. A closed destination or failed start shows its reason; interrupted starts ask you to check the workspace before retrying.
+- The queue survives server restarts and keeps started entries so you can see what ran. Edit, remove or start entries now, and clear the started history; a removal can be undone from its notice for a few seconds. Work more than ten minutes late is marked **missed** and waits for you. A closed destination or failed start shows its reason; interrupted starts ask you to check the workspace before retrying.
+- `cornercase queue add --issue` takes an issue URL or key. A URL must point to the project's own repository, or to the Jira site or the Plane or Linear workspace you are connected to; a bare key such as `482` that more than one tracker could read asks for `--source`.
 
 ## 0.12.93
 

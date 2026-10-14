@@ -200,7 +200,7 @@ impl App {
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
-        } else if areas.queue_button.contains(pos) {
+        } else if ui::queue_button(areas, self.queued.queue.pending()).contains(pos) {
             Self::toggle_queue
         } else if todo.contains(pos) {
             Self::toggle_todo

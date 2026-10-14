@@ -3,7 +3,7 @@ source: src/ui/tests/changes_layout.rs
 expression: "render_sized(&pending(true, true), 80, 18).backend()"
 ---
 "                                                                                "
-"   ≡     shop › main › zsh                      ±      ▤     Q 0     ☐ ●    ⌕   "
+"   ≡     shop › main › zsh                             ±      ▤      ☐ ●    ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

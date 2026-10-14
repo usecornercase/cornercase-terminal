@@ -65,6 +65,8 @@ import {
   TODO_LABEL,
   FILES_LABEL,
   todoDot,
+  queueButton,
+  queueLabel,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -536,10 +538,7 @@ export class Painter {
     }
     const showChanges = hasChanges(app.workspace());
     const showFiles = !!app.project();
-    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - areas.queueButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
-    const q = areas.queueButton;
-    this.band(q, [seg(centered(`Q ${app.queued.filter((entry) => entry.state === 'pending').length}`, q.w))], app.queueOpen || this.sidebarHovered(q) ? PRESSED : { fg: 8, bg: this.surface });
-    this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
+    const menu = rect(r.x, r.y, r.w - areas.searchButton.w - areas.todoButton.w - (showFiles ? areas.filesButton.w : 0) - (showChanges ? areas.changesButton.w : 0), r.h);
     const todo = areas.todoButton;
     this.band(todo, todoIcon(app.config.todoDot && app.todo.pending() > 0, todo.w), app.todo.open || this.sidebarHovered(todo) ? PRESSED : { fg: 8, bg: this.surface });
     this.region({ r: todo, click: () => app.toggleTodo(), cursor: 'pointer' });
@@ -931,8 +930,13 @@ export class Painter {
   private issuesRow(areas: Areas): void {
     const app = this.app;
     this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, { fg: this.lineColour })]);
-    this.button(areas.issues, ' ', 'Issues', this.buttonStyle(areas.issues, DARK, 6));
-    this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
+    const pending = app.queued.filter((entry) => entry.state === 'pending').length;
+    const q = queueButton(areas, pending);
+    const issues = areas.compact ? rect(areas.issues.x, areas.issues.y, Math.max(0, q.x - areas.issues.x), areas.issues.h) : areas.issues;
+    this.button(issues, ' ', 'Issues', this.buttonStyle(issues, DARK, 6));
+    this.region({ r: issues, click: () => app.openIssues(), cursor: 'pointer' });
+    this.button(q, '', queueLabel(pending), this.buttonStyle(q, app.queueOpen ? { fg: 6, add: BOLD } : DARK, 6));
+    this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
     if (!areas.compact && hasChanges(app.workspace())) {
       const label = changesLabel(app.activeChangesDiff());
       const w = label.length + 2;
@@ -942,9 +946,6 @@ export class Painter {
       this.region({ r, click: () => app.toggleChanges(), cursor: 'pointer' });
     }
     if (!areas.compact) {
-      const q = areas.queueButton;
-      this.button(q, '', `Queue ${app.queued.filter((entry) => entry.state === 'pending').length}`, this.buttonStyle(q, app.queueOpen ? { fg: 6, add: BOLD } : DARK, 6));
-      this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
       const r = areas.todoButton;
       this.button(r, '', TODO_LABEL, this.buttonStyle(r, app.todo.open ? { fg: 6, add: BOLD } : DARK, 6));
       const dot = todoDot(areas);

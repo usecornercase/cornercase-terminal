@@ -46,3 +46,44 @@ fn accepts_a_fixed_client_offset_and_displays_it() {
     assert_eq!(at, stamp("2026-10-14T11:30:00Z"));
     assert_eq!(display(at, "+03:00"), "2026-10-14 14:30");
 }
+
+#[test]
+fn a_bare_time_already_past_today_skips_a_daylight_saving_hour_of_today() {
+    assert_eq!(
+        parse("02:30", "Europe/Madrid", stamp("2026-10-25T09:00:00Z")).expect("parse"),
+        stamp("2026-10-26T01:30:00Z")
+    );
+}
+
+#[test]
+fn a_bare_time_inside_todays_repeated_hour_is_still_ambiguous() {
+    assert!(parse("02:30", "Europe/Madrid", stamp("2026-10-24T22:00:00Z")).is_err());
+}
+
+#[rstest]
+#[case::iana(Some("Europe/Madrid"), None, Some("Europe/Madrid"))]
+#[case::colon_path(Some(":/usr/share/zoneinfo/America/New_York"), None, Some("America/New_York"))]
+#[case::posix(Some("EST5EDT,M3.2.0,M11.1.0"), None, Some("EST5EDT,M3.2.0,M11.1.0"))]
+#[case::etc_timezone(None, Some("Europe/Lisbon\n"), Some("Europe/Lisbon"))]
+#[case::invalid_tz_falls_back(Some("Not/AZone"), Some("Asia/Tokyo"), Some("Asia/Tokyo"))]
+#[case::nothing(None, None, None)]
+fn finds_a_zone_with_its_rules_when_the_system_zone_has_no_name(
+    #[case] tz: Option<&str>,
+    #[case] etc: Option<&str>,
+    #[case] expected: Option<&str>,
+) {
+    assert_eq!(named([tz, etc]).as_deref(), expected);
+}
+
+#[test]
+fn a_posix_zone_keeps_its_daylight_saving_rules() {
+    let zone = "EST5EDT,M3.2.0,M11.1.0";
+    assert_eq!(
+        parse("2026-12-01 09:00", zone, stamp("2026-10-14T10:00:00Z")).expect("parse"),
+        stamp("2026-12-01T14:00:00Z")
+    );
+    assert_eq!(
+        parse("2026-10-20 09:00", zone, stamp("2026-10-14T10:00:00Z")).expect("parse"),
+        stamp("2026-10-20T13:00:00Z")
+    );
+}

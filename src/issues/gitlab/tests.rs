@@ -256,10 +256,7 @@ fn view_reads_the_description_and_the_comments() {
     let repo = on_the_server(&server);
 
     let detail = api(&server, &repo).view(42).expect("view");
-    assert_eq!(api(&server, &repo).find("42").expect("find for queue").number, 42);
-    let issue_url = format!("{}/acme/shop/-/issues/42", server.url());
-    assert_eq!(api(&server, &repo).find(&issue_url).expect("find by URL").number, 42);
-    assert!(api(&server, &repo).find("https://other.example/acme/shop/-/issues/42").is_err());
+    assert_eq!(api(&server, &repo).find(42).expect("find for queue").number, 42);
 
     assert_eq!(
         detail.info,
@@ -326,6 +323,14 @@ mod remotes {
         let remotes = remotes(output);
         assert_eq!(remotes.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["origin", "fork"]);
         assert_eq!(project_of(CLOUD, &remotes).as_deref(), Some("acme/shop"));
+    }
+
+    #[test]
+    fn config_urls_say_whether_the_repository_has_a_project_on_the_server() {
+        let urls = |url: &str| vec![("origin".to_string(), url.to_string())];
+        assert!(has_project(CLOUD, &urls("git@gitlab.com:acme/shop.git")));
+        assert!(!has_project(CLOUD, &urls("git@github.com:acme/shop.git")));
+        assert!(!has_project(CLOUD, &[]));
     }
 }
 

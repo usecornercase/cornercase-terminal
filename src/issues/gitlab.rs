@@ -134,31 +134,14 @@ impl Api {
         Ok(people)
     }
 
-    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
-        let (node, _) = if key.starts_with("https://") || key.starts_with("http://") {
-            let relative = key.strip_prefix(&format!("{}/", self.base.trim_end_matches('/'))).ok_or_else(|| {
-                Error::Api("the GitLab issue URL is on a different server than the connected tracker".into())
-            })?;
-            let (project, number) = relative
-                .split_once("/-/issues/")
-                .ok_or_else(|| Error::Api("the GitLab issue URL has no project and issue number".into()))?;
-            let number = number
-                .trim_end_matches('/')
-                .parse()
-                .map_err(|_| Error::Api("the GitLab issue URL has an invalid number".into()))?;
-            self.node_in(project, number)?
-        } else {
-            self.node(key.parse().map_err(|_| Error::Api("GitLab needs a numeric issue key".into()))?)?
-        };
-        issue(&node).ok_or_else(|| Error::Api(format!("issue {key} has no number")))
+    pub(crate) fn find(&self, number: u64) -> Result<Issue> {
+        let (node, _) = self.node(number)?;
+        issue(&node).ok_or_else(|| Error::Api(format!("issue #{number} has no number")))
     }
 
     fn node(&self, number: u64) -> Result<(Value, String)> {
-        self.node_in(&self.project()?, number)
-    }
-
-    fn node_in(&self, project: &str, number: u64) -> Result<(Value, String)> {
-        let path = Self::project_path(project, &format!("/issues/{number}"));
+        let project = self.project()?;
+        let path = Self::project_path(&project, &format!("/issues/{number}"));
         let node = self.get(&path, &[], &format!("issue #{number} not found in {project}"))?;
         Ok((node, path))
     }
@@ -295,6 +278,11 @@ fn remotes(output: &str) -> Vec<Remote> {
     }
     remotes.sort_by_key(|r| r.name != "origin");
     remotes
+}
+
+pub(crate) fn has_project(base: &str, urls: &[(String, String)]) -> bool {
+    let remotes: Vec<Remote> = urls.iter().filter_map(|(name, url)| remote(name, url)).collect();
+    project_of(base, &remotes).is_some()
 }
 
 fn project_of(base: &str, remotes: &[Remote]) -> Option<String> {

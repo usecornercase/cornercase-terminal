@@ -1363,8 +1363,19 @@ export class App {
     else this.dirty();
   }
 
-  private undoToast(text: string): void {
-    this.toast = { text, until: this.now() + 6000, undo: () => this.undoTodo() };
+  removeQueued(match: (entry: QueueEntry) => boolean, text: string): void {
+    const removed = this.queued.filter(match);
+    if (!removed.length) return;
+    this.queued = this.queued.filter((entry) => !match(entry));
+    this.undoToast(text.replace('{n}', String(removed.length)), () => {
+      this.queued = [...this.queued, ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
+      this.toast = null;
+      this.dirty();
+    });
+  }
+
+  private undoToast(text: string, undo: () => void = () => this.undoTodo()): void {
+    this.toast = { text, until: this.now() + 6000, undo };
     this.after(6050, () => this.dirty());
     this.dirty();
   }

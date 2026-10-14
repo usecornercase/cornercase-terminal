@@ -76,7 +76,7 @@ export function drawQueue(p: Painter, areas: Areas): void {
   if (app.queued.some((entry) => entry.state === 'started')) {
     const clear = rect(Math.max(area.x, close.x - 16), area.y, 15, 1);
     p.span(clear.x, clear.y, ' clear started ', { fg: 8 });
-    p.region({ r: clear, click: () => { app.queued = app.queued.filter((entry) => entry.state !== 'started'); app.dirty(); }, cursor: 'pointer' });
+    p.region({ r: clear, click: () => app.removeQueued((entry) => entry.state === 'started', 'cleared {n} started'), cursor: 'pointer' });
   }
   const list = rect(area.x, area.y + 2, area.w, Math.max(0, area.h - 2));
   const rows = new Rows(list, app.queued.map(() => 5), 1, app.queueScroll);
@@ -92,7 +92,7 @@ export function drawQueue(p: Painter, areas: Areas): void {
     p.region({ r, click: () => app.openQueueForm(entry), cursor: 'pointer' });
     const remove = rect(right(r) - 3, r.y + 1, 3, 1);
     if (p.hovered(r) || areas.compact) p.span(remove.x + 1, remove.y, '×', { fg: 8 });
-    p.region({ r: remove, click: () => { app.queued = app.queued.filter((item) => item.id !== entry.id); app.dirty(); }, cursor: 'pointer' });
+    p.region({ r: remove, click: () => app.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`), cursor: 'pointer' });
     if (entry.state !== 'started') {
       const run = rect(right(r) - 12, r.y + 3, 11, 1);
       p.span(run.x, run.y, ' start now ', { fg: 6 });
@@ -100,7 +100,7 @@ export function drawQueue(p: Painter, areas: Areas): void {
     }
   });
   const add = rows.buttonRect();
-  p.span(add.x + 1, add.y, '+ new', { fg: 6 });
+  p.span(add.x + 1, add.y, '+ New', { fg: 6 });
   p.region({ r: add, click: () => app.openQueueForm(), cursor: 'pointer' });
   p.region({ r: list, wheel: (dy) => { app.queueScroll = rows.scrolled(Math.sign(dy) * 3); app.dirty(); return true; } });
 }

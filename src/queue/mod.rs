@@ -101,14 +101,26 @@ impl Queue {
         self.entries.iter_mut().find(|entry| entry.id == id)
     }
 
-    pub(crate) fn remove(&mut self, id: u64) -> Result<(), String> {
+    pub(crate) fn remove(&mut self, id: u64) -> Result<Entry, String> {
         let at = self.entries.iter().position(|entry| entry.id == id).ok_or_else(|| missing(id))?;
-        self.entries.remove(at);
-        Ok(())
+        Ok(self.entries.remove(at))
     }
 
-    pub(crate) fn clear_started(&mut self) {
-        self.entries.retain(|entry| !matches!(entry.state, State::Started { .. }));
+    pub(crate) fn clear_started(&mut self) -> Vec<Entry> {
+        let (started, kept) = std::mem::take(&mut self.entries)
+            .into_iter()
+            .partition(|entry| matches!(entry.state, State::Started { .. }));
+        self.entries = kept;
+        started
+    }
+
+    pub(crate) fn restore(&mut self, entries: Vec<Entry>) {
+        for entry in entries {
+            if self.entry(entry.id).is_none() {
+                self.entries.push(entry);
+            }
+        }
+        self.sort();
     }
 
     pub(crate) fn pending(&self) -> usize {

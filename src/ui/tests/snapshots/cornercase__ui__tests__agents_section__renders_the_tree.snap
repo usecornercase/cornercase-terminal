@@ -29,7 +29,7 @@ expression: "render_sized(&shown(Sidebar::Tree, entries()), W, TALL.height).back
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
 "  Files                  TODO  │                                                                    "
-" Queue 0                       │                                                                    "
+"  Queue 0                      │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "

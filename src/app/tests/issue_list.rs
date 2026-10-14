@@ -389,7 +389,8 @@ mod starting {
         let mut s = listing();
         open_loaded(&mut s, Source::Github);
         send_key(&mut s.app, KeyCode::Down, KeyModifiers::NONE);
-        let start = ui::issue_buttons(ui::issues_area(AREA), &browser(&s.app).labels())[0];
+        let start =
+            ui::issue_buttons(ui::issues_area(AREA), &browser(&s.app).labels(issues_dialog::room(AREA).buttons))[0];
         click(&mut s.app, start.as_position());
         pump_until(&mut s.app, &s.rx, "the issue workspace opens", |a| a.projects[0].workspaces.len() == 2);
         assert_eq!(s.app.projects[0].workspaces[1].label(), "#3 Dark mode");

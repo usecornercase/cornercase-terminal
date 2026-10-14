@@ -6,7 +6,7 @@ use super::view::detail_lines;
 use super::*;
 use crate::issues::{Comment, issue};
 
-const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106 };
+const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106, buttons: 110 };
 
 fn browser() -> Browser {
     Browser {
@@ -107,7 +107,7 @@ fn click(b: &mut Browser, hit: IssuesHit) -> Action {
 }
 
 fn button(b: &Browser, label: &str) -> IssuesHit {
-    let labels = b.labels();
+    let labels = b.labels(ROOM.buttons);
     let i = labels.iter().position(|l| *l == label).expect("the button is there");
     IssuesHit::Button(i)
 }
@@ -321,7 +321,7 @@ mod tokens {
     #[test]
     fn a_tracker_without_a_token_asks_for_one() {
         let b = on_shortcut();
-        assert_eq!((b.token_form(), b.labels()), (Some(Source::Shortcut), vec!["connect", "cancel"]));
+        assert_eq!((b.token_form(), b.labels(ROOM.buttons)), (Some(Source::Shortcut), vec!["connect", "cancel"]));
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod tokens {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: false, account: None });
         assert_eq!(
-            (b.needs_load(), b.labels()),
+            (b.needs_load(), b.labels(ROOM.buttons)),
             (Action::Load(vec![Source::Shortcut]), vec!["start", "schedule", "refresh", "disconnect", "cancel"])
         );
     }
@@ -358,7 +358,7 @@ mod tokens {
     fn a_token_from_the_environment_cannot_be_disconnected() {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: true, account: None });
-        assert_eq!(b.labels(), ["start", "schedule", "refresh", "cancel"]);
+        assert_eq!(b.labels(ROOM.buttons), ["start", "schedule", "refresh", "cancel"]);
     }
 
     fn field(b: &Browser) -> (&'static str, String) {
@@ -384,14 +384,20 @@ mod tokens {
         #[test]
         fn asks_the_site_first_with_the_saved_one_typed() {
             let b = on_jira();
-            assert_eq!((field(&b), b.labels()), (("site", "acme.atlassian.net".into()), vec!["next", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("site", "acme.atlassian.net".into()), vec!["next", "cancel"])
+            );
         }
 
         #[test]
         fn then_the_email_and_saves_both() {
             let mut b = on_jira();
             press(&mut b, KeyCode::Enter);
-            assert_eq!((field(&b), b.labels()), (("email", "ana@acme.dev".into()), vec!["next", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("email", "ana@acme.dev".into()), vec!["next", "back", "cancel"])
+            );
             let saved = press(&mut b, KeyCode::Enter);
             assert_eq!(saved, Action::SaveJira { site: "acme.atlassian.net".into(), email: "ana@acme.dev".into() });
         }
@@ -422,7 +428,10 @@ mod tokens {
             let mut b = on_jira();
             to_the_token(&mut b);
             type_text(&mut b, "t0k");
-            assert_eq!((field(&b), b.labels()), (("API token", "•••".into()), vec!["connect", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("API token", "•••".into()), vec!["connect", "back", "cancel"])
+            );
             assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Jira, Secret("t0k".into())));
         }
 
@@ -449,14 +458,17 @@ mod tokens {
         #[test]
         fn asks_the_workspace_first_with_the_saved_one_typed() {
             let b = on_plane();
-            assert_eq!((field(&b), b.labels()), (("workspace", "acme".into()), vec!["next", "cancel"]));
+            assert_eq!((field(&b), b.labels(ROOM.buttons)), (("workspace", "acme".into()), vec!["next", "cancel"]));
         }
 
         #[test]
         fn saves_the_workspace_and_then_asks_for_the_key() {
             let mut b = on_plane();
             assert_eq!(press(&mut b, KeyCode::Enter), Action::SavePlane { workspace: "acme".into() });
-            assert_eq!((field(&b), b.labels()), (("API key", String::new()), vec!["connect", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("API key", String::new()), vec!["connect", "back", "cancel"])
+            );
         }
 
         #[test]
@@ -510,14 +522,20 @@ mod tokens {
         fn asks_the_server_first_with_the_saved_one_typed() {
             let mut b = on_gitlab();
             b.gitlab_url = "https://gitlab.acme.dev".into();
-            assert_eq!((field(&b), b.labels()), (("server", "https://gitlab.acme.dev".into()), vec!["next", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("server", "https://gitlab.acme.dev".into()), vec!["next", "cancel"])
+            );
         }
 
         #[test]
         fn an_empty_server_is_saved_and_then_the_token_is_asked() {
             let mut b = on_gitlab();
             assert_eq!(press(&mut b, KeyCode::Enter), Action::SaveGitlab { url: String::new() });
-            assert_eq!((field(&b), b.labels()), (("access token", String::new()), vec!["connect", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("access token", String::new()), vec!["connect", "back", "cancel"])
+            );
         }
 
         #[test]
@@ -587,12 +605,32 @@ pub(crate) mod buttons {
 
     #[test]
     fn the_issue_offers_raw_copy_and_back_after_the_agent() {
-        assert_eq!(reading().labels(), ["start", "schedule", "agent…", "raw", "copy url", "back"]);
+        assert_eq!(reading().labels(ROOM.buttons), ["start", "schedule", "agent…", "raw", "copy url", "back"]);
+    }
+
+    #[test]
+    fn a_narrow_row_drops_schedule_so_start_stays() {
+        let b = reading();
+        let all = ["start", "schedule", "agent…", "raw", "copy url", "back"];
+        let width = all.iter().map(|label| label.chars().count() + 3).sum::<usize>() - 1;
+        assert_eq!(b.labels(width), all);
+        assert_eq!(b.labels(width - 1), ["start", "agent…", "raw", "copy url", "back"]);
+    }
+
+    #[test]
+    fn enter_starts_the_issue_after_schedule_was_pressed() {
+        let mut b = reading();
+        let schedule = button(&b, "schedule");
+        click(&mut b, schedule);
+        if b.picker.is_some() {
+            press(&mut b, KeyCode::Esc);
+        }
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(..)));
     }
 
     #[test]
     fn the_list_offers_refresh() {
-        assert_eq!(with_lists().labels(), ["start", "schedule", "refresh", "cancel"]);
+        assert_eq!(with_lists().labels(ROOM.buttons), ["start", "schedule", "refresh", "cancel"]);
     }
 
     #[test]
@@ -608,7 +646,7 @@ pub(crate) mod buttons {
         let pos = button(&b, "raw");
         click(&mut b, pos);
         assert_eq!(
-            (b.labels().contains(&"rendered"), body_text(&b)),
+            (b.labels(ROOM.buttons).contains(&"rendered"), body_text(&b)),
             (true, vec!["# Title".to_string(), String::new(), "    indented **bold**".into()])
         );
     }
@@ -759,11 +797,11 @@ mod place {
     #[test]
     fn where_is_offered_for_stories_only() {
         let mut b = two_places();
-        let story = b.labels();
+        let story = b.labels(ROOM.buttons);
         press(&mut b, KeyCode::Esc);
         press(&mut b, KeyCode::Down);
         press(&mut b, KeyCode::Enter);
-        assert_eq!((story.contains(&"where…"), b.labels().contains(&"where…")), (true, false));
+        assert_eq!((story.contains(&"where…"), b.labels(ROOM.buttons).contains(&"where…")), (true, false));
     }
 
     #[test]
@@ -773,7 +811,7 @@ mod place {
         b.tab_to(Tab::One(Source::Gitlab));
         b.loaded(Source::Gitlab, &Query::default(), Ok(vec![issue(Source::Gitlab, 5, "Checkout fails")]));
         press(&mut b, KeyCode::Enter);
-        assert!(!b.labels().contains(&"where…"), "{:?}", b.labels());
+        assert!(!b.labels(ROOM.buttons).contains(&"where…"), "{:?}", b.labels(ROOM.buttons));
         assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#5"));
     }
 

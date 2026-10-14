@@ -10,6 +10,22 @@ pub(crate) enum Field {
     Branch,
 }
 
+impl Field {
+    const ORDER: [Self; 3] = [Self::Prompt, Self::At, Self::Branch];
+
+    pub(crate) fn next(self) -> Self {
+        Self::ORDER[(self.index() + 1) % Self::ORDER.len()]
+    }
+
+    pub(crate) fn previous(self) -> Self {
+        Self::ORDER[(self.index() + Self::ORDER.len() - 1) % Self::ORDER.len()]
+    }
+
+    fn index(self) -> usize {
+        Self::ORDER.iter().position(|field| *field == self).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Choice {
     pub(crate) label: String,

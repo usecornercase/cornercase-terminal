@@ -174,3 +174,37 @@ mod has_remote {
         assert!(!has_remote(TempDir::new().path()));
     }
 }
+
+mod remote_urls {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn lists_each_remote_url_from_the_shared_config_also_in_a_worktree() {
+        let cloned = cloned_with_a_worktree("main");
+        let urls = remote_urls(&cloned.worktree);
+
+        assert_eq!(urls.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["origin"]);
+        assert_eq!(remote_urls(&cloned.clone), urls);
+    }
+
+    #[test]
+    fn reads_only_url_lines_of_remote_sections() {
+        let repo = repo_with_head("ref: refs/heads/main\n");
+        std::fs::write(
+            repo.path().join(".git/config"),
+            "[core]\n\turl = nope\n[remote \"origin\"]\n\turl = git@gitlab.com:acme/shop.git\n\turlx = no\n\
+             [remote \"up\"]\n\turl=https://github.com/acme/shop\n[branch \"main\"]\n\tremote = origin\n",
+        )
+        .expect("write config");
+
+        assert_eq!(
+            remote_urls(repo.path()),
+            [
+                ("origin".to_string(), "git@gitlab.com:acme/shop.git".to_string()),
+                ("up".to_string(), "https://github.com/acme/shop".to_string()),
+            ]
+        );
+        assert_eq!(remote_urls(git_repo(&[]).path()), []);
+    }
+}

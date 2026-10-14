@@ -67,9 +67,21 @@ fn buttons(screen: Rect) -> [Rect; 2] {
 fn reset(screen: Rect) -> [Rect; 2] {
     let r = row(screen, 7, 1);
     [
-        Rect::new(r.x, r.y, 14.min(r.width), 1),
-        Rect::new(r.x.saturating_add(15), r.y, r.width.saturating_sub(15).min(13), 1),
+        Rect::new(r.x, r.y, 14.min(r.width), r.height),
+        Rect::new(r.x.saturating_add(15), r.y, r.width.saturating_sub(15).min(13), r.height),
     ]
+}
+
+fn note(screen: Rect) -> Rect {
+    let r = inner(screen);
+    let buttons = r.bottom().saturating_sub(1);
+    let y = buttons.saturating_sub(2).max(r.y.saturating_add(15)).min(buttons);
+    Rect::new(r.x, y, r.width, buttons - y)
+}
+
+pub(crate) fn first_line(editor: &Editor, field: Rect) -> usize {
+    let (line, _) = editor.position(usize::from(field.width.max(1)));
+    line.saturating_sub(usize::from(field.height).saturating_sub(1))
 }
 
 pub(crate) fn hit(screen: Rect, pos: Position) -> Option<Hit> {
@@ -110,8 +122,16 @@ fn draw_editor(f: &mut Frame, screen: Rect, editor: &Editor, field: Field, focus
     let r = self::field(screen, field);
     let width = usize::from(r.width.max(1));
     let (line, col) = editor.position(width);
-    let start = line.saturating_sub(usize::from(r.height).saturating_sub(1));
-    let chars: Vec<_> = editor.text().chars().collect();
+    let start = first_line(editor, r);
+    let chars: Vec<_> = editor
+        .text()
+        .chars()
+        .map(|c| match c {
+            '\n' => '↵',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect();
     let lines: Vec<_> =
         editor.lines(width).into_iter().skip(start).map(|range| chars[range].iter().collect::<String>()).collect();
     f.render_widget(Paragraph::new(lines.join("\n")).style(style.add_modifier(Modifier::BOLD)), r);
@@ -159,7 +179,8 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     draw_secondary(f, view, claude, "claude reset");
     draw_secondary(f, view, codex, "codex reset");
     if let Some(note) = &form.note {
-        let r = row(screen, 17, 2);
+        let r = self::note(screen);
+        f.render_widget(Clear, r);
         f.render_widget(
             Paragraph::new(note.as_str())
                 .style(Style::default().fg(if form.busy { view.muted } else { Color::Red }))

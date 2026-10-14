@@ -654,6 +654,7 @@ pub(super) fn room(area: Rect) -> Room {
         list_rows: usize::from(list.height),
         detail_rows: usize::from(detail.height),
         detail_width: usize::from(detail.width),
+        buttons: usize::from(ui::issue_buttons_width(issues)),
     }
 }
 
@@ -768,7 +769,7 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
         body,
         note,
         hint,
-        buttons: browser.labels(),
+        buttons: browser.labels(room.buttons),
     })
 }
 
