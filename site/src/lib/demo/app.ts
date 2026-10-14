@@ -7,6 +7,8 @@ import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
+import { type DiagramHit, type PanelView, live, plan, scrolled as flowScrolled } from './flow';
+import type { Run } from './flowrun';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
@@ -93,6 +95,10 @@ const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neith
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
 
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
+
+const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays the flow in payments';
+
+const NO_RUN = 'this workspace runs no flow';
 
 export interface SettingsRow {
   id: string;
@@ -344,6 +350,10 @@ export class App {
     ['Connect Linear for the team', true],
   ]);
   files = new FilesPanel();
+  runs: Run[] = [];
+  flowOpen = false;
+  flowScroll = 0;
+  private flowHinted = false;
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
@@ -457,6 +467,10 @@ export class App {
 
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
+    if (!this.flowHinted && !this.flowOpen && this.shownRun()) {
+      this.flowHinted = true;
+      this.emit('narrate', this.narration.flowHint);
+    }
     this.watchAgents();
     this.keepAwake();
     this.grid.reset();
@@ -522,7 +536,8 @@ export class App {
             if (measured) pane.memory = agent ? agent.memory : pane.shell.memory;
             followAgent(pane, agent?.name ?? null);
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
-            if (status && agent) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
+            const member = this.runs.some((r) => r.members.slice(1).some((m) => m.pane === pane.id));
+            if (status && agent && !(member && status === 'done')) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
             else if (pane.since === now && !pane.notified) this.after(NOTIFY_AFTER, () => this.dirty());
           }
         }
@@ -1039,7 +1054,9 @@ export class App {
   }
 
   openNewMenu(at: Pos): void {
-    this.overlay = { kind: 'menu', at, actions: [{ kind: 'openProject' }, { kind: 'newGroup' }] };
+    const actions: MenuAction[] = [{ kind: 'openProject' }, { kind: 'newGroup' }];
+    if (this.project()) actions.push({ kind: 'startFlow' });
+    this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
 
@@ -1219,7 +1236,106 @@ export class App {
   }
 
   panelShown(): boolean {
-    return this.changesShown() || this.todo.open || this.filesShown();
+    return this.changesShown() || this.todo.open || this.filesShown() || this.flowShown();
+  }
+
+  runOf(workspace: number): Run | undefined {
+    return this.runs.find((r) => r.workspace === workspace);
+  }
+
+  shownRun(): Run | undefined {
+    const w = this.workspace();
+    return w ? this.runOf(w.id) : undefined;
+  }
+
+  flowShown(): boolean {
+    return this.flowOpen && !!this.shownRun();
+  }
+
+  flowPlaying(run: Run): boolean {
+    return this.flowShown() && this.shownRun() === run;
+  }
+
+  toggleFlow(): void {
+    if (this.flowOpen) this.flowOpen = false;
+    else if (this.shownRun()) {
+      this.changesOpen = false;
+      this.closeTodo();
+      this.files.close();
+      this.flowOpen = true;
+      this.flowScroll = 0;
+      this.flowHinted = true;
+      this.emit('narrate', this.narration.flow);
+    } else this.bug(NO_RUN);
+    this.nav = null;
+    this.dirty();
+  }
+
+  showFlowOf(workspace: number): void {
+    for (const [p, project] of this.projects.entries()) {
+      const w = project.workspaces.findIndex((x) => x.id === workspace);
+      if (w < 0) continue;
+      this.selectProject(p);
+      this.selectWorkspace(p, w);
+      if (!this.flowOpen) this.toggleFlow();
+      return;
+    }
+  }
+
+  flowView(): PanelView | null {
+    const run = this.shownRun();
+    if (!run) return null;
+    const state = (role: string) => {
+      const id = run.members.find((m) => m.role === role)?.pane;
+      const found = id === undefined ? null : this.findPane(id);
+      if (!found) return id === undefined ? 'none' : 'closed';
+      return paneStatus(found.pane) ?? 'none';
+    };
+    const diagram = live(plan(run.flow), run.progress, state, this.now());
+    return { name: run.flow.name, task: run.task, diagram, scroll: this.flowScroll };
+  }
+
+  scrollFlow(delta: number): boolean {
+    const view = this.flowView();
+    if (!view) return false;
+    this.flowScroll = flowScrolled(this.areas().changes, view, delta);
+    this.dirty();
+    return true;
+  }
+
+  flowClick(hit: DiagramHit): void {
+    const run = this.shownRun();
+    if (!run) return;
+    if (hit.role) {
+      const pane = run.members.find((m) => m.role === hit.role)?.pane;
+      if (pane === undefined || !this.findPane(pane)) return;
+      if (this.areas().compact) this.flowOpen = false;
+      this.jumpToPane(pane);
+    } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, scroll: 0 };
+    this.dirty();
+  }
+
+  flowMessage(o: { workspace: number; edge: string }): { from: string; to: string; text: string } | null {
+    const run = this.runOf(o.workspace);
+    if (!run) return null;
+    const progress = run.progress;
+    const [kind, a, b] = o.edge.split(':');
+    const edge =
+      kind === 'outside'
+        ? { kind: 'outside' as const, from: a === 'null' ? null : Number(a), to: Number(b) }
+        : { kind: kind as 'forward' | 'loop', stage: Number(a) };
+    return progress.message(edge) ?? null;
+  }
+
+  copyFlowMessage(): void {
+    const o = this.overlay;
+    const message = o?.kind === 'flowMessage' ? this.flowMessage(o) : null;
+    this.overlay = null;
+    if (message) {
+      this.emit('copy', message.text);
+      this.notify('copied to clipboard');
+    }
+    this.dirty();
   }
 
   changesShown(): boolean {
@@ -1278,6 +1394,7 @@ export class App {
     if (this.changesOpen) {
       this.closeTodo();
       this.files.close();
+      this.flowOpen = false;
     }
     if (this.changesFilter) this.changesFilter.focused = false;
     this.nav = null;
@@ -1290,6 +1407,7 @@ export class App {
     else {
       this.changesOpen = false;
       this.files.close();
+      this.flowOpen = false;
       this.todo.open = true;
       this.emit('narrate', this.narration.todo);
     }
@@ -1306,6 +1424,7 @@ export class App {
     this.todo.field = null;
     this.closeTodo();
     this.changesOpen = false;
+    this.flowOpen = false;
     if (this.changesFilter) this.changesFilter.focused = false;
     this.files.close();
     this.dirty();
@@ -1419,6 +1538,7 @@ export class App {
   private openFiles(): void {
     if (this.files.open) return;
     this.changesOpen = false;
+    this.flowOpen = false;
     this.closeTodo();
     this.files.open = true;
   }
@@ -1764,6 +1884,7 @@ export class App {
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
+    if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -1795,6 +1916,8 @@ export class App {
     if (a.kind === 'newGroup') return 'new group';
     if (a.kind === 'base') return a.branch;
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
+    if (a.kind === 'showFlow') return 'show flow';
+    if (a.kind === 'startFlow') return 'start a flow…';
     return a.action;
   }
 
@@ -1852,6 +1975,8 @@ export class App {
       this.overlay = { kind: 'newGroup', input: '' };
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
+    else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
+    else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2290,6 +2415,8 @@ export class App {
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'away') this.openSettingsOn(4, 'telegram');
     else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
+    else if (a.kind === 'flow') this.toggleFlow();
+    else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else if (a.kind === 'quit') this.quit();
   }
 
@@ -2357,6 +2484,7 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
+      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '4 built in', note: 'teams of agents that work through a plan' });
       return rows;
     }
     if (page === 4) {
@@ -2505,6 +2633,8 @@ export class App {
       o.notice = ICON_BAR_NEEDS;
     } else if (row.id === 'pulls') {
       o.notice = PULL_REQUESTS_NEED;
+    } else if (row.id === 'flows') {
+      o.notice = FLOWS_NEED;
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;
@@ -2558,6 +2688,22 @@ export class App {
       ),
     );
     return markdown(restartText(running), width);
+  }
+
+  flowMessageLines(width: number): Line[] {
+    const o = this.overlay;
+    const m = o?.kind === 'flowMessage' ? this.flowMessage(o) : null;
+    return m ? [[seg('sent', { fg: 8 })], [], ...markdown(m.text, width)] : [];
+  }
+
+  scrollFlowMessage(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'flowMessage') return false;
+    const notes = updateNotes(this.cols, this.rows);
+    const max = Math.max(0, this.flowMessageLines(notes.w).length - notes.h);
+    o.scroll = Math.max(0, Math.min(max, o.scroll + dy));
+    this.dirty();
+    return true;
   }
 
   scrollRestart(dy: number): boolean {
@@ -2860,7 +3006,7 @@ export class App {
           scroll: 0,
           empty: '',
           hint: `enter starts it${more}`,
-          buttons: ['start', 'agent…', o.raw ? 'rendered' : 'raw', 'copy url', 'back'],
+          buttons: ['start', 'start a flow', 'agent…', o.raw ? 'rendered' : 'raw', 'copy url', 'back'],
           detail: lines,
           picking: false,
         };
@@ -3077,6 +3223,10 @@ export class App {
           this.dirty();
         });
       }
+      return this.dirty();
+    }
+    if (label === 'start a flow') {
+      o.notice = FLOWS_NEED;
       return this.dirty();
     }
     if (label === 'agent…') {
@@ -3553,6 +3703,12 @@ export class App {
     if (o.kind === 'usage' && ['Tab', 'ArrowLeft', 'ArrowRight'].includes(k.key)) { this.usagePage(1 - this.usage.page); return true; }
     if (o.kind === 'groupStyle' || o.kind === 'usage') {
       if (k.key === 'Escape' || k.key === 'Enter') this.closeOverlay();
+      return true;
+    }
+    if (o.kind === 'flowMessage') {
+      if (k.key === 'Escape') this.closeOverlay();
+      else if (k.key === 'Enter') this.copyFlowMessage();
+      else if (k.key === 'ArrowDown' || k.key === 'ArrowUp') this.scrollFlowMessage(k.key === 'ArrowDown' ? 1 : -1);
       return true;
     }
     if (o.kind === 'restart') {

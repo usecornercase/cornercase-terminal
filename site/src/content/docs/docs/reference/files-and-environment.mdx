@@ -11,6 +11,7 @@ import { Aside } from '@astrojs/starlight/components';
 | --- | --- | --- |
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place. | `~/.local/bin/` with the install script; Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
+| `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
 | `secrets.json` | GitLab, Shortcut, Linear, Jira and Plane tokens and the [Telegram](../../guides/telegram/) bot's token, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `telegram.json` | The [Telegram](../../guides/telegram/) bot's name and the chat paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
@@ -36,6 +37,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | --- | --- |
 | Socket, lock and log | `/tmp/cc-demo/server.sock`, `server.lock`, `server.log` |
 | Settings and tokens | `/tmp/cc-demo/config.json`, `secrets.json` |
+| Your flows | `/tmp/cc-demo/flows/` |
 | Paired browsers | `/tmp/cc-demo/browsers.json` |
 | Telegram bot and chat | `/tmp/cc-demo/telegram.json` |
 | Session | `/tmp/cc-demo/server.json` |
@@ -52,7 +54,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 - For Codex's model and context use, and its last message for `read --last-message`, cornercase reads the rollout JSONL held open by each running Codex process under its `$CODEX_HOME/sessions/` or `~/.codex/sessions/`. It follows npm wrapper children and reads the home from that agent's environment, so concurrent sessions are associated by process rather than folder. When Codex's background `app-server` holds the rollouts instead (its pid is in `app-server-daemon/daemon.pid`), cornercase takes the one whose session folder is the agent's, if only one Codex runs there. It never writes these files or reads Codex credentials.
 - For opencode, cornercase reads the SQLite database each running opencode holds open, `~/.local/share/opencode/opencode.db` by default, to show what it is doing, its model and its context use (and its last message, for `read --last-message`), and the list of models opencode caches in `~/.cache/opencode/models.json` for each model's name and context window. It opens the database read only, never writes either file, and never reads opencode's credentials.
 - For Grok Build, cornercase reads `$GROK_HOME` (or `~/.grok`): `active_sessions.json`, then `sessions/<encoded cwd>/<id>/` (`events.jsonl`, `updates.jsonl`, `chat_history.jsonl`, `summary.json` and `signals.json`). A directory name that does not decode is accepted when its `.cwd` file, or `summary.json`'s `info.cwd`, is the pane's folder. These files are only read. `auth.json` is never read.
-- Inside your projects, cornercase only changes what you ask for: the worktrees you create (which git records in the repository's `.git` folder) and the files `.worktreeinclude` copies into them.
+- Inside your projects, cornercase only changes what you ask for: the worktrees you create (which git records in the repository's `.git` folder), the files `.worktreeinclude` copies into them, and the [flows](../../guides/flows/#where-flows-are-kept) you save for the project in `.cornercase/flows/`.
 
 ## Environment variables
 

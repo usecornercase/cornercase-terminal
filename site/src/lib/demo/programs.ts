@@ -700,8 +700,58 @@ const LOOKS: Record<string, Look> = {
 
 const tool = (name: string, arg: string, note: string): Tool => ({ name, arg, note });
 
+const FLOW_TASKS: [string, Task][] = [
+  [
+    'before handling a webhook',
+    {
+      tools: [
+        tool('Read', 'src/webhooks.ts', 'Read 5 lines'),
+        tool('Write', 'src/signature.ts', 'Wrote 16 lines to src/signature.ts'),
+        tool('Update', 'src/webhooks.ts', 'Updated src/webhooks.ts with 4 additions'),
+        tool('Bash', 'npm test', '12 passed'),
+      ],
+      reply: ['**Done.** `onEvent()` checks the `Stripe-Signature` header with the endpoint secret first and answers 400 when it does not match. Committed as `Verify webhook signatures`.'],
+      took: '51s',
+    },
+  ],
+  [
+    'in constant time',
+    {
+      tools: [tool('Update', 'src/signature.ts', 'Updated src/signature.ts with 3 additions and 1 removal'), tool('Bash', 'npm test', '13 passed')],
+      reply: ['**Fixed.** The signatures are compared with `timingSafeEqual`, and a test checks a signature of the wrong length. Committed.'],
+      took: '24s',
+    },
+  ],
+  [
+    'review the signature check',
+    {
+      tools: [tool('Bash', 'git diff main', '2 files changed, 23 insertions'), tool('Read', 'src/signature.ts', 'Read 16 lines')],
+      reply: ['1. `src/signature.ts:11` compares the signatures with `===`, which leaks timing: use `crypto.timingSafeEqual`.'],
+      took: '19s',
+    },
+  ],
+  [
+    'review it again',
+    { tools: [tool('Bash', 'git diff main', '2 files changed, 26 insertions')], reply: ['No findings.'], took: '11s' },
+  ],
+  [
+    'security problems',
+    { tools: [tool('Read', 'src/signature.ts', 'Read 16 lines'), tool('Read', 'src/webhooks.ts', 'Read 9 lines')], reply: ['No findings.'], took: '17s' },
+  ],
+  [
+    'test the webhooks',
+    {
+      tools: [tool('Bash', 'npm test', '13 passed'), tool('Bash', 'curl -X POST localhost:3000/webhooks', '400 Bad Request')],
+      reply: ['**PASS.** A signed event is handled, and a forged one gets 400 without touching the charges.'],
+      took: '22s',
+    },
+  ],
+];
+
 export function taskFor(prompt: string, place: Place): Task {
   const p = prompt.toLowerCase();
+  const flow = FLOW_TASKS.find(([key]) => p.includes(key));
+  if (flow) return { ...flow[1] };
   if (p.includes('482') || p.includes('address')) {
     return {
       tools: [
@@ -1107,6 +1157,27 @@ export class Agent implements Program {
 
   setPace(pace: number): void {
     if (this.run) this.run.pace = pace;
+  }
+
+  begin(prompt: string): void {
+    this.add([seg('> ', DIMMED), seg(prompt)], 2);
+    this.add([]);
+    this.phase = 'working';
+    this.ticks = 0;
+    this.spin();
+    this.host.dirty();
+  }
+
+  tool(name: string, arg: string, note: string): void {
+    this.call(name, arg, note);
+    this.host.dirty();
+  }
+
+  end(reply: string, took: string): void {
+    this.said({ tools: [], reply: [reply], took });
+    this.phase = 'ready';
+    this.stopSpin();
+    this.host.dirty();
   }
 
   ask(file: string): boolean {

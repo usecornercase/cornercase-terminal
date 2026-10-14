@@ -15,7 +15,7 @@ cornercase starts coding agents for you when you start an [issue](../../guides/i
 | `claude` | `claude` | yes |
 | `codex` | `codex` | yes |
 | `gemini` | `gemini` | yes |
-| `opencode` | `opencode` | |
+| `opencode` | `opencode` | yes |
 | `grok` | `grok` | yes |
 | `cursor` | `cursor-agent` | |
 | `copilot` | `copilot` | |
@@ -41,7 +41,7 @@ When you press **start**, cornercase uses, in this order:
 
 <Screen
   name="settings-default-agent"
-  alt="Which agent takes an issue by default? auto, the agent in your tab, otherwise ask; then claude, codex, gemini, opencode, cursor and the other agents with their commands"
+  alt="Which agent takes an issue by default? auto, the agent in your tab, otherwise ask; then claude, codex, gemini, opencode, grok, cursor and the other agents with their commands"
   crop={[2, 4, 106, 21]}
 />
 
@@ -98,6 +98,8 @@ Each agent starts with its command followed by its arguments, `agent_args` in `c
 | `gemini` | auto edit | `--approval-mode auto_edit` |
 | | plan | `--approval-mode plan` |
 | | yolo (dangerous) | `--yolo` |
+| `opencode` | plan | `--agent plan` |
+| | auto (dangerous) | `--auto` |
 | `grok` | accept edits | `--permission-mode acceptEdits` |
 | | auto | `--permission-mode auto` |
 | | always approve (dangerous) | `--always-approve` |

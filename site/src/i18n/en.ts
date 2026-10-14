@@ -149,6 +149,7 @@ export const page = {
         name: 'For your agents',
         items: [
           ['Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.'],
+          ['Flows, a team per task', 'One agent codes, others review and test, and an orchestrator runs them, from a template. The Flow panel shows the work move.'],
           ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.'],
           ['Usage and stats', 'Your plan limits and the work your agents did in parallel.'],
           ['On Telegram', 'Away from the desk? Your agents message you there. Reply, and it reaches them.'],
@@ -251,6 +252,8 @@ export const demo = {
     prompt: 'The issue is in the prompt. Click the pane and press Enter to send it.',
     detached: (shells: number) => `Gone, but not stopped: your ${shells} shells keep running, agents included.`,
     attached: 'And we’re back. Same projects, same tabs, everything still running.',
+    flowHint: 'This worktree runs a flow, a team of agents. Right-click it and pick show flow to watch the plan.',
+    flow: 'The Full issue flow: an orchestrator agent sends the work from role to role. Boxes light up as they work. Click one to see its tab, an arrow to read what went along it.',
   },
 };
 

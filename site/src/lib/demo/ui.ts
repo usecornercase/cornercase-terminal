@@ -4,6 +4,7 @@ import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contai
 import type { AgentRow, App } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
+import { drawFlow } from './flow';
 import { drawTodo } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
@@ -210,6 +211,10 @@ export class Painter {
     this.span(r.x + indent, r.y, '─'.repeat(Math.max(0, r.w - indent - 1)), CYAN, Math.max(0, r.w - indent));
   }
 
+  statusSeg(status: Status): Seg {
+    return statusIcon(status, spinAt(this.app));
+  }
+
   region(region: Region): void {
     if (!isEmpty(region.r)) this.regions.push(region);
   }
@@ -315,6 +320,10 @@ export class Painter {
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
+    else if (app.flowShown() && !isEmpty(areas.changes)) {
+      const view = app.flowView();
+      if (view) drawFlow(this, areas, view);
+    }
     this.overlay(areas);
     if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
@@ -973,6 +982,7 @@ export class Painter {
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
     if (o.kind === 'restart') return this.restart(o.scroll);
+    if (o.kind === 'flowMessage') return this.flowMessage(o.scroll);
     const confirm = this.app.confirmView();
     if (confirm) return this.confirm(confirm);
     if (o.kind === 'picker') return this.picker();
@@ -1020,11 +1030,11 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void): void {
-    const cancel = intersect(rect(right(row) - buttonWidth('cancel'), row.y, buttonWidth('cancel'), 1), row);
+  private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
+    const cancel = intersect(rect(right(row) - buttonWidth(label), row.y, buttonWidth(label), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
     this.submitButton(ok, submit, onSubmit);
-    this.span(cancel.x, cancel.y, ' cancel ', this.pill(cancel, false));
+    this.span(cancel.x, cancel.y, ` ${label} `, this.pill(cancel, false));
     this.region({ r: cancel, click: onCancel, cursor: 'pointer' });
   }
 
@@ -1200,6 +1210,24 @@ export class Painter {
     lines.slice(first, first + notes.h).forEach((line, i) => drawLine(this.g, notes.x, notes.y + i, line, notes.w));
     this.region({ r: notes, wheel: (dy) => app.scrollRestart(dy) });
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), RESTART_SUBMIT, () => app.restartNow(), () => app.closeOverlay());
+  }
+
+  private flowMessage(scroll: number): void {
+    const app = this.app;
+    const o = app.overlay;
+    const message = o?.kind === 'flowMessage' ? app.flowMessage(o) : null;
+    if (!message) return;
+    const r = pickerArea(app.cols, app.rows);
+    this.dialogBackdrop(r);
+    this.box(r, 'Message');
+    const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
+    this.span(c.x, c.y, truncateRight(`${message.from} → ${message.to}`, c.w), {});
+    const notes = updateNotes(app.cols, app.rows);
+    const lines = app.flowMessageLines(notes.w);
+    const first = Math.min(scroll, Math.max(0, lines.length - notes.h));
+    lines.slice(first, first + notes.h).forEach((line, i) => drawLine(this.g, notes.x, notes.y + i, line, notes.w));
+    this.region({ r: notes, wheel: (dy) => app.scrollFlowMessage(dy) });
+    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), 'copy', () => app.copyFlowMessage(), () => app.closeOverlay(), 'done');
   }
 
   private picker(): void {

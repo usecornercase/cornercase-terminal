@@ -524,6 +524,10 @@ export const MODES: Record<string, [string, string][]> = {
     ['plan', '--approval-mode plan'],
     ['yolo (dangerous)', '--yolo'],
   ],
+  opencode: [
+    ['plan', '--agent plan'],
+    ['auto (dangerous)', '--auto'],
+  ],
   grok: [
     ['accept edits', '--permission-mode acceptEdits'],
     ['auto', '--permission-mode auto'],
