@@ -138,11 +138,12 @@ mod plan {
     }
 
     #[test]
-    fn every_role_takes_its_own_colour_and_none_is_red() {
-        let colours: Vec<Color> = (0..7).map(role_colour).collect();
+    fn every_role_takes_its_own_colour_and_none_is_red_or_the_waiting_orange() {
+        let colours: Vec<Color> = (0..6).map(role_colour).collect();
         let unique: std::collections::HashSet<_> = colours.iter().collect();
-        assert_eq!((unique.len(), colours.contains(&Color::Indexed(9))), (7, false));
-        assert_eq!(role_colour(7), role_colour(0));
+        let taken = [Color::Indexed(9), WAITING_COLOR].iter().any(|c| colours.contains(c));
+        assert_eq!((unique.len(), taken), (6, false));
+        assert_eq!(role_colour(6), role_colour(0));
     }
 
     #[test]
@@ -250,6 +251,12 @@ mod hits {
         Position::new(x, y)
     }
 
+    fn cell_at(view: &View, at: Position) -> String {
+        let mut t = Terminal::new(TestBackend::new(AREA.right(), AREA.bottom())).expect("terminal");
+        t.draw(|f| draw(f, AREA, view, None)).expect("draw");
+        t.backend().buffer()[(at.x, at.y)].symbol().to_string()
+    }
+
     #[test]
     fn a_box_names_its_role() {
         let view = panel(Diagram::plan(&full_issue(), MUTED, false));
@@ -265,10 +272,44 @@ mod hits {
         let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
         let view = panel(d);
         let exit = position(&view, "┃─╯");
-        assert_eq!(hit(AREA, &view, Position { x: exit.x + 1, ..exit }), Some(Hit::Edge(Edge::Loop(1))));
+        assert_eq!(hit(AREA, &view, Position { x: exit.x + 1, ..exit }), Some(Hit::Edge(Edge::Loop(1), None)));
         assert_eq!(hit(AREA, &view, position(&view, "◀")), None);
-        assert_eq!(hit(AREA, &view, position(&view, "findings")), Some(Hit::Edge(Edge::Loop(1))));
-        assert_eq!(hit(AREA, &view, position(&view, "▼")), Some(Hit::Edge(Edge::Forward(0))));
+        assert_eq!(hit(AREA, &view, position(&view, "findings")), Some(Hit::Edge(Edge::Loop(1), None)));
+        assert_eq!(hit(AREA, &view, position(&view, "┴")), Some(Hit::Edge(Edge::Forward(0), None)));
+    }
+
+    #[test]
+    fn a_branch_names_the_role_it_leads_to_and_takes_only_its_own_message() {
+        let flow = full_issue();
+        let start = Instant::now();
+        let progress = progress(&flow, &["coder", "reviewer"], start);
+        let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
+        let view = panel(d);
+        let reviewer = position(&view, "▼");
+        let security = Position { x: reviewer.x + 22, ..reviewer };
+        assert_eq!(cell_at(&view, security), "▼");
+        let forward = |to: &str| Some(Hit::Edge(Edge::Forward(0), Some(to.into())));
+        assert_eq!(hit(AREA, &view, reviewer), forward("reviewer"));
+        assert_eq!(hit(AREA, &view, Position { x: reviewer.x + 1, y: reviewer.y - 1 }), forward("reviewer"));
+        assert_eq!(hit(AREA, &view, security), None);
+    }
+
+    #[test]
+    fn hovering_a_branch_lights_its_way_and_not_the_others() {
+        let flow = full_issue();
+        let start = Instant::now();
+        let progress = progress(&flow, &["coder", "reviewer", "security"], start);
+        let d = Diagram::plan(&flow, MUTED, false).live(&progress, working, start + Duration::from_secs(9));
+        let view = panel(d);
+        let reviewer = position(&view, "▼");
+        let security = Position { x: reviewer.x + 22, ..reviewer };
+        let mut t = Terminal::new(TestBackend::new(AREA.right(), AREA.bottom())).expect("terminal");
+        t.draw(|f| draw(f, AREA, &view, Some(reviewer))).expect("draw");
+        let fg = |at: Position| t.backend().buffer()[(at.x, at.y)].fg;
+        let above = |at: Position| Position { y: at.y - 1, ..at };
+        let trunk = position(&view, "┴");
+        assert_eq!([fg(reviewer), fg(above(reviewer)), fg(trunk)], [Color::Cyan; 3]);
+        assert_eq!([fg(security), fg(above(security))], [role_colour(1); 2]);
     }
 
     #[test]
@@ -298,5 +339,54 @@ mod hits {
         t.draw(|f| draw(f, AREA, &view, None)).expect("draw");
         assert_eq!((find(&t, "Full issue"), find(&t, "fix the login")), (Some((11, 2)), Some((11, 3))));
         assert_eq!(find(&t, "more"), None);
+    }
+}
+
+mod limits {
+    use super::*;
+
+    fn renamed(mut flow: Flow, from: &str, to: &str) -> Flow {
+        for role in flow.roles.iter_mut().filter(|role| role.name == from) {
+            role.name = to.into();
+        }
+        for name in flow.stages.iter_mut().flat_map(|stage| &mut stage.roles).filter(|name| *name == from) {
+            *name = to.into();
+        }
+        flow
+    }
+
+    fn shown(t: &Terminal<TestBackend>, y: u16) -> String {
+        let buf = t.backend().buffer();
+        let mut row = String::new();
+        let mut x = 0;
+        while x < buf.area.width {
+            let symbol = buf[(x, y)].symbol();
+            row.push_str(symbol);
+            x += u16::try_from(text::cells(symbol)).unwrap_or(1).max(1);
+        }
+        row
+    }
+
+    #[test]
+    fn a_loop_label_longer_than_any_screen_takes_its_short_form() {
+        let mut flow = full_issue();
+        flow.stages[1].back.as_mut().expect("a loop").when = "w".repeat(40_000);
+        let t = render(&Diagram::plan(&flow, MUTED, false), 80);
+        assert!(find(&t, "≤3").is_some());
+    }
+
+    #[test]
+    fn a_wide_name_is_cut_by_its_cells_and_stays_in_its_box() {
+        let flow = renamed(renamed(full_issue(), "reviewer", "编码实现角色审查员"), "security", "安全审查角色");
+        let d = Diagram::plan(&flow, MUTED, false);
+        let t = render(&d, 46);
+        let (x, y) = find(&t, "编").expect("the wide name");
+        let row = shown(&t, y);
+        assert_eq!(text::cells(&row), 46, "{row}");
+        assert!(row.contains(" 编码实现角色… ") && row.contains(" 安全审查角色 "), "{row}");
+        let (end, _) = find(&t, "…").expect("the cut");
+        let area = Rect::new(0, 0, 46, diagram_height(&d, 46));
+        let owners: Vec<_> = (x..=end).map(|x| diagram_hit(area, &d, 0, Position::new(x, y))).collect();
+        assert!(owners.iter().all(|hit| *hit == Some(Hit::Role("编码实现角色审查员".into()))), "{owners:?}");
     }
 }

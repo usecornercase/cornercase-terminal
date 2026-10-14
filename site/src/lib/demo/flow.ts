@@ -8,7 +8,7 @@ import { truncateRight } from './text';
 export const TRAVEL = 1000;
 export const LABEL = 'Flow';
 const ORCHESTRATOR = 'orchestrator';
-const ROLE_COLOURS = [12, 2, 99, 208, 214, 205, 6];
+const ROLE_COLOURS = [12, 2, 99, 214, 205, 6];
 const BOX_HEIGHT = 3;
 const MIN_PREFERRED = 20;
 const MAX_PREFERRED = 34;
@@ -26,6 +26,7 @@ const DARK: Style = { fg: 8 };
 export type Edge = { kind: 'forward'; stage: number } | { kind: 'loop'; stage: number } | { kind: 'outside'; from: number | null; to: number };
 
 export const edgeKey = (e: Edge): string => (e.kind === 'outside' ? `outside:${e.from}:${e.to}` : `${e.kind}:${e.stage}`);
+const sentKey = (edge: string, to: string): string => `${edge}|${to}`;
 
 export interface FlowRole {
   name: string;
@@ -75,8 +76,13 @@ export class Progress {
     return this.counted[stage] ?? 0;
   }
 
-  message(edge: Edge): Message | undefined {
-    return this.along.get(edgeKey(edge));
+  message(edge: Edge, to: string | null = null): Message | undefined {
+    const key = `${edgeKey(edge)}|`;
+    return [...this.along].reverse().find(([k, m]) => k.startsWith(key) && (to === null || m.to === to))?.[1];
+  }
+
+  sent(): string[] {
+    return [...this.along.keys()];
   }
 
   travelled(now: number): number | null {
@@ -100,7 +106,9 @@ export class Progress {
     if (moved) {
       const [edge, from] = moved;
       if (edge.kind === 'outside') this.outside = edge;
-      this.along.set(edgeKey(edge), m);
+      const key = sentKey(edgeKey(edge), m.to);
+      this.along.delete(key);
+      this.along.set(key, m);
       this.last = { edge, from, to: m.to, at: m.at };
     }
     this.active = target;
@@ -177,7 +185,9 @@ export function live(d: Diagram, progress: Progress, state: (role: string) => No
     ...d.loops.flatMap((l, stage): Edge[] => (l ? [{ kind: 'loop', stage }] : [])),
     ...(progress.outside ? [progress.outside] : []),
   ];
-  d.live = { lit, outside: progress.outside, ended: d.orchestrator.state === 'pending', messages: edges.filter((e) => progress.message(e)).map(edgeKey) };
+  const keys = new Set(edges.map(edgeKey));
+  const messages = progress.sent().filter((key) => keys.has(key.split('|')[0]));
+  d.live = { lit, outside: progress.outside, ended: d.orchestrator.state === 'pending', messages };
   return d;
 }
 
@@ -511,6 +521,7 @@ export function diagramHeight(d: Diagram, width: number): number {
 export interface DiagramHit {
   role?: string;
   edge?: string;
+  to?: string | null;
 }
 
 export function drawDiagram(p: Painter, area: Rect, d: Diagram, scroll: number, click: (hit: DiagramHit) => void): void {
@@ -534,25 +545,43 @@ export function drawDiagram(p: Painter, area: Rect, d: Diagram, scroll: number, 
   const hover = p.app.hover;
   const local: At | null = hover && contains(area, hover.x, hover.y) ? [hover.x - ox, hover.y - area.y + scroll] : null;
   const onLabel = (at: At) => g.labels.find((l) => l.at[1] === at[1] && at[0] >= l.at[0] && at[0] < l.at[0] + len(l.text));
-  const edgeAt = (at: At | null): string | undefined => {
+  const branchAt = (edge: string, at: At): number | null => {
+    const [kind, stage] = edge.split(':');
+    const entries = kind === 'forward' ? (g.gaps[Number(stage)]?.entries ?? []) : [];
+    const on = entries.flatMap((path, j) => (path.some(([x, y]) => x === at[0] && y === at[1]) ? [j] : []));
+    return on.length === 1 ? on[0] : null;
+  };
+  const roleOf = (edge: string, branch: number | null): string | null =>
+    branch === null ? null : (d.stages[Number(edge.split(':')[1]) + 1]?.[branch]?.role ?? null);
+  const sent = (edge: string, to: string | null) => [...clickable].some((k) => k.startsWith(`${edge}|`) && (to === null || k === `${edge}|${to}`));
+  const arrowAt = (at: At | null): { edge: string; branch: number | null } | undefined => {
     if (!at) return undefined;
     const cell = g.cells.get(`${at[0]},${at[1]}`);
     const label = onLabel(at);
-    return [...(cell?.edges ?? []), ...(label ? [edgeKey({ kind: 'loop', stage: label.stage })] : [])].find((e) => clickable.has(e));
+    const onCell = (cell?.edges ?? []).map((edge) => ({ edge, branch: branchAt(edge, at) }));
+    const onText = label ? [{ edge: edgeKey({ kind: 'loop', stage: label.stage }), branch: null }] : [];
+    return [...onCell, ...onText].find((a) => sent(a.edge, roleOf(a.edge, a.branch)));
   };
-  const hovered = edgeAt(local);
+  const hovered = arrowAt(local);
+  const way = (() => {
+    if (!hovered || hovered.branch === null) return null;
+    const gap = g.gaps[Number(hovered.edge.split(':')[1])];
+    const cells = gap ? [...gap.merges.flat(), ...gap.middle, ...(gap.entries[hovered.branch] ?? [])] : [];
+    return new Set(cells.map(([x, y]) => `${x},${y}`));
+  })();
   const litKey = live?.lit ? edgeKey(live.lit.edge) : null;
   const lineColour = p.lineColour;
-  const colour = (edges: string[]): Style => {
-    if (hovered && edges.includes(hovered)) return { fg: 6, add: BOLD };
+  const colour = (edges: string[], at: At | null = null): Style => {
+    if (hovered && edges.includes(hovered.edge) && (!way || !at || way.has(`${at[0]},${at[1]}`))) return { fg: 6, add: BOLD };
     if (litKey && live?.lit && edges.includes(litKey)) return { fg: live.lit.colour };
     return { fg: lineColour };
   };
   for (const cell of g.cells.values()) {
-    put(cell.at, cell.arrow ?? glyph(cell.dirs, cell.dashed), colour(cell.edges));
+    put(cell.at, cell.arrow ?? glyph(cell.dirs, cell.dashed), colour(cell.edges, cell.at));
     const where = spot(cell.at);
-    const edge = cell.edges.find((e) => clickable.has(e));
-    if (where && edge) p.region({ r: rect(where[0], where[1], 1, 1), click: () => click({ edge }), cursor: 'pointer' });
+    const arrow = arrowAt(cell.at);
+    const hit = arrow && { edge: arrow.edge, to: roleOf(arrow.edge, arrow.branch) };
+    if (where && hit) p.region({ r: rect(where[0], where[1], 1, 1), click: () => click(hit), cursor: 'pointer' });
   }
   for (const l of g.labels) {
     const loop = d.loops[l.stage];
@@ -560,7 +589,7 @@ export function drawDiagram(p: Painter, area: Rect, d: Diagram, scroll: number, 
     put(l.at, l.text, style.fg === lineColour ? DARK : style);
     const key = edgeKey({ kind: 'loop', stage: l.stage });
     const where = spot(l.at);
-    if (where && clickable.has(key)) p.region({ r: rect(where[0], where[1], len(l.text), 1), click: () => click({ edge: key }), cursor: 'pointer' });
+    if (where && sent(key, null)) p.region({ r: rect(where[0], where[1], len(l.text), 1), click: () => click({ edge: key, to: null }), cursor: 'pointer' });
   }
   for (const b of g.boxes) drawBox(p, put, spot, b, local, click);
   const ended = !!live?.ended;

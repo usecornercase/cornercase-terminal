@@ -13,6 +13,7 @@ use crate::flows::progress::{Edge, Progress};
 use crate::flows::{Flow, ORCHESTRATOR, Role};
 use crate::project::group::GROUP_STYLES;
 use crate::text;
+use crate::ui::theme::WAITING_COLOR;
 
 mod geometry;
 mod paint;
@@ -72,7 +73,7 @@ pub(crate) struct Live {
     pub(crate) lit: Option<Lit>,
     pub(crate) outside: Option<Edge>,
     pub(crate) ended: bool,
-    pub(crate) messages: Vec<Edge>,
+    pub(crate) messages: Vec<(Edge, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,12 +92,13 @@ pub(crate) struct Diagram {
 pub(crate) enum Hit {
     Close,
     Role(String),
-    Edge(Edge),
+    Edge(Edge, Option<String>),
 }
 
 pub(crate) fn role_colour(index: usize) -> Color {
-    let colours = GROUP_STYLES.iter().map(|&(_, colour)| colour).filter(|&colour| colour != RED);
-    Color::Indexed(colours.cycle().nth(index).unwrap_or(GROUP_STYLES[0].1))
+    let colours = GROUP_STYLES.iter().map(|&(_, colour)| Color::Indexed(colour));
+    let kept = colours.filter(|&colour| colour != Color::Indexed(RED) && colour != WAITING_COLOR);
+    kept.cycle().nth(index).unwrap_or(Color::Indexed(GROUP_STYLES[0].1))
 }
 
 fn describe(role: &Role) -> String {
@@ -172,7 +174,9 @@ impl Diagram {
             let to = self.index_in(target, &step.to);
             Lit { edge: step.edge, from, to, colour, dot: step.travelled(now) }
         });
-        let messages = self.edges().into_iter().filter(|&edge| progress.along(edge).is_some()).collect();
+        let edges = self.edges();
+        let sent = progress.sent().filter(|(edge, _)| edges.contains(edge));
+        let messages = sent.map(|(edge, to)| (edge, to.to_string())).collect();
         let ended = self.orchestrator.state == Some(State::Agent(Some(Status::Pending)));
         self.live = Some(Live { lit, outside: progress.outside, ended, messages });
         self
@@ -193,6 +197,16 @@ impl Diagram {
         nodes.into_iter().find(|n| n.role == role).map(|n| n.colour)
     }
 
+    fn branch_role(&self, edge: Edge, branch: usize) -> Option<&str> {
+        let Edge::Forward(stage) = edge else { return None };
+        self.stages.get(stage + 1)?.get(branch).map(|node| node.role.as_str())
+    }
+
+    fn sent(&self, edge: Edge, to: Option<&str>) -> bool {
+        let messages = self.live.as_ref().map(|live| live.messages.as_slice()).unwrap_or_default();
+        messages.iter().any(|(e, role)| *e == edge && to.is_none_or(|to| role == to))
+    }
+
     fn index_in(&self, stage: usize, role: &str) -> Option<usize> {
         self.stages.get(stage)?.iter().position(|n| n.role == role)
     }
@@ -208,12 +222,13 @@ impl Diagram {
         let preferred = geometry::preferred(self);
         let rows = self.stages.iter().map(|nodes| geometry::row_width(nodes.len(), preferred));
         let boxes = rows.max().unwrap_or(0).max(preferred);
-        let label = self.loops.iter().flatten().map(|b| b.labels(self.live.is_some())[0].chars().count()).max();
-        let label = u16::try_from(label.map_or(0, |n| 2 * (n + 3))).unwrap_or(u16::MAX);
-        let lanes = 2 * u16::try_from(self.loops.iter().flatten().count()).unwrap_or(0);
+        let cells = |text: &str| u16::try_from(text::cells(text)).unwrap_or(u16::MAX);
+        let label = self.loops.iter().flatten().map(|b| cells(&b.labels(self.live.is_some())[0])).max();
+        let label = label.map_or(0, |n| n.saturating_add(3).saturating_mul(2));
+        let lanes = u16::try_from(self.loops.iter().flatten().count()).unwrap_or(u16::MAX).saturating_mul(2);
         let outside = if self.outside().is_some() { 2 } else { 0 };
-        let end = 2 * (u16::try_from(self.end.chars().count()).unwrap_or(0) + 2);
-        boxes.max(label).max(end) + lanes + outside
+        let end = cells(self.end).saturating_add(2).saturating_mul(2);
+        boxes.max(label).max(end).saturating_add(lanes).saturating_add(outside)
     }
 
     fn fit(&self, width: u16) -> u16 {
@@ -272,17 +287,17 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
 pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Position>) {
     let buf = f.buffer_mut();
     let row = header(area);
-    let name = text::truncate_right(&view.name, usize::from(row.width.saturating_sub(4)));
+    let name = text::truncate_cells(&view.name, usize::from(row.width.saturating_sub(4)));
     put(buf, row.x, row.y, &name, Style::default().add_modifier(Modifier::BOLD), row.right());
     draw_close(buf, close(area), hover, view.diagram.muted);
-    let task = text::truncate_right(view.task.lines().next().unwrap_or_default(), usize::from(row.width));
+    let task = text::truncate_cells(view.task.lines().next().unwrap_or_default(), usize::from(row.width));
     put(buf, row.x, row.y + 1, &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
     draw_diagram(buf, body, &view.diagram, scroll, hover.filter(|p| body.contains(*p)));
     let below = diagram_height(&view.diagram, body.width).saturating_sub(scroll) > body.height;
     let more = |buf: &mut Buffer, y: u16, text: &str| {
-        let x = body.right().saturating_sub(u16::try_from(text.chars().count()).unwrap_or(0));
+        let x = body.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
         put(buf, x, y, text, dim(view.diagram.muted), body.right());
     };
     if scroll > 0 {

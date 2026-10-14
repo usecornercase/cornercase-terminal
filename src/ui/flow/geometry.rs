@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 
 use super::{Diagram, Node};
 use crate::flows::progress::Edge;
+use crate::text;
 
 pub(super) const BOX_HEIGHT: u16 = 3;
 const MIN_PREFERRED: u16 = 20;
@@ -139,7 +140,7 @@ struct Lane {
 }
 
 fn width_of(text: &str) -> u16 {
-    u16::try_from(text.chars().count()).unwrap_or(u16::MAX)
+    u16::try_from(text::cells(text)).unwrap_or(u16::MAX)
 }
 
 fn natural(node: &Node) -> u16 {
@@ -410,10 +411,10 @@ fn labels(b: &mut Builder, d: &Diagram, lanes: &[Lane]) {
         slots.push((lane.stage, y, end, room, back.labels(d.live.is_some())));
     }
     let fits =
-        |form: usize| slots.iter().all(|(.., room, texts)| texts.get(form).is_some_and(|t| t.chars().count() <= *room));
+        |form: usize| slots.iter().all(|(.., room, texts)| texts.get(form).is_some_and(|t| text::cells(t) <= *room));
     let shared = (0..4).find(|&form| fits(form));
     for (stage, y, end, room, texts) in slots {
-        let fitting = |t: &&String| t.chars().count() <= room;
+        let fitting = |t: &&String| text::cells(t) <= room;
         let text = shared.and_then(|form| texts.get(form)).or_else(|| texts.iter().find(fitting));
         if let Some(text) = text {
             let x = end - width_of(text);

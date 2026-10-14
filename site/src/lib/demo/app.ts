@@ -1311,11 +1311,11 @@ export class App {
       if (pane === undefined || !this.findPane(pane)) return;
       if (this.areas().compact) this.flowOpen = false;
       this.jumpToPane(pane);
-    } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, scroll: 0 };
+    } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
     this.dirty();
   }
 
-  flowMessage(o: { workspace: number; edge: string }): { from: string; to: string; text: string } | null {
+  flowMessage(o: { workspace: number; edge: string; to: string | null }): { from: string; to: string; text: string } | null {
     const run = this.runOf(o.workspace);
     if (!run) return null;
     const progress = run.progress;
@@ -1324,7 +1324,7 @@ export class App {
       kind === 'outside'
         ? { kind: 'outside' as const, from: a === 'null' ? null : Number(a), to: Number(b) }
         : { kind: kind as 'forward' | 'loop', stage: Number(a) };
-    return progress.message(edge) ?? null;
+    return progress.message(edge, o.to) ?? null;
   }
 
   copyFlowMessage(): void {
@@ -2693,7 +2693,7 @@ export class App {
   flowMessageLines(width: number): Line[] {
     const o = this.overlay;
     const m = o?.kind === 'flowMessage' ? this.flowMessage(o) : null;
-    return m ? [[seg('sent', { fg: 8 })], [], ...markdown(m.text, width)] : [];
+    return m ? markdown(m.text, width) : [];
   }
 
   scrollFlowMessage(dy: number): boolean {

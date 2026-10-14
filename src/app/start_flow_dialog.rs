@@ -53,7 +53,7 @@ impl App {
         let Some(start) = self.start_flow() else { return };
         let room = room(start, area);
         if let Some(delta) = wheel(ev.kind) {
-            if ui::start_prompt(area, start.warnings().len(), start.selected().is_some()).contains(pos) {
+            if ui::start_prompt(area, shape(start)).contains(pos) {
                 start.scroll_prompt(delta, room);
             } else {
                 start.scroll_list(delta.signum());
@@ -120,8 +120,14 @@ impl App {
     }
 }
 
+fn shape(start: &Start) -> ui::StartShape {
+    let rows = start.rows();
+    let sections: Vec<&str> = rows.iter().map(|row| row.section).collect();
+    ui::StartShape::new(&sections, start.warnings().len(), start.selected().is_some(), start.diagram)
+}
+
 fn room(start: &Start, area: Rect) -> Room {
-    let prompt = ui::start_prompt(area, start.warnings().len(), start.selected().is_some());
+    let prompt = ui::start_prompt(area, shape(start));
     Room { width: usize::from(prompt.width), height: usize::from(prompt.height), wide: ui::flows_wide(area) }
 }
 

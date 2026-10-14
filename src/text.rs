@@ -1,6 +1,8 @@
 use std::fmt::Write;
 use std::path::Path;
 
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
 pub(crate) const CRUMB_SEPARATOR: &str = " › ";
 
 pub(crate) fn folder_name(path: &Path, home: Option<&Path>) -> String {
@@ -23,6 +25,25 @@ pub(crate) fn truncate_right(s: &str, max: usize) -> String {
         return s.to_string();
     }
     let head: String = s.chars().take(max - 1).collect();
+    format!("{}…", head.trim_end_matches('…'))
+}
+
+pub(crate) fn cells(s: &str) -> usize {
+    s.width()
+}
+
+pub(crate) fn truncate_cells(s: &str, max: usize) -> String {
+    if cells(s) <= max || max < 2 {
+        return s.to_string();
+    }
+    let mut used = 0;
+    let head: String = s
+        .chars()
+        .take_while(|ch| {
+            used += ch.width().unwrap_or(0);
+            used < max
+        })
+        .collect();
     format!("{}…", head.trim_end_matches('…'))
 }
 
