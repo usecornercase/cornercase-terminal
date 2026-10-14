@@ -134,9 +134,7 @@ impl App {
             return Ok(());
         }
         if areas.agents.contains(pos) {
-            if left && areas.agents_list.contains(pos) {
-                self.press_agent(&areas, pos, area);
-            }
+            self.agents_mouse(&areas, pos, ev.kind, area);
             return Ok(());
         }
         if self.footer_mouse(&areas, pos, left) {

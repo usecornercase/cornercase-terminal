@@ -133,7 +133,7 @@ So that a finished or waiting agent in another project doesn't go unnoticed, `!`
 
 #### Pending review
 
-When several agents finish at once, you rarely review them all straight away. Right-click a tab running an agent (or click its ` ⋯ `), or right-click inside the agent's pane, and pick **mark as pending review**: the tab gets a purple `●` that stays when you look at it, so you know which work you still have to check. Pick **mark as reviewed** to take it off, or send the agent a new prompt, which takes it off by itself since you are working on it again. With the [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `m` does the same on the pane you are in, and `a` stops at marked agents too. Scripts and agents use [`cornercase mark`](../scripts-and-agents/#arrange).
+When several agents finish at once, you rarely review them all straight away. Right-click a tab running an agent (or click its ` ⋯ `), its row in the [agents section](#the-agents-section), or inside the agent's pane, and pick **mark as pending review**: the tab gets a purple `●` that stays when you look at it, so you know which work you still have to check. Pick **mark as reviewed** to take it off, or send the agent a new prompt, which takes it off by itself since you are working on it again. With the [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `m` does the same on the pane you are in, and `a` stops at marked agents too. Scripts and agents use [`cornercase mark`](../scripts-and-agents/#arrange).
 
 Both `●` and `✓` are saved with the session: after a restart or an update, an agent that comes back in its conversation comes back with its mark.
 
@@ -384,6 +384,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 
 - Each row shows what the agent is doing with the [same icons](#what-your-agents-are-doing) as its tab, its project, and its workspace when the project has more than one. Below that: `claude`, `codex`, `gemini` or `opencode`, its model and [how full its context is](#how-full-the-context-is), as on the tab (the **model** and **context** settings apply here too).
 - **Click a row** to jump to that agent: its project, workspace and tab open and its pane gets the focus, even in a split tab, whatever project you were in. In the [tree](#the-tree) the way to it expands.
+- **Right-click a row** to mark that agent as [pending review](#pending-review), or as reviewed, without leaving the tab you are in.
 - The agent on screen is marked with the cyan bar `▌`.
 - Rows keep the order of the sidebar, so they don't move under your pointer; the icon tells you which one waits. When no agent runs, the section says *no agents running* instead of disappearing.
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.

@@ -98,3 +98,19 @@ test('A tab marked as pending review keeps its ● until it is marked as reviewe
   assert.equal(tabStatus(place.t), 'idle');
   app.destroy();
 });
+
+test('An agent row in the agents section offers marking its pane', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(177, 46);
+  world(app);
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  followAgent(pane, 'claude');
+  watchPane(pane, 'idle', true, 0);
+  app.openAgentMenu({ x: 1, y: 1 }, pane.id);
+  const labels = app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : [];
+  assert.deepEqual(labels, ['mark as pending review']);
+  app.chooseMenu(0);
+  assert.equal(tabStatus(app.projects[0].workspaces[0].tabs[0]), 'pending');
+  app.destroy();
+});

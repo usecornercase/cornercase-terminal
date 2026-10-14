@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.88
 
-- Mark an agent as **pending review** when you want to check its work later: right-click its tab or its pane and pick **mark as pending review**, or press `m` in the keys menu. Its tab, workspace, project and group show a purple `●` that stays when you look at it, until you pick **mark as reviewed** or send the agent a new prompt.
+- Mark an agent as **pending review** when you want to check its work later: right-click its tab, its pane or its row in the agents section and pick **mark as pending review**, or press `m` in the keys menu. Its tab, workspace, project and group show a purple `●` that stays when you look at it, until you pick **mark as reviewed** or send the agent a new prompt.
 - Marked agents, and the `✓` of agents that finished while you were elsewhere, now come back after a restart or an update, with the agent's conversation.
 - Scripts and agents can do the same with `cornercase mark` (`--reviewed` to take the mark off); `status`, `wait` and `events` show the state as `pending`.
 

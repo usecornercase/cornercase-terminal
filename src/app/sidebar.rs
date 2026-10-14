@@ -1,9 +1,11 @@
+use crossterm::event::{MouseButton, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::interaction::Drag;
 use super::interaction::Grab;
 use super::interaction::RowDrag;
+use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::Target;
 use super::overlay::Overlay;
@@ -103,13 +105,34 @@ impl App {
         ui::agent_rows(areas.agents_list, areas.pitch, self.agent_places().len(), self.scroll.agents)
     }
 
-    pub(super) fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
+    fn agent_row_at(&self, areas: &ui::Areas, pos: Position) -> Option<(usize, usize, u64)> {
         let places = self.agent_places();
         let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
-        let Some(i) = ui::agent_hit(list, pitch, places.len(), scroll, pos) else { return };
+        let i = ui::agent_hit(list, pitch, places.len(), scroll, pos)?;
         let (p, w, t, pane) = places[i];
-        let pane = self.projects[p].workspaces[w].tabs[t].panes[pane].id;
-        let row = ui::agent_row(list, pitch, places.len(), scroll, i);
+        Some((i, places.len(), self.projects[p].workspaces[w].tabs[t].panes[pane].id))
+    }
+
+    pub(super) fn agents_mouse(&mut self, areas: &ui::Areas, pos: Position, kind: MouseEventKind, area: Rect) {
+        match kind {
+            _ if !areas.agents_list.contains(pos) => {}
+            MouseEventKind::Down(MouseButton::Left) => self.press_agent(areas, pos, area),
+            MouseEventKind::Down(MouseButton::Right) => self.open_agent_menu(areas, pos),
+            _ => {}
+        }
+    }
+
+    fn open_agent_menu(&mut self, areas: &ui::Areas, pos: Position) {
+        let Some((_, _, pane)) = self.agent_row_at(areas, pos) else { return };
+        if let Some(mark) = self.mark_action(Marked::Pane(pane)) {
+            self.overlay = Some(Overlay::Menu { at: pos, actions: vec![mark] });
+        }
+    }
+
+    fn press_agent(&mut self, areas: &ui::Areas, pos: Position, area: Rect) {
+        let (list, pitch, scroll) = (areas.agents_list, areas.pitch, self.scroll.agents);
+        let Some((i, count, pane)) = self.agent_row_at(areas, pos) else { return };
+        let row = ui::agent_row(list, pitch, count, scroll, i);
         self.drag = Some(Drag::Row(RowDrag {
             target: Grab::Agent(pane),
             row,

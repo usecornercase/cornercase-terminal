@@ -1728,6 +1728,14 @@ export class App {
     }
   }
 
+  openAgentMenu(at: Pos, id: number): void {
+    const pane = this.findPane(id)?.pane;
+    const mark = pane && this.markAction([pane]);
+    if (!mark) return;
+    this.overlay = { kind: 'menu', at, actions: [mark] };
+    this.dirty();
+  }
+
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });
