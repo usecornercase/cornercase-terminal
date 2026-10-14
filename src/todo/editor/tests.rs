@@ -298,3 +298,51 @@ mod scrolling {
         assert_eq!(e.cursor(), 49);
     }
 }
+
+mod wide_characters {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::style::Style;
+
+    use super::*;
+
+    #[test]
+    fn lines_wrap_by_the_columns_their_characters_take() {
+        assert_eq!(Editor::new("你好世界").lines(5), vec![0..2, 2..4]);
+    }
+
+    #[test]
+    fn the_cursor_column_counts_display_columns() {
+        let mut buf = Buffer::empty(Rect::new(0, 0, 8, 1));
+        buf.set_stringn(0, 0, "a你好", 8, Style::default());
+        let e = at("a你好", 2);
+        let (_, col) = e.position(8);
+        assert_eq!((col, buf[(u16::try_from(col).expect("column"), 0)].symbol()), (3, "好"));
+    }
+
+    #[test]
+    fn a_click_on_either_half_of_a_wide_character_lands_before_it() {
+        let mut e = Editor::new("你好");
+        let mut cursors = Vec::new();
+        for col in 0..5 {
+            e.place(8, 0, col);
+            cursors.push(e.cursor());
+        }
+        assert_eq!(cursors, [0, 0, 1, 1, 2]);
+    }
+
+    #[test]
+    fn a_line_full_of_wide_characters_gets_an_empty_one_for_the_cursor() {
+        let e = Editor::new("你好");
+        assert_eq!((e.lines(4), e.position(4)), (vec![0..2, 2..2], (1, 0)));
+    }
+
+    #[test]
+    fn up_and_down_keep_the_display_column() {
+        let mut e = at("你好\nabcd", 1);
+        e.down(10);
+        assert_eq!(e.cursor(), 5);
+        e.up(10);
+        assert_eq!(e.cursor(), 1);
+    }
+}

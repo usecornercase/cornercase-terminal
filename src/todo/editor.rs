@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Editor {
@@ -108,8 +109,13 @@ impl Editor {
         let lines = self.lines(width);
         let Some(range) = lines.get(line) else { return };
         let ends = lines.get(line + 1).is_none_or(|next| next.start > range.end);
-        let room = if ends { range.len() } else { range.len().saturating_sub(1) };
-        self.cursor = range.start + col.min(room);
+        let limit = if ends { range.end } else { range.end.saturating_sub(1).max(range.start) };
+        let (mut at, mut used) = (range.start, 0);
+        while at < limit && used + cells(self.chars[at]) <= col {
+            used += cells(self.chars[at]);
+            at += 1;
+        }
+        self.cursor = at;
     }
 
     pub(crate) fn lines(&self, width: usize) -> Vec<Range<usize>> {
@@ -117,7 +123,7 @@ impl Editor {
         let mut start = 0;
         for part in self.chars.split(|c| *c == '\n') {
             let wrapped = wrap_chars(part, width);
-            let full = wrapped.last().is_some_and(|l| !l.is_empty() && l.len() >= width.max(1));
+            let full = wrapped.last().is_some_and(|l| !l.is_empty() && span(&part[l.clone()]) >= width.max(1));
             lines.extend(wrapped.into_iter().map(|l| l.start + start..l.end + start));
             if full {
                 lines.push(start + part.len()..start + part.len());
@@ -130,7 +136,8 @@ impl Editor {
     pub(crate) fn position(&self, width: usize) -> (usize, usize) {
         let lines = self.lines(width);
         let line = lines.iter().rposition(|l| l.start <= self.cursor).unwrap_or(0);
-        (line, self.cursor - lines.get(line).map_or(0, |l| l.start))
+        let start = lines.get(line).map_or(0, |l| l.start);
+        (line, span(&self.chars[start..self.cursor]))
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, width: usize, height: usize) -> bool {
@@ -178,12 +185,25 @@ pub(crate) fn wrap(text: &str, width: usize) -> Vec<Range<usize>> {
     wrap_chars(&text.chars().collect::<Vec<_>>(), width)
 }
 
+fn cells(c: char) -> usize {
+    c.width().unwrap_or(0)
+}
+
+fn span(chars: &[char]) -> usize {
+    chars.iter().map(|c| cells(*c)).sum()
+}
+
 fn wrap_chars(chars: &[char], width: usize) -> Vec<Range<usize>> {
     let width = width.max(1);
     let mut lines = Vec::new();
     let mut start = 0;
-    while chars.len() - start > width {
-        let end = start + width;
+    while span(&chars[start..]) > width {
+        let (mut end, mut used) = (start, 0);
+        while end < chars.len() && used + cells(chars[end]) <= width {
+            used += cells(chars[end]);
+            end += 1;
+        }
+        let end = end.max(start + 1);
         let space = (start + 1..end).rev().find(|&i| chars[i] == ' ');
         let next = space.map_or(end, |i| i + 1);
         lines.push(start..next);

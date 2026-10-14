@@ -640,6 +640,46 @@ mod stages_and_loops {
         assert_eq!(edit(&d).flow.problems(), Vec::<String>::new());
     }
 
+    fn whens(d: &Dialog) -> Vec<Option<String>> {
+        edit(d).flow.stages.iter().map(|s| s.back.as_ref().map(|b| b.when.clone())).collect()
+    }
+
+    fn typing_when(stage: usize) -> Dialog {
+        let mut d = editing();
+        click_row(&mut d, Row::Stage(stage));
+        click_row(&mut d, Row::When(stage));
+        type_text(&mut d, "X");
+        d
+    }
+
+    fn stage_row(d: &Dialog, stage: usize) -> usize {
+        edit(d).rows().iter().position(|r| *r == Row::Stage(stage)).expect("the stage row")
+    }
+
+    #[test]
+    fn moving_a_stage_while_its_when_is_typed_keeps_the_text_on_that_stage() {
+        let mut d = typing_when(2);
+        d.hit(Hit::MoveUp(stage_row(&d, 2)), ROOM);
+        key(&mut d, KeyCode::Enter);
+        assert_eq!(whens(&d), [None, Some("failuresX".into()), Some("findings".into())]);
+    }
+
+    #[test]
+    fn removing_an_earlier_stage_while_a_when_is_typed_keeps_the_text_on_its_stage() {
+        let mut d = typing_when(2);
+        d.hit(Hit::Remove(stage_row(&d, 1)), ROOM);
+        key(&mut d, KeyCode::Enter);
+        assert_eq!(whens(&d), [None, Some("failuresX".into())]);
+    }
+
+    #[test]
+    fn removing_the_stage_whose_when_is_typed_drops_the_text() {
+        let mut d = typing_when(2);
+        d.hit(Hit::Remove(stage_row(&d, 2)), ROOM);
+        assert!(edit(&d).field.is_none());
+        assert_eq!(whens(&d), [None, Some("findings".into())]);
+    }
+
     #[test]
     fn the_end_is_picked() {
         let mut d = editing();

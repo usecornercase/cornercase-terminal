@@ -1196,6 +1196,7 @@ dependencies = [
  "thiserror 2.0.21",
  "toml",
  "tungstenite",
+ "unicode-width",
  "ureq",
  "vt100",
 ]
