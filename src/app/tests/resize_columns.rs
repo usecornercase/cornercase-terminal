@@ -247,6 +247,7 @@ fn restore_brings_back_the_widths() {
         changes: None,
         todo: false,
         files: false,
+        flow: false,
     };
 
     app.restore(&saved, AREA);

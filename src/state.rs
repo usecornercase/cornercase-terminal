@@ -43,6 +43,8 @@ pub(crate) struct State {
     pub(crate) todo: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) flow: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -315,6 +317,7 @@ impl From<V2State> for State {
             changes: None,
             todo: false,
             files: false,
+            flow: false,
         }
     }
 }

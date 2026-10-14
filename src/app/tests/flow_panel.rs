@@ -242,6 +242,19 @@ mod recording {
     }
 
     #[test]
+    fn the_open_flow_panel_comes_back_after_a_restart() {
+        let (mut app, _rx, _dir) = team();
+        app.show_flow();
+        let saved = app.state();
+        assert!(saved.flow);
+        let (mut again, _rx) = new_app(no_config());
+
+        assert!(again.restore(&saved, AREA));
+
+        assert_eq!((again.runs.len(), again.side), (1, Some(Side::Flow)));
+    }
+
+    #[test]
     fn a_last_message_that_fails_is_not() {
         let (mut app, _rx, _dir) = team();
         let last = wire::LastMessage { pane: Some(pane(&app, "reviewer")), ..wire::LastMessage::default() };
