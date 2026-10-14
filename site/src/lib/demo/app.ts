@@ -70,6 +70,8 @@ import {
   activePane,
   attention,
   defaultConfig,
+  markPane,
+  needsYou,
   paneStatus,
   followAgent,
   projectLabel,
@@ -243,6 +245,7 @@ const RESTART_RESUME = 'To pick up a Claude Code conversation afterwards, run `c
 const RUNNING_STATUSES: [Status, string][] = [
   ['working', 'working'],
   ['waiting', 'waiting for you'],
+  ['pending', 'pending review'],
   ['done', 'done'],
   ['idle', 'idle'],
 ];
@@ -1712,9 +1715,25 @@ export class App {
     this.closeOverlay();
   }
 
+  private markAction(panes: Pane[]): Extract<MenuAction, { kind: 'mark' }> | null {
+    const agents = panes.filter((pane) => pane.agent);
+    if (!agents.length) return null;
+    return { kind: 'mark', panes: agents.map((pane) => pane.id), pending: !agents.some((pane) => pane.pending) };
+  }
+
+  private mark(a: Extract<MenuAction, { kind: 'mark' }>): void {
+    for (const id of a.panes) {
+      const found = this.findPane(id);
+      if (found) markPane(found.pane, a.pending);
+    }
+  }
+
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });
+    const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
+    const mark = tab && this.markAction(tab.panes);
+    if (mark) actions.push(mark);
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -1745,6 +1764,7 @@ export class App {
     if (a.kind === 'openProject') return 'open project';
     if (a.kind === 'newGroup') return 'new group';
     if (a.kind === 'base') return a.branch;
+    if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     return a.action;
   }
 
@@ -1801,7 +1821,8 @@ export class App {
       this.nav = null;
       this.overlay = { kind: 'newGroup', input: '' };
       this.emit('narrate', this.narration.group);
-    } else this.paneAction(a.pane, a.action);
+    } else if (a.kind === 'mark') this.mark(a);
+    else this.paneAction(a.pane, a.action);
     this.dirty();
   }
 
@@ -1824,9 +1845,12 @@ export class App {
     if (!alone && fits(area, 'right')) actions.push('split right');
     if (!alone && fits(area, 'down')) actions.push('split down');
     actions.push(pane.rightClicks ? 'use this menu on right-click' : 'send right-clicks to the pane');
-    actions.push('close pane');
     tab.active = pane.id;
-    this.overlay = { kind: 'menu', at, actions: actions.map((action) => ({ kind: 'pane', pane: pane.id, action })) };
+    const items: MenuAction[] = actions.map((action) => ({ kind: 'pane', pane: pane.id, action }));
+    const mark = this.markAction([pane]);
+    if (mark) items.push(mark);
+    items.push({ kind: 'pane', pane: pane.id, action: 'close pane' });
+    this.overlay = { kind: 'menu', at, actions: items };
     this.dirty();
   }
 
@@ -2182,9 +2206,16 @@ export class App {
     } else if (a.kind === 'agent') {
       const rows = this.agentRows();
       const at = rows.findIndex((r) => r.active);
-      const next = rows.map((_, k) => rows[(at + 1 + k) % rows.length]).find((r) => r.status === 'waiting' || r.status === 'done');
+      const next = rows.map((_, k) => rows[(at + 1 + k) % rows.length]).find((r) => needsYou(r.status));
       if (next) this.jumpToPane(next.pane);
       else this.notify('no agent needs you');
+    } else if (a.kind === 'mark') {
+      const pane = t?.panes.find((x) => x.id === t.active);
+      const mark = pane && this.markAction([pane]);
+      if (!mark) return this.bug('no agent in this pane to mark');
+      this.mark(mark);
+      if (mark.pending) this.notify('marked as pending review', 'pending');
+      else this.notify('marked as reviewed');
     } else if (a.kind === 'search') this.openSearch();
     else if (a.kind === 'newTab') this.addTab(p, w);
     else if (a.kind === 'split') {

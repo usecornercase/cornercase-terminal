@@ -124,6 +124,7 @@ pub(crate) enum Action {
     PreviousProject,
     Pane(Place),
     Agent,
+    Mark,
     Search,
     NewTab,
     Split(Dir),
@@ -191,7 +192,7 @@ const fn open(key: &'static str, group: Group) -> Item {
     Item { key, label: group.label(), step: Some(Step::Open(group)) }
 }
 
-const ROOT: [Item; 24] = [
+const ROOT: [Item; 25] = [
     run("n", "next tab", Action::NextTab),
     run("p", "previous tab", Action::PreviousTab),
     Item { key: "1-9", label: "go to tab", step: None },
@@ -201,6 +202,7 @@ const ROOT: [Item; 24] = [
     run("{", "previous project", Action::PreviousProject),
     Item { key: "←↑↓→", label: "pane on that side", step: None },
     run("a", "agent that needs you", Action::Agent),
+    run("m", "mark for review", Action::Mark),
     run("/", "search", Action::Search),
     run("c", "new tab", Action::NewTab),
     run("|", "split right", Action::Split(Dir::Right)),

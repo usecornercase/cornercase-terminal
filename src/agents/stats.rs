@@ -197,7 +197,7 @@ impl Sample {
         matches!(self.status, Some(Status::Working | Status::Waiting)) && !self.background
     }
     fn over(self) -> bool {
-        matches!(self.status, Some(Status::Idle | Status::Done)) || self.background
+        matches!(self.status, Some(Status::Idle | Status::Done | Status::Pending)) || self.background
     }
 }
 
@@ -263,7 +263,7 @@ impl Stats {
                 let counts = Counts {
                     turns: u64::from(previous.in_turn() && sample.over()),
                     agent_ms: if previous.working() { ms } else { 0 },
-                    waited_ms: if previous.status.is_some_and(Status::needs_you) { ms } else { 0 },
+                    waited_ms: if matches!(previous.status, Some(Status::Waiting | Status::Done)) { ms } else { 0 },
                     ..Counts::default()
                 };
                 if counts != Counts::default() {

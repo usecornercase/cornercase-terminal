@@ -58,3 +58,45 @@ fn esc_closes_it() {
 
     assert!(app.overlay.is_none());
 }
+
+mod marking {
+    use super::*;
+    use crate::agents::activity::{Activity, Status};
+
+    fn with_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
+        let (mut app, rx, dirs) = app_with(1);
+        let term = app.term_mut().expect("a pane");
+        term.agent.follow(Some(agents::Known::Claude));
+        term.agent.update(Some(Activity::Idle), true, Instant::now());
+        (app, rx, dirs)
+    }
+
+    fn status(app: &App) -> Option<Status> {
+        app.term().and_then(|t| t.agent.status())
+    }
+
+    #[test]
+    fn a_tab_running_an_agent_offers_marking_it_and_then_reviewing_it() {
+        let (mut app, _rx, _dirs) = with_claude();
+        right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
+        assert_eq!(menu_labels(&app), ["rename tab", "mark as pending review"]);
+        pick(&mut app, "mark as pending review");
+        let marked = status(&app);
+
+        right_click_row(&mut app, WorkspaceRow::Tab(0, 0));
+        assert_eq!(menu_labels(&app), ["rename tab", "mark as reviewed"]);
+        pick(&mut app, "mark as reviewed");
+
+        assert_eq!((marked, status(&app)), (Some(Status::Pending), Some(Status::Idle)));
+    }
+
+    #[test]
+    fn the_menu_of_an_agents_pane_offers_marking_it() {
+        let (mut app, _rx, _dirs) = with_claude();
+        let pane = areas().pane;
+        right_click(&mut app, Position::new(pane.x + 1, pane.y + 1));
+        pick(&mut app, "mark as pending review");
+
+        assert_eq!(status(&app), Some(Status::Pending));
+    }
+}

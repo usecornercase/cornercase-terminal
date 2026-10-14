@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
+use super::menus::{Marked, MenuAction};
 use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents;
@@ -71,6 +72,9 @@ impl App {
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
                             term.agent.follow(found.as_ref().map(|(agent, _)| *agent));
+                            if term.resuming.is_some_and(|until| now >= until) {
+                                term.agent.give_up();
+                            }
                             let notice = term.agent.update(activity, seen, now);
                             let state = term.agent.state();
                             if let Some(kind) = term.context.kind()
@@ -150,6 +154,29 @@ impl App {
         );
         self.outbox.notifications.extend(Notification::new(&message, &self.config.desktop_notifications));
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(status)));
+    }
+
+    fn marked_panes(&self, marked: Marked) -> Vec<&Term> {
+        let terms: Vec<&Term> = match marked {
+            Marked::Pane(pane) => self.projects.pane_by(pane).into_iter().collect(),
+            Marked::Tab(tab) => self.projects.tabs().filter(|t| t.id == tab).flat_map(|t| &t.panes).collect(),
+        };
+        terms.into_iter().filter(|term| term.agent.agent().is_some()).collect()
+    }
+
+    pub(super) fn mark_action(&self, marked: Marked) -> Option<MenuAction> {
+        let terms = self.marked_panes(marked);
+        (!terms.is_empty()).then(|| MenuAction::Mark(marked, !terms.iter().any(|term| term.agent.pending())))
+    }
+
+    pub(super) fn mark(&mut self, marked: Marked, pending: bool) -> usize {
+        let panes: Vec<u64> = self.marked_panes(marked).iter().map(|term| term.id).collect();
+        for &pane in &panes {
+            if let Some(term) = self.projects.pane_by_mut(pane) {
+                term.agent.mark(pending);
+            }
+        }
+        panes.len()
     }
 
     pub(super) fn agent_places(&self) -> Vec<(usize, usize, usize, usize)> {

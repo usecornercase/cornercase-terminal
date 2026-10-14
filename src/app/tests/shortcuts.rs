@@ -1,5 +1,5 @@
 use super::*;
-use crate::agents::activity::Activity;
+use crate::agents::activity::{Activity, Status};
 use crate::files::Mode;
 use crate::shortcuts::Group;
 
@@ -200,6 +200,31 @@ fn a_says_when_no_agent_needs_you() {
     let mut app = with_prefix(app);
     keys(&mut app, "a");
     assert_eq!(toast(&app), Some("no agent needs you"));
+}
+
+#[test]
+fn m_marks_the_agent_in_the_pane_and_takes_the_mark_off_again() {
+    let (app, _rx) = app();
+    let mut app = with_prefix(app);
+    let term = app.term_mut().expect("a pane");
+    term.agent.follow(Some(agents::Known::Claude));
+    term.agent.update(Some(Activity::Idle), true, Instant::now());
+    let status = |app: &App| app.term().and_then(|t| t.agent.status());
+
+    keys(&mut app, "m");
+    let marked = (status(&app), toast(&app).map(str::to_string));
+    keys(&mut app, "m");
+
+    assert_eq!(marked, (Some(Status::Pending), Some("marked as pending review".into())));
+    assert_eq!((status(&app), toast(&app)), (Some(Status::Idle), Some("marked as reviewed")));
+}
+
+#[test]
+fn m_says_when_the_pane_runs_no_agent() {
+    let (app, _rx) = app();
+    let mut app = with_prefix(app);
+    keys(&mut app, "m");
+    assert_eq!(toast(&app), Some("no agent in this pane to mark"));
 }
 
 #[test]

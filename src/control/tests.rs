@@ -58,6 +58,7 @@ fn every_command_is_listed_by_name() {
         Command::RestartWhenIdle(RestartWhenIdle::default()),
         Command::Stats(Stats::default()),
         Command::Away(Away::default()),
+        Command::Mark(Mark::default()),
     ];
 
     let names: Vec<String> = commands

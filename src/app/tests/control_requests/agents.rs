@@ -548,3 +548,75 @@ mod keeping_awake {
         assert_eq!(agent.app.report(None).keep_awake, None);
     }
 }
+
+mod pending_review {
+    use super::*;
+
+    fn mark(pane: u64, reviewed: bool) -> Command {
+        Command::Mark(wire::Mark { pane: Some(pane), tab: None, reviewed })
+    }
+
+    fn reported(agent: &mut Agent, id: u64) -> Option<String> {
+        let value = value(&mut agent.app, None, Command::Status(wire::Status::default()));
+        let report: Report = serde_json::from_value(value).expect("a report");
+        report.panes().into_iter().find(|row| row.pane == id).and_then(|row| row.status)
+    }
+
+    fn finished() -> (Agent, u64) {
+        let mut agent = Agent::new();
+        let id = agent.start(Some("fix the login"));
+        finish_working(&mut agent, id);
+        agent.refreshing("the turn is over and the conversation known", |a| {
+            pane(a, id).agent.status().is_some_and(|s| s != activity::Status::Working) && pane(a, id).resume.is_some()
+        });
+        (agent, id)
+    }
+
+    #[test]
+    fn a_marked_pane_reports_pending_until_it_is_reviewed() {
+        let (mut agent, id) = finished();
+
+        assert_eq!(done(now(&mut agent.app, None, mark(id, false))).ids.pane, Some(id));
+        let marked = reported(&mut agent, id);
+        agent.refreshing("a refresh in sight", |_| true);
+        let after_a_look = reported(&mut agent, id);
+        done(now(&mut agent.app, None, mark(id, true)));
+
+        assert_eq!(
+            (marked.as_deref(), after_a_look.as_deref(), reported(&mut agent, id).as_deref()),
+            (Some("pending"), Some("pending"), Some("idle"))
+        );
+    }
+
+    #[test]
+    fn a_pane_without_an_agent_cannot_be_marked() {
+        let mut agent = Agent::new();
+        agent.start(None);
+        let shell = done(now(&mut agent.app, None, new_tab(None))).ids.pane.expect("the shell's pane");
+
+        let message = error(now(&mut agent.app, None, mark(shell, false)));
+
+        assert!(message.contains("nothing to mark"), "{message}");
+    }
+
+    #[test]
+    fn a_pending_mark_comes_back_with_the_conversation_after_a_restart() {
+        let (mut agent, id) = finished();
+        done(now(&mut agent.app, None, mark(id, false)));
+        let saved = agent.app.state();
+        let panes = saved.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|t| &t.panes);
+        let marked: Vec<_> = panes.map(|p| (p.agent.is_some(), p.pending)).filter(|&(agent, _)| agent).collect();
+        assert_eq!(marked, [(true, true)]);
+
+        let (mut back, rx) = new_app(agent.config_dir.path().join("config.json"));
+        back.agents.claude_dir = Some(agent.fake.dir().to_path_buf());
+        assert!(back.restore(&saved, AREA));
+        refreshing(&mut back, &rx, "the resumed agent shows its mark", |a| {
+            a.projects
+                .iter()
+                .flat_map(|p| &p.workspaces)
+                .flat_map(Workspace::terms)
+                .any(|t| t.agent.agent().is_some() && t.agent.status() == Some(activity::Status::Pending))
+        });
+    }
+}

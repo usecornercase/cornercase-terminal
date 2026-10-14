@@ -107,6 +107,7 @@ const SPIN_EVERY = 100;
 const STATUS_ICONS: Record<Exclude<Status, 'working'>, Seg> = {
   idle: seg('○', { fg: 8 }),
   done: seg('✓', { fg: 2, add: BOLD }),
+  pending: seg('●', { fg: 99, add: BOLD }),
   waiting: seg('!', { fg: 208, add: BOLD }),
 };
 const MOON = '◐';

@@ -4,9 +4,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE,
-    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP,
-    OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP, SPLIT_HELP,
-    START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP,
+    NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP,
+    SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
+    WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -108,6 +109,8 @@ pub(crate) enum Control {
         after_help = AWAY_HELP
     )]
     Away(AwayArgs),
+    #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
+    Mark(MarkArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
@@ -407,6 +410,14 @@ pub(crate) struct RenameArgs {
     pub(crate) renamed: Renamed,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct MarkArgs {
+    #[command(flatten)]
+    pub(crate) target: Target,
+    #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
+    pub(crate) reviewed: bool,
 }
 
 #[derive(Debug, Args)]

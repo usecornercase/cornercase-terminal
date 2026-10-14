@@ -162,6 +162,11 @@ fn run_control(command: Control) -> Result<bool> {
             let Target { pane, tab } = keys.target;
             ask("keys", control::Command::Keys(control::Keys { pane, tab, keys: keys.keys })).map(drop)
         }
+        Control::Mark(mark) => {
+            let Target { pane, tab } = mark.target;
+            let request = control::Mark { pane, tab, reviewed: mark.reviewed };
+            ask("mark", control::Command::Mark(request)).map(drop)
+        }
         Control::Read(read) => return read::run(&read),
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {

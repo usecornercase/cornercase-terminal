@@ -69,8 +69,8 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
     let split = TabState {
         name: Some("split shell".into()),
         panes: vec![
-            PaneState { cwd: Some(paths[2].clone()), right_clicks: false, agent: None },
-            PaneState { cwd: Some(paths[3].clone()), right_clicks: true, agent: None },
+            PaneState { cwd: Some(paths[2].clone()), right_clicks: false, agent: None, done: false, pending: false },
+            PaneState { cwd: Some(paths[3].clone()), right_clicks: true, agent: None, done: false, pending: false },
         ],
         active: 1,
         layout: Some(split::Node::Split {
@@ -108,6 +108,8 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                                         cwd: Some(paths[2].clone()),
                                         right_clicks: false,
                                         agent: None,
+                                        done: false,
+                                        pending: false,
                                     }],
                                     active: 0,
                                     layout: None,
@@ -214,7 +216,13 @@ fn the_first_draw_keeps_a_folded_active_project_folded() {
 
 fn with_a_locked_pane(dir: &Path, locked: &Locked) -> WorkspaceState {
     let mut ws = WorkspaceState::plain(dir.to_path_buf(), vec![None, None], 0);
-    ws.tabs[0].panes.push(PaneState { cwd: Some(locked.path().to_path_buf()), right_clicks: false, agent: None });
+    ws.tabs[0].panes.push(PaneState {
+        cwd: Some(locked.path().to_path_buf()),
+        right_clicks: false,
+        agent: None,
+        done: false,
+        pending: false,
+    });
     ws
 }
 

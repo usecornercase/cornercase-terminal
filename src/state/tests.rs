@@ -62,7 +62,13 @@ mod file {
                         worktree: false,
                         tabs: vec![TabState {
                             name: Some("notes".into()),
-                            panes: vec![PaneState { cwd: None, right_clicks: false, agent: None }],
+                            panes: vec![PaneState {
+                                cwd: None,
+                                right_clicks: false,
+                                agent: None,
+                                done: false,
+                                pending: false,
+                            }],
                             active: 0,
                             layout: None,
                         }],
@@ -92,6 +98,8 @@ mod file {
                                         conversation: "conversation-plan".into(),
                                         mode: Some("plan".into()),
                                     }),
+                                    done: false,
+                                    pending: true,
                                 },
                                 PaneState {
                                     cwd: Some("worktrees/returns/src".into()),
@@ -101,6 +109,8 @@ mod file {
                                         conversation: "conversation-default".into(),
                                         mode: None,
                                     }),
+                                    done: true,
+                                    pending: false,
                                 },
                             ],
                             active: 1,
@@ -416,7 +426,7 @@ mod mapping {
     }
 
     fn saved_tab(panes: usize, active: usize) -> TabState {
-        let pane = PaneState { cwd: None, right_clicks: false, agent: None };
+        let pane = PaneState { cwd: None, right_clicks: false, agent: None, done: false, pending: false };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }
 

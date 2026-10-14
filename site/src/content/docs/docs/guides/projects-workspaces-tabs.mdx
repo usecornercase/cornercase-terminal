@@ -125,10 +125,17 @@ When Claude Code, Codex, Gemini CLI, opencode or Grok Build runs in a tab, an ic
 | --- | --- |
 | `◐` yellow | The agent is working. With **working icon** set to *spinner* in [settings → UI](../../reference/configuration/#ui), it is a spinner instead, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, turning about ten times a second. For Claude, also while it waits for a command it started in the background (a build, a test run); [`cornercase status`](../scripts-and-agents/#look) tells scripts that case apart. |
 | `!` orange | The agent needs you: it asks for permission or asks you a question. Claude Code, Codex, Gemini CLI and Grok Build. opencode never shows it. |
+| `●` purple | You marked the agent as pending review. It stays until you mark it as reviewed or send the agent a new prompt; opening the tab does not take it off. |
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
-So that a finished or waiting agent in another project doesn't go unnoticed, `!` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, `!` wins over `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
+So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, `!` wins over `●`, and `●` over `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
+
+#### Pending review
+
+When several agents finish at once, you rarely review them all straight away. Right-click a tab running an agent (or click its ` ⋯ `), or right-click inside the agent's pane, and pick **mark as pending review**: the tab gets a purple `●` that stays when you look at it, so you know which work you still have to check. Pick **mark as reviewed** to take it off, or send the agent a new prompt, which takes it off by itself since you are working on it again. With the [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `m` does the same on the pane you are in, and `a` stops at marked agents too. Scripts and agents use [`cornercase mark`](../scripts-and-agents/#arrange).
+
+Both `●` and `✓` are saved with the session: after a restart or an update, an agent that comes back in its conversation comes back with its mark.
 
 cornercase reads what each agent reports about itself. Nothing is installed and none of the agents' settings change.
 

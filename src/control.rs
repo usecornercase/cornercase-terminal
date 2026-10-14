@@ -63,6 +63,7 @@ pub(crate) enum Command {
     RestartWhenIdle(RestartWhenIdle),
     Stats(Stats),
     Away(Away),
+    Mark(Mark),
 }
 
 impl Command {
@@ -89,6 +90,7 @@ impl Command {
             Self::RestartWhenIdle(_) => 18,
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
+            Self::Mark(_) => 21,
         }]
     }
 
@@ -171,11 +173,14 @@ impl Command {
             Self::Away(away) => {
                 fields.add("off", away.off);
             }
+            Self::Mark(mark) => {
+                fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 21] = [
+    pub(crate) const NAMES: [&str; 22] = [
         "status",
         "open",
         "new-workspace",
@@ -197,6 +202,7 @@ impl Command {
         "restart-when-idle",
         "stats",
         "away",
+        "mark",
     ];
 }
 
@@ -388,6 +394,14 @@ pub(crate) struct Focus {
 #[serde(default)]
 pub(crate) struct Notify {
     pub(crate) text: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Mark {
+    pub(crate) pane: Option<u64>,
+    pub(crate) tab: Option<u64>,
+    pub(crate) reviewed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

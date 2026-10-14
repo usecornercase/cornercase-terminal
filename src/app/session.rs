@@ -41,20 +41,23 @@ impl App {
         for pane in &saved.panes {
             let cwd = pane.cwd.clone().filter(|cwd| cwd.is_dir()).unwrap_or_else(|| dir.to_path_buf());
             let mut term = self.spawn(area, cwd)?;
-            self.resume(&mut term, pane.agent.as_ref());
+            if self.resume(&mut term, pane.agent.as_ref()) {
+                term.agent.restore(pane.done, pane.pending);
+            }
             panes.push(term);
         }
         Ok(saved.restore(self.take_id(), panes))
     }
 
-    fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>) {
-        let Some(agent) = agent.filter(|_| self.config.resume_agents) else { return };
-        let Some(line) = agents::resume_line(&self.config, agent) else { return };
+    fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>) -> bool {
+        let Some(agent) = agent.filter(|_| self.config.resume_agents) else { return false };
+        let Some(line) = agents::resume_line(&self.config, agent) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
         self.agents.launches.push(Launch::command(term.id, line, now));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
+        true
     }
 }
 

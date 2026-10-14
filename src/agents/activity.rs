@@ -23,11 +23,16 @@ pub(crate) enum Status {
     Idle,
     Working,
     Done,
+    Pending,
     Waiting,
 }
 
 impl Status {
     pub(crate) fn needs_you(self) -> bool {
+        matches!(self, Self::Done | Self::Pending | Self::Waiting)
+    }
+
+    fn notifies(self) -> bool {
         matches!(self, Self::Done | Self::Waiting)
     }
 
@@ -36,6 +41,7 @@ impl Status {
             Self::Idle => "idle",
             Self::Working => "working",
             Self::Done => "done",
+            Self::Pending => "pending",
             Self::Waiting => "waiting",
         }
     }
@@ -58,11 +64,18 @@ pub(crate) fn spin_wait(elapsed: Duration) -> Duration {
     Duration::from_millis(u64::try_from(left).unwrap_or(100))
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct Marks {
+    unseen: bool,
+    pending: bool,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct Pane {
     agent: Option<Known>,
     activity: Option<Activity>,
-    unseen: bool,
+    marks: Marks,
+    restored: bool,
     since: Option<Instant>,
     notified: bool,
     worked: Option<Instant>,
@@ -72,29 +85,36 @@ pub(crate) struct Pane {
 impl Pane {
     pub(crate) fn follow(&mut self, agent: Option<Known>) {
         if self.agent != agent {
-            *self = Self { agent, ..Self::default() };
+            let kept = Self { marks: self.marks, restored: true, notified: true, ..Self::default() };
+            *self = if self.restored && self.agent.is_none() { kept } else { Self::default() };
+            self.agent = agent;
         }
     }
 
     pub(crate) fn update(&mut self, activity: Option<Activity>, seen: bool, now: Instant) -> Option<Status> {
+        if activity.is_none() && self.restored {
+            return None;
+        }
+        let restored = std::mem::take(&mut self.restored);
         let before = self.status();
         let finished = matches!(self.activity, Some(Activity::Working | Activity::Shell | Activity::Waiting));
         if activity == Some(Activity::Working) {
             self.worked = Some(now);
+            self.marks.pending &= !matches!(self.activity, Some(Activity::Idle | Activity::Waiting));
         }
         if activity.is_some() && self.activity.is_some() && activity != self.activity {
             self.moved = Some(now);
         }
-        self.unseen = activity == Some(Activity::Idle) && !seen && (self.unseen || finished);
+        self.marks.unseen = activity == Some(Activity::Idle) && !seen && (self.marks.unseen || finished);
         self.activity = activity;
         let status = self.status();
         if status != before {
             self.since = Some(now);
-            self.notified = false;
+            self.notified = restored;
         }
         self.notified |= seen;
         let settled = self.since.is_some_and(|since| now.duration_since(since) >= NOTIFY_AFTER);
-        if !settled || self.notified || !status.is_some_and(Status::needs_you) {
+        if !settled || self.notified || !status.is_some_and(Status::notifies) {
             return None;
         }
         self.notified = true;
@@ -102,8 +122,33 @@ impl Pane {
     }
 
     pub(crate) fn see(&mut self) {
-        self.unseen = false;
+        self.marks.unseen = false;
         self.notified = true;
+    }
+
+    pub(crate) fn mark(&mut self, pending: bool) {
+        self.marks.pending = pending;
+        self.marks.unseen &= pending;
+        self.notified = true;
+    }
+
+    pub(crate) fn pending(&self) -> bool {
+        self.marks.pending
+    }
+
+    pub(crate) fn unseen(&self) -> bool {
+        self.marks.unseen
+    }
+
+    pub(crate) fn restore(&mut self, unseen: bool, pending: bool) {
+        *self =
+            Self { marks: Marks { unseen, pending }, restored: unseen || pending, notified: true, ..Self::default() };
+    }
+
+    pub(crate) fn give_up(&mut self) {
+        if self.restored && self.agent.is_none() {
+            *self = Self::default();
+        }
     }
 
     pub(crate) fn agent(&self) -> Option<Known> {
@@ -126,7 +171,8 @@ impl Pane {
         Some(match self.activity? {
             Activity::Working | Activity::Shell => Status::Working,
             Activity::Waiting => Status::Waiting,
-            Activity::Idle if self.unseen => Status::Done,
+            Activity::Idle if self.marks.pending => Status::Pending,
+            Activity::Idle if self.marks.unseen => Status::Done,
             Activity::Idle => Status::Idle,
         })
     }

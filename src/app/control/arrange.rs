@@ -1,5 +1,5 @@
-use super::{Handled, json, name_of, none};
-use crate::app::menus::Target;
+use super::{Handled, json, name_of, none, pane_ids};
+use crate::app::menus::{Marked, Target};
 use crate::app::{App, Toast};
 use crate::control::{self, Done, Item, TodoItem, TodoList};
 use crate::host::notify::{self, Notification};
@@ -7,6 +7,17 @@ use crate::project::Hierarchy;
 use crate::ui;
 
 impl App {
+    pub(super) fn mark_request(&mut self, caller: Option<u64>, mark: &control::Mark) -> Handled {
+        let pane = self.target(caller, mark.pane, mark.tab)?;
+        if self.projects.pane_by(pane).is_none() {
+            return Err(none("pane", pane));
+        }
+        if self.mark(Marked::Pane(pane), !mark.reviewed) == 0 {
+            return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark"));
+        }
+        Ok(Some(json(&pane_ids(pane))))
+    }
+
     pub(super) fn rename_request(&mut self, caller: Option<u64>, rename: control::Rename) -> Handled {
         let target = match rename.item {
             Some(Item::Group(id)) => {

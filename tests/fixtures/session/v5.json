@@ -61,14 +61,16 @@
                     "kind": "claude",
                     "conversation": "conversation-plan",
                     "mode": "plan"
-                  }
+                  },
+                  "pending": true
                 },
                 {
                   "cwd": "worktrees/returns/src",
                   "agent": {
                     "kind": "codex",
                     "conversation": "conversation-default"
-                  }
+                  },
+                  "done": true
                 }
               ],
               "active": 1,

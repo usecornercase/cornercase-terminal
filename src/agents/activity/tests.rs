@@ -216,7 +216,138 @@ mod rollup {
     #[case::only_work(&[Some(Status::Working), Some(Status::Idle), None], None)]
     #[case::done(&[Some(Status::Working), Some(Status::Done)], Some(Status::Done))]
     #[case::waiting_wins(&[Some(Status::Done), Some(Status::Waiting), Some(Status::Working)], Some(Status::Waiting))]
+    #[case::pending_over_done(&[Some(Status::Done), Some(Status::Pending)], Some(Status::Pending))]
+    #[case::waiting_over_pending(&[Some(Status::Pending), Some(Status::Waiting)], Some(Status::Waiting))]
     fn keeps_what_needs_you(#[case] statuses: &[Option<Status>], #[case] expected: Option<Status>) {
         assert_eq!(attention(statuses.iter().copied()), expected);
+    }
+}
+
+mod marks {
+    use super::*;
+
+    const TICK: Duration = Duration::from_millis(500);
+
+    fn claude(activity: Activity) -> (Pane, Instant) {
+        let mut pane = Pane::default();
+        let now = Instant::now();
+        pane.follow(Some(Known::Claude));
+        pane.update(Some(activity), false, now);
+        (pane, now)
+    }
+
+    #[test]
+    fn a_pending_mark_stays_when_the_tab_is_seen() {
+        let (mut pane, now) = claude(Activity::Idle);
+        pane.mark(true);
+
+        pane.see();
+        pane.update(Some(Activity::Idle), true, now + TICK);
+
+        assert_eq!(pane.status(), Some(Status::Pending));
+    }
+
+    #[test]
+    fn a_new_prompt_takes_the_mark_off() {
+        let (mut pane, now) = claude(Activity::Idle);
+        pane.mark(true);
+
+        pane.update(Some(Activity::Working), false, now + TICK);
+        pane.update(Some(Activity::Idle), true, now + TICK * 2);
+
+        assert_eq!(pane.status(), Some(Status::Idle));
+    }
+
+    #[test]
+    fn a_mark_put_while_working_shows_once_the_turn_is_over() {
+        let (mut pane, now) = claude(Activity::Working);
+        pane.mark(true);
+
+        pane.update(Some(Activity::Working), true, now + TICK);
+        assert_eq!(pane.status(), Some(Status::Working));
+        pane.update(Some(Activity::Idle), true, now + TICK * 2);
+
+        assert_eq!(pane.status(), Some(Status::Pending));
+    }
+
+    #[test]
+    fn a_question_shows_over_the_mark_and_answering_it_takes_the_mark_off() {
+        let (mut pane, now) = claude(Activity::Idle);
+        pane.mark(true);
+
+        pane.update(Some(Activity::Waiting), false, now + TICK);
+        assert_eq!(pane.status(), Some(Status::Waiting));
+        pane.update(Some(Activity::Working), false, now + TICK * 2);
+
+        assert!(!pane.pending());
+    }
+
+    #[test]
+    fn reviewing_takes_off_the_done_as_well() {
+        let (mut pane, now) = claude(Activity::Working);
+        pane.update(Some(Activity::Idle), false, now + TICK);
+        pane.mark(true);
+
+        pane.mark(false);
+
+        assert_eq!(pane.status(), Some(Status::Idle));
+    }
+
+    #[test]
+    fn marking_never_notifies() {
+        let (mut pane, now) = claude(Activity::Working);
+        pane.update(Some(Activity::Idle), false, now + TICK);
+        pane.mark(true);
+        pane.mark(false);
+        pane.mark(true);
+
+        let notices: Vec<_> = (2..8).filter_map(|i| pane.update(Some(Activity::Idle), false, now + TICK * i)).collect();
+
+        assert_eq!(notices, []);
+    }
+
+    #[test]
+    fn the_agent_leaving_takes_the_mark_with_it() {
+        let (mut pane, now) = claude(Activity::Idle);
+        pane.mark(true);
+
+        pane.follow(None);
+        pane.update(None, false, now + TICK);
+        pane.follow(Some(Known::Claude));
+        pane.update(Some(Activity::Idle), false, now + TICK * 2);
+
+        assert_eq!(pane.status(), Some(Status::Idle));
+    }
+
+    #[rstest]
+    #[case::pending(false, true, Status::Pending)]
+    #[case::done(true, false, Status::Done)]
+    fn a_restored_mark_waits_for_its_agent_and_does_not_notify(
+        #[case] unseen: bool,
+        #[case] pending: bool,
+        #[case] expected: Status,
+    ) {
+        let mut pane = Pane::default();
+        let now = Instant::now();
+        pane.restore(unseen, pending);
+        pane.update(None, false, now);
+        pane.update(None, false, now + TICK);
+
+        pane.follow(Some(Known::Claude));
+        let notices: Vec<_> = (2..8).filter_map(|i| pane.update(Some(Activity::Idle), false, now + TICK * i)).collect();
+
+        assert_eq!((pane.status(), notices), (Some(expected), vec![]));
+    }
+
+    #[test]
+    fn a_restored_mark_goes_when_the_agent_never_comes_back() {
+        let mut pane = Pane::default();
+        pane.restore(true, true);
+
+        pane.give_up();
+        pane.follow(Some(Known::Claude));
+        pane.update(Some(Activity::Idle), false, Instant::now());
+
+        assert_eq!(pane.status(), Some(Status::Idle));
     }
 }

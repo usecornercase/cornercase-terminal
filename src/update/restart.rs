@@ -12,9 +12,10 @@ const SHELLS: [&str; 17] = [
     "sh", "bash", "zsh", "fish", "dash", "ksh", "mksh", "oksh", "loksh", "yash", "tcsh", "csh", "nu", "elvish",
     "xonsh", "pwsh", "ion",
 ];
-const STATUSES: [(Status, &str); 4] = [
+const STATUSES: [(Status, &str); 5] = [
     (Status::Working, "working"),
     (Status::Waiting, "waiting for you"),
+    (Status::Pending, "pending review"),
     (Status::Done, "done"),
     (Status::Idle, "idle"),
 ];

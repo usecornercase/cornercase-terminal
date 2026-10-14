@@ -207,7 +207,7 @@ impl App {
         let actions = match (row, self.tree_target(row)) {
             (ui::TreeRow::Group(g), _) => self.group_menu(g),
             (ui::TreeRow::Project(p), _) => self.project_menu(p),
-            (_, Some(target)) => vec![MenuAction::Rename(target)],
+            (_, Some(target)) => self.target_menu(target),
             _ => return,
         };
         self.overlay = Some(Overlay::Menu { at: pos, actions });
@@ -225,7 +225,7 @@ impl App {
             }
             _ => return,
         };
-        self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::Rename(target)] });
+        self.overlay = Some(Overlay::Menu { at: pos, actions: self.target_menu(target) });
     }
 
     fn workspace_hit(&self, list: Rect, pitch: u16, tabs: &ui::TabLines, pos: Position) -> Option<WorkspaceHit> {

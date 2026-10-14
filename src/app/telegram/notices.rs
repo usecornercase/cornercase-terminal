@@ -46,6 +46,7 @@ pub(super) fn icon(status: Option<Status>) -> &'static str {
     match status {
         Some(Status::Waiting) => "!",
         Some(Status::Done) => "✓",
+        Some(Status::Pending) => "●",
         Some(Status::Working) => MOON,
         Some(Status::Idle) | None => "○",
     }

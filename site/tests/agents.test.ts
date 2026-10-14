@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { AGENTS, MODES } from '../src/lib/demo/data';
+import { followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
 import { AGENT_KINDS } from '../src/lib/demo/programs';
 import { world } from '../src/lib/demo/world';
 
@@ -68,5 +69,32 @@ test('A working agent shows the moon, and turns once the spinner is picked in se
   frames.push(icon());
   assert.deepEqual(moon, ['◐', '◐']);
   assert.ok(frames.every((frame) => frame && frame !== '◐') && frames[0] !== frames[1], frames.join(' '));
+  app.destroy();
+});
+
+test('A tab marked as pending review keeps its ● until it is marked as reviewed', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(177, 46);
+  world(app);
+  const places = app.projects.flatMap((p) => p.workspaces.flatMap((w) => w.tabs.map((t) => ({ p, w, t }))));
+  const place = places[0];
+  assert.ok(place);
+  followAgent(place.t.panes[0], 'claude');
+  watchPane(place.t.panes[0], 'idle', true, 0);
+  const target = { kind: 'tab', project: place.p.id, workspace: place.w.id, tab: place.t.id } as const;
+  const labels = () => (app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : []);
+  const pick = (label: string) => app.chooseMenu(labels().indexOf(label));
+
+  app.openMenu({ x: 1, y: 1 }, target);
+  assert.deepEqual(labels(), ['rename tab', 'mark as pending review']);
+  pick('mark as pending review');
+  assert.equal(tabStatus(place.t), 'pending');
+  watchPane(place.t.panes[0], 'idle', true, 1);
+  assert.equal(tabStatus(place.t), 'pending');
+
+  app.openMenu({ x: 1, y: 1 }, target);
+  pick('mark as reviewed');
+  assert.equal(tabStatus(place.t), 'idle');
   app.destroy();
 });

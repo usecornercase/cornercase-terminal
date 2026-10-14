@@ -77,7 +77,7 @@ struct Agent {
     app: App,
     rx: Receiver<AppEvent>,
     fake: FakeClaude,
-    _config: TempDir,
+    config_dir: TempDir,
     _project: TempDir,
 }
 
@@ -93,7 +93,7 @@ impl Agent {
         let config_path = write_config(config.path(), &settings);
         let (mut app, rx) = app_in(project.path(), config_path);
         app.agents.claude_dir = Some(fake.dir().to_path_buf());
-        Self { app, rx, fake, _config: config, _project: project }
+        Self { app, rx, fake, config_dir: config, _project: project }
     }
 
     fn start(&mut self, prompt: Option<&str>) -> u64 {

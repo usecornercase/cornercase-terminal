@@ -72,7 +72,7 @@ src/version.rs    the binary version, version comparison and build id
 
 src/agents.rs     launch catalogue, shared modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
                   agents/known.rs Known, the supported identities and exhaustive dispatch to each agent folder
-                  agents/activity.rs shared activity and status, done-but-unseen, notifications and rollups; agents/launch.rs starting an agent in a new tab (pure state machine)
+                  agents/activity.rs shared activity and status, done-but-unseen, pending-review marks, notifications and rollups; agents/launch.rs starting an agent in a new tab (pure state machine)
                   agents/awake.rs keeps the server's machine from sleeping while an agent works: caffeinate, gnome-session-inhibit or systemd-inhibit as a child; agents/stats.rs local agent-work counts, hourly buckets, windows, heatmap, private persistence and share links
                   agents/context.rs shared pane state, Look, Reader and Record dispatch; agents/context/ shared discovery, incremental JSONL reads, counting and backwards last-message reads; agents/usage/ running plan probes and the modal's state per agent
                   agents/claude/ reader, session status and title (mod.rs), transcript and window rules (transcript.rs), last message (message.rs), input box and survey (screen.rs), plan usage (usage.rs), test fake (fake.rs)

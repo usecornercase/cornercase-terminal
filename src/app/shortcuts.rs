@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::layout::{Position, Rect};
 
 use super::layout::Side;
-use super::menus::Target;
+use super::menus::{Marked, MenuAction, Target};
 use super::{App, Overlay, Toast};
 use crate::agents::activity::Status;
 use crate::error::Result;
@@ -17,6 +17,9 @@ use crate::todo::Field;
 use crate::ui::{self, keys};
 
 const NO_AGENT_WAITS: &str = "no agent needs you";
+const NO_AGENT_HERE: &str = "no agent in this pane to mark";
+const MARKED: &str = "marked as pending review";
+const REVIEWED: &str = "marked as reviewed";
 const NO_ROOM: &str = "no room to split this pane";
 const NOT_GIT: &str = "this workspace is not in a git repository";
 
@@ -77,6 +80,7 @@ impl App {
             Action::PreviousProject => self.step_project(-1),
             Action::Pane(side) => self.focus_beside(side, area),
             Action::Agent => self.next_agent(),
+            Action::Mark => self.mark_focused(),
             Action::Search => {
                 self.nav = None;
                 self.overlay = Some(Overlay::Search(Search::default()));
@@ -219,6 +223,22 @@ impl App {
             Some(id) => self.jump_to_pane(id),
             None => self.toast = Some(Toast::new(NO_AGENT_WAITS, ui::ToastIcon::Check)),
         }
+    }
+
+    fn mark_focused(&mut self) {
+        let action = self.term().map(|t| t.id).and_then(|pane| self.mark_action(Marked::Pane(pane)));
+        let toast = match action {
+            Some(MenuAction::Mark(marked, pending)) => {
+                self.mark(marked, pending);
+                if pending {
+                    Toast::new(MARKED, ui::ToastIcon::Agent(Status::Pending))
+                } else {
+                    Toast::new(REVIEWED, ui::ToastIcon::Check)
+                }
+            }
+            _ => Toast::new(NO_AGENT_HERE, ui::ToastIcon::Bug),
+        };
+        self.toast = Some(toast);
     }
 
     fn ask_close_pane(&mut self) {

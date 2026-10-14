@@ -282,6 +282,7 @@ impl App {
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off),
+            Command::Mark(mark) => self.mark_request(caller, &mark),
         }
     }
 

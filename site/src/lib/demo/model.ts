@@ -17,13 +17,14 @@ export interface Pane {
   context?: Context | null;
   memory?: number | null;
   unseen?: boolean;
+  pending?: boolean;
   since?: number;
   notified?: boolean;
 }
 
 export type Activity = 'working' | 'waiting' | 'idle';
-export type Status = 'idle' | 'working' | 'done' | 'waiting';
-const URGENCY: Status[] = ['idle', 'working', 'done', 'waiting'];
+export type Status = 'idle' | 'working' | 'done' | 'pending' | 'waiting';
+const URGENCY: Status[] = ['idle', 'working', 'done', 'pending', 'waiting'];
 
 export interface Tab {
   id: number;
@@ -85,6 +86,7 @@ export type MenuAction =
   | { kind: 'addProject'; group: number }
   | { kind: 'openProject' }
   | { kind: 'newGroup' }
+  | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'pane'; pane: number; action: PaneAction }
   | { kind: 'base'; branch: string };
 
@@ -253,6 +255,7 @@ export function followAgent(pane: Pane, agent: string | null): void {
   pane.agent = agent;
   pane.activity = null;
   pane.unseen = false;
+  pane.pending = false;
   pane.since = undefined;
   pane.notified = false;
 }
@@ -260,6 +263,7 @@ export function followAgent(pane: Pane, agent: string | null): void {
 export function watchPane(pane: Pane, activity: Activity | null, seen: boolean, now: number): Status | null {
   const before = paneStatus(pane);
   const finished = pane.activity === 'working' || pane.activity === 'waiting';
+  if (activity === 'working' && (pane.activity === 'idle' || pane.activity === 'waiting')) pane.pending = false;
   pane.unseen = activity === 'idle' && !seen && (!!pane.unseen || finished);
   pane.activity = activity;
   const status = paneStatus(pane);
@@ -276,7 +280,7 @@ export function watchPane(pane: Pane, activity: Activity | null, seen: boolean, 
 
 export function paneStatus(pane: Pane): Status | null {
   if (!pane.activity) return null;
-  if (pane.activity === 'idle') return pane.unseen ? 'done' : 'idle';
+  if (pane.activity === 'idle') return pane.pending ? 'pending' : pane.unseen ? 'done' : 'idle';
   return pane.activity;
 }
 
@@ -286,7 +290,14 @@ function mostUrgent(statuses: (Status | null)[]): Status | null {
   return best;
 }
 
-export const attention = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses.filter((s) => s === 'done' || s === 'waiting'));
+export const needsYou = (s: Status | null): boolean => s === 'done' || s === 'pending' || s === 'waiting';
+export const attention = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses.filter(needsYou));
+
+export function markPane(pane: Pane, pending: boolean): void {
+  pane.pending = pending;
+  pane.unseen = pending && !!pane.unseen;
+  pane.notified = true;
+}
 export const tabStatus = (t: Tab): Status | null => mostUrgent(t.panes.map(paneStatus));
 export const tabRunning = (t: Tab): boolean => t.panes.some((p) => p.shell.busy);
 export const tabContext = (t: Tab): Context | null => activePane(t)?.context ?? t.panes.find((p) => p.context)?.context ?? null;

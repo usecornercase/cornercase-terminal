@@ -2,7 +2,6 @@ use crossterm::event::{MouseButton, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::menus::MenuAction;
 use super::menus::Target;
 use super::overlay::Overlay;
 use crate::error::Result;
@@ -68,7 +67,7 @@ impl App {
                 MouseEventKind::Down(MouseButton::Right),
                 ui::tab_bar::Hit::Tab(t) | ui::tab_bar::Hit::Close(t) | ui::tab_bar::Hit::Menu(t),
             ) => {
-                self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::Rename(target(t))] });
+                self.overlay = Some(Overlay::Menu { at: pos, actions: self.target_menu(target(t)) });
             }
             _ => {}
         }

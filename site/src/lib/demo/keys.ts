@@ -14,6 +14,7 @@ export type KeysAction =
   | { kind: 'previousProject' }
   | { kind: 'pane'; side: PanePlace }
   | { kind: 'agent' }
+  | { kind: 'mark' }
   | { kind: 'search' }
   | { kind: 'newTab' }
   | { kind: 'split'; dir: 'right' | 'down' }
@@ -55,6 +56,7 @@ const ROOT: KeysItem[] = [
   run('{', 'previous project', { kind: 'previousProject' }),
   { key: '←↑↓→', label: 'pane on that side', step: null },
   run('a', 'agent that needs you', { kind: 'agent' }),
+  run('m', 'mark for review', { kind: 'mark' }),
   run('/', 'search', { kind: 'search' }),
   run('c', 'new tab', { kind: 'newTab' }),
   run('|', 'split right', { kind: 'split', dir: 'right' }),

@@ -51,7 +51,7 @@ impl Condition {
         let holds = match self {
             Self::TurnOver if agent.background_shell() => return Some(activity::SHELL),
             Self::Stops | Self::TurnOver => status != Status::Working,
-            Self::Idle => matches!(status, Status::Idle | Status::Done),
+            Self::Idle => matches!(status, Status::Idle | Status::Done | Status::Pending),
             Self::Working => status == Status::Working,
             Self::Waiting => status == Status::Waiting,
             Self::Shell | Self::Text(_) | Self::Quiet(_) => false,

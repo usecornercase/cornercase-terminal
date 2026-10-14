@@ -111,13 +111,17 @@ pub(crate) struct PaneState {
     pub(crate) right_clicks: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) agent: Option<AgentState>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) done: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) pending: bool,
 }
 
 impl WorkspaceState {
     pub(crate) fn plain(path: PathBuf, cwds: Vec<Option<PathBuf>>, active: usize) -> Self {
         let tabs = cwds.into_iter().map(|cwd| TabState {
             name: None,
-            panes: vec![PaneState { cwd, right_clicks: false, agent: None }],
+            panes: vec![PaneState { cwd, right_clicks: false, agent: None, done: false, pending: false }],
             active: 0,
             layout: None,
         });
@@ -195,6 +199,8 @@ impl TabState {
                     cwd: term.cwd(),
                     right_clicks: tab.right_clicks_to_pane(term.id),
                     agent: term.resume.clone(),
+                    done: term.resume.is_some() && term.agent.unseen(),
+                    pending: term.resume.is_some() && term.agent.pending(),
                 })
                 .collect(),
             active: tab.active,
@@ -286,7 +292,13 @@ impl From<V1State> for V2State {
             if i <= old.active {
                 active = workspaces.len();
             }
-            let terminals = vec![PaneState { cwd: Some(cwd.clone()), right_clicks: false, agent: None }];
+            let terminals = vec![PaneState {
+                cwd: Some(cwd.clone()),
+                right_clicks: false,
+                agent: None,
+                done: false,
+                pending: false,
+            }];
             workspaces.push(V2Workspace { path: cwd, name: term.name, terminals, active: 0 });
         }
         Self { workspaces, active }

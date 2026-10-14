@@ -6,6 +6,7 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::interaction::{DOUBLE_CLICK, Drag, LinkPress, PaneDrag};
+use super::menus::Marked;
 use super::menus::MenuAction;
 use super::menus::PaneAction;
 use super::overlay::Overlay;
@@ -239,13 +240,15 @@ impl App {
         }
         let right_clicks =
             if tab.right_clicks_to_pane(pane) { PaneAction::RightClicksToMenu } else { PaneAction::RightClicksToPane };
-        let actions = [Dir::Right, Dir::Down]
+        let mut actions: Vec<MenuAction> = [Dir::Right, Dir::Down]
             .into_iter()
             .filter(|&d| tab.can_split(area, pane, d))
             .map(PaneAction::Split)
-            .chain([right_clicks, PaneAction::Close])
+            .chain([right_clicks])
             .map(|a| MenuAction::Pane(pane, a))
             .collect();
+        actions.extend(self.mark_action(Marked::Pane(pane)));
+        actions.push(MenuAction::Pane(pane, PaneAction::Close));
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 

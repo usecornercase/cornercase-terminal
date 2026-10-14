@@ -60,7 +60,13 @@ mod a_bug {
     pub(super) fn one_shell_in(dir: &Path) -> State {
         let tabs = vec![TabState {
             name: None,
-            panes: vec![PaneState { cwd: Some(dir.to_path_buf()), right_clicks: false, agent: None }],
+            panes: vec![PaneState {
+                cwd: Some(dir.to_path_buf()),
+                right_clicks: false,
+                agent: None,
+                done: false,
+                pending: false,
+            }],
             active: 0,
             layout: None,
         }];
