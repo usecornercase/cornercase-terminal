@@ -20,6 +20,10 @@ impl Settings {
         match row {
             Row::Folder => self.start_edit(row, self.config.worktrees_dir.clone()),
             Row::Fetch => self.start_edit(row, self.config.fetch_minutes.to_string()),
+            Row::PullRequests => self.flip(
+                |c| &mut c.pull_requests,
+                ["workspaces show their pull request and its checks", "workspaces no longer show pull requests"],
+            ),
             Row::Token(source) => {
                 if self.status(source) == Some(&Status::Env) {
                     let env = source.token_env().unwrap_or_default();

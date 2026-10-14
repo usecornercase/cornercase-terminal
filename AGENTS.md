@@ -59,6 +59,7 @@ src/main.rs       hands argv to cli.rs (uses anyhow)
 src/lib.rs        the `pub mod` lines, in the five groups below: shared leaves, domains, view, app, processes
 
 src/error.rs      library error type
+src/gh.rs         running gh, GitHub's CLI
 src/http.rs       HTTP requests and downloads for issue trackers and updates
 src/list.rs       list cursors and search queries with a selection and scroll
 src/log.rs        server.log: levels, the line format, the writer thread and its rotation, `Job` timings, `cornercase logs`
@@ -85,10 +86,11 @@ src/git.rs        branch from .git/HEAD, repo roots, linked worktrees (no git pr
 src/graphics/     images in the files panel: mod.rs (Support, Missing, Picture), detect.rs (which protocol a client's terminal shows), decode.rs, encode.rs (fit, payloads), kitty.rs, iterm.rs, sixel.rs, tmux.rs (passthrough)
 src/highlight.rs  syntax highlighting of fenced code (syntect scopes -> palette colours), cached; highlight/syntax.rs tree-sitter highlighting through arborium: which grammar a file gets, captures -> palette colours; highlight/markdown.rs Markdown -> wrapped ratatui Lines
 src/host/         the outer terminal: host/theme.rs asks it for its colours and its name (XTVERSION), host/notify.rs desktop notifications through it (which escape sequence a terminal understands, encoding), host/pointer.rs the resize pointer (which terminals take OSC 22, the shape names and the reset), host/clipboard.rs OSC 52
-src/issues/       issue model and clients: github.rs (gh CLI), gitlab.rs (REST, the remote's project), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state, sizes and hits; app/issues_dialog.rs builds its view) and browser/ (buttons, token_form, people, picker, input, view), cache.rs (lists on disk), issues/secrets.rs (GitLab / Shortcut / Linear / Jira / Plane tokens in secrets.json, 0600)
+src/issues/       issue model and clients: github.rs (gh CLI), gitlab.rs (REST), shortcut.rs (REST), linear.rs (GraphQL), jira.rs (REST; jira/adf.rs turns ADF into Markdown), plane.rs (REST; plane/html.rs turns HTML into Markdown), md.rs (Markdown helpers both share), browser.rs (modal state, sizes and hits; app/issues_dialog.rs builds its view) and browser/ (buttons, token_form, people, picker, input, view), cache.rs (lists on disk), issues/secrets.rs (the trackers' tokens in secrets.json, 0600)
 src/project.rs    Project > Workspace > Tab > panes, per-level lookups, labels, removal, moving
                   project/group.rs holds Group, GroupEntry, icons, colours, presets and saved-icon normalization; project/hierarchy.rs holds Hierarchy (lookups by id and walks across levels), group_indices and sidebar_order
                   project/split.rs a tab's split tree: rects, dividers, splitting, removing, ratios; project/search.rs global search: candidates (built from the hierarchy) and ranking; project/picker.rs folder picker state; project/vscode.rs reads a VS Code `.code-workspace` (JSONC: comments and trailing commas) into a name and its folders
+src/pull_request.rs a branch's pull request and its checks (`gh pr view`)
 src/settings.rs   the settings modal's state and plain row/edit/pick texts; returns Actions for App; settings/activate.rs what choosing a row does, submit.rs finishing a pick or an edit, trackers.rs the Issues page's tokens and tabs, input.rs keys, paste and capturing the prefix key, view.rs row texts
 src/shortcuts.rs  the prefix key (parse, match, clashes) and the keys menu's tree of actions
 src/state.rs      the saved session as JSON, its Widths schema, migrations and the mapping to and from the hierarchy (`ProjectState::of`/`restore`)
@@ -106,7 +108,7 @@ src/app/          event.rs (AppEvent, Start), overlay.rs (overlay state, view an
                   input.rs (keys, mouse and paste), interaction.rs (drags and timing), jobs.rs (`spawn_job`, the one way to start a background job), layout.rs (focus and side panels), view.rs (View entries)
                   hierarchy.rs (active lookups, closing, renaming, groups and moving), tabs.rs (shells, tabs, workspaces and projects), session.rs (restoring and resuming)
                   sidebar.rs (lists, row menus and agents section), sidebar/drag.rs (row drags), sidebar/tree.rs, tab_bar.rs, panes.rs (pane mouse, scrollback, selection and dividers), links.rs (paths in panes)
-                  agent_watch.rs (status, stats samples, notifications and keeping awake), launches.rs (typing into agents), worktrees.rs (creating, checking, removing and upstream counts), actions.rs (editor and agent actions)
+                  agent_watch.rs (status, stats samples, notifications and keeping awake), launches.rs (typing into agents), worktrees.rs (creating, checking, removing and upstream counts), pull_requests.rs, actions.rs (editor and agent actions)
                   changes_panel.rs and changes_panel/branches.rs, files_panel.rs, todo_panel.rs; issues_dialog.rs, update_dialog.rs, picker_dialog.rs, search_dialog.rs, settings_dialog.rs (builds the settings view), usage_dialog.rs
                   control.rs (the request switchboard and target resolution) and control/ (wait.rs waits, idle_restart.rs restart-when-idle, create.rs, talk.rs sending and reading, close.rs, arrange.rs renaming and TODOs, status.rs), events.rs (event subscribers), shortcuts.rs (keys menu actions), trace.rs (changes for logs and events), images.rs (placement and encode jobs), remote_access.rs (browser access), telegram.rs and telegram/ (pairing, away, notices, replies, /new)
 

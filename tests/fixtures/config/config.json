@@ -1,6 +1,7 @@
 {
   "worktrees_dir": "worktrees",
   "fetch_minutes": 12,
+  "pull_requests": false,
   "issue_tabs": [
     "shortcut",
     "github",

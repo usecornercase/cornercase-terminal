@@ -453,6 +453,42 @@ export const ISSUES: Issue[] = [
   },
 ];
 
+export interface PullCheck {
+  name: string;
+  workflow: string;
+  outcome: 'passed' | 'failed' | 'running' | 'skipped';
+}
+
+export interface Pull {
+  branch: string;
+  number: number;
+  title: string;
+  checks: PullCheck[];
+}
+
+const job = (name: string, outcome: PullCheck['outcome'], workflow = 'CI'): PullCheck => ({ name, workflow, outcome });
+
+export const PULLS: Pull[] = [
+  {
+    branch: 'feat/dark-mode',
+    number: 483,
+    title: 'Dark mode for the checkout',
+    checks: [job('test (ubuntu-latest)', 'running'), job('test (macos-latest)', 'running'), job('lint', 'passed')],
+  },
+  {
+    branch: 'feat/gift-cards',
+    number: 485,
+    title: 'Pay with a gift card at checkout',
+    checks: [
+      job('test (ubuntu-latest)', 'failed'),
+      job('test (macos-latest)', 'passed'),
+      job('lint', 'passed'),
+      job('preview', 'passed', ''),
+      job('deploy', 'skipped', 'Pages'),
+    ],
+  },
+];
+
 export const AGENTS: [string, string][] = [
   ['claude', 'claude'],
   ['codex', 'codex'],

@@ -1,6 +1,6 @@
 ---
 title: Git worktrees
-description: Give each workspace its own checkout and branch, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
+description: Give each workspace its own checkout and branch, see its pull request and checks, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -53,8 +53,8 @@ To keep them somewhere else, change **settings → Worktrees → worktrees folde
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n"
-  crop={[2, 4, 106, 6]}
+  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown"
+  crop={[2, 4, 106, 7]}
 />
 
 ## Commits to pull
@@ -66,6 +66,44 @@ When a workspace's branch is behind its upstream, the workspace row ends with th
 - The fetch never asks for a password or passphrase: if it needs one, or the network is down, it fails silently and the number stays as it was. Use an SSH agent or a credential helper so it can run unattended.
 
 To fetch more or less often, change **settings → Worktrees → fetch branches every**, in minutes. `0` turns it off: nothing is fetched and no numbers are shown.
+
+## Pull requests and their checks
+
+When a workspace's branch has a pull request on GitHub, its row ends with the pull request's number, coloured by its checks, so you see from the sidebar which line of work is green, still running or broken, without opening a browser:
+
+<Screen
+  name="pull-requests"
+  alt="The workspaces of web-shop: main with ↓2, feat/dark-mode with #483• in yellow, its checks still running, and feat/gift-cards with #485✗ in red, a check failed"
+  crop={[0, 14, 31, 18]}
+/>
+
+| Mark | Means |
+| --- | --- |
+| `#485✗` in red | a check failed |
+| `#483•` in yellow | checks are still running |
+| `#482✓` in green | every check passed |
+| `#482` in grey | the pull request has no checks |
+| `#482` in purple | merged |
+| `#482` crossed out | closed without merging |
+
+Click the row's ` ⋯ ` (or right-click it) and pick **pull request #485** to see each check, failed ones first, with the workflow it belongs to:
+
+<Screen
+  name="pull-request-checks"
+  alt="The Pull request dialog: #485 Pay with a gift card at checkout; open, 1 failed, 3 passed, 1 skipped; test (ubuntu-latest) failed, lint, test (macos-latest) and preview passed, deploy skipped; then ask agent, copy link and done"
+  crop={[19, 7, 72, 24]}
+/>
+
+- **copy link** copies the pull request's address, to open it in your browser.
+- **ask agent**, shown when a check failed, pastes into the workspace's agent which checks failed and the links to their logs, so it can read them (with `gh run view`, for example) and fix them. It is not sent: add what you want and press `Enter`. Without an agent in the workspace, the text is copied instead.
+
+With a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `g` `p` opens the dialog for the workspace on screen.
+
+How it works:
+
+- cornercase runs [`gh`](https://cli.github.com/), GitHub's CLI, in each workspace's folder: `gh pr view` finds the pull request of the branch checked out there, also one an agent opened with `gh pr create`. `gh` must be installed and logged in (`gh auth login`); without it nothing shows, and **settings → Worktrees → pull requests** says why.
+- Only workspaces on a branch of a repository with a remote are asked, and not the default branch (`origin`'s `HEAD`). A workspace is asked again every 20 seconds while its checks run and every minute otherwise; a merged or closed pull request, and a project where `gh` failed, every 5 minutes. Opening the dialog asks at once.
+- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`.
 
 ## Worktrees you made elsewhere
 

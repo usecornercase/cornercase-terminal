@@ -49,6 +49,12 @@ fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
     [submit, cancel]
 }
 
+fn left_of(row: Rect, submit: Rect, extra: &str) -> Rect {
+    let right = submit.x.saturating_sub(1).max(row.x);
+    let x = right.saturating_sub(button_width(extra)).max(row.x);
+    Rect { x, width: right - x, ..row }
+}
+
 fn first_visible(list: Rect, items: usize, scroll: usize) -> usize {
     scroll.min(items.saturating_sub(usize::from(list.height)))
 }

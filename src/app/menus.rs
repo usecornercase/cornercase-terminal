@@ -86,6 +86,7 @@ pub(super) enum MenuAction {
     NewGroup,
     Pane(u64, PaneAction),
     Mark(Marked, bool),
+    PullRequest(u64),
     Browser,
     Away,
 }
@@ -126,6 +127,9 @@ impl App {
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
+            MenuAction::PullRequest(workspace) => {
+                self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
+            }
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
             MenuAction::Away if !self.telegram.ready() => "set up Telegram…".into(),
@@ -135,11 +139,12 @@ impl App {
     }
 
     pub(super) fn target_menu(&self, target: Target) -> Vec<MenuAction> {
-        let mark = match target {
+        let more = match target {
             Target::Tab(_, _, tab) => self.mark_action(Marked::Tab(tab)),
-            _ => None,
+            Target::Workspace(_, workspace) => self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace)),
+            Target::Group(_) | Target::Project(_) => None,
         };
-        std::iter::once(MenuAction::Rename(target)).chain(mark).collect()
+        std::iter::once(MenuAction::Rename(target)).chain(more).collect()
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -186,6 +191,7 @@ impl App {
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
             }
+            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away => self.toggle_away(),

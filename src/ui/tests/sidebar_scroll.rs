@@ -85,6 +85,7 @@ fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
             name: "main".into(),
             tabs: vec!["zsh".into(); 10],
             behind: 0,
+            pull: None,
             removing: false,
         }],
         active_tab: Some(0),

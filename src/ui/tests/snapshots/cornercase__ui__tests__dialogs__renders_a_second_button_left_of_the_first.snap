@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/dialogs.rs
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"              ╭─ Pull request ───────────────────────────────────────────────────────╮              "
+" Projects     │ #482 Returns page crashes on an empty address                        │              "
+"              │                                                                      │              "
+"▌ cornercase (│                                                                      │              "
+"              │                                                                      │              "
+"  + New       │ open · 1 failed, 1 passed                                            │              "
+"              │                                                                      │              "
+"              │ ✗ tests                                                              │              "
+"              │ ✓ lint                                                               │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+"              │                                                                      │              "
+" ─────────────│                                                                      │              "
+"  Settings    │                                        ask agent   copy link   done  │              "
+"  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
+"  Quit                         │                         │                                          "

@@ -12,6 +12,7 @@ fn with_details(details: Details) -> View<'static> {
             name: "login".into(),
             tabs: vec![claude, "nvim".into()],
             behind: 0,
+            pull: None,
             removing: false,
         }],
         active_tab: Some(0),

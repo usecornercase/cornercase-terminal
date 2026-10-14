@@ -2,10 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.92
+## 0.12.93
 
 - GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so GitLab links the merge request from it to the issue and, with its automatic issue closing on, closes the issue when the merge request reaches the default branch. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope; both can be changed later in **Settings → Issues → GitLab**. A token in `GITLAB_TOKEN` takes precedence instead, and is changed outside cornercase, then `cornercase kill-server`.
 - Shortcut and Plane no longer follow a redirect with your token: a server that answers with one is reported in the list, so the token is never sent to another address.
+
+## 0.12.92
+
+- A workspace whose branch has a pull request on GitHub shows its number at the end of its row, coloured by its checks: `#485✗` in red when one failed, `#483•` in yellow while they run, `#482✓` in green when they all passed. It turns purple once merged and is crossed out once closed. cornercase asks `gh` in the background, every 20 seconds while checks run and every minute otherwise.
+- The workspace's menu (` ⋯ ` or right-click) has **pull request #485**, which lists every check. **copy link** copies the pull request's address, and **ask agent** hands the failed checks, with links to their logs, to the workspace's agent, for you to add a note. With a prefix key, `g p` opens it.
+- It needs `gh` installed and logged in: **Settings → Worktrees → pull requests** says why when none show, and turns it off. `cornercase status` lists each workspace's pull request too.
 
 ## 0.12.91
 

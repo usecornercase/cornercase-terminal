@@ -6,7 +6,7 @@ use rstest::rstest;
 use super::args::{RestartArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
-use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, TabInfo, WorkspaceInfo};
+use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
 
 fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
@@ -208,6 +208,7 @@ mod output {
             branch: Some("fix/login".into()),
             worktree: true,
             behind: 2,
+            pull_request: None,
             active: true,
             tabs: vec![tab],
         };
@@ -245,6 +246,24 @@ mod output {
                  group 8  work  collapsed\n\
                  \x20 project 9  api  ~/api\n"
         );
+    }
+
+    #[test]
+    fn a_workspace_with_a_pull_request_names_it_and_its_checks() {
+        let mut report = report();
+        let pull = |checks: Option<&str>| PullRequestInfo {
+            number: 482,
+            state: "open".into(),
+            checks: checks.map(String::from),
+            ..PullRequestInfo::default()
+        };
+        report.projects[0].workspaces[0].pull_request = Some(pull(Some("failing")));
+        let failing = render(&report, Some(Path::new("/home/ana")));
+        report.projects[0].workspaces[0].pull_request = Some(pull(None));
+        let unchecked = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(failing.contains("worktree  2 behind  pull request #482 open, checks failing  (shown)\n"), "{failing}");
+        assert!(unchecked.contains("worktree  2 behind  pull request #482 open  (shown)\n"), "{unchecked}");
     }
 
     #[test]

@@ -8,5 +8,10 @@ case "${1:-} ${2:-}" in
     ;;
   "issue view") cat "$CC_DATA/gh/view-$3.json" ;;
   "api repos/{owner}/{repo}/assignees") printf 'ana\nluis\nmarta\n' ;;
+  "pr view")
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    pull="$CC_DATA/gh/pr-$(printf '%s' "$branch" | tr / -).json"
+    if [ -f "$CC_DATA/gh/pulls" ] && [ -f "$pull" ]; then cat "$pull"; else echo "no pull requests found for branch \"$branch\"" >&2; exit 1; fi
+    ;;
   *) echo "gh stand-in: $*" >&2; exit 1 ;;
 esac

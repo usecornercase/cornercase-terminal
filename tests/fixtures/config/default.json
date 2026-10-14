@@ -1,6 +1,7 @@
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
+  "pull_requests": true,
   "issue_tabs": [
     "all",
     "github",

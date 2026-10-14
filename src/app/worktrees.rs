@@ -16,6 +16,7 @@ use crate::git::upstream;
 use crate::git::worktree;
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
+use crate::pull_request::PullRequest;
 use crate::ui::{self};
 
 #[derive(Default)]
@@ -49,6 +50,7 @@ pub(crate) enum WorktreeEvent {
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<()>, request: Option<u64> },
     Behind { project: u64, behind: Vec<(u64, u32)> },
+    PullRequests { project: u64, found: Vec<(u64, String, Option<PullRequest>)>, error: Option<String> },
 }
 
 impl WorktreeEvent {
@@ -58,6 +60,7 @@ impl WorktreeEvent {
             Self::Checked { .. } => "worktree checked",
             Self::Removed { .. } => "worktree removed",
             Self::Behind { .. } => "behind",
+            Self::PullRequests { .. } => "pull requests",
         }
     }
 }
@@ -84,6 +87,7 @@ impl App {
                 self.worktree_removed(project, workspace, result);
             }
             WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
+            WorktreeEvent::PullRequests { project, found, error } => self.pull_requests_found(project, found, error),
         }
         Ok(())
     }

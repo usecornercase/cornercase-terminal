@@ -46,6 +46,27 @@ for (const i of github) {
   writeFileSync(join(gh, `view-${i.number}.json`), JSON.stringify({ ...issue(i), body: i.body, comments }));
 }
 
+const run = (pull, i) => `https://github.com/acme/web-shop/actions/runs/${7000 + pull.number}/job/${9000 + i}`;
+const rollup = (pull) =>
+  pull.checks.map((check, i) =>
+    check.workflow
+      ? {
+          __typename: 'CheckRun',
+          name: check.name,
+          workflowName: check.workflow,
+          status: check.outcome === 'running' ? 'IN_PROGRESS' : 'COMPLETED',
+          conclusion: { passed: 'SUCCESS', failed: 'FAILURE', skipped: 'SKIPPED', running: '' }[check.outcome],
+          detailsUrl: run(pull, i),
+          startedAt: ago('1h'),
+        }
+      : { __typename: 'StatusContext', context: check.name, state: 'SUCCESS', targetUrl: '', startedAt: ago('1h') },
+  );
+for (const pull of data.PULLS) {
+  const url = `https://github.com/acme/web-shop/pull/${pull.number}`;
+  const view = { number: pull.number, title: pull.title, url, state: 'OPEN', isDraft: false, statusCheckRollup: rollup(pull) };
+  writeFileSync(join(gh, `pr-${pull.branch.replace(/\//g, '-')}.json`), JSON.stringify(view));
+}
+
 const at = (minutes) => new Date(now + minutes * 60e3).toISOString();
 const unix = (minutes) => Math.floor((now + minutes * 60e3) / 1000);
 const limit = (kind, group, percent, severity, minutes, scope = null) => ({ kind, group, percent, severity, resets_at: at(minutes), scope, is_active: false });

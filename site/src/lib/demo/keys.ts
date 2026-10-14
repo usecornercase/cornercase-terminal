@@ -25,6 +25,7 @@ export type KeysAction =
   | { kind: 'files' }
   | { kind: 'changes' }
   | { kind: 'base' }
+  | { kind: 'pullRequest' }
   | { kind: 'newWorkspace' }
   | { kind: 'renameWorkspace' }
   | { kind: 'closeWorkspace' }
@@ -81,7 +82,11 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('e', 'file tree', { kind: 'files' }),
     run('p', 'projects, workspaces, tabs', { kind: 'search' }),
   ],
-  git: [run('d', 'changes', { kind: 'changes' }), run('b', 'compare against a branch', { kind: 'base' })],
+  git: [
+    run('d', 'changes', { kind: 'changes' }),
+    run('b', 'compare against a branch', { kind: 'base' }),
+    run('p', 'pull request and its checks', { kind: 'pullRequest' }),
+  ],
   workspace: [
     run('n', 'new workspace', { kind: 'newWorkspace' }),
     run('r', 'rename workspace', { kind: 'renameWorkspace' }),

@@ -69,6 +69,10 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
         parts.extend(workspace.branch.as_ref().map(|branch| format!("branch {branch}")));
         parts.extend(workspace.worktree.then(|| "worktree".to_string()));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
+        parts.extend(workspace.pull_request.as_ref().map(|pull| match &pull.checks {
+            Some(checks) => format!("pull request #{} {}, checks {checks}", pull.number, pull.state),
+            None => format!("pull request #{} {}", pull.number, pull.state),
+        }));
         lines.push(line(depth + 1, "workspace", workspace.id, &parts, &marks(shown.workspace == Some(workspace.id))));
         for tab in &workspace.tabs {
             let parts = [tab.name.clone(), tab.status.clone().unwrap_or_default()];

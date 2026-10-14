@@ -5,6 +5,7 @@ use super::App;
 use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
 use super::menus::Target;
+use super::pull_requests::{COPY_LINK, DONE};
 use super::settings_dialog::settings_view;
 use super::update_dialog::UpdateStep;
 use super::worktrees::Check;
@@ -66,6 +67,7 @@ pub(super) enum Overlay {
     Remote,
     Telegram,
     Branches(BranchPicker),
+    PullRequest { workspace: u64, scroll: usize },
     Keys(Option<KeysGroup>),
 }
 
@@ -93,6 +95,7 @@ impl Overlay {
             Self::Telegram => "telegram",
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
+            Self::PullRequest { .. } => "pull request",
             Self::Keys(_) => "keys",
         }
     }
@@ -112,6 +115,7 @@ impl Overlay {
             Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
+            Self::PullRequest { .. } => COPY_LINK,
             _ => CREATE_SUBMIT,
         }
     }
@@ -119,6 +123,7 @@ impl Overlay {
     pub(super) fn cancel_label(&self) -> &'static str {
         match self {
             Self::Update(UpdateStep::Installed) => LATER,
+            Self::PullRequest { .. } => DONE,
             _ => ui::CANCEL_LABEL,
         }
     }
@@ -161,6 +166,7 @@ impl App {
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
+            Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Telegram) => self.telegram_mouse(ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
@@ -210,6 +216,7 @@ impl App {
             Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
             Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),
             Overlay::Branches(picker) => Self::branches_view(picker),
+            Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
         })
     }
 }

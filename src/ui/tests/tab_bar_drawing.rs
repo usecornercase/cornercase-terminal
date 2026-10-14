@@ -6,7 +6,13 @@ fn with_bar() -> View<'static> {
     let tabs = vec![claude, TabEntry::from("zsh")];
     View {
         has_project: true,
-        workspaces: vec![WorkspaceEntry { name: "main".into(), tabs: tabs.clone(), behind: 0, removing: false }],
+        workspaces: vec![WorkspaceEntry {
+            name: "main".into(),
+            tabs: tabs.clone(),
+            behind: 0,
+            pull: None,
+            removing: false,
+        }],
         active_tab: Some(0),
         tab_bar: Some(tab_bar::TabBar { tabs, active: Some(0), details, scroll: 0 }),
         ..view(&["cornercase"])

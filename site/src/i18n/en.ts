@@ -161,6 +161,7 @@ export const page = {
           ['Search', 'Any project, branch or tab, found as you type.'],
           ['Splits', "Right-click, split. Drag to resize. That's it."],
           ['TODO, at hand', 'Your list, next to the shells it is about.'],
+          ['Pull requests, checked', 'Each worktree shows its pull request and whether its checks pass. One fails? Hand it to the agent.'],
         ],
       },
       {

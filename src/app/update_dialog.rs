@@ -249,6 +249,7 @@ impl App {
             scroll: self.update.scroll,
             note,
             submit,
+            extra: None,
             cancel,
         })
     }
@@ -267,6 +268,7 @@ impl App {
             scroll: self.update.scroll,
             note: None,
             submit: RESTART_SUBMIT,
+            extra: None,
             cancel: ui::CANCEL_LABEL,
         })
     }

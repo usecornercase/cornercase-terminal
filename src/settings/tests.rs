@@ -62,7 +62,7 @@ mod pages {
 
     #[test]
     fn the_first_one_is_worktrees() {
-        assert_eq!(settings().rows(), [Row::Folder, Row::Fetch]);
+        assert_eq!(settings().rows(), [Row::Folder, Row::Fetch, Row::PullRequests]);
     }
 
     #[rstest]
@@ -95,9 +95,10 @@ mod pages {
     #[test]
     fn down_stays_on_the_page() {
         let mut s = settings();
-        press(&mut s, KeyCode::Down);
-        press(&mut s, KeyCode::Down);
-        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::Fetch)));
+        for _ in 0..3 {
+            press(&mut s, KeyCode::Down);
+        }
+        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::PullRequests)));
     }
 }
 
@@ -644,6 +645,29 @@ mod keep_awake {
         let before = s.config.keep_awake;
         go_to(&mut s, &Row::KeepAwake);
         assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).keep_awake), (false, true));
+    }
+}
+
+mod pull_requests {
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_on() {
+        let mut s = settings();
+        let before = s.config.pull_requests;
+        go_to(&mut s, &Row::PullRequests);
+        assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).pull_requests), (true, false));
+    }
+
+    #[test]
+    fn its_note_is_what_the_app_says() {
+        let mut s = settings();
+        s.pulls = "install gh, GitHub's CLI, to see them".into();
+
+        let text = s.row_text(&Row::PullRequests);
+
+        assert_eq!((text.label.as_str(), text.value.as_str()), ("pull requests", "[x] shown"));
+        assert_eq!(text.note, "install gh, GitHub's CLI, to see them");
     }
 }
 

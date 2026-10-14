@@ -1,7 +1,9 @@
 use super::{Handled, json, none};
 use crate::agents::awake;
 use crate::app::App;
-use crate::control::{self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, Report, TabInfo, WorkspaceInfo};
+use crate::control::{
+    self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo, WorkspaceInfo,
+};
 use crate::git;
 use crate::log::{self, Level};
 use crate::project::{Hierarchy, Tab, Workspace};
@@ -30,6 +32,14 @@ impl App {
             branch: git::branch(&ws.path),
             worktree: ws.worktree,
             behind: ws.behind,
+            pull_request: self.pull_request(ws.id).map(|pull| PullRequestInfo {
+                number: pull.number,
+                title: pull.title.clone(),
+                url: pull.url.clone(),
+                state: pull.state.name().into(),
+                checks: pull.ci().map(|ci| ci.name().into()),
+                failed: pull.failed().map(|check| check.name.clone()).collect(),
+            }),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
         };

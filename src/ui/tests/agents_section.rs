@@ -51,6 +51,7 @@ fn shown(sidebar: Sidebar, entries: Vec<AgentEntry>) -> View<'static> {
             name: "default".into(),
             tabs: vec!["codex".into()],
             behind: 0,
+            pull: None,
             removing: false,
         }],
         tree: (sidebar == Sidebar::Tree).then_some(tree),

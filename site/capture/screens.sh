@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
 
 pane_in() {
   cc status --json | node -e '
@@ -284,6 +284,26 @@ screen_remove_workspace() {
   cc_click '×'
   cc_wait 'remove anyway'
   cc_shot remove-workspace
+}
+
+pulls_shown() {
+  touch "$CC_DATA/gh/pulls"
+  cc_s1
+  cc_wait '#485✗'
+  cc_wait '#483•'
+}
+
+screen_pull_requests() {
+  pulls_shown
+  cc_shot pull-requests
+}
+
+screen_pull_request_checks() {
+  pulls_shown
+  cc_rclick 'feat/gift-cards'
+  cc_click 'pull request #485'
+  cc_wait 'copy link'
+  cc_shot pull-request-checks
 }
 
 open_issues() {

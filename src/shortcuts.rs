@@ -135,6 +135,7 @@ pub(crate) enum Action {
     Files,
     Changes,
     Base,
+    PullRequest,
     NewWorkspace,
     RenameWorkspace,
     CloseWorkspace,
@@ -227,7 +228,11 @@ const FIND: [Item; 4] = [
     run("p", "projects, workspaces, tabs", Action::Search),
 ];
 
-const GIT: [Item; 2] = [run("d", "changes", Action::Changes), run("b", "compare against a branch", Action::Base)];
+const GIT: [Item; 3] = [
+    run("d", "changes", Action::Changes),
+    run("b", "compare against a branch", Action::Base),
+    run("p", "pull request and its checks", Action::PullRequest),
+];
 
 const WORKSPACE: [Item; 3] = [
     run("n", "new workspace", Action::NewWorkspace),

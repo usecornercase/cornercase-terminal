@@ -52,6 +52,7 @@ use launches::LAUNCH_EVERY;
 use layout::Focus;
 use layout::{Scrolls, Side};
 use overlay::Overlay;
+use pull_requests::PullRequests;
 use session::not_restored;
 use telegram::{Telegram, TelegramEvent};
 use toast::Toast;
@@ -79,6 +80,7 @@ mod menus;
 mod overlay;
 mod panes;
 mod picker_dialog;
+mod pull_requests;
 mod remote_access;
 mod search_dialog;
 mod session;
@@ -110,6 +112,7 @@ struct Outbox {
 
 pub(crate) struct App {
     upstream: Upstream,
+    pulls: PullRequests,
     scroll: Scrolls,
     outbox: Outbox,
     agents: AgentRuntime,
@@ -164,6 +167,7 @@ impl App {
         let telegram = Telegram::new(&config_path, secrets_path.clone());
         Self {
             upstream: Upstream::default(),
+            pulls: PullRequests::default(),
             scroll: Scrolls::default(),
             outbox: Outbox::default(),
             agents: AgentRuntime::new(home.as_deref()),
@@ -346,6 +350,7 @@ impl App {
         self.sync_worktrees();
         self.forget_files();
         self.count_behind(now);
+        self.ask_pull_requests(now);
     }
 
     pub(crate) fn shows(&self, pane: u64) -> bool {

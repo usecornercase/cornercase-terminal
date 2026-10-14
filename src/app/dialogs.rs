@@ -143,8 +143,8 @@ impl App {
             KeyCode::Esc => self.cancel_form(),
             KeyCode::Enter => self.submit_form(area)?,
             KeyCode::Tab => self.toggle_worktree(),
-            KeyCode::Up => self.scroll_update(-1, area),
-            KeyCode::Down => self.scroll_update(1, area),
+            KeyCode::Up => self.scroll_dialog(-1, area),
+            KeyCode::Down => self.scroll_dialog(1, area),
             KeyCode::Backspace => {
                 if let Some(input) = self.overlay.as_mut().and_then(Overlay::input) {
                     input.pop();
@@ -176,6 +176,14 @@ impl App {
         Ok(())
     }
 
+    fn scroll_dialog(&mut self, delta: isize, area: Rect) {
+        if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
+            self.scroll_pull_request(delta, area);
+        } else {
+            self.scroll_update(delta, area);
+        }
+    }
+
     pub(super) fn cancel_form(&mut self) {
         if !self.overlay.as_ref().is_some_and(Overlay::busy) {
             self.overlay = None;
@@ -202,6 +210,7 @@ impl App {
             Overlay::ClosePane { pane } => self.submit_close_pane(pane, area)?,
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
+            Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
             busy => Some(busy),
         };
         Ok(())

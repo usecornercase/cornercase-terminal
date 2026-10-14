@@ -108,3 +108,69 @@ mod branch {
         assert_eq!(branch(tmp.path()), None);
     }
 }
+
+mod checked_out {
+    use super::*;
+
+    #[rstest]
+    #[case::a_branch("ref: refs/heads/feat/login\n", Some("feat/login"))]
+    #[case::a_detached_head("3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39\n", None)]
+    fn is_the_branch_only(#[case] head: &str, #[case] expected: Option<&str>) {
+        let repo = repo_with_head(head);
+        assert_eq!(checked_out(repo.path()).as_deref(), expected);
+    }
+}
+
+struct Cloned {
+    _dirs: [TempDir; 3],
+    clone: PathBuf,
+    worktree: PathBuf,
+}
+
+fn cloned_with_a_worktree(default_branch: &str) -> Cloned {
+    use crate::test_util::{clone_of, git, git_repo};
+    let remote = git_repo(&[]);
+    git(remote.path(), &["branch", "-m", default_branch]);
+    let (dir, clone) = clone_of(remote.path());
+    let tmp = TempDir::new();
+    let worktree = tmp.path().join("wt");
+    git(&clone, &["worktree", "add", "--quiet", "-b", "feat", &worktree.display().to_string()]);
+    Cloned { _dirs: [remote, dir, tmp], clone, worktree }
+}
+
+mod origin_head {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn is_the_default_branch_of_the_clone_also_from_a_worktree() {
+        let cloned = cloned_with_a_worktree("trunk");
+
+        assert_eq!(origin_head(&cloned.clone).as_deref(), Some("trunk"));
+        assert_eq!(origin_head(&cloned.worktree).as_deref(), Some("trunk"));
+    }
+
+    #[test]
+    fn is_none_without_a_clone() {
+        assert_eq!(origin_head(git_repo(&[]).path()), None);
+    }
+}
+
+mod has_remote {
+    use super::*;
+    use crate::test_util::git_repo;
+
+    #[test]
+    fn is_true_in_a_clone_and_its_worktrees() {
+        let cloned = cloned_with_a_worktree("main");
+
+        assert!(has_remote(&cloned.clone));
+        assert!(has_remote(&cloned.worktree));
+    }
+
+    #[test]
+    fn is_false_for_a_repo_of_its_own_or_no_repo() {
+        assert!(!has_remote(git_repo(&[]).path()));
+        assert!(!has_remote(TempDir::new().path()));
+    }
+}

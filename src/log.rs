@@ -123,11 +123,17 @@ pub(crate) struct Job {
     what: &'static str,
     fields: Vec<(&'static str, String)>,
     started: Instant,
+    slow: Duration,
 }
 
 impl Job {
     pub(crate) fn new(level: Level, target: &'static str, what: &'static str) -> Self {
-        Self { level, target, what, fields: Vec::new(), started: Instant::now() }
+        Self { level, target, what, fields: Vec::new(), started: Instant::now(), slow: SLOW }
+    }
+
+    #[must_use]
+    pub(crate) fn slow_after(self, slow: Duration) -> Self {
+        Self { slow, ..self }
     }
 
     #[must_use]
@@ -163,7 +169,7 @@ impl Job {
 
     fn end(self, error: Option<&dyn Display>) {
         let took = self.started.elapsed();
-        let (ms, slow) = (took.as_millis(), took >= SLOW);
+        let (ms, slow) = (took.as_millis(), took >= self.slow);
         let level = match (self.level, error, slow) {
             (Level::Info, Some(_), _) => Level::Warn,
             (Level::Debug, _, true) => Level::Info,

@@ -29,8 +29,20 @@ fn with_tree() -> View<'static> {
     let workspaces = vec![
         Vec::new(),
         vec![
-            WorkspaceEntry { name: "main".into(), tabs: vec![claude, "zsh".into()], behind: 0, removing: false },
-            WorkspaceEntry { name: "issue-50-reorder".into(), tabs: vec![finished], behind: 2, removing: false },
+            WorkspaceEntry {
+                name: "main".into(),
+                tabs: vec![claude, "zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+            },
+            WorkspaceEntry {
+                name: "issue-50-reorder".into(),
+                tabs: vec![finished],
+                behind: 2,
+                pull: None,
+                removing: false,
+            },
         ],
         Vec::new(),
     ];
