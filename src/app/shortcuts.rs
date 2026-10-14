@@ -119,6 +119,7 @@ impl App {
                     self.ask_new_workspace(self.active);
                 }
             }
+            Action::StartFlow => self.open_start_flow(self.start_flow_here()),
             Action::RenameWorkspace => {
                 let target = self.open_workspace_index().map(|(p, w)| {
                     let project = &self.projects[p];

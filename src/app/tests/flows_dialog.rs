@@ -39,9 +39,7 @@ fn dialog(app: &App) -> &Dialog {
 }
 
 fn view(app: &App, area: Rect) -> ui::Flows {
-    let Some(ui::Overlay::Flows(view)) = app.overlay.as_ref().and_then(|o| app.overlay_view(o, area)) else {
-        panic!("the flows dialog is not shown")
-    };
+    let ui::Overlay::Flows(view) = overlay_shown(app, area) else { panic!("the flows dialog is not shown") };
     *view
 }
 

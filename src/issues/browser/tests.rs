@@ -586,7 +586,7 @@ pub(crate) mod buttons {
 
     #[test]
     fn the_issue_offers_raw_copy_and_back_after_the_agent() {
-        assert_eq!(reading().labels(), ["start", "agent…", "raw", "copy url", "back"]);
+        assert_eq!(reading().labels(), ["start", "start a flow", "agent…", "raw", "copy url", "back"]);
     }
 
     #[test]
@@ -774,6 +774,26 @@ mod place {
         press(&mut b, KeyCode::Enter);
         assert!(!b.labels().contains(&"where…"), "{:?}", b.labels());
         assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#5"));
+    }
+
+    #[test]
+    fn a_flow_for_a_story_asks_where_first_then_starts_there() {
+        let mut b = two_places();
+        let pos = button(&b, "start a flow");
+        assert_eq!(click(&mut b, pos), Action::None);
+        type_text(&mut b, "notes");
+        let started = press(&mut b, KeyCode::Enter);
+        assert!(matches!(&started, Action::StartFlow(i, Some(place)) if i.key == "sc-2" && *place == notes()));
+    }
+
+    #[test]
+    fn a_flow_for_a_github_issue_starts_in_its_repository() {
+        let mut b = two_places();
+        press(&mut b, KeyCode::Esc);
+        press(&mut b, KeyCode::Down);
+        press(&mut b, KeyCode::Enter);
+        let pos = button(&b, "start a flow");
+        assert!(matches!(click(&mut b, pos), Action::StartFlow(i, None) if i.key == "#1"));
     }
 
     #[test]

@@ -47,7 +47,11 @@ impl App {
     }
 
     pub(super) fn new_project_menu(&mut self, pos: Position) {
-        self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
+        let mut actions = vec![MenuAction::OpenProject, MenuAction::NewGroup];
+        if self.project().is_some() {
+            actions.push(MenuAction::StartFlow);
+        }
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     pub(super) fn sidebar_layout(&self, areas: &ui::Areas) -> ui::Rows {

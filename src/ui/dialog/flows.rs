@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
-    Columns, SettingsEdit, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, draw_pick, draw_rows, pick_hit,
-    pick_list_in, rows_hit,
+    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, draw_pick, draw_rows, hit_in_rows, pick_hit,
+    pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
 use crate::flows::Flow;
@@ -20,7 +20,7 @@ const FLOWS_WIDTH: u16 = 140;
 const FLOWS_HEIGHT: u16 = 40;
 const PREVIEW_WIDTH: u16 = 46;
 const WIDE_FROM: u16 = 112;
-const MAX_WARNINGS: usize = 4;
+pub(in crate::ui) const MAX_WARNINGS: usize = 4;
 
 pub(crate) fn flows_area(area: Rect) -> Rect {
     let width = area.width.saturating_sub(4).min(FLOWS_WIDTH);
@@ -48,13 +48,20 @@ fn flows_rows(area: Rect, warnings: usize) -> [Rect; 6] {
 }
 
 fn split(area: Rect, warnings: usize, preview: bool) -> (Rect, Option<Rect>) {
-    let body = flows_rows(area, warnings)[1];
+    beside(area, flows_rows(area, warnings)[1], preview)
+}
+
+pub(in crate::ui) fn beside(area: Rect, body: Rect, preview: bool) -> (Rect, Option<Rect>) {
     if !preview || !flows_wide(area) {
         return (body, None);
     }
     let width = PREVIEW_WIDTH.min(body.width);
     let form = Rect { width: body.width.saturating_sub(width + 2), ..body };
     (form, Some(Rect { x: body.right().saturating_sub(width), width, ..body }))
+}
+
+pub(in crate::ui) fn text_inside(body: Rect) -> Rect {
+    Rect { x: body.x.saturating_add(1), width: body.width.saturating_sub(2), ..body }
 }
 
 pub(crate) fn flows_body(area: Rect, warnings: usize, preview: bool) -> Rect {
@@ -70,8 +77,7 @@ pub(crate) fn flows_preview(area: Rect, warnings: usize, preview: bool, diagram:
 }
 
 pub(crate) fn flows_text(area: Rect, warnings: usize, preview: bool) -> Rect {
-    let body = flows_body(area, warnings, preview);
-    Rect { x: body.x.saturating_add(1), width: body.width.saturating_sub(2), ..body }
+    text_inside(flows_body(area, warnings, preview))
 }
 
 pub(crate) fn flows_pick_rows(area: Rect, warnings: usize, preview: bool) -> usize {
@@ -94,8 +100,6 @@ pub(crate) struct Flows {
     pub(crate) rows: Vec<SettingsRow>,
     pub(crate) cursor: usize,
     pub(crate) label: usize,
-    pub(crate) removable: Vec<bool>,
-    pub(crate) movable: Vec<bool>,
     pub(crate) edit: Option<SettingsEdit>,
     pub(crate) pick: Option<SettingsPick>,
     pub(crate) text: Option<Editor>,
@@ -155,16 +159,7 @@ pub(crate) fn flows_hit(area: Rect, view: &Flows, pos: Position) -> Option<Flows
     if let Some(pick) = &view.pick {
         return pick_hit(pick_list_in(body), pick.items.len(), pick.scroll, pos).map(FlowsHit::Pick);
     }
-    let sections: Vec<&str> = view.rows.iter().map(|r| r.section).collect();
-    let layout = SettingsLayout {
-        tabs: &[],
-        sections: &sections,
-        removable: &view.removable,
-        movable: &view.movable,
-        cursor: view.cursor,
-        pick: None,
-    };
-    rows_hit(body, &layout, pos).map(FlowsHit::Row)
+    hit_in_rows(body, &view.rows, view.cursor, pos).map(FlowsHit::Row)
 }
 
 pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
@@ -197,25 +192,34 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
     if let Some(edit) = &flows.edit {
         cursor = draw_input(f, view.muted, edit_row, &format!("{}:", edit.label), &edit.value);
     }
-    let (text, style) = match &flows.note {
-        Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
-        Some(Note::Busy(text)) => (*text, dim),
-        None => (flows.hint.as_str(), dim),
-    };
-    f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(note.width)), style)), note);
-    for (rect, label) in flows_buttons(area, flows.warnings.len(), &flows.buttons).into_iter().zip(&flows.buttons) {
-        if *label == flows.submit {
-            draw_submit(f, view, rect, label);
-        } else {
-            draw_secondary(f, view, rect, label);
-        }
-    }
+    draw_hint(f, view, flows.note.as_ref(), &flows.hint, note);
+    draw_buttons(f, view, &flows_buttons(area, flows.warnings.len(), &flows.buttons), &flows.buttons, flows.submit);
     if let Some(pos) = cursor {
         f.set_cursor_position(pos);
     }
 }
 
-fn draw_warnings(f: &mut Frame, warnings: &[String], r: Rect) {
+pub(in crate::ui) fn draw_hint(f: &mut Frame, view: &View, note: Option<&Note>, hint: &str, r: Rect) {
+    let dim = Style::default().fg(view.muted);
+    let (text, style) = match note {
+        Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
+        Some(Note::Busy(text)) => (*text, dim),
+        None => (hint, dim),
+    };
+    f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(r.width)), style)), r);
+}
+
+pub(in crate::ui) fn draw_buttons(f: &mut Frame, view: &View, rects: &[Rect], labels: &[&str], submit: &str) {
+    for (rect, label) in rects.iter().zip(labels) {
+        if *label == submit {
+            draw_submit(f, view, *rect, label);
+        } else {
+            draw_secondary(f, view, *rect, label);
+        }
+    }
+}
+
+pub(in crate::ui) fn draw_warnings(f: &mut Frame, warnings: &[String], r: Rect) {
     let red = Style::default().fg(Color::Red);
     let shown = usize::from(r.height);
     let mut lines: Vec<String> = warnings.iter().take(shown).cloned().collect();
@@ -231,15 +235,15 @@ fn draw_warnings(f: &mut Frame, warnings: &[String], r: Rect) {
     }
 }
 
-fn draw_preview(f: &mut Frame, view: &View, r: Rect) {
+pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
 }
 
-fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &Editor) -> Option<Position> {
+pub(in crate::ui) fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &Editor) -> Option<Position> {
     let bg = Style::default().bg(view.surface());
     f.buffer_mut().set_style(body, bg);
-    let text = Rect { x: body.x.saturating_add(1), width: body.width.saturating_sub(2), ..body };
+    let text = text_inside(body);
     let width = usize::from(text.width);
     let chars: Vec<char> = editor.text().chars().collect();
     let lines = editor.lines(width);

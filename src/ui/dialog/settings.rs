@@ -170,7 +170,21 @@ pub(crate) fn settings_hit(area: Rect, layout: &SettingsLayout, pos: Position) -
     rows_hit(settings_body(settings), layout, pos)
 }
 
-pub(in crate::ui) fn rows_hit(body: Rect, layout: &SettingsLayout, pos: Position) -> Option<SettingsHit> {
+pub(in crate::ui) fn hit_in_rows(
+    body: Rect,
+    rows: &[SettingsRow],
+    cursor: usize,
+    pos: Position,
+) -> Option<SettingsHit> {
+    let sections: Vec<&str> = rows.iter().map(|r| r.section).collect();
+    let removable: Vec<bool> = rows.iter().map(|r| r.removable).collect();
+    let movable: Vec<bool> = rows.iter().map(|r| r.movable).collect();
+    let layout =
+        SettingsLayout { tabs: &[], sections: &sections, removable: &removable, movable: &movable, cursor, pick: None };
+    rows_hit(body, &layout, pos)
+}
+
+fn rows_hit(body: Rect, layout: &SettingsLayout, pos: Position) -> Option<SettingsHit> {
     let i = (0..layout.sections.len()).find(|&i| line_rect(body, layout.sections, layout.cursor, i).contains(pos))?;
     let row = line_rect(body, layout.sections, layout.cursor, i);
     if layout.removable.get(i).copied().unwrap_or(false) && settings_remove(row).contains(pos) {

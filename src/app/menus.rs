@@ -89,6 +89,7 @@ pub(super) enum MenuAction {
     PullRequest(u64),
     Browser,
     Away,
+    StartFlow,
 }
 
 impl App {
@@ -124,6 +125,7 @@ impl App {
             MenuAction::AddProject(_) => "add project".into(),
             MenuAction::OpenProject => "open project".into(),
             MenuAction::NewGroup => "new group".into(),
+            MenuAction::StartFlow => "start a flow…".into(),
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
@@ -187,6 +189,7 @@ impl App {
                 self.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
+            MenuAction::StartFlow => self.open_start_flow(self.start_flow_here()),
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);

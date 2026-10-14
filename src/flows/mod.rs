@@ -10,6 +10,7 @@ use crate::config::Config;
 pub(crate) mod builtin;
 pub(crate) mod dialog;
 pub(crate) mod run;
+pub(crate) mod start;
 pub(crate) mod store;
 
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
