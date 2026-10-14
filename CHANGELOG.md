@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.91
+
+- GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so the merge request from it closes the issue. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope, or set `GITLAB_TOKEN`; both can be changed later in **Settings → Issues → GitLab**.
+
 ## 0.12.90
 
 - On Telegram, answering a question from its buttons now brings the agent's next question, with its own buttons, when it asks several in a row or shows another permission prompt right away. Before, only the first one came.
