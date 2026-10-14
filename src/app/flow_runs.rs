@@ -104,6 +104,7 @@ impl App {
         let Starting { flow, task, branch, focus } = starting;
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
         let mut run = Run::new(id, flow, task);
+        run.id = self.take_id();
         let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new() };
         for role in &roles {
             let t = self.push_tab(p, w, area, Some(role.name.clone())).map_err(|e| e.to_string())?;
@@ -157,6 +158,7 @@ impl App {
             }
             kept
         });
+        self.forget_flow_reads(None);
     }
 
     pub(super) fn resume_line(&self, role: Option<&Role>, agent: &agents::AgentState) -> Option<String> {
@@ -168,6 +170,7 @@ impl App {
 
     pub(super) fn restore_run(&mut self, workspace: u64, saved: &RunState, tabs: &[(usize, Tab)]) {
         let mut run = Run::new(workspace, saved.flow.clone(), saved.task.clone());
+        run.id = self.take_id();
         for seat in &saved.members {
             let found = tabs.iter().find(|(t, _)| *t == seat.tab).and_then(|(_, tab)| tab.panes.get(seat.pane));
             if let Some(term) = found {

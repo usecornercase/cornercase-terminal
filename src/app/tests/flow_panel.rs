@@ -220,6 +220,27 @@ mod recording {
         assert_eq!(messages(&app), vec![expected]);
     }
 
+    #[rstest::rstest]
+    #[case::its_run_went_and_another_started(true)]
+    #[case::its_client_left(false)]
+    fn a_last_message_read_is_dropped_once(#[case] replaced: bool) {
+        let (mut app, _rx, _dir) = team();
+        let last = wire::LastMessage { pane: Some(pane(&app, "reviewer")), ..wire::LastMessage::default() };
+        let noted = app.flow_steps(Some(pane(&app, ORCHESTRATOR)), &Command::LastMessage(last), Instant::now());
+        app.flow_requested(CLIENT, noted, true);
+        if replaced {
+            let mut next = app.runs.remove(0);
+            next.id += 1;
+            app.runs.push(next);
+        } else {
+            app.forget(CLIENT);
+        }
+
+        app.flow_answered(CLIENT, &Ok(json!({ "text": "No findings." })));
+
+        assert_eq!(messages(&app), Vec::new());
+    }
+
     #[test]
     fn a_last_message_that_fails_is_not() {
         let (mut app, _rx, _dir) = team();

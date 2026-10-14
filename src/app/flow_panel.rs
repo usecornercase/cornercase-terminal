@@ -34,7 +34,8 @@ pub(super) struct FlowPanel {
 }
 
 pub(super) struct Noted {
-    workspace: u64,
+    run: u64,
+    panes: (u64, u64),
     message: Message,
     answered: bool,
 }
@@ -231,7 +232,8 @@ impl App {
     }
 
     pub(super) fn flow_steps(&self, caller: Option<u64>, command: &Command, now: Instant) -> Vec<Noted> {
-        let Some((run, from)) = caller.and_then(|c| self.runs.iter().find_map(|run| Some((run, run.role_of(c)?))))
+        let Some((caller, run, from)) =
+            caller.and_then(|c| self.runs.iter().find_map(|run| Some((c, run, run.role_of(c)?))))
         else {
             return Vec::new();
         };
@@ -249,8 +251,8 @@ impl App {
         };
         let mut panes: Vec<u64> = Vec::new();
         for (pane, tab) in targets {
-            if let Ok(to) = self.target(caller, pane, tab)
-                && Some(to) != caller
+            if let Ok(to) = self.target(Some(caller), pane, tab)
+                && to != caller
                 && !panes.contains(&to)
             {
                 panes.push(to);
@@ -258,9 +260,10 @@ impl App {
         }
         panes
             .into_iter()
-            .filter_map(|to| run.role_of(to))
-            .map(|to| Noted {
-                workspace: run.workspace,
+            .filter_map(|pane| Some((pane, run.role_of(pane)?)))
+            .map(|(pane, to)| Noted {
+                run: run.id,
+                panes: (caller, pane),
                 message: Message {
                     from: from.to_string(),
                     to: to.to_string(),
@@ -285,23 +288,30 @@ impl App {
                 }
                 self.flow.reads.push((client, noted));
             } else {
-                self.record_flow(noted.workspace, noted.message);
+                self.record_flow(noted);
             }
         }
     }
 
     pub(super) fn flow_answered(&mut self, client: u64, reply: &Result<Value, String>) {
         let Some(i) = self.flow.reads.iter().position(|(c, _)| *c == client) else { return };
-        let (_, Noted { workspace, mut message, .. }) = self.flow.reads.remove(i);
+        let (_, mut noted) = self.flow.reads.remove(i);
         let Ok(value) = reply else { return };
         let text = value.get("text").and_then(Value::as_str).unwrap_or_default();
-        message.bytes = text.len();
-        message.text = Some(kept(text));
-        self.record_flow(workspace, message);
+        noted.message.bytes = text.len();
+        noted.message.text = Some(kept(text));
+        self.record_flow(noted);
     }
 
-    fn record_flow(&mut self, workspace: u64, message: Message) {
-        if let Some(run) = self.runs.iter_mut().find(|run| run.workspace == workspace) {
+    pub(super) fn forget_flow_reads(&mut self, client: Option<u64>) {
+        let runs = &self.runs;
+        self.flow.reads.retain(|(c, noted)| Some(*c) != client && runs.iter().any(|run| run.id == noted.run));
+    }
+
+    fn record_flow(&mut self, noted: Noted) {
+        let Noted { run, panes: (from, to), message, .. } = noted;
+        let same = |r: &Run| r.role_of(from) == Some(&message.from) && r.role_of(to) == Some(&message.to);
+        if let Some(run) = self.runs.iter_mut().find(|r| r.id == run && same(r)) {
             run.record(message);
         }
     }
