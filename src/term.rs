@@ -148,7 +148,7 @@ impl Term {
         self.output_at = Instant::now();
         let pid = self.foreground_pid();
         let reporting = if self.interactive && pid == self.shell_pid() {
-            self.status_agent.as_ref().map(|(pid, _)| *pid).or(pid)
+            self.status_agent.as_ref().filter(|(pid, _)| process::alive(*pid)).map(|(pid, _)| *pid).or(pid)
         } else {
             pid
         };

@@ -190,16 +190,16 @@ cornercase wait --pane 7 --quiet 5                             # until it writes
 
 | Condition | Ends when | Prints |
 | --- | --- | --- |
-| *(none)* | the agent stops working: it is idle, done, pending review or waiting | `idle`, `done`, `failed`, `pending` or `waiting` |
-| `--until idle` | the agent is idle, done or pending review | `idle`, `done` or `pending` |
+| *(none)* | the agent stops working: it is idle, done, failed, pending review or waiting | `idle`, `done`, `failed`, `pending` or `waiting` |
+| `--until idle` | the agent is idle, done, failed or pending review | `idle`, `done`, `failed` or `pending` |
 | `--until working` | the agent is working | `working` |
 | `--until waiting` | the agent waits for an answer to a question or a permission prompt | `waiting` |
-| `--until turn-over` | the agent's turn is over: it stops working, as with no condition, or only a background shell it started still runs | `idle`, `done`, `pending`, `waiting` or `shell` |
+| `--until turn-over` | the agent's turn is over: it stops working, as with no condition, or only a background shell it started still runs | `idle`, `done`, `failed`, `pending`, `waiting` or `shell` |
 | `--until shell` | the program in the foreground ended and the shell is back, quiet (a second when cornercase never saw the program run) | `shell` |
 | `--text REGEX` | a line on the screen matches, one already there included | the line |
 | `--quiet SECONDS` | the pane wrote nothing for that long | `quiet` |
 
-- The agent conditions need Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane, the agents whose state cornercase [knows](../projects-workspaces-tabs/#what-your-agents-are-doing). On any other pane, or with another agent, wait for `shell`, a line or quiet instead.
+- The agent conditions need a recognised agent reporting [OSC 7501](../../reference/agents/#program-status-protocol), or a reader for Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane. On a pane with no agent status or supported reader, wait for `shell`, a line or quiet instead.
 - A Claude Code agent that ends its turn while a shell it started in the background still runs counts as working: it wakes up when that shell ends, and may then carry on. So the plain `wait` keeps waiting, and its timeout says that only a background shell is left. `--until turn-over` ends there and prints `shell`; read the pane to see what the agent said, and stop the shell yourself if nothing should wake the agent. Codex, Gemini and opencode report no such state: their turn ends when they say so, whatever they left running, so for them `turn-over` ends as the plain `wait` does.
 - After a prompt reached the agent (through `start`, `send --enter` or `keys … enter`), a wait for it to stop first gives the agent up to 10 seconds to take the prompt, so it doesn't end at once on an agent that hasn't started yet. If the agent shows no change in that time, the wait fails: it may have finished at once, or never got the text, and `read` tells which. If the agent was already working when the text arrived, the wait ends when it next stops. An agent that only had a background shell left counts as taking the prompt once it works again.
 - Waits run in the server and don't slow it down. They end with their condition, their `--timeout` (none by default) or when you interrupt the command. A timeout exits with status 1 and says what the pane was doing. It doesn't prove that the agent missed what you sent: read the pane before sending it again.

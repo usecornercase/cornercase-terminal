@@ -78,7 +78,7 @@ printf '\033]7501;state=done\033\\'
 
 <Screen name="agent-failed" alt="A reported failure shows a red exclamation mark for the agent in its tab, the project row and the agents section" crop={[0, 0, 110, 44]} />
 
-BEL can end a sequence too. cornercase answers the protocol's support query, `OSC 7501 ; ?`. Records can use hierarchical `id` values for subtasks: blocked takes priority over error, done, working and idle; clearing an id removes its children too. Reports persist without a heartbeat. A shell prompt expires working and blocked records, and a full terminal reset clears all of them. A state from an old process never overrides a new agent in the same pane.
+BEL can end a sequence too. cornercase answers the protocol's support query, `OSC 7501 ; ?`. Records can use hierarchical `id` values for subtasks: blocked takes priority over error, done, working and idle; clearing an id removes its children too. Reports persist without a heartbeat. A shell prompt expires idle, working and blocked records, and a full terminal reset clears all of them. A state from an old process never overrides a new agent in the same pane.
 
 When no applicable report exists, the five readers above keep working as before. Invalid reports are ignored. A shell or build that emits the protocol is still a shell or build; the foreground command must be recognised as an agent.
 

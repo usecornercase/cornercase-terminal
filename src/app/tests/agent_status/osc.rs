@@ -106,3 +106,20 @@ fn the_result_survives_the_agents_exit_and_does_not_override_the_next_agent(
     watch_until(&mut w.app, &w.rx, "the next agent has its own state", |a| status(a, 0, 0) == Some(Status::Idle));
     fresh.signal("quit");
 }
+
+#[rstest]
+#[case::idle("idle", None)]
+#[case::finished("done", Some(Status::Done))]
+fn a_shell_report_does_not_belong_to_the_departed_agent(#[case] state: &str, #[case] expected: Option<Status>) {
+    let mut w = Watched::start(agents::Known::Claude, true);
+    report(&mut w, state, 1);
+    let Fake::Claude(claude, pid) = &w.agents[0] else { panic!("Claude fake") };
+    let pid = *pid;
+    claude.signal("quit");
+    watch_until(&mut w.app, &w.rx, "the agent is gone", |a| {
+        tab_term(a, 0, 0).shell_in_foreground() && !process::alive(pid)
+    });
+    report(&mut w, "error:id=build:app=cargo", 6);
+    assert_eq!(status(&w.app, 0, 0), expected);
+    assert!(w.told().1.iter().all(|notice| !notice.text.contains("claude failed")));
+}
