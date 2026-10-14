@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
-use crate::app::telegram::CLIENTS as TELEGRAM_CLIENTS;
+use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
 use crate::control::{self, Command, Done, Ids, Item, Request, Response};
 use crate::error;
 use crate::git;
@@ -245,8 +245,8 @@ impl App {
                 }
             }
         }
-        if client >= TELEGRAM_CLIENTS {
-            self.telegram_answered(client, reply);
+        if client >= MESSENGER_CLIENTS {
+            self.chat_answered(client, reply);
             return;
         }
         let response = match reply {

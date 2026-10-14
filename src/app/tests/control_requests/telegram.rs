@@ -1,7 +1,7 @@
 use super::*;
-use crate::app::telegram::{self as wiring, By, TelegramEvent};
-use crate::telegram::link::Event as LinkEvent;
-use crate::telegram::{Chat, Keyboard, Message, Order, Press, Update};
+use crate::app::messenger::{self as wiring, By, MessengerEvent};
+use crate::messenger::link::Event as LinkEvent;
+use crate::messenger::{Chat, Keyboard, Message, Order, Press, Update, Via};
 
 const CHAT: i64 = 42;
 const USER: i64 = 9;
@@ -18,7 +18,7 @@ fn chat() -> Chat {
 
 fn html(order: &Order) -> &str {
     match order {
-        Order::Send { html, .. } | Order::Edit { html, .. } => html,
+        Order::Send { text, .. } | Order::Edit { text, .. } => text,
         _ => "",
     }
 }
@@ -37,7 +37,7 @@ fn button(order: &Order, text: &str) -> String {
 }
 
 fn update(app: &mut App, update: Update) {
-    let event = AppEvent::Telegram(TelegramEvent::Link(LinkEvent::Updates(1, vec![update])));
+    let event = AppEvent::Messenger(MessengerEvent::Link(Via::Telegram, LinkEvent::Updates(1, vec![update])));
     app.handle_event(event, AREA).expect("the update is handled");
 }
 
@@ -57,7 +57,7 @@ impl Phone {
             self.next += 1;
             if let Some(tag) = order.tag() {
                 let sent = LinkEvent::Sent { link: 1, tag, message: self.next };
-                app.handle_event(AppEvent::Telegram(TelegramEvent::Link(sent)), AREA).expect("sent");
+                app.handle_event(AppEvent::Messenger(MessengerEvent::Link(Via::Telegram, sent)), AREA).expect("sent");
             }
             got.push((self.next, order));
         }
@@ -119,7 +119,7 @@ mod pairing {
     use super::*;
 
     fn code(app: &App) -> String {
-        let url = app.telegram_view().url.expect("a pairing link");
+        let url = app.pairing_view(Via::Telegram).url.expect("a pairing link");
         url.split_once("?start=").map(|(_, token)| token.to_string()).expect("a token")
     }
 
@@ -128,14 +128,21 @@ mod pairing {
         let dir = TempDir::new();
         let (mut app, _rx) = new_app(dir.path().join("config.json"));
         let mut phone = Phone::set_up(&mut app, None);
-        assert_eq!(app.pair_telegram(), None);
-        assert!(app.telegram_view().url.is_some_and(|url| url.starts_with("https://t.me/cornercase_bot?start=")));
+        assert_eq!(app.pair(Via::Telegram), None);
+        assert!(
+            app.pairing_view(Via::Telegram)
+                .url
+                .is_some_and(|url| url.starts_with("https://t.me/cornercase_bot?start="))
+        );
 
         let token = code(&app);
         phone.says(&mut app, &format!("/start {token}"));
 
         let saved = std::fs::read_to_string(dir.path().join("telegram.json")).expect("the paired chat is saved");
-        assert!(app.telegram.paired() && app.overlay.is_none() && saved.contains(r#""id":42"#), "{saved}");
+        assert!(
+            app.messenger(Via::Telegram).paired() && app.overlay.is_none() && saved.contains(r#""id":42"#),
+            "{saved}"
+        );
         assert_eq!(toast(&app), Some("Telegram connected with @ada"));
         assert!(phone.read(&mut app).iter().any(|(_, order)| html(order).contains("cornercase is connected")));
     }
@@ -144,7 +151,7 @@ mod pairing {
     fn a_wrong_code_a_group_or_a_closed_dialog_pairs_nothing() {
         let (mut app, _rx) = empty_app();
         let mut phone = Phone::set_up(&mut app, None);
-        app.pair_telegram();
+        app.pair(Via::Telegram);
         let token = code(&app);
 
         phone.says(&mut app, "/start 00000000000000000000000000000000");
@@ -163,7 +170,7 @@ mod pairing {
         app.refresh(Instant::now());
         phone.says(&mut app, &format!("/start {token}"));
 
-        assert!(!app.telegram.paired());
+        assert!(!app.messenger(Via::Telegram).paired());
         assert_eq!(phone.read(&mut app).len(), 0);
     }
 
@@ -194,15 +201,15 @@ mod away {
         click(&mut app, ui::remote_button(areas().usage, false).as_position());
         let labels = menu_labels(&app);
         pick(&mut app, "continue on Telegram");
-        let away = (app.telegram.away, app.remote_button(), toast(&app).map(String::from));
+        let away = (app.messenger(Via::Telegram).away, app.remote_button(), toast(&app).map(String::from));
         send_key(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
-        let still = app.telegram.away;
+        let still = app.messenger(Via::Telegram).away;
         click(&mut app, ui::remote_button(areas().usage, true).as_position());
         pick(&mut app, "stop messaging on Telegram");
 
         assert_eq!(labels, ["set up your phone's browser…", "continue on Telegram"]);
         assert_eq!(away, (true, Some(true), Some("away: agents message you on Telegram".into())));
-        assert!(still && !app.telegram.away);
+        assert!(still && !app.messenger(Via::Telegram).away);
         let said: Vec<String> = phone.read(&mut app).iter().map(|(_, order)| html(order).to_string()).collect();
         let starts: Vec<&str> = said.iter().map(|html| html.split("</b>").next().unwrap_or_default()).collect();
         assert_eq!(starts, ["<b>Away", "<b>Back"], "{said:?}");
@@ -239,14 +246,17 @@ mod away {
     fn a_refused_token_turns_nothing_on_and_leads_to_the_bot_row() {
         let (mut app, _rx) = app();
         let _phone = Phone::paired(&mut app);
-        let refused = AppEvent::Telegram(TelegramEvent::Link(LinkEvent::Rejected(1)));
+        let refused = AppEvent::Messenger(MessengerEvent::Link(Via::Telegram, LinkEvent::Rejected(1)));
         app.handle_event(refused, AREA).expect("the refusal is handled");
 
         let message = error(now(&mut app, None, Command::Away(wire::Away { off: false })));
         click(&mut app, ui::remote_button(areas().usage, false).as_position());
         let labels = menu_labels(&app);
 
-        assert!(message.starts_with("Telegram refused the bot token") && !app.telegram.away, "{message}");
+        assert!(
+            message.starts_with("Telegram refused the bot token") && !app.messenger(Via::Telegram).away,
+            "{message}"
+        );
         assert_eq!(labels[1], "set up Telegram…");
     }
 
@@ -255,11 +265,11 @@ mod away {
         let (mut app, _rx) = app();
         let mut phone = Phone::paired(&mut app);
         phone.says(&mut app, "/away");
-        let away = app.telegram.away;
+        let away = app.messenger(Via::Telegram).away;
 
         phone.says(&mut app, "/back");
 
-        assert!(away && !app.telegram.away);
+        assert!(away && !app.messenger(Via::Telegram).away);
         assert!(phone.read(&mut app).iter().any(|(_, order)| html(order).starts_with("<b>Back</b>")));
     }
 }
@@ -276,7 +286,7 @@ mod agents {
     }
 
     fn away(agent: &mut Agent, phone: &mut Phone) {
-        agent.app.go_away(By::Command).expect("away");
+        agent.app.go_away(Via::Telegram, By::Command).expect("away");
         phone.read(&mut agent.app);
     }
 
@@ -314,9 +324,9 @@ mod agents {
             term.feed(&report);
             let at = now + Duration::from_secs(offset);
             agent.app.watch_agents(at);
-            agent.app.watch_telegram(at);
+            agent.app.watch_messengers(at);
         }
-        agent.app.watch_telegram(now + Duration::from_secs(4));
+        agent.app.watch_messengers(now + Duration::from_secs(4));
         assert_eq!(phone.read(&mut agent.app), []);
     }
 

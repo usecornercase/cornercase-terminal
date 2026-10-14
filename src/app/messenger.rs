@@ -10,10 +10,9 @@ use super::{App, AppEvent, Overlay, Toast};
 use crate::control::{Command, Done, Request};
 use crate::issues::{Secret, secrets};
 use crate::log::{self, Job, Level};
-use crate::paths;
+use crate::messenger::link::{self, Link};
+use crate::messenger::{Chat, Key, Keyboard, Message, Order, Saved, Tap, Via};
 use crate::settings;
-use crate::telegram::link::{self, Link};
-use crate::telegram::{self, Bot, Chat, Key, Keyboard, Order, Saved, Tap, html};
 use crate::ui;
 use crate::web::auth::{Pairing, random_hex};
 
@@ -22,35 +21,28 @@ mod drafts;
 mod notices;
 
 pub(in crate::app) const CLIENTS: u64 = 1 << 62;
+const CLIENTS_PER_VIA: u64 = 1 << 48;
 const ROUTES: usize = 256;
 const RECENT: i64 = 60;
-const NOT_PAIRED: &str = "Telegram is not set up: pair a phone in Settings › Remote";
-const REFUSED: &str = "Telegram refused the bot token: paste it again in Settings › Remote";
-const AWAY: &str = "away: agents message you on Telegram";
-const BACK: &str = "back: agents no longer message you on Telegram";
-const AWAY_HTML: &str = "<b>Away</b>: I'll message you here when an agent needs you or finishes, until you send \
-    /back or turn it off in cornercase.";
-const BACK_HTML: &str = "<b>Back</b>: I no longer message you here. /away starts again.";
-const CONNECTED: &str = "Telegram connected";
 
 #[derive(Debug)]
-pub(crate) enum TelegramEvent {
-    Link(link::Event),
-    Checked { token: Secret, result: Result<String, String> },
+pub(crate) enum MessengerEvent {
+    Link(Via, link::Event),
+    Checked { via: Via, token: Secret, result: Result<String, String> },
 }
 
-impl TelegramEvent {
+impl MessengerEvent {
     pub(super) fn name(&self) -> &'static str {
         match self {
-            Self::Link(_) => "telegram",
-            Self::Checked { .. } => "telegram bot checked",
+            Self::Link(via, _) => via.target(),
+            Self::Checked { via, .. } => via.checked(),
         }
     }
 }
 
-impl From<link::Event> for AppEvent {
-    fn from(event: link::Event) -> Self {
-        Self::Telegram(TelegramEvent::Link(event))
+impl From<(Via, link::Event)> for AppEvent {
+    fn from((via, event): (Via, link::Event)) -> Self {
+        Self::Messenger(MessengerEvent::Link(via, event))
     }
 }
 
@@ -72,15 +64,15 @@ enum Route {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum By {
     Window,
-    Telegram,
+    Chat,
     Command,
 }
 
 impl By {
-    fn name(self) -> &'static str {
+    fn name(self, via: Via) -> &'static str {
         match self {
             Self::Window => "window",
-            Self::Telegram => "telegram",
+            Self::Chat => via.target(),
             Self::Command => "command",
         }
     }
@@ -93,7 +85,8 @@ enum Asked {
     Start { message: i64, place: String, agent: String },
 }
 
-pub(super) struct Telegram {
+pub(super) struct Messenger {
+    via: Via,
     api: String,
     path: PathBuf,
     secrets: PathBuf,
@@ -125,12 +118,17 @@ fn run_id() -> String {
     random_hex(2).unwrap_or_else(|_| format!("{:04x}", unix_now() & 0xffff))
 }
 
-impl Telegram {
-    pub(super) fn new(config: &Path, secrets: PathBuf) -> Self {
-        let path = paths::telegram(config);
+pub(super) fn messengers(config: &Path, secrets: &Path) -> Vec<Messenger> {
+    Via::ALL.into_iter().map(|via| Messenger::new(via, config, secrets.to_path_buf())).collect()
+}
+
+impl Messenger {
+    fn new(via: Via, config: &Path, secrets: PathBuf) -> Self {
+        let path = via.saved(config);
         Self {
-            api: std::env::var(telegram::API_ENV).unwrap_or_else(|_| telegram::API.into()),
-            token: secrets::read(&secrets, telegram::TOKEN_KEY),
+            via,
+            api: via.api(),
+            token: secrets::read(&secrets, via.token_key()),
             saved: Saved::load(&path),
             path,
             secrets,
@@ -175,8 +173,8 @@ impl Telegram {
 
     pub(super) fn note(&self) -> String {
         match &self.phase {
-            _ if self.token.is_none() => "make a bot with @BotFather and paste its token here".into(),
-            Phase::Rejected => telegram::Failure::Rejected.to_string(),
+            _ if self.token.is_none() => self.via.unset().into(),
+            Phase::Rejected => self.via.rejected(),
             Phase::Problem(why) => why.clone(),
             Phase::Off | Phase::Listening if self.away => "connected · away: agents message you there".into(),
             Phase::Off | Phase::Listening => "connected".into(),
@@ -201,376 +199,447 @@ impl Telegram {
 
     fn save(&self) {
         if let Err(e) = self.saved.save(&self.path) {
-            log::error!("telegram", "cannot save the paired chat", error = e);
+            log::error!(self.via.target(), "cannot save the paired chat", error = e);
         }
     }
 }
 
 impl App {
-    pub(super) fn sync_telegram(&mut self) {
-        if !matches!(self.overlay, Some(Overlay::Telegram)) {
-            self.telegram.pairing = None;
+    pub(super) fn messenger(&self, via: Via) -> &Messenger {
+        &self.messengers[via.index()]
+    }
+
+    fn messenger_mut(&mut self, via: Via) -> &mut Messenger {
+        &mut self.messengers[via.index()]
+    }
+
+    pub(super) fn sync_messengers(&mut self) {
+        for via in Via::ALL {
+            self.sync_messenger(via);
         }
-        let wanted = self.telegram.token.is_some() && self.telegram.phase != Phase::Rejected;
-        match (self.telegram.link.is_some(), wanted) {
-            (false, true) => self.start_link(),
-            (true, false) => self.telegram.link = None,
+    }
+
+    fn sync_messenger(&mut self, via: Via) {
+        if !matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
+            self.messenger_mut(via).pairing = None;
+        }
+        let messenger = self.messenger(via);
+        let wanted = messenger.token.is_some() && messenger.phase != Phase::Rejected;
+        match (messenger.link.is_some(), wanted) {
+            (false, true) => self.start_link(via),
+            (true, false) => self.messenger_mut(via).link = None,
             _ => {}
         }
     }
 
-    fn start_link(&mut self) {
-        let Some(token) = self.telegram.token.as_deref() else { return };
-        self.telegram.links += 1;
-        let id = self.telegram.links;
-        let bot = Bot::new(&self.telegram.api, token);
-        let link = Link::start(id, &bot, &self.tx, link::POLL, unix_now() - RECENT);
+    fn start_link(&mut self, via: Via) {
+        let messenger = &mut self.messengers[via.index()];
+        let Some(token) = messenger.token.clone() else {
+            return;
+        };
+        messenger.links += 1;
+        let id = messenger.links;
+        let link = via.start_link(id, &messenger.api, &token, &self.tx, unix_now() - RECENT);
         link.send(Order::Commands);
-        log::info!("telegram", "listening", link = id, paired = self.telegram.paired());
-        self.telegram.link = Some(link);
-        self.telegram.phase = Phase::Listening;
-        self.refresh_telegram_note();
+        log::info!(via.target(), "listening", link = id, paired = messenger.paired());
+        messenger.link = Some(link);
+        messenger.phase = Phase::Listening;
+        self.refresh_messenger_note(via);
     }
 
-    fn restart_link(&mut self) {
-        self.telegram.link = None;
-        self.telegram.phase = Phase::Off;
-        self.sync_telegram();
+    fn restart_link(&mut self, via: Via) {
+        let messenger = self.messenger_mut(via);
+        messenger.link = None;
+        messenger.phase = Phase::Off;
+        self.sync_messenger(via);
     }
 
-    fn post(&self, order: Order) {
-        if let Some(link) = &self.telegram.link {
+    fn post(&self, via: Via, order: Order) {
+        if let Some(link) = &self.messenger(via).link {
             link.send(order);
         }
     }
 
-    fn say(&mut self, html: String, keyboard: Keyboard, route: Option<Route>, reply_to: Option<i64>) {
-        let Some(chat) = self.telegram.chat().map(|c| c.id) else { return };
+    fn say(&mut self, via: Via, text: String, keyboard: Keyboard, route: Option<Route>, reply_to: Option<i64>) {
+        let messenger = self.messenger_mut(via);
+        let Some(chat) = messenger.chat().map(|c| c.id) else { return };
         let tag = route.map(|route| {
-            self.telegram.next_tag += 1;
-            self.telegram.tags.insert(self.telegram.next_tag, route);
-            self.telegram.next_tag
+            messenger.next_tag += 1;
+            messenger.tags.insert(messenger.next_tag, route);
+            messenger.next_tag
         });
-        self.post(Order::Send { chat, html, keyboard, reply_to, ask: None, tag });
+        self.post(via, Order::Send { chat, text, keyboard, reply_to, ask: None, tag });
     }
 
-    fn say_long(&mut self, header: &str, parts: Vec<String>, keyboard: Keyboard, route: Option<Route>) {
+    fn say_long(&mut self, via: Via, header: &str, parts: Vec<String>, keyboard: Keyboard, route: Option<Route>) {
         let count = parts.len();
         if count == 0 {
-            self.say(header.to_string(), keyboard, route, None);
+            self.say(via, header.to_string(), keyboard, route, None);
             return;
         }
+        let markup = via.markup();
         for (i, part) in parts.into_iter().enumerate() {
-            let joined = i == 0 && html::fits(header, &part);
+            let joined = i == 0 && markup.fits(header, &part);
             if i == 0 && !joined {
-                self.say(header.to_string(), Vec::new(), route, None);
+                self.say(via, header.to_string(), Vec::new(), route, None);
             }
-            let html = if joined { format!("{header}\n\n{part}") } else { part };
+            let text = if joined { format!("{header}\n\n{part}") } else { part };
             let keys = if i + 1 == count { keyboard.clone() } else { Vec::new() };
-            self.say(html, keys, route, None);
+            self.say(via, text, keys, route, None);
         }
     }
 
-    fn ask(&mut self, html: String, placeholder: &str, route: Route) {
-        let Some(chat) = self.telegram.chat().map(|c| c.id) else { return };
-        self.telegram.next_tag += 1;
-        let tag = self.telegram.next_tag;
-        self.telegram.tags.insert(tag, route);
+    fn ask(&mut self, via: Via, text: String, placeholder: &str, route: Route) {
+        let messenger = self.messenger_mut(via);
+        let Some(chat) = messenger.chat().map(|c| c.id) else { return };
+        messenger.next_tag += 1;
+        let tag = messenger.next_tag;
+        messenger.tags.insert(tag, route);
         let ask = Some(placeholder.chars().take(64).collect());
-        self.post(Order::Send { chat, html, keyboard: Vec::new(), reply_to: None, ask, tag: Some(tag) });
+        self.post(via, Order::Send { chat, text, keyboard: Vec::new(), reply_to: None, ask, tag: Some(tag) });
     }
 
-    fn reply(&mut self, message: i64, text: &str) {
-        self.say(html::escape(text), Vec::new(), None, Some(message));
+    fn reply(&mut self, via: Via, message: i64, text: &str) {
+        let text = via.markup().escape(text);
+        self.say(via, text, Vec::new(), None, Some(message));
     }
 
-    fn answer_press(&self, press: &str, text: &str) {
+    fn answer_press(&self, via: Via, press: &str, text: &str) {
         let text = text.chars().take(190).collect();
-        self.post(Order::Answer { id: press.to_string(), text });
+        self.post(via, Order::Answer { id: press.to_string(), text });
     }
 
-    fn telegram_request(&mut self, command: Command, asked: Asked, area: Option<Rect>) {
-        self.telegram.next_client += 1;
-        let client = CLIENTS + self.telegram.next_client;
-        self.telegram.asked.insert(client, asked);
+    fn chat_request(&mut self, via: Via, command: Command, asked: Asked, area: Option<Rect>) {
+        let messenger = self.messenger_mut(via);
+        messenger.next_client += 1;
+        let offset = CLIENTS_PER_VIA * u64::try_from(via.index()).unwrap_or_default();
+        let client = CLIENTS + offset + messenger.next_client;
+        messenger.asked.insert(client, asked);
         let request = Request { caller: None, server: None, command };
         self.run_request(client, Ok(request), 0, area, Instant::now());
     }
 
-    pub(in crate::app) fn telegram_answered(&mut self, client: u64, reply: Result<Value, String>) {
-        let Some(asked) = self.telegram.asked.remove(&client) else { return };
+    pub(in crate::app) fn chat_answered(&mut self, client: u64, reply: Result<Value, String>) {
+        let Some(via) = Via::ALL.into_iter().find(|via| self.messenger(*via).asked.contains_key(&client)) else {
+            return;
+        };
+        let Some(asked) = self.messenger_mut(via).asked.remove(&client) else { return };
         match asked {
             Asked::Send { message } => match reply {
-                Ok(_) => self.post_reaction(message),
-                Err(why) => self.reply(message, &why),
+                Ok(_) => self.post_reaction(via, message),
+                Err(why) => self.reply(via, message, &why),
             },
             Asked::Keys { press, chat_message, key, agent } => match reply {
                 Ok(_) => {
-                    self.answer_press(&press, &format!("sent {key} to {agent}"));
+                    self.answer_press(via, &press, &format!("sent {key} to {agent}"));
                     if key.chars().all(|c| c.is_ascii_digit())
-                        && let Some(chat) = self.telegram.chat().map(|c| c.id)
+                        && let Some(chat) = self.messenger(via).chat().map(|c| c.id)
                     {
-                        self.post(Order::Buttons { chat, message: chat_message, keyboard: Vec::new() });
+                        self.post(via, Order::Buttons { chat, message: chat_message, keyboard: Vec::new() });
                     }
                 }
-                Err(why) => self.answer_press(&press, &why),
+                Err(why) => self.answer_press(via, &press, &why),
             },
-            Asked::Finished { pane, header } => self.finished_read(pane, &header, reply),
+            Asked::Finished { pane, header } => self.finished_read(via, pane, &header, reply),
             Asked::Start { message, place, agent } => match reply {
-                Ok(value) => self.started(&value, message, &place, &agent),
-                Err(why) => self.reply(message, &why),
+                Ok(value) => self.started(via, &value, message, &place, &agent),
+                Err(why) => self.reply(via, message, &why),
             },
         }
     }
 
-    fn post_reaction(&self, message: i64) {
-        if let Some(chat) = self.telegram.chat().map(|c| c.id) {
-            self.post(Order::React { chat, message, emoji: "👍".into() });
+    fn post_reaction(&self, via: Via, message: i64) {
+        if let Some(chat) = self.messenger(via).chat().map(|c| c.id) {
+            self.post(via, Order::React { chat, message, emoji: "👍".into() });
         }
     }
 
-    fn started(&mut self, value: &Value, message: i64, place: &str, agent: &str) {
+    fn started(&mut self, via: Via, value: &Value, message: i64, place: &str, agent: &str) {
         let done: Done = serde_json::from_value(value.clone()).unwrap_or_default();
-        let later = if self.telegram.away { "" } else { "\n/away to get its messages here." };
-        let html = format!(
-            "Started <b>{}</b> in {}. Reply to this message to write to it.{later}",
-            html::escape(agent),
-            html::escape(place)
+        let later = if self.messenger(via).away { "" } else { "\n/away to get its messages here." };
+        let m = via.markup();
+        let text = format!(
+            "Started {} in {}. Reply to this message to write to it.{later}",
+            m.bold(&m.escape(agent)),
+            m.escape(place)
         );
         let route = done.ids.pane.map(Route::Pane);
-        self.say(html, Vec::new(), route, Some(message));
+        self.say(via, text, Vec::new(), route, Some(message));
     }
 
-    pub(super) fn telegram_event(&mut self, event: TelegramEvent, area: Rect) {
-        let current = |app: &Self, id: u64| app.telegram.link.as_ref().is_some_and(|link| link.id == id);
+    pub(super) fn messenger_event(&mut self, event: MessengerEvent, area: Rect) {
+        let current = |app: &Self, via: Via, id: u64| app.messenger(via).link.as_ref().is_some_and(|l| l.id == id);
         match event {
-            TelegramEvent::Checked { token, result } => self.telegram_checked(&token, result),
-            TelegramEvent::Link(link::Event::Updates(id, updates)) if current(self, id) => {
+            MessengerEvent::Checked { via, token, result } => self.messenger_checked(via, &token, result),
+            MessengerEvent::Link(via, link::Event::Updates(id, updates)) if current(self, via, id) => {
                 for update in updates {
-                    self.telegram_update(update, area);
+                    self.chat_update(via, update, area);
                 }
             }
-            TelegramEvent::Link(link::Event::Sent { link, tag, message }) if current(self, link) => {
-                if let Some(route) = self.telegram.tags.remove(&tag) {
-                    self.telegram.remember(message, route);
+            MessengerEvent::Link(via, link::Event::Sent { link, tag, message }) if current(self, via, link) => {
+                let messenger = self.messenger_mut(via);
+                if let Some(route) = messenger.tags.remove(&tag) {
+                    messenger.remember(message, route);
                 }
             }
-            TelegramEvent::Link(link::Event::Problem(id, problem)) if current(self, id) => {
-                self.telegram.phase = problem.map_or(Phase::Listening, Phase::Problem);
-                self.refresh_telegram_note();
+            MessengerEvent::Link(via, link::Event::Problem(id, problem)) if current(self, via, id) => {
+                self.messenger_mut(via).phase = problem.map_or(Phase::Listening, Phase::Problem);
+                self.refresh_messenger_note(via);
             }
-            TelegramEvent::Link(link::Event::Rejected(id)) if current(self, id) => {
-                self.telegram.link = None;
-                self.telegram.phase = Phase::Rejected;
-                self.refresh_telegram_note();
+            MessengerEvent::Link(via, link::Event::Rejected(id)) if current(self, via, id) => {
+                let messenger = self.messenger_mut(via);
+                messenger.link = None;
+                messenger.phase = Phase::Rejected;
+                self.refresh_messenger_note(via);
             }
-            TelegramEvent::Link(_) => {}
+            MessengerEvent::Link(..) => {}
         }
     }
 
-    pub(super) fn check_telegram(&mut self, token: Secret) {
-        let bot = Bot::new(&self.telegram.api, &token.0);
-        let job = Job::new(Level::Info, "telegram", "check bot");
+    pub(super) fn check_messenger(&mut self, via: Via, token: Secret) {
+        let api = self.messenger(via).api.clone();
+        let job = Job::new(Level::Info, via.target(), "check bot");
+        let checked = token.0.clone();
         self.spawn_job(
             job,
-            move || Ok(bot.me().map_err(|e| e.to_string())),
+            move || Ok(via.check(&api, &checked)),
             move |result, _| {
                 let result = result.unwrap_or_else(|e| Err(e.to_string()));
-                Some(AppEvent::Telegram(TelegramEvent::Checked { token, result }))
+                Some(AppEvent::Messenger(MessengerEvent::Checked { via, token, result }))
             },
         );
     }
 
-    fn telegram_checked(&mut self, token: &Secret, result: Result<String, String>) {
+    fn messenger_checked(&mut self, via: Via, token: &Secret, result: Result<String, String>) {
+        let messenger = self.messenger(via);
         let saved = result.and_then(|name| {
-            secrets::write(&self.telegram.secrets, telegram::TOKEN_KEY, &token.0)
+            secrets::write(&messenger.secrets, via.token_key(), &token.0)
                 .map(|()| name)
                 .map_err(|e| format!("failed to save the token: {e}"))
         });
         if let Ok(name) = &saved {
-            log::info!("telegram", "bot set", bot = name);
-            if self.telegram.saved.bot != *name {
-                self.telegram.saved.chat = None;
+            log::info!(via.target(), "bot set", bot = name);
+            let messenger = self.messenger_mut(via);
+            if messenger.saved.bot != *name {
+                messenger.saved.chat = None;
             }
-            self.telegram.saved.bot.clone_from(name);
-            self.telegram.save();
-            self.telegram.token = Some(token.0.trim().to_string());
-            self.restart_link();
+            messenger.saved.bot.clone_from(name);
+            messenger.save();
+            messenger.token = Some(token.0.trim().to_string());
+            self.restart_link(via);
         }
-        let paired = self.telegram.paired();
+        let paired = self.messenger(via).paired();
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.telegram_checked(saved, paired);
+            match via {
+                Via::Telegram => s.telegram_checked(saved, paired),
+            }
         }
-        self.refresh_telegram_note();
+        self.refresh_messenger_note(via);
     }
 
-    pub(super) fn remove_telegram(&mut self) -> Result<&'static str, String> {
-        secrets::remove(&self.telegram.secrets, telegram::TOKEN_KEY)
-            .map_err(|e| format!("failed to remove the token: {e}"))?;
-        log::info!("telegram", "bot removed");
-        self.telegram.token = None;
-        self.telegram.saved = Saved::default();
-        self.telegram.save();
-        self.telegram.away = false;
-        self.telegram.phase = Phase::Off;
-        self.sync_telegram();
-        self.refresh_telegram_note();
-        Ok("the Telegram bot was removed")
+    pub(super) fn remove_messenger(&mut self, via: Via) -> Result<String, String> {
+        let messenger = self.messenger_mut(via);
+        secrets::remove(&messenger.secrets, via.token_key()).map_err(|e| format!("failed to remove the token: {e}"))?;
+        log::info!(via.target(), "bot removed");
+        messenger.token = None;
+        messenger.saved = Saved::default();
+        messenger.save();
+        messenger.away = false;
+        messenger.phase = Phase::Off;
+        self.sync_messenger(via);
+        self.refresh_messenger_note(via);
+        Ok(format!("the {} bot was removed", via.name()))
     }
 
-    pub(super) fn forget_telegram_chat(&mut self) -> &'static str {
-        log::info!("telegram", "chat forgotten");
-        self.telegram.saved.chat = None;
-        self.telegram.save();
-        self.telegram.away = false;
-        self.refresh_telegram_note();
-        "this computer no longer messages your Telegram"
+    pub(super) fn forget_chat(&mut self, via: Via) -> String {
+        log::info!(via.target(), "chat forgotten");
+        let messenger = self.messenger_mut(via);
+        messenger.saved.chat = None;
+        messenger.save();
+        messenger.away = false;
+        self.refresh_messenger_note(via);
+        format!("this computer no longer messages your {}", via.name())
     }
 
-    pub(super) fn pair_telegram(&mut self) -> Option<&'static str> {
-        if self.telegram.bot().is_none() {
+    pub(super) fn pair(&mut self, via: Via) -> Option<&'static str> {
+        if self.messenger(via).bot().is_none() {
             return Some("paste the bot's token first");
         }
         match Pairing::new(Instant::now()) {
-            Ok(pairing) => self.telegram.pairing = Some(pairing),
-            Err(e) => log::error!("telegram", "cannot make a pairing code", error = e),
+            Ok(pairing) => self.messenger_mut(via).pairing = Some(pairing),
+            Err(e) => log::error!(via.target(), "cannot make a pairing code", error = e),
         }
-        self.overlay = Some(Overlay::Telegram);
+        self.overlay = Some(Overlay::Pairing(via));
         None
     }
 
-    fn try_pairing(&mut self, message: &telegram::Message) -> bool {
-        let token = message.text.trim().strip_prefix("/start").map(str::trim).unwrap_or_default();
+    fn try_pairing(&mut self, via: Via, message: &Message) -> bool {
+        let messenger = self.messenger(via);
+        let code = via.pairing_code(&message.text);
         let accepted = message.private
-            && !token.is_empty()
-            && self.telegram.pairing.as_ref().is_some_and(|p| p.accepts(token, Instant::now()));
+            && code.is_some_and(|code| messenger.pairing.as_ref().is_some_and(|p| p.accepts(code, Instant::now())));
         if !accepted {
             return false;
         }
-        self.telegram.pairing = None;
         let paired = u64::try_from(unix_now()).unwrap_or_default();
         let chat = Chat { id: message.chat, user: message.user, name: message.name.clone(), paired };
-        log::info!("telegram", "paired", chat = chat.id);
-        self.telegram.saved.chat = Some(chat);
-        self.telegram.save();
-        if matches!(self.overlay, Some(Overlay::Telegram)) {
+        log::info!(via.target(), "paired", chat = chat.id);
+        let messenger = self.messenger_mut(via);
+        messenger.pairing = None;
+        messenger.saved.chat = Some(chat);
+        messenger.save();
+        if matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
             self.overlay = None;
         }
         let who = if message.name.is_empty() { String::new() } else { format!(" with {}", message.name) };
-        self.toast = Some(Toast::new(format!("{CONNECTED}{who}"), ui::ToastIcon::Check));
-        self.say(chat::welcome(), Vec::new(), None, None);
-        self.refresh_telegram_note();
+        self.toast = Some(Toast::new(format!("{} connected{who}", via.name()), ui::ToastIcon::Check));
+        self.say(via, chat::welcome(via), Vec::new(), None, None);
+        self.refresh_messenger_note(via);
         true
     }
 
-    pub(super) fn telegram_view(&self) -> ui::RemoteAccess {
-        let bot = self.telegram.bot().unwrap_or_default();
-        let (url, lines) = match &self.telegram.pairing {
-            Some(pairing) => (
-                Some(format!("https://t.me/{bot}?start={}", pairing.token)),
-                vec![
-                    "scan the code with your phone's camera, then tap Start in Telegram.".into(),
-                    "the bot then answers only that chat.".into(),
-                ],
-            ),
+    pub(super) fn pairing_view(&self, via: Via) -> ui::RemoteAccess {
+        let messenger = self.messenger(via);
+        let bot = messenger.bot().unwrap_or_default();
+        let (url, lines) = match &messenger.pairing {
+            Some(pairing) => {
+                let (url, lines) = via.pairing_link(bot, &pairing.token);
+                (Some(url), lines)
+            }
             None => (None, vec!["could not make a code, see server.log".into()]),
         };
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();
-        ui::RemoteAccess { title: ui::TELEGRAM_TITLE, url, code, lines }
+        ui::RemoteAccess { title: via.name(), url, code, lines }
     }
 
-    pub(super) fn telegram_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
-        let done = ui::remote_done(area, &self.telegram_view());
+    pub(super) fn pairing_mouse(&mut self, via: Via, ev: MouseEvent, pos: Position, area: Rect) {
+        let done = ui::remote_done(area, &self.pairing_view(via));
         if ev.kind == MouseEventKind::Down(MouseButton::Left) && done.contains(pos) {
             self.overlay = None;
         }
     }
 
-    pub(super) fn refresh_telegram_note(&mut self) {
-        let view = self.telegram_settings();
+    pub(super) fn refresh_messenger_note(&mut self, via: Via) {
+        let view = self.messenger_settings(via);
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            s.telegram = view;
+            match via {
+                Via::Telegram => s.telegram = view,
+            }
         }
     }
 
-    pub(super) fn telegram_settings(&self) -> settings::Telegram {
+    pub(super) fn messenger_settings(&self, via: Via) -> settings::Telegram {
+        let messenger = self.messenger(via);
         settings::Telegram {
-            bot: self.telegram.bot().map(|name| format!("@{name}")),
-            chat: self.telegram.chat_name().map(String::from),
-            note: self.telegram.note(),
+            bot: messenger.bot().map(|name| format!("@{name}")),
+            chat: messenger.chat_name().map(String::from),
+            note: messenger.note(),
             checking: false,
         }
     }
 
-    pub(super) fn toggle_away(&mut self) {
-        if !self.telegram.ready() {
-            self.open_settings_on(&settings::Row::TelegramBot);
-        } else if self.telegram.away {
-            self.come_back(By::Window);
-        } else if let Err(why) = self.go_away(By::Window) {
+    pub(super) fn toggle_away(&mut self, via: Via) {
+        if !self.messenger(via).ready() {
+            let row = match via {
+                Via::Telegram => settings::Row::TelegramBot,
+            };
+            self.open_settings_on(&row);
+        } else if self.messenger(via).away {
+            self.come_back(via, By::Window);
+        } else if let Err(why) = self.go_away(via, By::Window) {
             self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
         }
     }
 
-    pub(super) fn go_away(&mut self, by: By) -> Result<(), String> {
-        if !self.telegram.paired() {
-            return Err(NOT_PAIRED.into());
+    pub(super) fn go_away(&mut self, via: Via, by: By) -> Result<(), String> {
+        let messenger = self.messenger_mut(via);
+        if !messenger.paired() {
+            return Err(format!("{} is not set up: pair a phone in Settings › Remote", via.name()));
         }
-        if self.telegram.phase == Phase::Rejected {
-            return Err(REFUSED.into());
+        if messenger.phase == Phase::Rejected {
+            return Err(format!("{} refused the bot token: paste it again in Settings › Remote", via.name()));
         }
-        if !self.telegram.away {
-            self.telegram.away = true;
-            log::info!("telegram", "away", by = by.name());
+        if !messenger.away {
+            messenger.away = true;
+            log::info!(via.target(), "away", by = by.name(via));
         }
-        let (status, keyboard) = self.status_message();
-        self.say_long(&format!("{AWAY_HTML}\n\n{}", notices::AGENTS), status, keyboard, None);
-        if by != By::Telegram {
-            self.toast = Some(Toast::new(AWAY, ui::ToastIcon::Check));
+        let (status, keyboard) = self.status_message(via);
+        let m = via.markup();
+        let header = format!(
+            "{}: I'll message you here when an agent needs you or finishes, until you send /back or turn it off in \
+             cornercase.\n\n{}",
+            m.bold("Away"),
+            m.bold(notices::AGENTS)
+        );
+        self.say_long(via, &header, status, keyboard, None);
+        if by != By::Chat {
+            self.toast = Some(Toast::new(format!("away: agents message you on {}", via.name()), ui::ToastIcon::Check));
         }
-        self.refresh_telegram_note();
+        self.refresh_messenger_note(via);
         Ok(())
     }
 
-    pub(super) fn come_back(&mut self, by: By) {
-        if !self.telegram.away {
+    pub(super) fn come_back(&mut self, via: Via, by: By) {
+        let messenger = self.messenger_mut(via);
+        if !messenger.away {
             return;
         }
-        self.telegram.away = false;
-        log::info!("telegram", "back", by = by.name());
-        self.say(BACK_HTML.into(), Vec::new(), None, None);
-        if by != By::Telegram {
-            self.toast = Some(Toast::new(BACK, ui::ToastIcon::Check));
+        messenger.away = false;
+        log::info!(via.target(), "back", by = by.name(via));
+        let text = format!("{}: I no longer message you here. /away starts again.", via.markup().bold("Back"));
+        self.say(via, text, Vec::new(), None, None);
+        if by != By::Chat {
+            let back = format!("back: agents no longer message you on {}", via.name());
+            self.toast = Some(Toast::new(back, ui::ToastIcon::Check));
         }
-        self.refresh_telegram_note();
+        self.refresh_messenger_note(via);
+    }
+
+    pub(super) fn away_anywhere(&self) -> bool {
+        self.messengers.iter().any(|messenger| messenger.away)
     }
 
     pub(in crate::app) fn away_request(&mut self, off: bool) -> Result<Option<Value>, String> {
         if off {
-            self.come_back(By::Command);
+            for via in Via::ALL {
+                self.come_back(via, By::Command);
+            }
         } else {
-            self.go_away(By::Command)?;
+            let paired: Vec<Via> = Via::ALL.into_iter().filter(|via| self.messenger(*via).paired()).collect();
+            let mut refused = None;
+            let mut went = false;
+            for via in if paired.is_empty() { Via::ALL.to_vec() } else { paired } {
+                match self.go_away(via, By::Command) {
+                    Ok(()) => went = true,
+                    Err(why) => refused = refused.or(Some(why)),
+                }
+            }
+            if let (false, Some(why)) = (went, refused) {
+                return Err(why);
+            }
         }
-        Ok(Some(serde_json::json!({ "away": self.telegram.away })))
+        Ok(Some(serde_json::json!({ "away": self.away_anywhere() })))
     }
 }
 
 #[cfg(test)]
 pub(super) fn capture(app: &mut App) -> std::sync::mpsc::Receiver<Order> {
     let (link, orders) = Link::capture(1);
-    app.telegram.links = 1;
-    app.telegram.link = Some(link);
-    app.telegram.phase = Phase::Listening;
+    let messenger = app.messenger_mut(Via::Telegram);
+    messenger.links = 1;
+    messenger.link = Some(link);
+    messenger.phase = Phase::Listening;
     orders
 }
 
 #[cfg(test)]
 pub(super) fn set_up(app: &mut App, token: &str, bot: &str, chat: Option<Chat>) {
-    app.telegram.token = Some(token.into());
-    app.telegram.saved = Saved::new(bot.into(), chat);
+    let messenger = app.messenger_mut(Via::Telegram);
+    messenger.token = Some(token.into());
+    messenger.saved = Saved::new(bot.into(), chat);
 }
 
 #[cfg(test)]
 pub(super) fn run(app: &App) -> &str {
-    &app.telegram.run
+    &app.messenger(Via::Telegram).run
 }
