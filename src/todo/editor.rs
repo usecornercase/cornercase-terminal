@@ -4,12 +4,13 @@ use std::ops::Range;
 pub struct Editor {
     chars: Vec<char>,
     cursor: usize,
+    scroll: usize,
 }
 
 impl Editor {
     pub(crate) fn new(text: &str) -> Self {
         let chars: Vec<char> = text.chars().collect();
-        Self { cursor: chars.len(), chars }
+        Self { cursor: chars.len(), chars, scroll: 0 }
     }
 
     pub(crate) fn text(&self) -> String {
@@ -25,8 +26,26 @@ impl Editor {
         self.cursor
     }
 
+    pub(crate) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
     pub(crate) fn insert(&mut self, text: &str) {
         let typed: Vec<char> = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+        self.splice(typed);
+    }
+
+    pub(crate) fn insert_lines(&mut self, text: &str) {
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let typed: Vec<char> = text.chars().map(|c| if c.is_control() && c != '\n' { ' ' } else { c }).collect();
+        self.splice(typed);
+    }
+
+    pub(crate) fn newline(&mut self) {
+        self.splice(vec!['\n']);
+    }
+
+    fn splice(&mut self, typed: Vec<char>) {
         let n = typed.len();
         self.chars.splice(self.cursor..self.cursor, typed);
         self.cursor += n;
@@ -61,6 +80,16 @@ impl Editor {
         self.cursor = self.chars.len();
     }
 
+    pub(crate) fn line_home(&mut self, width: usize) {
+        let (line, _) = self.position(width);
+        self.place(width, line, 0);
+    }
+
+    pub(crate) fn line_end(&mut self, width: usize) {
+        let (line, _) = self.position(width);
+        self.place(width, line, usize::MAX);
+    }
+
     pub(crate) fn up(&mut self, width: usize) {
         let (line, col) = self.position(width);
         if line > 0 {
@@ -76,15 +105,22 @@ impl Editor {
     pub(crate) fn place(&mut self, width: usize, line: usize, col: usize) {
         let lines = self.lines(width);
         let Some(range) = lines.get(line) else { return };
-        let last = line + 1 == lines.len();
-        let room = if last { range.len() } else { range.len().saturating_sub(1) };
+        let ends = lines.get(line + 1).is_none_or(|next| next.start > range.end);
+        let room = if ends { range.len() } else { range.len().saturating_sub(1) };
         self.cursor = range.start + col.min(room);
     }
 
     pub(crate) fn lines(&self, width: usize) -> Vec<Range<usize>> {
-        let mut lines = wrap_chars(&self.chars, width);
-        if lines.last().is_some_and(|l| !l.is_empty() && l.len() >= width.max(1)) {
-            lines.push(self.chars.len()..self.chars.len());
+        let mut lines = Vec::new();
+        let mut start = 0;
+        for part in self.chars.split(|c| *c == '\n') {
+            let wrapped = wrap_chars(part, width);
+            let full = wrapped.last().is_some_and(|l| !l.is_empty() && l.len() >= width.max(1));
+            lines.extend(wrapped.into_iter().map(|l| l.start + start..l.end + start));
+            if full {
+                lines.push(start + part.len()..start + part.len());
+            }
+            start += part.len() + 1;
         }
         lines
     }
@@ -93,6 +129,26 @@ impl Editor {
         let lines = self.lines(width);
         let line = lines.iter().rposition(|l| l.start <= self.cursor).unwrap_or(0);
         (line, self.cursor - lines.get(line).map_or(0, |l| l.start))
+    }
+
+    pub(crate) fn reveal(&mut self, width: usize, height: usize) {
+        let (line, _) = self.position(width);
+        let height = height.max(1);
+        if line < self.scroll {
+            self.scroll = line;
+        } else if line >= self.scroll + height {
+            self.scroll = line + 1 - height;
+        }
+        self.clamp_scroll(width, height);
+    }
+
+    pub(crate) fn scroll_by(&mut self, delta: isize, width: usize, height: usize) {
+        self.scroll = self.scroll.saturating_add_signed(delta);
+        self.clamp_scroll(width, height);
+    }
+
+    fn clamp_scroll(&mut self, width: usize, height: usize) {
+        self.scroll = self.scroll.min(self.lines(width).len().saturating_sub(height.max(1)));
     }
 }
 

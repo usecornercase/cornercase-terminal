@@ -159,3 +159,142 @@ mod moving {
         assert_eq!(e.cursor(), expected);
     }
 }
+
+mod line_breaks {
+    use super::*;
+
+    fn typed(text: &str) -> Editor {
+        let mut e = Editor::default();
+        e.insert_lines(text);
+        e
+    }
+
+    #[test]
+    fn a_break_starts_a_new_line() {
+        assert_eq!(typed("ab\ncd").lines(10), vec![0..2, 3..5]);
+    }
+
+    #[test]
+    fn each_line_wraps_on_its_own() {
+        assert_eq!(typed("fix the login\nbug").lines(10), vec![0..8, 8..13, 14..17]);
+    }
+
+    #[test]
+    fn empty_lines_are_kept() {
+        assert_eq!(typed("a\n\nb\n").lines(10), vec![0..1, 2..2, 3..4, 5..5]);
+    }
+
+    #[test]
+    fn a_full_line_before_a_break_gets_an_empty_one_for_the_cursor() {
+        assert_eq!(typed("abcd\nef").lines(4), vec![0..4, 4..4, 5..7]);
+    }
+
+    #[test]
+    fn enter_inserts_a_break_where_the_cursor_is() {
+        let mut e = at("abcd", 2);
+        e.newline();
+        assert_eq!((e.text().as_str(), e.position(10)), ("ab\ncd", (1, 0)));
+    }
+
+    #[test]
+    fn a_paste_keeps_its_line_breaks() {
+        let mut e = Editor::new("a");
+        e.insert_lines("\r\nb\tc\rd");
+        assert_eq!(e.text(), "a\nb c\nd");
+    }
+
+    #[test]
+    fn the_end_of_a_line_sits_before_its_break() {
+        assert_eq!(at("ab\ncd", 2).position(10), (0, 2));
+    }
+
+    #[test]
+    fn a_click_past_the_end_of_a_line_stops_before_its_break() {
+        let mut e = at("ab\ncd", 5);
+        e.place(10, 0, 30);
+        assert_eq!(e.cursor(), 2);
+    }
+
+    #[test]
+    fn up_and_down_cross_the_breaks() {
+        let mut e = at("abc\nde\nfgh", 2);
+        e.down(10);
+        assert_eq!(e.cursor(), 6);
+        e.down(10);
+        assert_eq!(e.cursor(), 9);
+        e.up(10);
+        e.up(10);
+        assert_eq!(e.cursor(), 2);
+    }
+
+    #[test]
+    fn home_and_end_of_a_line_stay_on_it() {
+        let mut e = at("abc\ndef", 5);
+        e.line_home(10);
+        assert_eq!(e.cursor(), 4);
+        e.line_end(10);
+        assert_eq!(e.cursor(), 7);
+        e.up(10);
+        e.line_end(10);
+        assert_eq!(e.cursor(), 3);
+    }
+
+    #[test]
+    fn backspace_at_the_start_of_a_line_joins_it_to_the_one_above() {
+        let mut e = at("ab\ncd", 3);
+        e.backspace();
+        assert_eq!((e.text().as_str(), e.cursor()), ("abcd", 2));
+    }
+}
+
+mod scrolling {
+    use super::*;
+
+    fn tall(lines: usize) -> Editor {
+        let mut e = Editor::default();
+        e.insert_lines(&vec!["line"; lines].join("\n"));
+        e
+    }
+
+    #[test]
+    fn revealing_brings_the_cursor_into_view() {
+        let mut e = tall(10);
+        e.reveal(20, 4);
+        assert_eq!(e.scroll(), 6);
+        e.home();
+        e.reveal(20, 4);
+        assert_eq!(e.scroll(), 0);
+    }
+
+    #[test]
+    fn a_cursor_in_view_does_not_scroll() {
+        let mut e = tall(10);
+        e.scroll_by(3, 20, 4);
+        e.place(20, 4, 0);
+        e.reveal(20, 4);
+        assert_eq!(e.scroll(), 3);
+    }
+
+    #[test]
+    fn the_wheel_stops_at_the_last_screenful() {
+        let mut e = tall(10);
+        e.scroll_by(50, 20, 4);
+        assert_eq!(e.scroll(), 6);
+        e.scroll_by(-50, 20, 4);
+        assert_eq!(e.scroll(), 0);
+    }
+
+    #[test]
+    fn text_shorter_than_the_view_never_scrolls() {
+        let mut e = tall(3);
+        e.scroll_by(5, 20, 4);
+        assert_eq!(e.scroll(), 0);
+    }
+
+    #[test]
+    fn the_wheel_leaves_the_cursor_where_it_was() {
+        let mut e = tall(10);
+        e.scroll_by(-2, 20, 4);
+        assert_eq!(e.cursor(), 49);
+    }
+}
