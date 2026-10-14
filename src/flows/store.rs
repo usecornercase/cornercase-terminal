@@ -25,6 +25,7 @@ impl Origin {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn label(&self) -> &'static str {
         match self {
             Self::BuiltIn => "built in",

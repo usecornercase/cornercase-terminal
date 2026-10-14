@@ -39,6 +39,7 @@ pub(crate) struct Progress {
 }
 
 impl Progress {
+    #[cfg(test)]
     pub(crate) fn of<'a>(flow: &Flow, messages: impl IntoIterator<Item = &'a Message>) -> Self {
         let mut progress = Self::default();
         for message in messages {
