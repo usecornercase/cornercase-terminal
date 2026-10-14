@@ -320,6 +320,7 @@ When a program ends by itself, for example when you type `exit`, its pane closes
   Between stacked lists, drag the line to share the height, and double-click it to split it in half again.
 - **Borders that drag** (column borders, the line between stacked lists, the line above the [agents section](#the-agents-section) and the [dividers between panes](../panes-and-splits/#focus-resize-and-dim)) light up cyan under the mouse. In Ghostty, kitty (0.31 or later) and foot the mouse pointer also turns into a resize arrow there, ↔ on a border between columns and ↕ on a line between rows, and keeps it while you drag, even off the border. Releasing the button or pressing `Esc` ends the drag where it is. Other terminals, and cornercase inside tmux, screen or Zellij, keep their usual pointer: see [The resize pointer](../../reference/keyboard-and-mouse/#the-resize-pointer).
 - **Move the tabs above the pane** with **settings → UI → tabs** set to *top*: see [Tabs above the pane](#tabs-above-the-pane).
+- **Turn the buttons into icons** with **settings → UI → icon bar**: see [The icon bar](#the-icon-bar).
 - The active project and tab are marked with a cyan bar `▌` on the left edge and a highlighted background; the active workspace's name is brighter than the others. Each workspace's tabs hang from it on thin tree lines.
 
 Column widths, the line between stacked lists, the height of the [agents section](#the-agents-section) and what is collapsed in the tree are saved with your session. On a small terminal the columns shrink to leave room for the panes, and below 90 columns cornercase switches to a [compact layout](../small-terminals/).
@@ -391,6 +392,18 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 - In a narrow sidebar the model goes first, then the workspace; the icon and the project stay.
 
 It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex, Gemini CLI, opencode and Grok Build are listed, since other agents don't report what they are doing.
+
+### The icon bar
+
+Turn on **settings → UI → icon bar** to move the buttons at the bottom of the sidebar (**`Issues`**, **`Changes`**, **`Files`**, **`TODO`**, **`Settings`**, **`Usage`**, **`Quit`**, and **`Remote`** and the update when they show) into a narrow column of icons on the left edge, like an editor's activity bar. The lists then reach the bottom of the window. Off by default.
+
+- The panels and **`Issues`** are at the top; **`Settings`**, **`Usage`** and **`Quit`** at the bottom, with **`Remote`** and an available update above them. A button that doesn't apply, such as **`Changes`** outside a git repository, is left out and the others close up.
+- **Hover an icon** to see its name beside it, such as *Changes 3*.
+- The panel that is open is marked with the cyan bar `▌` and a cyan icon. Click its icon again to close it.
+- The number of changed files sits at the corner of the **`Changes`** icon, in a circle (`9+` from ten on); **`TODO`** gets a grey dot while items are left to do, and **`Remote`** a green one while a browser is attached or you are away on Telegram.
+- With it on, the [compact layout](../small-terminals/)'s top bar, the search bar and the search buttons of the [changes](../changes/) and [files](../files/) panels use the same icons.
+
+The icons come from [Nerd Fonts](https://www.nerdfonts.com/). Ghostty, kitty and WezTerm include them, so they show without installing anything; in another terminal, install a Nerd Font and pick it as your terminal's font, or the icons show as empty boxes. The size of an icon is your terminal's choice: a program can only say which character goes in a cell.
 
 <Aside type="tip">
 Lost in a big session? Click the search bar above the projects column and type: it finds groups, projects, workspaces, branches and tabs. See [Search](../search/).

@@ -90,6 +90,8 @@ import { type Drag, type Frame, Painter, type Region } from './ui';
 
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor Telegram';
 
+const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
+
 export interface SettingsRow {
   id: string;
   section: string;
@@ -2367,6 +2369,7 @@ export class App {
     return [
       { id: 'sidebar', section: '', label: 'sidebar', value: this.sidebar(), note: 'how projects, workspaces and tabs are laid out' },
       { id: 'tabs', section: '', label: 'tabs', value: this.tabsOnTop() ? 'top' : 'sidebar', note: "where a workspace's tabs are listed" },
+      { id: 'iconBar', section: '', label: 'icon bar', value: '[ ] off', note: 'the buttons under the lists, as icons; needs a Nerd Font' },
       { id: 'agents', section: '', label: 'agents section', value: c.agentsSection ? '[x] shown' : '[ ] hidden', note: 'every running agent in the sidebar' },
       { id: 'working', section: '', label: 'working icon', value: c.workingIcon, note: 'on the tab of an agent that is working' },
       { id: 'counts', section: '', label: 'counts', value: c.counts ? '[x] shown' : '[ ] hidden', note: 'what a project or collapsed group holds, such as (3)' },
@@ -2474,6 +2477,8 @@ export class App {
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
     } else if (row.id === 'remote' || row.id === 'telegram') {
       o.notice = REMOTE_NEEDS;
+    } else if (row.id === 'iconBar') {
+      o.notice = ICON_BAR_NEEDS;
     } else if (row.id.startsWith('token:')) {
       const source = row.id.slice(6) as Remote;
       if (c.accounts[source]) o.notice = `${REMOTES[source].name} is connected; delete removes the token`;
