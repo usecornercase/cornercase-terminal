@@ -93,8 +93,13 @@ impl App {
             if self.projects[p].closing {
                 return Err(format!("project {project} is closing"));
             }
+            let made = self.projects[p].workspaces.iter().all(|w| w.path != path);
             let w = self.worktree_workspace(p, path);
-            self.open_run(p, w, starting, area)
+            let opened = self.open_run(p, w, starting, area);
+            if opened.is_err() && made {
+                self.projects[p].remove_workspace(w);
+            }
+            opened
         });
         match opened {
             Ok(info) => self.answer(client, Ok(json(&info))),

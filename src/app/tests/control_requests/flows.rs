@@ -1,3 +1,5 @@
+use std::os::unix::fs::PermissionsExt;
+
 use super::*;
 use crate::agents::AgentState;
 use crate::app::flow_runs::Starting;
@@ -353,6 +355,33 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
 
     assert!(refused.contains(said), "{refused}");
     assert_eq!((team.app.projects[0].workspaces[0].tabs.len(), team.app.runs.len()), (1, 0));
+}
+
+#[test]
+fn a_run_whose_shells_cannot_start_leaves_no_tab_and_no_workspace_behind() {
+    let mut team = Team::new();
+    let run = wire::FlowRun { name: "Pair".into(), prompt: "Fix the login form".into(), ..wire::FlowRun::default() };
+    ask(&mut team.app, None, Command::FlowRun(run));
+    let mut made = None;
+    wait_until("git makes the worktree", || {
+        made = team.rx.try_iter().find(|event| matches!(event, AppEvent::Worktree(_)));
+        made.is_some()
+    });
+    let Some(AppEvent::Worktree(WorktreeEvent::Created { result: Ok(path), .. })) = &made else {
+        panic!("not a new worktree: {made:?}")
+    };
+    let path = path.canonicalize().expect("the worktree");
+    let chmod = |bits| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(bits)).expect("chmod");
+    chmod(0o000);
+
+    team.app.handle_event(made.take().expect("the answer"), AREA).expect("handled");
+
+    chmod(0o755);
+    let refused = error(answers(&mut team.app).remove(0));
+    assert!(refused.starts_with("failed to spawn shell"), "{refused}");
+    assert!(team.app.runs.is_empty());
+    assert!(team.app.projects[0].workspaces.iter().all(|w| w.path != path), "the new workspace stayed");
+    assert_eq!(team.app.projects[0].workspaces[0].tabs.len(), 1);
 }
 
 #[test]

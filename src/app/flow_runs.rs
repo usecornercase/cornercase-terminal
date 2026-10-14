@@ -108,12 +108,17 @@ impl App {
         let mut run = Run::new(id, flow, task);
         run.id = self.take_id();
         let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
-        for role in &roles {
-            let t = self.push_tab(p, w, area, Some(role.name.clone())).map_err(|e| e.to_string())?;
-            let tab = &self.projects[p].workspaces[w].tabs[t];
-            let pane = tab.pane().map_or(0, |term| term.id);
+        let path = self.projects[p].workspaces[w].path.clone();
+        let mut terms = Vec::with_capacity(roles.len());
+        for _ in &roles {
+            terms.push(self.spawn(area, path.clone()).map_err(|e| e.to_string())?);
+        }
+        for (role, term) in roles.iter().zip(terms) {
+            let pane = term.id;
+            let tab = Tab::new(self.take_id(), Some(role.name.clone()), term);
             run.members.push(Member { role: role.name.clone(), pane });
             info.members.push(MemberInfo { role: role.name.clone(), agent: role.agent.clone(), tab: tab.id, pane });
+            self.projects[p].workspaces[w].tabs.push(tab);
         }
         let now = Instant::now();
         let mut team = Vec::new();
