@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.90
+
+- On Telegram, answering a question from its buttons now brings the agent's next question, with its own buttons, when it asks several in a row or shows another permission prompt right away. Before, only the first one came.
+
 ## 0.12.89
 
 - The buttons at the bottom of the sidebar can become a column of icons on the left edge, like an editor's activity bar: turn on **Settings → UI → icon bar**. Hover an icon to see its name. The number of changed files, the TODO dot and the Remote dot sit at the corner of their icons, and the lists get the rows the buttons took. The icons need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default.

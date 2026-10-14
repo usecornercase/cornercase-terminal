@@ -25,6 +25,7 @@ const VERSION: u32 = 1;
 const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 const SERVICE: Service = Service { name: "Telegram", rejected: "Telegram refused the bot token" };
 const MOST_CHOICES: usize = 9;
+pub(crate) const MARKS: &str = "│┃|❯›>▶●○◯";
 const DATA_BYTES: usize = 64;
 
 #[derive(Clone)]
@@ -374,7 +375,7 @@ pub(crate) fn choices(screen: &str) -> Vec<(char, String)> {
     let lines: Vec<&str> = screen.lines().rev().filter(|line| !line.trim().is_empty()).take(15).collect();
     let mut found: Vec<(char, String)> = Vec::new();
     for line in lines {
-        let line = line.trim_matches(|c: char| c.is_whitespace() || "│┃|❯›>▶●○◯".contains(c));
+        let line = line.trim_matches(|c: char| c.is_whitespace() || MARKS.contains(c));
         let mut chars = line.chars();
         let (Some(digit), Some('.')) = (chars.next(), chars.next()) else { continue };
         let label = chars.as_str().trim();
