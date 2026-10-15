@@ -88,7 +88,13 @@ mod the_risks {
         let flow = with_env();
         let role = flow.roles[0].name.clone();
         let risks = risks(&flow, "this imported flow").expect("risks");
-        assert!(risks.starts_with("this imported flow sets AWS_PROFILE for "), "{risks}");
+        assert!(risks.starts_with("this imported flow sets AWS_PROFILE=work for "), "{risks}");
+        let long = Flow {
+            roles: vec![Role { env: [("K".into(), "v".repeat(60))].into(), ..flow.roles[0].clone() }],
+            ..flow.clone()
+        };
+        assert!(super::risks(&long, "it").expect("risks").contains(&format!("K={}…", "v".repeat(39))), "{risks}");
+        assert!(key_risks(&flow, "it").expect("risks").starts_with("it sets AWS_PROFILE for "));
         assert!(risks.contains(&format!("`{role}` and passes --verbose to `{role}`")), "{risks}");
         assert!(risks.ends_with("they run without asking, so check them"), "{risks}");
     }

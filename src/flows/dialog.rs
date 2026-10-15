@@ -482,7 +482,7 @@ pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], saved: &Saved) -> R
 }
 
 pub(crate) fn project_risks(flow: &Flow) -> Option<String> {
-    share::risks(flow, "this project's flow")
+    share::key_risks(flow, "this project's flow")
 }
 
 fn row_width(labels: &[&str]) -> usize {

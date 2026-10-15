@@ -499,9 +499,9 @@ mod flows {
         let question = confirmation("it sets A for `coder`; they run without asking, so check them", ImportTo::Yours);
         assert_eq!(
             question,
-            "it sets A for `coder`; they run without asking, so check them\nImport it into your flows?"
+            "it sets A for `coder`; they run without asking, so check them\nImport it into your flows? [y/N] "
         );
-        assert!(confirmation("x", ImportTo::Project).ends_with("into the project's flows?"));
+        assert!(confirmation("x", ImportTo::Project).ends_with("into the project's flows? [y/N] "));
         let done = Imported {
             name: "Pair".into(),
             origin: "user".into(),

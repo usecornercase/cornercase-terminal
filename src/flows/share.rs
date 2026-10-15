@@ -7,6 +7,7 @@ use crate::agents::{self, Known};
 
 pub(crate) const HEADER: &str =
     "# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import";
+const VALUE_WIDTH: usize = 40;
 pub(crate) const MAX_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,11 +32,19 @@ pub(crate) fn from_share(text: &str) -> Result<Flow, String> {
     store::parse(text.strip_prefix('\u{feff}').unwrap_or(text))
 }
 
-fn parts(flow: &Flow) -> Vec<String> {
+fn parts(flow: &Flow, values: bool) -> Vec<String> {
     let mut parts = Vec::new();
     for role in std::iter::once(&flow.orchestrator).chain(&flow.roles) {
         if !role.env.is_empty() {
-            parts.push(format!("sets {} for `{}`", env_keys(role).join(", "), role.name.trim()));
+            let sets: Vec<String> = if values {
+                role.env
+                    .iter()
+                    .map(|(key, value)| format!("{key}={}", crate::text::truncate_right(value, VALUE_WIDTH)))
+                    .collect()
+            } else {
+                env_keys(role).iter().map(ToString::to_string).collect()
+            };
+            parts.push(format!("sets {} for `{}`", sets.join(", "), role.name.trim()));
         }
         if !role.args.is_empty() {
             parts.push(format!("passes {} to `{}`", agents::join_args(&role.args), role.name.trim()));
@@ -49,7 +58,15 @@ pub(crate) fn env_keys(role: &Role) -> Vec<&str> {
 }
 
 pub(crate) fn risks(flow: &Flow, whose: &str) -> Option<String> {
-    let parts = parts(flow);
+    described(flow, whose, true)
+}
+
+pub(crate) fn key_risks(flow: &Flow, whose: &str) -> Option<String> {
+    described(flow, whose, false)
+}
+
+fn described(flow: &Flow, whose: &str, values: bool) -> Option<String> {
+    let parts = parts(flow, values);
     let (last, rest) = parts.split_last()?;
     let parts = if rest.is_empty() { last.clone() } else { format!("{} and {last}", rest.join(", ")) };
     Some(format!("{whose} {parts}; they run without asking, so check them"))

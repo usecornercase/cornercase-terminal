@@ -81,6 +81,9 @@ impl Dialog {
     }
 
     pub(crate) fn paste(&mut self, text: &str, room: Room) {
+        if self.confirm.is_some() {
+            return;
+        }
         if self.importing.is_some() || self.edit.is_none() {
             self.paste_import(text, room);
             return;

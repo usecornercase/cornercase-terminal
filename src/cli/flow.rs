@@ -111,7 +111,7 @@ pub(super) fn confirmation(risks: &str, to: ImportTo) -> String {
         ImportTo::Yours => "your flows",
         ImportTo::Project => "the project's flows",
     };
-    format!("{risks}\nImport it into {place}?")
+    format!("{risks}\nImport it into {place}? [y/N] ")
 }
 
 pub(super) fn imported_line(imported: &Imported) -> String {

@@ -122,6 +122,15 @@ mod the_page {
     }
 
     #[test]
+    fn a_paste_while_a_confirmation_is_pending_is_ignored() {
+        let mut d = dialog();
+        d.select(4);
+        d.ask_delete();
+        d.paste("name = \"x\"", ROOM);
+        assert!(d.confirm.is_some() && d.importing.is_none());
+    }
+
+    #[test]
     fn a_paste_past_the_cap_is_refused() {
         let mut d = dialog();
         d.paste(&"x".repeat(share::MAX_BYTES), ROOM);
