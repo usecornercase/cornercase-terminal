@@ -96,6 +96,9 @@ mod parsing {
     #[case::a_blank_branch(&["close", "--worktree", " "])]
     #[case::an_unknown_command(&["frobnicate"])]
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
+    #[case::an_import_without_a_file(&["flow", "import"])]
+    #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
+    #[case::an_export_without_a_name(&["flow", "export"])]
     #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
     fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
         assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
@@ -180,6 +183,30 @@ mod parsing {
             ("Full issue", Some("Fix it"), Some("fix"))
         );
         assert!(run.create.focus && run.create.print.json);
+    }
+
+    #[test]
+    fn a_flow_is_exported_and_imported_with_its_options() {
+        let cli = parse(&["flow", "export", "Quick", "--json"]).expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Export(export) = flow.action else { panic!("not export") };
+        assert_eq!((export.name.as_str(), export.print.json), ("Quick", true));
+
+        let cli =
+            parse(&["flow", "import", "f.toml", "--to", "project", "--name", "X", "--replace", "--yes", "--json"])
+                .expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
+        assert_eq!(
+            (import.file, import.to, import.name.as_deref()),
+            ("f.toml".into(), args::ImportTo::Project, Some("X"))
+        );
+        assert!(import.replace && import.yes && import.print.json);
+
+        let cli = parse(&["flow", "import", "-"]).expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
+        assert_eq!((import.file, import.to, import.yes), ("-".into(), args::ImportTo::Yours, false));
     }
 
     #[test]
@@ -463,8 +490,27 @@ mod output {
 }
 
 mod flows {
-    use super::flow::{listing, started};
-    use crate::control::{BrokenFlow, FlowInfo, Flows, MemberInfo, RoleInfo, RunInfo};
+    use super::args::ImportTo;
+    use super::flow::{confirmation, imported_line, listing, started};
+    use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
+
+    #[test]
+    fn an_import_is_confirmed_with_what_it_sets_and_reported_with_where_it_went() {
+        let question = confirmation("it sets A for `coder`; they run without asking, so check them", ImportTo::Yours);
+        assert_eq!(
+            question,
+            "it sets A for `coder`; they run without asking, so check them\nImport it into your flows? [y/N] "
+        );
+        assert!(confirmation("x", ImportTo::Project).ends_with("into the project's flows? [y/N] "));
+        let done = Imported {
+            name: "Pair".into(),
+            origin: "user".into(),
+            path: Some("/c/flows/pair.toml".into()),
+            replaced: true,
+            note: None,
+        };
+        assert_eq!(imported_line(&done), "imported Pair into yours (replaced): /c/flows/pair.toml\n");
+    }
 
     fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
         RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), effort: None, edits }

@@ -14,6 +14,10 @@ impl Dialog {
             return Action::None;
         }
         self.notice = None;
+        if self.importing.is_some() {
+            self.import_key(key, room);
+            return Action::None;
+        }
         let typing = !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         let Some(edit) = &mut self.edit else { return self.list_key(key) };
         if let Some(text) = &mut edit.text {
@@ -77,6 +81,13 @@ impl Dialog {
     }
 
     pub(crate) fn paste(&mut self, text: &str, room: Room) {
+        if self.confirm.is_some() {
+            return;
+        }
+        if self.importing.is_some() || self.edit.is_none() {
+            self.paste_import(text, room);
+            return;
+        }
         let Some(edit) = &mut self.edit else { return };
         if let Some(open) = &mut edit.text {
             open.editor.insert_lines(text);
@@ -94,6 +105,13 @@ impl Dialog {
             return self.press(label);
         }
         self.notice = None;
+        if let Some(importing) = &mut self.importing {
+            if let Hit::Text { line, col } = hit {
+                let scroll = importing.editor.scroll();
+                importing.editor.place(room.width, scroll + line, col);
+            }
+            return Action::None;
+        }
         let Some(edit) = &mut self.edit else {
             if let Hit::Row(i) = hit {
                 if self.cursor == i {
@@ -130,6 +148,10 @@ impl Dialog {
     }
 
     pub(crate) fn wheel(&mut self, delta: isize, room: Room) {
+        if let Some(importing) = &mut self.importing {
+            importing.editor.scroll_by(delta, room.width, room.height);
+            return;
+        }
         let Some(edit) = &mut self.edit else {
             self.cursor = self.cursor.saturating_add_signed(delta).min(self.entries().saturating_sub(1));
             return;

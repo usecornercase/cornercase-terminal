@@ -2,9 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.98
+## 0.12.99
 
 - The Issues list offers ` start a flow ` beside ` start ` and ` schedule `, so a flow starts on the selected issue without opening it first. It reads the issue and asks where to run it when the tracker needs a project, then opens the same dialog as the issue's own button. A narrow window drops ` schedule ` first, then ` start a flow `, which the issue's page keeps.
+
+## 0.12.98
+
+- **Share a flow with a teammate.** In **Settings → Agents → flows**, **export** copies the selected flow's text to your clipboard, and **import** (or just pasting on the list) opens a flow your teammate sent you in the editor, unsaved, so you can read it before you save it. What the flow sets for its agents (variables and arguments, which run without asking) is shown in red, and agents you do not have installed are named.
+- `cornercase flow export NAME > file.toml` and `cornercase flow import FILE` do the same from a shell, into yours or, with `--to project`, the project's flows. A flow that sets variables or arguments asks first (or needs `--yes` without a terminal). A name that is already taken is refused unless you pass `--replace` or `--name`.
+- A flow file that cannot be read now says which line is wrong.
 
 ## 0.12.97
 

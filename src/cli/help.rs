@@ -207,7 +207,9 @@ flows/ next to config.json, and a project's in .cornercase/flows/ in its reposit
 Examples:
   cornercase flow list
   cornercase flow run Quick --prompt 'Fix the login form'
-  cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login";
+  cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
+  cornercase flow export Quick > quick.toml
+  cornercase flow import quick.toml";
 pub(super) const FLOW_RUN_HELP: &str =
     "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
@@ -227,6 +229,27 @@ command says so on stderr when it happens.
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json";
+pub(super) const FLOW_EXPORT_HELP: &str =
+    "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
+and arguments before importing it. A name is looked up as `flow run` does. Variables a flow sets are
+named on stderr: check no secret goes with them.
+
+Examples:
+  cornercase flow export Quick > quick.toml
+  cornercase flow export 'Full issue' --json";
+pub(super) const FLOW_IMPORT_HELP: &str =
+    "It reads a flow at most 256 KiB long, lists its roles, and saves it in yours (or the project's, with
+--to project). Every agent of a flow runs without permission prompts, so when it sets variables or
+arguments it asks first, and refuses without a terminal unless you pass --yes.
+
+A name that is already taken is refused: pass --replace to overwrite that flow, or --name to import
+this one under another name. A built-in flow's name is yours to take, with --replace, and it then
+stands in its place. A project's flow never takes the place of one of yours or a built-in.
+
+Examples:
+  cornercase flow import quick.toml
+  cornercase flow import quick.toml --to project --name 'Quick mine'
+  ssh host cornercase flow export Quick | cornercase flow import - --yes";
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list

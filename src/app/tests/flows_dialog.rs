@@ -447,3 +447,56 @@ mod pages {
         insta::assert_snapshot!(shown(&mut s.app, WIDE));
     }
 }
+
+mod sharing {
+    use base64::Engine as _;
+
+    use super::*;
+    use crate::flows::share;
+
+    fn copied(app: &mut App) -> String {
+        let writes = app.take_host_writes();
+        let write = String::from_utf8(writes.last().expect("a host write").clone()).expect("text");
+        let encoded = write.strip_prefix("\x1b]52;c;").and_then(|w| w.strip_suffix('\x07')).expect("an osc 52");
+        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).expect("base64");
+        String::from_utf8(bytes).expect("text")
+    }
+
+    #[test]
+    fn export_copies_the_share_text_and_says_how_to_use_it() {
+        let mut s = open(false);
+        select_flow(&mut s.app, WIDE, "Quick");
+        button(&mut s.app, WIDE, dialog::EXPORT);
+        let text = copied(&mut s.app);
+        assert_eq!(share::from_share(&text).expect("it reads back").name, "Quick");
+        let notice = dialog(&s.app).notice.clone().expect("a notice");
+        assert!(notice.starts_with("copied Quick") && notice.contains("Flows › import"), "{notice}");
+    }
+
+    #[test]
+    fn import_then_save_writes_a_file_in_your_folder() {
+        let mut s = open(false);
+        let text = share::to_share(&dialog(&s.app).flows[0].flow.clone()).expect("export");
+        button(&mut s.app, WIDE, dialog::IMPORT);
+        s.app.flows_paste(&text, WIDE);
+        button(&mut s.app, WIDE, dialog::IMPORT);
+        let edit = dialog(&s.app).edit.as_deref().expect("the editor is open");
+        assert!(edit.dirty() && edit.path.is_none());
+        let name = edit.flow.name.clone();
+        assert!(name.ends_with(" 2"), "{name}");
+        button(&mut s.app, WIDE, dialog::SAVE);
+        assert_eq!(files(&user_dir(&s)).len(), 1);
+    }
+}
+
+mod import_page {
+    use super::*;
+
+    #[test]
+    fn the_import_page() {
+        let mut s = open(false);
+        button(&mut s.app, WIDE, dialog::IMPORT);
+        s.app.flows_paste("name = \"Pair\"\n", WIDE);
+        insta::assert_snapshot!("the_import_page", shown(&mut s.app, WIDE));
+    }
+}

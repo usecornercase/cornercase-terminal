@@ -296,6 +296,8 @@ impl App {
             Command::Mark(mark) => self.mark_request(caller, &mark),
             Command::FlowList(list) => self.flow_list_request(caller, &list),
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
+            Command::FlowExport(export) => self.flow_export_request(caller, &export),
+            Command::FlowImport(import) => self.flow_import_request(caller, &import),
         };
         self.flow_requested(client, noted, handled.is_ok());
         handled

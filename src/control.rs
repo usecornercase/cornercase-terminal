@@ -6,6 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod flow;
+
+pub(crate) use flow::{
+    BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
+    RunInfo,
+};
+
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
 
@@ -68,6 +75,8 @@ pub(crate) enum Command {
     Queue(Queue),
     FlowList(FlowList),
     FlowRun(FlowRun),
+    FlowExport(FlowExport),
+    FlowImport(FlowImport),
 }
 
 impl Command {
@@ -99,6 +108,8 @@ impl Command {
             Self::StartWith(_) => 23,
             Self::FlowList(_) => 24,
             Self::FlowRun(_) => 25,
+            Self::FlowExport(_) => 26,
+            Self::FlowImport(_) => 27,
         }]
     }
 
@@ -189,18 +200,15 @@ impl Command {
             Self::Mark(mark) => {
                 fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
             }
-            Self::FlowList(list) => {
-                fields.maybe("project", list.project);
-            }
-            Self::FlowRun(run) => {
-                fields.add("flow", &run.name).maybe("worktree", run.worktree.as_ref()).maybe("project", run.project);
-                fields.add("prompt_bytes", run.prompt.len()).add("focus", run.focus);
-            }
+            Self::FlowList(list) => list.fields(&mut fields),
+            Self::FlowRun(run) => run.fields(&mut fields),
+            Self::FlowExport(export) => export.fields(&mut fields),
+            Self::FlowImport(import) => import.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 26] = [
+    pub(crate) const NAMES: [&str; 28] = [
         "status",
         "open",
         "new-workspace",
@@ -227,6 +235,8 @@ impl Command {
         "start-with",
         "flow-list",
         "flow-run",
+        "flow-export",
+        "flow-import",
     ];
 }
 
@@ -429,79 +439,6 @@ pub(crate) struct Mark {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
     pub(crate) reviewed: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowList {
-    pub(crate) project: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowRun {
-    pub(crate) name: String,
-    pub(crate) prompt: String,
-    pub(crate) worktree: Option<String>,
-    pub(crate) project: Option<u64>,
-    pub(crate) focus: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct Flows {
-    pub(crate) flows: Vec<FlowInfo>,
-    pub(crate) broken: Vec<BrokenFlow>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowInfo {
-    pub(crate) name: String,
-    pub(crate) origin: String,
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) description: String,
-    pub(crate) roles: Vec<RoleInfo>,
-    pub(crate) problems: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) check: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct RoleInfo {
-    pub(crate) role: String,
-    pub(crate) agent: String,
-    pub(crate) model: Option<String>,
-    pub(crate) effort: Option<String>,
-    pub(crate) edits: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct BrokenFlow {
-    pub(crate) path: PathBuf,
-    pub(crate) error: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct RunInfo {
-    pub(crate) project: u64,
-    pub(crate) workspace: u64,
-    pub(crate) branch: String,
-    pub(crate) members: Vec<MemberInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) note: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct MemberInfo {
-    pub(crate) role: String,
-    pub(crate) agent: String,
-    pub(crate) tab: u64,
-    pub(crate) pane: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

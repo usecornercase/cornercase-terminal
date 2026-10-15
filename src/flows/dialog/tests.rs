@@ -8,7 +8,7 @@ use super::*;
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::flows::{Back, End, Stage};
 
-const ROOM: Room = Room { pick: 10, width: 40, height: 5, wide: true };
+pub(super) const ROOM: Room = Room { pick: 10, width: 40, height: 5, wide: true };
 
 fn user_flow() -> Flow {
     let mut flow = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude)).remove(0);
@@ -16,7 +16,7 @@ fn user_flow() -> Flow {
     flow
 }
 
-fn dialog() -> Dialog {
+pub(super) fn dialog() -> Dialog {
     let builtins = builtin::flows(&[Known::Claude, Known::Codex], Some(Known::Claude));
     let mut flows: Vec<Saved> = builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect();
     flows.push(Saved { flow: user_flow(), origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
@@ -32,13 +32,13 @@ fn mine() -> usize {
     4
 }
 
-fn editing() -> Dialog {
+pub(super) fn editing() -> Dialog {
     let mut d = dialog();
     d.open(mine());
     d
 }
 
-fn edit(d: &Dialog) -> &Editing {
+pub(super) fn edit(d: &Dialog) -> &Editing {
     d.edit.as_deref().expect("the edit page is open")
 }
 
@@ -117,13 +117,13 @@ mod the_list {
     }
 
     #[rstest]
-    #[case::built_in(0, vec![EDIT, DUPLICATE, NEW, DONE])]
-    #[case::yours(4, vec![EDIT, DUPLICATE, DELETE, NEW, DONE])]
-    #[case::unreadable(5, vec![DELETE, NEW, DONE])]
+    #[case::built_in(0, vec![EDIT, DUPLICATE, EXPORT, IMPORT, NEW, DONE])]
+    #[case::yours(4, vec![EDIT, DUPLICATE, EXPORT, DELETE, IMPORT, NEW, DONE])]
+    #[case::unreadable(5, vec![DELETE, IMPORT, NEW, DONE])]
     fn the_buttons_follow_the_selected_flow(#[case] selected: usize, #[case] expected: Vec<&str>) {
         let mut d = dialog();
         d.select(selected);
-        assert_eq!(d.buttons(ROOM), expected);
+        assert_eq!(d.buttons(Room { width: 80, ..ROOM }), expected);
     }
 
     #[test]

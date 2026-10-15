@@ -1,13 +1,15 @@
 use std::path::PathBuf;
 
 use super::store::{self, Listing, Origin, Saved};
-use super::{Flow, builtin};
-use crate::agents::{self, Known};
+use super::{Flow, builtin, share};
+use crate::agents::Known;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const EDIT: &str = "edit";
 pub(crate) const DUPLICATE: &str = "duplicate";
 pub(crate) const DELETE: &str = "delete";
+pub(crate) const EXPORT: &str = "export";
+pub(crate) const IMPORT: &str = "import";
 pub(crate) const NEW: &str = "new";
 pub(crate) const SAVE: &str = "save";
 pub(crate) const CANCEL: &str = "cancel";
@@ -17,6 +19,7 @@ pub(crate) const DELETE_ROLE: &str = "delete role";
 pub(crate) const DISCARD: &str = "discard";
 pub(crate) const ADD_ROLE: &str = "+ add role";
 pub(crate) const RESTORE: &str = "restore default";
+const IMPORT_HINT: &str = "enter starts a new line · import opens the flow to check it · esc goes back";
 const BUILT_IN_HINT: &str = "a built-in flow: edit saves your version in your folder, in its place";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +43,7 @@ pub(crate) enum Action {
     Close,
     Save { flow: Box<Flow>, place: Place, previous: Option<PathBuf> },
     Duplicate(Box<Flow>),
+    Export(Box<Flow>),
     Delete(PathBuf),
     ReadModels(Known),
 }
@@ -133,6 +137,7 @@ pub(crate) struct Dialog {
     pub(crate) last: Option<Origin>,
     pub(crate) project: Option<u64>,
     pub(crate) builtins: Vec<String>,
+    pub(crate) importing: Option<Importing>,
 }
 
 impl Dialog {
@@ -148,6 +153,7 @@ impl Dialog {
             agents,
             last: None,
             project: None,
+            importing: None,
         }
     }
 
@@ -214,8 +220,11 @@ impl Dialog {
         self.notice = None;
     }
 
-    fn unique(&self, name: &str, suffix: &str) -> String {
-        let taken = |candidate: &str| self.flows.iter().any(|s| s.flow.name.trim() == candidate);
+    pub(crate) fn unique(&self, name: &str, suffix: &str) -> String {
+        let taken = |candidate: &str| {
+            self.flows.iter().any(|s| store::same_name(&s.flow.name, candidate))
+                || self.builtins.iter().any(|built| store::same_name(built, candidate))
+        };
         let base = format!("{name}{suffix}");
         (1..=self.flows.len() + 1)
             .map(|n| if n == 1 { base.clone() } else { format!("{base} {n}") })
@@ -228,6 +237,13 @@ impl Dialog {
         let mut flow = saved.flow.clone();
         flow.name = self.unique(saved.flow.name.trim(), " copy");
         Action::Duplicate(Box::new(flow))
+    }
+
+    pub(crate) fn export(&self) -> Action {
+        match self.selected() {
+            Some(saved) => Action::Export(Box::new(saved.flow.clone())),
+            None => Action::None,
+        }
     }
 
     pub(crate) fn ask_delete(&mut self) {
@@ -319,6 +335,9 @@ impl Dialog {
     }
 
     pub(crate) fn title(&self) -> String {
+        if self.importing.is_some() {
+            return "Flows › import".into();
+        }
         match &self.edit {
             Some(edit) if edit.flow.name.trim().is_empty() => "Flows › untitled".into(),
             Some(edit) => format!("Flows › {}", edit.flow.name.trim()),
@@ -338,28 +357,44 @@ impl Dialog {
     }
 
     pub(crate) fn buttons(&self, room: Room) -> Vec<&'static str> {
+        if self.importing.is_some() {
+            return vec![IMPORT, CANCEL];
+        }
         if let Some(edit) = &self.edit {
             return edit.buttons(room);
         }
         let mut buttons = Vec::new();
         match self.selected() {
-            Some(saved) if store::edits_builtin(&self.builtins, saved) => buttons.extend([EDIT, DUPLICATE, RESTORE]),
-            Some(saved) if saved.origin.editable() => buttons.extend([EDIT, DUPLICATE, DELETE]),
-            Some(_) => buttons.extend([EDIT, DUPLICATE]),
+            Some(saved) if store::edits_builtin(&self.builtins, saved) => {
+                buttons.extend([EDIT, DUPLICATE, EXPORT, RESTORE]);
+            }
+            Some(saved) if saved.origin.editable() => buttons.extend([EDIT, DUPLICATE, EXPORT, DELETE]),
+            Some(_) => buttons.extend([EDIT, DUPLICATE, EXPORT]),
             None if self.cursor < self.entries() => buttons.push(DELETE),
             None => {}
         }
-        buttons.extend([NEW, DONE]);
+        buttons.extend([IMPORT, NEW, DONE]);
+        for dropped in [IMPORT, EXPORT] {
+            if room.width > 0 && row_width(&buttons) > room.width {
+                buttons.retain(|label| *label != dropped);
+            }
+        }
         buttons
     }
 
     pub(crate) fn submit(&self) -> &'static str {
+        if self.importing.is_some() {
+            return IMPORT;
+        }
         self.edit.as_ref().map_or(DONE, |edit| edit.submit())
     }
 
     pub(crate) fn hint(&self) -> String {
         if let Some(notice) = &self.notice {
             return notice.clone();
+        }
+        if self.importing.is_some() {
+            return IMPORT_HINT.into();
         }
         match &self.edit {
             Some(edit) => edit.hint(),
@@ -369,21 +404,30 @@ impl Dialog {
     }
 
     pub(crate) fn error(&self) -> Option<String> {
+        if let Some(importing) = &self.importing {
+            return importing.error.clone();
+        }
         self.edit.as_ref().and_then(|edit| edit.field.as_ref()).and_then(|field| field.error.clone())
     }
 
     pub(crate) fn warnings(&self) -> Vec<String> {
         let Some(edit) = &self.edit else { return Vec::new() };
         let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
-        risks.into_iter().chain(edit.flow.problems()).collect()
+        let imported = edit.imported.then(|| share::risks(&edit.flow, "this imported flow")).flatten();
+        risks.into_iter().chain(imported).chain(edit.flow.problems().iter().map(|p| share::visible(p))).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {
         self.notice = None;
+        if self.importing.is_some() {
+            return self.press_import(label);
+        }
         if self.edit.is_some() {
             return self.press_in_edit(label);
         }
         match label {
+            EXPORT => return self.export(),
+            IMPORT => self.importing = Some(Importing::new("")),
             EDIT => self.open(self.cursor),
             DUPLICATE => return self.duplicate(),
             DELETE | RESTORE => self.ask_delete(),
@@ -438,19 +482,11 @@ pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], saved: &Saved) -> R
 }
 
 pub(crate) fn project_risks(flow: &Flow) -> Option<String> {
-    let mut parts = Vec::new();
-    for role in std::iter::once(&flow.orchestrator).chain(&flow.roles) {
-        if !role.env.is_empty() {
-            let keys: Vec<&str> = role.env.keys().map(String::as_str).collect();
-            parts.push(format!("sets {} for `{}`", keys.join(", "), role.name.trim()));
-        }
-        if !role.args.is_empty() {
-            parts.push(format!("passes {} to `{}`", agents::join_args(&role.args), role.name.trim()));
-        }
-    }
-    let (last, rest) = parts.split_last()?;
-    let parts = if rest.is_empty() { last.clone() } else { format!("{} and {last}", rest.join(", ")) };
-    Some(format!("this project's flow {parts}; they run without asking, so check them"))
+    share::key_risks(flow, "this project's flow")
+}
+
+fn row_width(labels: &[&str]) -> usize {
+    labels.iter().map(|label| label.chars().count() + 2).sum::<usize>() + labels.len().saturating_sub(1)
 }
 
 pub(crate) fn scrolled(scroll: u16, delta: isize, most: u16) -> u16 {
@@ -467,12 +503,14 @@ pub(crate) fn plan_summary(flow: &Flow) -> String {
 }
 
 mod edit;
+mod import;
 mod input;
 mod rows;
 
 pub(crate) use edit::Editing;
 #[cfg(test)]
 pub(crate) use edit::{Row, Tab};
+pub(crate) use import::Importing;
 
 #[cfg(test)]
 mod tests;

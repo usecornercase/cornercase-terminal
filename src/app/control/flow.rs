@@ -6,12 +6,15 @@ use ratatui::layout::Rect;
 use super::{Handled, NO_PROJECT, Pending, Stage, json, none, sized};
 use crate::app::App;
 use crate::app::flow_runs::Starting;
-use crate::control::{self, BrokenFlow, Done, FlowInfo, Flows, RoleInfo};
+use crate::control::{self, BrokenFlow, Done, Exported, FlowInfo, Flows, Imported, RoleInfo};
 use crate::error;
 use crate::flows::dialog::project_risks;
-use crate::flows::store::{Listing, Origin, Saved};
-use crate::flows::{self, Flow, Role};
+use crate::flows::share::{self, To};
+use crate::flows::store::{self, Listing, Origin, Saved};
+use crate::flows::{self, Flow, Role, builtin};
 use crate::git;
+use crate::log;
+use crate::paths;
 use crate::project::Hierarchy;
 
 impl App {
@@ -32,6 +35,77 @@ impl App {
             .collect();
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken })))
+    }
+
+    pub(super) fn flow_export_request(&self, caller: Option<u64>, export: &control::FlowExport) -> Handled {
+        let path = self.flows_scope(caller, export.project)?;
+        let (saved, note) = lookup(&self.flow_listing(path.as_deref()), &export.name)?;
+        let text = share::to_share(&saved.flow)?;
+        log::info!("flows", "flow exported", bytes = text.len());
+        let note = [note, share::env_warning(&saved.flow)].into_iter().flatten().collect::<Vec<_>>();
+        let exported = Exported {
+            name: saved.flow.name.clone(),
+            origin: origin_name(&saved.origin).into(),
+            path: saved.origin.path().map(PathBuf::from),
+            text,
+            note: (!note.is_empty()).then(|| note.join("; ")),
+        };
+        Ok(Some(json(&exported)))
+    }
+
+    pub(super) fn flow_import_request(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
+        self.import_flow(caller, import).map_err(|e| share::visible(&e))
+    }
+
+    fn import_flow(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
+        let mut flow = share::from_share(&import.text).map_err(|e| format!("cannot read the flow: {e}"))?;
+        if let Some(name) = &import.name {
+            flow.name = name.trim().to_string();
+        }
+        let problems = flow.problems();
+        if !problems.is_empty() {
+            return Err(format!("the flow cannot run: {}", problems.join("; ")));
+        }
+        let to = match import.place.as_str() {
+            "" | "yours" => To::Yours,
+            "project" => To::Project,
+            other => return Err(format!("`{other}` is not a place for a flow: use yours or project")),
+        };
+        let path = self.flows_scope(caller, import.project)?;
+        if to == To::Project && path.is_none() {
+            return Err(NO_PROJECT.to_string());
+        }
+        let listing = self.flow_listing(path.as_deref());
+        let replaced = share::collision(&listing, &flow.name, to, import.replace)?;
+        let missing = share::missing_agents(&flow, &builtin::installed(&self.config));
+        let mut imported = Imported {
+            name: flow.name.clone(),
+            origin: if to == To::Yours { "user" } else { "project" }.into(),
+            replaced: replaced.is_some(),
+            note: (!missing.is_empty()).then(|| missing.join("; ")),
+            path: None,
+        };
+        if import.check {
+            return Ok(Some(json(&imported)));
+        }
+        let dir = match (to, &path) {
+            (To::Project, Some(path)) => store::project_dir(path),
+            _ => paths::flows(&self.config_path),
+        };
+        let saved =
+            store::save(&dir, &flow, replaced.as_deref()).map_err(|e| format!("could not save the flow: {e}"))?;
+        log::info!("flows", "flow imported", place = imported.origin, bytes = import.text.len());
+        imported.path = Some(saved);
+        self.refresh_flows();
+        Ok(Some(json(&imported)))
+    }
+
+    fn flows_scope(&self, caller: Option<u64>, project: Option<u64>) -> Result<Option<PathBuf>, String> {
+        let p = match project {
+            Some(id) => Some(self.projects.project_index(id).ok_or_else(|| none("project", id))?),
+            None => self.here(caller).project,
+        };
+        Ok(p.map(|p| self.projects[p].path.clone()))
     }
 
     pub(super) fn flow_run_request(
@@ -158,12 +232,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
     };
     FlowInfo {
         name: flow.name.clone(),
-        origin: match origin {
-            Origin::BuiltIn => "built-in",
-            Origin::User(_) => "user",
-            Origin::Project(_) => "project",
-        }
-        .into(),
+        origin: origin_name(origin).into(),
         path: origin.path().map(PathBuf::from),
         description: flow.description.clone(),
         roles: std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect(),
@@ -172,7 +241,21 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
     }
 }
 
+fn origin_name(origin: &Origin) -> &'static str {
+    match origin {
+        Origin::BuiltIn => "built-in",
+        Origin::User(_) => "user",
+        Origin::Project(_) => "project",
+    }
+}
+
 fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String> {
+    let (saved, note) = lookup(listing, name)?;
+    let note = [note, risks(&saved.flow, &saved.origin)].into_iter().flatten().collect::<Vec<_>>();
+    Ok((saved.flow, (!note.is_empty()).then(|| note.join(" "))))
+}
+
+fn lookup(listing: &Listing, name: &str) -> Result<(Saved, Option<String>), String> {
     let name = name.trim();
     let found: Vec<&Saved> = listing.named(name).collect();
     let Some(first) = found.first() else {
@@ -192,8 +275,7 @@ fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String>
             first.origin.whose()
         )
     });
-    let note = [note, risks(&first.flow, &first.origin)].into_iter().flatten().collect::<Vec<_>>();
-    Ok((first.flow.clone(), (!note.is_empty()).then(|| note.join(" "))))
+    Ok(((*first).clone(), note))
 }
 
 fn risks(flow: &Flow, origin: &Origin) -> Option<String> {

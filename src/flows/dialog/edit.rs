@@ -85,6 +85,7 @@ pub(crate) struct Editing {
     pub(crate) diagram: bool,
     pub(crate) notice: Option<String>,
     pub(crate) preview: u16,
+    pub(crate) imported: bool,
     followed: Option<usize>,
 }
 
@@ -105,8 +106,13 @@ impl Editing {
             diagram: false,
             notice: None,
             preview: 0,
+            imported: false,
             followed: None,
         }
+    }
+
+    pub(crate) fn imported(flow: Flow) -> Self {
+        Self { original: Flow::default(), imported: true, ..Self::new(flow, Place::Yours, None) }
     }
 
     pub(crate) fn preview_stage(&self) -> Option<usize> {

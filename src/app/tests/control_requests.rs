@@ -377,6 +377,7 @@ mod arranging;
 mod creating;
 mod discord;
 mod events;
+mod flow_sharing;
 mod flows;
 mod gemini;
 mod grok;
