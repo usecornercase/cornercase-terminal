@@ -483,3 +483,36 @@ mod searching {
         assert_eq!(count, 1);
     }
 }
+
+mod odd_turn_lists {
+    use super::*;
+
+    #[test]
+    fn skips_entries_that_are_not_blob_ids() {
+        let dir = TempDir::new();
+        let (fake, sleeper) = running(dir.path());
+        fake.turn("one");
+        let (data,): (Vec<u8>,) = Connection::open(&fake.store)
+            .and_then(|db| {
+                let root = meta(&db).and_then(|meta| meta.root).expect("a root");
+                db.query_row("SELECT data FROM blobs WHERE id = ?1", [root], |row| Ok((row.get(0)?,)))
+            })
+            .expect("the root");
+        let id = fake.blob(&[fake::bytes(8, b"junk"), data].concat());
+        fake.root(&id);
+
+        let session = first(&sleeper);
+
+        assert!(session.resumable && session.context.is_some());
+    }
+
+    #[test]
+    fn remembers_at_most_a_bounded_number_of_prompts() {
+        let mut session = Session::default();
+        for n in 0..REMEMBER + 10 {
+            assert!(session.remember(&format!("message-{n}")));
+        }
+        assert_eq!(session.known.len(), REMEMBER);
+        assert!(!session.remember(&format!("message-{}", REMEMBER + 9)));
+    }
+}

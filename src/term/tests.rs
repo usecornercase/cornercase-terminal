@@ -237,6 +237,7 @@ mod program {
         &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js"],
         "cursor"
     )]
+    #[case::another_program_with_that_thread_name("MainThread", &["/usr/bin/other", "--flag"], "MainThread")]
     #[case::grok_binary_named_agent("agent", &["/home/a/.grok/bin/agent"], "agent")]
     #[case::another_program("nvim", &["nvim", "src/main.rs"], "nvim")]
     #[case::a_program_with_an_agent_argument("less", &["less", "claude"], "less")]

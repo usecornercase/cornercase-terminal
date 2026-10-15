@@ -26,7 +26,8 @@ use crate::process;
 const SCROLLBACK_BYTES: usize = 10_000_000;
 const READ_BUFFER: usize = 16 * 1024;
 const INTERPRETERS: [&str; 6] = ["node", "bun", "deno", "python", "python3", "ruby"];
-const NODE_MAIN_THREADS: [&str; 2] = ["node-MainThread", "MainThread"];
+const NODE_MAIN_THREAD: &str = "node-MainThread";
+const MAIN_THREAD: &str = "MainThread";
 const SCRIPT_EXTENSIONS: [&str; 9] = ["js", "mjs", "cjs", "ts", "mts", "cts", "py", "rb", "sh"];
 const NOT_A_SCRIPT: [&str; 6] = ["-e", "--eval", "-p", "--print", "-c", "-m"];
 const PASTE_START: &str = "\x1b[200~";
@@ -260,7 +261,12 @@ pub(crate) fn bracketed(text: &str) -> String {
 }
 
 pub(crate) fn program(config: &Config, name: &str, argv: &[String]) -> String {
-    let name = if NODE_MAIN_THREADS.contains(&name) { "node" } else { name };
+    let node = name == NODE_MAIN_THREAD
+        || (name == MAIN_THREAD
+            && (argv.first().is_some_and(|a| Path::new(a).file_name().is_some_and(|n| n == "node"))
+                || agents::detect(config, argv).is_some()
+                || script(argv).is_some()));
+    let name = if node { "node" } else { name };
     let interpreter = INTERPRETERS.contains(&name);
     let considered = if interpreter { argv } else { argv.get(..1).unwrap_or_default() };
     agents::detect(config, considered)

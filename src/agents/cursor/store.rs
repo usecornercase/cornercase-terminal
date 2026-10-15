@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -16,6 +16,7 @@ use crate::process;
 use crate::time::Stamp;
 
 const BUSY_FOR: Duration = Duration::from_millis(100);
+const REMEMBER: usize = 512;
 const AUTO: &str = "Auto";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,7 @@ pub(in crate::agents) struct Session {
     cache: HashMap<String, Turn>,
     order: Vec<String>,
     tokens: Option<(u64, u64)>,
-    known: HashSet<String>,
+    known: VecDeque<String>,
     read: bool,
 }
 
@@ -119,8 +120,8 @@ fn meta(connection: &Connection) -> Option<Meta> {
     Some(Meta { root: text("latestRootBlobId"), model: text("lastUsedModel"), created: value["createdAt"].as_u64() })
 }
 
-fn blobs_of(fields: &[Field<'_>], number: u32) -> Option<Vec<String>> {
-    proto::all_bytes(fields, number).into_iter().map(proto::blob_id).collect()
+fn blobs_of(fields: &[Field<'_>], number: u32) -> Vec<String> {
+    proto::all_bytes(fields, number).into_iter().filter_map(proto::blob_id).collect()
 }
 
 fn agent_turn(connection: &Connection, id: &str) -> Option<Vec<u8>> {
@@ -167,6 +168,17 @@ impl Session {
         self.show(&meta);
     }
 
+    fn remember(&mut self, prompt: &str) -> bool {
+        if self.known.iter().any(|known| known == prompt) {
+            return false;
+        }
+        self.known.push_back(prompt.to_string());
+        if self.known.len() > REMEMBER {
+            self.known.pop_front();
+        }
+        true
+    }
+
     fn forget(&mut self) {
         self.context = None;
         self.resumable = false;
@@ -179,7 +191,7 @@ impl Session {
             let tokens = proto::bytes(&fields, 5).and_then(proto::fields);
             let used = tokens.as_ref().and_then(|t| proto::number(t, 1));
             let window = tokens.as_ref().and_then(|t| proto::number(t, 2));
-            Some((blobs_of(&fields, 8)?, used.zip(window)))
+            Some((blobs_of(&fields, 8), used.zip(window)))
         });
         let Some((ids, tokens)) = root else {
             self.resumable = false;
@@ -194,7 +206,7 @@ impl Session {
             let turn = previous.get(id).cloned().or_else(|| read_turn(connection, id));
             let Some(turn) = turn else { continue };
             if let Some(prompt) = &turn.prompt
-                && self.known.insert(prompt.clone())
+                && self.remember(prompt)
                 && (!first || fresh)
             {
                 let at = started_at(connection, turn.user.as_deref()).unwrap_or_else(SystemTime::now);
@@ -263,11 +275,11 @@ pub(in crate::agents) fn said_all(store: &Path, each: Each) -> error::Result<()>
     let Some(root) = meta(&connection).and_then(|meta| meta.root).and_then(|id| blob(&connection, &id)) else {
         return Ok(());
     };
-    let Some(turns) = proto::fields(&root).and_then(|fields| blobs_of(&fields, 8)) else { return Ok(()) };
+    let Some(turns) = proto::fields(&root).map(|fields| blobs_of(&fields, 8)) else { return Ok(()) };
     for turn in turns.iter().rev() {
         let Some(inner) = agent_turn(&connection, turn) else { continue };
         let Some(fields) = proto::fields(&inner) else { continue };
-        for step in blobs_of(&fields, 2).unwrap_or_default().iter().rev() {
+        for step in blobs_of(&fields, 2).iter().rev() {
             let Some(said) = blob(&connection, step).and_then(|data| assistant_text(&data)) else { continue };
             if !each(Spoken { role: Role::Reply, said }) {
                 return Ok(());
