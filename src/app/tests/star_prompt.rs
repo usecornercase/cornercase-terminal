@@ -40,6 +40,7 @@ impl Star {
     fn offer(&mut self, clock: i64) {
         self.draw();
         self.app.offer_star(self.now, clock);
+        self.draw();
     }
 
     fn shows(&self) -> bool {
@@ -121,6 +122,19 @@ mod getting_in_the_way {
         let mut s = Star::with(activity, FIRST_AFTER_DAYS);
         s.offer(T0);
         assert!(!s.shows());
+    }
+
+    #[test]
+    fn a_card_closed_before_it_was_drawn_does_not_use_the_ninety_days() {
+        let mut s = Star::due();
+        s.app.offer_star(s.now, T0);
+        assert!(s.shows());
+        s.app.toast = Some(Toast::new("hello", ui::ToastIcon::Check));
+        s.app.offer_star(s.now, T0);
+        assert!(!s.shows());
+        s.draw();
+        assert_eq!(s.app.star.saved.shown, None);
+        assert_eq!(s.saved().shown, None);
     }
 
     #[test]
@@ -246,5 +260,19 @@ mod the_pane_keeps_what_it_had {
         click(&mut s.app, Position::new(area.x + 2, area.y + 1));
         assert!(s.shows());
         assert!(s.app.overlay.is_none());
+    }
+
+    #[test]
+    fn the_release_of_a_press_that_closed_the_card_does_not_reach_the_pane() {
+        let mut s = Star::due();
+        s.offer(T0);
+        let (_, rect) = ui::star_buttons(AREA)[1];
+        mouse(&mut s.app, MouseEventKind::Down(MouseButton::Left), rect.as_position());
+        assert!(!s.shows());
+        mouse(&mut s.app, MouseEventKind::Drag(MouseButton::Left), Position::new(5, 5));
+        assert!(s.app.drag.is_none());
+        mouse(&mut s.app, MouseEventKind::Up(MouseButton::Left), Position::new(5, 5));
+        assert!(!s.app.star.swallowed);
+        assert!(s.app.drag.is_none());
     }
 }

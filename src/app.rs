@@ -576,6 +576,7 @@ impl App {
 
     fn begin_draw(&mut self, area: Rect, now: Instant) {
         self.star.window = Some(now);
+        self.star_seen();
         self.follow(area);
         if !self.drawn.compact() {
             self.nav = None;

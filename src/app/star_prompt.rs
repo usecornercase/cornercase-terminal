@@ -20,6 +20,8 @@ pub(super) struct StarPrompt {
     pub(super) path: Option<PathBuf>,
     pub(super) window: Option<Instant>,
     pub(super) card: bool,
+    pub(super) opened: Option<i64>,
+    pub(super) swallowed: bool,
 }
 
 impl App {
@@ -41,9 +43,7 @@ impl App {
             self.close_star("unanswered");
         } else if window && !in_the_way && !self.star.card && self.star.saved.due(clock) {
             self.star.card = true;
-            self.star.saved.shown(clock);
-            self.save_star();
-            log::info!("star", "shown", days = self.star.saved.days);
+            self.star.opened = Some(clock);
         }
     }
 
@@ -61,13 +61,32 @@ impl App {
             })
     }
 
+    pub(super) fn star_seen(&mut self) {
+        if let Some(clock) = self.star.opened.take().filter(|_| self.star.card) {
+            self.star.saved.shown(clock);
+            self.save_star();
+            log::info!("star", "shown", days = self.star.saved.days);
+        }
+    }
+
     fn close_star(&mut self, why: &str) {
+        self.star.opened = None;
         if std::mem::take(&mut self.star.card) {
             log::info!("star", "closed", why = why);
         }
     }
 
     pub(super) fn star_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> bool {
+        if self.star.swallowed {
+            match ev.kind {
+                MouseEventKind::Drag(MouseButton::Left) => return true,
+                MouseEventKind::Up(MouseButton::Left) => {
+                    self.star.swallowed = false;
+                    return true;
+                }
+                _ => self.star.swallowed = false,
+            }
+        }
         if !self.star.card || !ui::star_area(area).contains(pos) {
             return false;
         }
@@ -82,6 +101,7 @@ impl App {
         };
         self.star.saved.answered(answer);
         self.star.card = false;
+        self.star.swallowed = true;
         self.save_star();
         log::info!("star", "answered", answer = format!("{answer:?}").to_lowercase());
         if button == StarButton::Star {
