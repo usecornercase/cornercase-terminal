@@ -60,6 +60,7 @@ mod file {
             memory: true,
             desktop_notifications: "off".into(),
             check_updates: false,
+            star_prompt: false,
             remote: true,
             remote_port: 47682,
         };

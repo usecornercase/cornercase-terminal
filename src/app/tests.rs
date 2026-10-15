@@ -450,6 +450,7 @@ mod sidebar_clicks;
 mod sidebar_scroll;
 mod splits;
 mod stacked_sidebar;
+mod star_prompt;
 mod start_flow_dialog;
 mod tab_bar;
 mod tabs;

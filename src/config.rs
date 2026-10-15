@@ -161,6 +161,7 @@ pub(crate) struct Config {
     pub(crate) memory: bool,
     pub(crate) desktop_notifications: String,
     pub(crate) check_updates: bool,
+    pub(crate) star_prompt: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
 }
@@ -204,6 +205,7 @@ impl Default for Config {
             memory: false,
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
+            star_prompt: true,
             remote: false,
             remote_port: DEFAULT_PORT,
         }

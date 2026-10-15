@@ -28,6 +28,7 @@ pub(crate) mod pull_request;
 pub(crate) mod queue;
 pub(crate) mod settings;
 pub(crate) mod shortcuts;
+pub(crate) mod star;
 pub mod state;
 pub(crate) mod telegram;
 pub(crate) mod term;

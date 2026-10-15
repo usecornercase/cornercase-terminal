@@ -55,6 +55,7 @@ fn view(names: &[&str]) -> View<'static> {
         tab: None,
         overlay: None,
         toast: None,
+        star: false,
         nav: None,
         update: None,
         remote: None,
@@ -170,6 +171,7 @@ mod sidebar_hit;
 mod sidebar_scroll;
 mod splits;
 mod stacked;
+mod star;
 mod tab_bar_drawing;
 mod tab_context;
 mod tall_rows;

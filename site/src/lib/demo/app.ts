@@ -2582,6 +2582,7 @@ export class App {
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
+      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
       this.prefixRow(),
     ];
   }
@@ -2645,6 +2646,9 @@ export class App {
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
     } else if (row.id === 'prefix') {
       o.capturing = true;
+    } else if (row.id === 'starPrompt') {
+      c.starPrompt = !c.starPrompt;
+      o.notice = c.starPrompt ? 'cornercase may ask for a star on GitHub' : 'cornercase never asks for a star';
     } else if (row.id === 'updates') {
       c.updates = !c.updates;
       o.notice = c.updates ? 'cornercase looks for new versions' : 'cornercase no longer looks for new versions';

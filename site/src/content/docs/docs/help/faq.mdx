@@ -109,6 +109,8 @@ From the app: when a new version is out, a button with its number appears next t
 
 It asks GitHub for the latest release when the server starts and then every hour. Nothing about you or your projects is sent. Turn it off in **settings → UI → check for updates**, or with `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates).
 
+The [star prompt](../../reference/configuration/#star_prompt) that now and then asks for a star on GitHub sends nothing and doesn't check whether you starred; it only copies the link when you answer yes.
+
 With a [Telegram](../../guides/telegram/) or [Discord](../../guides/discord/) bot set up, it also talks to that service, as that bot, and while you are away sends your chat the agents' messages. `check_updates` doesn't change that: remove the bot in **Settings › Remote**, under **Telegram** or **Discord**, to stop it.
 
 ### Can I run two independent sessions?

@@ -88,7 +88,7 @@ pub(super) fn tabs_in(row: Rect, names: &[&str]) -> Vec<Rect> {
         .collect()
 }
 
-fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -> Vec<Rect> {
+pub(super) fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -> Vec<Rect> {
     let mut x = row.right();
     let mut rects: Vec<Rect> = labels
         .iter()
@@ -171,7 +171,7 @@ fn draw_note(f: &mut Frame, muted: Color, note: Option<&Note>, r: Rect) {
     }
 }
 
-fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style {
+pub(super) fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style {
     match (primary, hovered(view, r)) {
         (true, true) => Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
         (true, false) => Style::default().fg(Color::Cyan).bg(view.surface()).add_modifier(Modifier::BOLD),

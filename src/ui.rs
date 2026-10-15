@@ -21,6 +21,7 @@ pub(crate) mod remote;
 pub(crate) mod remote_access;
 mod rows;
 mod sidebar;
+mod star;
 mod stats;
 pub(crate) mod tab_bar;
 mod theme;
@@ -90,6 +91,9 @@ pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
+#[cfg(test)]
+pub(crate) use star::star_buttons;
+pub(crate) use star::{StarButton, star_area, star_hit};
 pub(crate) use theme::{muted, outcome_icon};
 #[cfg(test)]
 pub(crate) use toast::toast_area;
@@ -133,6 +137,7 @@ use dialog::{FORM_WIDTH, draw_submit, form_inner};
 use pane::{draw_no_tab, draw_tab, draw_welcome};
 use rows::{GAP, Zone, draw_more};
 use sidebar::draw_sidebar;
+use star::draw_star;
 use theme::{BRAND_COLOR, hover_colour, line_colour, surface_colour};
 use toast::draw_toast;
 use tree::draw_tree;
@@ -163,6 +168,7 @@ pub(crate) struct View<'a> {
     pub(crate) tab: Option<TabView>,
     pub(crate) overlay: Option<Overlay>,
     pub(crate) toast: Option<Toast<'a>>,
+    pub(crate) star: bool,
     pub(crate) nav: Option<Nav>,
     pub(crate) update: Option<String>,
     pub(crate) remote: Option<bool>,
@@ -340,6 +346,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}
+    }
+    if view.star {
+        draw_star(f, view);
     }
     if let Some(toast) = view.toast {
         draw_toast(f, view, toast);

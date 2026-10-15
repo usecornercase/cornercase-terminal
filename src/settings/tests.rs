@@ -704,6 +704,7 @@ mod sidebar {
                 Row::Detail(Detail::Memory),
                 Row::Notifications,
                 Row::Updates,
+                Row::StarPrompt,
                 Row::Prefix
             ]
         );
@@ -840,6 +841,17 @@ mod updates {
         let mut s = settings();
         go_to(&mut s, &Row::Updates);
         assert!(!saved(press(&mut s, KeyCode::Enter)).check_updates);
+    }
+}
+
+mod star_prompt {
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_on() {
+        let mut s = settings();
+        go_to(&mut s, &Row::StarPrompt);
+        assert!(!saved(press(&mut s, KeyCode::Enter)).star_prompt);
     }
 }
 

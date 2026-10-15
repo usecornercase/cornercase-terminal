@@ -83,6 +83,10 @@ pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
 }
 
+pub(crate) fn star(session: &Path) -> PathBuf {
+    session.with_file_name("star.json")
+}
+
 pub(crate) fn log() -> PathBuf {
     match custom_socket() {
         Some(socket) => socket.with_extension("log"),

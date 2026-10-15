@@ -43,6 +43,7 @@
   "memory": false,
   "desktop_notifications": "auto",
   "check_updates": true,
+  "star_prompt": true,
   "remote": false,
   "remote_port": 47681
 }

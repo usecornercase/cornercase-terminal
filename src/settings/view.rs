@@ -113,6 +113,10 @@ impl Settings {
                 let value = if config.check_updates { "[x] every hour" } else { "[ ] never" };
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
             }
+            Row::StarPrompt => {
+                let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
+                ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
+            }
             Row::Trust => {
                 let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
