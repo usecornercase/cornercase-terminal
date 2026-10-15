@@ -2,7 +2,10 @@ use serde_json::Value;
 
 use super::*;
 use crate::agents::claude::fake::FakeClaude;
+use crate::app::messenger::{self as wiring, MessengerEvent};
 use crate::control::{self as wire, Command, Done, Item, Report, Response, Until};
+use crate::messenger::link::Event as LinkEvent;
+use crate::messenger::{Chat, Keyboard, Message, Order, Press, Update, Via};
 use crate::test_util::write_executable;
 
 fn wait_after_typing(app: &mut App, rx: &Receiver<AppEvent>) -> Instant {
@@ -252,9 +255,127 @@ fn change(from: Option<&str>, to: Option<&str>) -> (Option<String>, Option<Strin
     (from.map(str::to_string), to.map(str::to_string))
 }
 
+const CHAT: i64 = 42;
+const USER: i64 = 9;
+
+struct Phone {
+    via: Via,
+    orders: Receiver<Order>,
+    next: i64,
+    seen: Vec<(i64, Order)>,
+}
+
+fn chat() -> Chat {
+    Chat { id: CHAT, user: USER, name: "@ada".into(), paired: 1 }
+}
+
+fn html(order: &Order) -> &str {
+    match order {
+        Order::Send { text, .. } | Order::Edit { text, .. } => text,
+        _ => "",
+    }
+}
+
+fn keyboard(order: &Order) -> &Keyboard {
+    static NONE: Keyboard = Vec::new();
+    match order {
+        Order::Send { keyboard, .. } | Order::Edit { keyboard, .. } => keyboard,
+        _ => &NONE,
+    }
+}
+
+fn button(order: &Order, text: &str) -> String {
+    let key = keyboard(order).iter().flatten().find(|key| key.text.contains(text));
+    key.unwrap_or_else(|| panic!("no `{text}` button in {order:?}")).data.clone()
+}
+
+fn update(app: &mut App, via: Via, update: Update) {
+    let event = AppEvent::Messenger(MessengerEvent::Link(via, LinkEvent::Updates(1, vec![update])));
+    app.handle_event(event, AREA).expect("the update is handled");
+}
+
+impl Phone {
+    fn on(app: &mut App, via: Via, chat: Option<Chat>) -> Self {
+        wiring::set_up(app, via, "1:t", "cornercase_bot", chat);
+        Self { via, orders: wiring::capture(app, via), next: 1000, seen: Vec::new() }
+    }
+
+    fn set_up(app: &mut App, chat: Option<Chat>) -> Self {
+        Self::on(app, Via::Telegram, chat)
+    }
+
+    fn paired(app: &mut App) -> Self {
+        Self::set_up(app, Some(chat()))
+    }
+
+    fn read(&mut self, app: &mut App) -> Vec<(i64, Order)> {
+        let mut got = Vec::new();
+        while let Ok(order) = self.orders.try_recv() {
+            self.next += 1;
+            if let Some(tag) = order.tag() {
+                let sent = LinkEvent::Sent { link: 1, tag, message: self.next };
+                app.handle_event(AppEvent::Messenger(MessengerEvent::Link(self.via, sent)), AREA).expect("sent");
+            }
+            got.push((self.next, order));
+        }
+        self.seen.extend(got.iter().cloned());
+        got
+    }
+
+    fn message(&mut self, app: &mut App, text: &str, reply_to: Option<i64>, from: (i64, i64)) -> i64 {
+        self.next += 1;
+        let (chat, user) = from;
+        let message = Message {
+            id: self.next,
+            chat,
+            user,
+            private: true,
+            date: 0,
+            name: "@ada".into(),
+            text: text.into(),
+            reply_to,
+        };
+        update(app, self.via, Update::Message(message));
+        self.next
+    }
+
+    fn says(&mut self, app: &mut App, text: &str) -> i64 {
+        self.message(app, text, None, (CHAT, USER))
+    }
+
+    fn replies(&mut self, app: &mut App, to: i64, text: &str) -> i64 {
+        self.message(app, text, Some(to), (CHAT, USER))
+    }
+
+    fn taps(&self, app: &mut App, message: i64, data: &str) {
+        let press = Press { id: format!("q{message}"), chat: CHAT, user: USER, message, data: data.into() };
+        update(app, self.via, Update::Press(press));
+    }
+
+    fn waits(&mut self, agent: &mut Agent, what: &str, pick: impl Fn(&Order) -> bool) -> (i64, Order) {
+        let mut found = None;
+        wait_until(what, || {
+            drain(&mut agent.app, &agent.rx);
+            agent.app.refresh(Instant::now());
+            found = self.read(&mut agent.app).into_iter().find(|(_, order)| pick(order));
+            found.is_some()
+        });
+        found.expect("an order")
+    }
+
+    fn says_in_html(&mut self, agent: &mut Agent, what: &str, text: &str) -> (i64, Order) {
+        self.waits(agent, what, |order| html(order).contains(text))
+    }
+}
+
+fn reacted(message: i64) -> impl Fn(&Order) -> bool {
+    move |order| matches!(order, Order::React { message: m, .. } if *m == message)
+}
+
 mod agents;
 mod arranging;
 mod creating;
+mod discord;
 mod events;
 mod gemini;
 mod grok;

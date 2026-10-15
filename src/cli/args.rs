@@ -104,10 +104,7 @@ pub(crate) enum Control {
     Focus(FocusArgs),
     #[command(about = "Show a message in the window, with a desktop notification", after_help = NOTIFY_HELP)]
     Notify(NotifyArgs),
-    #[command(
-        about = "Have agents message you on Telegram when they need you or finish, until you type in a window",
-        after_help = AWAY_HELP
-    )]
+    #[command(about = "Have agents message you on Telegram or Discord until you turn it off", after_help = AWAY_HELP)]
     Away(AwayArgs),
     #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
     Mark(MarkArgs),
@@ -422,7 +419,7 @@ pub(crate) struct MarkArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct AwayArgs {
-    #[arg(long, help = "Stop: agents no longer message you on Telegram")]
+    #[arg(long, help = "Stop: agents no longer message you on Telegram or Discord")]
     pub(crate) off: bool,
 }
 

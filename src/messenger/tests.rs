@@ -8,6 +8,51 @@ mod via {
     fn every_platform_is_indexed_by_its_place_in_the_list() {
         assert!(Via::ALL.iter().enumerate().all(|(i, via)| via.index() == i));
     }
+
+    #[test]
+    fn discord_pairs_with_the_app_owner_through_its_install_link() {
+        let (url, _) = Via::Discord.pairing_link("cornercase", "MTIzNDU2Nzg5.Gx.secret", "unused");
+
+        assert!(url.starts_with("https://discord.com/oauth2/authorize?client_id=123456789&integration_type=1"));
+        assert_eq!((Via::Telegram.pairs_by_owner(), Via::Discord.pairs_by_owner()), (false, true));
+        assert_eq!(Via::Discord.pairing_code("/start abc"), None);
+        assert_eq!(
+            Via::Telegram.pair("http://127.0.0.1:1", "t", "hello"),
+            (Advice::Read(None), Ok(Owned::Later(Duration::ZERO)))
+        );
+    }
+
+    #[test]
+    fn a_discord_owner_who_has_not_added_the_app_is_waited_for() {
+        let server = crate::test_util::FakeHttp::start(vec![
+            ("GET /oauth2/applications/@me", 200, r#"{"owner":{"id":"9","username":"ada"},"bot_public":true}"#),
+            ("POST /users/@me/channels", 200, r#"{"id":"1200"}"#),
+            ("POST /channels/1200/messages", 403, r#"{"message":"Cannot send messages to this user","code":50007}"#),
+        ]);
+
+        assert_eq!(
+            Via::Discord.pair(&server.url(), "MTIzNDU2Nzg5.Gx.secret", "hello"),
+            (Advice::Read(Some(discord::PUBLIC)), Ok(Owned::Later(Duration::ZERO)))
+        );
+    }
+
+    #[test]
+    fn a_discord_rate_limit_while_pairing_waits_as_long_as_discord_asks() {
+        let server = crate::test_util::FakeHttp::start(vec![(
+            "GET /oauth2/applications/@me",
+            429,
+            r#"{"message":"You are being rate limited.","retry_after":4.2}"#,
+        )]);
+
+        let owned = Via::Discord.pair(&server.url(), "MTIzNDU2Nzg5.Gx.secret", "hello");
+
+        assert_eq!(owned, (Advice::Unread, Ok(Owned::Later(Duration::from_secs(5)))));
+    }
+
+    #[test]
+    fn only_telegram_forces_a_reply() {
+        assert_eq!((Via::Telegram.forces_reply(), Via::Discord.forces_reply()), (true, false));
+    }
 }
 
 mod taps {

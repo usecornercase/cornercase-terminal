@@ -318,7 +318,7 @@ impl App {
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
-        [drag, launch, spin, self.next_request(now)].into_iter().flatten().min()
+        [drag, launch, spin, self.next_request(now), self.next_pairing(now)].into_iter().flatten().min()
     }
 
     fn agent_working(&self) -> bool {
@@ -338,6 +338,7 @@ impl App {
         self.watch_messengers(now);
         self.sync_remote();
         self.sync_messengers();
+        self.pair_by_owner(now);
         self.check_requests(now);
         self.check_updates(now);
         self.refresh_files(now);

@@ -51,7 +51,9 @@ impl App {
         settings.pulls = self.pull_requests_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
-        settings.telegram = self.messenger_settings(Via::Telegram);
+        for via in Via::ALL {
+            *settings.messenger_mut(via) = self.messenger_settings(via);
+        }
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
@@ -149,21 +151,21 @@ impl App {
                     s.notice = Some(forgotten.map_or_else(|e| e, String::from));
                 }
             }
-            settings::Action::CheckTelegram(token) => self.check_messenger(Via::Telegram, token),
-            settings::Action::RemoveTelegram => {
-                let removed = self.remove_messenger(Via::Telegram);
+            settings::Action::CheckBot(via, token) => self.check_messenger(via, token),
+            settings::Action::RemoveBot(via) => {
+                let removed = self.remove_messenger(via);
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {
                     s.notice = Some(removed.unwrap_or_else(|e| e));
                 }
             }
-            settings::Action::PairTelegram => {
-                let refused = self.pair(Via::Telegram);
+            settings::Action::Pair(via) => {
+                let refused = self.pair(via);
                 if let (Some(why), Some(Overlay::Settings(s))) = (refused, &mut self.overlay) {
                     s.notice = Some(why.into());
                 }
             }
-            settings::Action::ForgetTelegram => {
-                let forgotten = self.forget_chat(Via::Telegram);
+            settings::Action::ForgetChat(via) => {
+                let forgotten = self.forget_chat(via);
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {
                     s.notice = Some(forgotten);
                 }

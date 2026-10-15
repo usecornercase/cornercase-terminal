@@ -153,7 +153,7 @@ export const page: Page = {
           ['Status, modelo e contexto', 'Trabalhando, precisa de você ou pronto, embaixo de cada aba. E o modelo e quanto do contexto já foi usado.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
-          ['No Telegram', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
+          ['No Telegram ou Discord', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
           ['Worktrees, organizados', 'Cada frente de trabalho ganha seu próprio branch e pasta. Os criados em outro lugar aparecem também.'],
         ],
       },

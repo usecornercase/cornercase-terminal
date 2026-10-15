@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use ureq::Agent;
 use ureq::http::Response;
+use ureq::typestate::WithBody;
+use ureq::{Agent, RequestBuilder};
 
 use crate::error::{Error, Result};
 
@@ -87,6 +88,53 @@ pub(crate) fn post_within(service: &Service, url: &str, body: &Value, timeout: D
     let request = agent(timeout).post(url).header("Accept", "application/json").content_type("application/json");
     let mut response = reached(service, request.send(body.to_string()), timeout)?;
     read(service, &mut response)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Method {
+    Get,
+    Post,
+    Patch,
+    Put,
+    Delete,
+}
+
+pub(crate) fn call_within(
+    service: &Service,
+    method: Method,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: Option<&Value>,
+    timeout: Duration,
+) -> Result<Answer> {
+    let agent = agent(timeout);
+    let result = match method {
+        Method::Get => headed(agent.get(url), headers).call(),
+        Method::Post => carrying(headed(agent.post(url), headers), body),
+        Method::Patch => carrying(headed(agent.patch(url), headers), body),
+        Method::Put => carrying(headed(agent.put(url), headers), body),
+        Method::Delete => headed(agent.delete(url), headers).call(),
+    };
+    let mut response = reached(service, result, timeout)?;
+    read(service, &mut response)
+}
+
+fn headed<B>(mut request: RequestBuilder<B>, headers: &[(&str, &str)]) -> RequestBuilder<B> {
+    request = request.header("Accept", "application/json");
+    for (key, value) in headers {
+        request = request.header(*key, *value);
+    }
+    request
+}
+
+fn carrying(
+    request: RequestBuilder<WithBody>,
+    body: Option<&Value>,
+) -> std::result::Result<Response<ureq::Body>, ureq::Error> {
+    match body {
+        Some(body) => request.content_type("application/json").send(body.to_string()),
+        None => request.send_empty(),
+    }
 }
 
 pub(crate) fn download(service: &Service, url: &str) -> Result<Vec<u8>> {

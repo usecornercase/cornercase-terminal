@@ -9,7 +9,6 @@ use crate::error::Result;
 use crate::files::Mode;
 use crate::list::Search;
 use crate::log;
-use crate::messenger::Via;
 use crate::project::Project;
 use crate::project::search::Goto;
 use crate::project::split::{self, Place};
@@ -149,7 +148,7 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
-            Action::Away => self.toggle_away(Via::Telegram),
+            Action::Away => self.toggle_away_everywhere(),
             Action::Quit => self.outbox.detach = true,
         }
         Ok(())

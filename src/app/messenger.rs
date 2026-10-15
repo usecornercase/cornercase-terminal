@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
@@ -8,10 +8,11 @@ use serde_json::Value;
 
 use super::{App, AppEvent, Overlay, Toast};
 use crate::control::{Command, Done, Request};
+use crate::error::Error;
 use crate::issues::{Secret, secrets};
 use crate::log::{self, Job, Level};
 use crate::messenger::link::{self, Link};
-use crate::messenger::{Chat, Key, Keyboard, Message, Order, Saved, Tap, Via};
+use crate::messenger::{Advice, Chat, Identity, Key, Keyboard, Message, Order, Owned, Saved, Tap, Via};
 use crate::settings;
 use crate::ui;
 use crate::web::auth::{Pairing, random_hex};
@@ -19,16 +20,21 @@ use crate::web::auth::{Pairing, random_hex};
 mod chat;
 mod drafts;
 mod notices;
+mod pairing;
 
 pub(in crate::app) const CLIENTS: u64 = 1 << 62;
 const CLIENTS_PER_VIA: u64 = 1 << 48;
 const ROUTES: usize = 256;
+const TAGS: u64 = 256;
 const RECENT: i64 = 60;
+const ASK_FOR: Duration = Duration::from_mins(10);
 
 #[derive(Debug)]
 pub(crate) enum MessengerEvent {
     Link(Via, link::Event),
-    Checked { via: Via, token: Secret, result: Result<String, String> },
+    Checked { via: Via, token: Secret, result: Result<Identity, String> },
+    Paired { via: Via, token: Secret, advice: Advice, result: Result<Owned, String> },
+    Advised { via: Via, link: u64, advice: Option<&'static str> },
 }
 
 impl MessengerEvent {
@@ -36,6 +42,8 @@ impl MessengerEvent {
         match self {
             Self::Link(via, _) => via.target(),
             Self::Checked { via, .. } => via.checked(),
+            Self::Paired { via, .. } => via.pairing(),
+            Self::Advised { via, .. } => via.advised(),
         }
     }
 }
@@ -98,9 +106,12 @@ pub(super) struct Messenger {
     pub(super) away: bool,
     run: String,
     pairing: Option<Pairing>,
+    owner: pairing::Owner,
+    advice: Option<&'static str>,
     tags: HashMap<u64, Route>,
     next_tag: u64,
     routes: VecDeque<(i64, Route)>,
+    open_ask: Option<(Route, Instant)>,
     asked: HashMap<u64, Asked>,
     next_client: u64,
     watches: HashMap<u64, notices::Watch>,
@@ -138,9 +149,12 @@ impl Messenger {
             away: false,
             run: run_id(),
             pairing: None,
+            owner: pairing::Owner::default(),
+            advice: None,
             tags: HashMap::new(),
             next_tag: 0,
             routes: VecDeque::new(),
+            open_ask: None,
             asked: HashMap::new(),
             next_client: 0,
             watches: HashMap::new(),
@@ -176,13 +190,30 @@ impl Messenger {
             _ if self.token.is_none() => self.via.unset().into(),
             Phase::Rejected => self.via.rejected(),
             Phase::Problem(why) => why.clone(),
-            Phase::Off | Phase::Listening if self.away => "connected · away: agents message you there".into(),
-            Phase::Off | Phase::Listening => "connected".into(),
+            Phase::Off | Phase::Listening => match (self.advice, self.away) {
+                (Some(advice), true) => format!("away · {advice}"),
+                (Some(advice), false) => advice.into(),
+                (None, true) => "connected · away: agents message you there".into(),
+                (None, false) => "connected".into(),
+            },
         }
     }
 
     fn tap(&self, text: impl Into<String>, tap: &Tap) -> Key {
         Key { text: text.into(), data: tap.data(&self.run) }
+    }
+
+    fn tag(&mut self, route: Route) -> u64 {
+        self.next_tag += 1;
+        let tag = self.next_tag;
+        self.tags.insert(tag, route);
+        let oldest = tag.saturating_sub(TAGS);
+        self.tags.retain(|kept, _| *kept > oldest);
+        tag
+    }
+
+    fn take_open_ask(&mut self, now: Instant) -> Option<Route> {
+        self.open_ask.take().filter(|(_, at)| now.duration_since(*at) < ASK_FOR).map(|(route, _)| route)
     }
 
     fn remember(&mut self, message: i64, route: Route) {
@@ -221,7 +252,9 @@ impl App {
 
     fn sync_messenger(&mut self, via: Via) {
         if !matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
-            self.messenger_mut(via).pairing = None;
+            let messenger = self.messenger_mut(via);
+            messenger.pairing = None;
+            messenger.owner.closed();
         }
         let messenger = self.messenger(via);
         let wanted = messenger.token.is_some() && messenger.phase != Phase::Rejected;
@@ -245,6 +278,23 @@ impl App {
         messenger.link = Some(link);
         messenger.phase = Phase::Listening;
         self.refresh_messenger_note(via);
+        self.read_advice(via, id, token);
+    }
+
+    fn read_advice(&self, via: Via, link: u64, token: String) {
+        if !via.advises() {
+            return;
+        }
+        let api = self.messenger(via).api.clone();
+        let job = Job::new(Level::Debug, via.target(), "read app");
+        self.spawn_job(
+            job,
+            move || via.read_advice(&api, &token).map_err(Error::Api),
+            move |result, _| {
+                let advice = result.ok()?;
+                Some(AppEvent::Messenger(MessengerEvent::Advised { via, link, advice }))
+            },
+        );
     }
 
     fn restart_link(&mut self, via: Via) {
@@ -262,12 +312,11 @@ impl App {
 
     fn say(&mut self, via: Via, text: String, keyboard: Keyboard, route: Option<Route>, reply_to: Option<i64>) {
         let messenger = self.messenger_mut(via);
+        if route.is_some() {
+            messenger.open_ask = None;
+        }
         let Some(chat) = messenger.chat().map(|c| c.id) else { return };
-        let tag = route.map(|route| {
-            messenger.next_tag += 1;
-            messenger.tags.insert(messenger.next_tag, route);
-            messenger.next_tag
-        });
+        let tag = route.map(|route| messenger.tag(route));
         self.post(via, Order::Send { chat, text, keyboard, reply_to, ask: None, tag });
     }
 
@@ -292,9 +341,10 @@ impl App {
     fn ask(&mut self, via: Via, text: String, placeholder: &str, route: Route) {
         let messenger = self.messenger_mut(via);
         let Some(chat) = messenger.chat().map(|c| c.id) else { return };
-        messenger.next_tag += 1;
-        let tag = messenger.next_tag;
-        messenger.tags.insert(tag, route);
+        let tag = messenger.tag(route);
+        if !via.forces_reply() {
+            messenger.open_ask = Some((route, Instant::now()));
+        }
         let ask = Some(placeholder.chars().take(64).collect());
         self.post(via, Order::Send { chat, text, keyboard: Vec::new(), reply_to: None, ask, tag: Some(tag) });
     }
@@ -371,6 +421,7 @@ impl App {
         let current = |app: &Self, via: Via, id: u64| app.messenger(via).link.as_ref().is_some_and(|l| l.id == id);
         match event {
             MessengerEvent::Checked { via, token, result } => self.messenger_checked(via, &token, result),
+            MessengerEvent::Paired { via, token, advice, result } => self.owner_answered(via, &token, advice, result),
             MessengerEvent::Link(via, link::Event::Updates(id, updates)) if current(self, via, id) => {
                 for update in updates {
                     self.chat_update(via, update, area);
@@ -378,7 +429,7 @@ impl App {
             }
             MessengerEvent::Link(via, link::Event::Sent { link, tag, message }) if current(self, via, link) => {
                 let messenger = self.messenger_mut(via);
-                if let Some(route) = messenger.tags.remove(&tag) {
+                if let Some(route) = messenger.tags.get(&tag).copied() {
                     messenger.remember(message, route);
                 }
             }
@@ -392,7 +443,11 @@ impl App {
                 messenger.phase = Phase::Rejected;
                 self.refresh_messenger_note(via);
             }
-            MessengerEvent::Link(..) => {}
+            MessengerEvent::Advised { via, link, advice } if current(self, via, link) => {
+                self.messenger_mut(via).advice = advice;
+                self.refresh_messenger_note(via);
+            }
+            MessengerEvent::Link(..) | MessengerEvent::Advised { .. } => {}
         }
     }
 
@@ -410,12 +465,18 @@ impl App {
         );
     }
 
-    fn messenger_checked(&mut self, via: Via, token: &Secret, result: Result<String, String>) {
+    fn messenger_checked(&mut self, via: Via, token: &Secret, result: Result<Identity, String>) {
         let messenger = self.messenger(via);
-        let saved = result.and_then(|name| {
+        let saved = result.and_then(|found| {
             secrets::write(&messenger.secrets, via.token_key(), &token.0)
-                .map(|()| name)
+                .map(|()| found)
                 .map_err(|e| format!("failed to save the token: {e}"))
+        });
+        let saved = saved.map(|Identity { name, advice }| {
+            if let Advice::Read(advice) = advice {
+                self.messenger_mut(via).advice = advice;
+            }
+            name
         });
         if let Ok(name) = &saved {
             log::info!(via.target(), "bot set", bot = name);
@@ -430,9 +491,7 @@ impl App {
         }
         let paired = self.messenger(via).paired();
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            match via {
-                Via::Telegram => s.telegram_checked(saved, paired),
-            }
+            s.bot_checked(via, saved, paired);
         }
         self.refresh_messenger_note(via);
     }
@@ -442,6 +501,7 @@ impl App {
         secrets::remove(&messenger.secrets, via.token_key()).map_err(|e| format!("failed to remove the token: {e}"))?;
         log::info!(via.target(), "bot removed");
         messenger.token = None;
+        messenger.advice = None;
         messenger.saved = Saved::default();
         messenger.save();
         messenger.away = false;
@@ -465,9 +525,13 @@ impl App {
         if self.messenger(via).bot().is_none() {
             return Some("paste the bot's token first");
         }
-        match Pairing::new(Instant::now()) {
-            Ok(pairing) => self.messenger_mut(via).pairing = Some(pairing),
-            Err(e) => log::error!(via.target(), "cannot make a pairing code", error = e),
+        if via.pairs_by_owner() {
+            self.messenger_mut(via).owner.closed();
+        } else {
+            match Pairing::new(Instant::now()) {
+                Ok(pairing) => self.messenger_mut(via).pairing = Some(pairing),
+                Err(e) => log::error!(via.target(), "cannot make a pairing code", error = e),
+            }
         }
         self.overlay = Some(Overlay::Pairing(via));
         None
@@ -482,32 +546,27 @@ impl App {
             return false;
         }
         let paired = u64::try_from(unix_now()).unwrap_or_default();
-        let chat = Chat { id: message.chat, user: message.user, name: message.name.clone(), paired };
-        log::info!(via.target(), "paired", chat = chat.id);
-        let messenger = self.messenger_mut(via);
-        messenger.pairing = None;
-        messenger.saved.chat = Some(chat);
-        messenger.save();
-        if matches!(self.overlay, Some(Overlay::Pairing(shown)) if shown == via) {
-            self.overlay = None;
-        }
-        let who = if message.name.is_empty() { String::new() } else { format!(" with {}", message.name) };
-        self.toast = Some(Toast::new(format!("{} connected{who}", via.name()), ui::ToastIcon::Check));
+        self.connect(via, Chat { id: message.chat, user: message.user, name: message.name.clone(), paired });
         self.say(via, chat::welcome(via), Vec::new(), None, None);
-        self.refresh_messenger_note(via);
         true
     }
 
     pub(super) fn pairing_view(&self, via: Via) -> ui::RemoteAccess {
         let messenger = self.messenger(via);
         let bot = messenger.bot().unwrap_or_default();
-        let (url, lines) = match &messenger.pairing {
-            Some(pairing) => {
-                let (url, lines) = via.pairing_link(bot, &pairing.token);
-                (Some(url), lines)
+        let code = match &messenger.pairing {
+            Some(pairing) => Some(pairing.token.as_str()),
+            None => via.pairs_by_owner().then_some(""),
+        };
+        let (url, mut lines) = match code {
+            Some(code) => {
+                let (url, lines) = via.pairing_link(bot, messenger.token.as_deref().unwrap_or_default(), code);
+                (Some(url).filter(|url| !url.is_empty()), lines)
             }
             None => (None, vec!["could not make a code, see server.log".into()]),
         };
+        lines.extend(messenger.owner.failed.clone());
+        lines.extend(messenger.advice.map(String::from));
         let code = url.as_deref().map(ui::remote_access::code).unwrap_or_default();
         ui::RemoteAccess { title: via.name(), url, code, lines }
     }
@@ -522,15 +581,13 @@ impl App {
     pub(super) fn refresh_messenger_note(&mut self, via: Via) {
         let view = self.messenger_settings(via);
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
-            match via {
-                Via::Telegram => s.telegram = view,
-            }
+            *s.messenger_mut(via) = view;
         }
     }
 
-    pub(super) fn messenger_settings(&self, via: Via) -> settings::Telegram {
+    pub(super) fn messenger_settings(&self, via: Via) -> settings::Messenger {
         let messenger = self.messenger(via);
-        settings::Telegram {
+        settings::Messenger {
             bot: messenger.bot().map(|name| format!("@{name}")),
             chat: messenger.chat_name().map(String::from),
             note: messenger.note(),
@@ -540,14 +597,49 @@ impl App {
 
     pub(super) fn toggle_away(&mut self, via: Via) {
         if !self.messenger(via).ready() {
-            let row = match via {
-                Via::Telegram => settings::Row::TelegramBot,
-            };
-            self.open_settings_on(&row);
+            self.open_settings_on(&settings::Row::Bot(via));
         } else if self.messenger(via).away {
             self.come_back(via, By::Window);
         } else if let Err(why) = self.go_away(via, By::Window) {
             self.toast = Some(Toast::new(why, ui::ToastIcon::Bug));
+        }
+    }
+
+    pub(super) fn toggle_away_everywhere(&mut self) {
+        let back = self.away_anywhere();
+        let vias: Vec<Via> = Via::ALL
+            .into_iter()
+            .filter(|via| if back { self.messenger(*via).away } else { self.messenger(*via).ready() })
+            .collect();
+        if vias.is_empty() {
+            let unset = Via::ALL.into_iter().find(|via| !self.messenger(*via).ready()).unwrap_or(Via::Telegram);
+            self.open_settings_on(&settings::Row::Bot(unset));
+            return;
+        }
+        let (mut went, mut failed) = (Vec::new(), Vec::new());
+        for via in vias {
+            if back {
+                self.come_back(via, By::Window);
+                went.push(via.name());
+            } else {
+                match self.go_away(via, By::Window) {
+                    Ok(()) => went.push(via.name()),
+                    Err(why) => failed.push(why),
+                }
+            }
+        }
+        let names = went.join(" and ");
+        if !failed.is_empty() {
+            let why = failed.join("; ");
+            let text = if went.is_empty() { why } else { format!("away: agents message you on {names}; {why}") };
+            self.toast = Some(Toast::new(text, ui::ToastIcon::Bug));
+        } else if went.len() > 1 {
+            let text = if back {
+                format!("back: agents no longer message you on {names}")
+            } else {
+                format!("away: agents message you on {names}")
+            };
+            self.toast = Some(Toast::new(text, ui::ToastIcon::Check));
         }
     }
 
@@ -600,7 +692,9 @@ impl App {
     }
 
     pub(in crate::app) fn away_request(&mut self, off: bool) -> Result<Option<Value>, String> {
+        let changed: Vec<Via>;
         if off {
+            changed = Via::ALL.into_iter().filter(|via| self.messenger(*via).away).collect();
             for via in Via::ALL {
                 self.come_back(via, By::Command);
             }
@@ -617,15 +711,17 @@ impl App {
             if let (false, Some(why)) = (went, refused) {
                 return Err(why);
             }
+            changed = Via::ALL.into_iter().filter(|via| self.messenger(*via).away).collect();
         }
-        Ok(Some(serde_json::json!({ "away": self.away_anywhere() })))
+        let platforms: Vec<&str> = changed.into_iter().map(Via::name).collect();
+        Ok(Some(serde_json::json!({ "away": self.away_anywhere(), "platforms": platforms })))
     }
 }
 
 #[cfg(test)]
-pub(super) fn capture(app: &mut App) -> std::sync::mpsc::Receiver<Order> {
+pub(super) fn capture(app: &mut App, via: Via) -> std::sync::mpsc::Receiver<Order> {
     let (link, orders) = Link::capture(1);
-    let messenger = app.messenger_mut(Via::Telegram);
+    let messenger = app.messenger_mut(via);
     messenger.links = 1;
     messenger.link = Some(link);
     messenger.phase = Phase::Listening;
@@ -633,13 +729,21 @@ pub(super) fn capture(app: &mut App) -> std::sync::mpsc::Receiver<Order> {
 }
 
 #[cfg(test)]
-pub(super) fn set_up(app: &mut App, token: &str, bot: &str, chat: Option<Chat>) {
-    let messenger = app.messenger_mut(Via::Telegram);
+pub(super) fn set_up(app: &mut App, via: Via, token: &str, bot: &str, chat: Option<Chat>) {
+    let messenger = app.messenger_mut(via);
     messenger.token = Some(token.into());
     messenger.saved = Saved::new(bot.into(), chat);
 }
 
 #[cfg(test)]
-pub(super) fn run(app: &App) -> &str {
-    &app.messenger(Via::Telegram).run
+pub(super) fn run(app: &App, via: Via) -> &str {
+    &app.messenger(via).run
 }
+
+#[cfg(test)]
+pub(super) fn point(app: &mut App, via: Via, api: &str) {
+    app.messenger_mut(via).api = api.into();
+}
+
+#[cfg(test)]
+mod tests;

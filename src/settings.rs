@@ -4,6 +4,7 @@ use crate::agents;
 use crate::config::{Config, DEFAULT_ISSUE_TABS};
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
+use crate::messenger::Via;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
@@ -52,8 +53,8 @@ pub(crate) enum Row {
     Browsers,
     Kind(String),
     AddAgent,
-    TelegramBot,
-    TelegramChat,
+    Bot(Via),
+    Chat(Via),
 }
 
 impl Row {
@@ -79,7 +80,7 @@ impl Row {
             | Self::Updates
             | Self::Prefix => "",
             Self::Remote | Self::Browsers => "Browser",
-            Self::TelegramBot | Self::TelegramChat => "Telegram",
+            Self::Bot(via) | Self::Chat(via) => via.name(),
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
             Self::Token(Source::Gitlab) | Self::GitlabUrl => "GitLab",
@@ -121,7 +122,7 @@ impl Row {
             | Self::Notifications
             | Self::Updates
             | Self::Prefix => Page::Ui,
-            Self::Remote | Self::Browsers | Self::TelegramBot | Self::TelegramChat => Page::Remote,
+            Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
         }
     }
 }
@@ -221,14 +222,14 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     RemoveToken(Source),
     ForgetBrowsers,
-    CheckTelegram(Secret),
-    RemoveTelegram,
-    PairTelegram,
-    ForgetTelegram,
+    CheckBot(Via, Secret),
+    RemoveBot(Via),
+    Pair(Via),
+    ForgetChat(Via),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Telegram {
+pub(crate) struct Messenger {
     pub(crate) bot: Option<String>,
     pub(crate) chat: Option<String>,
     pub(crate) note: String,
@@ -281,7 +282,7 @@ pub(crate) struct Settings {
     pub(crate) pulls: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
-    pub(crate) telegram: Telegram,
+    pub(crate) messengers: [Messenger; Via::ALL.len()],
 }
 
 impl Settings {
@@ -302,12 +303,20 @@ impl Settings {
             pulls: String::new(),
             remote: String::new(),
             browsers: 0,
-            telegram: Telegram::default(),
+            messengers: Default::default(),
         }
     }
 
     pub(crate) fn busy(&self) -> bool {
-        !self.checking.is_empty() || self.telegram.checking
+        !self.checking.is_empty() || self.messengers.iter().any(|m| m.checking)
+    }
+
+    pub(crate) fn messenger(&self, via: Via) -> &Messenger {
+        &self.messengers[via.index()]
+    }
+
+    pub(crate) fn messenger_mut(&mut self, via: Via) -> &mut Messenger {
+        &mut self.messengers[via.index()]
     }
 
     fn shown_tabs(&self) -> Vec<&'static str> {
@@ -375,9 +384,11 @@ impl Settings {
         if self.browsers > 0 {
             rows.push(Row::Browsers);
         }
-        rows.push(Row::TelegramBot);
-        if self.telegram.bot.is_some() {
-            rows.push(Row::TelegramChat);
+        for via in Via::ALL {
+            rows.push(Row::Bot(via));
+            if self.messenger(via).bot.is_some() {
+                rows.push(Row::Chat(via));
+            }
         }
         rows.retain(|row| row.page() == self.page);
         rows

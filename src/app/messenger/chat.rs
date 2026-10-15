@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use ratatui::layout::Rect;
 
 use super::{Asked, By, Route};
@@ -55,10 +57,22 @@ impl App {
             return;
         }
         if let Some((word, _)) = command(&message.text) {
+            self.messenger_mut(via).open_ask = None;
             self.chat_command(via, word, message, area);
             return;
         }
-        match message.reply_to.and_then(|id| self.messenger(via).route(id)) {
+        let replied = message.reply_to.and_then(|id| self.messenger(via).route(id));
+        let messenger = self.messenger_mut(via);
+        let route = match replied {
+            Some(route) => {
+                if messenger.open_ask.is_some_and(|(open, _)| open == route) {
+                    messenger.open_ask = None;
+                }
+                Some(route)
+            }
+            None => messenger.take_open_ask(Instant::now()),
+        };
+        match route {
             Some(Route::Pane(pane)) => self.deliver(via, pane, message.text.clone(), message.id),
             Some(Route::Branch(draft)) => self.draft_branch(via, draft, message.text.trim(), message.id),
             Some(Route::Prompt(draft)) => self.draft_prompt(via, draft, &message.text, message.id, area),

@@ -217,7 +217,7 @@ const ROOT: [Item; 25] = [
     run("t", "todo", Action::Todo),
     run(",", "settings", Action::Settings),
     run("u", "usage", Action::Usage),
-    run("o", "away on Telegram", Action::Away),
+    run("o", "away on chat apps", Action::Away),
     run("q", "quit", Action::Quit),
 ];
 

@@ -93,8 +93,8 @@ impl Settings {
                 ["the computer stays awake while an agent works", "the computer sleeps as usual"],
             ),
             Row::Kind(kind) => self.pick_mode(kind),
-            Row::TelegramBot => self.start_edit(row, String::new()),
-            Row::TelegramChat => Action::PairTelegram,
+            Row::Bot(_) => self.start_edit(row, String::new()),
+            Row::Chat(via) => Action::Pair(via),
             Row::AddAgent => {
                 let listed = self.listed_kinds();
                 let items: Vec<PickItem> = agents::kinds(&self.config)

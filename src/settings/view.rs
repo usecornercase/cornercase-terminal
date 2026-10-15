@@ -1,6 +1,7 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
 use crate::issues::Source;
+use crate::messenger::Via;
 use crate::shortcuts::Prefix;
 
 use super::{Page, Row, RowText, Settings, Status};
@@ -36,12 +37,13 @@ impl Settings {
         }
     }
 
-    fn telegram_row(&self, row: &Row) -> (String, String, String, bool) {
-        if *row == Row::TelegramBot {
-            let note = if self.telegram.checking { "checking…".into() } else { self.telegram.note.clone() };
-            return ("bot".into(), self.telegram.bot.clone().unwrap_or_else(|| "not set".into()), note, false);
+    fn messenger_row(&self, row: &Row, via: Via) -> (String, String, String, bool) {
+        let messenger = self.messenger(via);
+        if *row == Row::Bot(via) {
+            let note = if messenger.checking { "checking…".into() } else { messenger.note.clone() };
+            return ("bot".into(), messenger.bot.clone().unwrap_or_else(|| "not set".into()), note, false);
         }
-        let (value, note) = match &self.telegram.chat {
+        let (value, note) = match &messenger.chat {
             Some(chat) => (chat.clone(), "agents message it while you are away · enter pairs another"),
             None => ("not paired".into(), "enter shows a code to scan with your phone"),
         };
@@ -129,7 +131,7 @@ impl Settings {
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
-            Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
+            Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
         };
         RowText { label, value, note, dangerous }
     }
@@ -174,7 +176,7 @@ impl Settings {
 
     pub(crate) fn edit_field(&self) -> Option<(String, String)> {
         self.edit.as_ref().map(|edit| {
-            let token = matches!(edit.row, Row::Token(_) | Row::TelegramBot);
+            let token = matches!(edit.row, Row::Token(_) | Row::Bot(_));
             let label = match &edit.row {
                 Row::Folder => "worktrees folder".to_string(),
                 Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
@@ -187,7 +189,7 @@ impl Settings {
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
-                Row::TelegramBot => "Telegram bot token, from @BotFather".to_string(),
+                Row::Bot(via) => via.token_field().to_string(),
                 _ => String::new(),
             };
             let value = if token { "•".repeat(edit.input.chars().count()) } else { edit.input.clone() };

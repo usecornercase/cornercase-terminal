@@ -52,6 +52,10 @@ pub(crate) fn telegram(config: &Path) -> PathBuf {
     config.with_file_name("telegram.json")
 }
 
+pub(crate) fn discord(config: &Path) -> PathBuf {
+    config.with_file_name("discord.json")
+}
+
 pub(crate) fn session() -> PathBuf {
     match custom_socket() {
         Some(socket) => socket.with_extension("json"),

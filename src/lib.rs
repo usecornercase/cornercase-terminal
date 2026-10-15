@@ -14,6 +14,7 @@ pub mod version;
 pub mod agents;
 pub(crate) mod changes;
 pub mod config;
+pub(crate) mod discord;
 pub(crate) mod files;
 pub(crate) mod git;
 pub(crate) mod graphics;
