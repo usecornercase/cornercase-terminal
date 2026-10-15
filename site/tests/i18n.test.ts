@@ -63,16 +63,22 @@ function tourApp(columns: number, narrate: App['narration']): { app: App; said: 
   return { app, said };
 }
 
-async function tour(locale: keyof typeof DEMO, columns: number): Promise<string[]> {
+async function tour(locale: keyof typeof DEMO, columns: number, missed: string[] = []): Promise<string[]> {
   const { app, said } = tourApp(columns, DEMO[locale].narrate);
   let finished = false;
   const steps = chapters(DEMO[locale].tour).flat();
   steps.push({ run: () => void (finished = true) });
-  await play({ app } as Mounted, null, steps, { instant: true }).done;
+  await play({ app } as Mounted, null, steps, { instant: true, missed: (text) => missed.push(text) }).done;
   assert.ok(finished);
   app.destroy();
   return said;
 }
+
+test('every click of the hero tour finds what it clicks at 140 columns', async () => {
+  const missed: string[] = [];
+  await tour('en', 140, missed);
+  assert.deepEqual(missed, []);
+});
 
 for (const columns of [140, 80]) {
   test(`the hero tour narrates in each language and reaches its end at ${columns} columns`, async () => {

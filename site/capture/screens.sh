@@ -814,7 +814,6 @@ screen_flow_start() {
   cc_wait 'opened by @ana'
   cc_click 'start a flow'
   cc_wait 'Flow templates'
-  cc_click 'Full issue'
   cc_wait 'Full issue in web-shop'
   cc_wait '◆ open a pull request'
   cc_hover '╭─ Start a flow'

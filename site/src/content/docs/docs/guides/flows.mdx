@@ -39,7 +39,7 @@ The whole team works in one worktree. Claude Code, Codex, Gemini CLI and Grok Bu
 
 A flow works in a worktree of its own, so its project must be the root of a git repository. Start one:
 
-- **From an issue**: open it in the [issue browser](../issues-and-agents/) and click **`start a flow`**, next to **`start`**. The prompt is the issue's, made from your [prompt template](../../reference/prompt/), and the branch is the one **`start`** would make (`issue-482-…`).
+- **From an issue**: open it in the [issue browser](../issues-and-agents/) and click **`start a flow`**, after **`start`** and **`schedule`**. The prompt is the issue's, made from your [prompt template](../../reference/prompt/), and the branch is the one **`start`** would make (`issue-482-…`).
 - **From the workspaces' `+ New`**: **start a flow…**, for that project, with a prompt of your own. In the tree, each project's own `+ New` offers it too.
 - **From the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts)**: `w` `s`.
 
@@ -186,5 +186,6 @@ cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
 
 - One worktree per role, for flows where several models compete and the orchestrator picks the best: the whole team works in one worktree, and only the roles told to edit change files.
 - Flows that span several projects.
+- Scheduling a flow: the [queue](../queue/) starts single agents.
 - Message events in [`cornercase events`](../scripts-and-agents/#follow-events).
 - Agents cornercase doesn't know: a role runs Claude Code, Codex, Gemini CLI, opencode or Grok Build.
