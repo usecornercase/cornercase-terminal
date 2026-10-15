@@ -199,7 +199,7 @@ impl View<'_> {
 
     pub(crate) fn tab_lines(&self) -> TabLines {
         let lines = self.workspaces.iter().map(|w| w.tabs.iter().map(|t| t.details.lines()).collect()).collect();
-        TabLines::new(lines, self.tab_bar.is_none())
+        TabLines::new(lines, self.tab_bar.is_none()).folded(self.workspaces.iter().map(|w| w.collapsed).collect())
     }
 
     fn glyphs(&self) -> &'static icons::Glyphs {

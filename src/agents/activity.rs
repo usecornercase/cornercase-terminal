@@ -50,8 +50,12 @@ impl Status {
     }
 }
 
+pub(crate) fn highest(statuses: impl IntoIterator<Item = Option<Status>>) -> Option<Status> {
+    statuses.into_iter().flatten().max()
+}
+
 pub(crate) fn attention(statuses: impl IntoIterator<Item = Option<Status>>) -> Option<Status> {
-    statuses.into_iter().flatten().filter(|s| s.needs_you()).max()
+    highest(statuses).filter(|s| s.needs_you())
 }
 
 pub(crate) fn spin_frame(elapsed: Duration) -> u8 {

@@ -15,13 +15,21 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
         has_project: true,
         workspaces: vec![
             WorkspaceEntry {
+                collapsed: false,
                 name: "feat/login".into(),
                 tabs: vec!["claude".into(), "nvim".into()],
                 behind: 0,
                 pull: None,
                 removing: false,
             },
-            WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, pull: None, removing: false },
+            WorkspaceEntry {
+                collapsed: false,
+                name: "main".into(),
+                tabs: vec!["zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+            },
         ],
         active_tab: Some(0),
         nav,

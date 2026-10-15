@@ -11,8 +11,8 @@ use super::chrome::draw_back;
 use super::drop::landed;
 use super::layout::Areas;
 use super::rows::{
-    Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, room, row_button,
-    row_close_button, row_menu_button, row_rect,
+    Band, GAP, RowButton, Rows, Tags, arrow, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, room,
+    row_button, row_close_button, row_menu_button, row_rect,
 };
 use super::sidebar::NEW_BUTTON;
 use super::theme::{pull_tag, severity_color, status_icon};
@@ -53,12 +53,21 @@ pub enum WorkspaceRow {
 pub struct TabLines {
     lines: Vec<Vec<u16>>,
     listed: bool,
+    folded: Vec<bool>,
 }
 
 impl TabLines {
     pub(crate) fn new(lines: Vec<Vec<u16>>, listed: bool) -> Self {
         let lines = if listed { lines } else { vec![Vec::new(); lines.len()] };
-        Self { lines, listed }
+        Self { lines, listed, folded: Vec::new() }
+    }
+
+    pub(crate) fn folded(self, folded: Vec<bool>) -> Self {
+        Self { folded, ..self }
+    }
+
+    pub(crate) fn is_folded(&self, w: usize) -> bool {
+        self.listed && self.folded.get(w) == Some(&true)
     }
 }
 
@@ -73,12 +82,13 @@ pub(crate) fn workspace_rows(tabs: &TabLines) -> Vec<WorkspaceRow> {
         .iter()
         .enumerate()
         .flat_map(|(w, lines)| {
+            let open = !tabs.is_folded(w);
             (w > 0)
                 .then_some(WorkspaceRow::Gap)
                 .into_iter()
                 .chain(std::iter::once(WorkspaceRow::Workspace(w)))
-                .chain((0..lines.len()).map(move |t| WorkspaceRow::Tab(w, t)))
-                .chain(tabs.listed.then_some(WorkspaceRow::NewTab(w)))
+                .chain((0..lines.len()).filter(move |_| open).map(move |t| WorkspaceRow::Tab(w, t)))
+                .chain((tabs.listed && open).then_some(WorkspaceRow::NewTab(w)))
         })
         .collect()
 }
@@ -112,6 +122,7 @@ pub(crate) enum WorkspaceHit {
     Workspace(usize),
     CloseWorkspace(usize),
     WorkspaceMenu(usize),
+    Fold(usize),
     Tab(usize, usize),
     CloseTab(usize, usize),
     TabMenu(usize, usize),
@@ -125,6 +136,7 @@ impl WorkspaceHit {
             Self::Workspace(w)
             | Self::CloseWorkspace(w)
             | Self::WorkspaceMenu(w)
+            | Self::Fold(w)
             | Self::Tab(w, _)
             | Self::CloseTab(w, _)
             | Self::TabMenu(w, _)
@@ -132,6 +144,17 @@ impl WorkspaceHit {
             Self::NewWorkspace => None,
         }
     }
+}
+
+pub(crate) fn fold_button(row: Rect) -> Rect {
+    Rect { width: 4, ..row }.intersection(row)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Badge {
+    Off,
+    Attention,
+    Highest,
 }
 
 pub(crate) fn workspace_hit(
@@ -154,6 +177,9 @@ pub(crate) fn workspace_hit(
         (WorkspaceRow::Gap | WorkspaceRow::Landing, _) => return None,
         (WorkspaceRow::Workspace(w), Some(RowButton::Close)) => WorkspaceHit::CloseWorkspace(w),
         (WorkspaceRow::Workspace(w), Some(RowButton::Menu)) => WorkspaceHit::WorkspaceMenu(w),
+        (WorkspaceRow::Workspace(w), None) if tabs.listed && fold_button(layout.item(i)).contains(pos) => {
+            WorkspaceHit::Fold(w)
+        }
         (WorkspaceRow::Workspace(w), None) => WorkspaceHit::Workspace(w),
         (WorkspaceRow::Tab(w, t), Some(RowButton::Close)) => WorkspaceHit::CloseTab(w, t),
         (WorkspaceRow::Tab(w, t), Some(RowButton::Menu)) => WorkspaceHit::TabMenu(w, t),
@@ -164,6 +190,7 @@ pub(crate) fn workspace_hit(
 
 pub(crate) struct WorkspaceEntry {
     pub(crate) name: String,
+    pub(crate) collapsed: bool,
     pub(crate) tabs: Vec<TabEntry>,
     pub(crate) behind: u32,
     pub(crate) pull: Option<Mark>,
@@ -252,10 +279,19 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
                 }
             }
             WorkspaceRow::Workspace(w) => {
-                let bg = view.row_background(r, view.dragging_workspace_row(row));
-                let band = Band { r, pitch: areas.pitch, lead: vec![Span::raw("  ")], bg };
-                draw_workspace_band(f, view, band, &view.workspaces[w], w == view.active_workspace, true);
-                draw_guide(f, view.line(), guide, r, Guide::Top);
+                let folded = tabs.is_folded(w);
+                let marked = folded && w == view.active_workspace;
+                let bg = view.row_background(r, marked || view.dragging_workspace_row(row));
+                let fold = if tabs.listed { arrow(view.muted, folded) } else { Span::raw("  ") };
+                let band = Band { r, pitch: areas.pitch, lead: vec![marker(marked), fold], bg };
+                let badge = if folded { Badge::Highest } else { Badge::Attention };
+                draw_workspace_band(f, view, band, &view.workspaces[w], w == view.active_workspace, badge);
+                if !folded {
+                    draw_guide(f, view.line(), guide, r, Guide::Top);
+                }
+                if marked {
+                    draw_rail(f, r);
+                }
             }
             WorkspaceRow::Tab(w, t) => {
                 let active = w == view.active_workspace && view.active_tab == Some(t);
@@ -325,19 +361,17 @@ fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
     above.is_some() && above == below
 }
 
-fn marks(
-    entry: &WorkspaceEntry,
-    attention: bool,
-    muted: Color,
-    spin: Option<u8>,
-) -> (Vec<Span<'static>>, Option<usize>) {
+fn marks(entry: &WorkspaceEntry, badge: Badge, muted: Color, spin: Option<u8>) -> (Vec<Span<'static>>, Option<usize>) {
     if entry.removing {
         return (vec![Span::styled(REMOVING_LABEL, Style::default().fg(muted))], None);
     }
-    let badge = attention
-        .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
-        .flatten()
-        .map(|status| status_icon(muted, status, spin));
+    let statuses = entry.tabs.iter().map(|t| t.status);
+    let badge = match badge {
+        Badge::Off => None,
+        Badge::Attention => activity::attention(statuses),
+        Badge::Highest => activity::highest(statuses),
+    }
+    .map(|status| status_icon(muted, status, spin));
     let pull_at = usize::from(badge.is_some());
     let pull = entry.pull.map(|mark| pull_tag(muted, mark));
     let pull_index = pull.is_some().then_some(pull_at);
@@ -347,9 +381,9 @@ fn marks(
     (badge.into_iter().chain(pull).chain(behind).collect(), pull_index)
 }
 
-pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEntry, attention: bool) -> Option<Rect> {
+pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEntry, badge: Badge) -> Option<Rect> {
     let room = room(row, pitch, lead);
-    let (spans, pull) = marks(entry, attention, Color::Reset, None);
+    let (spans, pull) = marks(entry, badge, Color::Reset, None);
     let (x, width) = Tags::fit(spans, room).place(pull?, lead + room)?;
     let x = u16::try_from(usize::from(row.x) + x).ok()?;
     let rect = Rect::new(x, row.y, u16::try_from(width).ok()?, pitch.min(row.height)).intersection(row);
@@ -364,7 +398,8 @@ pub(crate) fn workspace_pull(
     w: usize,
     entry: &WorkspaceEntry,
 ) -> Option<Rect> {
-    pull_badge(workspace_row(list, pitch, tabs, scroll, WorkspaceRow::Workspace(w)), pitch, 2, entry, true)
+    let badge = if tabs.is_folded(w) { Badge::Highest } else { Badge::Attention };
+    pull_badge(workspace_row(list, pitch, tabs, scroll, WorkspaceRow::Workspace(w)), pitch, 4, entry, badge)
 }
 
 pub(super) fn draw_workspace_band(
@@ -373,7 +408,7 @@ pub(super) fn draw_workspace_band(
     band: Band,
     entry: &WorkspaceEntry,
     active: bool,
-    badge: bool,
+    badge: Badge,
 ) {
     let colour = match (entry.removing, active) {
         (true, _) => view.muted,

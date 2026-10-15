@@ -6,7 +6,7 @@ expression: "render_sized(&shown(Sidebar::SideBySide, entries()), W, TALL.height
 "                                                         │                                          "
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
-"  cornercase (1)               │  default                │                                          "
+"  cornercase (1)               │  ▾ default              │                                          "
 "▌ website (1)                  │▌ ├ › codex              │                                          "
 "  api (1)                      │  └ + Tab                │                                          "
 "                               │                         │                                          "

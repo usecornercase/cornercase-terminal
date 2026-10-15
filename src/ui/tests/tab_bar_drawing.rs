@@ -7,6 +7,7 @@ fn with_bar() -> View<'static> {
     View {
         has_project: true,
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "main".into(),
             tabs: tabs.clone(),
             behind: 0,

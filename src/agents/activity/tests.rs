@@ -236,6 +236,19 @@ mod rollup {
     fn keeps_what_needs_you(#[case] statuses: &[Option<Status>], #[case] expected: Option<Status>) {
         assert_eq!(attention(statuses.iter().copied()), expected);
     }
+
+    #[rstest]
+    #[case::nothing(&[], None)]
+    #[case::shells(&[None, None], None)]
+    #[case::idle(&[Some(Status::Idle), None], Some(Status::Idle))]
+    #[case::working(&[Some(Status::Idle), Some(Status::Working)], Some(Status::Working))]
+    #[case::done_over_working(&[Some(Status::Working), Some(Status::Done)], Some(Status::Done))]
+    #[case::pending_over_done(&[Some(Status::Done), Some(Status::Pending)], Some(Status::Pending))]
+    #[case::failed_over_pending(&[Some(Status::Failed), Some(Status::Pending)], Some(Status::Failed))]
+    #[case::waiting_over_all(&[Some(Status::Failed), Some(Status::Waiting), Some(Status::Working)], Some(Status::Waiting))]
+    fn highest_follows_the_order_of_urgency(#[case] statuses: &[Option<Status>], #[case] expected: Option<Status>) {
+        assert_eq!(highest(statuses.iter().copied()), expected);
+    }
 }
 
 mod marks {

@@ -9,6 +9,7 @@ fn with_agents() -> View<'static> {
         has_project: true,
         workspaces: vec![
             WorkspaceEntry {
+                collapsed: false,
                 name: "login".into(),
                 tabs: vec![tab("claude", Some(Status::Working)), tab("claude", Some(Status::Waiting)), "nvim".into()],
                 behind: 2,
@@ -16,6 +17,7 @@ fn with_agents() -> View<'static> {
                 removing: false,
             },
             WorkspaceEntry {
+                collapsed: false,
                 name: "main".into(),
                 tabs: vec![tab("claude", Some(Status::Done)), tab("claude", Some(Status::Idle))],
                 behind: 0,
@@ -169,21 +171,21 @@ fn a_tab_with_one_pane_shows_no_count() {
 
 #[test]
 fn the_workspace_mark_comes_before_the_commits_to_pull() {
-    assert_eq!(workspace_line(&with_agents(), 0), "  login        ! ↓2");
+    assert_eq!(workspace_line(&with_agents(), 0), "  ▾ login      ! ↓2");
 }
 
 #[test]
 fn only_what_needs_you_reaches_the_workspace() {
     let mut v = with_agents();
     v.workspaces[0].tabs = vec![tab("claude", Some(Status::Working)), tab("claude", Some(Status::Idle))];
-    assert_eq!(workspace_line(&v, 0), "  login          ↓2");
+    assert_eq!(workspace_line(&v, 0), "  ▾ login        ↓2");
 }
 
 #[test]
 fn done_waits_behind_what_needs_you() {
     let mut v = with_agents();
     v.workspaces[0].tabs = vec![tab("claude", Some(Status::Done)), tab("claude", Some(Status::Waiting))];
-    assert_eq!(workspace_line(&v, 0), "  login        ! ↓2");
+    assert_eq!(workspace_line(&v, 0), "  ▾ login      ! ↓2");
 }
 
 #[rstest]

@@ -181,4 +181,5 @@ mod tree_drop;
 mod tree_layout;
 mod tree_rows;
 mod widths;
+mod workspace_folds;
 mod workspaces_column;
