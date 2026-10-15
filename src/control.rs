@@ -6,6 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod flow;
+
+pub(crate) use flow::{BrokenFlow, FlowInfo, FlowList, FlowRun, Flows, MemberInfo, RoleInfo, RunInfo};
+
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
 
@@ -429,79 +433,6 @@ pub(crate) struct Mark {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
     pub(crate) reviewed: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowList {
-    pub(crate) project: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowRun {
-    pub(crate) name: String,
-    pub(crate) prompt: String,
-    pub(crate) worktree: Option<String>,
-    pub(crate) project: Option<u64>,
-    pub(crate) focus: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct Flows {
-    pub(crate) flows: Vec<FlowInfo>,
-    pub(crate) broken: Vec<BrokenFlow>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct FlowInfo {
-    pub(crate) name: String,
-    pub(crate) origin: String,
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) description: String,
-    pub(crate) roles: Vec<RoleInfo>,
-    pub(crate) problems: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) check: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct RoleInfo {
-    pub(crate) role: String,
-    pub(crate) agent: String,
-    pub(crate) model: Option<String>,
-    pub(crate) effort: Option<String>,
-    pub(crate) edits: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct BrokenFlow {
-    pub(crate) path: PathBuf,
-    pub(crate) error: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct RunInfo {
-    pub(crate) project: u64,
-    pub(crate) workspace: u64,
-    pub(crate) branch: String,
-    pub(crate) members: Vec<MemberInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) note: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct MemberInfo {
-    pub(crate) role: String,
-    pub(crate) agent: String,
-    pub(crate) tab: u64,
-    pub(crate) pane: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
