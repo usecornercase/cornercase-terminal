@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.95
+
+- cornercase can message you on Discord, as it does on Telegram: while you are away, an agent that needs you or finishes its turn sends you a direct message with its question and buttons to answer it, or what it wrote, and what you reply goes to that agent. `/status`, `/new`, `/away` and `/back` work there too, as slash commands: type `/` in the chat with the bot to pick one.
+- To set it up, make an application in the Discord Developer Portal with **User Install** on, **Install Link** set to **None** and **Public Bot** off (so the app stays yours alone; cornercase tells you in Settings when it is not), paste its bot token in **Settings › Remote › Discord › bot**, then select **phone** and scan the code to add the app to your account. No code to type and no server to share: the bot writes to the app's owner. The guide is at usecornercase.dev, **On Discord**.
+- Telegram and Discord can both be set up and away at the same time. `o` in the keys menu (now **away on chat apps**) and `cornercase away` turn away on or off on every one that is set up, and the **Remote** menu has an entry for each.
+
 ## 0.12.94
 
 - No changes in the app. The Telegram bot's shared parts (the notices, replies, away, `/status` and `/new`) no longer depend on Telegram, so a second chat app can use them.
