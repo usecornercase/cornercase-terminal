@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { inputKey } from '../src/lib/demo/client';
+import { fitIssueButtons } from '../src/lib/demo/ui';
 import { world } from '../src/lib/demo/world';
 
 const key = (k: string) => ({ key: k, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: false });
@@ -71,4 +72,25 @@ test('a host name that starts like a loopback address still gets the warning', (
   app.render();
   assert.ok(app.textAt('Careful: the address starts with http://, so the token travels unencrypted.'));
   app.destroy();
+});
+
+test('the issue list offers start a flow, which needs a real cornercase', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openIssues();
+  app.advance(500);
+  app.render();
+  assert.ok(app.textAt('start a flow'));
+  app.issuesButton('start a flow');
+  app.render();
+  assert.ok(app.textAt('the demo only plays the flow in payments'));
+  app.destroy();
+});
+
+test('a narrow issue list drops schedule, then start a flow, and keeps start, refresh and cancel', () => {
+  const labels = ['start', 'schedule', 'start a flow', 'refresh', 'cancel'];
+  const room = (shown: string[]) => shown.reduce((sum, label) => sum + [...label].length + 3, 0) - 1;
+  const without = ['start', 'start a flow', 'refresh', 'cancel'];
+  assert.deepEqual(fitIssueButtons(labels, room(labels)), labels);
+  assert.deepEqual(fitIssueButtons(labels, room(without)), without);
+  assert.deepEqual(fitIssueButtons(labels, room(without) - 1), ['start', 'refresh', 'cancel']);
 });

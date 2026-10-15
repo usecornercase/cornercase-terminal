@@ -181,6 +181,15 @@ const wordmark = (): Line => [seg('c', { fg: BRAND, add: BOLD }), seg('ornercase
 type Guide = 'top' | 'tee' | 'end' | 'bar';
 const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 
+export function fitIssueButtons(buttons: string[], width: number): string[] {
+  let fitted = buttons;
+  for (const optional of ['schedule', 'start a flow']) {
+    const needed = fitted.reduce((sum, label) => sum + [...label].length + 3, 0);
+    if (needed > width + 1) fitted = fitted.filter((label) => label !== optional);
+  }
+  return fitted;
+}
+
 export class Painter {
   readonly regions: Region[] = [];
   cursor: Cursor | null = null;
@@ -1401,7 +1410,7 @@ export class Painter {
     const note = busy ?? o.notice ?? view.hint;
     this.span(noteRow.x, noteRow.y, truncateRight(note, noteRow.w), view.error && !busy ? { fg: 1 } : DARK);
     if (busy) this.cursor = null;
-    const labels = view.buttons;
+    const labels = fitIssueButtons(view.buttons, buttonsRow.w);
     rightAligned(buttonsRow, labels, buttonWidth, 1).forEach((br, i) => {
       this.span(br.x, br.y, ` ${labels[i]} `, this.pill(br, i === 0));
       this.region({ r: br, click: () => app.issuesButton(labels[i]), cursor: 'pointer' });
