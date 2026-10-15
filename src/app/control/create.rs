@@ -260,11 +260,11 @@ impl App {
         let w = self.worktree_workspace(p, path);
         let launch = match then.start {
             Some((spec, name)) => {
-                let t = self.push_tab(p, w, area, name).map_err(|e| e.to_string())?;
+                let t = self.push_setup_tab(p, w, area, name).map_err(|e| e.to_string())?;
                 Some((spec, t))
             }
             None if self.projects[p].workspaces[w].tabs.is_empty() => {
-                self.push_tab(p, w, area, None).map_err(|e| e.to_string())?;
+                self.push_setup_tab(p, w, area, None).map_err(|e| e.to_string())?;
                 None
             }
             None => None,

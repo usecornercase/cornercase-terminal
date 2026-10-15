@@ -107,6 +107,7 @@ mod trace;
 mod update_dialog;
 mod usage_dialog;
 mod view;
+mod worktree_setup;
 mod worktrees;
 
 pub(crate) use event::AppEvent;
@@ -147,6 +148,7 @@ pub(crate) struct App {
     overlay: Option<Overlay>,
     config: Config,
     config_path: PathBuf,
+    setup_dir: PathBuf,
     shell: String,
     home: Option<PathBuf>,
     theme: HostTheme,
@@ -207,6 +209,7 @@ impl App {
             star: StarPrompt::default(),
             overlay: None,
             config: config::load(&config_path),
+            setup_dir: config_path.parent().map(std::path::Path::to_path_buf).unwrap_or_default(),
             config_path,
             shell,
             theme,
@@ -340,7 +343,9 @@ impl App {
 
     pub(super) fn tick_at(&self, now: Instant, clock: i64) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
-        let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
+        let held = self.held_launch_panes();
+        let launch =
+            self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
         [
@@ -367,6 +372,7 @@ impl App {
 
     pub(super) fn refresh_at(&mut self, now: Instant, clock: i64) {
         self.reap();
+        self.watch_setups(now);
         self.drive_queue(clock, now);
         self.sync_queued();
         if self.overlay.as_ref().is_some_and(Overlay::lists_running)

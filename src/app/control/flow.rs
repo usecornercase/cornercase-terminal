@@ -147,7 +147,7 @@ impl App {
             if !self.projects[p].workspaces[w].worktree {
                 return Err(own_folder(&branch));
             }
-            return self.open_run(p, w, starting, area).map(|info| Some(json(&info)));
+            return self.open_run(p, w, starting, area, false).map(|info| Some(json(&info)));
         }
         let key = self.requests.key();
         self.spawn_worktree(p, branch, None, Some(key));
@@ -203,7 +203,7 @@ impl App {
             }
             let made = self.projects[p].workspaces.iter().all(|w| w.path != path);
             let w = self.worktree_workspace(p, path);
-            let opened = self.open_run(p, w, starting, area);
+            let opened = self.open_run(p, w, starting, area, true);
             if opened.is_err() && made {
                 self.projects[p].remove_workspace(w);
             }

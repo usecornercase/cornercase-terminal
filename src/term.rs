@@ -20,6 +20,7 @@ use crate::agents::context;
 use crate::agents::{self, AgentState, Known};
 use crate::config::Config;
 use crate::error::{Error, Result};
+use crate::git::worktree::setup;
 use crate::host::theme::HostTheme;
 use crate::process;
 
@@ -55,6 +56,7 @@ pub(crate) struct Term {
     pub(crate) submitted: Option<Instant>,
     pub(crate) input_seen: Option<i32>,
     pub(crate) job: Option<Job>,
+    pub(crate) setup: Option<setup::Pane>,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -137,6 +139,7 @@ impl Term {
             submitted: None,
             input_seen: None,
             job: None,
+            setup: None,
             master: pair.master,
             writer,
             child,
@@ -209,6 +212,10 @@ impl Term {
     pub(crate) fn shell_in_foreground(&self) -> bool {
         let shell = self.shell_pid();
         self.interactive && shell.is_some() && self.foreground_pid() == shell
+    }
+
+    pub(crate) fn became_shell(&mut self) {
+        self.interactive = true;
     }
 
     pub(crate) fn dialog(&self) -> bool {

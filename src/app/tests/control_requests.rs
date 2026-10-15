@@ -384,6 +384,7 @@ mod gemini;
 mod grok;
 mod one_folder;
 mod searching;
+mod setup;
 mod talking;
 mod telegram;
 mod worktrees;

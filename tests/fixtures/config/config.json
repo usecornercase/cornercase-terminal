@@ -55,5 +55,11 @@
   "check_updates": false,
   "star_prompt": false,
   "remote": true,
-  "remote_port": 47682
+  "remote_port": 47682,
+  "projects": {
+    "~/code/web-shop": {
+      "setup": "npm ci\ncp ../.env .env",
+      "teardown": "docker compose down"
+    }
+  }
 }

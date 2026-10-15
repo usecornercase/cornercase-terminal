@@ -92,11 +92,18 @@ impl App {
         )
     }
 
-    pub(in crate::app) fn worktree_gone(&mut self, key: u64, project: u64, workspace: u64, result: error::Result<()>) {
+    pub(in crate::app) fn worktree_gone(
+        &mut self,
+        key: u64,
+        project: u64,
+        workspace: u64,
+        result: error::Result<Option<String>>,
+    ) {
         let pending = self.requests.take(key);
         self.settle_removal(project, workspace, result.is_ok());
         let Some(pending) = pending else { return };
-        self.answer(pending.client, result.map(|()| json(&Done::default())).map_err(|e| e.to_string()));
+        let answer = result.map(|warning| json(&Done { warning, ..Done::default() }));
+        self.answer(pending.client, answer.map_err(|e| e.to_string()));
     }
 }
 

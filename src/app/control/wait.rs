@@ -207,6 +207,8 @@ impl App {
     fn not_started(&self, pane: u64) -> String {
         if self.projects.pane_by(pane).is_none() {
             format!("pane {pane} closed before it was ready")
+        } else if let Some(failure) = self.setup_failure(pane) {
+            failure
         } else {
             format!(
                 "pane {pane} did not take what was typed: the agent did not start, or its program is not reading; \

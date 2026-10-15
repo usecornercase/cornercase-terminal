@@ -89,7 +89,14 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn open_run(&mut self, p: usize, w: usize, starting: Starting, area: Rect) -> Result<RunInfo, String> {
+    pub(super) fn open_run(
+        &mut self,
+        p: usize,
+        w: usize,
+        starting: Starting,
+        area: Rect,
+        setup: bool,
+    ) -> Result<RunInfo, String> {
         let (project, workspace) = (&self.projects[p], &self.projects[p].workspaces[w]);
         let id = workspace.id;
         if project.closing {
@@ -110,8 +117,13 @@ impl App {
         let mut info = RunInfo { project: self.projects[p].id, workspace: id, branch, members: Vec::new(), note };
         let path = self.projects[p].workspaces[w].path.clone();
         let mut terms = Vec::with_capacity(roles.len());
-        for _ in &roles {
-            terms.push(self.spawn(area, path.clone()).map_err(|e| e.to_string())?);
+        let script = self.setup_script(p).filter(|_| setup);
+        for i in 0..roles.len() {
+            let term = match (&script, i) {
+                (Some(script), 0) => self.spawn_setup(area, p, path.clone(), script),
+                _ => self.spawn(area, path.clone()),
+            };
+            terms.push(term.map_err(|e| e.to_string())?);
         }
         for (role, term) in roles.iter().zip(terms) {
             let pane = term.id;

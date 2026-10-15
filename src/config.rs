@@ -121,6 +121,26 @@ pub(crate) const DEFAULT_GH: &str = "gh";
 pub(crate) const DEFAULT_ISSUE_TABS: [&str; 7] = ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ProjectSettings {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) setup: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) teardown: String,
+}
+
+impl ProjectSettings {
+    fn normalised(self) -> Self {
+        let clean = |text: String| text.replace("\r\n", "\n").trim_end().to_string();
+        Self { setup: clean(self.setup), teardown: clean(self.teardown) }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.setup.is_empty() && self.teardown.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 #[expect(clippy::struct_excessive_bools, reason = "each switch is its own key in config.json")]
@@ -164,6 +184,7 @@ pub(crate) struct Config {
     pub(crate) star_prompt: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
+    pub(crate) projects: BTreeMap<String, ProjectSettings>,
 }
 
 impl Default for Config {
@@ -208,6 +229,7 @@ impl Default for Config {
             star_prompt: true,
             remote: false,
             remote_port: DEFAULT_PORT,
+            projects: BTreeMap::new(),
         }
     }
 }
@@ -227,6 +249,22 @@ impl Config {
 
     pub(crate) fn spinner(&self) -> bool {
         WorkingIcon::from_setting(&self.working_icon) == WorkingIcon::Spinner
+    }
+
+    pub(crate) fn project(&self, folder: &Path, home: Option<&Path>) -> ProjectSettings {
+        self.projects
+            .iter()
+            .find(|(key, _)| expand_home(key, home) == folder)
+            .map(|(_, s)| s.clone())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn set_project(&mut self, folder: &Path, home: Option<&Path>, settings: ProjectSettings) {
+        self.projects.retain(|key, _| expand_home(key, home) != folder);
+        let settings = settings.normalised();
+        if !settings.is_empty() {
+            self.projects.insert(crate::text::display_path(folder, home), settings);
+        }
     }
 
     pub(crate) fn fetch_every(&self) -> Option<Duration> {

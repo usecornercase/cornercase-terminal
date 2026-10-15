@@ -63,8 +63,42 @@ mod file {
             star_prompt: false,
             remote: true,
             remote_port: 47682,
+            projects: [(
+                "~/code/web-shop".into(),
+                ProjectSettings { setup: "npm ci\ncp ../.env .env".into(), teardown: "docker compose down".into() },
+            )]
+            .into(),
         };
         matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
+    }
+
+    #[test]
+    fn a_home_relative_key_names_the_absolute_folder() {
+        let home = Path::new("/home/ana");
+        let mut config = Config::default();
+        let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new() };
+        config.set_project(Path::new("/home/ana/code/shop"), Some(home), settings.clone());
+
+        assert_eq!(config.projects.keys().collect::<Vec<_>>(), ["~/code/shop"]);
+        assert_eq!(config.project(Path::new("/home/ana/code/shop"), Some(home)), settings);
+        assert_eq!(config.project(Path::new("/home/ana/code/other"), Some(home)), ProjectSettings::default());
+    }
+
+    #[test]
+    fn saving_a_project_replaces_its_key_and_empty_settings_remove_it() {
+        let home = Path::new("/home/ana");
+        let folder = Path::new("/home/ana/code/shop");
+        let mut config = Config::default();
+        config
+            .projects
+            .insert("/home/ana/code/shop".into(), ProjectSettings { setup: "old".into(), ..Default::default() });
+        config.set_project(folder, Some(home), ProjectSettings { setup: "new\r\n\n".into(), teardown: String::new() });
+
+        assert_eq!(config.projects.len(), 1);
+        assert_eq!(config.project(folder, Some(home)).setup, "new");
+
+        config.set_project(folder, Some(home), ProjectSettings::default());
+        assert!(config.projects.is_empty());
     }
 
     #[test]

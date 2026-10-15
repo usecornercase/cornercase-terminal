@@ -99,6 +99,11 @@ impl Launch {
         }
     }
 
+    pub(crate) fn wait_from(&mut self, now: Instant) {
+        self.since = now;
+        self.output = Some(now);
+    }
+
     pub(crate) fn command(term: u64, command: String, now: Instant) -> Self {
         Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false, trusted: false }, now) }
     }

@@ -573,6 +573,8 @@ pub(crate) struct Done {
     #[serde(flatten)]
     pub(crate) ids: Ids,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ended: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) line: Option<String>,
