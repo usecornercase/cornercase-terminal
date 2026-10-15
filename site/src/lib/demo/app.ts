@@ -476,6 +476,8 @@ export class App {
 
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
+    const shown = this.overlay;
+    if (shown?.kind === 'flowMessage' && !this.flowMessage(shown)) this.overlay = null;
     if (!this.flowHinted && !this.flowOpen && this.shownRun()) {
       this.flowHinted = true;
       this.emit('narrate', this.narration.flowHint);

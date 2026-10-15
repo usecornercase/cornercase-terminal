@@ -129,6 +129,24 @@ test('a box goes to its tab, and an arrow shows the last message sent along it',
   app.destroy();
 });
 
+test('a message dialog closes when its run starts over', () => {
+  const app = demo();
+  toRun(app);
+  app.toggleFlow();
+  playUntil(app, '┏━ reviewer');
+  app.advance(1500);
+  app.render();
+  const arrow = app.textAt('▼');
+  assert.ok(arrow);
+  app.pointerDown(arrow.x, arrow.y, 0);
+  app.pointerUp();
+  assert.equal(app.overlay?.kind, 'flowMessage');
+  app.runs[0].progress = new Progress();
+  app.render();
+  assert.equal(app.overlay, null);
+  app.destroy();
+});
+
 test('each branch of an arrow opens the message its own role got', () => {
   const app = demo();
   toRun(app);
