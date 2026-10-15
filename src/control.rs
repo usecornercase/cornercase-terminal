@@ -64,6 +64,7 @@ pub(crate) enum Command {
     Stats(Stats),
     Away(Away),
     Mark(Mark),
+    NewWorkspaceAt(NewWorkspace),
 }
 
 impl Command {
@@ -91,6 +92,7 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
+            Self::NewWorkspaceAt(_) => 22,
         }]
     }
 
@@ -101,9 +103,10 @@ impl Command {
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
-            Self::NewWorkspace(new) => {
+            Self::NewWorkspace(new) | Self::NewWorkspaceAt(new) => {
                 fields.add("name", &new.name).maybe("project", new.project).add("worktree", new.worktree);
-                fields.add("focus", new.focus);
+                fields.maybe("remote", new.remote.as_ref()).maybe("from", new.from.as_ref());
+                fields.maybe("at", new.at.as_ref()).add("focus", new.focus);
             }
             Self::NewTab(new) => {
                 fields.maybe("workspace", new.workspace).maybe("name", new.name.as_ref());
@@ -180,7 +183,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 22] = [
+    pub(crate) const NAMES: [&str; 23] = [
         "status",
         "open",
         "new-workspace",
@@ -203,6 +206,7 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "new-workspace-at",
     ];
 }
 
@@ -254,6 +258,9 @@ pub(crate) struct NewWorkspace {
     pub(crate) name: String,
     pub(crate) project: Option<u64>,
     pub(crate) worktree: bool,
+    pub(crate) remote: Option<String>,
+    pub(crate) from: Option<String>,
+    pub(crate) at: Option<String>,
     pub(crate) focus: bool,
 }
 
@@ -543,6 +550,10 @@ pub(crate) struct Done {
     pub(crate) written: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) turn_over: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) branch_made: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) branch_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

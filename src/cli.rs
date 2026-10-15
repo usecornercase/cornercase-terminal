@@ -6,8 +6,8 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, Target, TodoAction, WaitArgs, WhenArgs,
-    Which,
+    Command, Control, EventsArgs, LogsArgs, NewWorkspaceArgs, Renamed, StartArgs, StatsArgs, Target, TodoAction,
+    WaitArgs, WhenArgs, Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
@@ -118,12 +118,7 @@ fn run_control(command: Control) -> Result<bool> {
             let value = ask("open", control::Command::Open(control::Open { path, focus: open.create.focus }))?;
             say(value, open.create.print.json, |done| id(done.ids.project))
         }
-        Control::NewWorkspace(new) => {
-            let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
-            let request = control::NewWorkspace { name, project, worktree, focus };
-            let value = ask("new-workspace", control::Command::NewWorkspace(request))?;
-            say(value, new.create.print.json, |done| id(done.ids.workspace))
-        }
+        Control::NewWorkspace(new) => run_new_workspace(new),
         Control::NewTab(new) => {
             let request = control::NewTab {
                 workspace: workspace("new-tab", new.workspace, new.worktree.as_deref())?,
@@ -246,6 +241,19 @@ fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Re
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
+fn run_new_workspace(new: NewWorkspaceArgs) -> Result<()> {
+    let (name, project, worktree, focus) = (new.name, new.project, new.worktree, new.create.focus);
+    let pinned = new.from.is_some();
+    let (remote, from, at) = (new.remote, new.from, new.at);
+    let request = control::NewWorkspace { name, project, worktree, remote, from, at, focus };
+    let value = if pinned {
+        ask("new-workspace", control::Command::NewWorkspaceAt(request))?
+    } else {
+        ask("new-workspace", control::Command::NewWorkspace(request))?
+    };
+    say(value, new.create.print.json, |done| id(done.ids.workspace))
+}
+
 fn run_start(start: StartArgs) -> Result<()> {
     let prompt = match (start.prompt, start.prompt_file) {
         (Some(prompt), _) => Some(prompt),
@@ -342,10 +350,25 @@ fn say(value: Value, json: bool, lines: impl Fn(&Done) -> Vec<String>) -> Result
     if json {
         return print_json(&value);
     }
-    for line in lines(&answer(value)?) {
+    let done = answer(value)?;
+    if let Some(made) = made(&done) {
+        eprintln!("{made}");
+    }
+    for line in lines(&done) {
         println!("{line}");
     }
     Ok(())
+}
+
+fn made(done: &Done) -> Option<String> {
+    let from = done.branch_from.as_deref().unwrap_or_default();
+    Some(match done.branch_made.as_deref()? {
+        "local" => "checked out the existing branch".to_string(),
+        "remote" => format!("made the branch from {from}, which it tracks"),
+        "new" => format!("made a new branch from {from}"),
+        "fetched" => format!("fetched {from} into the branch"),
+        other => format!("branch: {other}"),
+    })
 }
 
 fn id(id: Option<u64>) -> Vec<String> {

@@ -29,28 +29,169 @@ pub(crate) fn checkout_path(worktrees_dir: &Path, repo: &Path, branch: &str) -> 
     worktrees_dir.join(name).join(slug(branch))
 }
 
-pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<()> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Pin {
+    pub(crate) remote: String,
+    pub(crate) reference: String,
+    pub(crate) commit: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Made {
+    Local,
+    Tracking(String),
+    New,
+    Fetched(String),
+}
+
+impl Made {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Tracking(_) => "remote",
+            Self::New => "new",
+            Self::Fetched(_) => "fetched",
+        }
+    }
+
+    pub(crate) fn from(&self) -> &str {
+        match self {
+            Self::Local => "",
+            Self::Tracking(from) | Self::Fetched(from) => from,
+            Self::New => "HEAD",
+        }
+    }
+}
+
+pub(crate) fn create(repo: &Path, branch: &str, path: &Path) -> Result<Made> {
+    refuse_option("branch", branch)?;
+    prepare(path)?;
+    let made = if ref_exists(repo, &format!("refs/heads/{branch}"))? {
+        Made::Local
+    } else if let Some(remote) = remote_with(repo, branch)? {
+        Made::Tracking(format!("{remote}/{branch}"))
+    } else {
+        Made::New
+    };
+    let path = path.as_os_str();
+    let worktree_add = [OsStr::new("worktree"), "add".as_ref()];
+    match &made {
+        Made::Tracking(from) => {
+            let args = ["--track".as_ref(), "-b".as_ref(), branch.as_ref(), path, from.as_ref()];
+            check(git(repo, worktree_add.into_iter().chain(args))?)?;
+        }
+        Made::New => {
+            let args = ["-b".as_ref(), branch.as_ref(), path, "HEAD".as_ref()];
+            check(git(repo, worktree_add.into_iter().chain(args))?)?;
+        }
+        Made::Local | Made::Fetched(_) => {
+            check(git(repo, worktree_add.into_iter().chain([path, branch.as_ref()]))?)?;
+        }
+    }
+    copy_included(repo, Path::new(path))?;
+    Ok(made)
+}
+
+pub(crate) fn create_pinned(repo: &Path, branch: &str, path: &Path, pin: &Pin) -> Result<Made> {
+    refuse_option("branch", branch)?;
+    refuse_option("remote", &pin.remote)?;
+    check_reference(&pin.reference)?;
+    let commit = commit_prefix(&pin.commit)?;
+    prepare(path)?;
+    let local = format!("refs/heads/{branch}");
+    let made = if ref_exists(repo, &local)? {
+        let at = commit_of(repo, &local)?;
+        if !at.starts_with(&commit) {
+            return Err(Error::Git(format!("branch {branch} already exists at {at}, not {commit}")));
+        }
+        Made::Local
+    } else {
+        let refspec = format!("{}:{local}", pin.reference);
+        check(git(repo, ["fetch", "--no-tags", "--quiet", &pin.remote, &refspec])?)?;
+        let at = commit_of(repo, &local)?;
+        if !at.starts_with(&commit) {
+            let _ = git(repo, ["branch", "-D", branch]);
+            return Err(Error::Git(format!(
+                "{} on {} is at {at}, not {commit}; nothing was checked out",
+                pin.reference, pin.remote
+            )));
+        }
+        Made::Fetched(format!("{} {}", pin.remote, pin.reference))
+    };
+    check(git(repo, [OsStr::new("worktree"), "add".as_ref(), path.as_os_str(), branch.as_ref()])?)?;
+    copy_included(repo, path)?;
+    Ok(made)
+}
+
+fn prepare(path: &Path) -> Result<()> {
     if path.exists() {
         return Err(Error::PathExists(path.to_path_buf()));
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let path = path.as_os_str();
-    if branch_exists(repo, branch)? {
-        check(git(repo, [OsStr::new("worktree"), "add".as_ref(), path, branch.as_ref()])?)?;
-    } else {
-        check(git(
-            repo,
-            [OsStr::new("worktree"), "add".as_ref(), "-b".as_ref(), branch.as_ref(), path, "HEAD".as_ref()],
-        )?)?;
-    }
+    Ok(())
+}
+
+fn copy_included(repo: &Path, path: &Path) -> Result<()> {
     for file in included_files(repo)? {
-        if let Err(e) = copy(&repo.join(&file), &Path::new(path).join(&file)) {
+        if let Err(e) = copy(&repo.join(&file), &path.join(&file)) {
             log::warning!("worktree", "failed to copy a file into the worktree", file = file.display(), error = e);
         }
     }
     Ok(())
+}
+
+fn refuse_option(what: &str, value: &str) -> Result<()> {
+    if value.starts_with('-') {
+        return Err(Error::Git(format!("the {what} `{value}` starts with `-`, which git would read as an option")));
+    }
+    Ok(())
+}
+
+fn check_reference(reference: &str) -> Result<()> {
+    refuse_option("ref", reference)?;
+    let bad = |c: char| c.is_whitespace() || c.is_control() || matches!(c, ':' | '*' | '^' | '~' | '?' | '[' | '\\');
+    if reference.is_empty() || reference.starts_with('+') || reference.contains(bad) {
+        return Err(Error::Git(format!("`{reference}` is not a ref to fetch")));
+    }
+    Ok(())
+}
+
+fn commit_prefix(commit: &str) -> Result<String> {
+    let commit = commit.trim().to_ascii_lowercase();
+    if (7..=64).contains(&commit.len()) && commit.chars().all(|c| c.is_ascii_hexdigit()) {
+        Ok(commit)
+    } else {
+        Err(Error::Git(format!("`{commit}` is not a commit: give at least 7 hexadecimal digits of its hash")))
+    }
+}
+
+fn commit_of(repo: &Path, reference: &str) -> Result<String> {
+    let out = check(git(repo, ["rev-parse", "--verify", "--quiet", &format!("{reference}^{{commit}}")])?)?;
+    Ok(String::from_utf8_lossy(&out).trim().to_string())
+}
+
+fn remote_with(repo: &Path, branch: &str) -> Result<Option<String>> {
+    let out = check(git(repo, ["remote"])?)?;
+    let mut remotes = Vec::new();
+    for remote in String::from_utf8_lossy(&out).lines().map(str::trim).filter(|r| !r.is_empty()) {
+        if ref_exists(repo, &format!("refs/remotes/{remote}/{branch}"))? {
+            remotes.push(remote.to_string());
+        }
+    }
+    if remotes.len() < 2 {
+        return Ok(remotes.pop());
+    }
+    let default = git(repo, ["config", "--get", "checkout.defaultRemote"])?;
+    let default = String::from_utf8_lossy(&default.stdout).trim().to_string();
+    if remotes.contains(&default) {
+        return Ok(Some(default));
+    }
+    Err(Error::Git(format!(
+        "branch {branch} is on several remotes ({}); set checkout.defaultRemote to the one to track",
+        remotes.join(", ")
+    )))
 }
 
 pub(crate) fn remove(repo: &Path, path: &Path, force: bool, unlock: bool) -> Result<()> {
@@ -138,8 +279,8 @@ pub(crate) fn check(out: Output) -> Result<Vec<u8>> {
     Err(Error::Git(message))
 }
 
-fn branch_exists(repo: &Path, branch: &str) -> Result<bool> {
-    let out = git(repo, ["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])?;
+fn ref_exists(repo: &Path, reference: &str) -> Result<bool> {
+    let out = git(repo, ["show-ref", "--verify", "--quiet", reference])?;
     match out.status.code() {
         Some(0) => Ok(true),
         Some(1) => Ok(false),
