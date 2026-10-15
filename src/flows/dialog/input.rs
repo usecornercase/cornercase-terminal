@@ -72,7 +72,7 @@ impl Dialog {
         match key.code {
             KeyCode::Esc => return Action::Close,
             KeyCode::Enter => self.open(self.cursor),
-            KeyCode::Up | KeyCode::BackTab => self.cursor = self.cursor.saturating_sub(1),
+            KeyCode::Up | KeyCode::BackTab => self.select(self.cursor.saturating_sub(1)),
             KeyCode::Down | KeyCode::Tab => self.select(self.cursor + 1),
             KeyCode::Delete | KeyCode::Backspace => self.ask_delete(),
             _ => {}
@@ -153,7 +153,7 @@ impl Dialog {
             return;
         }
         let Some(edit) = &mut self.edit else {
-            self.cursor = self.cursor.saturating_add_signed(delta).min(self.entries().saturating_sub(1));
+            self.select(self.cursor.saturating_add_signed(delta).min(self.entries().saturating_sub(1)));
             return;
         };
         if let Some(text) = &mut edit.text {

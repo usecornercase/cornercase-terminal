@@ -10,7 +10,7 @@ use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
 use crate::agents::Known;
-use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Room, RowText};
+use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
 use crate::flows::store::{self, Origin};
 use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
@@ -94,11 +94,13 @@ impl App {
         }
         if let Some(delta) = wheel(ev.kind) {
             let body = preview_body(dialog, area).filter(|body| body.contains(pos));
-            match (body, dialog.edit.as_deref_mut()) {
-                (Some(body), Some(edit)) => {
-                    let most = ui::flow::max_scroll(&plan(&edit.flow), body);
-                    edit.scroll_preview(delta, most);
-                }
+            let most = body.and_then(|body| match dialog.preview() {
+                Some(Preview::Flow(flow)) => Some(ui::flow::max_scroll(&plan(flow), body)),
+                _ => None,
+            });
+            match (body, most) {
+                (Some(_), Some(most)) => dialog.scroll_preview(delta, most),
+                (Some(_), None) => {}
                 _ => dialog.wheel(delta, room),
             }
             return;
@@ -257,8 +259,8 @@ pub(super) fn plan(flow: &Flow) -> ui::flow::Diagram {
 }
 
 fn preview_body(dialog: &Dialog, area: Rect) -> Option<Rect> {
-    let edit = dialog.edit.as_deref().filter(|edit| edit.text.is_none())?;
-    ui::flows_preview(area, dialog.warnings().len(), true, edit.diagram).map(ui::preview_body)
+    dialog.preview()?;
+    ui::flows_preview(area, dialog.warnings().len(), true, dialog.diagram()).map(ui::preview_body)
 }
 
 fn follow_preview(dialog: &mut Dialog, area: Rect) {
@@ -271,7 +273,7 @@ fn follow_preview(dialog: &mut Dialog, area: Rect) {
 
 fn room(dialog: &Dialog, area: Rect) -> Room {
     let warnings = dialog.warnings().len();
-    let preview = dialog.importing.is_none() && dialog.edit.as_ref().is_some_and(|edit| edit.text.is_none());
+    let preview = dialog.preview().is_some();
     let text = ui::flows_text(area, warnings, preview);
     Room {
         pick: ui::flows_pick_rows(area, warnings, preview),
@@ -352,9 +354,12 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         hint: dialog.hint(),
         buttons: dialog.buttons(room),
         submit: dialog.submit(),
-        preview: edit.filter(|e| e.text.is_none() && dialog.importing.is_none()).map(|e| e.flow.clone()),
-        preview_scroll: edit.map_or(0, |e| e.preview),
+        preview: dialog.preview().map(|preview| match preview {
+            Preview::Flow(flow) => ui::FlowPreview::Plan(Box::new(flow.clone())),
+            Preview::Note(note) => ui::FlowPreview::Note(note),
+        }),
+        preview_scroll: dialog.preview_scroll(),
         focus: edit.and_then(Editing::preview_stage),
-        diagram: edit.is_some_and(|e| e.diagram),
+        diagram: dialog.diagram(),
     }))
 }

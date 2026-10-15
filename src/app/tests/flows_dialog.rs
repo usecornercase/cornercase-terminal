@@ -5,6 +5,7 @@ use crate::flows::store;
 use crate::settings::Row as SettingsRow;
 
 const WIDE: Rect = Rect { x: 0, y: 0, width: 150, height: 44 };
+const SHORT: Rect = Rect { x: 0, y: 0, width: 150, height: 28 };
 const NARROW: Rect = Rect { x: 0, y: 0, width: 90, height: 30 };
 
 struct Setup {
@@ -257,8 +258,6 @@ mod built_in_flows {
 mod preview {
     use super::*;
 
-    const SHORT: Rect = Rect { x: 0, y: 0, width: 150, height: 28 };
-
     fn preview_scroll(app: &App) -> u16 {
         dialog(app).edit.as_ref().map(|edit| edit.preview).expect("the edit page is open")
     }
@@ -302,6 +301,100 @@ mod preview {
         let screen = shown(&mut s.app, SHORT);
         assert!(screen.contains("┏━ tester") && screen.contains(" ↑ more "), "{screen}");
         assert!(!screen.contains("┏━ coder"), "{screen}");
+    }
+}
+
+mod list_preview {
+    use super::*;
+
+    fn body(app: &App, area: Rect) -> Rect {
+        let warnings = view(app, area).warnings.len();
+        ui::flows_preview(area, warnings, true, dialog(app).diagram())
+            .map(ui::preview_body)
+            .expect("the preview is shown")
+    }
+
+    fn scroll(app: &mut App, kind: MouseEventKind, at: Position, area: Rect) {
+        mouse_in(app, kind, at, area);
+    }
+
+    #[test]
+    fn the_list_draws_the_selected_flows_diagram_beside_it() {
+        let mut s = open(false);
+        let screen = shown(&mut s.app, WIDE);
+        assert!(screen.contains("Diagram") && screen.contains("open a pull request"), "{screen}");
+        assert!(dialog(&s.app).edit.is_none());
+    }
+
+    #[test]
+    fn a_click_on_another_flow_redraws_the_diagram_without_opening_it() {
+        let mut s = open(false);
+        let before = shown(&mut s.app, WIDE);
+        click_list_row(&mut s.app, WIDE, 1);
+        assert!(dialog(&s.app).edit.is_none());
+        assert_ne!(shown(&mut s.app, WIDE), before);
+        assert_eq!(view(&s.app, WIDE).cursor, 1);
+    }
+
+    #[test]
+    fn built_in_edited_and_project_flows_are_all_previewed() {
+        let mut s = open(true);
+        duplicate_full_issue(&mut s, WIDE);
+        button(&mut s.app, WIDE, dialog::DONE);
+        for i in 0..dialog(&s.app).flows.len() {
+            click_list_row(&mut s.app, WIDE, i);
+            assert!(matches!(view(&s.app, WIDE).preview, Some(ui::FlowPreview::Plan(_))));
+        }
+    }
+
+    #[test]
+    fn the_wheel_over_the_diagram_scrolls_only_it() {
+        let mut s = open(false);
+        let at = body(&s.app, SHORT).as_position();
+        scroll(&mut s.app, MouseEventKind::ScrollDown, at, SHORT);
+        assert!(dialog(&s.app).preview_scroll() > 0);
+        assert_eq!(dialog(&s.app).cursor, 0);
+        let list = row_rect(&s.app, SHORT, 0).as_position();
+        scroll(&mut s.app, MouseEventKind::ScrollDown, list, SHORT);
+        assert!(dialog(&s.app).cursor > 0);
+        assert_eq!(dialog(&s.app).preview_scroll(), 0);
+    }
+
+    #[test]
+    fn a_press_on_the_diagram_selects_nothing() {
+        let mut s = open(false);
+        let at = body(&s.app, WIDE).as_position();
+        click_in(&mut s.app, at, WIDE);
+        assert_eq!((dialog(&s.app).cursor, dialog(&s.app).edit.is_none()), (0, true));
+    }
+
+    #[test]
+    fn an_unreadable_file_shows_why_in_place_of_a_diagram() {
+        let mut s = setup(false);
+        let dir = user_dir(&s);
+        std::fs::create_dir_all(&dir).expect("flows folder");
+        std::fs::write(dir.join("bad.toml"), "not a flow").expect("write");
+        s.app.open_flows(None, None);
+        let last = dialog(&s.app).entries() - 1;
+        assert_eq!(dialog(&s.app).broken.len(), 1);
+        click_list_row(&mut s.app, WIDE, last);
+        assert_eq!(dialog(&s.app).cursor, last);
+        let screen = shown(&mut s.app, WIDE);
+        assert!(screen.contains("has no diagram"), "{screen}");
+        let at = body(&s.app, SHORT).as_position();
+        scroll(&mut s.app, MouseEventKind::ScrollDown, at, SHORT);
+        assert_eq!(dialog(&s.app).cursor, last);
+    }
+
+    #[test]
+    fn a_narrow_window_swaps_the_list_and_the_diagram() {
+        let mut s = open(false);
+        assert!(!shown(&mut s.app, NARROW).contains("Diagram"));
+        button(&mut s.app, NARROW, dialog::DIAGRAM);
+        let screen = shown(&mut s.app, NARROW);
+        assert!(screen.contains("Diagram") && screen.contains("open a pull request"), "{screen}");
+        button(&mut s.app, NARROW, dialog::LIST);
+        assert!(!shown(&mut s.app, NARROW).contains("Diagram"));
     }
 }
 
@@ -412,6 +505,27 @@ mod pages {
         duplicate_full_issue(&mut s, area);
         tab(&mut s.app, area, 3);
         insta::assert_snapshot!(format!("a_role_tab_{size}"), shown(&mut s.app, area));
+    }
+
+    #[test]
+    fn the_list_with_an_unreadable_file() {
+        let mut s = setup(false);
+        let dir = user_dir(&s);
+        std::fs::create_dir_all(&dir).expect("flows folder");
+        std::fs::write(dir.join("bad.toml"), "not a flow").expect("write");
+        s.app.open_flows(None, None);
+        let last = dialog(&s.app).entries() - 1;
+        click_list_row(&mut s.app, WIDE, last);
+        let screen = shown(&mut s.app, WIDE);
+        let diagram: Vec<String> = screen.lines().skip(2).take(10).map(|l| l.chars().skip(96).collect()).collect();
+        insta::assert_snapshot!(diagram.join("\n"));
+    }
+
+    #[test]
+    fn the_list_diagram_behind_its_button() {
+        let mut s = open(false);
+        button(&mut s.app, NARROW, dialog::DIAGRAM);
+        insta::assert_snapshot!(shown(&mut s.app, NARROW));
     }
 
     #[test]

@@ -38,7 +38,7 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
 pub(crate) use dialog::flows::{
-    Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
+    FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
 };
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};

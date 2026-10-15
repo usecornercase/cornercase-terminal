@@ -1,0 +1,14 @@
+---
+source: src/app/tests/flows_dialog.rs
+expression: "diagram.join(\"\\n\")"
+---
+─────────────────────────────────────────────────╮     "
+                                                 │     "
+                                                 │     "
+  ╭─ Diagram ──────────────────────────────────╮ │     "
+  │ bad.toml cannot be read as a flow, so it   │ │     "
+  │ has no diagram: line 1: key with no value, │ │     "
+  │ expected `=`                               │ │     "
+  │                                            │ │     "
+  │                                            │ │     "
+  │                                            │ │     "

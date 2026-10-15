@@ -15,6 +15,7 @@ pub(crate) const SAVE: &str = "save";
 pub(crate) const CANCEL: &str = "cancel";
 pub(crate) const DIAGRAM: &str = "diagram";
 pub(crate) const FORM: &str = "form";
+pub(crate) const LIST: &str = "list";
 pub(crate) const DELETE_ROLE: &str = "delete role";
 pub(crate) const DISCARD: &str = "discard";
 pub(crate) const ADD_ROLE: &str = "+ add role";
@@ -125,6 +126,12 @@ impl Agents {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Preview<'a> {
+    Flow(&'a Flow),
+    Note(String),
+}
+
 #[derive(Debug)]
 pub(crate) struct Dialog {
     pub(crate) flows: Vec<Saved>,
@@ -138,6 +145,8 @@ pub(crate) struct Dialog {
     pub(crate) project: Option<u64>,
     pub(crate) builtins: Vec<String>,
     pub(crate) importing: Option<Importing>,
+    pub(crate) preview: u16,
+    pub(crate) diagram: bool,
 }
 
 impl Dialog {
@@ -154,14 +163,55 @@ impl Dialog {
             last: None,
             project: None,
             importing: None,
+            preview: 0,
+            diagram: false,
         }
     }
 
     pub(crate) fn set_listing(&mut self, listing: Listing) {
+        let before = self.selected().map(|saved| (saved.origin.clone(), saved.flow.name.clone()));
         self.flows = listing.flows;
         self.broken = listing.broken;
         self.builtins = listing.builtins;
         self.cursor = self.cursor.min(self.entries().saturating_sub(1));
+        if before != self.selected().map(|saved| (saved.origin.clone(), saved.flow.name.clone())) {
+            self.preview = 0;
+        }
+    }
+
+    pub(crate) fn preview(&self) -> Option<Preview<'_>> {
+        if self.importing.is_some() {
+            return None;
+        }
+        if let Some(edit) = &self.edit {
+            return edit.text.is_none().then_some(Preview::Flow(&edit.flow));
+        }
+        if let Some(saved) = self.selected() {
+            return Some(Preview::Flow(&saved.flow));
+        }
+        match self.broken.get(self.cursor.saturating_sub(self.flows.len())) {
+            Some((path, reason)) if self.cursor >= self.flows.len() => {
+                let reason = reason.split_once("`: ").map_or(reason.as_str(), |(_, rest)| rest);
+                let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                Some(Preview::Note(format!("{file} cannot be read as a flow, so it has no diagram: {reason}")))
+            }
+            _ => Some(Preview::Note("no flows yet: new makes one, import brings one in".into())),
+        }
+    }
+
+    pub(crate) fn preview_scroll(&self) -> u16 {
+        self.edit.as_ref().map_or(self.preview, |edit| edit.preview)
+    }
+
+    pub(crate) fn scroll_preview(&mut self, delta: isize, most: u16) {
+        match &mut self.edit {
+            Some(edit) => edit.scroll_preview(delta, most),
+            None => self.preview = scrolled(self.preview, delta, most),
+        }
+    }
+
+    pub(crate) fn diagram(&self) -> bool {
+        self.edit.as_ref().map_or(self.diagram, |edit| edit.diagram)
     }
 
     pub(crate) fn entries(&self) -> usize {
@@ -184,6 +234,9 @@ impl Dialog {
 
     pub(crate) fn select(&mut self, i: usize) {
         if i < self.entries() {
+            if i != self.cursor {
+                self.preview = 0;
+            }
             self.cursor = i;
         }
     }
@@ -373,6 +426,9 @@ impl Dialog {
             None if self.cursor < self.entries() => buttons.push(DELETE),
             None => {}
         }
+        if !room.wide {
+            buttons.push(if self.diagram { LIST } else { DIAGRAM });
+        }
         buttons.extend([IMPORT, NEW, DONE]);
         for dropped in [IMPORT, EXPORT] {
             if room.width > 0 && row_width(&buttons) > room.width {
@@ -429,6 +485,7 @@ impl Dialog {
             EXPORT => return self.export(),
             IMPORT => self.importing = Some(Importing::new("")),
             EDIT => self.open(self.cursor),
+            DIAGRAM | LIST => self.diagram = !self.diagram,
             DUPLICATE => return self.duplicate(),
             DELETE | RESTORE => self.ask_delete(),
             NEW => self.open_new(),

@@ -158,6 +158,115 @@ mod the_list {
     }
 }
 
+mod list_preview {
+    use super::*;
+
+    fn flow_named(d: &Dialog) -> Option<String> {
+        match d.preview() {
+            Some(Preview::Flow(flow)) => Some(flow.name.clone()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn the_selected_flow_is_previewed_as_soon_as_the_list_opens() {
+        assert_eq!(flow_named(&dialog()).as_deref(), Some("Full issue"));
+    }
+
+    #[test]
+    fn a_click_selects_and_previews_without_editing_and_a_second_click_edits() {
+        let mut d = dialog();
+        d.hit(Hit::Row(mine()), ROOM);
+        assert!(d.edit.is_none());
+        assert_eq!(flow_named(&d).as_deref(), Some("Mine"));
+        d.hit(Hit::Row(mine()), ROOM);
+        assert!(d.edit.is_some());
+    }
+
+    #[test]
+    fn changing_the_selection_scrolls_the_preview_back_to_the_top() {
+        let mut d = dialog();
+        d.scroll_preview(5, 20);
+        assert_eq!(d.preview_scroll(), 5);
+        d.hit(Hit::Row(1), ROOM);
+        assert_eq!(d.preview_scroll(), 0);
+        d.scroll_preview(5, 20);
+        key(&mut d, KeyCode::Down);
+        assert_eq!(d.preview_scroll(), 0);
+        d.scroll_preview(5, 20);
+        key(&mut d, KeyCode::Up);
+        assert_eq!(d.preview_scroll(), 0);
+        d.scroll_preview(5, 20);
+        d.wheel(1, ROOM);
+        assert_eq!(d.preview_scroll(), 0);
+        d.scroll_preview(5, 20);
+        d.hit(Hit::Row(d.cursor), ROOM);
+        assert!(d.edit.is_some());
+    }
+
+    #[test]
+    fn scrolling_stops_at_its_edges() {
+        let mut d = dialog();
+        d.scroll_preview(100, 7);
+        assert_eq!(d.preview_scroll(), 7);
+        d.scroll_preview(-100, 7);
+        assert_eq!(d.preview_scroll(), 0);
+    }
+
+    #[test]
+    fn the_list_scroll_is_not_the_editors() {
+        let mut d = dialog();
+        d.scroll_preview(3, 20);
+        d.open(d.cursor);
+        assert_eq!(d.preview_scroll(), 0);
+        d.scroll_preview(2, 20);
+        d.back();
+        assert_eq!(d.preview_scroll(), 3);
+    }
+
+    #[test]
+    fn an_unreadable_file_says_why_it_has_no_diagram() {
+        let mut d = dialog();
+        d.select(5);
+        assert_eq!(
+            d.preview(),
+            Some(Preview::Note("bad.toml cannot be read as a flow, so it has no diagram: expected `=`".into()))
+        );
+    }
+
+    #[test]
+    fn an_empty_list_says_how_to_get_a_flow() {
+        let mut d = dialog();
+        d.set_listing(Listing::default());
+        assert_eq!(d.preview(), Some(Preview::Note("no flows yet: new makes one, import brings one in".into())));
+    }
+
+    #[test]
+    fn importing_and_a_text_field_have_no_preview() {
+        let mut d = dialog();
+        d.press(IMPORT);
+        assert_eq!(d.preview(), None);
+        let mut d = editing();
+        assert!(d.preview().is_some());
+        d.hit(Hit::Tab(2), ROOM);
+        click_row(&mut d, Row::Prompt);
+        assert_eq!(d.preview(), None);
+    }
+
+    #[test]
+    fn a_narrow_list_swaps_between_the_flows_and_the_diagram() {
+        let narrow = Room { wide: false, width: 0, ..ROOM };
+        let mut d = dialog();
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, EXPORT, DIAGRAM, IMPORT, NEW, DONE]);
+        d.press(DIAGRAM);
+        assert!(d.diagram());
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, EXPORT, LIST, IMPORT, NEW, DONE]);
+        d.press(LIST);
+        assert!(!d.diagram());
+        assert_eq!(d.buttons(Room { width: 0, ..ROOM }), [EDIT, DUPLICATE, EXPORT, IMPORT, NEW, DONE]);
+    }
+}
+
 mod duplicating {
     use super::*;
 
@@ -838,7 +947,7 @@ mod narrow {
     #[test]
     fn a_narrow_dialog_shows_the_diagram_behind_a_button() {
         let mut d = editing();
-        let narrow = Room { wide: false, ..ROOM };
+        let narrow = Room { wide: false, width: 0, ..ROOM };
         assert_eq!(d.buttons(narrow), [DIAGRAM, SAVE, DONE]);
         d.press(DIAGRAM);
         assert!(edit(&d).diagram);

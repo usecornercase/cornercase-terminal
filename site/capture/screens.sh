@@ -796,10 +796,7 @@ screen_flows_list() {
   cc_click 'save   done'
   cc_wait 'full-issue.toml'
   cc_click 'save   done' 7
-  cc_wait 'restore default'
-  CC_ROWS=24
-  tmux -L "$CC_TMUX" resize-window -x 140 -y 24
-  cc_wait 'restore default'
+  cc_wait 'open a pull request'
   cc_hover '╭─ Flows'
   cc_shot flows-list
 }

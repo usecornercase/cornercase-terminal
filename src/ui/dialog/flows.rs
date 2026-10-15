@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
@@ -93,6 +93,11 @@ pub(crate) fn flows_buttons(area: Rect, warnings: usize, labels: &[&str]) -> Vec
     issue_buttons_in(flows_rows(area, warnings)[5], labels)
 }
 
+pub(crate) enum FlowPreview {
+    Plan(Box<Flow>),
+    Note(String),
+}
+
 pub(crate) struct Flows {
     pub(crate) title: String,
     pub(crate) heading: String,
@@ -109,7 +114,7 @@ pub(crate) struct Flows {
     pub(crate) hint: String,
     pub(crate) buttons: Vec<&'static str>,
     pub(crate) submit: &'static str,
-    pub(crate) preview: Option<Flow>,
+    pub(crate) preview: Option<FlowPreview>,
     pub(crate) preview_scroll: u16,
     pub(crate) focus: Option<usize>,
     pub(crate) diagram: bool,
@@ -182,7 +187,16 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
     }
     if let Some(preview) = flows.preview_area(area) {
-        draw_preview(f, view, preview, flows.preview.as_ref(), flows.preview_scroll, flows.focus);
+        match &flows.preview {
+            Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, note),
+            plan => {
+                let flow = match plan {
+                    Some(FlowPreview::Plan(flow)) => Some(&**flow),
+                    _ => None,
+                };
+                draw_preview(f, view, preview, flow, flows.preview_scroll, flows.focus);
+            }
+        }
     }
     if let Some(editor) = &flows.text {
         cursor = draw_text(f, view, body, editor);
@@ -256,6 +270,13 @@ pub(in crate::ui) fn draw_preview(
         let diagram = Diagram::plan(flow, view.muted, view.light).focused(focus);
         draw_scrolled(f.buffer_mut(), preview_body(r), &diagram, scroll, None);
     }
+}
+
+fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, note: &str) {
+    f.render_widget(Clear, r);
+    f.render_widget(overlay_block(view.muted, "Diagram"), r);
+    let text = Paragraph::new(note).style(Style::default().fg(view.muted)).wrap(Wrap { trim: true });
+    f.render_widget(text, preview_body(r));
 }
 
 pub(in crate::ui) fn draw_text(f: &mut Frame, view: &View, body: Rect, editor: &Editor) -> Option<Position> {
