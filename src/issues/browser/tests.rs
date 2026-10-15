@@ -672,7 +672,7 @@ pub(crate) mod buttons {
 
     #[test]
     fn tabs_round_trip_through_their_id() {
-        let tabs = [Tab::All, Tab::One(Source::Linear)];
+        let tabs = [Tab::All, Tab::One(Source::Linear), Tab::Queue];
         assert_eq!(tabs.map(|t| Tab::from_id(t.id())), tabs.map(Some));
     }
 }

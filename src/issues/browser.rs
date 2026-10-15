@@ -52,7 +52,7 @@ impl Tab {
     }
 
     pub(crate) fn from_id(id: &str) -> Option<Self> {
-        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).find(|t| t.id() == id)
+        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).chain([Self::Queue]).find(|t| t.id() == id)
     }
 }
 

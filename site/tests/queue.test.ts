@@ -403,3 +403,25 @@ test('remove and clear started on the Queue tab come back with undo', () => {
   assert.deepEqual(app.queued, before);
   app.destroy();
 });
+
+test('an entry brought back by undo after its time still starts', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  const form = app.overlay;
+  if (form?.kind !== 'queue') throw new Error('form');
+  form.prompt = 'Fix the login';
+  chooseCombo(form.agent, form.agent.options.indexOf('claude'));
+  chooseCombo(form.when, form.when.options.indexOf('in'));
+  form.amount = '1';
+  chooseCombo(form.unit, form.unit.options.indexOf('minutes'));
+  app.submitQueue();
+  const entry = app.queued[0];
+  app.advance(58000);
+  app.removeQueued((item) => item.id === entry.id, 'removed queue entry {n}');
+  app.advance(3000);
+  assert.equal(entry.state, 'pending');
+  app.toast?.undo?.();
+  app.advance(1);
+  assert.equal(app.queued[0].state, 'started');
+  app.destroy();
+});

@@ -350,6 +350,7 @@ export class App {
   ]);
   files = new FilesPanel();
   queued: QueueEntry[] = [];
+  private queueTimers = new Map<QueueEntry, () => void>();
   private queueBack: IssuesOverlay | null = null;
   private nextQueueId = 1;
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
@@ -1366,11 +1367,28 @@ export class App {
     const removed = this.queued.filter(match);
     if (!removed.length) return;
     this.queued = this.queued.filter((entry) => !match(entry));
+    removed.forEach((entry) => this.disarmQueued(entry));
     this.undoToast(text.replace('{n}', String(removed.length)), () => {
       this.queued = [...this.queued, ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
+      removed.filter((entry) => entry.state === 'pending').forEach((entry) => this.armQueued(entry));
       this.toast = null;
       this.dirty();
     });
+  }
+
+  private armQueued(entry: QueueEntry): void {
+    this.disarmQueued(entry);
+    this.queueTimers.set(entry, this.after(Math.max(0, entry.at - this.now()), () => {
+      this.queueTimers.delete(entry);
+      if (!this.queued.includes(entry) || entry.state !== 'pending') return;
+      if (this.now() - entry.at > 600000) { entry.state = 'missed'; this.dirty(); }
+      else this.runQueue(entry);
+    }));
+  }
+
+  private disarmQueued(entry: QueueEntry): void {
+    this.queueTimers.get(entry)?.();
+    this.queueTimers.delete(entry);
   }
 
   private undoToast(text: string, undo: () => void = () => this.undoTodo()): void {
@@ -3400,11 +3418,8 @@ export class App {
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
     this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);
-    this.after(at - this.now(), () => {
-      if (!this.queued.includes(entry) || entry.state !== 'pending') return;
-      if (this.now() - entry.at > 600000) { entry.state = 'missed'; this.dirty(); }
-      else this.runQueue(entry);
-    });
+    if (old) this.disarmQueued(old);
+    this.armQueued(entry);
     this.closeQueueForm(true);
     this.notify(`scheduled queue entry ${entry.id}`);
     this.dirty();
