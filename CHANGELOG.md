@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.101
+
+- **Search what was said.** The search has a second mode, **in sessions**, that looks in what your agents were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build) and in everything every pane printed, shells included, in every open project. Click the `❯` button at the right end of the search bar, or press `Tab`, to switch; with a prefix key, `f` `s` opens the search already there. Each result shows the matching line, who said it and `project › workspace › tab`. Choosing one goes to that pane and scrolls to the match, selected.
+- It ignores case, runs in the background so typing stays responsive with long scrollbacks, leaves out panes being closed or removed, and lists at most 20 matches per pane and 300 in all.
+- `cornercase search TEXT` finds the same matches from a shell, a script or an agent: one line per match with the pane's id, or JSON with `--json`. No match prints a header and exits 0.
+
 ## 0.12.100
 
 - The Issues list offers ` start a flow ` beside ` start ` and ` schedule `, so a flow starts on the selected issue without opening it first. It reads the issue and asks where to run it when the tracker needs a project, then opens the same dialog as the issue's own button. A narrow window drops ` schedule ` first, then ` start a flow `, which the issue's page keeps.
