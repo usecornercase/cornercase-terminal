@@ -352,7 +352,10 @@ mod tokens {
         b.connected(Source::Shortcut, Connection { from_env: false, account: None });
         assert_eq!(
             (b.needs_load(), b.labels(ROOM.buttons)),
-            (Action::Load(vec![Source::Shortcut]), vec!["start", "schedule", "refresh", "disconnect", "cancel"])
+            (
+                Action::Load(vec![Source::Shortcut]),
+                vec!["start", "schedule", "start a flow", "refresh", "disconnect", "cancel"]
+            )
         );
     }
 
@@ -360,7 +363,7 @@ mod tokens {
     fn a_token_from_the_environment_cannot_be_disconnected() {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: true, account: None });
-        assert_eq!(b.labels(ROOM.buttons), ["start", "schedule", "refresh", "cancel"]);
+        assert_eq!(b.labels(ROOM.buttons), ["start", "schedule", "start a flow", "refresh", "cancel"]);
     }
 
     fn field(b: &Browser) -> (&'static str, String) {
@@ -634,8 +637,8 @@ pub(crate) mod buttons {
     }
 
     #[test]
-    fn the_list_offers_refresh() {
-        assert_eq!(with_lists().labels(ROOM.buttons), ["start", "schedule", "refresh", "cancel"]);
+    fn the_list_offers_a_flow_beside_start_and_refresh() {
+        assert_eq!(with_lists().labels(ROOM.buttons), ["start", "schedule", "start a flow", "refresh", "cancel"]);
     }
 
     #[test]
@@ -759,6 +762,7 @@ mod agent {
     }
 }
 
+mod list_flow;
 mod place;
 
 pub(crate) mod people {

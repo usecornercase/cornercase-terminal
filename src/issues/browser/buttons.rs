@@ -106,7 +106,7 @@ impl Browser {
         if self.current() == Tab::Queue {
             return self.queue_buttons();
         }
-        let mut buttons = vec![Button::Start, Button::Schedule, Button::Refresh];
+        let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Refresh];
         if let Tab::One(source) = self.current()
             && self.connections.get(&source).is_some_and(|c| !c.from_env)
         {
@@ -175,7 +175,15 @@ impl Browser {
                     let issue = (**issue).clone();
                     self.start_flow(issue)
                 }
-                Screen::List => Action::None,
+                Screen::List => match self.selected() {
+                    Some(issue) if !self.needs_place(&issue) => self.start_flow(issue),
+                    Some(issue) => {
+                        let read = self.read(issue.clone());
+                        let _ = self.start_flow(issue);
+                        read
+                    }
+                    None => Action::None,
+                },
             },
             Button::Agent => {
                 self.open_picker(Pick::Agent, After::Nothing);

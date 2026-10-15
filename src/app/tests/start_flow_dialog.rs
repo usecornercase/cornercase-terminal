@@ -120,6 +120,29 @@ mod entries {
         button(&mut s.app, WIDE, dialog::CANCEL);
         assert!(matches!(s.app.overlay, Some(Overlay::Issues(_))));
     }
+
+    #[test]
+    fn the_issues_list_starts_one_for_the_selected_issue_and_cancel_starts_nothing() {
+        let mut s = setup(true);
+        s.app.open_issues(WIDE).expect("open the issues");
+        let Some(Overlay::Issues(b)) = &mut s.app.overlay else { panic!("no issues") };
+        let query = b.query(Source::Github);
+        b.loaded(Source::Github, &query, Ok(vec![issues::issue(Source::Github, 7, "Fix the login")]));
+        assert_eq!(b.shown().iter().map(|i| i.key.as_str()).collect::<Vec<_>>(), ["#7"]);
+        let labels = b.labels(usize::MAX);
+        let i = labels.iter().position(|l| *l == "start a flow").expect("the list offers start a flow");
+        click_in(&mut s.app, ui::issue_buttons(ui::issues_area(WIDE), &labels)[i].as_position(), WIDE);
+        let start = start(&s.app);
+        assert_eq!(start.prompt.text(), "https://github.com/acme/shop/issues/7");
+        assert_eq!(
+            (start.branch.as_str(), start.title()),
+            ("issue-7-fix-the-login", "Start a flow › #7 Fix the login".into())
+        );
+        let workspaces = s.app.projects[0].workspaces.len();
+        button(&mut s.app, WIDE, dialog::CANCEL);
+        assert!(matches!(&s.app.overlay, Some(Overlay::Issues(b)) if matches!(b.screen, Screen::List)));
+        assert_eq!(s.app.projects[0].workspaces.len(), workspaces);
+    }
 }
 
 mod the_dialog {

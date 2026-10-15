@@ -3204,7 +3204,7 @@ export class App {
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
-    const buttons = ['start', 'schedule', 'refresh', ...(isRemote(source) ? ['disconnect'] : []), 'cancel'];
+    const buttons = ['start', 'schedule', 'start a flow', 'refresh', ...(isRemote(source) ? ['disconnect'] : []), 'cancel'];
     return {
       tabs,
       toggles,
