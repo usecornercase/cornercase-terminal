@@ -179,13 +179,17 @@ impl App {
     fn scroll_dialog(&mut self, delta: isize, area: Rect) {
         if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
             self.scroll_pull_request(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::Question { .. })) {
+            self.scroll_question(delta, area);
         } else {
             self.scroll_update(delta, area);
         }
     }
 
     pub(super) fn cancel_form(&mut self) {
-        if !self.overlay.as_ref().is_some_and(Overlay::busy) {
+        if let Some(Overlay::Question { key, .. }) = self.overlay {
+            self.answer_question(key, None);
+        } else if !self.overlay.as_ref().is_some_and(Overlay::busy) {
             self.overlay = None;
         }
     }

@@ -2,6 +2,7 @@ mod arrange;
 mod close;
 mod create;
 mod idle_restart;
+mod question;
 mod status;
 mod talk;
 mod wait;
@@ -17,6 +18,7 @@ use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
 use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
+use crate::app::question_dialog::Question;
 use crate::control::{self, Command, Done, Ids, Item, Request, Response};
 use crate::error;
 use crate::git;
@@ -51,6 +53,7 @@ pub(super) struct Requests {
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
     next: u64,
+    windows: usize,
 }
 
 impl Requests {
@@ -86,6 +89,7 @@ enum Stage {
     Several { all: bool, parts: Vec<Pending> },
     Reading,
     Restart { caller: Option<u64> },
+    Question(Box<Question>),
 }
 
 impl Stage {
@@ -226,8 +230,10 @@ impl App {
                         | Stage::Several { .. }
                         | Stage::Reading
                         | Stage::Restart { .. }
+                        | Stage::Question(_)
                 )
         });
+        self.show_question();
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
@@ -283,6 +289,7 @@ impl App {
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off),
             Command::Mark(mark) => self.mark_request(caller, &mark),
+            Command::Confirm(confirm) => self.confirm_request(client, &confirm, now),
         }
     }
 

@@ -826,6 +826,7 @@ impl Server {
     }
 
     fn fit(&mut self, resized: Option<u64>) {
+        self.app.set_windows(self.clients.iter().filter(|c| c.size.is_some()).count());
         let latest = self.clients.iter().filter(|c| c.size.is_some()).max_by_key(|c| c.used).and_then(|c| c.size);
         let Some((cols, rows)) = latest else { return };
         let area = Rect::new(0, 0, cols, rows);

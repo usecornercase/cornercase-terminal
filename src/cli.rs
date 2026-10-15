@@ -6,8 +6,8 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, Target, TodoAction, WaitArgs, WhenArgs,
-    Which,
+    Command, ConfirmArgs, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, Target, TodoAction, WaitArgs,
+    WhenArgs, Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
@@ -168,6 +168,7 @@ fn run_control(command: Control) -> Result<bool> {
             ask("mark", control::Command::Mark(request)).map(drop)
         }
         Control::Read(read) => return read::run(&read),
+        Control::Confirm(confirm) => return run_confirm(confirm),
         Control::Wait(wait) => run_wait(wait),
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
@@ -246,16 +247,33 @@ fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Re
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
-fn run_start(start: StartArgs) -> Result<()> {
-    let prompt = match (start.prompt, start.prompt_file) {
-        (Some(prompt), _) => Some(prompt),
+fn text_or_file(text: Option<String>, file: Option<&Path>, what: &str) -> Result<Option<String>> {
+    Ok(match (text, file) {
+        (Some(text), _) => Some(text),
         (None, Some(file)) if file == Path::new("-") => Some(stdin()?),
         (None, Some(file)) => Some(trimmed(
-            &std::fs::read_to_string(&file)
-                .map_err(|e| Error::Control(format!("cannot read the prompt from `{}`: {e}", file.display())))?,
+            &std::fs::read_to_string(file)
+                .map_err(|e| Error::Control(format!("cannot read the {what} from `{}`: {e}", file.display())))?,
         )),
         (None, None) => None,
-    };
+    })
+}
+
+fn run_confirm(args: ConfirmArgs) -> Result<bool> {
+    let body = text_or_file(args.body, args.body_file.as_deref(), "body")?.unwrap_or_default();
+    let request = control::Confirm { title: args.title, body, buttons: args.buttons, timeout: args.timeout };
+    let value = ask("confirm", control::Command::Confirm(request))?;
+    let chosen: control::Chosen = answer(value.clone())?;
+    if args.print.json {
+        print_json(&value)?;
+    } else {
+        print_out(&format!("{}\n", chosen.choice.as_deref().unwrap_or("cancelled")))?;
+    }
+    Ok(!chosen.cancelled)
+}
+
+fn run_start(start: StartArgs) -> Result<()> {
+    let prompt = text_or_file(start.prompt, start.prompt_file.as_deref(), "prompt")?;
     let request = control::Start {
         agent: start.agent,
         project: None,

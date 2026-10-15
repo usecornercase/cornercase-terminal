@@ -82,6 +82,7 @@ mod overlay;
 mod panes;
 mod picker_dialog;
 mod pull_requests;
+mod question_dialog;
 mod remote_access;
 mod search_dialog;
 mod session;

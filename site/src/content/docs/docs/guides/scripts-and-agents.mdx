@@ -54,6 +54,7 @@ group 9  personal  collapsed
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
 | `notify TEXT` | Shows a message in the window, with a desktop notification. |
+| `confirm` | Asks the person at the window a question in a dialog, and prints the button they chose. |
 | `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/). |
 | `away` | Has agents message you [on Telegram](../telegram/); `--off` stops it. |
 | `skill` | Prints the instructions that teach coding agents these commands. |
@@ -284,6 +285,22 @@ cornercase todo rm 3
 
 `notify` shows a toast in the window and sends a [desktop notification](../projects-workspaces-tabs/#notifications) through the terminal of every open window, like the one for an agent that needs you.
 
+### Ask the person at the window
+
+```sh
+cornercase confirm --title 'Deploy to staging?' --button deploy
+gh pr view 485 --json body -q .body |
+  cornercase confirm --title 'Ana shares PR #485' --body-file - \
+    --button 'set up and run' --button 'check out only' --timeout 600
+```
+
+`confirm` opens a dialog in the window, with the title, a body in Markdown that scrolls when it is long, your buttons (up to three; the first is highlighted) and **cancel**, and waits until someone answers. It prints the label of the button clicked, or `cancelled` with status 1 for **cancel**, `Esc` or a click outside the dialog. A script, a git hook, a plugin or an agent can ask before it does something only the person should decide.
+
+- A dialog already open in the window stays: the question waits until it closes, and several questions show one after the other.
+- `Enter` answers nothing: the dialog shows up while someone may be typing into a pane, and a key meant for the pane must not accept it.
+- It fails at once when no window is open, and when the last one closes before an answer, so it never waits with nobody there. `--timeout` gives up after that long, and ending the command takes the dialog away.
+- The title, the body and the labels may come from other people, such as a pull request's title and description, so control characters and bidirectional marks (which can make text read differently from what it is) are left out of what the dialog shows.
+
 ### Away on Telegram
 
 ```sh
@@ -334,6 +351,7 @@ cornercase stats --share
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
+| `confirm` | `choice`, the label of the button clicked, or `cancelled: true`. |
 
 ## Exit status
 
@@ -358,6 +376,8 @@ Some messages you may meet:
 | `the … agent in pane … has not written a message yet` | `read --last-message` found the agent's record, with no message in it. |
 | `the program in pane … is not reading its input …` | Over 16 MiB sent to the pane are still waiting for its program to read them, so `send` and `keys` stop adding more. |
 | `timed out after …` | The `--timeout` passed; the rest of the message says what the pane was doing. |
+| `no cornercase window is open, so nobody can answer …` | `confirm` needs a window to show its question; open one with `cornercase`. |
+| `the last cornercase window closed before anyone answered` | Every window closed while `confirm` waited. |
 | `the restart was cancelled in the window …` | Someone pressed **cancel** on the window's notice while `restart --when-idle` waited; the server keeps running. |
 | `cornercase hit a bug, see server.log` | cornercase hit a bug while it handled the command or waited for it. Your shells keep running; see [this message in troubleshooting](../../help/troubleshooting/#cornercase-hit-a-bug-see-serverlog). |
 

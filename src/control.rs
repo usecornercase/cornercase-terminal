@@ -64,6 +64,7 @@ pub(crate) enum Command {
     Stats(Stats),
     Away(Away),
     Mark(Mark),
+    Confirm(Confirm),
 }
 
 impl Command {
@@ -91,6 +92,7 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
+            Self::Confirm(_) => 22,
         }]
     }
 
@@ -176,11 +178,15 @@ impl Command {
             Self::Mark(mark) => {
                 fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
             }
+            Self::Confirm(confirm) => {
+                fields.add("buttons", confirm.buttons.len()).add("bytes", confirm.body.len());
+                fields.maybe("timeout", confirm.timeout);
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 22] = [
+    pub(crate) const NAMES: [&str; 23] = [
         "status",
         "open",
         "new-workspace",
@@ -203,6 +209,7 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "confirm",
     ];
 }
 
@@ -402,6 +409,24 @@ pub(crate) struct Mark {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
     pub(crate) reviewed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Confirm {
+    pub(crate) title: String,
+    pub(crate) body: String,
+    pub(crate) buttons: Vec<String>,
+    pub(crate) timeout: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Chosen {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) choice: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) cancelled: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
