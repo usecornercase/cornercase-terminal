@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.104
+
+- Click a workspace's pull request number (`#485✗`) to see its pull request and checks, the same dialog as **pull request #485** in its menu. It works in the lists, the tree and the compact menu, and the number is underlined under the pointer.
+
 ## 0.12.103
 
 - The Flows dialog draws the selected flow's diagram beside the list, so you see a flow's plan before opening it. A click selects a flow and a second click edits it, as before; the wheel over the diagram scrolls a tall one. In a narrow dialog, **diagram** shows it in place of the list and **list** brings the list back. A file that cannot be read says why instead of drawing a diagram.
