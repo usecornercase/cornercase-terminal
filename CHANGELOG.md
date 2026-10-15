@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.103
+
+- The Flows dialog draws the selected flow's diagram beside the list, so you see a flow's plan before opening it. A click selects a flow and a second click edits it, as before; the wheel over the diagram scrolls a tall one. In a narrow dialog, **diagram** shows it in place of the list and **list** brings the list back. A file that cannot be read says why instead of drawing a diagram.
+
 ## 0.12.102
 
 - **Cursor CLI is now a full agent.** Tabs running `cursor-agent` show their model and how full the context is, whether the agent is working or finished, and its conversation comes back after a restart (`cursor-agent --resume <chat id>`, in the mode it ran in). `cornercase send --enter` confirms the prompt was taken, `read --last-message` and the search in sessions read its answers, and Stats counts its prompts, turns and time. Settings → Agents lists `cursor` with its modes (plan, ask, auto review, run everything).
