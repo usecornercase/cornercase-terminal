@@ -88,7 +88,15 @@ impl Start {
             notice: None,
             waiting: false,
         };
-        start.cursor = start.flows.iter().position(|saved| start.problems(saved).is_empty()).unwrap_or(0);
+        let startable = |saved: &&Saved| start.problems(saved).is_empty();
+        let first_builtin = start.builtins.first().map(|name| name.to_lowercase());
+        let named = |saved: &Saved| first_builtin.as_deref() == Some(saved.flow.name.trim().to_lowercase().as_str());
+        start.cursor = start
+            .flows
+            .iter()
+            .position(|saved| named(saved) && startable(&saved))
+            .or_else(|| start.flows.iter().position(|saved| startable(&saved)))
+            .unwrap_or(0);
         start
     }
 

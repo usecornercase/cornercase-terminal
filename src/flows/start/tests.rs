@@ -85,6 +85,15 @@ mod opening {
     }
 
     #[test]
+    fn the_first_built_in_flow_is_selected_wherever_it_sorts() {
+        let mut listing = listing();
+        listing.flows.sort_by(|a, b| a.flow.name.cmp(&b.flow.name));
+        assert_ne!(listing.flows[0].flow.name, "Full issue");
+        let s = Start::new(7, "web-shop".into(), true, listing);
+        assert_eq!(s.selected().map(|saved| saved.flow.name.as_str()), Some("Full issue"));
+    }
+
+    #[test]
     fn the_prompt_has_the_keys_at_first() {
         assert_eq!(start().focus, Focus::Prompt);
     }
