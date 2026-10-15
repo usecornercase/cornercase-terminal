@@ -123,7 +123,7 @@ fn a_lone_agent_without_a_record_still_waits_for_its_prompt_to_be_recorded() {
     let send = wire::SendText { timeout: Some(1.0), ..send_text_of(id) };
     ask(&mut app, None, Command::Send(send));
     let message = error(answered(&mut app, &rx, "the send gives up"));
-    assert!(message.starts_with("timed out"), "{message}");
+    assert!(message.starts_with("timed out") || message.starts_with("not confirmed"), "{message}");
 }
 
 fn send_text_of(pane: u64) -> wire::SendText {

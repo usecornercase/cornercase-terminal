@@ -117,10 +117,36 @@ impl Team {
 
     fn until_got(&mut self, n: usize) -> Vec<String> {
         let log = self.log.path().join("order");
-        until_logged(&mut self.app, &self.rx, "every agent got its prompt", || {
-            std::fs::read_to_string(&log).unwrap_or_default().lines().filter(|l| l.starts_with("got ")).count() >= n
-        });
+        let got = |log: &Path| {
+            std::fs::read_to_string(log).unwrap_or_default().lines().filter(|l| l.starts_with("got ")).count() >= n
+        };
+        let deadline = Instant::now() + STARTING;
+        while !got(&log) {
+            assert!(Instant::now() < deadline, "timed out waiting for every agent to get its prompt\n{}", self.state());
+            drain(&mut self.app, &self.rx);
+            self.app.refresh(Instant::now());
+            std::thread::sleep(Duration::from_millis(20));
+        }
         self.order()
+    }
+
+    fn state(&mut self) -> String {
+        let order = self.order().join("\n");
+        let launches: Vec<String> =
+            self.app.agents.launches.iter().map(|l| format!("{} {}", l.term, l.stage())).collect();
+        let screens: Vec<String> = self
+            .app
+            .projects
+            .iter_mut()
+            .flat_map(|p| p.workspaces.iter_mut())
+            .flat_map(|w| w.tabs.iter_mut())
+            .flat_map(|t| t.panes.iter_mut())
+            .map(|term| {
+                let text = term.emulator.snapshot().map(|s| s.contents()).unwrap_or_default();
+                format!("--- pane {}:\n{}", term.id, text.trim_end())
+            })
+            .collect();
+        format!("order:\n{order}\nlaunches: {launches:?}\n{}", screens.join("\n"))
     }
 }
 
