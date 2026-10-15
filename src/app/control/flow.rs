@@ -79,7 +79,7 @@ impl App {
         let replaced = share::collision(&listing, &flow.name, to, import.replace)?;
         let missing = share::missing_agents(&flow, &builtin::installed(&self.config));
         let mut imported = Imported {
-            name: share::visible(&flow.name),
+            name: flow.name.clone(),
             origin: if to == To::Yours { "user" } else { "project" }.into(),
             replaced: replaced.is_some(),
             note: (!missing.is_empty()).then(|| missing.join("; ")),

@@ -136,6 +136,7 @@ impl Flow {
         if self.version > VERSION {
             out.push("the flow was made by a newer cornercase".to_string());
         }
+        out.extend(self.control_problems());
         out.extend(role_problems(&self.orchestrator, ORCHESTRATOR));
         if self.roles.is_empty() {
             out.push("the flow has no roles besides the orchestrator".to_string());
@@ -189,6 +190,30 @@ impl Flow {
 }
 
 impl Flow {
+    fn control_problems(&self) -> Vec<String> {
+        let bad = |text: &str| text.chars().any(char::is_control);
+        let mut out = Vec::new();
+        let mut field = |found: bool, what: String| {
+            if found {
+                out.push(format!("{what} contains a control character"));
+            }
+        };
+        field(bad(&self.name), "the flow's name".into());
+        field(bad(&self.description), "the flow's description".into());
+        for (i, role) in std::iter::once(&self.orchestrator).chain(&self.roles).enumerate() {
+            let which = if i == 0 { "the orchestrator".to_string() } else { format!("role {i}") };
+            let fields = [&role.name, &role.agent];
+            let model = role.model.iter().chain(&role.effort);
+            field(fields.into_iter().chain(model).any(|t| bad(t)), format!("{which}'s name, agent, model or effort"));
+            field(role.env.keys().any(|key| bad(key)), format!("{which}'s variable names"));
+        }
+        for (i, stage) in self.stages.iter().enumerate() {
+            field(stage.roles.iter().any(|r| bad(r)), format!("stage {}'s roles", i + 1));
+            field(stage.back.as_ref().is_some_and(|back| bad(&back.when)), format!("stage {}'s loop label", i + 1));
+        }
+        out
+    }
+
     fn folder_problems(&self) -> Vec<String> {
         let members: Vec<&Role> = std::iter::once(&self.orchestrator).chain(&self.roles).collect();
         Known::ALL

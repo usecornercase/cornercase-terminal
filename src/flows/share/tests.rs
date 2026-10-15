@@ -74,6 +74,22 @@ mod the_text {
     }
 
     #[test]
+    fn control_characters_in_names_labels_and_variable_names_are_problems() {
+        let bad = "x\x1b[2J";
+        let mut flows = vec![sample(); 5];
+        flows[0].name = format!("Bad{bad}");
+        flows[1].description = bad.into();
+        flows[2].roles[0].name = bad.into();
+        flows[3].roles[0].agent = bad.into();
+        flows[4].roles[0].env.insert(bad.into(), "v".into());
+        for flow in &flows {
+            let read = from_share(&to_share(flow).expect("export")).expect("it parses");
+            assert!(read.problems().iter().any(|p| p.contains("control character")), "{:?}", read.problems());
+        }
+        assert!(sample().problems().iter().all(|p| !p.contains("control character")));
+    }
+
+    #[test]
     fn the_orchestrators_name_is_forced() {
         let text = "name = \"x\"\n[orchestrator]\nname = \"boss\"\nagent = \"claude\"\n";
         assert_eq!(from_share(text).expect("import").orchestrator.name, ORCHESTRATOR);

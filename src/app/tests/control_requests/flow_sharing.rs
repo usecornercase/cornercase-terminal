@@ -202,10 +202,10 @@ mod importing {
         let refused = error(s.import(&share::to_share(&bad).expect("export"), |_| {}));
         assert!(refused.contains("\\u{1b}[1Ader") && !refused.contains('\x1b'), "{refused:?}");
         s.app.config.agent_commands.insert("grok".into(), "/nonexistent/grok".into());
-        let mut fine = flow("Fine\x1b[2J");
+        let mut fine = flow("Fine");
         fine.roles[0].agent = "grok".into();
         let done = imported(s.import(&share::to_share(&fine).expect("export"), |_| {}));
-        assert!(!done.name.contains('\x1b') && !done.note.expect("a note").contains('\x1b'));
+        assert!(!done.note.expect("a note").contains('\x1b'));
         let taken = error(s.import(&share::to_share(&fine).expect("export"), |_| {}));
         assert!(!taken.contains('\x1b'), "{taken:?}");
     }
