@@ -1,31 +1,45 @@
 export const VERSION = 1;
 export const MANIFEST = 'cornercase-plugin.toml';
 export const TOPIC = 'cornercase-plugin';
-export const MAX_BYTES = 4 * 1024 * 1024;
-const MAX_PLUGINS = 1000;
+export const MAX_BYTES = 8 * 1024 * 1024;
+export const MAX_MANIFESTS = 20;
+const MAX_REPOS = 1000;
 const MAX_PERMISSIONS = 16;
 const PLATFORMS = ['macos', 'linux'];
-const ENTRY = ['id', 'name', 'description', 'repo', 'commit', 'version', 'min_cornercase', 'platforms', 'permissions', 'stars'];
-const REQUIRED = ['id', 'name', 'repo', 'commit', 'version', 'stars'];
+const REPO_FIELDS = ['repo', 'description', 'stars', 'language', 'pushed', 'created', 'commit', 'invalid', 'plugins'];
+const PLUGIN_FIELDS = ['path', 'id', 'name', 'version', 'description', 'min_cornercase', 'platforms', 'permissions', 'duplicate'];
 const COUNTS = ['total', 'missing', 'invalid', 'duplicate', 'blocked'] as const;
 const UNSAFE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/;
 
-export type Entry = {
+export type Plugin = {
+  path: string;
   id: string;
   name: string;
-  description?: string;
-  repo: string;
-  commit: string;
   version: string;
+  description?: string;
   min_cornercase?: string;
   platforms?: string[];
   permissions?: string[];
-  stars: number;
+  duplicate?: boolean;
 };
+
+export type Card = {
+  repo: string;
+  description?: string;
+  stars: number;
+  language?: string;
+  pushed: string;
+  created: string;
+  commit: string;
+  invalid?: number;
+  plugins: Plugin[];
+};
+
+export type Skipped = { repo: string; commit: string; invalid: number };
 
 export type Counts = Record<(typeof COUNTS)[number], number>;
 
-export type Index = { version: number; generated: string; source: Counts; plugins: Entry[] };
+export type Index = { version: number; generated: string; source: Counts; repos: Card[]; skipped: Skipped[] };
 
 export const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -49,6 +63,19 @@ const count = (where: string, value: unknown): number => {
   return value;
 };
 
+const date = (where: string, value: unknown): string => {
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) throw new Error(`${where} must be a date`);
+  return value;
+};
+
+const commitOf = (where: string, value: unknown): string => {
+  if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value)) throw new Error(`${where} must be 40 lower-case hexadecimal digits`);
+  return value;
+};
+
+const optional = (where: string, value: unknown, max: number): string | undefined =>
+  value === undefined || (typeof value === 'string' && !value.trim()) ? undefined : text(where, value, max);
+
 export const validId = (id: string): boolean => id.length <= 64 && /^[a-z0-9][a-z0-9._-]*$/.test(id);
 
 export const validRepo = (repo: string): boolean => {
@@ -62,17 +89,19 @@ export const validRepo = (repo: string): boolean => {
   );
 };
 
-export function fields(raw: Record<string, unknown>, where: (field: string) => string): Omit<Entry, 'repo' | 'commit' | 'stars'> {
+export const validPath = (path: string): boolean =>
+  path === '' || (path.length <= 200 && path.split('/').every((part) => /^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(part)));
+
+export function manifestFields(raw: Record<string, unknown>, where: (field: string) => string): Omit<Plugin, 'path' | 'duplicate'> {
   const id = text(where('id'), raw.id, 64);
   if (!validId(id)) throw new Error(`${where('id')} must be lower-case letters, digits, . _ or -`);
-  const out: Omit<Entry, 'repo' | 'commit' | 'stars'> = {
+  const out: Omit<Plugin, 'path' | 'duplicate'> = {
     id,
     name: text(where('name'), raw.name, 64),
     version: text(where('version'), raw.version, 32),
   };
-  if (raw.description !== undefined && String(raw.description).trim()) {
-    out.description = text(where('description'), raw.description, 200);
-  }
+  const description = optional(where('description'), raw.description, 200);
+  if (description) out.description = description;
   if (raw.min_cornercase !== undefined) out.min_cornercase = text(where('min_cornercase'), raw.min_cornercase, 32);
   if (raw.platforms !== undefined) {
     out.platforms = list(where('platforms'), raw.platforms, PLATFORMS.length, (p) => {
@@ -86,44 +115,89 @@ export function fields(raw: Record<string, unknown>, where: (field: string) => s
   return out;
 }
 
-function entry(raw: unknown, at: number): Entry {
-  if (!isObject(raw)) throw new Error(`plugins[${at}] must be an object`);
-  const where = (field: string) => `plugins[${at}].${field}`;
+function keys(raw: Record<string, unknown>, allowed: string[], where: (field: string) => string): void {
   for (const key of Object.keys(raw)) {
-    if (!ENTRY.includes(key)) throw new Error(`${where(key)} is not a field of the index`);
+    if (!allowed.includes(key)) throw new Error(`${where(key)} is not a field of the index`);
   }
-  for (const key of REQUIRED) {
-    if (!(key in raw)) throw new Error(`${where(key)} is missing`);
+}
+
+function plugin(raw: unknown, where: (field: string) => string): Plugin {
+  if (!isObject(raw)) throw new Error(`${where('')} must be an object`);
+  keys(raw, PLUGIN_FIELDS, where);
+  if (typeof raw.path !== 'string' || !validPath(raw.path)) throw new Error(`${where('path')} must be a folder inside the repository`);
+  const out: Plugin = { path: raw.path, ...manifestFields(raw, where) };
+  if (raw.duplicate !== undefined) {
+    if (raw.duplicate !== true) throw new Error(`${where('duplicate')} must be true when present`);
+    out.duplicate = true;
   }
+  return out;
+}
+
+function card(raw: unknown, at: number): Card {
+  if (!isObject(raw)) throw new Error(`repos[${at}] must be an object`);
+  const where = (field: string) => `repos[${at}].${field}`;
+  keys(raw, REPO_FIELDS, where);
   const repo = text(where('repo'), raw.repo, 140);
   if (!validRepo(repo)) throw new Error(`${where('repo')} must be owner/repo on github.com`);
-  const commit = text(where('commit'), raw.commit, 40);
-  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`${where('commit')} must be 40 lower-case hexadecimal digits`);
-  return { ...fields(raw, where), repo, commit, stars: count(where('stars'), raw.stars) };
+  if (!Array.isArray(raw.plugins) || raw.plugins.length === 0 || raw.plugins.length > MAX_MANIFESTS) {
+    throw new Error(`${where('plugins')} must list 1 to ${MAX_MANIFESTS} plugins`);
+  }
+  const out: Card = {
+    repo,
+    stars: count(where('stars'), raw.stars),
+    pushed: date(where('pushed'), raw.pushed),
+    created: date(where('created'), raw.created),
+    commit: commitOf(where('commit'), raw.commit),
+    plugins: raw.plugins.map((p, i) => plugin(p, (field) => `${where('plugins')}[${i}]${field ? `.${field}` : ''}`)),
+  };
+  const description = optional(where('description'), raw.description, 350);
+  if (description) out.description = description;
+  const language = optional(where('language'), raw.language, 40);
+  if (language) out.language = language;
+  if (raw.invalid !== undefined) out.invalid = count(where('invalid'), raw.invalid);
+  if (new Set(out.plugins.map((p) => p.path)).size !== out.plugins.length) throw new Error(`${where('plugins')} lists a folder twice`);
+  return out;
+}
+
+function skipped(raw: unknown, at: number): Skipped {
+  if (!isObject(raw)) throw new Error(`skipped[${at}] must be an object`);
+  const where = (field: string) => `skipped[${at}].${field}`;
+  keys(raw, ['repo', 'commit', 'invalid'], where);
+  const repo = text(where('repo'), raw.repo, 140);
+  if (!validRepo(repo)) throw new Error(`${where('repo')} must be owner/repo on github.com`);
+  return { repo, commit: commitOf(where('commit'), raw.commit), invalid: count(where('invalid'), raw.invalid) };
 }
 
 export function validate(source: string): Index {
   if (new TextEncoder().encode(source).length > MAX_BYTES) throw new Error(`the index is larger than ${MAX_BYTES / 1024 / 1024} MiB`);
   const raw: unknown = JSON.parse(source);
   if (!isObject(raw)) throw new Error('the index must be an object');
-  for (const key of Object.keys(raw)) {
-    if (!['version', 'generated', 'source', 'plugins'].includes(key)) throw new Error(`${key} is not a field of the index`);
-  }
+  keys(raw, ['version', 'generated', 'source', 'repos', 'skipped'], (key) => key);
   if (raw.version !== VERSION) throw new Error(`the index must be version ${VERSION}`);
-  if (typeof raw.generated !== 'string' || Number.isNaN(Date.parse(raw.generated))) throw new Error('generated must be a date');
+  const generated = date('generated', raw.generated);
   if (!isObject(raw.source)) throw new Error('source must be an object');
-  const counts = Object.fromEntries(COUNTS.map((key) => [key, count(`source.${key}`, raw.source && (raw.source as Record<string, unknown>)[key])])) as Counts;
-  if (!Array.isArray(raw.plugins)) throw new Error('plugins must be a list');
-  if (raw.plugins.length > MAX_PLUGINS) throw new Error(`more than ${MAX_PLUGINS} plugins`);
-  const plugins = raw.plugins.map(entry);
-  const seen = new Set<string>();
-  for (const plugin of plugins) {
-    if (seen.has(plugin.id)) throw new Error(`${plugin.id} is listed twice`);
-    seen.add(plugin.id);
+  const given = raw.source;
+  const counts = Object.fromEntries(COUNTS.map((key) => [key, count(`source.${key}`, given[key])])) as Counts;
+  if (!Array.isArray(raw.repos) || raw.repos.length > MAX_REPOS) throw new Error(`repos must be a list of at most ${MAX_REPOS}`);
+  if (!Array.isArray(raw.skipped) || raw.skipped.length > MAX_REPOS) throw new Error(`skipped must be a list of at most ${MAX_REPOS}`);
+  const repos = raw.repos.map(card);
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  for (const { repo, plugins } of repos) {
+    if (names.has(repo.toLowerCase())) throw new Error(`${repo} is listed twice`);
+    names.add(repo.toLowerCase());
+    for (const p of plugins.filter((p) => !p.duplicate)) {
+      if (ids.has(p.id)) throw new Error(`${p.id} is listed twice`);
+      ids.add(p.id);
+    }
   }
-  return { version: VERSION, generated: raw.generated, source: counts, plugins };
+  return { version: VERSION, generated, source: counts, repos, skipped: raw.skipped.map(skipped) };
 }
 
-export const installCommand = (entry: Entry): string => `cornercase plugin install ${entry.repo}@${entry.commit}`;
+export const installSpec = (card: Card, plugin: Plugin): string =>
+  `${card.repo}${plugin.path ? `/${plugin.path}` : ''}@${card.commit}`;
 
-export const sourceUrl = (entry: Entry): string => `https://github.com/${entry.repo}/tree/${entry.commit}`;
+export const installCommand = (card: Card, plugin: Plugin): string => `cornercase plugin install ${installSpec(card, plugin)}`;
+
+export const sourceUrl = (card: Card, plugin: Plugin): string =>
+  `https://github.com/${card.repo}/tree/${card.commit}${plugin.path ? `/${plugin.path}` : ''}`;

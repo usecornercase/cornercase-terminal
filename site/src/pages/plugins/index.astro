@@ -4,11 +4,23 @@ import { Aside } from '@astrojs/starlight/components';
 import source from '../../../plugins/index.json?raw';
 import { MANIFEST, TOPIC, installCommand, sourceUrl, validate } from '../../lib/plugins/catalogue';
 
-const { generated, plugins } = validate(source);
+const { generated, repos } = validate(source);
 const base = import.meta.env.BASE_URL;
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
+const day = (iso: string) => iso.slice(0, 10);
 const platforms = (list?: string[]) => (list?.length ? list.join(', ') : 'macOS and Linux');
 const updated = new Date(generated).toISOString().slice(0, 16).replace('T', ' ');
+const cards = repos.map((card) => ({
+  ...card,
+  owner: card.repo.split('/')[0],
+  name: card.repo.split('/')[1],
+  plugins: card.plugins.filter((plugin) => !plugin.duplicate),
+}));
+const search = (card: (typeof cards)[number]) =>
+  [card.repo, card.description, card.language, ...card.plugins.flatMap((p) => [p.id, p.name, p.description, ...(p.permissions ?? [])])]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
 ---
 <StarlightPage
   frontmatter={{
@@ -17,55 +29,83 @@ const updated = new Date(generated).toISOString().slice(0, 16).replace('T', ' ')
   }}
 >
   <p>
-    Every public GitHub repository with the <code>{TOPIC}</code> topic and a valid <code>{MANIFEST}</code> at its root is
-    listed here, refreshed every 30 minutes. What a plugin is and how to write one is in the
+    Every public GitHub repository with the <code>{TOPIC}</code> topic and a valid <code>{MANIFEST}</code>, at its root or in
+    a folder, is listed here, refreshed every 30 minutes. What a plugin is and how to write one is in the
     <a href={`${base}docs/guides/plugins/`}>plugins guide</a>. The list is also published as
     <a href={`${base}plugins/index.json`}><code>index.json</code></a>.
   </p>
 
   <Aside type="caution" title="Nobody reviews these plugins">
-    They are listed automatically. A plugin runs as you: once on, it can do anything you can, including typing into every
-    terminal, and the permissions it lists are shown, not enforced. Read its code or trust its author before you turn it on.
+    A listing only means the repository tagged itself. A plugin runs as you: once on, it can do anything you can, including
+    typing into every terminal, and the permissions it lists are shown, not enforced. Read its code or trust its author
+    before you turn it on.
   </Aside>
 
   <h2 id="plugins">Plugins</h2>
-  <p>{plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`}, most starred first. Updated {updated} UTC.</p>
-  {plugins.length === 0 ? (
+  <div class="tools not-content">
+    <input type="search" data-filter placeholder="Search repositories and plugins" aria-label="Search repositories and plugins" />
+    <select data-sort aria-label="Sort by">
+      <option value="stars">Most stars</option>
+      <option value="pushed">Recently updated</option>
+      <option value="created">Newest</option>
+    </select>
+  </div>
+  <p data-count>
+    {cards.length === 1 ? '1 repository' : `${cards.length} repositories`}. Updated {updated} UTC.
+  </p>
+  {cards.length === 0 && (
     <p data-empty>No plugins are listed yet. Yours could be the first: see <a href="#publish">publish a plugin</a>.</p>
-  ) : (
-    plugins.map((plugin) => (
-      <section data-plugin={plugin.id}>
-        <h3>{plugin.name} <small>{plugin.version} · ★ {plugin.stars}</small></h3>
-        {plugin.description && <p>{plugin.description}</p>}
-        <ul>
-          <li>Source: <a href={sourceUrl(plugin)} rel="noopener noreferrer nofollow">{plugin.repo}</a>, commit <code>{plugin.commit.slice(0, 12)}</code></li>
-          <li>Runs on: {platforms(plugin.platforms)}</li>
-          <li>Asks for: {plugin.permissions?.length ? plugin.permissions.join(', ') : 'nothing'} (shown, not enforced)</li>
-          {plugin.min_cornercase && <li>Needs cornercase {plugin.min_cornercase} or later</li>}
-        </ul>
-        <pre><code>{installCommand(plugin)}</code></pre>
-      </section>
-    ))
   )}
+  <p data-none hidden>No repository matches.</p>
+  <div data-cards>
+    {cards.map((card) => (
+      <article class="card" data-card data-search={search(card)} data-stars={card.stars} data-pushed={card.pushed} data-created={card.created}>
+        <header>
+          <h3>
+            <a href={`https://github.com/${card.repo}`} rel="noopener noreferrer nofollow">{card.name}</a>
+            <small> by {card.owner}</small>
+          </h3>
+          <p class="meta">★ {card.stars}{card.language && ` · ${card.language}`} · updated {day(card.pushed)}</p>
+        </header>
+        {card.description && <p>{card.description}</p>}
+        {card.plugins.map((plugin) => (
+          <section class="plugin" data-plugin={plugin.id}>
+            <h4>
+              <a href={sourceUrl(card, plugin)} rel="noopener noreferrer nofollow">{plugin.name}</a> <small>{plugin.version}</small>
+              {plugin.path && <small> · <code>{plugin.path}</code></small>}
+            </h4>
+            {plugin.description && <p>{plugin.description}</p>}
+            <p class="meta">
+              Runs on {platforms(plugin.platforms)} · asks for {plugin.permissions?.length ? plugin.permissions.join(', ') : 'nothing'}
+              {plugin.min_cornercase && ` · needs cornercase ${plugin.min_cornercase}`}
+            </p>
+            <pre><code>{installCommand(card, plugin)}</code></pre>
+          </section>
+        ))}
+      </article>
+    ))}
+  </div>
 
   <h2 id="install">Install one</h2>
   <p>
-    Copy the command under a plugin. It installs the commit listed here: cornercase fetches it, shows where it comes from
-    and every command it will run, and asks before installing. The plugin is installed turned off; turn it on in
-    <strong>Settings › Plugins</strong> or with <code>cornercase plugin enable &lt;id&gt;</code>.
+    Copy the command under a plugin, or install any repository directly with
+    <code>cornercase plugin install owner/repo</code> (add <code>/folder</code> for a plugin in a folder), listed or not. The
+    command here installs the commit listed: cornercase fetches it, shows where it comes from and every command it will
+    run, and asks before installing. The plugin is installed turned off; turn it on in <strong>Settings › Plugins</strong>
+    or with <code>cornercase plugin enable &lt;id&gt;</code>.
   </p>
 
   <h2 id="publish">Publish a plugin</h2>
   <ol>
-    <li>Put your plugin in a public GitHub repository, with its <code>{MANIFEST}</code> at the root.</li>
+    <li>Put your plugin in a public GitHub repository, with its <code>{MANIFEST}</code> at the root or in a folder. One repository can hold several plugins, each in its own folder.</li>
     <li>Add the <code>{TOPIC}</code> topic to the repository (the gear next to <strong>About</strong>).</li>
   </ol>
   <p>
-    That is all. Within 30 minutes it shows here, at the latest commit of its default branch, and each new commit replaces
-    it at the next refresh. Forks, archived repositories and manifests that cannot be read are left out. When two
-    repositories declare the same <code>id</code>, the older repository keeps it. The manifest's <code>name</code>,
-    <code>version</code>, <code>description</code>, <code>platforms</code>, <code>permissions</code> and
-    <code>min_cornercase</code> are what this page shows.
+    That is all. Within 30 minutes it shows here, at the latest commit of its default branch, and it is read again whenever
+    that commit changes. Forks, archived repositories, and manifests that cannot be read or have malformed metadata are
+    left out. When two repositories declare the same <code>id</code>, the older repository keeps it. The card shows the
+    repository's description, stars, language and last push, and each manifest's <code>name</code>, <code>version</code>,
+    <code>description</code>, <code>platforms</code>, <code>permissions</code> and <code>min_cornercase</code>.
   </p>
   <p>
     A plugin that harms its users is removed through
@@ -73,3 +113,70 @@ const updated = new Date(generated).toISOString().slice(0, 16).replace('T', ' ')
     To report one, <a href={`${repo}/issues/new`}>open an issue</a>.
   </p>
 </StarlightPage>
+
+<script>
+  const filter = document.querySelector<HTMLInputElement>('[data-filter]');
+  const sort = document.querySelector<HTMLSelectElement>('[data-sort]');
+  const list = document.querySelector<HTMLElement>('[data-cards]');
+  const none = document.querySelector<HTMLElement>('[data-none]');
+  const cards = [...document.querySelectorAll<HTMLElement>('[data-card]')];
+  const key = (card: HTMLElement, by: string) => (by === 'stars' ? Number(card.dataset.stars) : Date.parse(card.dataset[by] ?? '') || 0);
+  function show() {
+    if (!filter || !sort || !list) return;
+    const words = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const card of [...cards].sort((a, b) => key(b, sort.value) - key(a, sort.value))) {
+      const match = words.every((word) => (card.dataset.search ?? '').includes(word));
+      card.hidden = !match;
+      if (match) shown += 1;
+      list.append(card);
+    }
+    if (none) none.hidden = shown > 0 || cards.length === 0;
+  }
+  filter?.addEventListener('input', show);
+  sort?.addEventListener('change', show);
+</script>
+
+<style>
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .tools input {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  .tools input,
+  .tools select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    font: inherit;
+  }
+  .card {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.7rem;
+    padding: 1rem 1.2rem;
+    margin-top: 1rem;
+  }
+  .card[hidden] {
+    display: none;
+  }
+  .card h3,
+  .card h4 {
+    margin: 0;
+  }
+  .plugin {
+    border-top: 1px solid var(--sl-color-gray-6);
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+  }
+  .meta {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+</style>

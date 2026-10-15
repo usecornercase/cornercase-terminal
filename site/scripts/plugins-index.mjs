@@ -21,18 +21,27 @@ try {
     format: 'esm',
   });
   const { crawl, assemble, validate } = await import(pathToFileURL(out).href);
+  const published = async () => {
+    try {
+      const live = await fetch(PUBLISHED);
+      return live.ok ? validate(await live.text()) : null;
+    } catch {
+      return null;
+    }
+  };
+  const previous = await published();
   const blocklist = JSON.parse(await readFile('plugins/blocklist.json', 'utf8'));
   let text;
   try {
-    const index = assemble(await crawl(fetch, process.env.GITHUB_TOKEN), blocklist, new Date());
+    const index = assemble(await crawl(fetch, process.env.GITHUB_TOKEN, previous), blocklist, new Date());
     text = `${JSON.stringify(index, null, 2)}\n`;
+    const plugins = index.repos.reduce((n, card) => n + card.plugins.filter((p) => !p.duplicate).length, 0);
     const { total, missing, invalid, duplicate, blocked } = index.source;
-    console.log(`${index.plugins.length} plugins from ${total} repositories (${missing} without a manifest, ${invalid} invalid, ${duplicate} duplicate, ${blocked} blocked)`);
+    console.log(`${plugins} plugins in ${index.repos.length} of ${total} repositories (${missing} without a manifest, ${invalid} invalid manifests, ${duplicate} duplicates, ${blocked} blocked)`);
   } catch (error) {
+    if (!previous) throw error;
     console.warn(`the crawl failed (${error.message}); keeping the published index`);
-    const live = await fetch(PUBLISHED);
-    if (!live.ok) throw new Error(`the published index answered ${live.status}`);
-    text = await live.text();
+    text = `${JSON.stringify(previous, null, 2)}\n`;
   }
   validate(text);
   await writeFile('plugins/index.json', text);

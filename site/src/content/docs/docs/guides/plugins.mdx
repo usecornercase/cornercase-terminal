@@ -35,11 +35,11 @@ cornercase plugin remove acme.notes   # stops it and deletes its installed copy
 
 ## Find and publish plugins
 
-[The plugin list](../../../plugins/) shows every public GitHub repository with the `cornercase-plugin` topic and a valid `cornercase-plugin.toml` at its root, most starred first, refreshed every 30 minutes. Each plugin has its install command, pinned to the commit the list saw.
+[The plugin list](../../../plugins/) shows every public GitHub repository with the `cornercase-plugin` topic and a valid `cornercase-plugin.toml`, at its root or in a folder, refreshed every 30 minutes. Each repository is a card with its description, stars, language and last push, and lists each plugin it holds with the command that installs it, pinned to the commit the list saw. Search it, and sort by stars, recent activity or newest.
 
-Nobody reviews them: the list is found automatically, like a search. Read a plugin's code or trust its author before you turn it on.
+Nobody reviews them: a listing only means the repository tagged itself. Read a plugin's code or trust its author before you turn it on.
 
-To publish yours, put it in a public repository and add the `cornercase-plugin` topic (the gear next to **About** on GitHub). It shows within 30 minutes, at the latest commit of its default branch. Forks, archived repositories and manifests that cannot be read are left out, and when two repositories declare the same `id` the older one keeps it.
+To publish yours, put it in a public repository, with its manifest at the root or in a folder (one repository can hold several plugins), and add the `cornercase-plugin` topic (the gear next to **About** on GitHub). It shows within 30 minutes, at the latest commit of its default branch, and is read again when that commit changes. Forks, archived repositories and manifests that cannot be read or have malformed metadata are left out, and when two repositories declare the same `id` the older one keeps it.
 
 ## Link a folder, turn on and off
 
