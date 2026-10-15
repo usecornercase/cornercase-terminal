@@ -51,6 +51,7 @@ impl Record {
             Self::Gemini(path) => gemini::session::said_all(path, each),
             Self::Opencode { database, session } => opencode::database::said_all(database, session, each),
             Self::Grok(path) => grok::session::said_all(path, each),
+            Self::Cursor(path) => cursor::store::said_all(path, each),
         }
     }
 }

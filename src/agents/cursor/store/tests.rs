@@ -439,3 +439,47 @@ mod the_last_message {
         assert!(last_message(Path::new("/nonexistent/store.db")).is_err());
     }
 }
+
+mod searching {
+    use super::*;
+
+    #[test]
+    fn lists_prompts_and_replies_newest_first_without_thinking_or_tools() {
+        let dir = TempDir::new();
+        let fake = FakeCursor::new(dir.path());
+        fake.turn("one");
+        fake.reply("answer one");
+        fake.turn("two");
+        fake.thinking("hmm");
+        fake.tool("output");
+        fake.reply("answer two");
+        let mut seen = Vec::new();
+
+        said_all(&fake.store, &mut |spoken| {
+            seen.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("readable");
+
+        let expected =
+            [(Role::Reply, "answer two"), (Role::Prompt, "two"), (Role::Reply, "answer one"), (Role::Prompt, "one")];
+        assert_eq!(seen, expected.map(|(role, text)| (role, text.to_string())));
+    }
+
+    #[test]
+    fn stops_when_asked() {
+        let dir = TempDir::new();
+        let fake = FakeCursor::new(dir.path());
+        fake.turn("one");
+        fake.reply("answer");
+        let mut count = 0;
+
+        said_all(&fake.store, &mut |_| {
+            count += 1;
+            false
+        })
+        .expect("readable");
+
+        assert_eq!(count, 1);
+    }
+}

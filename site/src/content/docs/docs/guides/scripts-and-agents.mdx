@@ -118,7 +118,7 @@ cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" 
 
 #### Find where something was said
 
-`search` answers "which pane dealt with this?" without opening tabs one by one. It looks, ignoring case, in what the coding agents in your panes were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build: the records `read --last-message` reads) and in the history of every pane, shells included. It is the same search as [in sessions](../search/#in-sessions) in the window, and leaves out panes of projects being closed and workspaces being removed.
+`search` answers "which pane dealt with this?" without opening tabs one by one. It looks, ignoring case, in what the coding agents in your panes were told and answered (Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI: the records `read --last-message` reads) and in the history of every pane, shells included. It is the same search as [in sessions](../search/#in-sessions) in the window, and leaves out panes of projects being closed and workspaces being removed.
 
 ```sh
 cornercase search 'migration failed'

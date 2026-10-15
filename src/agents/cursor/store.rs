@@ -9,7 +9,7 @@ use super::proto::{self, Field};
 use crate::agents::context::counting::{Record, Usage};
 use crate::agents::context::discovery;
 use crate::agents::context::jsonl::Tail;
-use crate::agents::context::message::{self, Said};
+use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::agents::context::{Context, percent};
 use crate::error::{self, Error};
 use crate::process;
@@ -247,22 +247,46 @@ impl Session {
 }
 
 pub(in crate::agents) fn last_message(store: &Path) -> error::Result<Option<Said>> {
+    let mut found = None;
+    said_all(store, &mut |spoken| {
+        if spoken.role == Role::Reply {
+            found = Some(spoken.said);
+        }
+        found.is_none()
+    })?;
+    Ok(found)
+}
+
+pub(in crate::agents) fn said_all(store: &Path, each: Each) -> error::Result<()> {
     let failed = |e: rusqlite::Error| Error::Record { path: store.to_path_buf(), cause: e.to_string() };
     let connection = open(store).map_err(failed)?;
     let Some(root) = meta(&connection).and_then(|meta| meta.root).and_then(|id| blob(&connection, &id)) else {
-        return Ok(None);
+        return Ok(());
     };
-    let Some(turns) = proto::fields(&root).and_then(|fields| blobs_of(&fields, 8)) else { return Ok(None) };
+    let Some(turns) = proto::fields(&root).and_then(|fields| blobs_of(&fields, 8)) else { return Ok(()) };
     for turn in turns.iter().rev() {
-        let Some(steps) = agent_turn(&connection, turn).and_then(|inner| blobs_of(&proto::fields(&inner)?, 2)) else {
-            continue;
-        };
-        for step in steps.iter().rev() {
+        let Some(inner) = agent_turn(&connection, turn) else { continue };
+        let Some(fields) = proto::fields(&inner) else { continue };
+        for step in blobs_of(&fields, 2).unwrap_or_default().iter().rev() {
             let Some(said) = blob(&connection, step).and_then(|data| assistant_text(&data)) else { continue };
-            return Ok(Some(said));
+            if !each(Spoken { role: Role::Reply, said }) {
+                return Ok(());
+            }
+        }
+        let prompt = proto::bytes(&fields, 1)
+            .and_then(proto::blob_id)
+            .and_then(|id| blob(&connection, &id))
+            .and_then(|data| proto::text(&proto::fields(&data)?, 1))
+            .and_then(|text| message::joined(Some(text)));
+        if let Some(text) = prompt {
+            let written = started_at(&connection, proto::bytes(&fields, 1).and_then(proto::blob_id).as_deref())
+                .map(|at| Stamp(at).to_string());
+            if !each(Spoken { role: Role::Prompt, said: Said { text, written } }) {
+                return Ok(());
+            }
         }
     }
-    Ok(None)
+    Ok(())
 }
 
 fn assistant_text(data: &[u8]) -> Option<Said> {
