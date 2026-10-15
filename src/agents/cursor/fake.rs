@@ -212,6 +212,18 @@ impl FakeCursor {
         self.save();
     }
 
+    pub(crate) fn turns(&self, count: usize) {
+        {
+            let mut state = self.state.lock();
+            for n in 0..count {
+                let message = format!("message-{}", state.turns.len());
+                let user = [bytes(1, format!("prompt {n}").as_bytes()), bytes(2, message.as_bytes())].concat();
+                state.turns.push(Turn { user, message, steps: Vec::new(), routed: None, shell: false });
+            }
+        }
+        self.save();
+    }
+
     pub(crate) fn shell_turn(&self, command: &str) {
         self.state.lock().turns.push(Turn {
             user: Vec::new(),

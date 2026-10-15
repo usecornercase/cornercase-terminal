@@ -516,3 +516,22 @@ mod odd_turn_lists {
         assert!(!session.remember(&format!("message-{}", REMEMBER + 9)));
     }
 }
+
+mod long_chats {
+    use super::*;
+
+    #[test]
+    fn a_chat_past_the_remembered_prompts_counts_nothing_twice() {
+        let dir = TempDir::new();
+        let (fake, sleeper) = running(dir.path());
+        let session = first(&sleeper);
+        fake.turns(REMEMBER + 5);
+
+        let loaded = follow_now(&sleeper, Some(session));
+        assert_eq!(loaded.counted.len(), REMEMBER + 5);
+        fake.reply("one more thing");
+        let again = follow_now(&sleeper, Some(loaded));
+
+        assert_eq!((again.counted.len(), again.prompted), (0, None));
+    }
+}

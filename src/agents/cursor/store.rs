@@ -203,9 +203,11 @@ impl Session {
         let previous = std::mem::take(&mut self.cache);
         let fresh = meta.created.and_then(moment).is_some_and(|created| created >= since);
         for id in &ids {
-            let turn = previous.get(id).cloned().or_else(|| read_turn(connection, id));
-            let Some(turn) = turn else { continue };
-            if let Some(prompt) = &turn.prompt
+            let cached = previous.get(id).cloned();
+            let seen = cached.is_some();
+            let Some(turn) = cached.or_else(|| read_turn(connection, id)) else { continue };
+            if !seen
+                && let Some(prompt) = &turn.prompt
                 && self.remember(prompt)
                 && (!first || fresh)
             {
