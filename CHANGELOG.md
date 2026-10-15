@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.99
+
+- After about two weeks of use (days on which a window was open and an agent ran), a small card at the bottom right asks for a star on GitHub. **star on GitHub** copies the link and never asks again, **later** asks again in about three months, and **don't show again** stops it for good. It never appears while an agent is working or waiting for you, never takes the keys from your pane, and is skipped below 90 columns. Turn it off in **Settings → UI → star prompt**, or with `"star_prompt": false` in `config.json`. Nothing is sent anywhere.
+
 ## 0.12.98
 
 - **Share a flow with a teammate.** In **Settings → Agents → flows**, **export** copies the selected flow's text to your clipboard, and **import** (or just pasting on the list) opens a flow your teammate sent you in the editor, unsaved, so you can read it before you save it. What the flow sets for its agents (variables and arguments, which run without asking) is shown in red, and agents you do not have installed are named.
