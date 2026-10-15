@@ -9,7 +9,6 @@ use super::{FORM_WIDTH, View, draw_submit, form_inner, overlay_block, update_but
 use crate::highlight::markdown;
 
 pub(crate) const TITLE: &str = "Remote";
-pub(crate) const TELEGRAM_TITLE: &str = "Telegram";
 pub(crate) const LABEL: &str = "Remote";
 const LIT: &str = " ●";
 const QUIET: usize = 4;

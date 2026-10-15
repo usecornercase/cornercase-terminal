@@ -90,7 +90,7 @@ import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, pla
 import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
-const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor Telegram';
+const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
 
@@ -2383,6 +2383,7 @@ export class App {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
         { id: 'telegram', section: 'Telegram', label: 'bot', value: 'not set', note: 'make a bot with @BotFather and paste its token here' },
+        { id: 'discord', section: 'Discord', label: 'bot', value: 'not set', note: 'make a Discord app with User Install and paste its bot token' },
       ];
     }
     if (page === 2) {
@@ -2519,7 +2520,7 @@ export class App {
       const listed = this.listedKinds();
       const items = AGENTS.filter(([k]) => !listed.includes(k)).map(([k, bin]) => ({ value: k, note: bin }));
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
-    } else if (row.id === 'remote' || row.id === 'telegram') {
+    } else if (row.id === 'remote' || row.id === 'telegram' || row.id === 'discord') {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;

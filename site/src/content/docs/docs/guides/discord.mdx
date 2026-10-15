@@ -1,0 +1,87 @@
+---
+title: On Discord
+description: Leave the computer and keep working with your agents from Discord. While you are away, an agent that needs you or finishes messages you in a direct message, and what you reply goes to it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When you leave the computer, cornercase can carry on in a Discord direct message. While you are **away**, every agent that needs you or finishes its turn sends you a message: its question with buttons to answer it, or what it wrote. You reply to that message, and your reply goes to that agent. From the same chat you can list your agents, look at their screens, stop one or start a new one.
+
+It does what the [Telegram bot](../telegram/) does, and the two can be set up and away at the same time. To see the whole window instead, use [From your phone](../phone/).
+
+## What you need
+
+- **A Discord account**, with the Discord app on your phone.
+- **An app of your own**, made in the [Discord Developer Portal](https://discord.com/developers/applications):
+  1. **New Application**, give it a name (`cornercase` will do) and create it.
+  2. In **Installation**, under **Installation Contexts**, keep **User Install** on. **Guild Install** can stay as it is: cornercase never joins a server.
+  3. Still in **Installation**, set **Install Link** to **None** and save. cornercase makes its own link when you pair, and Discord does not let a bot be private while it has an install link.
+  4. In **Bot**, turn **Public Bot** off and save, so the app is private: nobody but you can add it. cornercase would ignore anyone else anyway, but each of their messages would add a line to `server.log`.
+  5. In **General Information**, leave **Interactions Endpoint URL** empty. With an address there, Discord sends button presses and commands to it instead of to cornercase, and they all fail.
+  6. In **Bot**, press **Reset Token** and copy the token it shows (a long string with two dots).
+
+The app is yours alone: cornercase talks to Discord as its bot, and only to you, its owner. cornercase runs no server for this: your computer connects to Discord and sends the agents' messages itself, over HTTPS and a WebSocket. Nothing on your computer is reachable from the internet.
+
+## Set it up
+
+1. In **Settings › Remote**, under **Discord**, select **bot**, press `Enter`, paste the token and press `Enter`. cornercase checks it with Discord and shows the bot's name.
+2. Select **phone** and press `Enter`. A dialog shows a QR code and the same link as text.
+3. Scan the code with your phone's camera. It opens Discord on **Add to my apps**: authorize it.
+4. Within a few seconds the dialog closes, `Discord connected` shows, and the bot says hello in a direct message.
+
+There is no code to type: the link adds the app to your own Discord account, and cornercase then messages the app's owner, which is you. Once paired, the bot listens only to that direct message.
+
+If the app is still public or **User Install** is off, the **bot** row and the dialog say what to change (`public app: Install Link to None, then Public Bot off`, `turn on User Install in the Developer Portal`). Change it in the Developer Portal and the warning goes on the next check, a few seconds later while the dialog is open; there is no need to paste the token again. It never stops you from pairing.
+
+## Go away
+
+When you leave, turn on **away** in any of these ways:
+
+- click **`Remote`**, at the right of **`Usage`** at the bottom of the sidebar, then **continue on Discord**;
+- press `o` in the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts), which turns it on for every chat app that is set up;
+- run [`cornercase away`](../scripts-and-agents/#away-on-telegram-or-discord), the same;
+- send `/away` to the bot, if you left without it.
+
+The bot then sends the list of your agents, and **`Remote`** shows a green **`●`**. It stays on until you turn it off: **Remote › stop messaging on Discord**, `o` again, `/back` in the chat or `cornercase away --off`.
+
+## What you get and how to answer
+
+The messages are the same as on Telegram (see [What you get](../telegram/#what-you-get)): `! claude needs you · web-shop › dark-mode` with the last lines of its screen and a button per option, plus **esc** and **screen**; `✓ claude finished` with the last thing it wrote, in Discord's Markdown. A message longer than Discord's 2,000 characters comes in several, at most four. A keyboard with more buttons than one message holds continues in the next ones, marked `…`.
+
+**Reply** to one of the bot's messages (long-press or swipe it, then **Reply**) and what you write goes to that agent, with `Enter`. A 👍 on your message says the agent took it; otherwise the bot answers why not. When the bot asks you to write something (the prompt for `/new`, a branch's name, a message after **write**), its message ends with *reply to this message*, but a plain message works too: the next one you send that is not a command answers it, for ten minutes, unless the bot has written about an agent since. Otherwise a message that replies to nothing goes to your only agent, or, with several, the bot asks which one.
+
+## Commands
+
+Type `/` in the chat with the bot and they show in Discord's command menu, under the app's name; pick one and send it. They only show in that chat, not in servers or other conversations.
+
+| Command | What it does |
+| --- | --- |
+| `/status` | Every agent, in sidebar order, with what it is doing, its model and context, and buttons to write to it, see its screen or stop its turn. |
+| `/new` | Starts an agent: the bot asks for the project, the workspace or a new worktree, the agent if needed, and the prompt. |
+| `/away` | Turns away on from the phone. |
+| `/back` | Turns it off: the bot stops messaging you. |
+
+A button from before the server restarted is refused, since the ids it carries may name other panes now: send `/status` for fresh ones.
+
+## Change or forget
+
+- **Forget the phone**: select **phone** and press `Backspace`. The bot stops listening to you.
+- **Remove the bot**: select **bot** and press `Backspace`. The token is deleted and cornercase stops talking to Discord. Setting another bot forgets the paired chat.
+
+## Privacy and security
+
+- Only the direct message with the app's owner is heard; messages from anyone else, and from servers, are ignored.
+- The token lives in `secrets.json`, and the bot's name and the paired chat in `discord.json`, both next to `config.json` and readable only by you (see [Files](../../reference/files-and-environment/)).
+- `server.log` says when a message or a tap came in and what kind it was, never its text, nor the token.
+- **What agents write goes through Discord.** Direct messages with bots are not end-to-end encrypted, so Discord's servers store them: questions, answers, the screens you ask for, file paths and code. Don't use it for work you can't send there.
+
+<Aside type="caution">
+Whoever can write as you in Discord can type into your agents, as if at your keyboard. Keep your Discord account locked (two-factor authentication), and keep the bot's token secret: reset it in the Developer Portal if it leaks.
+</Aside>
+
+## Limits
+
+- The computer must be awake and the cornercase server running. [Keep awake](../../reference/agents/#keep-the-computer-awake) keeps it awake while an agent works.
+- Away is not saved: after a server restart it is off until you turn it on again.
+- Give each computer its own app: two computers on one app would both read your replies.
+- Pictures from the agents are not sent: one direct message holds every agent, and replies say which one.

@@ -51,11 +51,11 @@ use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::Focus;
 use layout::{Scrolls, Side};
+use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use pull_requests::PullRequests;
 use queue_panel::{QueueEvent, QueueRuntime};
 use session::not_restored;
-use telegram::{Telegram, TelegramEvent};
 use toast::Toast;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
@@ -78,6 +78,7 @@ mod launches;
 mod layout;
 mod links;
 mod menus;
+mod messenger;
 mod overlay;
 mod panes;
 mod picker_dialog;
@@ -92,7 +93,6 @@ mod shortcuts;
 mod sidebar;
 mod tab_bar;
 mod tabs;
-mod telegram;
 mod toast;
 mod todo_panel;
 mod trace;
@@ -148,7 +148,7 @@ pub(crate) struct App {
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
     remote: remote_access::Remote,
-    telegram: Telegram,
+    messengers: Vec<Messenger>,
     usage: usage::State,
     usage_page: usage::Page,
     usage_timeout: Duration,
@@ -168,7 +168,7 @@ impl App {
         let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
-        let telegram = Telegram::new(&config_path, secrets_path.clone());
+        let messengers = messenger::messengers(&config_path, &secrets_path);
         Self {
             upstream: Upstream::default(),
             pulls: PullRequests::default(),
@@ -204,7 +204,7 @@ impl App {
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
             remote: remote_access::Remote::new(web),
-            telegram,
+            messengers,
             usage: usage::State::default(),
             usage_page: usage::Page::default(),
             usage_timeout: usage::TIMEOUT,
@@ -327,10 +327,17 @@ impl App {
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
-        [drag, launch, spin, self.next_request(now), self.queued.area.and_then(|_| self.queued.queue.next(clock))]
-            .into_iter()
-            .flatten()
-            .min()
+        [
+            drag,
+            launch,
+            spin,
+            self.next_request(now),
+            self.next_pairing(now),
+            self.queued.area.and_then(|_| self.queued.queue.next(clock)),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn agent_working(&self) -> bool {
@@ -353,9 +360,10 @@ impl App {
         self.drive_launches(now);
         self.watch_agents(now);
         self.keep_awake(now);
-        self.watch_telegram(now);
+        self.watch_messengers(now);
         self.sync_remote();
-        self.sync_telegram();
+        self.sync_messengers();
+        self.pair_by_owner(now);
         self.check_requests(now);
         self.check_updates(now);
         self.refresh_files(now);
@@ -485,7 +493,7 @@ impl App {
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
-            AppEvent::Telegram(event) => self.telegram_event(event, area),
+            AppEvent::Messenger(event) => self.messenger_event(event, area),
         }
         Ok(())
     }

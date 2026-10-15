@@ -75,6 +75,7 @@ export default defineConfig({
             { label: 'Remote machines', slug: 'docs/guides/remote' },
             { label: 'From your phone', slug: 'docs/guides/phone' },
             { label: 'On Telegram', slug: 'docs/guides/telegram' },
+            { label: 'On Discord', slug: 'docs/guides/discord' },
             { label: 'Small terminals', slug: 'docs/guides/small-terminals' },
           ],
         },

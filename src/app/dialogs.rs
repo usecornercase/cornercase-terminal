@@ -201,7 +201,7 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input),
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input),
-            Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote | Overlay::Telegram => None,
+            Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote | Overlay::Pairing(_) => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }

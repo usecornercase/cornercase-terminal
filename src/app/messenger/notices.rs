@@ -7,8 +7,8 @@ use super::{Asked, Route};
 use crate::agents::activity::{MOON, SHELL, Status};
 use crate::app::App;
 use crate::control::{Command, LastMessage};
+use crate::messenger::{self, Keyboard, Tap, Via};
 use crate::project::Hierarchy;
-use crate::telegram::{self, Keyboard, Tap, html};
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
 const SETTLE: Duration = Duration::from_secs(1);
@@ -18,7 +18,7 @@ const MOST_LISTED: usize = 25;
 const LABEL: usize = 40;
 const PLACE: usize = 120;
 const MODEL: usize = 40;
-pub(super) const AGENTS: &str = "<b>Agents</b>";
+pub(super) const AGENTS: &str = "Agents";
 const WORKING: &str = "working";
 const WAITING: &str = "waiting";
 
@@ -63,18 +63,19 @@ fn label(text: &str) -> String {
     out
 }
 
-fn with_screen(header: &str, screen: &str, lines: usize) -> String {
-    let screen = html::pre(&excerpt(screen, lines), html::room(header));
+fn with_screen(via: Via, header: &str, screen: &str, lines: usize) -> String {
+    let m = via.markup();
+    let screen = m.pre(&excerpt(screen, lines), m.room(header));
     format!("{header}\n{screen}")
 }
 
 fn question(screen: &str) -> Option<String> {
-    if telegram::choices(screen).is_empty() {
+    if messenger::choices(screen).is_empty() {
         return None;
     }
     let rows = excerpt(screen, EXCERPT);
     let rows: Vec<&str> =
-        rows.lines().map(|row| row.trim_matches(|c: char| c.is_whitespace() || telegram::MARKS.contains(c))).collect();
+        rows.lines().map(|row| row.trim_matches(|c: char| c.is_whitespace() || messenger::MARKS.contains(c))).collect();
     Some(rows.join("\n"))
 }
 
@@ -105,9 +106,15 @@ impl App {
         places.map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id).collect()
     }
 
-    pub(in crate::app) fn watch_telegram(&mut self, now: Instant) {
-        if !self.telegram.paired() {
-            self.telegram.watches.clear();
+    pub(in crate::app) fn watch_messengers(&mut self, now: Instant) {
+        for via in Via::ALL {
+            self.watch_messenger(via, now);
+        }
+    }
+
+    fn watch_messenger(&mut self, via: Via, now: Instant) {
+        if !self.messenger(via).paired() {
+            self.messenger_mut(via).watches.clear();
             return;
         }
         let mut seen = HashSet::new();
@@ -118,7 +125,7 @@ impl App {
             seen.insert(term.id);
             let fresh =
                 Watch { state, since: now, settled: state, busy: false, question: None, asked: now, looked: now };
-            let watch = self.telegram.watches.entry(term.id).or_insert(fresh);
+            let watch = self.messengers[via.index()].watches.entry(term.id).or_insert(fresh);
             if watch.state != state {
                 watch.state = state;
                 watch.since = now;
@@ -153,36 +160,39 @@ impl App {
             watch.settled = state;
             watch.busy &= !over;
         }
-        self.telegram.watches.retain(|pane, _| seen.contains(pane));
-        if !self.telegram.away {
+        self.messenger_mut(via).watches.retain(|pane, _| seen.contains(pane));
+        if !self.messenger(via).away {
             return;
         }
         for notice in notices {
             match notice {
-                Notice::Waiting(pane) => self.notice_waiting(pane),
-                Notice::Finished(pane, shell) => self.notice_finished(pane, shell),
+                Notice::Waiting(pane) => self.notice_waiting(via, pane),
+                Notice::Finished(pane, shell) => self.notice_finished(via, pane, shell),
             }
         }
     }
 
-    pub(super) fn notice_waiting(&mut self, pane: u64) {
+    pub(super) fn notice_waiting(&mut self, via: Via, pane: u64) {
         let Some(agent) = self.agent_at(pane) else { return };
-        let mut keyboard: Keyboard = telegram::choices(&agent.screen)
+        let messenger = self.messenger(via);
+        let mut keyboard: Keyboard = messenger::choices(&agent.screen)
             .into_iter()
             .map(|(digit, text)| {
-                vec![self.telegram.tap(label(&format!("{digit} · {text}")), &Tap::Key(pane, digit.into()))]
+                vec![messenger.tap(label(&format!("{digit} · {text}")), &Tap::Key(pane, digit.into()))]
             })
             .collect();
         keyboard.push(vec![
-            self.telegram.tap("esc", &Tap::Key(pane, "esc".into())),
-            self.telegram.tap("screen", &Tap::Screen(pane)),
+            messenger.tap("esc", &Tap::Key(pane, "esc".into())),
+            messenger.tap("screen", &Tap::Screen(pane)),
         ]);
-        let header = format!("<b>! {} needs you</b> · {}", html::escape(&agent.kind), html::escape(&agent.place));
-        let html = with_screen(&header, &agent.screen, EXCERPT);
-        self.say(html, keyboard, Some(Route::Pane(pane)), None);
+        let m = via.markup();
+        let header =
+            format!("{} · {}", m.bold(&format!("! {} needs you", m.escape(&agent.kind))), m.escape(&agent.place));
+        let text = with_screen(via, &header, &agent.screen, EXCERPT);
+        self.say(via, text, keyboard, Some(Route::Pane(pane)), None);
     }
 
-    fn notice_finished(&mut self, pane: u64, shell: bool) {
+    fn notice_finished(&mut self, via: Via, pane: u64, shell: bool) {
         let Some(agent) = self.agent_at(pane) else { return };
         let (icon, what) = if agent.status == Some(Status::Failed) {
             ("!", "failed")
@@ -191,43 +201,49 @@ impl App {
         } else {
             ("✓", "finished")
         };
-        let mut header = format!("<b>{icon} {} {what}</b> · {}", html::escape(&agent.kind), html::escape(&agent.place));
+        let m = via.markup();
+        let mut header =
+            format!("{} · {}", m.bold(&format!("{icon} {} {what}", m.escape(&agent.kind))), m.escape(&agent.place));
         if shell {
             header.push_str(" · a background shell still runs");
         }
         let command = Command::LastMessage(LastMessage { pane: Some(pane), tab: None });
-        self.telegram_request(command, Asked::Finished { pane, header }, None);
+        self.chat_request(via, command, Asked::Finished { pane, header }, None);
     }
 
-    pub(super) fn finished_read(&mut self, pane: u64, header: &str, reply: Result<Value, String>) {
-        let keyboard = vec![vec![self.telegram.tap("screen", &Tap::Screen(pane))]];
+    pub(super) fn finished_read(&mut self, via: Via, pane: u64, header: &str, reply: Result<Value, String>) {
+        let keyboard = vec![vec![self.messenger(via).tap("screen", &Tap::Screen(pane))]];
+        let m = via.markup();
         let text = reply.ok().and_then(|value| value["text"].as_str().map(String::from));
         let parts = match text {
-            Some(text) if !text.trim().is_empty() => html::markdown(&text),
+            Some(text) if !text.trim().is_empty() => m.markdown(&text),
             _ => {
                 let screen = self.agent_at(pane).map(|agent| agent.screen).unwrap_or_default();
-                vec![html::pre(&excerpt(&screen, EXCERPT), html::room(header))]
+                vec![m.pre(&excerpt(&screen, EXCERPT), m.room(header))]
             }
         };
-        self.say_long(header, parts, keyboard, Some(Route::Pane(pane)));
+        self.say_long(via, header, parts, keyboard, Some(Route::Pane(pane)));
     }
 
-    pub(super) fn send_screen(&mut self, pane: u64) {
+    pub(super) fn send_screen(&mut self, via: Via, pane: u64) {
         let Some(agent) = self.agent_at(pane) else {
-            self.say(super::chat::GONE.into(), Vec::new(), None, None);
+            self.say(via, super::chat::GONE.into(), Vec::new(), None, None);
             return;
         };
+        let messenger = self.messenger(via);
         let keyboard = vec![vec![
-            self.telegram.tap("refresh", &Tap::Screen(pane)),
-            self.telegram.tap("esc", &Tap::Key(pane, "esc".into())),
+            messenger.tap("refresh", &Tap::Screen(pane)),
+            messenger.tap("esc", &Tap::Key(pane, "esc".into())),
         ]];
-        let header =
-            format!("{} <b>{}</b> · {}", icon(agent.status), html::escape(&agent.kind), html::escape(&agent.place));
-        let html = with_screen(&header, &agent.screen, SCREEN);
-        self.say(html, keyboard, Some(Route::Pane(pane)), None);
+        let m = via.markup();
+        let header = format!("{} {} · {}", icon(agent.status), m.bold(&m.escape(&agent.kind)), m.escape(&agent.place));
+        let text = with_screen(via, &header, &agent.screen, SCREEN);
+        self.say(via, text, keyboard, Some(Route::Pane(pane)), None);
     }
 
-    pub(super) fn status_message(&self) -> (Vec<String>, Keyboard) {
+    pub(super) fn status_message(&self, via: Via) -> (Vec<String>, Keyboard) {
+        let messenger = self.messenger(via);
+        let m = via.markup();
         let mut lines = Vec::new();
         let mut keyboard: Keyboard = Vec::new();
         let panes = self.agent_panes();
@@ -240,14 +256,14 @@ impl App {
             lines.push(format!(
                 "{} {} · {}{}",
                 icon(agent.status),
-                html::escape(&agent.kind),
-                html::escape(&agent.place),
-                html::escape(&details.unwrap_or_default())
+                m.escape(&agent.kind),
+                m.escape(&agent.place),
+                m.escape(&details.unwrap_or_default())
             ));
             keyboard.push(vec![
-                self.telegram.tap(label(&format!("✎ {} · {}", agent.kind, agent.place)), &Tap::Write(pane)),
-                self.telegram.tap("screen", &Tap::Screen(pane)),
-                self.telegram.tap("esc", &Tap::Key(pane, "esc".into())),
+                messenger.tap(label(&format!("✎ {} · {}", agent.kind, agent.place)), &Tap::Write(pane)),
+                messenger.tap("screen", &Tap::Screen(pane)),
+                messenger.tap("esc", &Tap::Key(pane, "esc".into())),
             ]);
         }
         if panes.is_empty() {
@@ -256,12 +272,12 @@ impl App {
             lines.push(format!("… and {} more", panes.len() - MOST_LISTED));
         }
         lines.push(String::new());
-        lines.push(if self.telegram.away {
+        lines.push(if messenger.away {
             "Away is on: I message you here when an agent needs you or finishes.".into()
         } else {
             "Away is off: /away to get messages here.".into()
         });
-        keyboard.push(vec![self.telegram.tap("+ new agent", &Tap::New)]);
-        (html::lines(&lines), keyboard)
+        keyboard.push(vec![messenger.tap("+ new agent", &Tap::New)]);
+        (m.lines(&lines), keyboard)
     }
 }

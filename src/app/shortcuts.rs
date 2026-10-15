@@ -148,7 +148,7 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
-            Action::Away => self.toggle_away(),
+            Action::Away => self.toggle_away_everywhere(),
             Action::Quit => self.outbox.detach = true,
         }
         Ok(())

@@ -8,6 +8,7 @@ use crate::config::{self, Config};
 use crate::issues::Source;
 use crate::issues::secrets;
 use crate::log::{self, Level};
+use crate::messenger::Via;
 use crate::settings::{self, DONE, Page, Settings, Status};
 use crate::ui::{self};
 
@@ -50,7 +51,9 @@ impl App {
         settings.pulls = self.pull_requests_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();
-        settings.telegram = self.telegram_settings();
+        for via in Via::ALL {
+            *settings.messenger_mut(via) = self.messenger_settings(via);
+        }
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
@@ -148,23 +151,23 @@ impl App {
                     s.notice = Some(forgotten.map_or_else(|e| e, String::from));
                 }
             }
-            settings::Action::CheckTelegram(token) => self.check_telegram(token),
-            settings::Action::RemoveTelegram => {
-                let removed = self.remove_telegram();
+            settings::Action::CheckBot(via, token) => self.check_messenger(via, token),
+            settings::Action::RemoveBot(via) => {
+                let removed = self.remove_messenger(via);
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                    s.notice = Some(removed.map_or_else(|e| e, String::from));
+                    s.notice = Some(removed.unwrap_or_else(|e| e));
                 }
             }
-            settings::Action::PairTelegram => {
-                let refused = self.pair_telegram();
+            settings::Action::Pair(via) => {
+                let refused = self.pair(via);
                 if let (Some(why), Some(Overlay::Settings(s))) = (refused, &mut self.overlay) {
                     s.notice = Some(why.into());
                 }
             }
-            settings::Action::ForgetTelegram => {
-                let forgotten = self.forget_telegram_chat();
+            settings::Action::ForgetChat(via) => {
+                let forgotten = self.forget_chat(via);
                 if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                    s.notice = Some(forgotten.into());
+                    s.notice = Some(forgotten);
                 }
             }
             settings::Action::RemoveToken(source) => {

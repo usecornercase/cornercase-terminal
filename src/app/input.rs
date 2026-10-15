@@ -11,6 +11,7 @@ use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
 use crate::list::Search;
+use crate::messenger::Via;
 use crate::ui::{self};
 
 pub(super) const WHEEL_ROWS: isize = 3;
@@ -294,7 +295,8 @@ impl App {
     }
 
     fn open_remote_menu(&mut self, at: Position) {
-        let actions = vec![super::menus::MenuAction::Browser, super::menus::MenuAction::Away];
+        let away = Via::ALL.into_iter().map(super::menus::MenuAction::Away);
+        let actions = std::iter::once(super::menus::MenuAction::Browser).chain(away).collect();
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
