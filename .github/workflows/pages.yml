@@ -10,6 +10,8 @@ on:
     paths:
       - site/**
       - .github/workflows/pages.yml
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -45,6 +47,12 @@ jobs:
 
       - name: check
         run: npm run check
+
+      - name: plugins
+        if: ${{ github.event_name != 'pull_request' }}
+        run: npm run plugins
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: build
         run: npm run build

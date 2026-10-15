@@ -7,7 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check && npm test",
-    "test": "node scripts/test-demo.mjs"
+    "test": "node scripts/test-demo.mjs",
+    "plugins": "node scripts/plugins-index.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.5",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "esbuild": "^0.28.2",
+    "smol-toml": "^1.4.2",
     "typescript": "^6.0.3"
   }
 }

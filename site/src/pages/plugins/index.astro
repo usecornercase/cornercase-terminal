@@ -2,35 +2,43 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import { Aside } from '@astrojs/starlight/components';
 import source from '../../../plugins/index.json?raw';
-import { installCommand, sourceUrl, validate } from '../../lib/plugins/catalogue';
+import { MANIFEST, TOPIC, installCommand, sourceUrl, validate } from '../../lib/plugins/catalogue';
 
-const { plugins } = validate(source);
+const { generated, plugins } = validate(source);
 const base = import.meta.env.BASE_URL;
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
 const platforms = (list?: string[]) => (list?.length ? list.join(', ') : 'macOS and Linux');
+const updated = new Date(generated).toISOString().slice(0, 16).replace('T', ' ');
 ---
 <StarlightPage
   frontmatter={{
-    title: 'Plugin catalogue',
-    description: 'Plugins reviewed for cornercase, each pinned to the commit that was read. Install one from Settings or the command line.',
+    title: 'Plugins',
+    description: `Plugins for cornercase, found on GitHub by their ${TOPIC} topic. Install one with cornercase plugin install.`,
   }}
 >
   <p>
-    Each plugin here was read by a cornercase maintainer at the commit it is pinned to, and installs exactly that commit.
-    What a plugin is and how to write one is in the <a href={`${base}docs/guides/plugins/`}>plugins guide</a>. The list is
-    also published as <a href={`${base}plugins/index.json`}><code>index.json</code></a>, which cornercase reads.
+    Every public GitHub repository with the <code>{TOPIC}</code> topic and a valid <code>{MANIFEST}</code> at its root is
+    listed here, refreshed every 30 minutes. What a plugin is and how to write one is in the
+    <a href={`${base}docs/guides/plugins/`}>plugins guide</a>. The list is also published as
+    <a href={`${base}plugins/index.json`}><code>index.json</code></a>.
   </p>
 
+  <Aside type="caution" title="Nobody reviews these plugins">
+    They are listed automatically. A plugin runs as you: once on, it can do anything you can, including typing into every
+    terminal, and the permissions it lists are shown, not enforced. Read its code or trust its author before you turn it on.
+  </Aside>
+
   <h2 id="plugins">Plugins</h2>
+  <p>{plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`}, most starred first. Updated {updated} UTC.</p>
   {plugins.length === 0 ? (
-    <p data-empty>No plugins are listed yet. Yours could be the first: see <a href="#submit">submit a plugin</a>.</p>
+    <p data-empty>No plugins are listed yet. Yours could be the first: see <a href="#publish">publish a plugin</a>.</p>
   ) : (
     plugins.map((plugin) => (
       <section data-plugin={plugin.id}>
-        <h3>{plugin.name} <small>{plugin.version}</small></h3>
-        <p>{plugin.description}</p>
+        <h3>{plugin.name} <small>{plugin.version} · ★ {plugin.stars}</small></h3>
+        {plugin.description && <p>{plugin.description}</p>}
         <ul>
-          <li>Source: <a href={sourceUrl(plugin)} rel="noopener noreferrer">{plugin.repo}</a>{plugin.ref ? ` at ${plugin.ref}` : ''}, commit <code>{plugin.commit.slice(0, 12)}</code></li>
+          <li>Source: <a href={sourceUrl(plugin)} rel="noopener noreferrer nofollow">{plugin.repo}</a>, commit <code>{plugin.commit.slice(0, 12)}</code></li>
           <li>Runs on: {platforms(plugin.platforms)}</li>
           <li>Asks for: {plugin.permissions?.length ? plugin.permissions.join(', ') : 'nothing'} (shown, not enforced)</li>
           {plugin.min_cornercase && <li>Needs cornercase {plugin.min_cornercase} or later</li>}
@@ -42,55 +50,26 @@ const platforms = (list?: string[]) => (list?.length ? list.join(', ') : 'macOS 
 
   <h2 id="install">Install one</h2>
   <p>
-    In cornercase, open <strong>Settings › Plugins</strong> and click <strong>catalogue</strong> under Available. Only then
-    does cornercase fetch this list; it never fetches it in the background. Click a plugin to see where it comes from
-    and every command it will run, then <strong>install</strong>. From a shell, the command under each plugin installs
-    the same commit and asks first.
+    Copy the command under a plugin. It installs the commit listed here: cornercase fetches it, shows where it comes from
+    and every command it will run, and asks before installing. The plugin is installed turned off; turn it on in
+    <strong>Settings › Plugins</strong> or with <code>cornercase plugin enable &lt;id&gt;</code>.
   </p>
-  <p>
-    A plugin is installed turned off. Nothing in it runs until you turn it on in Settings or with
-    <code>cornercase plugin enable &lt;id&gt;</code>.
-  </p>
-  <Aside type="caution" title="A plugin runs as you">
-    Review is not a sandbox. Once on, a plugin can do anything you can, including typing into every terminal.
-    The permissions it lists are shown, not enforced. <code>cornercase plugin install owner/repo</code> also installs
-    plugins that are not listed here, which nobody has reviewed.
-  </Aside>
 
-  <h2 id="submit">Submit a plugin</h2>
+  <h2 id="publish">Publish a plugin</h2>
+  <ol>
+    <li>Put your plugin in a public GitHub repository, with its <code>{MANIFEST}</code> at the root.</li>
+    <li>Add the <code>{TOPIC}</code> topic to the repository (the gear next to <strong>About</strong>).</li>
+  </ol>
   <p>
-    Open a pull request on <a href={repo}>cornercase-terminal</a> that adds an entry to
-    <a href={`${repo}/blob/main/site/plugins/index.json`}><code>site/plugins/index.json</code></a>:
+    That is all. Within 30 minutes it shows here, at the latest commit of its default branch, and each new commit replaces
+    it at the next refresh. Forks, archived repositories and manifests that cannot be read are left out. When two
+    repositories declare the same <code>id</code>, the older repository keeps it. The manifest's <code>name</code>,
+    <code>version</code>, <code>description</code>, <code>platforms</code>, <code>permissions</code> and
+    <code>min_cornercase</code> are what this page shows.
   </p>
-  <pre><code>{`{
-  "id": "acme.notes",
-  "name": "Notes",
-  "description": "A notes file per workspace",
-  "repo": "acme/cornercase-notes",
-  "ref": "v1.0.0",
-  "commit": "<the full 40-character commit>",
-  "version": "1.0.0",
-  "min_cornercase": "0.12.91",
-  "platforms": ["macos", "linux"],
-  "permissions": ["read", "send"],
-  "sha256": { "aarch64-apple-darwin": "<sha256 of that download>" }
-}`}</code></pre>
   <p>
-    <code>id</code>, <code>name</code>, <code>description</code>, <code>repo</code> (<code>owner/repo</code> on GitHub),
-    <code>commit</code> and <code>version</code> are required. The <code>id</code> must be the one in the plugin's
-    <code>cornercase-plugin.toml</code> at that commit. When the manifest has a <code>[download]</code>, list the sha256 of
-    each target here too: cornercase refuses a download that is not the one reviewed. <code>npm run check</code> in
-    <code>site/</code> checks the format.
-  </p>
-  <p>A maintainer then reads, at that commit:</p>
-  <ul>
-    <li>the manifest: every action, hook, service and window process, the build steps and the downloads;</li>
-    <li>the code those commands run, and what it does with the cornercase commands, your files and the network;</li>
-    <li>that the declared permissions match what the code does;</li>
-    <li>that a download is built from that commit, and its sha256.</li>
-  </ul>
-  <p>
-    A new version is a new pull request that moves the <code>commit</code>, reviewed the same way. A plugin found doing
-    something it should not is removed from the list.
+    A plugin that harms its users is removed through
+    <a href={`${repo}/blob/main/site/plugins/blocklist.json`}><code>site/plugins/blocklist.json</code></a>.
+    To report one, <a href={`${repo}/issues/new`}>open an issue</a>.
   </p>
 </StarlightPage>
