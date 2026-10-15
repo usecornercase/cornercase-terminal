@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.102
+
+- **Cursor CLI is now a full agent.** Tabs running `cursor-agent` show their model and how full the context is, whether the agent is working or finished, and its conversation comes back after a restart (`cursor-agent --resume <chat id>`, in the mode it ran in). `cornercase send --enter` confirms the prompt was taken, `read --last-message` and the search in sessions read its answers, and Stats counts its prompts, turns and time. Settings → Agents lists `cursor` with its modes (plan, ask, auto review, run everything).
+- Cursor shows `!` when it needs you only with `/status-indicators` turned on in Cursor; without it a permission prompt shows as working. Cursor keeps no token counts on disk, so Stats has none for it.
+- This was built from Cursor CLI's code and has not been checked against a live session: if its chat store looks different from what cornercase expects, the tab shows no model or context rather than a wrong one.
+- A tab running a Node 24 program started through a launcher is named after the program instead of `MainThread`.
+
 ## 0.12.101
 
 - **Search what was said.** The search has a second mode, **in sessions**, that looks in what your agents were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build) and in everything every pane printed, shells included, in every open project. Click the `❯` button at the right end of the search bar, or press `Tab`, to switch; with a prefix key, `f` `s` opens the search already there. Each result shows the matching line, who said it and `project › workspace › tab`. Choosing one goes to that pane and scrolls to the match, selected.
