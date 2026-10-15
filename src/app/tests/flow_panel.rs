@@ -271,6 +271,16 @@ mod recording {
         let message = &app.runs[0].messages[0];
         assert_eq!((message.text.as_ref().map(String::len), message.bytes), (Some(32 * 1024), text.len()));
     }
+
+    #[test]
+    fn wide_texts_are_cut_at_32_kib_too() {
+        let (mut app, _rx, _dir) = team();
+        let text = "é".repeat(20 * 1024);
+        send(&mut app, ORCHESTRATOR, "coder", &text);
+        let kept = app.runs[0].messages[0].text.clone().expect("the text");
+        assert!(kept.len() <= 32 * 1024 && kept.len() > 32 * 1024 - 4, "{}", kept.len());
+        assert!(text.starts_with(&kept));
+    }
 }
 
 mod clicks {

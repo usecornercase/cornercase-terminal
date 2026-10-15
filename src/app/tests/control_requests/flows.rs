@@ -123,12 +123,8 @@ impl Team {
             std::fs::read_to_string(log).unwrap_or_default().lines().filter(|l| l.starts_with("got ")).count() >= n
         };
         let deadline = Instant::now() + STARTING;
-        while !got(&log) {
-            assert!(Instant::now() < deadline, "timed out waiting for every agent to get its prompt\n{}", self.state());
-            drain(&mut self.app, &self.rx);
-            self.app.refresh(Instant::now());
-            std::thread::sleep(Duration::from_millis(20));
-        }
+        until_logged(&mut self.app, &self.rx, "every agent got its prompt", || got(&log) || Instant::now() >= deadline);
+        assert!(got(&log), "timed out waiting for every agent to get its prompt\n{}", self.state());
         self.order()
     }
 
@@ -233,9 +229,21 @@ fn a_member_asked_to_accept_bypass_permissions_waits_for_you_and_holds_the_orche
 
     let told = told.expect("a toast");
     assert!(told.contains("bypass permissions mode in its tab"), "{told}");
-    assert!(team.app.take_notifications().iter().any(|sent| sent.text.contains("waits for you")));
+    let mut sent: Vec<String> = Vec::new();
+    wait_until_within("both members are told", STARTING, || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        sent.extend(team.app.take_notifications().into_iter().map(|n| n.text));
+        ["coder", "reviewer"]
+            .iter()
+            .all(|role| sent.iter().any(|text| text.starts_with(&format!("{role} waits for you"))))
+    });
+    let coder = team.app.runs[0].pane_of("coder").expect("the coder's pane");
+    team.app.projects.pane_by_mut(coder).expect("its pane").write(b"j");
     let later = Instant::now() + Duration::from_secs(2);
     refreshing(&mut team.app, &team.rx, "a while passes", |_| Instant::now() >= later);
+    let again = team.app.take_notifications();
+    assert!(!again.iter().any(|sent| sent.text.contains("waits for you")), "told again on a key: {again:?}");
     let order = team.order();
     assert!(order.iter().all(|line| !line.starts_with("got")), "something was typed: {order:?}");
     assert_eq!(order.iter().filter(|line| line.starts_with("start")).count(), 2, "{order:?}");
@@ -264,6 +272,29 @@ fn flows_are_listed_with_their_agents_and_their_problems() {
     assert_eq!(broken.origin, "project");
     assert!(broken.problems.iter().any(|p| p.contains("`coder` runs `vim`")), "{:?}", broken.problems);
     assert!(listed.flows.iter().any(|f| f.origin == "built-in"));
+}
+
+#[test]
+fn a_project_flow_says_what_env_and_args_it_sets_when_listed_and_when_run() {
+    let mut team = Team::new();
+    let mut risky = pair();
+    risky.name = "Risky".into();
+    risky.roles[0].env.insert("NODE_OPTIONS".into(), "--require ./x.js".into());
+    risky.roles[1].args = vec!["--foo".into()];
+    let project_flows = store::project_dir(team.repo.path());
+    store::save(&project_flows, &risky, None).expect("save the flow");
+
+    let listed: wire::Flows =
+        serde_json::from_value(value(&mut team.app, None, Command::FlowList(wire::FlowList::default())))
+            .expect("the flows");
+    let check = listed.flows.iter().find(|f| f.name == "Risky").and_then(|f| f.check.clone()).expect("a check");
+    assert!(check.contains("sets NODE_OPTIONS for `coder`") && check.contains("passes --foo to `reviewer`"), "{check}");
+    assert!(listed.flows.iter().filter(|f| f.name != "Risky").all(|f| f.check.is_none()));
+
+    let Response::Ok(value) = team.run("Risky", None) else { panic!("the flow did not start") };
+    let run: RunInfo = serde_json::from_value(value).expect("the run");
+    let note = run.note.expect("a note");
+    assert!(note.contains("sets NODE_OPTIONS for `coder`"), "{note}");
 }
 
 #[test]

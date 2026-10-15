@@ -57,6 +57,9 @@ pub(super) fn listing(flows: &Flows) -> String {
         for problem in &flow.problems {
             let _ = writeln!(out, "  cannot run: {problem}");
         }
+        if let Some(check) = &flow.check {
+            let _ = writeln!(out, "  {check}");
+        }
     }
     for broken in &flows.broken {
         let _ = writeln!(out, "cannot read {}: {}", broken.path.display(), broken.error);

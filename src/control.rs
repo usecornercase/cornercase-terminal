@@ -463,6 +463,8 @@ pub(crate) struct FlowInfo {
     pub(crate) description: String,
     pub(crate) roles: Vec<RoleInfo>,
     pub(crate) problems: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) check: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

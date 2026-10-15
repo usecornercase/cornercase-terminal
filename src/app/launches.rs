@@ -47,7 +47,8 @@ impl App {
             let before = launch.stage();
             let step = launch.step(now, &mut seen);
             let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
-            if stage == "consent" && before != stage {
+            if stage == "consent" && before != stage && !launch.told {
+                launch.told = true;
                 parked.push(pane);
             }
             match &step {

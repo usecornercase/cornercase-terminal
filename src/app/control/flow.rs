@@ -8,6 +8,7 @@ use crate::app::App;
 use crate::app::flow_runs::Starting;
 use crate::control::{self, BrokenFlow, Done, FlowInfo, Flows, RoleInfo};
 use crate::error;
+use crate::flows::dialog::project_risks;
 use crate::flows::store::{Listing, Origin, Saved};
 use crate::flows::{self, Flow, Role};
 use crate::git;
@@ -167,6 +168,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         description: flow.description.clone(),
         roles: std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect(),
         problems: flow.problems(),
+        check: risks(flow, origin),
     }
 }
 
@@ -190,7 +192,12 @@ fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String>
             first.origin.whose()
         )
     });
-    Ok((first.flow.clone(), note))
+    let note = [note, risks(&first.flow, &first.origin)].into_iter().flatten().collect::<Vec<_>>();
+    Ok((first.flow.clone(), (!note.is_empty()).then(|| note.join(" "))))
+}
+
+fn risks(flow: &Flow, origin: &Origin) -> Option<String> {
+    matches!(origin, Origin::Project(_)).then(|| project_risks(flow)).flatten()
 }
 
 fn own_folder(branch: &str) -> String {

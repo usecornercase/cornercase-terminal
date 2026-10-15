@@ -41,10 +41,8 @@ pub(super) struct Noted {
 }
 
 fn kept(text: &str) -> String {
-    match text.char_indices().nth(MAX_TEXT) {
-        Some((cut, _)) => text[..cut].to_string(),
-        None => text.to_string(),
-    }
+    let cut = (0..=MAX_TEXT.min(text.len())).rev().find(|&at| text.is_char_boundary(at)).unwrap_or_default();
+    text[..cut].to_string()
 }
 
 pub(super) type Sent<'a> = (Edge, Option<&'a str>);
