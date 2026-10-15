@@ -90,7 +90,8 @@ export type MenuAction =
   | { kind: 'pane'; pane: number; action: PaneAction }
   | { kind: 'base'; branch: string }
   | { kind: 'showFlow'; workspace: number }
-  | { kind: 'startFlow' };
+  | { kind: 'newWorkspace'; project: number }
+  | { kind: 'startFlow'; project: number };
 
 export interface PickItem {
   value: string;

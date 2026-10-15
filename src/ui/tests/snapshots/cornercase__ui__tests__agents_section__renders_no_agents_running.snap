@@ -17,7 +17,7 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.h
 "▌ ├ › codex                    │                                                                    "
 "  └ + Tab                      │                                                                    "
 "                               │                             no tab open                            "
-"  + New workspace              │                      + Tab opens a shell here                      "
+"  + New                        │                      + Tab opens a shell here                      "
 " ───────────────────────────── │                                                                    "
 " Agents                        │                                                                    "
 "                               │                                                                    "

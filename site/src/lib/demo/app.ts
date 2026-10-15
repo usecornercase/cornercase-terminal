@@ -1055,8 +1055,14 @@ export class App {
   }
 
   openNewMenu(at: Pos): void {
-    const actions: MenuAction[] = [{ kind: 'openProject' }, { kind: 'newGroup' }];
-    if (this.project()) actions.push({ kind: 'startFlow' });
+    this.overlay = { kind: 'menu', at, actions: [{ kind: 'openProject' }, { kind: 'newGroup' }] };
+    this.dirty();
+  }
+
+  openNewWorkspaceMenu(at: Pos, p: number): void {
+    const project = this.projects[p];
+    if (!project) return;
+    const actions: MenuAction[] = [{ kind: 'newWorkspace', project: project.id }, { kind: 'startFlow', project: project.id }];
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -1918,6 +1924,7 @@ export class App {
     if (a.kind === 'base') return a.branch;
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
     if (a.kind === 'showFlow') return 'show flow';
+    if (a.kind === 'newWorkspace') return 'new workspace';
     if (a.kind === 'startFlow') return 'start a flow…';
     return a.action;
   }
@@ -1977,7 +1984,10 @@ export class App {
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
     else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
-    else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
+    else if (a.kind === 'newWorkspace') {
+      this.nav = null;
+      this.openNewWorkspace(this.projects.findIndex((x) => x.id === a.project));
+    } else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }

@@ -15,7 +15,7 @@ expression: render(&with_agents()).backend()
 "                               │  main            ✓      │                                          "
 "                               │  ├ ✓ claude             │                                          "
 "                               │  ↓ 1 more               │                                          "
-"                               │  + New workspace        │                                          "
+"                               │  + New                  │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "

@@ -61,7 +61,7 @@ fn names(app: &App) -> Vec<&str> {
 fn the_new_button_offers_a_project_or_a_group() {
     let (mut app, _rx) = app();
     click(&mut app, ui::new_project_button(list(), 1, &plain(1)).as_position());
-    assert_eq!(menu_labels(&app), ["open project", "new group", "start a flow…"]);
+    assert_eq!(menu_labels(&app), ["open project", "new group"]);
 }
 
 #[test]

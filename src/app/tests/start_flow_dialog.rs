@@ -29,7 +29,7 @@ fn setup(repo: bool) -> Setup {
 
 fn opened(repo: bool) -> Setup {
     let mut s = setup(repo);
-    let new = new_project_pos(&s.app);
+    let new = new_workspace_pos(&s.app);
     click(&mut s.app, new);
     pick(&mut s.app, START_FLOW);
     s
@@ -65,17 +65,24 @@ mod entries {
     use super::*;
 
     #[test]
-    fn the_new_menu_starts_a_flow_in_the_active_project() {
+    fn the_workspaces_new_menu_starts_a_flow_in_their_project() {
         let s = opened(true);
         let start = start(&s.app);
         assert_eq!((start.project, start.focus, start.repo), (s.app.projects[0].id, Focus::Prompt, true));
     }
 
     #[test]
-    fn without_a_project_the_new_menu_offers_no_flow() {
-        let (mut app, _rx) = empty_app();
-        click(&mut app, ui::new_project_button(list(), 1, &[]).as_position());
-        assert_eq!(menu_labels(&app), ["open project", "new group"]);
+    fn the_workspaces_new_offers_a_workspace_or_a_flow_and_the_projects_new_no_flow() {
+        let mut s = setup(true);
+        let new = new_workspace_pos(&s.app);
+        click(&mut s.app, new);
+        assert_eq!(menu_labels(&s.app), ["new workspace", START_FLOW]);
+        pick(&mut s.app, "new workspace");
+        assert!(matches!(s.app.overlay, Some(Overlay::NewWorkspace { .. })));
+        s.app.overlay = None;
+        let new = new_project_pos(&s.app);
+        click(&mut s.app, new);
+        assert_eq!(menu_labels(&s.app), ["open project", "new group"]);
     }
 
     #[test]

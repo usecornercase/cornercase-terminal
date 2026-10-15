@@ -156,7 +156,7 @@ cc_release() {
 }
 
 cc_wheel() {
-  cc_find "$1"
+  cc_find "$1" 0 "${4:-1}"
   button=64
   [ "$2" = down ] && button=65
   n=${3:-1}

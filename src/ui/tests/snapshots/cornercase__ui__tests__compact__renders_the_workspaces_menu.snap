@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/compact.rs
-assertion_line: 5759
 expression: "render_small(&in_a_project(Some(Nav::Workspaces))).backend()"
 ---
 "                                                                                "
@@ -27,7 +26,7 @@ expression: "render_small(&in_a_project(Some(Nav::Workspaces))).backend()"
 "                                                                                "
 "  ↓ 2 more                                                                      "
 "                                                                                "
-"  + New workspace                                                               "
+"  + New                                                                         "
 "                                                                                "
 "                                                                                "
 "                                                                                "

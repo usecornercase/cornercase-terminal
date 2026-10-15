@@ -225,10 +225,16 @@ screen_picker_filter() {
   cc_shot picker-filter
 }
 
+new_workspace_form() {
+  cc_click '+ New' 0 -1
+  cc_wait 'start a flow…'
+  cc_click 'new workspace'
+  cc_wait 'with its own worktree'
+}
+
 screen_new_workspace() {
   cc_s1
-  cc_click '+ New workspace'
-  cc_wait 'with its own worktree'
+  new_workspace_form
   cc_type 'feat/login'
   cc_wait 'in ~/.cornercase/worktrees/web-shop/feat-login'
   cc_shot new-workspace
@@ -236,8 +242,7 @@ screen_new_workspace() {
 
 screen_new_workspace_plain() {
   cc_s1
-  cc_click '+ New workspace'
-  cc_wait 'with its own worktree'
+  new_workspace_form
   cc_click 'its own worktree'
   cc_wait '[ ] with its own worktree'
   cc_hover 'Workspaces'
@@ -400,7 +405,7 @@ issue_pane() {
 }
 
 issue_listed() {
-  cc_wheel '+ New workspace' down 3
+  cc_wheel '+ New' down 3 -1
   cc_hover 'Workspaces'
   cc_wait "$1"
 }

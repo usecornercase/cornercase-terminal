@@ -163,9 +163,31 @@ test('the keys menu lists the flow keys, and a workspace without a run says so',
   app.destroy();
 });
 
+test("the workspaces' + New offers a workspace or a flow, and the projects' + New no flow", () => {
+  const app = demo();
+  app.render();
+  const labels = () => (app.overlay?.kind === 'menu' ? app.overlay.actions.map((a) => app.menuLabel(a)) : []);
+  const click = (nth: number) => {
+    const at = app.textAt('+ New', nth);
+    assert.ok(at);
+    app.pointerDown(at.x + 1, at.y, 0);
+    app.pointerUp();
+    app.render();
+  };
+  click(0);
+  assert.deepEqual(labels(), ['open project', 'new group']);
+  app.closeOverlay();
+  app.render();
+  click(1);
+  assert.deepEqual(labels(), ['new workspace', 'start a flow…']);
+  app.chooseMenu(0);
+  assert.equal(app.overlay?.kind, 'newWorkspace');
+  app.destroy();
+});
+
 test('starting and editing flows need a real cornercase', () => {
   const app = demo(110, 38);
-  app.openNewMenu({ x: 2, y: 2 });
+  app.openNewWorkspaceMenu({ x: 2, y: 2 }, app.active);
   if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
   app.chooseMenu(app.overlay.actions.findIndex((a) => a.kind === 'startFlow'));
   assert.ok(shown(app, 'the demo only plays the flow in payments'));
