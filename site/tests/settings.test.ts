@@ -43,3 +43,18 @@ test('g p in the keys menu says pull requests need a real cornercase', () => {
   assert.ok(app.textAt('the demo has no GitHub'));
   app.destroy();
 });
+
+test('the star prompt is a switch on the UI tab', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.openSettings();
+  inputKey(app, key('ArrowLeft'));
+  inputKey(app, key('ArrowLeft'));
+  const index = app.settingsRows(3).findIndex((row) => row.id === 'starPrompt');
+  assert.ok(index > 0);
+  assert.equal(app.config.starPrompt, true);
+  app.settingsClick(index);
+  app.render();
+  assert.equal(app.config.starPrompt, false);
+  assert.ok(app.textAt('cornercase never asks for a star'));
+  app.destroy();
+});

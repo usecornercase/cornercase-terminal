@@ -34,6 +34,7 @@ pub(crate) enum Row {
     Detail(Detail),
     Notifications,
     Updates,
+    StarPrompt,
     Prefix,
     Token(Source),
     GitlabUrl,
@@ -79,6 +80,7 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates
+            | Self::StarPrompt
             | Self::Prefix => "",
             Self::Remote | Self::Browsers => "Browser",
             Self::Bot(via) | Self::Chat(via) => via.name(),
@@ -124,6 +126,7 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates
+            | Self::StarPrompt
             | Self::Prefix => Page::Ui,
             Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
         }
@@ -385,6 +388,7 @@ impl Settings {
             Row::Detail(Detail::Memory),
             Row::Notifications,
             Row::Updates,
+            Row::StarPrompt,
             Row::Prefix,
             Row::Remote,
         ]);

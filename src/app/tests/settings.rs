@@ -145,6 +145,7 @@ fn a_click_on_a_tab_shows_its_rows() {
             Row::Detail(Detail::Memory),
             Row::Notifications,
             Row::Updates,
+            Row::StarPrompt,
             Row::Prefix
         ]
     );

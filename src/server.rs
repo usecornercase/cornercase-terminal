@@ -333,6 +333,7 @@ pub(crate) fn run() -> Result<()> {
         hours = stats.saved(SystemTime::now()).hours.len()
     );
     app.set_stats(stats);
+    app.set_star(paths::star(&session));
     let mut server = Server::new(app, session, todo_saver, tx);
     server.serve(&rx);
     let _ = std::fs::remove_file(&path);

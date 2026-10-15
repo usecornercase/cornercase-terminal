@@ -74,6 +74,9 @@ impl App {
         if self.continue_drag(ev, &areas, area) {
             return Ok(());
         }
+        if self.star_mouse(ev, pos, area) {
+            return Ok(());
+        }
         if self.toast_mouse(ev, pos, area) {
             return Ok(());
         }

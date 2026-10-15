@@ -82,8 +82,8 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; and prefix key off"
-  crop={[2, 4, 106, 18]}
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; star prompt now and then; and prefix key off"
+  crop={[2, 4, 106, 19]}
 />
 
 | Row | What it sets |
@@ -101,6 +101,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
+| **star prompt** | *Now and then*: after about two weeks of use, a small card at the bottom right asks for a star on GitHub. *Never*: it never asks. See [`star_prompt`](#star_prompt). |
 | **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
 
 ### Remote
@@ -183,6 +184,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "memory": false,
   "desktop_notifications": "auto",
   "check_updates": true,
+  "star_prompt": true,
   "remote": false,
   "remote_port": 47681
 }
@@ -228,6 +230,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`memory`](#memory) | boolean | `false` |
 | [`desktop_notifications`](#desktop_notifications) | string | `"auto"` |
 | [`check_updates`](#check_updates) | boolean | `true` |
+| [`star_prompt`](#star_prompt) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
 
@@ -378,6 +381,10 @@ How cornercase asks your terminal for a desktop notification when an agent in an
 #### `check_updates`
 
 Whether cornercase asks GitHub for the latest release, when the server starts and then every hour, to offer an [update](../../installation/#update). Only a request for the latest release is sent, and, once a newer one is out, a download of its changelog for the update dialog; nothing about you. Builds made with `cargo run` never check.
+
+#### `star_prompt`
+
+Whether cornercase may ask for a star on GitHub. After about 14 days on which a window was open and an agent ran (not calendar days since you installed it), a small card appears at the bottom right of the window: **star on GitHub** copies the repository's link to your clipboard and never asks again, **later** asks again in about 90 days, and **don't show again** never asks again. If you don't answer, it counts as **later**. It never appears while an agent is working or waiting for you, while a dialog, the search or a panel's field has the keys, or in the compact layout (below 90 columns), and it never takes the keys from the pane. Nothing is sent anywhere and cornercase doesn't check whether you starred; what it remembers (the days counted, when it last asked and your answer) is in `star.json` next to `session.json`. Set it to `false` to turn it off for good.
 
 [Agents](../agents/) explains `agent`, `agent_args`, `agent_modes`, `agent_commands` and the trust prompt in depth.
 

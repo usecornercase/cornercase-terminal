@@ -56,6 +56,7 @@ use overlay::Overlay;
 use pull_requests::PullRequests;
 use queue_panel::{QueueEvent, QueueRuntime};
 use session::not_restored;
+use star_prompt::StarPrompt;
 use toast::Toast;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
@@ -94,6 +95,7 @@ mod session;
 mod settings_dialog;
 mod shortcuts;
 mod sidebar;
+mod star_prompt;
 mod start_flow_dialog;
 mod tab_bar;
 mod tabs;
@@ -139,6 +141,7 @@ pub(crate) struct App {
     border_click: Option<(ui::Border, Instant)>,
     divider_click: Option<(u64, Vec<bool>, Instant)>,
     toast: Option<Toast>,
+    star: StarPrompt,
     overlay: Option<Overlay>,
     config: Config,
     config_path: PathBuf,
@@ -198,6 +201,7 @@ impl App {
             border_click: None,
             divider_click: None,
             toast: None,
+            star: StarPrompt::default(),
             overlay: None,
             config: config::load(&config_path),
             config_path,
@@ -369,6 +373,7 @@ impl App {
         self.drive_launches(now);
         self.watch_agents(now);
         self.keep_awake(now);
+        self.offer_star(now, clock);
         self.watch_messengers(now);
         self.sync_remote();
         self.sync_messengers();
@@ -560,15 +565,26 @@ impl App {
         self.agents.stats = stats;
     }
 
+    pub(crate) fn set_star(&mut self, path: PathBuf) {
+        self.star.saved = crate::star::load(&path);
+        self.star.path = Some(path);
+    }
+
     pub(crate) fn stats(&self) -> &agents::stats::Stats {
         &self.agents.stats
     }
 
-    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
-        self.follow(f.area());
+    fn begin_draw(&mut self, area: Rect, now: Instant) {
+        self.star.window = Some(now);
+        self.star_seen();
+        self.follow(area);
         if !self.drawn.compact() {
             self.nav = None;
         }
+    }
+
+    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
+        self.begin_draw(f.area(), now);
         let projects = self.project_entries();
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let (has_project, workspaces, active_workspace, active_tab) = match self.project() {
@@ -643,6 +659,7 @@ impl App {
             tab,
             overlay,
             toast: self.toast.as_ref().map(Toast::view),
+            star: self.star.card,
             nav: self.nav,
             update: self.update_label(),
             remote: self.remote_button(),

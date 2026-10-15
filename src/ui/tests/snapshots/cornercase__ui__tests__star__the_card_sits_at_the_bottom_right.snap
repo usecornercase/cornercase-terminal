@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/star.rs
+expression: render(&card()).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ ~ (1)                        │                         │                                          "
+"                               │                         │                                          "
+"  + New                        │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │    ╭─────────────────────────────────────────────────────────────╮ "
+" ───────────────────────────── │    │ Enjoying cornercase? A star on GitHub helps others find it. │ "
+"  Settings                     │    │                  don't show again   later   star on GitHub  │ "
+"  Usage                        │    ╰─────────────────────────────────────────────────────────────╯ "
+"  Quit                         │                         │                                          "

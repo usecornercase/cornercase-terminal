@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.99
+## 0.12.100
 
 - The Issues list offers ` start a flow ` beside ` start ` and ` schedule `, so a flow starts on the selected issue without opening it first. It reads the issue and asks where to run it when the tracker needs a project, then opens the same dialog as the issue's own button. A narrow window drops ` schedule ` first, then ` start a flow `, which the issue's page keeps.
+
+## 0.12.99
+
+- After about two weeks of use (days on which a window was open and an agent ran), a small card at the bottom right asks for a star on GitHub. **star on GitHub** copies the link and never asks again, **later** asks again in about three months, and **don't show again** stops it for good. It never appears while an agent is working or waiting for you, never takes the keys from your pane, and is skipped below 90 columns. Turn it off in **Settings → UI → star prompt**, or with `"star_prompt": false` in `config.json`. Nothing is sent anywhere.
 
 ## 0.12.98
 

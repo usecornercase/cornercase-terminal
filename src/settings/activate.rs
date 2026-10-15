@@ -74,6 +74,10 @@ impl Settings {
                 |c| &mut c.check_updates,
                 ["cornercase looks for new versions", "cornercase no longer looks for new versions"],
             ),
+            Row::StarPrompt => self.flip(
+                |c| &mut c.star_prompt,
+                ["cornercase may ask for a star on GitHub", "cornercase never asks for a star"],
+            ),
             Row::Trust => self.flip(
                 |c| &mut c.accept_trust_prompts,
                 ["trust prompts are accepted for you", "trust prompts are left to you"],

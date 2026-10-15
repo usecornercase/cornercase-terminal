@@ -182,6 +182,7 @@ export interface Config {
   memory: boolean;
   notify: string;
   updates: boolean;
+  starPrompt: boolean;
   prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
@@ -215,6 +216,7 @@ export const defaultConfig = (): Config => ({
   memory: false,
   notify: 'auto',
   updates: true,
+  starPrompt: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
   sources: ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'],
