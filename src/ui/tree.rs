@@ -11,7 +11,7 @@ use super::rows::row_close_button;
 use super::rows::{
     Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_rect,
 };
-use super::sidebar::{SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
+use super::sidebar::{NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
 use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band};
 
@@ -286,7 +286,7 @@ pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
             }
             TreeRow::NewWorkspace(_) => {
                 let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
-                draw_button(f, r, &format!("{lead} "), "+ New workspace", style);
+                draw_button(f, r, &format!("{lead} "), NEW_BUTTON, style);
             }
         }
         if mark {

@@ -15,7 +15,7 @@ expression: render(&with_workspaces(Some(0))).backend()
 "                               │  ├ › zsh                │                                          "
 "                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
-"                               │  + New workspace        │                                          "
+"                               │  + New                  │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "

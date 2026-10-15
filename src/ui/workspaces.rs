@@ -14,6 +14,7 @@ use super::rows::{
     Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, row_button,
     row_close_button, row_menu_button, row_rect,
 };
+use super::sidebar::NEW_BUTTON;
 use super::theme::{pull_tag, severity_color, status_icon};
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle};
 use crate::agents::activity::{self, Status};
@@ -278,7 +279,7 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     draw_hidden(f, view.muted, &layout, &rows, |r| matches!(r, WorkspaceRow::Workspace(_) | WorkspaceRow::Tab(..)));
 
     let r = layout.button();
-    draw_button(f, r, " ", "+ New workspace", button_style(view, r, accent, Color::Cyan));
+    draw_button(f, r, " ", NEW_BUTTON, button_style(view, r, accent, Color::Cyan));
     draw_landing(f, landing_line, landing.map(|l| l.spot.indent()));
 }
 

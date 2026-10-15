@@ -345,6 +345,12 @@ fn new_workspace_pos(app: &App) -> Position {
     ui::new_workspace_button(areas().workspaces_list, areas().pitch, &app.tab_lines()).as_position()
 }
 
+fn click_new_workspace(app: &mut App) {
+    let new = new_workspace_pos(app);
+    click(app, new);
+    pick(app, "new workspace");
+}
+
 fn form_value(app: &App) -> Option<&str> {
     match &app.overlay {
         Some(Overlay::NewWorkspace { input, .. } | Overlay::Rename { input, .. }) => Some(input),

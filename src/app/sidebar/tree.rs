@@ -97,7 +97,7 @@ impl App {
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
             Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
             Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
-            Some(ui::TreeHit::NewWorkspace(p)) => self.ask_new_workspace(p),
+            Some(ui::TreeHit::NewWorkspace(p)) => self.new_workspace_menu(p, pos),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
             None => {}
         }

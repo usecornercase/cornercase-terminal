@@ -83,7 +83,18 @@ fn adding_a_tab_under_another_project_switches_to_it() {
 fn a_new_workspace_under_another_project_is_asked_for_that_project() {
     let (mut app, _rx, _dirs) = tree(2);
     click_name(&mut app, TreeRow::NewWorkspace(0));
+    pick(&mut app, "new workspace");
     let asked = matches!(app.overlay, Some(Overlay::NewWorkspace { project, .. }) if project == app.projects[0].id);
+    assert_eq!((asked, app.active), (true, 1));
+}
+
+#[test]
+fn a_flow_started_under_another_project_is_for_that_project() {
+    let (mut app, _rx, _dirs) = tree(2);
+    click_name(&mut app, TreeRow::NewWorkspace(0));
+    assert_eq!(menu_labels(&app), ["new workspace", "start a flow…"]);
+    pick(&mut app, "start a flow…");
+    let asked = matches!(&app.overlay, Some(Overlay::StartFlow { start, .. }) if start.project == app.projects[0].id);
     assert_eq!((asked, app.active), (true, 1));
 }
 
@@ -91,6 +102,7 @@ fn a_new_workspace_under_another_project_is_asked_for_that_project() {
 fn a_plain_workspace_created_under_another_project_is_shown() {
     let (mut app, _rx, _dirs) = tree(2);
     click_name(&mut app, TreeRow::NewWorkspace(0));
+    pick(&mut app, "new workspace");
 
     submit_text(&mut app, "spike");
 

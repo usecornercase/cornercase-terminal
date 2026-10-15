@@ -10,11 +10,6 @@ fn external_checkout() -> (TempDir, App, Receiver<AppEvent>, TempDir, PathBuf) {
     (repo, app, rx, tmp, path)
 }
 
-fn open_form(app: &mut App) {
-    let pos = new_workspace_pos(app);
-    click(app, pos);
-}
-
 fn worktree_option(app: &App) -> Option<bool> {
     let Some(Overlay::NewWorkspace { worktree, .. }) = &app.overlay else { panic!("the form is not open") };
     *worktree
@@ -23,7 +18,7 @@ fn worktree_option(app: &App) -> Option<bool> {
 #[test]
 fn outside_git_the_form_has_no_worktree_option() {
     let (mut app, _rx, _dirs) = app_with(1);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     assert_eq!(worktree_option(&app), None);
 }
 
@@ -31,7 +26,7 @@ fn outside_git_the_form_has_no_worktree_option() {
 fn in_a_repo_the_form_offers_a_worktree() {
     let repo = git_repo(&[]);
     let (mut app, _rx) = app_in(repo.path(), no_config());
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     assert_eq!(worktree_option(&app), Some(true));
 }
 
@@ -39,7 +34,7 @@ fn in_a_repo_the_form_offers_a_worktree() {
 fn the_toggle_switches_the_worktree_option() {
     let repo = git_repo(&[]);
     let (mut app, _rx) = app_in(repo.path(), no_config());
-    open_form(&mut app);
+    click_new_workspace(&mut app);
 
     click(&mut app, ui::form_toggle(ui::form_area(AREA)).as_position());
 
@@ -49,7 +44,7 @@ fn the_toggle_switches_the_worktree_option() {
 #[test]
 fn an_empty_name_is_refused() {
     let (mut app, _rx, _dirs) = app_with(1);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
 
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
 
@@ -59,7 +54,7 @@ fn an_empty_name_is_refused() {
 #[test]
 fn a_plain_one_shares_the_project_folder() {
     let (mut app, _rx, dirs) = app_with(1);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     type_text(&mut app, "bug-123");
 
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
@@ -78,7 +73,7 @@ fn with_a_worktree_it_opens_in_a_new_checkout() {
     let repo = git_repo(&[("README", "hi")]);
     let (worktrees, _config, config_path) = with_worktrees_config();
     let (mut app, rx) = app_in(repo.path(), config_path);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     type_text(&mut app, "feat/login");
 
     click(&mut app, form_button(CREATE_SUBMIT, 0));
@@ -100,7 +95,7 @@ fn git_errors_stay_in_the_form() {
     let repo = git_repo(&[("README", "hi")]);
     let (_worktrees, _config, config_path) = with_worktrees_config();
     let (mut app, rx) = app_in(repo.path(), config_path);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     type_text(&mut app, "not valid");
 
     send_key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
@@ -186,7 +181,7 @@ mod behind {
 #[test]
 fn clicking_one_selects_it() {
     let (mut app, _rx, _dirs) = app_with(1);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     submit_text(&mut app, "other");
 
     click_row(&mut app, WorkspaceRow::Workspace(0));
@@ -197,7 +192,7 @@ fn clicking_one_selects_it() {
 #[test]
 fn closing_a_plain_one_closes_its_tabs() {
     let (mut app, rx, _dirs) = app_with(1);
-    open_form(&mut app);
+    click_new_workspace(&mut app);
     submit_text(&mut app, "other");
 
     click_close(&mut app, WorkspaceRow::Workspace(1));

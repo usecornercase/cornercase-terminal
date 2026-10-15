@@ -726,8 +726,8 @@ export class Painter {
   }
 
   private newWorkspace(r: Rect, indent: string, p: number): void {
-    this.button(r, indent, '+ New workspace', this.buttonStyle(r, CYAN, 6));
-    this.region({ r, click: () => this.app.openNewWorkspace(p), cursor: 'pointer' });
+    this.button(r, indent, NEW_BUTTON, this.buttonStyle(r, CYAN, 6));
+    this.region({ r, click: (x, y) => this.app.openNewWorkspaceMenu({ x, y }, p), cursor: 'pointer' });
   }
 
   private newProject(b: Rect): void {

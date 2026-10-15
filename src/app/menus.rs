@@ -91,7 +91,8 @@ pub(super) enum MenuAction {
     ShowFlow(u64),
     Browser,
     Away(Via),
-    StartFlow,
+    NewWorkspace(u64),
+    StartFlow(u64),
 }
 
 impl App {
@@ -127,7 +128,8 @@ impl App {
             MenuAction::AddProject(_) => "add project".into(),
             MenuAction::OpenProject => "open project".into(),
             MenuAction::NewGroup => "new group".into(),
-            MenuAction::StartFlow => "start a flow…".into(),
+            MenuAction::NewWorkspace(_) => "new workspace".into(),
+            MenuAction::StartFlow(_) => "start a flow…".into(),
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
@@ -196,7 +198,13 @@ impl App {
                 self.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
-            MenuAction::StartFlow => self.open_start_flow(self.start_flow_here()),
+            MenuAction::NewWorkspace(project) => {
+                if let Some(p) = self.projects.project_index(project) {
+                    self.nav = None;
+                    self.ask_new_workspace(p);
+                }
+            }
+            MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);

@@ -136,10 +136,10 @@ fn a_narrow_terminal_gets_a_menu_bar() {
     app.wait_for("the shell gets the whole width", |s| s.contains(&format!("{} {narrow}", ROWS - ui::COMPACT_PITCH)));
 
     app.click(areas.bar.as_position());
-    app.wait_for("the menu lists the workspaces", |s| s.contains("‹ Projects") && s.contains("+ New workspace"));
+    app.wait_for("the menu lists the workspaces", |s| s.contains("‹ Projects") && s.contains(ui::NEW_BUTTON));
     app.click(areas.back.as_position());
     app.wait_for("back lists the projects", |s| {
-        s.contains(ui::NEW_BUTTON) && !s.contains("+ New workspace") && s.contains("Quit")
+        s.contains(ui::NEW_BUTTON) && !s.contains("‹ Projects") && s.contains("Quit")
     });
 }
 
@@ -181,7 +181,10 @@ fn a_workspace_with_its_own_worktree_is_created_and_removed() {
     app.open_project(1, &repo);
     app.wait_for("the repo opens as project 2", |s| s.contains(&entry(&repo_name)));
 
-    app.click(ui::new_workspace_button(workspaces_list(), 1, &tab_lines(&[1])).as_position());
+    let at = ui::new_workspace_button(workspaces_list(), 1, &tab_lines(&[1])).as_position();
+    app.click(at);
+    app.wait_for("the new menu opens", |s| s.contains("new workspace") && s.contains("start a flow…"));
+    app.pick(at, &["new workspace", "start a flow…"], 0);
     app.wait_for("the form opens", |s| s.contains("with its own worktree"));
     app.send(b"e2e/login\r");
 

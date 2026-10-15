@@ -8,7 +8,7 @@ expression: render(&with_bar()).backend()
 "                               │                         │                                          "
 "▌ cornercase (1)               │  main                   │                                          "
 "                               │                         │                                          "
-"  + New                        │  + New workspace        │                                          "
+"  + New                        │  + New                  │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                no tab open               "

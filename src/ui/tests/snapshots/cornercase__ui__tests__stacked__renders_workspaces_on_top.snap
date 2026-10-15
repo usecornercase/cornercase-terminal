@@ -13,7 +13,7 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 "                               │                                                                    "
 "  main                         │                                                                    "
 "  ↓ 1 more                     │                                                                    "
-"  + New workspace              │                                                                    "
+"  + New                        │                                                                    "
 " ───────────────────────────── │                                                                    "
 " Projects                      │                                                                    "
 "                               │                             no tab open                            "

@@ -1,13 +1,12 @@
 ---
 source: src/ui/tests/activity.rs
-assertion_line: 121
 expression: "render_sized(&with_bar(None), W, 24).backend()"
 ---
 "   │   search projects, workspaces, tabs                    │                                      "
 "  │                                                         │                                      "
 "   │ Projects                      │ Workspaces              │                                      "
 "  │                               │                         │                                      "
-"  󰲤│▌ shop (1)                     │  + New workspace        │                                      "
+"  󰲤│▌ shop (1)                     │  + New                  │                                      "
 "  │                               │                         │                                      "
 "   │  + New                        │                         │                                      "
 "  │                               │                         │                                      "

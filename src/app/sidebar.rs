@@ -47,10 +47,12 @@ impl App {
     }
 
     pub(super) fn new_project_menu(&mut self, pos: Position) {
-        let mut actions = vec![MenuAction::OpenProject, MenuAction::NewGroup];
-        if self.project().is_some() {
-            actions.push(MenuAction::StartFlow);
-        }
+        self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
+    }
+
+    pub(super) fn new_workspace_menu(&mut self, p: usize, pos: Position) {
+        let project = self.projects[p].id;
+        let actions = vec![MenuAction::NewWorkspace(project), MenuAction::StartFlow(project)];
         self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
@@ -158,7 +160,7 @@ impl App {
         }
         let tabs = self.tab_lines();
         let hit = self.workspace_hit(list, pitch, &tabs, pos);
-        if matches!(hit, Some(WorkspaceHit::NewTab(_) | WorkspaceHit::NewWorkspace)) {
+        if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
             self.nav = None;
         }
         let p = self.active;
@@ -187,7 +189,7 @@ impl App {
             }
             Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
             Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
-            Some(WorkspaceHit::NewWorkspace) => self.ask_new_workspace(p),
+            Some(WorkspaceHit::NewWorkspace) => self.new_workspace_menu(p, pos),
             Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
                 self.open_workspace_menu(list, pitch, pos);
             }

@@ -15,7 +15,7 @@ expression: render(&v).backend()
 "                               │  ├ › zsh                │                                          "
 "                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
-"                               │  + New workspace        │                                          "
+"                               │  + New                  │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │  Files            TODO  │                                          "
