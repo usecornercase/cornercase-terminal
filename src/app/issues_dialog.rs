@@ -635,7 +635,7 @@ impl App {
             self.overlay = None;
             return self.open_workspace(p, w, Some(start), area);
         }
-        self.spawn_worktree(p, branch, Some(start), None);
+        self.spawn_worktree(p, branch, None, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
             b.starting = true;
             b.error = None;

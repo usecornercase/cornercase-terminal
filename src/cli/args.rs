@@ -163,6 +163,17 @@ pub(crate) struct NewWorkspaceArgs {
     pub(crate) project: Option<u64>,
     #[arg(long, help = "Check the branch out in a git worktree of its own, at a repository's root only")]
     pub(crate) worktree: bool,
+    #[arg(
+        long,
+        value_name = "REF",
+        requires_all = ["worktree", "at"],
+        help = "Fetch this ref, such as pull/485/head, into the branch, which must not exist yet"
+    )]
+    pub(crate) from: Option<String>,
+    #[arg(long, value_name = "COMMIT", requires = "from", help = "Refuse unless the fetched ref is at this commit")]
+    pub(crate) at: Option<String>,
+    #[arg(long, value_name = "NAME", requires = "from", help = "The remote to fetch from [default: origin]")]
+    pub(crate) remote: Option<String>,
     #[command(flatten)]
     pub(crate) create: Create,
 }

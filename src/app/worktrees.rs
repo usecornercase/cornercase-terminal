@@ -46,7 +46,7 @@ pub(super) enum Check {
 
 #[derive(Debug)]
 pub(crate) enum WorktreeEvent {
-    Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
+    Created { project: u64, result: Result<(PathBuf, worktree::Made)>, start: Option<Start>, request: Option<u64> },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
     Removed { project: u64, workspace: u64, result: Result<()>, request: Option<u64> },
     Behind { project: u64, behind: Vec<(u64, u32)> },
@@ -171,16 +171,39 @@ impl App {
         }
     }
 
-    pub(super) fn spawn_worktree(&self, p: usize, branch: String, start: Option<Start>, request: Option<u64>) {
+    pub(super) fn spawn_worktree(
+        &self,
+        p: usize,
+        branch: String,
+        pin: Option<worktree::Pin>,
+        start: Option<Start>,
+        request: Option<u64>,
+    ) {
         let project = &self.projects[p];
         let (id, repo) = (project.id, project.path.clone());
         let path = worktree::checkout_path(&self.config.worktrees_dir(self.home.as_deref()), &repo, &branch);
         let job = Job::new(Level::Info, "worktree", "add").with("project", id).with("branch", &branch);
         let job = job.with("path", path.display()).with("issue", start.is_some());
+        let job = match &pin {
+            Some(pin) => job.with("from", format!("{} {}", pin.remote, pin.reference)).with("at", &pin.commit),
+            None => job,
+        };
         self.spawn_job(
             job,
-            move || worktree::create(&repo, &branch, &path).map(|()| path),
-            move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Created { project: id, result, start, request })),
+            move || {
+                let made = match &pin {
+                    Some(pin) => worktree::create_pinned(&repo, &branch, &path, pin)?,
+                    None => worktree::create(&repo, &branch, &path)?,
+                };
+                Ok((path, made))
+            },
+            move |result, job| {
+                if let Ok((_, made)) = &result {
+                    job.note("branch", made.name());
+                    job.note("branch_from", made.from());
+                }
+                Some(AppEvent::Worktree(WorktreeEvent::Created { project: id, result, start, request }))
+            },
         );
     }
 
@@ -198,7 +221,7 @@ impl App {
             return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error, creating: false }));
         }
         if worktree == Some(true) {
-            self.spawn_worktree(p, name, None, None);
+            self.spawn_worktree(p, name, None, None, None);
             return Ok(Some(Overlay::NewWorkspace { project, input, worktree, error: None, creating: true }));
         }
         let repo = self.projects[p].path.clone();
@@ -213,12 +236,12 @@ impl App {
     pub(super) fn worktree_created(
         &mut self,
         project: u64,
-        result: Result<PathBuf>,
+        result: Result<(PathBuf, worktree::Made)>,
         start: Option<Start>,
         area: Rect,
     ) -> Result<()> {
         let path = match result {
-            Ok(path) => path.canonicalize().unwrap_or(path),
+            Ok((path, _)) => path.canonicalize().unwrap_or(path),
             Err(e) => {
                 match &mut self.overlay {
                     Some(Overlay::NewWorkspace { error, creating, .. }) => {

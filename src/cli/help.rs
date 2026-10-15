@@ -49,12 +49,19 @@ pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
 pub(super) const NEW_WORKSPACE_HELP: &str =
-    "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
-branch from HEAD when the branch does not exist yet; the command returns once git made it.
+    "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on the
+branch if it exists, else on a new one tracking the remote branch of that name (after a fetch),
+else on a new one from HEAD; stderr says which, and the command returns once git made it.
+
+With --from, git fetches that ref from the remote into the branch, which must not exist yet (or
+already be at the commit), and refuses unless it is at the commit --at names: a pull request's
+head, checked out exactly as you saw it. The branch has no upstream, and removing the workspace
+keeps it.
 
 Examples:
   cornercase new-workspace experiments
-  cornercase new-workspace fix/login --worktree --project 3";
+  cornercase new-workspace fix/login --worktree --project 3
+  cornercase new-workspace review/485 --worktree --from pull/485/head --at 3f2c9e1";
 pub(super) const COMMAND_HELP: &str =
     "The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
 as ssh does, so quote what the shell should read as one argument. The command returns once it

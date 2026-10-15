@@ -11,6 +11,7 @@ use crate::app::App;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
+use crate::git::worktree;
 use crate::project::Hierarchy;
 use crate::project::split::Dir;
 
@@ -53,12 +54,23 @@ impl App {
             Some(id) => self.projects.project_index(id).ok_or_else(|| none("project", id))?,
             None => self.here(caller).project.ok_or(NO_PROJECT)?,
         };
+        let pin = match (new.from, new.at) {
+            (Some(reference), Some(commit)) => {
+                let remote = new.remote.unwrap_or_else(|| "origin".into());
+                Some(worktree::Pin { remote, reference, commit })
+            }
+            (None, None) => None,
+            _ => return Err("--from and --at go together".into()),
+        };
+        if pin.is_some() && !new.worktree {
+            return Err("--from needs --worktree".into());
+        }
         if new.worktree {
             if let Some(open) = self.workspace_on(p, &name) {
                 return Err(format!("branch {name} is already open in workspace {open}"));
             }
             let then = Then { start: None, wait: None, focus: new.focus };
-            return self.create_worktree(client, p, &name, then, None).map(|()| None);
+            return self.create_worktree(client, p, &name, pin, then, None).map(|()| None);
         }
         let path = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, path, Some(name), false).map_err(|e| e.to_string())?;
@@ -144,7 +156,7 @@ impl App {
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
                 let then = Then { start: Some((spec, name)), wait, focus: start.focus };
-                return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
+                return self.create_worktree(client, p, branch, None, then, timeout).map(|()| None);
             };
             found
         } else {
@@ -183,6 +195,7 @@ impl App {
         client: u64,
         p: usize,
         branch: &str,
+        pin: Option<worktree::Pin>,
         then: Then,
         timeout: Option<(Instant, f64)>,
     ) -> Result<(), String> {
@@ -191,7 +204,7 @@ impl App {
             return Err(format!("project {} is not the root of a git repository, so it has no worktrees", project.id));
         }
         let key = self.requests.key();
-        self.spawn_worktree(p, branch.to_string(), None, Some(key));
+        self.spawn_worktree(p, branch.to_string(), pin, None, Some(key));
         let stage = Stage::Worktree(then);
         self.requests.pending.push(Pending { client: Some(client), key, timeout, done: Done::default(), stage });
         Ok(())
@@ -201,7 +214,7 @@ impl App {
         &mut self,
         key: u64,
         project: u64,
-        result: error::Result<PathBuf>,
+        result: error::Result<(PathBuf, worktree::Made)>,
         area: Rect,
     ) {
         let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
@@ -218,12 +231,14 @@ impl App {
     fn open_worktree(
         &mut self,
         project: u64,
-        result: error::Result<PathBuf>,
+        result: error::Result<(PathBuf, worktree::Made)>,
         then: Then,
         area: Rect,
         pending: &mut Pending,
     ) -> Result<bool, String> {
-        let path = result.map_err(|e| e.to_string())?;
+        let (path, made) = result.map_err(|e| e.to_string())?;
+        pending.done.branch_made = Some(made.name().to_string());
+        pending.done.branch_from = Some(made.from().to_string()).filter(|from| !from.is_empty());
         let path = path.canonicalize().unwrap_or(path);
         let p = self.projects.project_index(project).ok_or_else(|| format!("project {project} closed"))?;
         let w = self.worktree_workspace(p, path);

@@ -120,12 +120,14 @@ cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" 
 cornercase open ~/code/orders-api                # prints the project's id
 cornercase new-workspace experiments             # a workspace in the project's folder
 cornercase new-workspace fix/login --worktree    # a git worktree on branch fix/login
+cornercase new-workspace review/485 --worktree --from pull/485/head --at 3f2c9e1
 cornercase new-tab --name server -- npm run dev  # prints the new pane's id
 cornercase split --down -- tail -f server.log    # splits the pane below
 ```
 
 - `open` finds a project that is already open instead of opening it twice.
-- `new-workspace` adds to the project the command runs in (`--project ID` for another one). With `--worktree`, the project must be at a repository's root, as in the [new workspace dialog](../worktrees/): the checkout goes in the worktrees folder from settings, the branch is created from `HEAD` when it does not exist, and the command returns once git has made it. Each new workspace gets one tab.
+- `new-workspace` adds to the project the command runs in (`--project ID` for another one). With `--worktree`, the project must be at a repository's root, as in the [new workspace dialog](../worktrees/): the checkout goes in the worktrees folder from settings, the branch is checked out if it exists, else made from a remote branch of that name, which it then tracks, else made from `HEAD`; the command returns once git has made it and says on stderr which of the three happened (`--json` has it as `branch_made`, `local`, `remote` or `new`, and `branch_from`). Each new workspace gets one tab.
+- `new-workspace BRANCH --worktree --from REF --at COMMIT` checks out a commit you have looked at, such as a pull request's head: git fetches `REF` (`pull/485/head`) from `origin` (`--remote NAME` for another) into `BRANCH`, which must not exist yet or already be at that commit, and the command fails, leaving nothing behind, unless the fetched ref is at `COMMIT` (at least 7 digits of its hash). The branch tracks nothing, so a `git push` there goes nowhere by accident, and removing the workspace keeps the branch, as always. `branch_made` is `fetched`. A server from before `--from` refuses it rather than making a branch from `HEAD`.
 - `new-tab` opens the tab in the workspace the command runs in (`--workspace ID` or `--worktree BRANCH` for another one). `split` splits the pane it runs in (`--pane ID` for another one), and refuses a pane too small to split.
 - After `--`, the words of a command are joined with spaces and typed at the prompt once the shell is ready, as `ssh` does with its command, so quote what the shell should read as one argument: `-- 'cargo test 2>&1 | tee test.log'`. The command returns once it is typed.
 - Each prints the new pane's, workspace's or project's id, so `pane=$(cornercase new-tab …)` needs nothing else. `--json` prints every id: `{"project": 1, "workspace": 2, "tab": 8, "pane": 9}`.

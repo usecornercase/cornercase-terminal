@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.95
+
+- A new worktree on a branch that only a remote has, such as `origin/feat/login` after a fetch, now checks out that branch and tracks it, from the **New workspace** dialog, `cornercase new-workspace --worktree` and `cornercase start --worktree`. Before, cornercase silently made a new branch of that name from your current `HEAD`, so you worked on the wrong code. When several remotes have the branch, git's `checkout.defaultRemote` setting picks one. The commands say on stderr whether they used a local branch, a remote one or made a new one.
+- `cornercase new-workspace BRANCH --worktree --from pull/485/head --at 3f2c9e1` fetches a ref, such as a pull request's head, into a new branch and checks it out in a worktree, and refuses unless it is at the commit you name, so you review exactly what you looked at.
+
 ## 0.12.94
 
 - No changes in the app. The Telegram bot's shared parts (the notices, replies, away, `/status` and `/new`) no longer depend on Telegram, so a second chat app can use them.

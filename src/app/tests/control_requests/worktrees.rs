@@ -43,6 +43,37 @@ fn a_worktree_opens_with_a_tab_and_leaves_the_window_as_it_is() {
     assert!(workspace.path.starts_with(worktrees.path()), "{}", workspace.path.display());
 }
 
+#[test]
+fn the_answer_says_how_the_branch_was_made() {
+    let (mut app, rx, _repo, _worktrees, _config) = repo();
+
+    ask(&mut app, None, worktree("feat/x"));
+    let made = done(answered(&mut app, &rx, "git makes the worktree"));
+
+    assert_eq!((made.branch_made.as_deref(), made.branch_from.as_deref()), (Some("new"), Some("HEAD")));
+}
+
+#[test]
+fn a_pin_on_another_commit_is_refused() {
+    let (mut app, rx, repo, _worktrees, _config) = repo();
+    git(repo.path(), &["update-ref", "refs/pull/1/head", "HEAD"]);
+    git(repo.path(), &["remote", "add", "origin", &repo.path().display().to_string()]);
+    let pinned = wire::NewWorkspace {
+        name: "review/1".into(),
+        worktree: true,
+        from: Some("pull/1/head".into()),
+        at: Some("0000000".into()),
+        ..wire::NewWorkspace::default()
+    };
+
+    ask(&mut app, None, Command::NewWorkspaceAt(pinned));
+    let answer = answered(&mut app, &rx, "git fetches the ref");
+
+    let Response::Error(message) = answer else { panic!("not refused: {answer:?}") };
+    assert!(message.starts_with("pull/1/head on origin is at "), "{message}");
+    assert_eq!(app.projects[0].workspaces.len(), 1);
+}
+
 fn made(app: &mut App, rx: &Receiver<AppEvent>) -> (u64, PathBuf) {
     ask(app, None, worktree("feat/x"));
     let id = done(answered(app, rx, "git makes the worktree")).ids.workspace.expect("the workspace");

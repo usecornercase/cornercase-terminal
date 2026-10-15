@@ -215,7 +215,7 @@ mod remove {
 
         remove(repo.path(), &path, false, true).expect("remove");
 
-        assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
+        assert_eq!((path.exists(), ref_exists(repo.path(), "refs/heads/wt").expect("show-ref")), (false, true));
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod remove {
 
         remove(repo.path(), &path, false, true).expect("remove");
 
-        assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
+        assert_eq!((path.exists(), ref_exists(repo.path(), "refs/heads/wt").expect("show-ref")), (false, true));
     }
 
     #[test]
@@ -233,7 +233,7 @@ mod remove {
 
         remove(repo.path(), &path, false, false).expect("remove");
 
-        assert_eq!((path.exists(), branch_exists(repo.path(), "wt").expect("show-ref")), (false, true));
+        assert_eq!((path.exists(), ref_exists(repo.path(), "refs/heads/wt").expect("show-ref")), (false, true));
     }
 
     #[test]
@@ -267,5 +267,226 @@ mod remove {
         }
 
         assert_eq!(changed(&path).expect("git status"), expected);
+    }
+}
+
+fn said(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git").arg("-C").arg(dir).args(args).output().expect("run git");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+fn rev(dir: &Path, rev: &str) -> String {
+    said(dir, &["rev-parse", rev])
+}
+
+fn bare_with_branch(branch: &str) -> (TempDir, TempDir, PathBuf, String) {
+    let source = git_repo(&[("README", "main")]);
+    git(source.path(), &["checkout", "--quiet", "-b", branch]);
+    std::fs::write(source.path().join("README"), "branch").expect("write file");
+    git(source.path(), &["commit", "--quiet", "--all", "-m", "on the branch"]);
+    let commit = rev(source.path(), "HEAD");
+    git(source.path(), &["checkout", "--quiet", "main"]);
+    let remotes = TempDir::new();
+    let bare = remotes.path().join("remote.git");
+    git(remotes.path(), &["clone", "--quiet", "--bare", &source.path().display().to_string(), "remote.git"]);
+    (source, remotes, bare, commit)
+}
+
+mod from_a_remote {
+    use super::*;
+    use crate::test_util::clone_of;
+
+    #[test]
+    fn tracks_a_branch_that_only_a_remote_has() {
+        let (_source, _remotes, bare, commit) = bare_with_branch("feat/x");
+        let (_clone, repo) = clone_of(&bare);
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+
+        let made = create(&repo, "feat/x", &path).expect("create worktree");
+
+        assert_eq!(
+            (made, rev(&path, "HEAD"), said(&repo, &["rev-parse", "--abbrev-ref", "feat/x@{upstream}"])),
+            (Made::Tracking("origin/feat/x".into()), commit, "origin/feat/x".into())
+        );
+    }
+
+    #[test]
+    fn makes_a_new_branch_from_head_when_no_remote_has_it() {
+        let (_source, _remotes, bare, _) = bare_with_branch("feat/x");
+        let (_clone, repo) = clone_of(&bare);
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+
+        let made = create(&repo, "feat/y", &path).expect("create worktree");
+
+        assert_eq!((made, rev(&path, "HEAD")), (Made::New, rev(&repo, "HEAD")));
+    }
+
+    #[test]
+    fn asks_which_remote_when_several_have_it() {
+        let (_source, _remotes, bare, _) = bare_with_branch("feat/x");
+        let (_clone, repo) = clone_of(&bare);
+        git(&repo, &["remote", "add", "up", &bare.display().to_string()]);
+        git(&repo, &["fetch", "--quiet", "up"]);
+        let out = TempDir::new();
+
+        let err = create(&repo, "feat/x", &out.path().join("wt")).expect_err("ambiguous");
+
+        assert_eq!(
+            err.to_string(),
+            "branch feat/x is on several remotes (origin, up); set checkout.defaultRemote to the one to track"
+        );
+    }
+
+    #[test]
+    fn follows_checkout_default_remote() {
+        let (_source, _remotes, bare, _) = bare_with_branch("feat/x");
+        let (_clone, repo) = clone_of(&bare);
+        git(&repo, &["remote", "add", "up", &bare.display().to_string()]);
+        git(&repo, &["fetch", "--quiet", "up"]);
+        git(&repo, &["config", "checkout.defaultRemote", "up"]);
+        let out = TempDir::new();
+
+        let made = create(&repo, "feat/x", &out.path().join("wt")).expect("create worktree");
+
+        assert_eq!(made, Made::Tracking("up/feat/x".into()));
+    }
+}
+
+mod pinned {
+    use super::*;
+    use crate::test_util::clone_of;
+
+    fn with_pull() -> (TempDir, TempDir, TempDir, PathBuf, String) {
+        let (source, remotes, bare, commit) = bare_with_branch("feat/x");
+        git(&bare, &["update-ref", "refs/pull/1/head", &commit]);
+        git(&bare, &["update-ref", "-d", "refs/heads/feat/x"]);
+        let (clone, repo) = clone_of(&bare);
+        (source, remotes, clone, repo, commit)
+    }
+
+    fn pin(commit: &str) -> Pin {
+        Pin { remote: "origin".into(), reference: "pull/1/head".into(), commit: commit.into() }
+    }
+
+    #[test]
+    fn checks_out_the_pull_request_head_at_its_commit() {
+        let (_source, _remotes, _clone, repo, commit) = with_pull();
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+
+        let made = create_pinned(&repo, "review/1", &path, &pin(&commit[..7])).expect("create worktree");
+
+        assert_eq!(
+            (
+                made,
+                current_branch(&path),
+                rev(&path, "HEAD"),
+                said(&path, &["rev-parse", "--abbrev-ref", "@{upstream}"])
+            ),
+            (Made::Fetched("origin pull/1/head".into()), Some("review/1".into()), commit, String::new())
+        );
+    }
+
+    #[test]
+    fn refuses_another_commit_and_leaves_no_branch() {
+        let (_source, _remotes, _clone, repo, commit) = with_pull();
+        let out = TempDir::new();
+        let path = out.path().join("wt");
+
+        let err = create_pinned(&repo, "review/1", &path, &pin("0000000")).expect_err("wrong commit");
+
+        assert_eq!(
+            (err.to_string(), path.exists(), said(&repo, &["branch", "--list", "review/1"])),
+            (
+                format!("pull/1/head on origin is at {commit}, not 0000000; nothing was checked out"),
+                false,
+                String::new()
+            )
+        );
+    }
+
+    #[test]
+    fn reuses_a_branch_already_at_the_commit() {
+        let (_source, _remotes, _clone, repo, commit) = with_pull();
+        git(&repo, &["branch", "review/1", &commit]);
+        let out = TempDir::new();
+
+        let made = create_pinned(&repo, "review/1", &out.path().join("wt"), &pin(&commit)).expect("create worktree");
+
+        assert_eq!(made, Made::Local);
+    }
+
+    #[test]
+    fn refuses_a_branch_that_is_elsewhere() {
+        let (_source, _remotes, _clone, repo, commit) = with_pull();
+        git(&repo, &["branch", "review/1", "HEAD"]);
+        let out = TempDir::new();
+
+        let err = create_pinned(&repo, "review/1", &out.path().join("wt"), &pin(&commit)).expect_err("elsewhere");
+
+        assert_eq!(err.to_string(), format!("branch review/1 already exists at {}, not {commit}", rev(&repo, "HEAD")));
+    }
+}
+
+mod options {
+    use super::*;
+
+    #[rstest]
+    #[case::branch(
+        "--orphan",
+        "origin",
+        "pull/1/head",
+        "the branch `--orphan` starts with `-`, which git would read as an option"
+    )]
+    #[case::remote(
+        "x",
+        "--upload-pack=touch",
+        "pull/1/head",
+        "the remote `--upload-pack=touch` starts with `-`, which git would read as an option"
+    )]
+    #[case::reference("x", "origin", "-q", "the ref `-q` starts with `-`, which git would read as an option")]
+    #[case::destination(
+        "x",
+        "origin",
+        "pull/1/head:refs/heads/main",
+        "`pull/1/head:refs/heads/main` is not a ref to fetch"
+    )]
+    #[case::forced("x", "origin", "+pull/1/head", "`+pull/1/head` is not a ref to fetch")]
+    fn are_refused_before_git_runs(
+        #[case] branch: &str,
+        #[case] remote: &str,
+        #[case] reference: &str,
+        #[case] expected: &str,
+    ) {
+        let repo = git_repo(&[]);
+        let out = TempDir::new();
+        let pin = Pin { remote: remote.into(), reference: reference.into(), commit: "abcdef0".into() };
+
+        let err = create_pinned(repo.path(), branch, &out.path().join("wt"), &pin).expect_err("refused");
+
+        assert_eq!(err.to_string(), expected);
+    }
+
+    #[test]
+    fn a_commit_needs_seven_hex_digits() {
+        let repo = git_repo(&[]);
+        let out = TempDir::new();
+        let pin = Pin { remote: "origin".into(), reference: "pull/1/head".into(), commit: "--all".into() };
+
+        let err = create_pinned(repo.path(), "x", &out.path().join("wt"), &pin).expect_err("refused");
+
+        assert_eq!(err.to_string(), "`--all` is not a commit: give at least 7 hexadecimal digits of its hash");
+    }
+
+    #[test]
+    fn a_branch_starting_with_a_dash_is_refused() {
+        let repo = git_repo(&[]);
+        let out = TempDir::new();
+
+        let err = create(repo.path(), "-b", &out.path().join("wt")).expect_err("refused");
+
+        assert_eq!(err.to_string(), "the branch `-b` starts with `-`, which git would read as an option");
     }
 }

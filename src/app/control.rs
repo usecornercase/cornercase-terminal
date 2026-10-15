@@ -264,7 +264,9 @@ impl App {
             Command::Status(_) => Ok(Some(json(&self.report(caller)))),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
             Command::Open(open) => self.open_request(&open, area),
-            Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
+            Command::NewWorkspace(new) | Command::NewWorkspaceAt(new) => {
+                self.new_workspace_request(client, caller, new, area)
+            }
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),
             Command::Split(split) => self.split_request(client, caller, split, area, now),
             Command::Start(start) => self.start_request(client, caller, start, area, now),
