@@ -414,7 +414,7 @@ impl Dialog {
         let Some(edit) = &self.edit else { return Vec::new() };
         let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
         let imported = edit.imported.then(|| share::risks(&edit.flow, "this imported flow")).flatten();
-        risks.into_iter().chain(imported).chain(edit.flow.problems()).collect()
+        risks.into_iter().chain(imported).chain(edit.flow.problems().iter().map(|p| share::visible(p))).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {

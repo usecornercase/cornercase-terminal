@@ -192,6 +192,25 @@ mod importing {
     }
 
     #[test]
+    fn control_characters_in_an_imported_flow_never_reach_an_answer() {
+        let mut s = Share::new();
+        let mut bad = flow("Bad\x1b[2J");
+        bad.roles[0].name = "co\x1b[1Ader".into();
+        bad.stages[0].roles = vec!["co\x1b[1Ader".into()];
+        bad.roles[0].agent = "vim\x1b[2J".into();
+        bad.roles[0].env.insert("K\x1b[2J".into(), "v".into());
+        let refused = error(s.import(&share::to_share(&bad).expect("export"), |_| {}));
+        assert!(refused.contains("\\u{1b}[1Ader") && !refused.contains('\x1b'), "{refused:?}");
+        s.app.config.agent_commands.insert("grok".into(), "/nonexistent/grok".into());
+        let mut fine = flow("Fine\x1b[2J");
+        fine.roles[0].agent = "grok".into();
+        let done = imported(s.import(&share::to_share(&fine).expect("export"), |_| {}));
+        assert!(!done.name.contains('\x1b') && !done.note.expect("a note").contains('\x1b'));
+        let taken = error(s.import(&share::to_share(&fine).expect("export"), |_| {}));
+        assert!(!taken.contains('\x1b'), "{taken:?}");
+    }
+
+    #[test]
     fn agents_that_are_not_installed_here_are_noted() {
         let mut s = Share::new();
         s.app.config.agent_commands.insert("grok".into(), "/nonexistent/grok".into());

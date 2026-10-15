@@ -55,7 +55,8 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
 fn import_flow(args: FlowImportArgs) -> Result<()> {
     let from = args.file.display().to_string();
     let text = read_shared(&args.file)?;
-    let flow = share::from_share(&text).map_err(|e| Error::Control(format!("cannot read `{from}`: {e}")))?;
+    let flow =
+        share::from_share(&text).map_err(|e| Error::Control(share::visible(&format!("cannot read `{from}`: {e}"))))?;
     eprint!("{}", share::summary(&flow));
     let risks = share::risks(&flow, "it");
     let mut request = control::FlowImport {
@@ -118,7 +119,7 @@ pub(super) fn imported_line(imported: &Imported) -> String {
     let place = if imported.origin == "project" { "this project" } else { "yours" };
     let path = imported.path.as_ref().map(|path| format!(": {}", path.display())).unwrap_or_default();
     let replaced = if imported.replaced { " (replaced)" } else { "" };
-    format!("imported {} into {place}{replaced}{path}\n", imported.name)
+    format!("imported {} into {place}{replaced}{path}\n", share::visible(&imported.name))
 }
 
 pub(super) fn listing(flows: &Flows) -> String {

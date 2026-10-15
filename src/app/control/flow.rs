@@ -54,6 +54,10 @@ impl App {
     }
 
     pub(super) fn flow_import_request(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
+        self.import_flow(caller, import).map_err(|e| share::visible(&e))
+    }
+
+    fn import_flow(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
         let mut flow = share::from_share(&import.text).map_err(|e| format!("cannot read the flow: {e}"))?;
         if let Some(name) = &import.name {
             flow.name = name.trim().to_string();
@@ -75,7 +79,7 @@ impl App {
         let replaced = share::collision(&listing, &flow.name, to, import.replace)?;
         let missing = share::missing_agents(&flow, &builtin::installed(&self.config));
         let mut imported = Imported {
-            name: flow.name.clone(),
+            name: share::visible(&flow.name),
             origin: if to == To::Yours { "user" } else { "project" }.into(),
             replaced: replaced.is_some(),
             note: (!missing.is_empty()).then(|| missing.join("; ")),

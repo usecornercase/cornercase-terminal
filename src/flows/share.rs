@@ -53,7 +53,7 @@ fn parts(flow: &Flow, values: bool) -> Vec<String> {
     parts
 }
 
-fn visible(text: &str) -> String {
+pub(crate) fn visible(text: &str) -> String {
     text.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect()
 }
 
@@ -82,14 +82,14 @@ pub(crate) fn env_warning(flow: &Flow) -> Option<String> {
         .filter(|role| !role.env.is_empty())
         .map(|role| format!("{} for `{}`", env_keys(role).join(", "), role.name.trim()))
         .collect();
-    (!roles.is_empty()).then(|| format!("it sets {}: check no secret goes with it", roles.join(", ")))
+    (!roles.is_empty()).then(|| visible(&format!("it sets {}: check no secret goes with it", roles.join(", "))))
 }
 
 pub(crate) fn missing_agents(flow: &Flow, installed: &[Known]) -> Vec<String> {
     std::iter::once(&flow.orchestrator)
         .chain(&flow.roles)
         .filter(|role| Known::of(&role.agent).is_some_and(|kind| !installed.contains(&kind)))
-        .map(|role| format!("`{}` runs {}, which is not installed here", role.name.trim(), role.agent))
+        .map(|role| visible(&format!("`{}` runs {}, which is not installed here", role.name.trim(), role.agent)))
         .collect()
 }
 
@@ -105,7 +105,8 @@ pub(crate) fn summary(flow: &Flow) -> String {
 pub(crate) fn collision(listing: &Listing, name: &str, to: To, replace: bool) -> Result<Option<PathBuf>, String> {
     let named: Vec<_> = listing.named(name).collect();
     let builtin = listing.builtins.iter().any(|built| store::same_name(built, name));
-    let name = name.trim();
+    let name = visible(name.trim());
+    let name = name.as_str();
     match to {
         To::Yours => {
             if let Some(path) =

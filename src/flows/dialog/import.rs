@@ -60,7 +60,7 @@ impl Dialog {
         let mut flow = match share::from_share(&importing.editor.text()) {
             Ok(flow) => flow,
             Err(e) => {
-                importing.error = Some(e);
+                importing.error = Some(share::visible(&e));
                 return;
             }
         };
