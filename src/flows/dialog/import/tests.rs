@@ -122,6 +122,17 @@ mod the_page {
     }
 
     #[test]
+    fn a_name_with_a_control_character_keeps_the_page_open_with_the_error() {
+        let mut d = dialog();
+        d.paste(&shared("x\x1b[2J"), ROOM);
+        press(&mut d, IMPORT);
+        assert!(d.importing.is_some() && d.edit.is_none());
+        let error = d.error().expect("an error");
+        assert!(error.contains("control character") && !error.contains('\x1b'), "{error:?}");
+        assert!(!d.title().contains('\x1b'));
+    }
+
+    #[test]
     fn a_paste_while_a_confirmation_is_pending_is_ignored() {
         let mut d = dialog();
         d.select(4);

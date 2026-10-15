@@ -64,6 +64,10 @@ impl Dialog {
                 return;
             }
         };
+        if let Some(problem) = flow.problems().into_iter().find(|p| p.contains("control character")) {
+            importing.error = Some(problem);
+            return;
+        }
         self.importing = None;
         flow.name = self.unique(flow.name.trim(), "");
         let missing = share::missing_agents(&flow, &self.agents.installed);
