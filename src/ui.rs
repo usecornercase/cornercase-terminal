@@ -100,7 +100,7 @@ pub(crate) use toast::toast_area;
 pub(crate) use toast::{Toast, ToastButton, ToastIcon, toast_button};
 pub(crate) use tree::{
     ProjectShape, TreeHit, TreeRow, TreeShape, TreeView, WorkspaceShape, tree_active_row, tree_hit, tree_layout_rows,
-    tree_row, tree_rows,
+    tree_pull, tree_row, tree_rows,
 };
 #[cfg(test)]
 pub(crate) use tree::{tree_arrow, tree_close};
@@ -110,7 +110,7 @@ pub use widths::SIDEBAR_WIDTH;
 pub(crate) use widths::{MIN_COLUMN_WIDTH, MIN_PANE_WIDTH, MIN_STACK_SECTION, PANE_PADDING, WORKSPACES_WIDTH};
 pub use workspaces::{Details, TabLines, WorkspaceRow, new_workspace_button, workspace_row};
 pub(crate) use workspaces::{
-    ICON_WIDTH, TabEntry, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout, workspace_rows,
+    ICON_WIDTH, TabEntry, WorkspaceEntry, WorkspaceHit, workspace_hit, workspace_layout, workspace_pull, workspace_rows,
 };
 
 use crate::agents::activity::Status;

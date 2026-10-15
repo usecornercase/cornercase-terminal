@@ -201,6 +201,121 @@ mod pull_request_tag {
         assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), expected);
     }
 
+    fn badge_text(v: &View) -> Option<String> {
+        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), v.workspaces_scroll, 0, &v.workspaces[0])?;
+        let terminal = render(v);
+        let buffer = terminal.backend().buffer();
+        Some((r.x..r.right()).map(|x| buffer[(x, r.y)].symbol().to_string()).collect())
+    }
+
+    #[rstest]
+    #[case::alone("login", 0, false, "#482✗")]
+    #[case::before_commits_to_pull("login", 3, false, "#482✗")]
+    #[case::after_the_attention_icon("login", 3, true, "#482✗")]
+    #[case::a_long_name_is_cut("feature-with-a-very-long-name", 3, false, "#482✗")]
+    #[case::a_wide_name("日本語の名前", 3, false, "#482✗")]
+    fn the_target_is_the_badge_drawn(
+        #[case] name: &str,
+        #[case] behind: u32,
+        #[case] waiting: bool,
+        #[case] expected: &str,
+    ) {
+        let mut v = tagged(name, behind, mark(State::Open, Some(Ci::Failing)));
+        if waiting {
+            v.workspaces[0].tabs[0].status = Some(Status::Waiting);
+        }
+
+        assert_eq!(badge_text(&v).as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn a_name_allocated_one_cell_does_not_shift_the_badge_from_its_target() {
+        let mut v = tagged("login", 3, mark(State::Open, Some(Ci::Failing)));
+        v.workspaces[0].tabs[0].status = Some(Status::Waiting);
+        let list = Rect { width: 20, ..wlist() };
+        let r = workspace_pull(list, areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        let row = workspace_row(list, areas().pitch, &v.tab_lines(), 0, WorkspaceRow::Workspace(0));
+        let mut terminal = Terminal::new(TestBackend::new(160, 60)).expect("terminal");
+        terminal
+            .draw(|f| {
+                let band = Band { r: row, pitch: 1, lead: vec![Span::raw("  ")], bg: Style::default() };
+                workspaces::draw_workspace_band(f, &v, band, &v.workspaces[0], false, true);
+            })
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+
+        let drawn: String = (r.x..r.right()).map(|x| buffer[(x, r.y)].symbol().to_string()).collect();
+
+        assert_eq!(drawn, "#482✗");
+    }
+
+    #[test]
+    fn in_compact_mode_the_target_is_the_whole_band() {
+        let v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        let pitch = 3;
+
+        let r = workspace_pull(wlist(), pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+
+        assert_eq!(r.height, pitch);
+        assert_eq!(r.width, 5);
+    }
+
+    fn pull_badge_for(row: Rect, entry: &WorkspaceEntry) -> Option<Rect> {
+        workspaces::pull_badge(row, 1, 2, entry, true)
+    }
+
+    #[test]
+    fn a_narrow_row_drops_the_badge_and_its_target() {
+        let v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        let row = Rect::new(0, 0, 8, 1);
+
+        assert!(pull_badge_for(row, &v.workspaces[0]).is_none());
+        assert!(pull_badge_for(Rect::new(0, 0, 30, 1), &v.workspaces[0]).is_some());
+    }
+
+    #[test]
+    fn a_row_being_removed_has_no_target() {
+        let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        v.workspaces[0].removing = true;
+
+        assert_eq!(badge_text(&v), None);
+    }
+
+    fn badge_cell(v: &View) -> ratatui::buffer::Cell {
+        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        render(v).backend().buffer()[(r.x, r.y)].clone()
+    }
+
+    #[test]
+    fn hovering_it_underlines_it_and_keeps_its_colour() {
+        let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        v.hover = Some(r.as_position());
+
+        let cell = badge_cell(&v);
+
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(cell.fg, Color::Red);
+    }
+
+    #[test]
+    fn hovering_the_name_does_not() {
+        let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        v.hover = Some(at(0));
+
+        assert!(!badge_cell(&v).modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[test]
+    fn no_underline_while_an_overlay_is_open() {
+        let mut v = tagged("login", 0, mark(State::Open, Some(Ci::Failing)));
+        let r = workspace_pull(wlist(), areas().pitch, &v.tab_lines(), 0, 0, &v.workspaces[0]).expect("a target");
+        v.hover = Some(r.as_position());
+        v.overlay = Some(Overlay::Menu { at: Position::new(0, 0), items: vec!["rename".into()] });
+
+        assert!(!badge_cell(&v).modifier.contains(Modifier::UNDERLINED));
+    }
+
     #[test]
     fn renders_beside_the_other_marks() {
         let mut v = tagged("login", 3, mark(State::Open, Some(Ci::Failing)));

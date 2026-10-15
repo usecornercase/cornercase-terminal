@@ -218,6 +218,35 @@ impl App {
         }
     }
 
+    pub(super) fn pull_in_list(
+        &self,
+        list: Rect,
+        pitch: u16,
+        tabs: &ui::TabLines,
+        w: usize,
+        pos: Position,
+    ) -> Option<u64> {
+        let workspace = self.projects.get(self.active)?.workspaces.get(w)?;
+        let entry = self.workspace_entry(workspace);
+        ui::workspace_pull(list, pitch, tabs, self.scroll.workspaces, w, &entry)
+            .filter(|rect| rect.contains(pos))
+            .map(|_| workspace.id)
+    }
+
+    pub(super) fn pull_in_tree(
+        &self,
+        list: Rect,
+        shape: &ui::TreeShape,
+        (p, w): (usize, usize),
+        pos: Position,
+    ) -> Option<u64> {
+        let workspace = self.projects.get(p)?.workspaces.get(w)?;
+        let entry = self.workspace_entry(workspace);
+        ui::tree_pull(list, shape, self.scroll.projects, (p, w), &entry)
+            .filter(|rect| rect.contains(pos))
+            .map(|_| workspace.id)
+    }
+
     pub(super) fn open_pull_request(&mut self, workspace: u64) {
         let Some(found) = self.pulls.found.get_mut(&workspace) else { return };
         found.at = None;

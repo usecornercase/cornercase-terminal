@@ -11,16 +11,16 @@ use super::chrome::draw_back;
 use super::drop::landed;
 use super::layout::Areas;
 use super::rows::{
-    Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, row_button,
+    Band, GAP, RowButton, Rows, Tags, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, room, row_button,
     row_close_button, row_menu_button, row_rect,
 };
 use super::sidebar::NEW_BUTTON;
 use super::theme::{pull_tag, severity_color, status_icon};
-use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle};
+use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle, sidebar_hovered};
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::pull_request::Mark;
-use crate::text::truncate_right;
+use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
 
 const SHELL_ICON: &str = "›";
 
@@ -325,6 +325,48 @@ fn among_tabs(rows: &[WorkspaceRow], i: usize) -> bool {
     above.is_some() && above == below
 }
 
+fn marks(
+    entry: &WorkspaceEntry,
+    attention: bool,
+    muted: Color,
+    spin: Option<u8>,
+) -> (Vec<Span<'static>>, Option<usize>) {
+    if entry.removing {
+        return (vec![Span::styled(REMOVING_LABEL, Style::default().fg(muted))], None);
+    }
+    let badge = attention
+        .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
+        .flatten()
+        .map(|status| status_icon(muted, status, spin));
+    let pull_at = usize::from(badge.is_some());
+    let pull = entry.pull.map(|mark| pull_tag(muted, mark));
+    let pull_index = pull.is_some().then_some(pull_at);
+    let behind = Some(entry.behind)
+        .filter(|n| *n > 0)
+        .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
+    (badge.into_iter().chain(pull).chain(behind).collect(), pull_index)
+}
+
+pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEntry, attention: bool) -> Option<Rect> {
+    let room = room(row, pitch, lead);
+    let (spans, pull) = marks(entry, attention, Color::Reset, None);
+    let (x, width) = Tags::fit(spans, room).place(pull?, lead + room)?;
+    let x = u16::try_from(usize::from(row.x) + x).ok()?;
+    let rect = Rect::new(x, row.y, u16::try_from(width).ok()?, pitch.min(row.height)).intersection(row);
+    (!rect.is_empty()).then_some(rect)
+}
+
+pub(crate) fn workspace_pull(
+    list: Rect,
+    pitch: u16,
+    tabs: &TabLines,
+    scroll: usize,
+    w: usize,
+    entry: &WorkspaceEntry,
+) -> Option<Rect> {
+    pull_badge(workspace_row(list, pitch, tabs, scroll, WorkspaceRow::Workspace(w)), pitch, 2, entry, true)
+}
+
 pub(super) fn draw_workspace_band(
     f: &mut Frame,
     view: &View,
@@ -340,21 +382,17 @@ pub(super) fn draw_workspace_band(
     };
     let style = Style::default().fg(colour).add_modifier(Modifier::BOLD);
     let room = band.room();
-    let marks = if entry.removing {
-        Tags::fit(vec![Span::styled(REMOVING_LABEL, Style::default().fg(view.muted))], room)
-    } else {
-        let badge = badge
-            .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
-            .flatten()
-            .map(|status| status_icon(view.muted, status, view.spin));
-        let pull = entry.pull.map(|mark| pull_tag(view.muted, mark));
-        let behind = Some(entry.behind)
-            .filter(|n| *n > 0)
-            .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-        Tags::fit(badge.into_iter().chain(pull).chain(behind).collect(), room)
-    };
-    let name = truncate_right(&entry.name, room.saturating_sub(marks.reserved()));
-    let used = name.chars().count();
+    let (spans, pull) = marks(entry, badge, view.muted, view.spin);
+    let mut marks = Tags::fit(spans, room);
+    if let Some(rect) = pull_badge(band.r, band.pitch, band.lead_width(), entry, badge)
+        && let Some(tag) = pull
+        && sidebar_hovered(view, rect)
+    {
+        marks.highlight(tag, Modifier::UNDERLINED);
+    }
+    let allocation = room.saturating_sub(marks.reserved());
+    let name = clip_cells(&truncate_cells(&entry.name, allocation), allocation);
+    let used = cells(&name);
     let mut line = band.lead;
     line.push(Span::styled(name, style));
     marks.push_onto(&mut line, used, room);

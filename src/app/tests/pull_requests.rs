@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::pull_requests::{ASK_AGENT, COPY_LINK, DONE};
 use crate::pull_request::State;
+use crate::state;
 use crate::test_util::{clone_of, fake_gh, fixture, git};
 
 const VIEW: &str = fixture!("gh/2.101.0/pr-view.json");
@@ -75,6 +76,26 @@ fn row_text(app: &mut App, row: WorkspaceRow) -> String {
     let terminal = render(app, AREA);
     let buffer = terminal.backend().buffer();
     (r.left()..r.right()).map(|x| buffer[(x, r.y)].symbol().to_string()).collect()
+}
+
+fn notes(app: &App) -> Vec<String> {
+    let Some(Overlay::PullRequest { workspace, scroll }) = app.overlay else { panic!("the dialog is not open") };
+    let Some(ui::Overlay::Update(update)) = app.pull_request_view(workspace, scroll) else { panic!("no view") };
+    update.notes.iter().map(ToString::to_string).collect()
+}
+
+fn find_in(app: &mut App, r: Rect, area: Rect, which: char) -> Position {
+    let terminal = render(app, area);
+    let buffer = terminal.backend().buffer();
+    let cells = (r.top()..r.bottom()).flat_map(|y| (r.left()..r.right()).map(move |x| (x, y)));
+    let (x, y) =
+        cells.into_iter().find(|&cell| buffer[cell].symbol() == which.to_string()).expect("the badge is drawn");
+    Position::new(x, y)
+}
+
+fn badge_pos(app: &mut App, which: char) -> Position {
+    let r = row_rect(app, WorkspaceRow::Workspace(1));
+    find_in(app, r, AREA, which)
 }
 
 fn open_dialog(repo: &mut Repo) {
@@ -204,12 +225,6 @@ mod asking {
 mod dialog {
     use super::*;
 
-    fn notes(app: &App) -> Vec<String> {
-        let Some(Overlay::PullRequest { workspace, scroll }) = app.overlay else { panic!("the dialog is not open") };
-        let Some(ui::Overlay::Update(update)) = app.pull_request_view(workspace, scroll) else { panic!("no view") };
-        update.notes.iter().map(ToString::to_string).collect()
-    }
-
     #[test]
     fn opens_from_the_workspace_menu_with_its_checks() {
         let mut repo = found();
@@ -293,6 +308,128 @@ mod dialog {
         right_click_row(&mut repo.app, WorkspaceRow::Workspace(0));
 
         assert_eq!(menu_labels(&repo.app), ["rename workspace"]);
+    }
+}
+
+mod badge {
+    use super::*;
+
+    const FAILED_NOTES: usize = 7;
+
+    #[test]
+    fn a_click_on_the_number_opens_the_dialog() {
+        let mut repo = found();
+        let pos = badge_pos(&mut repo.app, '#');
+
+        click(&mut repo.app, pos);
+
+        let Some(Overlay::PullRequest { workspace, .. }) = repo.app.overlay else { panic!("the dialog is not open") };
+        assert_eq!(workspace, repo.worktree());
+        assert_eq!(notes(&repo.app).len(), FAILED_NOTES);
+    }
+
+    #[test]
+    fn a_click_on_the_glyph_opens_it_too() {
+        let mut repo = found();
+        let pos = badge_pos(&mut repo.app, '✗');
+
+        click(&mut repo.app, pos);
+
+        assert!(matches!(repo.app.overlay, Some(Overlay::PullRequest { .. })));
+    }
+
+    #[test]
+    fn it_opens_without_switching_to_the_workspace() {
+        let mut repo = found();
+        assert_eq!(repo.app.projects[0].active, 0);
+        let pos = badge_pos(&mut repo.app, '#');
+
+        click(&mut repo.app, pos);
+
+        assert_eq!(repo.app.projects[0].active, 0);
+    }
+
+    #[test]
+    fn it_asks_again_at_once_like_the_menu() {
+        let mut repo = found();
+        let pos = badge_pos(&mut repo.app, '#');
+
+        click(&mut repo.app, pos);
+        pump_until(&mut repo.app, &repo.rx, "gh answers", |a| a.pulls.asking.is_empty());
+
+        assert_eq!(repo.calls().len(), 2);
+    }
+
+    #[test]
+    fn a_click_on_the_name_still_selects_the_row() {
+        let mut repo = found();
+
+        let pos = row_pos(&repo.app, WorkspaceRow::Workspace(1));
+        click(&mut repo.app, pos);
+
+        assert!(repo.app.overlay.is_none());
+        assert_eq!(repo.app.projects[0].active, 1);
+    }
+
+    #[test]
+    fn a_right_click_on_the_badge_opens_the_row_menu() {
+        let mut repo = found();
+        let pos = badge_pos(&mut repo.app, '#');
+
+        right_click(&mut repo.app, pos);
+
+        assert!(menu_labels(&repo.app).contains(&"pull request #482".to_string()));
+    }
+
+    #[test]
+    fn a_workspace_without_one_has_no_target() {
+        let mut repo = found();
+        let pos = badge_pos(&mut repo.app, '#');
+        let main = row_rect(&repo.app, WorkspaceRow::Workspace(0));
+
+        click(&mut repo.app, Position::new(pos.x, main.y));
+
+        assert!(repo.app.overlay.is_none());
+    }
+
+    #[test]
+    fn in_the_tree_the_badge_opens_it() {
+        let mut repo = repo();
+        repo.app.config.sidebar = config::Sidebar::Tree.id().into();
+        repo.ask("gh answers");
+        let area = Rect::new(0, 0, 100, 30);
+        render(&mut repo.app, area);
+        let list = ui::layout_with(area, state::Widths::default(), false, config::Sidebar::Tree).list;
+        let shape = repo.app.tree_shape();
+        let r = ui::tree_row(list, &shape, repo.app.scroll.projects, ui::TreeRow::Workspace(0, 1));
+        let pos = find_in(&mut repo.app, r, area, '#');
+
+        click_in(&mut repo.app, pos, area);
+
+        let Some(Overlay::PullRequest { workspace, .. }) = repo.app.overlay else { panic!("the dialog is not open") };
+        assert_eq!(workspace, repo.worktree());
+        assert_eq!(repo.app.projects[0].active, 0);
+    }
+
+    #[test]
+    fn in_the_compact_menu_the_badge_opens_it_and_closes_the_menu() {
+        let mut repo = found();
+        let small = Rect::new(0, 0, 80, 40);
+        let areas = ui::layout(small, state::Widths::default());
+        repo.app.nav = Some(ui::Nav::Workspaces);
+        let r = ui::workspace_row(
+            areas.workspaces_list,
+            areas.pitch,
+            &repo.app.tab_lines(),
+            repo.app.scroll.workspaces,
+            WorkspaceRow::Workspace(1),
+        );
+        let pos = find_in(&mut repo.app, r, small, '#');
+
+        click_in(&mut repo.app, Position::new(pos.x, r.y + r.height - 1), small);
+
+        assert!(matches!(repo.app.overlay, Some(Overlay::PullRequest { .. })));
+        assert_eq!(repo.app.nav, None);
     }
 }
 

@@ -49,6 +49,16 @@ pub(crate) fn truncate_cells(s: &str, max: usize) -> String {
     format!("{}…", head.trim_end_matches('…'))
 }
 
+pub(crate) fn clip_cells(s: &str, max: usize) -> String {
+    let mut used = 0;
+    s.chars()
+        .take_while(|ch| {
+            used += ch.width().unwrap_or(0);
+            used <= max
+        })
+        .collect()
+}
+
 pub(crate) fn truncate_left(s: &str, max: usize) -> String {
     let n = s.chars().count();
     if n <= max || max < 2 {

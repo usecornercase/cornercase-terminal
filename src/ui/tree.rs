@@ -13,7 +13,7 @@ use super::rows::{
 };
 use super::sidebar::{NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
-use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band};
+use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band, pull_badge};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TreeShape {
@@ -194,6 +194,18 @@ pub(crate) fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Positi
         _ if arrow_in(r, shape, row).contains(pos) => TreeHit::Fold(row),
         _ => TreeHit::Select(row),
     })
+}
+
+pub(crate) fn tree_pull(
+    list: Rect,
+    shape: &TreeShape,
+    scroll: usize,
+    (p, w): (usize, usize),
+    entry: &WorkspaceEntry,
+) -> Option<Rect> {
+    let row = TreeRow::Workspace(p, w);
+    let lead = usize::from(tree_indent(shape, row)) + 2;
+    pull_badge(tree_row(list, shape, scroll, row), 1, lead, entry, shape.tab_bar || folded(shape, row))
 }
 
 pub(crate) struct TreeView {

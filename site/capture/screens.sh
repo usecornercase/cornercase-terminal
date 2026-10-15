@@ -315,8 +315,7 @@ screen_pull_requests() {
 
 screen_pull_request_checks() {
   pulls_shown
-  cc_rclick 'feat/gift-cards'
-  cc_click 'pull request #485'
+  cc_click '#485✗'
   cc_wait 'copy link'
   cc_shot pull-request-checks
 }

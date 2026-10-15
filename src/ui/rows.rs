@@ -209,9 +209,13 @@ impl Band {
     }
 
     pub(super) fn room(&self) -> usize {
-        let buttons = row_close_button(self.r, self.pitch).width + row_menu_button(self.r, self.pitch).width;
-        usize::from(self.r.width).saturating_sub(self.lead_width() + usize::from(buttons) + 1)
+        room(self.r, self.pitch, self.lead_width())
     }
+}
+
+pub(super) fn room(r: Rect, pitch: u16, lead: usize) -> usize {
+    let buttons = row_close_button(r, pitch).width + row_menu_button(r, pitch).width;
+    usize::from(r.width).saturating_sub(lead + usize::from(buttons) + 1)
 }
 
 pub(super) struct Tags {
@@ -238,6 +242,18 @@ impl Tags {
 
     pub(super) fn is_empty(&self) -> bool {
         self.spans.is_empty()
+    }
+
+    pub(super) fn place(&self, tag: usize, right: usize) -> Option<(usize, usize)> {
+        let span = self.spans.get(2 * tag)?;
+        let before: usize = self.spans[..2 * tag].iter().map(Span::width).sum();
+        Some((right.saturating_sub(self.width) + before, span.width()))
+    }
+
+    pub(super) fn highlight(&mut self, tag: usize, add: Modifier) {
+        if let Some(span) = self.spans.get_mut(2 * tag) {
+            span.style = span.style.add_modifier(add);
+        }
     }
 
     pub(super) fn reserved(&self) -> usize {

@@ -166,6 +166,14 @@ impl App {
         let p = self.active;
         let ask = pitch > 1;
         let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
+        let pull = match hit {
+            Some(WorkspaceHit::Workspace(w)) => self.pull_in_list(list, pitch, &tabs, w, pos),
+            _ => None,
+        };
+        if let Some(id) = pull {
+            self.open_pull_request(id);
+            return Ok(());
+        }
         let project = &self.projects[p];
         match hit {
             Some(WorkspaceHit::Workspace(w)) => {
