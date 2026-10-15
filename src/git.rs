@@ -1,3 +1,4 @@
+pub(crate) mod remote;
 pub(crate) mod upstream;
 pub(crate) mod worktree;
 
