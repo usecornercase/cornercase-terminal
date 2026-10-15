@@ -535,3 +535,23 @@ mod long_chats {
         assert_eq!((again.counted.len(), again.prompted), (0, None));
     }
 }
+
+mod retrying {
+    use super::*;
+
+    #[test]
+    fn a_root_that_failed_to_read_is_read_again_without_a_new_root_id() {
+        let dir = TempDir::new();
+        let (fake, sleeper) = running(dir.path());
+        fake.turn("hello");
+        let good = meta(&Connection::open(&fake.store).expect("open")).and_then(|m| m.root).expect("a root");
+        fake.root(&"ab".repeat(32));
+        let broken = first(&sleeper);
+        assert!(!broken.resumable);
+
+        fake.root(&good);
+        let again = follow_now(&sleeper, Some(broken));
+
+        assert!(again.resumable && again.context.is_some());
+    }
+}

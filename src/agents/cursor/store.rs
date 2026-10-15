@@ -194,6 +194,7 @@ impl Session {
             Some((blobs_of(&fields, 8), used.zip(window)))
         });
         let Some((ids, tokens)) = root else {
+            self.root = None;
             self.resumable = false;
             self.tokens = None;
             self.order.clear();

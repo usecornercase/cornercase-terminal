@@ -89,7 +89,9 @@ mod starts {
                 .iter()
                 .find(|workspace| git::branch(&workspace.path).as_deref() == Some(branch))
                 .expect("worktree workspace");
-            wait_until("the fake gets the prompt", || workspace.path.join("got").exists());
+            wait_until("the fake gets the prompt", || {
+                std::fs::read_to_string(workspace.path.join("got")).is_ok_and(|text| !text.is_empty())
+            });
             assert_eq!(std::fs::read_to_string(workspace.path.join("got")).expect("prompt"), "fix the login");
             assert_eq!(std::fs::read_to_string(workspace.path.join("answered")).expect("trust"), "");
             panes.push(workspace.tabs[0].panes[0].id);
@@ -224,7 +226,9 @@ mod forms {
             refreshing(&mut app, &rx, "the queued tab starts", |app| {
                 matches!(app.queued.queue.entry(id).expect("entry").state, QueueState::Started { .. })
             });
-            wait_until("the fake receives the issue prompt", || folder.path().join("got").exists());
+            wait_until("the fake receives the issue prompt", || {
+                std::fs::read_to_string(folder.path().join("got")).is_ok_and(|text| !text.is_empty())
+            });
             assert_eq!(std::fs::read_to_string(folder.path().join("got")).expect("prompt"), prompt);
             assert_eq!(app.projects[0].workspaces[0].tabs.len(), 2);
         }
