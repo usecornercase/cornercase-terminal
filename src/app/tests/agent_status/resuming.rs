@@ -54,9 +54,7 @@ fn an_agent_restored_in_its_conversation_is_not_a_new_start() {
     back.config.agent_args.insert(agents::Known::Claude.name().into(), vec![claude.dir().display().to_string()]);
     back.agents.claude_dir = Some(claude.dir().to_path_buf());
     assert!(back.restore(&saved, AREA));
-    refreshing(&mut back, &rx, "resumed conversation", |a| {
-        a.term().and_then(|t| t.context.conversation()).is_some()
-    });
+    refreshing(&mut back, &rx, "resumed conversation", |a| a.term().and_then(|t| t.context.conversation()).is_some());
     assert_eq!(back.stats_view(SystemTime::now()).windows["total"].counts.agents, 0);
     claude.signal("quit");
 }
@@ -113,6 +111,25 @@ fn grok_comes_back_in_its_conversation_and_mode() {
     let (mut back, rx, _bin) = restored(&saved, agents::Known::Grok.name(), true);
     wait_resumed(&mut back, &rx, &format!("--permission-mode acceptEdits --resume {}", FakeGrok::ID));
     assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("accept edits"));
+}
+
+#[test]
+fn cursor_comes_back_in_its_conversation_and_mode() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let cursor = FakeCursor::new(&app.projects[0].path);
+    type_line(&mut app, &format!("{} --mode plan", cursor.command_line()));
+    pump_until(&mut app, &rx, "cursor runs", |a| runs(a, agents::Known::Cursor.name()));
+    watch_until(&mut app, &rx, "cursor holds its store", |a| {
+        a.term().is_some_and(|t| t.context.record_for(agents::Known::Cursor).is_some())
+    });
+    cursor.turn("hello");
+    cursor.reply("hi");
+    let saved = remembered(&mut app, &rx);
+    let (mut back, rx, _bin) = restored(&saved, agents::Known::Cursor.name(), true);
+
+    wait_resumed(&mut back, &rx, &format!("--mode plan --resume {}", agents::cursor::fake::ID));
+
+    assert_eq!(saved_agent(&saved).and_then(|s| s.mode.as_deref()), Some("plan"));
 }
 
 #[test]

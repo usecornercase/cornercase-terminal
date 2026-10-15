@@ -375,6 +375,7 @@ fn reacted(message: i64) -> impl Fn(&Order) -> bool {
 mod agents;
 mod arranging;
 mod creating;
+mod cursor;
 mod discord;
 mod events;
 mod flow_sharing;

@@ -183,6 +183,18 @@ mod arguments {
     }
 
     #[test]
+    fn cursor_modes_follow_its_flags() {
+        let modes = modes(&config(), Known::Cursor.name());
+        let kind = Known::Cursor.name();
+        let mode = |argv: &[&str]| mode_of(kind, &strings(argv), &modes);
+        assert_eq!(mode(&["cursor-agent", "--plan"]).as_deref(), Some("plan"));
+        assert_eq!(mode(&["cursor-agent", "--mode=ask"]).as_deref(), Some("ask"));
+        assert_eq!(mode(&["cursor-agent", "--yolo"]).as_deref(), Some("run everything (dangerous)"));
+        assert_eq!(mode(&["cursor-agent", "-f", "--trust"]).as_deref(), Some("run everything (dangerous)"));
+        assert_eq!(mode(&["cursor-agent", "--mode", "debug"]), None);
+    }
+
+    #[test]
     fn join_quotes_what_a_shell_would_split() {
         assert_eq!(join_args(&strings(&["--add-dir", "../my dir", "it's"])), r"--add-dir '../my dir' 'it'\''s'");
     }
@@ -276,7 +288,7 @@ mod arguments {
         let refused = start_line(&c, "aider", None, Some("gpt"), None).expect_err("aider takes no model");
         assert_eq!(
             refused,
-            "cornercase passes a model to claude, codex, gemini, opencode, grok only; give aider its model in agent_args"
+            "cornercase passes a model to claude, codex, gemini, opencode, grok, cursor only; give aider its model in agent_args"
         );
     }
 
@@ -303,6 +315,12 @@ mod resuming {
     #[case::grok(Known::Grok.name(), Some("accept edits"), "grok --permission-mode acceptEdits --resume 4f2c-91")]
     #[case::grok_always(Known::Grok.name(), Some("always approve (dangerous)"), "grok --always-approve --resume 4f2c-91")]
     #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
+    #[case::cursor_in_plan(Known::Cursor.name(), Some("plan"), "cursor-agent --mode plan --resume 4f2c-91")]
+    #[case::cursor_running_everything(
+        Known::Cursor.name(),
+        Some("run everything (dangerous)"),
+        "cursor-agent --force --resume 4f2c-91"
+    )]
     fn the_conversation_comes_back_in_the_mode_it_ran_in(
         #[case] kind: &str,
         #[case] mode: Option<&str>,
@@ -352,6 +370,17 @@ mod choosing {
     #[case::codex_npm(&["node", "/usr/lib/node_modules/@openai/codex/bin/codex.js"], Some("codex"))]
     #[case::codex_native(&["/usr/local/bin/codex"], Some("codex"))]
     #[case::renamed_binary(&["cursor-agent"], Some("cursor"))]
+    #[case::cursor_through_its_launcher(
+        &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js"],
+        Some("cursor")
+    )]
+    #[case::cursor_through_its_shim(
+        &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js", "agent"],
+        Some("cursor")
+    )]
+    #[case::cursor_by_name(&["/home/a/.local/bin/cursor-agent", "--use-system-ca", "/x/index.js"], Some("cursor"))]
+    #[case::grok_binary_named_agent(&["/home/a/.grok/bin/agent"], None)]
+    #[case::a_worker_server_of_another_app(&["node", "/home/a/app/versions/1/index.js", "worker-server"], None)]
     #[case::a_shell(&["-zsh"], None)]
     fn detects_the_agent_in_a_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
         assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);

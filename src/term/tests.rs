@@ -231,6 +231,13 @@ mod program {
     #[case::python_code_naming_a_file("python3", &["python3", "-c", "import./tools/sync.py"], "python3")]
     #[case::a_bare_interpreter("node", &["node"], "node")]
     #[case::the_node_thread_name("node-MainThread", &["node"], "node")]
+    #[case::the_node_24_thread_name("MainThread", &["node"], "node")]
+    #[case::cursor_started_as_agent(
+        "MainThread",
+        &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js"],
+        "cursor"
+    )]
+    #[case::grok_binary_named_agent("agent", &["/home/a/.grok/bin/agent"], "agent")]
     #[case::another_program("nvim", &["nvim", "src/main.rs"], "nvim")]
     #[case::a_program_with_an_agent_argument("less", &["less", "claude"], "less")]
     fn names_the_program(#[case] name: &str, #[case] argv: &[&str], #[case] expected: &str) {

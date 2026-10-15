@@ -17,7 +17,7 @@ use crate::term;
 use crate::term::keys;
 
 const CANNOT_READ: &str =
-    "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode and Grok Build";
+    "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI";
 
 fn not_reading(pane: u64) -> String {
     format!(

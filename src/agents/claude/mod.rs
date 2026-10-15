@@ -12,6 +12,7 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "claude";
 pub(in crate::agents) const TITLE: &str = "Claude Code";
+pub(in crate::agents) const COMMAND: &str = "claude";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {

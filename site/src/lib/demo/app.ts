@@ -264,7 +264,7 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
   tab: { label: 'rename tab', hint: 'leave it empty to use the program name' },
 };
 
-const WATCHED = ['claude', 'codex', 'gemini', 'grok'];
+const WATCHED = ['claude', 'codex', 'gemini', 'grok', 'cursor'];
 const DETAILS = [
   ['model', "under an agent's tab, such as Opus 5.5"],
   ['context', 'how full its context is, such as 23%'],
@@ -2582,7 +2582,7 @@ export class App {
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
-        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code, Codex, Gemini and Grok, in their tabs' },
+        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude, Codex, Gemini, Grok, Cursor, in their tabs' },
         { id: 'awake', section: 'Agent', label: 'keep awake', value: c.awake ? '[x] while an agent works' : '[ ] never', note: this.awakeNote() },
       ];
       for (const kind of this.listedKinds()) {

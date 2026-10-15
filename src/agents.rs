@@ -3,6 +3,7 @@ pub(crate) mod awake;
 pub mod claude;
 pub(crate) mod codex;
 pub(crate) mod context;
+pub(crate) mod cursor;
 pub(crate) mod gemini;
 pub(crate) mod grok;
 mod known;
@@ -33,8 +34,7 @@ pub(crate) const AUTO: &str = "auto";
 pub(crate) const DEFAULT_TRUST_PROMPT: &str =
     "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed";
 const TRUST_LINES: usize = 15;
-const OTHERS: [(&str, &str); 10] = [
-    ("cursor", "cursor-agent"),
+const OTHERS: [(&str, &str); 9] = [
     ("copilot", "copilot"),
     ("amp", "amp"),
     ("droid", "droid"),
@@ -68,6 +68,7 @@ pub(crate) fn command(config: &Config, kind: &str) -> String {
         .agent_commands
         .get(kind)
         .cloned()
+        .or_else(|| Known::of(kind).map(|kind| kind.command().to_string()))
         .or_else(|| OTHERS.iter().find(|(k, _)| *k == kind).map(|(_, bin)| (*bin).to_string()))
         .unwrap_or_else(|| kind.to_string())
 }
@@ -347,10 +348,11 @@ fn basename(arg: &str) -> &str {
 
 pub(crate) fn detect(config: &Config, argv: &[String]) -> Option<String> {
     let names: Vec<&str> = argv.iter().take(2).map(|a| basename(a)).collect();
+    let script = argv.iter().skip(1).find(|arg| !arg.starts_with('-')).map(String::as_str);
     kinds(config).into_iter().find(|kind| {
         let bin = command(config, kind);
         names.contains(&basename(&bin))
-            || Known::of(kind).is_some_and(|kind| argv.get(1).is_some_and(|arg| kind.runs_as(arg)))
+            || Known::of(kind).is_some_and(|kind| script.is_some_and(|arg| kind.runs_as(arg)))
     })
 }
 

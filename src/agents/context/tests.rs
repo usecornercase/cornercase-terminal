@@ -26,7 +26,7 @@ mod pane {
 
         let found = Known::ALL.map(|agent| replaced.record_for(agent));
 
-        assert_eq!(found, [Some(Record::Claude(path)), None, None, None, None]);
+        assert_eq!(found, [Some(Record::Claude(path)), None, None, None, None, None]);
     }
 }
 

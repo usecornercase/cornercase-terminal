@@ -533,6 +533,12 @@ export const MODES: Record<string, [string, string][]> = {
     ['auto', '--permission-mode auto'],
     ['always approve (dangerous)', '--always-approve'],
   ],
+  cursor: [
+    ['plan', '--mode plan'],
+    ['ask', '--mode ask'],
+    ['auto review', '--auto-review'],
+    ['run everything (dangerous)', '--force'],
+  ],
 };
 
 export interface UsageWindow {

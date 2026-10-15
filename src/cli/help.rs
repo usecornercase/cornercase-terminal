@@ -89,12 +89,12 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force.
 
-With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode or Grok Build has
+With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI has
 recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have
 been submitted` when it records none: read the pane before sending it again. A working Codex,
-Gemini or Grok Build holds a prompt until it takes it, so the command returns then. Grok Build
-queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
-slash commands, ? help and ! shell input, and Grok Build's / and ! commands, return after Enter
+Gemini, Grok Build or Cursor CLI holds a prompt until it takes it, so the command returns then.
+Grok Build queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
+slash commands, ? help and ! shell input, and the / and ! commands of Grok Build and Cursor CLI, return after Enter
 without confirming a prompt record. In other programs it returns once Enter is pressed.
 
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
@@ -118,10 +118,10 @@ pub(super) const READ_HELP: &str =
 
 With --last-message it prints the last message the agent in the pane wrote, as plain text, from
 its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
-database, Grok Build's session) instead of the screen, so it comes whole even once it scrolled
+database, Grok Build's session, Cursor CLI's chat store) instead of the screen, so it comes whole even once it scrolled
 off, without the input box or status lines. While the agent works it is the newest one so far.
 --json adds when it was written and whether the agent's turn is over. It fails on a pane without
-Claude Code, Codex, Gemini CLI, opencode or Grok Build, and before the agent wrote anything.
+Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI, and before the agent wrote anything.
 
 With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
 header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
@@ -146,7 +146,8 @@ counts as working, since it wakes up when the shell ends; --until turn-over also
 prints shell. It then prints how it ended (idle, done, failed, pending, waiting, working, shell or quiet),
 or the line that matched.
 Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
-opencode or Grok Build in the pane. Without reports, Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
+opencode, Grok Build or Cursor CLI in the pane. Without reports, Gemini status needs its dynamic window title,
+and Cursor CLI's waiting needs /status-indicators. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once

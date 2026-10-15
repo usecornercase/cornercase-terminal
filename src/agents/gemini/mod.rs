@@ -8,6 +8,7 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
+pub(in crate::agents) const COMMAND: &str = "gemini";
 pub(in crate::agents) const MODEL_FLAG: &str = "--model";
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
 pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;

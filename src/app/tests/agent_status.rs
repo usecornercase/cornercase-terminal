@@ -4,6 +4,7 @@ use super::*;
 use crate::agents::activity::{Activity, Status};
 use crate::agents::claude::fake::FakeClaude;
 use crate::agents::codex::fake::FakeCodex;
+use crate::agents::cursor::fake::FakeCursor;
 use crate::agents::gemini::fake::FakeGemini;
 use crate::agents::grok::fake::FakeGrok;
 use crate::agents::opencode::fake::FakeOpencode;
@@ -321,6 +322,7 @@ enum Fake {
     Gemini(FakeGemini, usize),
     Opencode(FakeOpencode, usize),
     Grok(FakeGrok, usize),
+    Cursor(FakeCursor, usize),
 }
 
 fn start_opencode(app: &mut App, rx: &Receiver<AppEvent>) -> FakeOpencode {
@@ -383,6 +385,12 @@ impl Watched {
                 grok.bind(pid);
                 Fake::Grok(grok, app.projects[0].workspaces[0].active)
             }
+            agents::Known::Cursor => {
+                let cursor = FakeCursor::new(&app.projects[0].path);
+                type_line(app, &cursor.command_line());
+                pump_until(app, rx, "cursor runs", |a| runs(a, agents::Known::Cursor.name()));
+                Fake::Cursor(cursor, app.projects[0].workspaces[0].active)
+            }
             agents::Known::Claude => {
                 let claude = FakeClaude::running(FakeClaude::SILENT);
                 claude.start(app);
@@ -425,6 +433,24 @@ impl Watched {
                     let messages = if status == "busy" { OPENCODE_WORKING } else { OPENCODE_REPLY };
                     opencode_says(&mut self.app, &self.rx, opencode, *tab, messages);
                 }
+                Fake::Cursor(cursor, tab) => {
+                    let title = match status {
+                        "busy" => {
+                            cursor.turn("fix the login");
+                            "Cursor Agent - ⏳ Working ···"
+                        }
+                        "waiting" => "Cursor Agent - 🔐 Waiting for confirmation",
+                        _ => {
+                            cursor.reply("done");
+                            cursor.end("success");
+                            "Cursor Agent - ✅ Ready"
+                        }
+                    };
+                    cursor.title(title);
+                    pump_until(&mut self.app, &self.rx, "cursor sets its title", |a| {
+                        tab_term(a, 0, *tab).emulator.title() == title
+                    });
+                }
                 Fake::Grok(grok, tab) => {
                     grok.report(status);
                     let wanted = match status {
@@ -459,7 +485,8 @@ fn a_restart_names_the_agent_at_work_and_the_other_program(
         agents::Known::Codex,
         agents::Known::Gemini,
         agents::Known::Opencode,
-        agents::Known::Grok
+        agents::Known::Grok,
+        agents::Known::Cursor
     )]
     agent: agents::Known,
 ) {
@@ -482,7 +509,8 @@ fn runs(app: &App, agent: &str) -> bool {
 
 #[rstest]
 fn a_tab_follows_turns_and_approvals(
-    #[values(agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)] agent: agents::Known,
+    #[values(agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok, agents::Known::Cursor)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, false);
     let mut seen = vec![status(&w.app, 0, 0)];
@@ -498,7 +526,13 @@ fn a_tab_follows_turns_and_approvals(
 
 #[rstest]
 fn a_hidden_tab_that_needs_you_shows_a_toast_and_sends_one_notification(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    #[values(
+        agents::Known::Claude,
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Grok,
+        agents::Known::Cursor
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
@@ -529,6 +563,42 @@ fn a_grok_tab_shows_its_model_and_context() {
     let mut w = Watched::start(agents::Known::Grok, false);
     let row = second_row(&mut w.app).1;
     assert!(row.contains("grok-4.7") && row.contains("8%"), "{row}");
+}
+
+#[test]
+fn a_cursor_without_status_indicators_follows_its_transcript() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let cursor = FakeCursor::new(&app.projects[0].path);
+    type_line(&mut app, &cursor.command_line());
+    pump_until(&mut app, &rx, "cursor runs", |a| runs(a, agents::Known::Cursor.name()));
+    watch_until(&mut app, &rx, "cursor is idle", |a| status(a, 0, 0) == Some(Status::Idle));
+
+    cursor.turn("fix the login");
+    watch_until(&mut app, &rx, "the open turn shows", |a| status(a, 0, 0) == Some(Status::Working));
+    cursor.reply("done");
+    cursor.end("success");
+
+    watch_until(&mut app, &rx, "the ended turn shows", |a| status(a, 0, 0) == Some(Status::Idle));
+}
+
+#[test]
+fn a_cursor_tab_shows_its_model_and_context_until_the_model_changes() {
+    let mut w = Watched::start(agents::Known::Cursor, false);
+    let Fake::Cursor(cursor, _) = &w.agents[0] else { unreachable!("Cursor was started") };
+    cursor.routed("Opus 5.5");
+    cursor.context(25_000, 200_000);
+    watch_until(&mut w.app, &w.rx, "cursor's context shows", |a| a.tab().is_some_and(|t| t.context().is_some()));
+    watch_until(&mut w.app, &w.rx, "cursor's percentage shows", |a| {
+        a.tab().and_then(|t| t.context()).is_some_and(|c| c.percent == Some(13))
+    });
+    let row = second_row(&mut w.app).1;
+    assert!(row.contains("Opus 5.5") && row.contains("13%"), "{row}");
+
+    let Fake::Cursor(cursor, _) = &w.agents[0] else { unreachable!("Cursor was started") };
+    cursor.model("sonnet");
+    watch_until(&mut w.app, &w.rx, "the percentage goes", |a| {
+        a.tab().and_then(|t| t.context()).is_some_and(|c| c.percent.is_none())
+    });
 }
 
 #[test]
@@ -592,7 +662,8 @@ fn a_hidden_tab_that_finishes_says_so(
         agents::Known::Codex,
         agents::Known::Gemini,
         agents::Known::Opencode,
-        agents::Known::Grok
+        agents::Known::Grok,
+        agents::Known::Cursor
     )]
     agent: agents::Known,
 ) {
@@ -606,7 +677,13 @@ fn a_hidden_tab_that_finishes_says_so(
 
 #[rstest]
 fn a_settled_change_notifies_once(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    #[values(
+        agents::Known::Claude,
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Grok,
+        agents::Known::Cursor
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
@@ -620,7 +697,13 @@ fn a_settled_change_notifies_once(
 
 #[rstest]
 fn the_visible_tab_stays_quiet(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Grok)]
+    #[values(
+        agents::Known::Claude,
+        agents::Known::Codex,
+        agents::Known::Gemini,
+        agents::Known::Grok,
+        agents::Known::Cursor
+    )]
     agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, false);
@@ -632,7 +715,8 @@ fn the_visible_tab_stays_quiet(
 
 #[rstest]
 fn a_question_answered_at_once_stays_quiet(
-    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini)] agent: agents::Known,
+    #[values(agents::Known::Claude, agents::Known::Codex, agents::Known::Gemini, agents::Known::Cursor)]
+    agent: agents::Known,
 ) {
     let mut w = Watched::start(agent, true);
     w.report("waiting", 1);

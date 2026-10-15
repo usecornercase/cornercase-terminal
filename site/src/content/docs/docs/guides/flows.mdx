@@ -33,7 +33,7 @@ A **flow** is a team of coding agents and the plan they follow, saved as a templ
 
 They come with cornercase, so they improve with each update, and they use the agents you have installed: the default agent (**settings → Agents → default agent**) orchestrates and codes, and the reviewers take other agents when you have them, so a change is reviewed by a model that did not write it. You can change them: save a built-in flow from the editor and your version, kept in your folder under the same name, takes its place (tagged `edited`, and no longer updated with cornercase); **`restore default`** brings the built-in back (see [Edit flows](#edit-flows)).
 
-The whole team works in one worktree. Claude Code, Codex, Gemini CLI and Grok Build can take several roles of one flow; opencode takes one, since cornercase reads its status from its folder and cannot tell two opencode apart there. A flow that gives opencode two roles says so in red and does not start, and the built-in flows give the other roles another agent. Two Codex or two Gemini CLI in one worktree still show their status, from their titles, but cornercase cannot tell their conversations apart: `read --last-message` fails for them, and the orchestrator reads their screens instead.
+The whole team works in one worktree. Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI can take several roles of one flow; opencode takes one, since cornercase reads its status from its folder and cannot tell two opencode apart there. A flow that gives opencode two roles says so in red and does not start, and the built-in flows give the other roles another agent. Two Codex or two Gemini CLI in one worktree still show their status, from their titles, but cornercase cannot tell their conversations apart: `read --last-message` fails for them, and the orchestrator reads their screens instead.
 
 ## Start a flow
 
@@ -62,7 +62,7 @@ Starting a flow:
 The whole team starts at once, so the tabs and the diagram are complete from the first second; an agent waiting for its first message costs nothing. The roles' turns ending don't notify you or leave a `✓` on their tabs, since the orchestrator reads them; the orchestrator does when the run is done, and any agent still does when it [waits for you](../projects-workspaces-tabs/#notifications).
 
 <Aside type="caution" title="Every agent runs without asking for permission">
-A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto` and Grok Build with `--always-approve`. Start flows in repositories you trust, and read what they did before you merge it.
+A team that stops to ask defeats the point, and the orchestrator must not answer another agent's permission prompt. So every role starts in its agent's mode that skips permission prompts: Claude Code with `--dangerously-skip-permissions`, Codex with `--dangerously-bypass-approvals-and-sandbox`, Gemini CLI with `--yolo --skip-trust`, opencode with `--auto`, Grok Build with `--always-approve` and Cursor CLI with `--force --trust`. Start flows in repositories you trust, and read what they did before you merge it.
 </Aside>
 
 A run lives in its workspace: closing the workspace closes the run. It is saved with the [session](../sessions/), so after a restart the agents [resume their conversations](../sessions/#agents-resume-their-conversations) in their tabs, each in its role's mode, model and effort, and the orchestrator is told its team's new pane ids.
@@ -122,7 +122,7 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 />
 
 - **The Flow tab**: the name, a description, where it is saved (yours, or the project's), the stages, the final action and the notes. Click a stage to open it: **roles** (several work side by side), **goes back** (never, or to an earlier stage), **when** (what sends it back, such as `findings`) and **at most** (how many times). Hover a stage to move it with **`↑`** **`↓`** or remove it with **`×`**; **`+ add stage`** adds one.
-- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **effort** (the agent's default, or one of its levels: Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex `minimal` to `xhigh`; Grok Build `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Gemini CLI and opencode have no effort switch), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, and its **prompt**. Renaming a role renames it in every stage.
+- **A role's tab**: its **name**, **agent**, **model** (the agent's default, the models cornercase knows for it, or **other…** to type one), **effort** (the agent's default, or one of its levels: Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex `minimal` to `xhigh`; Grok Build `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Gemini CLI, opencode and Cursor CLI have no effort switch; with Cursor it goes in the model id), **args** added to the agent's command, **env** as `KEY=value` pairs (Claude Code on Bedrock, for example), whether it **edits files**, and its **prompt**. Renaming a role renames it in every stage.
 - **Prompts and notes** open a larger editor: `Enter` starts a new line, **`save`** keeps the text, **`cancel`** or `Esc` drops it.
 
 **`save`** refuses while the flow has problems, listed in red under the form (a role in no stage, a loop that goes forward, an agent cornercase cannot start…). Renaming a flow renames its file. Closing a flow with unsaved changes asks first.
@@ -213,4 +213,4 @@ cornercase flow import quick.toml
 - Flows that span several projects.
 - Scheduling a flow: the [queue](../queue/) starts single agents.
 - Message events in [`cornercase events`](../scripts-and-agents/#follow-events).
-- Agents cornercase doesn't know: a role runs Claude Code, Codex, Gemini CLI, opencode or Grok Build.
+- Agents cornercase doesn't know: a role runs Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI.

@@ -170,6 +170,7 @@ mod problems {
     #[case::opencode("opencode", true)]
     #[case::claude("claude", false)]
     #[case::grok("grok", false)]
+    #[case::cursor("cursor", false)]
     fn only_opencode_takes_one_role(#[case] agent: &str, #[case] refused: bool) {
         let mut flow = sample();
         flow.orchestrator.agent = agent.into();
