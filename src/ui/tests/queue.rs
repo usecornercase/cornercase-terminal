@@ -101,8 +101,8 @@ fn the_open_list_counts_as_part_of_the_dialog() {
 }
 
 #[rstest]
-#[case::two_rows_short(16)]
-#[case::one_row_short(17)]
+#[case::two_rows_short(20)]
+#[case::one_row_short(21)]
 fn a_short_form_shows_its_error_above_the_buttons(#[case] height: u16) {
     let lines = lines(&shown(form("fix", Some("choose a time in the future")), 100, height));
     let note = lines.iter().position(|l| l.contains("choose a time in the future")).expect("the note shows");
@@ -177,4 +177,13 @@ fn the_panel_buttons_light_up_under_the_pointer() {
         view.hover = Some(pos);
         assert_eq!(render_sized(&view, 140, 28).backend().buffer()[(pos.x, pos.y)].bg, Color::Cyan, "{pos:?}");
     }
+}
+
+#[test]
+fn a_workspace_says_it_opens_a_new_tab_without_offering_a_choice() {
+    let mut f = form("fix", None);
+    f.place.choose(1);
+    let lines = lines(&shown(f, 100, 24));
+    let open_in = lines.iter().find(|l| l.contains("Open in")).expect("the open in row");
+    assert!(open_in.contains("Open in   new tab") && !open_in.contains('▾'), "{open_in}");
 }

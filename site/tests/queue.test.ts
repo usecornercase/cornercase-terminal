@@ -150,7 +150,7 @@ test('the place, agent and mode lists open and choose with a click', () => {
   const o = form(app);
   o.prompt = 'Fix the login';
   app.render();
-  assert.equal(app.textAt('Open in'), null);
+  assert.ok(app.textAt('Open in   new tab'));
   clickControl(app, 'place');
   assert.ok(o.place.open);
   const root = o.places.findIndex((choice) => choice.project === app.project()!.id && choice.workspace === null);

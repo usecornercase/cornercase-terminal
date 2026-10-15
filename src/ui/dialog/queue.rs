@@ -12,7 +12,12 @@ use crate::ui::combo;
 use crate::ui::widgets::overlay_block;
 
 const LABEL: u16 = 9;
-const HEIGHT: u16 = 19;
+const HEIGHT: u16 = 23;
+const WHERE: u16 = 8;
+const OPEN_IN: u16 = 10;
+const AGENT: u16 = 12;
+const MODE: u16 = 14;
+const NOTICE: u16 = 16;
 const COMBO: u16 = 18;
 const WIDE: u16 = 44;
 const CLOCK: u16 = 7;
@@ -65,11 +70,13 @@ pub(crate) fn rect(screen: Rect, form: &Form, control: Control) -> Rect {
         Control::Clock => cell(screen, 6, if on { LABEL + DATE + 1 } else { LABEL }, CLOCK),
         Control::Amount => cell(screen, 6, LABEL, AMOUNT),
         Control::Unit => cell(screen, 6, LABEL + AMOUNT + 1, UNIT),
-        Control::Place => cell(screen, 7, LABEL, rest(screen, LABEL).min(WIDE)),
-        Control::OpenIn => cell(screen, 8, LABEL, COMBO),
-        Control::Branch => cell(screen, 8, LABEL + COMBO + 1, rest(screen, LABEL + COMBO + 1).min(WIDE - COMBO - 1)),
-        Control::Agent => cell(screen, 9, LABEL, COMBO),
-        Control::Mode => cell(screen, 10, LABEL, COMBO),
+        Control::Place => cell(screen, WHERE, LABEL, rest(screen, LABEL).min(WIDE)),
+        Control::OpenIn => cell(screen, OPEN_IN, LABEL, COMBO),
+        Control::Branch => {
+            cell(screen, OPEN_IN, LABEL + COMBO + 1, rest(screen, LABEL + COMBO + 1).min(WIDE - COMBO - 1))
+        }
+        Control::Agent => cell(screen, AGENT, LABEL, COMBO),
+        Control::Mode => cell(screen, MODE, LABEL, COMBO),
     }
 }
 
@@ -95,7 +102,7 @@ fn buttons(screen: Rect) -> [Rect; 2] {
 fn note(screen: Rect) -> Rect {
     let r = inner(screen);
     let buttons = r.bottom().saturating_sub(1);
-    let y = buttons.saturating_sub(2).max(r.y.saturating_add(12)).min(buttons);
+    let y = buttons.saturating_sub(2).max(r.y.saturating_add(NOTICE)).min(buttons);
     Rect::new(r.x, y, r.width, buttons - y)
 }
 
@@ -170,10 +177,14 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     f.render_widget(overlay_block(view.muted, "Schedule an agent"), area);
     let dim = Style::default().fg(view.muted);
     let controls = form.controls();
-    for (at, label) in [(0, "Prompt"), (5, "When"), (7, "Where"), (8, "Open in"), (9, "Agent"), (10, "Mode")] {
-        if at != 8 || controls.contains(&Control::OpenIn) {
-            f.render_widget(Paragraph::new(Span::styled(label, dim)), cell(screen, at, 0, LABEL));
-        }
+    for (at, label) in
+        [(0, "Prompt"), (5, "When"), (WHERE, "Where"), (OPEN_IN, "Open in"), (AGENT, "Agent"), (MODE, "Mode")]
+    {
+        f.render_widget(Paragraph::new(Span::styled(label, dim)), cell(screen, at, 0, LABEL));
+    }
+    if !controls.contains(&Control::OpenIn) {
+        let only = cell(screen, OPEN_IN, LABEL + 1, rest(screen, LABEL + 1));
+        f.render_widget(Paragraph::new(Span::styled(crate::queue::form::OPEN_IN[0], dim)), only);
     }
     let typing = !form.busy && form.opened().is_none();
     let placeholder = if form.places.is_empty() { "no open project" } else { "choose an open place…" };
@@ -195,7 +206,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     let tip = Rect::new(end.saturating_add(1), r.y, r.right().saturating_sub(end.saturating_add(1)), r.height);
     f.render_widget(Paragraph::new(Span::styled(hint(form), dim)), tip);
     let notice = format!("Times use {}. Queued agents always accept their folder trust question.", form.zone);
-    f.render_widget(Paragraph::new(Span::styled(notice, dim)).wrap(Wrap { trim: true }), row(screen, 12, 2));
+    f.render_widget(Paragraph::new(Span::styled(notice, dim)).wrap(Wrap { trim: true }), row(screen, NOTICE, 2));
     let note = if form.busy { Some("reading the plan reset…".to_string()) } else { form.error.clone() };
     if let Some(note) = note {
         let r = self::note(screen);

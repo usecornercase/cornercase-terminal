@@ -44,7 +44,12 @@ export const OPEN_IN = ['new tab', 'new worktree'];
 
 const LISTS: QueueList[] = ['when', 'unit', 'place', 'openIn', 'agent', 'mode'];
 const LABEL = 9;
-const HEIGHT = 19;
+const HEIGHT = 23;
+const WHERE = 8;
+const OPEN_IN_ROW = 10;
+const AGENT = 12;
+const MODE = 14;
+const NOTICE = 16;
 const COMBO = 18;
 const WIDE = 44;
 const CLOCK = 7;
@@ -200,11 +205,11 @@ export function queueRect(screen: Rect, o: QueueForm, control: QueueControl): Re
     case 'clock': return cell(screen, 6, on ? LABEL + DATE + 1 : LABEL, CLOCK);
     case 'amount': return cell(screen, 6, LABEL, AMOUNT);
     case 'unit': return cell(screen, 6, LABEL + AMOUNT + 1, UNIT);
-    case 'place': return cell(screen, 7, LABEL, Math.min(rest(screen, LABEL), WIDE));
-    case 'openIn': return cell(screen, 8, LABEL, COMBO);
-    case 'branch': return cell(screen, 8, LABEL + COMBO + 1, Math.min(rest(screen, LABEL + COMBO + 1), WIDE - COMBO - 1));
-    case 'agent': return cell(screen, 9, LABEL, COMBO);
-    case 'mode': return cell(screen, 10, LABEL, COMBO);
+    case 'place': return cell(screen, WHERE, LABEL, Math.min(rest(screen, LABEL), WIDE));
+    case 'openIn': return cell(screen, OPEN_IN_ROW, LABEL, COMBO);
+    case 'branch': return cell(screen, OPEN_IN_ROW, LABEL + COMBO + 1, Math.min(rest(screen, LABEL + COMBO + 1), WIDE - COMBO - 1));
+    case 'agent': return cell(screen, AGENT, LABEL, COMBO);
+    case 'mode': return cell(screen, MODE, LABEL, COMBO);
   }
 }
 
@@ -298,11 +303,13 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
   p.g.box(area, MUTED, 'Schedule an agent', { add: BOLD, fg: -1 });
   p.region({ r: area, click: () => { closeQueueLists(o); app.dirty(); }, wheel: scroll });
   const controls = queueControls(o);
-  for (const [at, label] of [[0, 'Prompt'], [5, 'When'], [7, 'Where'], [8, 'Open in'], [9, 'Agent'], [10, 'Mode']] as const) {
-    if (at !== 8 || controls.includes('openIn')) {
-      const r = cell(screen, at, 0, LABEL);
-      p.span(r.x, r.y, label, MUTED, r.w);
-    }
+  for (const [at, label] of [[0, 'Prompt'], [5, 'When'], [WHERE, 'Where'], [OPEN_IN_ROW, 'Open in'], [AGENT, 'Agent'], [MODE, 'Mode']] as const) {
+    const r = cell(screen, at, 0, LABEL);
+    p.span(r.x, r.y, label, MUTED, r.w);
+  }
+  if (!controls.includes('openIn')) {
+    const only = cell(screen, OPEN_IN_ROW, LABEL + 1, rest(screen, LABEL + 1));
+    p.span(only.x, only.y, 'new tab', MUTED, only.w);
   }
   const placeholder = o.places.length ? 'choose an open place…' : 'no open project';
   for (const control of controls) {
@@ -319,11 +326,11 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
   const end = values.length ? Math.max(...values.map((c) => right(queueRect(screen, o, c)))) : inner(screen).x + LABEL;
   const tipRow = row(screen, 6, 1);
   if (!isEmpty(tipRow)) p.span(end + 1, tipRow.y, hint(o), MUTED, Math.max(0, right(tipRow) - end - 1));
-  paragraph(p, row(screen, 12, 2), `Times use ${o.zone}. Queued agents always accept their folder trust question.`, MUTED);
+  paragraph(p, row(screen, NOTICE, 2), `Times use ${o.zone}. Queued agents always accept their folder trust question.`, MUTED);
   const r = inner(screen);
   const buttons = bottom(r) - 1;
   if (o.error) {
-    const y = Math.min(Math.max(buttons - 2, r.y + 12), buttons);
+    const y = Math.min(Math.max(buttons - 2, r.y + NOTICE), buttons);
     const note = rect(r.x, y, r.w, buttons - y);
     p.g.clear(note);
     paragraph(p, note, o.error, { fg: 1 });
