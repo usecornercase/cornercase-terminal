@@ -32,7 +32,7 @@ Worktrees are offered when the **project folder is the root of a git repository*
 
 cornercase then, in the background:
 
-- checks out the branch if it already exists locally; otherwise, if a remote has it (after a fetch, `origin/feat/login`), creates it from there and makes it track that remote branch; only when no remote has it either does it create it from the project's current `HEAD`. When several remotes have the branch, git's `checkout.defaultRemote` setting picks one, and without it the dialog asks you to set it;
+- checks out the branch if it already exists locally; otherwise, if a remote branch of that name was already fetched (`origin/feat/login`; cornercase does not fetch first), creates it from there and makes it track that remote branch; only when no remote has it either does it create it from the project's current `HEAD`. When several remotes have the branch, git's `checkout.defaultRemote` setting picks one; without it, the dialog shows an error naming the remotes and that setting;
 - runs `git worktree add` into `<worktrees folder>/<repository>/<branch>`;
 - copies the files listed in [`.worktreeinclude`](#bring-your-ignored-files-along);
 - opens the new workspace with a shell in the checkout.

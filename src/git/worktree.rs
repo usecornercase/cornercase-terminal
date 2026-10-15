@@ -118,7 +118,13 @@ pub(crate) fn create_pinned(repo: &Path, branch: &str, path: &Path, pin: &Pin) -
         }
         Made::Fetched(format!("{} {}", pin.remote, pin.reference))
     };
-    check(git(repo, [OsStr::new("worktree"), "add".as_ref(), path.as_os_str(), branch.as_ref()])?)?;
+    let added = git(repo, [OsStr::new("worktree"), "add".as_ref(), path.as_os_str(), branch.as_ref()]).and_then(check);
+    if let Err(e) = added {
+        if matches!(made, Made::Fetched(_)) {
+            let _ = git(repo, ["branch", "-D", branch]);
+        }
+        return Err(e);
+    }
     copy_included(repo, path)?;
     Ok(made)
 }
