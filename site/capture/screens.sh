@@ -771,26 +771,31 @@ flows_open() {
   cc_click 'Settings'
   cc_click 'Agents'
   cc_click 'flows'
-  cc_wait 'Built in'
+  cc_wait 'teams of agents that work through a plan'
+}
+
+flows_edit_full_issue() {
+  flows_open
+  cc_click 'Full issue'
+  cc_click 'edit   duplicate'
+  cc_wait 'not saved yet'
 }
 
 screen_flows_list() {
-  flows_open
-  cc_click 'duplicate   new'
-  cc_wait 'saved in'
-  cc_click 'done'
-  cc_wait 'Full issue copy'
+  flows_edit_full_issue
+  cc_click 'save   done'
+  cc_wait 'full-issue.toml'
+  cc_click 'save   done' 7
+  cc_wait 'restore default'
   CC_ROWS=24
   tmux -L "$CC_TMUX" resize-window -x 140 -y 24
-  cc_wait 'edit   duplicate'
+  cc_wait 'restore default'
   cc_hover '╭─ Flows'
   cc_shot flows-list
 }
 
 screen_flows_edit() {
-  flows_open
-  cc_click 'duplicate   new'
-  cc_wait 'saved in'
+  flows_edit_full_issue
   cc_click '▸ 2'
   cc_wait 'goes back'
   cc_hover '╭─ Flows'
@@ -808,7 +813,9 @@ screen_flow_start() {
   cc_click '#482'
   cc_wait 'opened by @ana'
   cc_click 'start a flow'
-  cc_wait 'Start a flow'
+  cc_wait 'Flow templates'
+  cc_click 'Full issue'
+  cc_wait 'Full issue in web-shop'
   cc_wait '◆ open a pull request'
   cc_hover '╭─ Start a flow'
   cc_shot flow-start
