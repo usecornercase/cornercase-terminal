@@ -93,7 +93,7 @@ impl App {
                     Some(Overlay::Search(Finder { mode: Mode::Sessions, enter: true, field, .. }))
                         if field.query().trim() == query
                 );
-                if let Some(Overlay::Search(dialog)) = &mut self.overlay {
+                if waiting && let Some(Overlay::Search(dialog)) = &mut self.overlay {
                     dialog.enter = false;
                 }
                 let first = self.sessions.answer(&query).and_then(|found| found.matches.first().cloned());

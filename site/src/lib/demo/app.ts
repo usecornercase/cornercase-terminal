@@ -138,7 +138,6 @@ export interface SearchResult {
 
 const SAID_PER_PANE = 20;
 const SAID_MATCHES = 300;
-const SAID_WIDTH = 160;
 
 type Listener = (event: string, detail?: string) => void;
 
@@ -2260,27 +2259,28 @@ export class App {
           for (const pane of t.panes) {
             const lines = pane.shell.screen().split('\n');
             let found = 0;
-            for (let i = lines.length - 1; i >= 0; i--) {
-              const at = lines[i].toLowerCase().indexOf(q);
-              if (at < 0) continue;
-              if (found === SAID_PER_PANE || results.length === SAID_MATCHES) {
-                capped = true;
-                break;
+            scan: for (let i = lines.length - 1; i >= 0; i--) {
+              const lower = lines[i].toLowerCase();
+              for (let at = lower.indexOf(q); at >= 0; at = lower.indexOf(q, at + q.length)) {
+                if (found === SAID_PER_PANE || results.length === SAID_MATCHES) {
+                  capped = true;
+                  break scan;
+                }
+                found++;
+                const [name, hit] = snippet(lines[i], at, [...q].length);
+                results.push({
+                  kind: 3,
+                  name,
+                  hit,
+                  context: `${projectLabel(p)} › ${workspaceLabel(w)} › ${tabLabel(t)}`,
+                  detail: `${pane.agent ?? pane.shell.fg?.name ?? 'shell'} · screen`,
+                  keys: [],
+                  go: () => {
+                    this.goto(pi, wi, ti);
+                    t.active = pane.id;
+                  },
+                });
               }
-              found++;
-              const [name, hit] = snippet(lines[i], at, [...q].length);
-              results.push({
-                kind: 3,
-                name,
-                hit,
-                context: `${projectLabel(p)} › ${workspaceLabel(w)} › ${tabLabel(t)}`,
-                detail: `${pane.agent ?? pane.shell.fg?.name ?? 'shell'} · screen`,
-                keys: [],
-                go: () => {
-                  this.goto(pi, wi, ti);
-                  t.active = pane.id;
-                },
-              });
             }
           }
         }
@@ -4104,10 +4104,15 @@ export class App {
       else if (k.key === 'Backspace') {
         o.query = o.query.slice(0, -1);
         o.selected = 0;
+        o.scroll = 0;
       } else if (ch) {
         o.query += ch;
         o.selected = 0;
+        o.scroll = 0;
       }
+      const visible = Math.max(1, Math.floor(Math.max(0, this.areas().results.h - 2) / (o.mode === 'sessions' ? 2 : 1)));
+      if (o.selected < o.scroll) o.scroll = o.selected;
+      else if (o.selected >= o.scroll + visible) o.scroll = o.selected - visible + 1;
       this.dirty();
       return true;
     }
@@ -4279,17 +4284,20 @@ export class App {
 function snippet(line: string, at: number, length: number): [string, [number, number]] {
   const chars = [...line.replace(/[\u0000-\u001f\u007f]/g, ' ')];
   const before = [...line.slice(0, at)].length;
-  const lead = Math.min(chars.findIndex((c) => c.trim() !== ''), before);
-  const text = chars.slice(Math.max(0, lead));
-  const start = before - Math.max(0, lead);
-  const from = text.length <= SAID_WIDTH ? 0 : Math.min(Math.max(0, start - 40), text.length - SAID_WIDTH);
-  const to = Math.min(from + SAID_WIDTH, text.length);
-  let shown = text.slice(from, to).join('');
-  let hit: [number, number] = [start - from, Math.min(start + length, to) - from];
-  if (from > 0) {
-    shown = `…${shown}`;
-    hit = [hit[0] + 1, hit[1] + 1];
-  }
-  if (to < text.length) shown += '…';
-  return [shown, hit];
+  const lead = Math.max(0, Math.min(chars.findIndex((c) => c.trim() !== ''), before));
+  const start = before - lead;
+  return [chars.slice(lead).join('').trimEnd(), [start, start + length]];
+}
+
+export function crop(text: string, hit: [number, number], width: number): [string, [number, number]] {
+  const chars = [...text];
+  if (chars.length <= width) return [text, hit];
+  const from = Math.min(Math.max(0, hit[0] - Math.floor(width / 4)), chars.length - width);
+  const to = from + width;
+  const lead = from > 0 ? 1 : 0;
+  let shown = chars.slice(from + lead, to - (to < chars.length ? 1 : 0)).join('');
+  if (lead) shown = `…${shown}`;
+  if (to < chars.length) shown += '…';
+  const end = Math.min(hit[1], to - (to < chars.length ? 1 : 0));
+  return [shown, [Math.max(hit[0], from + lead) - from, Math.max(end - from, Math.max(hit[0], from + lead) - from)]];
 }

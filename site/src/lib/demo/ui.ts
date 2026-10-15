@@ -2,7 +2,7 @@ import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
-import type { AgentRow, App } from './app';
+import { type AgentRow, type App, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
 import { drawFlow } from './flow';
@@ -1457,8 +1457,7 @@ export class Painter {
       const context = truncateLeft(res.context, Math.floor(row.w / 2));
       this.line(rect(row.x, row.y, 1, pitch), [rail(selected, bg)]);
       if (sessions) {
-        const text = truncateRight(res.name, Math.max(0, row.w - 3));
-        const [from, to] = res.hit ?? [0, 0];
+        const [text, [from, to]] = crop(res.name, res.hit ?? [0, 0], Math.max(0, row.w - 3));
         const chars = [...text];
         let x = this.span(row.x + 2, row.y, chars.slice(0, from).join(''), base);
         x = this.span(x, row.y, chars.slice(from, to).join(''), matched);
@@ -1482,7 +1481,7 @@ export class Painter {
       this.region({ r: row, click: () => app.searchGo(i), cursor: 'pointer' });
     });
     const selected = results[Math.min(o.selected, results.length - 1)];
-    if (sessions && app.saidCapped(o.query)) this.span(hint.x, hint.y, '  the first 300 matches', DARK);
+    if (sessions && app.saidCapped(o.query)) this.span(hint.x, hint.y, `  the first ${results.length} matches`, DARK);
     else if (sessions && selected) this.span(hint.x, hint.y, `  enter goes to ${truncateLeft(selected.context, hint.w - 16)}`, DARK);
     else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }

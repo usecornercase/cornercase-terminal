@@ -71,3 +71,47 @@ test('a search with nothing to find says so and a compact window keeps the butto
   assert.ok(app.textAt('❯'));
   app.destroy();
 });
+
+test('every occurrence on a line is a result, and the per-pane cap counts occurrences', () => {
+  const app = started();
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  pane.shell.screen = () => 'foo foo foo\nbar foo';
+  assert.equal(app.searchResults('foo', 'sessions').filter((r) => r.name === 'foo foo foo').length, 3);
+  assert.equal(app.searchResults('foo', 'sessions').filter((r) => r.name === 'bar foo').length, 1);
+  pane.shell.screen = () => Array.from({ length: 30 }, () => 'foo').join(' ');
+  const mine = app.searchResults('foo', 'sessions').filter((r) => r.name.startsWith('foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo'));
+  assert.equal(mine.length, 20);
+  assert.equal(app.saidCapped('foo'), true);
+  app.destroy();
+});
+
+test('the arrows keep the selected session result in view', () => {
+  const app = started();
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  pane.shell.screen = () => Array.from({ length: 15 }, (_, i) => `row ${i} foo`).join('\n');
+  app.resize(140, 16);
+  app.openSearch('sessions'); type(app, 'row'); app.render();
+  const o = app.overlay;
+  assert.ok(o?.kind === 'search');
+  for (let i = 0; i < 12; i++) app.key({ key: 'ArrowDown', ctrl: false, alt: false, shift: false });
+  assert.equal(o.selected, 12);
+  assert.ok(o.scroll > 0);
+  app.render();
+  assert.ok(app.textAt('row 2 foo'));
+  assert.ok(!app.textAt('row 14 foo'));
+  for (let i = 0; i < 12; i++) app.key({ key: 'ArrowUp', ctrl: false, alt: false, shift: false });
+  assert.equal(o.scroll, 0);
+  app.destroy();
+});
+
+test('a narrow row crops around the match so it stays visible, and the hint counts what is listed', () => {
+  const app = started();
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  pane.shell.screen = () => `${'a'.repeat(80)}NEEDLE${'b'.repeat(80)}`;
+  app.openSearch('sessions'); type(app, 'needle'); app.render();
+  assert.ok(app.textAt('NEEDLE'));
+  pane.shell.screen = () => Array.from({ length: 21 }, () => 'needle').join('\n');
+  app.render();
+  assert.ok(app.textAt('the first 20 matches'));
+  app.destroy();
+});

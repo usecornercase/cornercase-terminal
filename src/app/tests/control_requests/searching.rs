@@ -55,9 +55,14 @@ fn a_search_goes_with_its_client() {
     ask(&mut app, None, search("anything"));
 
     app.forget(CLIENT);
-    pump_until(&mut app, &rx, "the job ends", |_| true);
-    std::thread::sleep(Duration::from_millis(200));
-    drain(&mut app, &rx);
+    let mut ended = false;
+    wait_until("the job answers", || {
+        while let Ok(event) = rx.try_recv() {
+            ended |= matches!(event, AppEvent::Search(_));
+            app.handle_event(event, AREA).expect("handle event");
+        }
+        ended
+    });
 
     assert_eq!(app.take_answers(), Vec::new());
 }
