@@ -148,7 +148,15 @@ mod drawing {
 
     #[test]
     fn nothing_is_named_while_a_dialog_is_open() {
-        let search = Search { query: String::new(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
+        let search = Search {
+            query: String::new(),
+            results: Vec::new(),
+            selected: 0,
+            scroll: 0,
+            hint: String::new(),
+            sessions: false,
+            searching: false,
+        };
         let v = View { overlay: Some(Overlay::Search(search)), ..with_bar(Some(Position::new(1, 20))) };
         let t = render_sized(&v, W, 24);
         assert!(!row_text(&t, Rect::new(WIDTH, 20, 12, 1)).contains("Settings"));

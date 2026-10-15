@@ -39,10 +39,14 @@ pub(crate) fn render(report: &Report, home: Option<&Path>) -> String {
 }
 
 pub(crate) fn pane_table(rows: &[PaneRow]) -> Result<String> {
-    let mut text = PaneRow::COLUMNS.join("\t") + "\n";
+    tsv(&PaneRow::COLUMNS, rows)
+}
+
+pub(super) fn tsv(columns: &[&str], rows: &[impl serde::Serialize]) -> Result<String> {
+    let mut text = columns.join("\t") + "\n";
     for row in rows {
         let value = serde_json::to_value(row).map_err(|e| Error::Control(e.to_string()))?;
-        let cells: Vec<String> = PaneRow::COLUMNS.iter().map(|column| cell(&value[*column])).collect();
+        let cells: Vec<String> = columns.iter().map(|column| cell(&value[*column])).collect();
         text.push_str(&cells.join("\t"));
         text.push('\n');
     }

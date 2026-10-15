@@ -79,6 +79,27 @@ fn a_command_typed_in_a_new_tab_is_waited_for_and_read() {
     app.wait_for("the tab shows in the list", |s| s.contains("build"));
 }
 
+#[test]
+fn search_finds_what_a_pane_printed_with_its_ids() {
+    let mut app = Harness::start();
+    let pane = app.session.says(&["new-tab", "--name", "build", "--", "echo needle-\"\"found"]);
+    app.session.says(&["wait", "--pane", &pane, "--until", "shell", "--timeout", "10"]);
+    app.wait_for("the tab shows in the list", |s| s.contains("build"));
+
+    let table = app.session.says(&["search", "NEEDLE-found"]);
+    let rows: Vec<Vec<&str>> = table.lines().map(|line| line.split('\t').collect()).collect();
+    let json: serde_json::Value =
+        serde_json::from_str(&app.session.says(&["search", "needle-found", "--json"])).expect("json");
+    let none = app.session.says(&["search", "no-such-text-anywhere"]);
+
+    assert_eq!(rows[0], ["pane", "who", "source", "place", "line", "text"]);
+    assert_eq!((rows[1][0], rows[1][2]), (pane.as_str(), "screen"));
+    assert!(rows[1][5].ends_with("needle-found"), "{table}");
+    assert!(rows[1][3].ends_with("build"), "{table}");
+    assert_eq!(json["matches"][0]["pane"], pane.parse::<u64>().expect("an id"));
+    assert_eq!(none, "pane\twho\tsource\tplace\tline\ttext");
+}
+
 struct Followed {
     lines: std::sync::mpsc::Receiver<String>,
     seen: Vec<serde_json::Value>,

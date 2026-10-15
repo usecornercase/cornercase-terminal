@@ -8,8 +8,8 @@ use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_EXPORT_HELP, FLOW_HELP,
     FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP,
     LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP,
-    RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP,
-    UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
+    STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -110,6 +110,8 @@ pub(crate) enum Control {
     Away(AwayArgs),
     #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
     Mark(MarkArgs),
+    #[command(about = "Find the panes where some text was said: agent transcripts and every pane's history", after_help = SEARCH_HELP)]
+    Search(SearchArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
     #[command(about = "Schedule issues or prompts for later; queued agents accept folder trust prompts")]
@@ -435,6 +437,14 @@ pub(crate) struct MarkArgs {
     pub(crate) target: Target,
     #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
     pub(crate) reviewed: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SearchArgs {
+    #[arg(required = true, value_name = "TEXT", help = "The text to look for, ignoring case")]
+    pub(crate) query: Vec<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

@@ -2,8 +2,50 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::git;
+use crate::list;
 use crate::project::group::Group;
 use crate::project::{Project, group_indices};
+
+pub(crate) mod said;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Mode {
+    #[default]
+    Names,
+    Sessions,
+}
+
+impl Mode {
+    pub(crate) fn toggled(self) -> Self {
+        match self {
+            Self::Names => Self::Sessions,
+            Self::Sessions => Self::Names,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Finder {
+    pub(crate) field: list::Search,
+    pub(crate) mode: Mode,
+    pub(crate) enter: bool,
+}
+
+impl Finder {
+    pub(crate) fn sessions() -> Self {
+        Self { mode: Mode::Sessions, ..Self::default() }
+    }
+
+    pub(crate) fn query(&self) -> &str {
+        self.field.query()
+    }
+
+    pub(crate) fn toggle(&mut self) {
+        self.mode = self.mode.toggled();
+        self.field.reset();
+        self.enter = false;
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Kind {

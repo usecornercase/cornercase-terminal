@@ -30,6 +30,7 @@ use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
 use crate::paths;
+use crate::project::search::said;
 use crate::project::split::Dir;
 use crate::project::{Group, Hierarchy, Project, Tab, group};
 use crate::settings::Page;
@@ -55,6 +56,7 @@ use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use pull_requests::PullRequests;
 use queue_panel::{QueueEvent, QueueRuntime};
+use search_dialog::SearchEvent;
 use session::not_restored;
 use star_prompt::StarPrompt;
 use toast::Toast;
@@ -166,6 +168,7 @@ pub(crate) struct App {
     flow: flow_panel::FlowPanel,
     todo: todo::Panel,
     files: files::Panel,
+    sessions: said::Sessions,
     images: images::Payloads,
     requests: control::Requests,
     events: events::Events,
@@ -225,6 +228,7 @@ impl App {
             flow: flow_panel::FlowPanel::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
+            sessions: said::Sessions::default(),
             images: images::Payloads::default(),
             requests: control::Requests::default(),
             events: events::Events::default(),
@@ -382,6 +386,7 @@ impl App {
         self.close_gone_flow_message();
         self.check_updates(now);
         self.refresh_files(now);
+        self.ask_sessions(now);
         self.refresh_changes(now);
         self.auto_scroll(now);
         if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
@@ -507,6 +512,7 @@ impl App {
             AppEvent::Changes(event) => self.changes_answered(event),
             AppEvent::Files(event) => self.files_answered(event),
             AppEvent::Update(event) => self.update_answered(event),
+            AppEvent::Search(event) => self.search_answered(event),
             AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),

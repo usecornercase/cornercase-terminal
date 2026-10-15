@@ -185,7 +185,15 @@ fn the_bar_shows_the_brand_without_a_project() {
 
 #[test]
 fn the_search_field_takes_the_whole_bar() {
-    let search = Search { query: "feat".into(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
+    let search = Search {
+        query: "feat".into(),
+        results: Vec::new(),
+        selected: 0,
+        scroll: 0,
+        hint: String::new(),
+        sessions: false,
+        searching: false,
+    };
     let v = View { overlay: Some(Overlay::Search(search)), ..in_a_project(None) };
     let t = render_small(&v);
     let row: String = (0..SMALL.width).map(|x| t.backend().buffer()[(x, 1)].symbol().to_string()).collect();

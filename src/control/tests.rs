@@ -65,6 +65,7 @@ fn every_command_is_listed_by_name() {
         Command::FlowRun(FlowRun::default()),
         Command::FlowExport(FlowExport::default()),
         Command::FlowImport(FlowImport::default()),
+        Command::Search(Search::default()),
     ];
 
     let names: Vec<String> = commands
@@ -92,6 +93,7 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::Wait(Wait { until: Until::Text(secret.into()), ..Wait::default() }),
         Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
         Command::Notify(Notify { text: secret.into() }),
+        Command::Search(Search { query: secret.into() }),
         Command::Todo(Todo::Add(secret.into())),
         Command::FlowRun(FlowRun { name: "Quick".into(), prompt: secret.into(), ..FlowRun::default() }),
     ];
@@ -100,6 +102,24 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         let fields = command.fields();
         assert!(fields.iter().all(|(_, value)| !value.contains(secret)), "{fields:?}");
     }
+}
+
+#[test]
+fn a_search_travels_as_its_query_and_logs_only_its_size() {
+    let request = Request { caller: None, server: None, command: Command::Search(Search { query: "checkout".into() }) };
+    let sent = serde_json::to_string(&request).expect("json");
+
+    assert_eq!(sent, r#"{"caller":null,"server":null,"command":"search","args":{"query":"checkout"}}"#);
+    assert_eq!(serde_json::from_str::<Request>(&sent).expect("a request"), request);
+    assert_eq!(request.command.fields(), [("bytes", "8".to_string())]);
+}
+
+#[test]
+fn a_search_answer_an_older_server_lacks_fields_of_still_reads() {
+    let found: Matches = serde_json::from_str(r#"{"matches":[{"pane":4,"text":"hit"}]}"#).expect("matches");
+
+    assert_eq!(found.matches[0], Hit { pane: 4, text: "hit".into(), ..Hit::default() });
+    assert!(!found.capped);
 }
 
 mod workspace_on {

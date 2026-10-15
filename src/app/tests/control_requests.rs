@@ -382,6 +382,7 @@ mod flows;
 mod gemini;
 mod grok;
 mod one_folder;
+mod searching;
 mod talking;
 mod telegram;
 mod worktrees;

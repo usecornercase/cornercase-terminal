@@ -61,7 +61,7 @@ pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_lis
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
-pub(crate) use dialog::search::{ResultRow, Search, result_hit, results_list};
+pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
 pub(crate) use dialog::settings::{
     Settings, SettingsEdit, SettingsHit, SettingsLayout, SettingsPick, SettingsRow, settings_area, settings_hit,
     settings_pick_list,

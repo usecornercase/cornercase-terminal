@@ -7,7 +7,7 @@ use serde_json::json;
 use super::*;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::{Ledger, Usage, tests::sum};
-use crate::agents::context::{Context, Look, Pane, tests::pane_look};
+use crate::agents::context::{Context, Look, Pane, Role, tests::pane_look};
 use crate::agents::stats::Tokens;
 use crate::agents::{DEFAULT_TRUST_PROMPT, Known, TrustPrompt, asks_trust};
 use crate::test_util::{Sleeper, TempDir, fixture, wait_until};
@@ -690,4 +690,27 @@ fn counted_records_reach_the_ledger_once() {
     });
     pane.update(Some(Known::Grok), &look);
     assert_eq!(sum(pane.take_counted()).0, 0);
+}
+
+mod conversation {
+    use super::*;
+
+    fn heard(chat: &str) -> Vec<(Role, String)> {
+        let (home, cwd) = home_with(&[("chat_history.jsonl", chat)]);
+        let dir = home.path().join("sessions").join(session::encode_path(&cwd.to_string_lossy())).join("sess");
+        let mut heard = Vec::new();
+        session::said_all(&dir, &mut |spoken| {
+            heard.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("read the history");
+        heard
+    }
+
+    #[test]
+    fn a_prompt_loses_its_wrapper_and_synthetic_entries_are_left_out() {
+        let heard = heard(fixture!("grok/1.0.52/chat_history.jsonl"));
+
+        assert_eq!(heard, [(Role::Reply, "Hi.".into()), (Role::Prompt, "say hi".into())]);
+    }
 }

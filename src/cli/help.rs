@@ -188,6 +188,20 @@ off: here with --off, from the chat with /back, or from Remote in the window.
 Examples:
   cornercase away
   cornercase away --off";
+pub(super) const SEARCH_HELP: &str =
+    "Looks in what the coding agents in the panes were told and answered (Claude Code, Codex, Gemini CLI,
+opencode and Grok Build, the same records as `read --last-message`) and in the history of every
+pane, shells included, ignoring case. Panes of projects being closed and workspaces being removed
+are left out. It prints one line per match, newest first within a pane, its columns separated by
+tabs under a header: the pane, the agent or program, where the text was found (prompt, reply or
+screen), `project › workspace › tab`, the line on the pane's screen (screen matches only), and the
+text. A missing value is -. No match prints the header alone and exits 0. With --json each match
+also has its tab, workspace and project ids and, for an agent's message, when it was written.
+
+Examples:
+  cornercase search 'migration failed'
+  pane=$(cornercase search --json checkout | jq -r '.matches[0].pane')
+  cornercase focus --pane \"$pane\"";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a purple ● on its tab, and on its workspace, project and
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an

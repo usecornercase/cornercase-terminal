@@ -5,11 +5,19 @@ fn results() -> Rect {
 }
 
 fn search(query: &str, results: Vec<ResultRow>) -> Search {
-    Search { query: query.into(), results, selected: 0, scroll: 0, hint: "enter goes to feat/search".into() }
+    Search {
+        query: query.into(),
+        results,
+        selected: 0,
+        scroll: 0,
+        hint: "enter goes to feat/search".into(),
+        sessions: false,
+        searching: false,
+    }
 }
 
 fn row(name: &str, context: &str) -> ResultRow {
-    ResultRow { name: name.into(), context: context.into() }
+    ResultRow { name: name.into(), context: context.into(), detail: String::new(), hit: None }
 }
 
 fn found() -> Vec<ResultRow> {
@@ -21,7 +29,7 @@ fn with(search: Search) -> View<'static> {
 }
 
 fn item(i: usize) -> Position {
-    result_item(results(), 2, 0, i).as_position().offset(ratatui::layout::Offset { x: 2, y: 0 })
+    result_item(results(), 2, 0, i, 1).as_position().offset(ratatui::layout::Offset { x: 2, y: 0 })
 }
 
 #[test]
@@ -85,12 +93,104 @@ fn puts_the_cursor_after_the_query() {
 #[case::below_the_last(2, None)]
 fn maps_clicks(#[case] row: u16, #[case] expected: Option<usize>) {
     let list = results_list(results());
-    assert_eq!(result_hit(results(), 2, 0, Position::new(list.x + 3, list.y + row)), expected);
+    assert_eq!(result_hit(results(), 2, 0, Position::new(list.x + 3, list.y + row), 1), expected);
 }
 
 #[test]
 fn scrolled_rows_map_to_later_results() {
     let list = results_list(results());
     let items = usize::from(list.height) + 5;
-    assert_eq!(result_hit(results(), items, 3, list.as_position()), Some(3));
+    assert_eq!(result_hit(results(), items, 3, list.as_position(), 1), Some(3));
+}
+
+mod sessions {
+    use super::*;
+
+    fn said(name: &str, hit: std::ops::Range<usize>, context: &str, detail: &str) -> ResultRow {
+        ResultRow { name: name.into(), context: context.into(), detail: detail.into(), hit: Some(hit) }
+    }
+
+    fn in_sessions(query: &str, results: Vec<ResultRow>) -> Search {
+        Search { sessions: true, hint: "enter goes to pane 4".into(), ..search(query, results) }
+    }
+
+    fn two_matches() -> Vec<ResultRow> {
+        vec![
+            said("the checkout tax bug is in rounding", 4..16, "notes › feat/search › claude", "claude · reply"),
+            said("migration failed: duplicate key", 0..16, "notes › main › zsh", "zsh · screen"),
+        ]
+    }
+
+    fn line(t: &Terminal<TestBackend>, y: u16) -> String {
+        let buffer = t.backend().buffer();
+        (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect::<String>().trim_end().to_string()
+    }
+
+    fn text(t: &Terminal<TestBackend>) -> String {
+        t.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect()
+    }
+
+    #[test]
+    fn renders_two_lines_per_result() {
+        insta::assert_snapshot!(render(&with(in_sessions("checkout tax", two_matches()))).backend());
+    }
+
+    #[test]
+    fn the_bar_shows_the_toggle_lit_in_sessions_and_a_placeholder() {
+        let bar = areas().search;
+        let button = mode_button(bar);
+        let (names, sessions) = (render(&with(search("", Vec::new()))), render(&with(in_sessions("", Vec::new()))));
+        assert!(line(&names, bar.y).contains("projects, workspaces, tabs"));
+        assert!(line(&sessions, bar.y).contains("what was said in agents and panes"));
+        assert_eq!(names.backend().buffer()[button.as_position()].bg, DARK_SURFACE);
+        assert_eq!(
+            sessions.backend().buffer()[button.as_position().offset(ratatui::layout::Offset { x: 1, y: 0 })].bg,
+            Color::Cyan
+        );
+    }
+
+    #[test]
+    fn the_button_is_three_cells_at_the_end_of_the_bar() {
+        let bar = areas().search;
+        let button = mode_button(bar);
+        assert_eq!((button.width, button.right(), button.y), (3, bar.right(), bar.y));
+    }
+
+    #[test]
+    fn lights_the_match_in_the_snippet() {
+        let list = results_list(results());
+        let t = render(&with(Search { selected: 1, ..in_sessions("checkout tax", two_matches()) }));
+        let at = |dx| t.backend().buffer()[(list.x + dx, list.y)].fg;
+        assert_eq!((at(2), at(6)), (Color::Reset, Color::Cyan));
+    }
+
+    #[test]
+    fn says_it_is_searching_instead_of_that_nothing_matches() {
+        let search = Search { searching: true, hint: "searching…".into(), ..in_sessions("zzz", Vec::new()) };
+        let shown = text(&render(&with(search)));
+        assert!(shown.contains("searching…") && !shown.contains("no matches"), "{shown}");
+    }
+
+    #[test]
+    fn maps_clicks_on_either_line_of_a_result() {
+        let list = results_list(results());
+        let at = |row| result_hit(results(), 2, 0, Position::new(list.x + 3, list.y + row), SESSIONS_PITCH);
+        assert_eq!((at(0), at(1), at(2), at(3), at(4)), (Some(0), Some(0), Some(1), Some(1), None));
+    }
+
+    #[test]
+    fn a_selected_result_marks_both_lines() {
+        let list = results_list(results());
+        let t = render(&with(in_sessions("checkout tax", two_matches())));
+        let buffer = t.backend().buffer();
+        assert_eq!((buffer[(list.x, list.y)].symbol(), buffer[(list.x, list.y + 1)].symbol()), ("▌", "▌"));
+        assert_eq!(buffer[(list.x, list.y + 2)].symbol(), " ");
+    }
+
+    #[test]
+    fn the_compact_bar_keeps_the_toggle() {
+        let t = render_sized(&with(in_sessions("", Vec::new())), SMALL.width, SMALL.height);
+        let row = line(&t, 1);
+        assert!(row.contains("what was said") && row.ends_with(" ❯"), "{row:?}");
+    }
 }

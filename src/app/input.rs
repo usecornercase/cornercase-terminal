@@ -10,8 +10,8 @@ use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
-use crate::list::Search;
 use crate::messenger::Via;
+use crate::project::search::Finder;
 use crate::ui::{self};
 
 pub(super) const WHEEL_ROWS: isize = 3;
@@ -110,7 +110,7 @@ impl App {
         }
         if areas.search_button.contains(pos) {
             if left {
-                self.overlay = Some(Overlay::Search(Search::default()));
+                self.overlay = Some(Overlay::Search(Finder::default()));
             }
             return Ok(());
         }
@@ -339,7 +339,8 @@ impl App {
             return;
         }
         if let Some(Overlay::Search(search)) = &mut self.overlay {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| search.push(c));
+            text.chars().filter(|c| !c.is_control()).for_each(|c| search.field.push(c));
+            self.ask_sessions(Instant::now());
             return;
         }
         if let Some(Overlay::Branches(picker)) = &mut self.overlay {

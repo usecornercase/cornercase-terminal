@@ -7,10 +7,13 @@ pub(crate) struct Glyphs {
     pub(crate) search: &'static str,
     pub(crate) filter: &'static str,
     pub(crate) names: &'static str,
+    pub(crate) said: &'static str,
 }
 
 pub(crate) const PLAIN: Glyphs =
-    Glyphs { menu: "≡", changes: "±", files: "▤", todo: "☐", search: "⌕", filter: "⌕", names: "▤" };
+    Glyphs {
+        menu: "≡", changes: "±", files: "▤", todo: "☐", search: "⌕", filter: "⌕", names: "▤", said: "❯"
+    };
 
 pub(crate) const NERD: Glyphs = Glyphs {
     menu: "\u{eb94}",
@@ -20,6 +23,7 @@ pub(crate) const NERD: Glyphs = Glyphs {
     search: "\u{ea6d}",
     filter: "\u{eaf1}",
     names: "\u{ea7b}",
+    said: "\u{eac7}",
 };
 
 pub(crate) fn glyphs(nerd: bool) -> &'static Glyphs {

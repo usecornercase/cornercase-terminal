@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agents::claude::transcript::{ASSISTANT, SYNTHETIC};
-use crate::agents::context::message::{Said, joined, lines, texts, unreadable};
+use crate::agents::context::message::{Each, Role, Said, Spoken, joined, lines, texts, unreadable};
 use crate::error::Result;
 
 #[derive(Deserialize)]
@@ -64,6 +64,47 @@ pub(in crate::agents) fn claude(path: &Path) -> Result<Option<Said>> {
         }
     }
     Ok(newest.and_then(Reply::message))
+}
+
+fn prompt(line: &[u8]) -> Option<Spoken> {
+    let line = std::str::from_utf8(line).ok().filter(|line| line.contains("origin"))?;
+    let entry: Value = serde_json::from_str(line).ok()?;
+    if entry["isSidechain"] == true || entry["isMeta"] == true {
+        return None;
+    }
+    let text = match entry["type"].as_str()? {
+        "user" if entry["origin"]["kind"] == "human" => joined(texts(entry["message"].get("content"), "text"))?,
+        "attachment"
+            if entry["attachment"]["type"] == "queued_command"
+                && entry["attachment"]["commandMode"] == "prompt"
+                && entry["attachment"]["origin"]["kind"] == "human" =>
+        {
+            joined([entry["attachment"]["prompt"].as_str()?.to_string()])?
+        }
+        _ => return None,
+    };
+    Some(Spoken { role: Role::Prompt, said: Said { text, written: entry["timestamp"].as_str().map(str::to_string) } })
+}
+
+pub(in crate::agents) fn said(path: &Path, each: Each) -> Result<()> {
+    let Some(lines) = lines(path)? else { return Ok(()) };
+    for line in lines {
+        let line = line.map_err(|e| unreadable(path, &e))?;
+        if let Some(spoken) = prompt(&line) {
+            if !each(spoken) {
+                return Ok(());
+            }
+            continue;
+        }
+        let Some(reply) = Reply::claude(&line) else { continue };
+        for text in reply.texts.into_iter().rev() {
+            let Some(text) = joined([text]) else { continue };
+            if !each(Spoken { role: Role::Reply, said: Said { text, written: reply.written.clone() } }) {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

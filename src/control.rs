@@ -7,11 +7,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod flow;
+mod search;
 
 pub(crate) use flow::{
     BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
     RunInfo,
 };
+pub(crate) use search::{Hit, Matches, Search};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -77,6 +79,7 @@ pub(crate) enum Command {
     FlowRun(FlowRun),
     FlowExport(FlowExport),
     FlowImport(FlowImport),
+    Search(Search),
 }
 
 impl Command {
@@ -110,6 +113,7 @@ impl Command {
             Self::FlowRun(_) => 25,
             Self::FlowExport(_) => 26,
             Self::FlowImport(_) => 27,
+            Self::Search(_) => 28,
         }]
     }
 
@@ -204,11 +208,14 @@ impl Command {
             Self::FlowRun(run) => run.fields(&mut fields),
             Self::FlowExport(export) => export.fields(&mut fields),
             Self::FlowImport(import) => import.fields(&mut fields),
+            Self::Search(search) => {
+                fields.add("bytes", search.query.len());
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 28] = [
+    pub(crate) const NAMES: [&str; 29] = [
         "status",
         "open",
         "new-workspace",
@@ -237,6 +244,7 @@ impl Command {
         "flow-run",
         "flow-export",
         "flow-import",
+        "search",
     ];
 }
 

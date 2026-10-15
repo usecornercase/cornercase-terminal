@@ -331,3 +331,13 @@ fn q_detaches() {
     keys(&mut app, "q");
     assert!(app.take_detach());
 }
+
+#[test]
+fn f_then_s_opens_the_search_in_sessions() {
+    let (app, _rx) = app();
+    let mut app = with_prefix(app);
+    keys(&mut app, "fs");
+    assert!(
+        matches!(&app.overlay, Some(Overlay::Search(finder)) if finder.mode == crate::project::search::Mode::Sessions)
+    );
+}

@@ -1,6 +1,8 @@
 use crossterm::event::Event;
 
-use super::{ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, QueueEvent, UpdateEvent, WorktreeEvent};
+use super::{
+    ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, QueueEvent, SearchEvent, UpdateEvent, WorktreeEvent,
+};
 use crate::agents::context::{self};
 use crate::agents::launch::{self};
 use crate::agents::usage;
@@ -21,6 +23,7 @@ pub(crate) enum AppEvent {
     Changes(ChangesEvent),
     Files(FilesEvent),
     Update(UpdateEvent),
+    Search(SearchEvent),
     Usage(crate::agents::Known, Result<usage::Report>),
     FlowModels(crate::agents::Known, Vec<String>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
@@ -42,6 +45,7 @@ impl AppEvent {
             Self::Changes(event) => event.name(),
             Self::Files(event) => event.name(),
             Self::Update(event) => event.name(),
+            Self::Search(event) => event.name(),
             Self::Usage(..) => "usage",
             Self::FlowModels(..) => "flow models",
             Self::LastMessage { .. } => "last message",

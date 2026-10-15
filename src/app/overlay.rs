@@ -19,9 +19,9 @@ use crate::flows::progress::Edge;
 use crate::flows::start::Start;
 use crate::git::worktree;
 use crate::issues::browser::Browser;
-use crate::list::Search;
 use crate::messenger::Via;
 use crate::project::picker::Picker;
+use crate::project::search::Finder;
 use crate::settings::Settings;
 use crate::shortcuts::Group as KeysGroup;
 use crate::time;
@@ -70,7 +70,7 @@ pub(super) enum Overlay {
     Picker { picker: Picker, group: Option<u64> },
     Issues(Box<Browser>),
     Queue(Box<crate::queue::form::Form>),
-    Search(Search),
+    Search(Finder),
     Update(UpdateStep),
     Restart,
     Usage,

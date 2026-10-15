@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
 use super::View;
+use super::dialog::search::mode_button;
 use super::files;
 use super::icons::Glyphs;
 use super::layout::{Areas, Border, COMPACT_BUTTON_WIDTH, changes_button};
@@ -21,6 +22,10 @@ use crate::text::{CRUMB_SEPARATOR, truncate_left, truncate_right};
 pub(super) const SEARCH_ICON: &str = " ⌕ ";
 
 pub(super) const SEARCH_PLACEHOLDER: &str = "search projects, workspaces, tabs";
+
+const NAMES_PLACEHOLDER: &str = "projects, workspaces, tabs";
+
+const SESSIONS_PLACEHOLDER: &str = "what was said in agents and panes";
 
 pub(super) const BACK_LABEL: &str = "‹ Projects";
 
@@ -88,7 +93,8 @@ pub(super) fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
     let search_icon = format!(" {} ", view.glyphs().search);
     let icon_width = search_icon.chars().count();
     let line = if let Some(search) = view.search() {
-        let max = usize::from(r.width).saturating_sub(icon_width + 1);
+        let button = mode_button(r);
+        let max = usize::from(r.width.saturating_sub(button.width)).saturating_sub(icon_width + 1);
         let query = truncate_left(&search.query, max);
         let cursor = icon_width + query.chars().count();
         if let Ok(offset) = u16::try_from(cursor)
@@ -96,10 +102,18 @@ pub(super) fn draw_search_bar(f: &mut Frame, view: &View, r: Rect) {
         {
             f.set_cursor_position(Position::new(r.x + offset, r.y));
         }
-        Line::from(vec![
-            Span::styled(search_icon, accent),
-            Span::styled(query, Style::default().add_modifier(Modifier::BOLD)),
-        ])
+        let lit = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
+        let (said, style) = (centered(view.glyphs().said, button.width), if search.sessions { lit } else { dim });
+        let mut spans = vec![Span::styled(search_icon, accent)];
+        if search.query.is_empty() {
+            let hint = if search.sessions { SESSIONS_PLACEHOLDER } else { NAMES_PLACEHOLDER };
+            spans.push(Span::styled(truncate_right(hint, max), dim));
+        } else {
+            spans.push(Span::styled(query, Style::default().add_modifier(Modifier::BOLD)));
+        }
+        f.render_widget(Paragraph::new(Line::from(spans)).style(Style::default().bg(view.surface())), r);
+        f.render_widget(Paragraph::new(Span::styled(said, style)), button);
+        return;
     } else {
         let icon = if sidebar_hovered(view, r) { accent } else { dim };
         let room = usize::from(r.width).saturating_sub(icon_width + 1);

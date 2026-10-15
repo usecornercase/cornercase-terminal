@@ -1,6 +1,8 @@
 use std::fmt::Write;
+use std::ops::Range;
 use std::path::Path;
 
+use regex::{Regex, RegexBuilder};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub(crate) const CRUMB_SEPARATOR: &str = " › ";
@@ -58,6 +60,23 @@ pub(crate) fn truncate_left(s: &str, max: usize) -> String {
 
 pub(crate) fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Needle(Regex);
+
+impl Needle {
+    pub(crate) fn new(query: &str) -> Option<Self> {
+        let query = query.trim();
+        if query.is_empty() {
+            return None;
+        }
+        RegexBuilder::new(&regex::escape(query)).case_insensitive(true).build().ok().map(Self)
+    }
+
+    pub(crate) fn find(&self, text: &str) -> Option<Range<usize>> {
+        self.0.find(text).map(|m| m.range())
+    }
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {

@@ -7,10 +7,9 @@ use super::{App, Overlay, Toast};
 use crate::agents::activity::Status;
 use crate::error::Result;
 use crate::files::Mode;
-use crate::list::Search;
 use crate::log;
 use crate::project::Project;
-use crate::project::search::Goto;
+use crate::project::search::{Finder, Goto};
 use crate::project::split::{self, Place};
 use crate::shortcuts::{self, Action, Group, Step};
 use crate::todo::Field;
@@ -83,7 +82,7 @@ impl App {
             Action::Mark => self.mark_focused(),
             Action::Search => {
                 self.nav = None;
-                self.overlay = Some(Overlay::Search(Search::default()));
+                self.overlay = Some(Overlay::Search(Finder::default()));
             }
             Action::NewTab => {
                 if let Some((p, w)) = self.open_workspace_index() {
@@ -106,6 +105,10 @@ impl App {
                     (!workspace.tabs.is_empty()).then_some((p, w, workspace.active))
                 });
                 self.ask_rename(self.tab_target(found));
+            }
+            Action::FindSaid => {
+                self.nav = None;
+                self.overlay = Some(Overlay::Search(Finder::sessions()));
             }
             Action::FindNames => self.find_files(Mode::Name),
             Action::FindText => self.find_files(Mode::Text),

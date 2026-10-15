@@ -15,6 +15,20 @@ pub(crate) struct Said {
     pub(crate) written: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Role {
+    Prompt,
+    Reply,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Spoken {
+    pub(crate) role: Role,
+    pub(crate) said: Said,
+}
+
+pub(in crate::agents) type Each<'a> = &'a mut dyn FnMut(Spoken) -> bool;
+
 pub(in crate::agents) fn joined(texts: impl IntoIterator<Item = String>) -> Option<String> {
     let texts: Vec<String> = texts.into_iter().map(|text| text.trim().to_string()).filter(|t| !t.is_empty()).collect();
     (!texts.is_empty()).then(|| texts.join("\n\n"))

@@ -21,6 +21,7 @@ mod flow;
 mod help;
 mod queue;
 mod read;
+mod search;
 mod status;
 mod update;
 
@@ -195,6 +196,7 @@ fn run_control(command: Control) -> Result<bool> {
             let text = notify.text.join(" ");
             ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
         }
+        Control::Search(search) => search::run(&search),
         Control::Away(away) => {
             let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
             print_out(&away_line(&value))

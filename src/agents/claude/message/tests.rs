@@ -117,3 +117,74 @@ mod claude {
         assert!(error.to_string().starts_with(&format!("cannot read `{}`", dir.path().display())), "{error}");
     }
 }
+
+mod conversation {
+    use super::*;
+
+    fn heard(text: &str) -> Vec<(Role, String)> {
+        let file = Written::new(text);
+        let mut heard = Vec::new();
+        super::super::said(&file.path, &mut |spoken| {
+            heard.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("read the transcript");
+        heard
+    }
+
+    #[test]
+    fn gives_prompts_and_replies_newest_first_without_tool_results() {
+        let human = serde_json::json!({
+            "type": "user", "origin": { "kind": "human" }, "message": { "content": "fix it" }
+        })
+        .to_string();
+        let result = serde_json::json!({
+            "type": "user", "message": { "content": [{ "type": "tool_result", "content": "ok" }] }
+        })
+        .to_string();
+        let heard =
+            heard(&joined_lines(&[human, said("m1", "text", "Looking."), result, said("m2", "text", "Fixed.")]));
+
+        assert_eq!(
+            heard,
+            [(Role::Reply, "Fixed.".into()), (Role::Reply, "Looking.".into()), (Role::Prompt, "fix it".into())]
+        );
+    }
+
+    #[test]
+    fn counts_the_human_prompts_of_the_queue_once_each() {
+        let heard = heard(crate::test_util::fixture!("claude/2.1.296/queued-prompts.jsonl"));
+
+        assert_eq!(
+            heard,
+            [(Role::Prompt, "synthetic dequeued prompt".into()), (Role::Prompt, "synthetic absorbed prompt".into())]
+        );
+    }
+
+    #[test]
+    fn leaves_out_sidechains_and_meta_prompts() {
+        let meta = serde_json::json!({
+            "type": "user", "origin": { "kind": "human" }, "isMeta": true, "message": { "content": "caveat" }
+        })
+        .to_string();
+        let side = serde_json::json!({
+            "type": "user", "origin": { "kind": "human" }, "isSidechain": true, "message": { "content": "agent" }
+        })
+        .to_string();
+
+        assert_eq!(heard(&joined_lines(&[meta, side])), []);
+    }
+
+    #[test]
+    fn stops_when_asked() {
+        let file = Written::new(&joined_lines(&[said("m1", "text", "one"), said("m2", "text", "two")]));
+        let mut seen = 0;
+        super::super::said(&file.path, &mut |_| {
+            seen += 1;
+            false
+        })
+        .expect("read the transcript");
+
+        assert_eq!(seen, 1);
+    }
+}

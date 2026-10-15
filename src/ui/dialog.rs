@@ -61,15 +61,23 @@ fn left_of(row: Rect, submit: Rect, extra: &str) -> Rect {
 }
 
 fn first_visible(list: Rect, items: usize, scroll: usize) -> usize {
-    scroll.min(items.saturating_sub(usize::from(list.height)))
+    first_visible_by(list, items, scroll, 1)
+}
+
+pub(super) fn first_visible_by(list: Rect, items: usize, scroll: usize, pitch: u16) -> usize {
+    scroll.min(items.saturating_sub(usize::from(list.height / pitch.max(1))))
 }
 
 pub(super) fn list_item(list: Rect, items: usize, scroll: usize, i: usize) -> Rect {
-    let Some(row) = i.checked_sub(first_visible(list, items, scroll)).filter(|_| i < items) else {
+    list_item_by(list, items, scroll, i, 1)
+}
+
+pub(super) fn list_item_by(list: Rect, items: usize, scroll: usize, i: usize, pitch: u16) -> Rect {
+    let Some(row) = i.checked_sub(first_visible_by(list, items, scroll, pitch)).filter(|_| i < items) else {
         return Rect::default();
     };
-    let y = list.y.saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
-    Rect::new(list.x, y, list.width, 1).intersection(list)
+    let y = list.y.saturating_add(u16::try_from(row).unwrap_or(u16::MAX).saturating_mul(pitch));
+    Rect::new(list.x, y, list.width, pitch).intersection(list)
 }
 
 fn row_of(row: Rect, x: u16, width: u16) -> Rect {

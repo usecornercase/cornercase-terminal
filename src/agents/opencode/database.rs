@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use crate::agents::context::counting::{Record, Usage};
 use crate::agents::context::discovery::{folder, named};
-use crate::agents::context::message::{self, Said};
+use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::agents::context::{Context, percent};
 use crate::error::{self, Error};
 use crate::process;
@@ -281,6 +281,15 @@ struct Part {
 }
 
 pub(in crate::agents) fn last_message(database: &Path, session: &str) -> error::Result<Option<Said>> {
+    let mut found = None;
+    said_all(database, session, &mut |spoken| {
+        found = (spoken.role == Role::Reply).then_some(spoken.said);
+        found.is_none()
+    })?;
+    Ok(found)
+}
+
+pub(in crate::agents) fn said_all(database: &Path, session: &str, each: Each) -> error::Result<()> {
     let failed = |e: rusqlite::Error| Error::Record { path: database.to_path_buf(), cause: e.to_string() };
     let connection = open(database).map_err(failed)?;
     let mut messages = connection
@@ -291,9 +300,11 @@ pub(in crate::agents) fn last_message(database: &Path, session: &str) -> error::
     while let Some(row) = rows.next().map_err(failed)? {
         let (id, data): (String, String) = (row.get(0).map_err(failed)?, row.get(1).map_err(failed)?);
         let said: Value = serde_json::from_str(&data).unwrap_or_default();
-        if said["role"] != "assistant" || said["summary"] == true {
-            continue;
-        }
+        let role = match said["role"].as_str() {
+            Some("user") => Role::Prompt,
+            Some("assistant") if said["summary"] != true => Role::Reply,
+            _ => continue,
+        };
         let texts: Vec<String> = parts
             .query_map(params![id], |row| row.get::<_, String>(0))
             .map_err(failed)?
@@ -305,9 +316,11 @@ pub(in crate::agents) fn last_message(database: &Path, session: &str) -> error::
         let Some(text) = message::joined(texts) else { continue };
         let time = said["time"]["completed"].as_u64().or_else(|| said["time"]["created"].as_u64());
         let written = time.map(|ms| Stamp(UNIX_EPOCH + Duration::from_millis(ms)).to_string());
-        return Ok(Some(Said { text, written }));
+        if !each(Spoken { role, said: Said { text, written } }) {
+            break;
+        }
     }
-    Ok(None)
+    Ok(())
 }
 
 fn read(newest_first: &[String], models: &mut Models, file: Option<&Path>) -> Session {

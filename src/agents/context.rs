@@ -10,7 +10,7 @@ pub(in crate::agents) mod discovery;
 pub(in crate::agents) mod jsonl;
 pub(in crate::agents) mod message;
 
-pub(crate) use message::Said;
+pub(crate) use message::{Role, Said, Spoken};
 
 use counting::Ledger;
 
@@ -39,6 +39,16 @@ impl Record {
             Self::Gemini(path) => gemini::session::last_message(path),
             Self::Opencode { database, session } => opencode::database::last_message(database, session),
             Self::Grok(path) => grok::session::last_message(path),
+        }
+    }
+
+    pub(crate) fn said(&self, each: &mut dyn FnMut(Spoken) -> bool) -> Result<()> {
+        match self {
+            Self::Claude(path) => claude::message::said(path, each),
+            Self::Codex(path) => codex::message::said(path, each),
+            Self::Gemini(path) => gemini::session::said_all(path, each),
+            Self::Opencode { database, session } => opencode::database::said_all(database, session, each),
+            Self::Grok(path) => grok::session::said_all(path, each),
         }
     }
 }

@@ -126,6 +126,7 @@ pub(crate) enum Action {
     Agent,
     Mark,
     Search,
+    FindSaid,
     NewTab,
     Split(Dir),
     ClosePane,
@@ -223,11 +224,12 @@ const ROOT: [Item; 25] = [
     run("q", "quit", Action::Quit),
 ];
 
-const FIND: [Item; 4] = [
+const FIND: [Item; 5] = [
     run("f", "files by name", Action::FindNames),
     run("w", "text in files", Action::FindText),
     run("e", "file tree", Action::Files),
     run("p", "projects, workspaces, tabs", Action::Search),
+    run("s", "said in sessions", Action::FindSaid),
 ];
 
 const GIT: [Item; 3] = [

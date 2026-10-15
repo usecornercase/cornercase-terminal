@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::agents::activity::Activity;
 use crate::agents::context::counting::{self, Usage};
 use crate::agents::context::jsonl::{self, Tail};
-use crate::agents::context::message::{self, Said};
+use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::agents::context::{self, Context};
 use crate::agents::stats::Tokens;
 use crate::error::Result;
@@ -144,6 +144,37 @@ pub(in crate::agents) fn last_message(dir: &Path) -> Result<Option<Said>> {
     }
     let Some(text) = text else { return Ok(None) };
     Ok(Some(Said { text: text.clone(), written: written(dir, &text) }))
+}
+
+fn query(content: &Value) -> Option<String> {
+    let text = message::joined(message::texts(Some(content), "text"))?;
+    let text = text.strip_prefix("<user_query>").and_then(|text| text.strip_suffix("</user_query>")).unwrap_or(&text);
+    message::joined([text.to_string()])
+}
+
+pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
+    let chat = dir.join("chat_history.jsonl");
+    let Some(lines) = message::lines(&chat)? else { return Ok(()) };
+    for line in lines {
+        let line = line.map_err(|e| message::unreadable(&chat, &e))?;
+        let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
+        let spoken = match kind_of(&entry) {
+            Some("assistant") => entry["content"]
+                .as_str()
+                .and_then(|text| message::joined([text.to_string()]))
+                .map(|text| (Role::Reply, text)),
+            Some("user") if entry.get("synthetic_reason").is_none() && entry.get("prompt_index").is_some() => {
+                query(&entry["content"]).map(|text| (Role::Prompt, text))
+            }
+            _ => None,
+        };
+        if let Some((role, text)) = spoken
+            && !each(Spoken { role, said: Said { text, written: None } })
+        {
+            return Ok(());
+        }
+    }
+    Ok(())
 }
 
 impl Session {

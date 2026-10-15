@@ -31,7 +31,7 @@ fn active(app: &App) -> (usize, usize, usize) {
 
 fn result_pos(app: &App, i: usize) -> Position {
     let len = app.search_results(query(app).expect("search is open")).len();
-    ui::result_item(areas().results, len, 0, i).as_position()
+    ui::result_item(areas().results, len, 0, i, 1).as_position()
 }
 
 #[test]

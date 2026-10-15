@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/search.rs
+expression: "render(&with(in_sessions(\"checkout tax\", two_matches()))).backend()"
+---
+"  ⌕ checkout tax                                      ❯  │                                          "
+"                                                         │                                          "
+"▌ the checkout tax bug is in rounding                    │                                          "
+"▌ claude · reply           notes › feat/search › claude  │                                          "
+"  migration failed: duplicate key                        │                                          "
+"  zsh · screen                       notes › main › zsh  │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"                                                         │                                          "
+"  enter goes to pane 4                                   │                                          "

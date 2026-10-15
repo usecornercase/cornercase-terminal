@@ -4,6 +4,7 @@ mod create;
 mod flow;
 mod idle_restart;
 mod queue;
+mod search;
 mod status;
 mod talk;
 mod wait;
@@ -298,6 +299,7 @@ impl App {
             Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
             Command::FlowExport(export) => self.flow_export_request(caller, &export),
             Command::FlowImport(import) => self.flow_import_request(caller, &import),
+            Command::Search(search) => self.search_request(client, &search.query),
         };
         self.flow_requested(client, noted, handled.is_ok());
         handled
