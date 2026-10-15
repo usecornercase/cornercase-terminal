@@ -15,6 +15,7 @@ const CONSENTING: &str = r#"#!/bin/sh
 log="LOG"
 printf 'start %s\n' "$*" >> "$log/order"
 printf '  WARNING: Claude Code running in Bypass Permissions mode\n\n  \342\235\257 1. No, exit\n    2. Yes, I accept\n'
+stty -icanon 2>/dev/null
 IFS= read -r line
 printf 'got %s\n' "$line" >> "$log/order"
 while [ -d "$log" ]; do sleep 0.1; done
@@ -26,6 +27,7 @@ printf 'start %s\n' "$*" >> "$log/order"
 printf 'Do you trust the files in this folder?\n❯ 1. Yes, proceed\n  2. No, exit\n'
 read answer
 printf '\033[2J\033[Hagent ready> '
+stty -icanon 2>/dev/null
 IFS= read -r line
 printf 'got %s\n' "$line" >> "$log/order"
 while [ -d "$log" ]; do sleep 0.1; done
