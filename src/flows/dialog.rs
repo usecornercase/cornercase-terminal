@@ -431,7 +431,7 @@ impl Dialog {
         }
         buttons.extend([IMPORT, NEW, DONE]);
         for dropped in [IMPORT, EXPORT] {
-            if room.width > 0 && row_width(&buttons) > room.width {
+            if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
         }

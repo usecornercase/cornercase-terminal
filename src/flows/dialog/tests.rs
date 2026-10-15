@@ -141,7 +141,7 @@ mod the_list {
         let mut d = dialog();
         d.flows[mine()].flow.name = "Full issue".into();
         d.select(mine());
-        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, RESTORE, NEW, DONE]);
+        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, EXPORT, RESTORE, IMPORT, NEW, DONE]);
         d.press(RESTORE);
         assert_eq!(d.confirm, Some(Confirm::Restore(mine())));
         assert_eq!(d.confirm_text().map(|(title, ..)| title), Some("Restore default"));
@@ -251,6 +251,15 @@ mod list_preview {
         d.hit(Hit::Tab(2), ROOM);
         click_row(&mut d, Row::Prompt);
         assert_eq!(d.preview(), None);
+    }
+
+    #[test]
+    fn a_wide_list_keeps_its_buttons_whatever_width_the_preview_leaves() {
+        let mut d = dialog();
+        d.flows[mine()].flow.name = "Full issue".into();
+        d.select(mine());
+        let room = Room { width: 62, ..ROOM };
+        assert_eq!(d.buttons(room), [EDIT, DUPLICATE, EXPORT, RESTORE, IMPORT, NEW, DONE]);
     }
 
     #[test]

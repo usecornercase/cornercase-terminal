@@ -29,13 +29,13 @@ mod the_buttons {
     }
 
     #[rstest]
-    #[case::roomy(80, &["edit", "duplicate", "export", "delete", "import", "new", "done"])]
-    #[case::tight(50, &["edit", "duplicate", "export", "delete", "new", "done"])]
-    #[case::tighter(45, &["edit", "duplicate", "delete", "new", "done"])]
+    #[case::roomy(80, &["edit", "duplicate", "export", "delete", "diagram", "import", "new", "done"])]
+    #[case::tight(59, &["edit", "duplicate", "export", "delete", "diagram", "new", "done"])]
+    #[case::tighter(50, &["edit", "duplicate", "delete", "diagram", "new", "done"])]
     fn narrow_rooms_drop_import_then_export(#[case] width: usize, #[case] expected: &[&str]) {
         let mut d = dialog();
         d.select(4);
-        let room = Room { width, ..ROOM };
+        let room = Room { width, wide: false, ..ROOM };
         assert_eq!(d.buttons(room), expected);
     }
 
