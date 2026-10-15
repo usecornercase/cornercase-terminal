@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/toast.rs
+assertion_line: 7008
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │ $ echo hello                             "
@@ -19,4 +20,4 @@ expression: render(&v).backend()
 " ───────────────────────────── │                         │                ╭───────────────────────╮ "
 "  Settings                     │                         │                │ ✓ copied to clipboard │ "
 "  Usage                        │                         │                ╰───────────────────────╯ "
-"  Quit                         │  Queue 0                │                                          "
+"  Quit                         │                         │                                          "

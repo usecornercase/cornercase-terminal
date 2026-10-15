@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 
-use super::{Action, Browser, IssuesHit, Pick, Room, Screen};
+use super::{Action, Browser, IssuesHit, Pick, Room, Screen, Tab};
 
 const WHEEL_ROWS: isize = 3;
 
@@ -59,8 +59,11 @@ impl Browser {
             return Action::None;
         }
         let rows = room.list_rows;
-        let shown = self.shown().len();
+        let shown = self.list_len();
         match key.code {
+            KeyCode::Enter if self.current() == Tab::Queue => {
+                return self.selected_queued().map_or(Action::None, |queued| Action::QueueOpen(queued.id));
+            }
             KeyCode::Enter => return self.selected().map_or(Action::None, |issue| self.read(issue)),
             KeyCode::Up => self.search.move_selection(-1, shown, rows),
             KeyCode::Down => self.search.move_selection(1, shown, rows),
@@ -139,7 +142,7 @@ impl Browser {
             return Action::None;
         }
         let rows = room.list_rows;
-        let shown = if self.token_form().is_some() { 0 } else { self.shown().len() };
+        let shown = if self.token_form().is_some() { 0 } else { self.list_len() };
         match kind {
             MouseEventKind::ScrollUp => self.search.scroll_by(-WHEEL_ROWS, shown, rows),
             MouseEventKind::ScrollDown => self.search.scroll_by(WHEEL_ROWS, shown, rows),
@@ -150,6 +153,12 @@ impl Browser {
                     return self.needs_load();
                 }
                 Some(IssuesHit::Toggle(i)) => return self.toggle(i),
+                Some(IssuesHit::Item(i)) if self.current() == Tab::Queue => {
+                    if let Some(id) = self.shown_queue().get(i).map(|queued| queued.id) {
+                        self.search.select(i);
+                        return Action::QueueOpen(id);
+                    }
+                }
                 Some(IssuesHit::Item(i)) => {
                     if let Some(issue) = self.shown().get(i).map(|issue| (*issue).clone()) {
                         return self.read(issue);

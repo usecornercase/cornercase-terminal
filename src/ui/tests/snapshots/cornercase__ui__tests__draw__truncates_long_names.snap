@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/draw.rs
+assertion_line: 6841
 expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,4 +20,4 @@ expression: render(&v).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │  Queue 0                │                                          "
+"  Quit                         │                         │                                          "

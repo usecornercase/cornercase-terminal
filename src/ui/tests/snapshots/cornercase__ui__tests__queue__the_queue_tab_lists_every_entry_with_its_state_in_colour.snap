@@ -1,0 +1,28 @@
+---
+source: src/ui/tests/queue.rs
+expression: t.backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                                              "
+"     ╭─ Issues · shop ────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" Proj│  All   GitHub   Queue                                                                                      │     "
+"     │                                                                                                            │     "
+"▌ sho│ ›                                                                                                          │     "
+"     │                                                                                                            │     "
+"  + N│ ▌2026-10-14 14:30  #482 Fix the login form                           pending · claude · shop › issue-482   │     "
+"     │  2026-10-14 15:00  Update the docs                                       started · pane 7 · codex · shop   │     "
+"     │  2026-10-14 16:00  Fix logout                                        failed · codex is not installed · …   │     "
+"     │  2026-10-14 17:00  Review the tests                                                missed · claude · api   │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+"     │                                                                                                            │     "
+" ────│ enter edits it · start now runs it at once                                                                 │     "
+"  Set│                                                         new   start now   remove   clear started   cancel  │     "
+"  Usa╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
+"  Quit                         │                         │                                                              "

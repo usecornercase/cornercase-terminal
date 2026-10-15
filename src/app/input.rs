@@ -86,7 +86,15 @@ impl App {
             self.files.unfocus();
         }
         if in_panel {
-            return self.side_mouse(ev, pos, areas.changes, area);
+            match self.side {
+                Some(Side::Todo) => {
+                    self.todo_mouse(ev, pos, areas.changes, area);
+                    return Ok(());
+                }
+                Some(Side::Files) => return self.files_mouse(ev, pos, areas.changes, area),
+                Some(Side::Changes) => return self.changes_mouse(ev, pos, areas.changes, area),
+                None => {}
+            }
         }
         if let Some(delta) = wheel(ev.kind)
             && self.scroll_column(&areas, pos, delta)
@@ -158,17 +166,6 @@ impl App {
         self.main_mouse(ev, pos, &areas, area)
     }
 
-    fn side_mouse(&mut self, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
-        match self.side {
-            Some(Side::Queue) => self.queue_mouse(ev, pos, panel, area),
-            Some(Side::Todo) => self.todo_mouse(ev, pos, panel, area),
-            Some(Side::Files) => return self.files_mouse(ev, pos, panel, area),
-            Some(Side::Changes) => return self.changes_mouse(ev, pos, panel, area),
-            None => {}
-        }
-        Ok(())
-    }
-
     fn main_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> Result<()> {
         if areas.tab_bar.contains(pos) {
             return self.tab_bar_mouse(areas, pos, ev.kind, area);
@@ -198,8 +195,6 @@ impl App {
         let files = if self.project().is_some() { areas.files_button } else { Rect::default() };
         let toggle: fn(&mut Self) = if changes.contains(pos) {
             Self::toggle_changes
-        } else if ui::queue_button(areas, self.queued.queue.pending()).contains(pos) {
-            Self::toggle_queue
         } else if todo.contains(pos) {
             Self::toggle_todo
         } else if files.contains(pos) {
@@ -289,7 +284,6 @@ impl App {
             ui::ActivityItem::Changes => self.toggle_changes(),
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
-            ui::ActivityItem::Queue => self.toggle_queue(),
             ui::ActivityItem::Update => self.open_update(),
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Usage => self.open_usage(),

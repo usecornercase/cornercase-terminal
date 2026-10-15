@@ -178,7 +178,7 @@ export const WORKING_ICONS: [string, string][] = [
   ['spinner', '⠋, turning ten times a second'],
 ];
 export const MIN_STACK_SECTION = 5;
-const STACK_FOOTER = 7;
+const STACK_FOOTER = 6;
 const STACKED_KEEP = 2 * MIN_STACK_SECTION + 1;
 export const AGENTS_LABEL = 'Agents ›';
 
@@ -284,7 +284,6 @@ export interface Areas {
   changesBorder: Rect;
   changesButton: Rect;
   todoButton: Rect;
-  queueButton: Rect;
   filesButton: Rect;
   tabBar: Rect;
 }
@@ -372,7 +371,6 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean): Area
     changesBorder: EMPTY,
     changesButton: EMPTY,
     todoButton: todoButton(todo),
-    queueButton: rect(todo.x, todo.y + 1, todo.w, 1),
     filesButton: filesButton(todo),
     tabBar: EMPTY,
     ...agentsAreas,
@@ -431,15 +429,14 @@ function oneColumn(cols: number, rows: number, widths: Widths, keep: number, age
     title: EMPTY,
     list: EMPTY,
     separator: rect(0, footer, inner, 1),
-    settings: rect(0, footer + 4, inner, 1),
-    usage: rect(0, footer + 5, inner, 1),
-    quit: rect(0, footer + 6, inner, 1),
+    settings: rect(0, footer + 3, inner, 1),
+    usage: rect(0, footer + 4, inner, 1),
+    quit: rect(0, footer + 5, inner, 1),
     workspaces: EMPTY,
     workspacesTitle: EMPTY,
     workspacesList: EMPTY,
     workspacesSeparator: EMPTY,
     issues: rect(0, footer + 1, inner, 1),
-    queueButton: rect(0, footer + 3, inner, 1),
     results: rect(0, HEADER_HEIGHT, inner, Math.max(0, rows - HEADER_HEIGHT)),
     pane: rect(width + PANE_PADDING, 0, Math.max(1, cols - width - PANE_PADDING), rows),
     projectsBorder: rect(width - 1, 0, 1, rows),
@@ -534,20 +531,9 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean):
     changesBorder: EMPTY,
     changesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),
     filesButton: rect(Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH)), pitch),
-    queueButton: footer,
     todoButton: rect(Math.max(0, cols - searchWidth - COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth)), pitch),
     tabBar: EMPTY,
   };
-}
-
-export function queueLabel(pending: number): string {
-  return `Queue ${pending}`;
-}
-
-export function queueButton(areas: Areas, pending: number): Rect {
-  const w = queueLabel(pending).length + 2;
-  const row = areas.queueButton;
-  return areas.compact ? intersect(rect(right(row) - w - 1, row.y, w, row.h), row) : intersect(rect(row.x + 1, row.y, w, row.h), row);
 }
 
 export class Rows {

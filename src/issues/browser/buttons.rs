@@ -1,5 +1,6 @@
 use super::{Action, Browser, Pick, Place, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
+use crate::queue::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Button {
@@ -20,6 +21,10 @@ pub(super) enum Button {
     Next,
     Cancel,
     Back,
+    New,
+    RunNow,
+    Remove,
+    ClearStarted,
 }
 
 impl Button {
@@ -42,6 +47,10 @@ impl Button {
             Self::Next => "next",
             Self::Cancel => "cancel",
             Self::Back => "back",
+            Self::New => "new",
+            Self::RunNow => "start now",
+            Self::Remove => "remove",
+            Self::ClearStarted => "clear started",
         }
     }
 }
@@ -90,11 +99,31 @@ impl Browser {
     }
 
     fn list_buttons(&self) -> Vec<Button> {
+        if self.current() == Tab::Queue {
+            return self.queue_buttons();
+        }
         let mut buttons = vec![Button::Start, Button::Schedule, Button::Refresh];
         if let Tab::One(source) = self.current()
             && self.connections.get(&source).is_some_and(|c| !c.from_env)
         {
             buttons.push(Button::Disconnect);
+        }
+        buttons.push(Button::Cancel);
+        buttons
+    }
+
+    fn queue_buttons(&self) -> Vec<Button> {
+        let mut buttons = vec![Button::New];
+        if let Some(queued) = self.selected_queued() {
+            if queued.runnable() {
+                buttons.push(Button::RunNow);
+            }
+            if queued.state != State::Starting {
+                buttons.push(Button::Remove);
+            }
+        }
+        if self.queued.iter().any(|queued| matches!(queued.state, State::Started { .. })) {
+            buttons.push(Button::ClearStarted);
         }
         buttons.push(Button::Cancel);
         buttons
@@ -109,6 +138,9 @@ impl Browser {
     }
 
     pub(crate) fn toggles(&self) -> (Vec<String>, Vec<bool>) {
+        if self.current() == Tab::Queue {
+            return (Vec::new(), Vec::new());
+        }
         let label = self.people_label();
         let filtered = label != "people";
         (vec!["closed".into(), label], vec![self.closed, filtered])
@@ -138,6 +170,10 @@ impl Browser {
                 self.open_picker(Pick::Agent, false);
                 Action::None
             }
+            Button::New => Action::QueueNew,
+            Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
+            Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
+            Button::ClearStarted => Action::QueueClear,
             Button::Where => {
                 self.open_picker(Pick::Place, false);
                 Action::None
@@ -170,7 +206,7 @@ impl Browser {
             },
             Button::Disconnect => match self.current() {
                 Tab::One(source) => Action::Disconnect(source),
-                Tab::All => Action::None,
+                Tab::All | Tab::Queue => Action::None,
             },
             Button::Connect | Button::Next => self.submit_token(),
             Button::Cancel => Action::Close,

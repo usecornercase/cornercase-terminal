@@ -185,7 +185,6 @@ screen_compact_menu_workspaces() {
   cc_s1_at 64 35
   cc_click '≡'
   cc_wait '‹ Projects'
-  cc_wait 'Queue 0'
   cc_shot compact-menu-workspaces
 }
 
@@ -391,6 +390,7 @@ screen_issue_started() {
   cc_wheel 'feat/dark-mode' down 3
   cc_hover 'Workspaces'
   cc_wait '▌ │   Opus 5.5 · 7%'
+  cc_wait '  feat/dark-mode               │'
   cc_wait '    blog (1)                   │'
   cc_shot issue-started
 }
@@ -751,9 +751,11 @@ screen_queue() {
   ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
   cc_wait 'web-shop'
-  cc_click 'Queue 1'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
   cc_wait 'clear started'
-  cc_hover 'Workspaces'
+  cc_hover 'Issues · web-shop'
   cc_shot queue
 }
 
@@ -762,9 +764,11 @@ screen_queue_form() {
   cc_session "$CC_CAPTURE/sessions/s1.json"
   cc_start 110 38
   cc_wait 'web-shop'
-  cc_click 'Queue 0'
-  cc_wait '+ New'
-  cc_click '+ New'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'nothing queued'
+  cc_click 'new   cancel'
   cc_wait 'Schedule an agent'
   cc_type 'Fix the login form'
   cc_hover 'Workspaces'

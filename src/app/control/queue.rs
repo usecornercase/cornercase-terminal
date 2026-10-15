@@ -246,7 +246,6 @@ impl App {
 
     pub(in crate::app) fn focus_queued(&mut self, pane: u64, area: Rect) {
         if self.show(control::Item::Pane(pane)).is_ok() {
-            self.close_panel();
             self.resize(area);
         }
     }

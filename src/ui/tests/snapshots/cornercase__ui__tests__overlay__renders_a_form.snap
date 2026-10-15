@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/overlay.rs
+assertion_line: 7147
 expression: "render(&with(Overlay::Form(form(None)))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,4 +20,4 @@ expression: "render(&with(Overlay::Form(form(None)))).backend()"
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │  Queue 0                │                                          "
+"  Quit                         │                         │                                          "

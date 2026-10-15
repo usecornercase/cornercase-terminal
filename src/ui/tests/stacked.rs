@@ -30,20 +30,11 @@ fn the_line_sits_between_the_lists() {
 }
 
 #[test]
-fn one_footer_holds_issues_todo_queue_settings_usage_and_quit() {
+fn one_footer_holds_issues_todo_settings_usage_and_quit() {
     let a = stacked(Sidebar::WorkspacesOnTop);
     assert_eq!(
-        (
-            a.separator.y,
-            a.issues.y,
-            a.todo_button.y,
-            a.queue_button.y,
-            a.settings.y,
-            a.usage.y,
-            a.quit.y,
-            a.workspaces_separator
-        ),
-        (23, 24, 25, 26, 27, 28, 29, Rect::default())
+        (a.separator.y, a.issues.y, a.todo_button.y, a.settings.y, a.usage.y, a.quit.y, a.workspaces_separator),
+        (24, 25, 26, 27, 28, 29, Rect::default())
     );
 }
 

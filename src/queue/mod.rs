@@ -123,6 +123,7 @@ impl Queue {
         self.sort();
     }
 
+    #[cfg(test)]
     pub(crate) fn pending(&self) -> usize {
         self.entries.iter().filter(|entry| entry.state == State::Pending).count()
     }

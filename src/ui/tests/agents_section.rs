@@ -1,6 +1,6 @@
 use super::*;
 
-const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 31 };
+const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 30 };
 
 fn with_agents(sidebar: Sidebar) -> Areas {
     full_layout(TALL, Widths::default(), false, sidebar, true, false)

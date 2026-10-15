@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/dialogs.rs
+assertion_line: 6932
 expression: "render(&with(Overlay::Usage(usage))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -19,4 +20,4 @@ expression: "render(&with(Overlay::Usage(usage))).backend()"
 " ─────────────────╰──────────────────────────────────────────────────────────────╯                  "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │  Queue 0                │                                          "
+"  Quit                         │                         │                                          "

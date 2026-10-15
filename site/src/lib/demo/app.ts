@@ -108,7 +108,7 @@ export interface SettingsRow {
 export interface IssuesView {
   tabs: string[];
   toggles: { label: string; on: boolean }[];
-  items: { key: string; title: string; meta: string; danger?: boolean }[];
+  items: { key: string; title: string; meta: string; danger?: boolean; colour?: number }[];
   selected: number;
   scroll: number;
   empty: string;
@@ -131,6 +131,9 @@ export interface SearchResult {
 type Listener = (event: string, detail?: string) => void;
 
 const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
+const QUEUE = 'queue';
+const QUEUE_EVERY = "every project's scheduled agents";
+const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2 };
 
 type Remote = 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
@@ -347,8 +350,7 @@ export class App {
   ]);
   files = new FilesPanel();
   queued: QueueEntry[] = [];
-  queueOpen = false;
-  queueScroll = 0;
+  private queueBack: IssuesOverlay | null = null;
   private nextQueueId = 1;
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
@@ -1219,14 +1221,13 @@ export class App {
     if (this.nav) {
       this.changesOpen = false;
       this.closeTodo();
-      this.queueOpen = false;
       this.files.close();
     }
     this.dirty();
   }
 
   panelShown(): boolean {
-    return this.changesShown() || this.todo.open || this.filesShown() || this.queueOpen;
+    return this.changesShown() || this.todo.open || this.filesShown();
   }
 
   changesShown(): boolean {
@@ -1284,7 +1285,6 @@ export class App {
     this.changesOpen = !this.changesOpen;
     if (this.changesOpen) {
       this.closeTodo();
-      this.queueOpen = false;
       this.files.close();
     }
     if (this.changesFilter) this.changesFilter.focused = false;
@@ -1297,7 +1297,6 @@ export class App {
     if (this.todo.open) this.closeTodo();
     else {
       this.changesOpen = false;
-      this.queueOpen = false;
       this.files.close();
       this.todo.open = true;
       this.emit('narrate', this.narration.todo);
@@ -1312,7 +1311,6 @@ export class App {
   }
 
   private closePanel(): boolean {
-    this.queueOpen = false;
     this.todo.field = null;
     this.closeTodo();
     this.changesOpen = false;
@@ -1439,7 +1437,6 @@ export class App {
 
   private openFiles(): void {
     if (this.files.open) return;
-    this.queueOpen = false;
     this.changesOpen = false;
     this.closeTodo();
     this.files.open = true;
@@ -1756,6 +1753,7 @@ export class App {
   dismissDialog(): void {
     const o = this.overlay;
     if (!o || (o.kind === 'newWorkspace' && o.creating) || ('busy' in o && o.busy)) return;
+    if (o.kind === 'queue') return this.closeQueueForm(false);
     this.closeOverlay();
   }
 
@@ -2776,7 +2774,62 @@ export class App {
   }
 
   private issuesSource(o: IssuesOverlay): string {
-    return this.config.sources[o.tab] ?? 'all';
+    return o.tab === this.config.sources.length ? QUEUE : this.config.sources[o.tab] ?? 'all';
+  }
+
+  private issuesTabCount(): number {
+    return this.config.sources.length + 1;
+  }
+
+  private queuePlace(entry: QueueEntry): string {
+    const project = this.projects.find((p) => p.id === entry.project);
+    const name = project ? projectLabel(project) : entry.folder;
+    const inside = entry.branch || entry.workspaceName;
+    return inside ? `${name} › ${inside}` : name;
+  }
+
+  private queueRow(entry: QueueEntry): IssuesView['items'][number] {
+    const pane = entry.pane === undefined ? null : this.findPane(entry.pane);
+    const status = entry.state === 'started' ? `started · ${pane ? `pane ${entry.pane}` : 'pane closed'}` : entry.state === 'failed' ? `failed · ${entry.error ?? 'unknown'}` : entry.state;
+    return { key: queueWhen(entry.at), title: entry.label, meta: `${status} · ${entry.agent} · ${this.queuePlace(entry)}`, colour: QUEUE_COLOURS[entry.state] };
+  }
+
+  private queueShown(o: IssuesOverlay): QueueEntry[] {
+    const query = o.filter.toLowerCase();
+    return this.queued.filter((entry) => {
+      const row = this.queueRow(entry);
+      return [row.key, row.title, row.meta].some((text) => text.toLowerCase().includes(query));
+    });
+  }
+
+  private queueSelected(o: IssuesOverlay): QueueEntry | undefined {
+    const shown = this.queueShown(o);
+    return shown[Math.min(o.selected, shown.length - 1)];
+  }
+
+  private queueView(o: IssuesOverlay, tabs: string[]): IssuesView {
+    const shown = this.queueShown(o);
+    const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
+    const sel = shown[selected];
+    const hint = !sel ? QUEUE_EVERY : sel.state === 'started' ? `enter opens its pane · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
+    const buttons = [
+      'new',
+      ...(sel && sel.state !== 'started' ? ['start now'] : []),
+      ...(sel ? ['remove'] : []),
+      ...(this.queued.some((entry) => entry.state === 'started') ? ['clear started'] : []),
+      'cancel',
+    ];
+    return {
+      tabs,
+      toggles: [],
+      items: shown.map((entry) => this.queueRow(entry)),
+      selected,
+      scroll: o.scroll,
+      empty: this.queued.length ? 'nothing matches' : 'nothing queued: new schedules a prompt, and schedule on an issue queues it',
+      hint,
+      buttons,
+      picking: false,
+    };
   }
 
   private accountOf(source: Remote): string {
@@ -2861,7 +2914,7 @@ export class App {
   }
 
   issuesView(o: IssuesOverlay): IssuesView {
-    const tabs = this.config.sources.map((s) => SOURCE_NAMES[s]);
+    const tabs = [...this.config.sources.map((s) => SOURCE_NAMES[s]), 'Queue'];
     const toggles = [
       { label: 'closed', on: o.closed },
       { label: o.mine ? 'people: assignee me' : 'people', on: o.mine },
@@ -2903,6 +2956,7 @@ export class App {
         picking: true,
       };
     }
+    if (source === QUEUE) return this.queueView(o, tabs);
     if (isRemote(source) && !this.config.accounts[source]) {
       const remote = REMOTES[source];
       const step = o.token.step ?? 'token';
@@ -3022,6 +3076,12 @@ export class App {
       o.agentPick.selected = i;
       return this.issuesButton('choose');
     }
+    if (this.issuesSource(o) === QUEUE) {
+      const entry = this.queueShown(o)[i];
+      if (!entry) return;
+      o.selected = i;
+      return this.openQueued(entry);
+    }
     const issue = this.issuesList(o)[i];
     if (!issue) return;
     o.selected = i;
@@ -3034,7 +3094,7 @@ export class App {
   issuesScroll(dy: number): boolean {
     const o = this.overlay;
     if (o?.kind !== 'issues') return false;
-    const n = this.issuesList(o).length;
+    const n = this.issuesSource(o) === QUEUE ? this.queueShown(o).length : this.issuesList(o).length;
     o.scroll = Math.max(0, Math.min(Math.max(0, n - 1), o.scroll + dy));
     this.dirty();
     return true;
@@ -3052,6 +3112,14 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
+    if (this.issuesSource(o) === QUEUE && !o.detail && !o.agentPick) {
+      const entry = this.queueSelected(o);
+      if (label === 'new') this.openQueueForm();
+      else if (label === 'start now' && entry && entry.state !== 'started') this.runQueue(entry);
+      else if (label === 'remove' && entry) this.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`);
+      else if (label === 'clear started') this.removeQueued((item) => item.state === 'started', 'cleared {n} started');
+      return;
+    }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
       return this.dirty();
@@ -3221,22 +3289,31 @@ export class App {
     });
   }
 
-  toggleQueue(): void {
-    const open = !this.queueOpen;
-    this.closePanel();
-    this.queueOpen = open;
-    this.nav = null;
+  openQueued(entry: QueueEntry): void {
+    if (entry.state !== 'started') return this.openQueueForm(entry);
+    this.closeOverlay();
+    for (let p = 0; p < this.projects.length; p++) for (let w = 0; w < this.projects[p].workspaces.length; w++) {
+      const t = this.projects[p].workspaces[w].tabs.findIndex((tab) => tab.panes.some((pane) => pane.id === entry.pane));
+      if (t >= 0) return this.selectTab(p, w, t);
+    }
+  }
+
+  closeQueueForm(scheduled: boolean): void {
+    const back = this.queueBack;
+    this.queueBack = null;
+    if (back && scheduled) {
+      back.tab = this.config.sources.length;
+      back.detail = null;
+      back.agentPick = null;
+      back.filter = '';
+      back.selected = 0;
+      back.scroll = 0;
+    }
+    this.overlay = back;
     this.dirty();
   }
 
   openQueueForm(entry?: QueueEntry): void {
-    if (entry?.state === 'started') {
-      for (let p = 0; p < this.projects.length; p++) for (let w = 0; w < this.projects[p].workspaces.length; w++) {
-        const t = this.projects[p].workspaces[w].tabs.findIndex((tab) => tab.panes.some((pane) => pane.id === entry.pane));
-        if (t >= 0) { this.closePanel(); this.selectTab(p, w, t); return; }
-      }
-      return;
-    }
     const places = this.queuePlaces();
     const matching = entry ? places.flatMap((choice, i) => (choice.project === entry.project && choice.workspace === entry.workspace ? [i] : [])) : [];
     const project = this.project();
@@ -3259,6 +3336,7 @@ export class App {
       o.branch = entry.branch;
     }
     o.cursor = [...o.prompt].length;
+    this.queueBack = this.overlay?.kind === 'issues' ? this.overlay : null;
     this.overlay = o;
     this.queueModes(o);
     if (entry?.mode) {
@@ -3312,7 +3390,10 @@ export class App {
     }
     const picked = comboLabel(o.agent) ?? 'auto';
     const chosenMode = comboLabel(o.mode) ?? 'default';
-    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, workspace: place.workspace, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending' };
+    const project = this.projects.find((p) => p.id === place.project);
+    const ws = project?.workspaces.find((w) => w.id === place.workspace);
+    const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
+    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending' };
     const old = this.queued.find((item) => item.id === entry.id);
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
@@ -3322,9 +3403,7 @@ export class App {
       if (this.now() - entry.at > 600000) { entry.state = 'missed'; this.dirty(); }
       else this.runQueue(entry);
     });
-    this.overlay = null;
-    this.closePanel();
-    this.queueOpen = true;
+    this.closeQueueForm(true);
     this.notify(`scheduled queue entry ${entry.id}`);
     this.dirty();
   }
@@ -3341,6 +3420,7 @@ export class App {
     tab.name = entry.label;
     workspace.tabs.push(tab);
     entry.state = 'started';
+    entry.error = undefined;
     entry.pane = pane.id;
     this.launch(pane, entry.agent, entry.prompt, true, entry.command, true);
     this.notify(`started queued agent ${entry.id}`);
@@ -3351,7 +3431,7 @@ export class App {
     const screen = rect(0, 0, this.cols, this.rows);
     const width = Math.max(1, queueTextRect(screen, o, o.focus).w);
     const step = queueFormKey(o, k, width, queueListRows(screen, o));
-    if (step === 'cancel') this.closeOverlay();
+    if (step === 'cancel') this.closeQueueForm(false);
     else if (step === 'submit') this.submitQueue();
     else if (step === 'agent') this.queueModes(o);
     this.dirty();
@@ -3875,8 +3955,8 @@ export class App {
     }
     if (view.token) {
       if (k.key === 'Enter') this.issuesConnect();
-      else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.config.sources.length);
-      else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.config.sources.length - 1) % this.config.sources.length);
+      else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.issuesTabCount());
+      else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.issuesTabCount() - 1) % this.issuesTabCount());
       else if (k.key === 'Backspace' || ch) {
         o.token.input = k.key === 'Backspace' ? o.token.input.slice(0, -1) : o.token.input + ch;
         o.token.error = undefined;
@@ -3905,8 +3985,8 @@ export class App {
     if (k.key === 'Enter') this.issuesClick(view.selected);
     else if (k.key === 'ArrowDown') o.selected = Math.min(o.selected + 1, Math.max(0, view.items.length - 1));
     else if (k.key === 'ArrowUp') o.selected = Math.max(0, o.selected - 1);
-    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.config.sources.length);
-    else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.config.sources.length - 1) % this.config.sources.length);
+    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.issuesTabCount());
+    else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.issuesTabCount() - 1) % this.issuesTabCount());
     else if (k.key === 'Backspace') o.filter = o.filter.slice(0, -1);
     else if (ch) {
       o.filter += ch;

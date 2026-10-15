@@ -105,6 +105,7 @@ pub(crate) struct IssueRow {
     pub(crate) key: String,
     pub(crate) title: String,
     pub(crate) meta: String,
+    pub(crate) colour: Option<Color>,
 }
 
 pub(crate) enum IssuesBody {
@@ -205,7 +206,7 @@ fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], s
                 rail(chosen, bg),
                 Span::styled(format!("{:<key_width$}  ", item.key), style.fg(Color::Cyan)),
                 Span::styled(format!("{title}{}", " ".repeat(gap)), style),
-                Span::styled(format!("{meta} "), bg.fg(view.muted)),
+                Span::styled(format!("{meta} "), bg.fg(item.colour.unwrap_or(view.muted))),
             ]))
             .style(bg),
             row,

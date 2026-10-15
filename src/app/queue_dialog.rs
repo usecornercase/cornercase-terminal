@@ -2,13 +2,13 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::layout::Side;
 use super::overlay::Overlay;
 use super::toast::Toast;
 use crate::agents;
 use crate::control::QueueAdd;
 use crate::git;
-use crate::issues::{self, Issue, browser::Place};
+use crate::issues::browser::{Place, Screen, Tab};
+use crate::issues::{self, Issue};
 use crate::list::{COMBO_ROWS, Combo};
 use crate::project::Hierarchy;
 use crate::queue;
@@ -77,6 +77,13 @@ impl App {
             form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
             form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
         }
+        self.queued.back = match self.overlay.take() {
+            Some(Overlay::Issues(browser)) => Some(browser),
+            other => {
+                self.overlay = other;
+                None
+            }
+        };
         self.overlay = Some(Overlay::Queue(Box::new(form)));
         self.queue_modes();
         if let Some(Overlay::Queue(form)) = &mut self.overlay
@@ -198,7 +205,7 @@ impl App {
         let rows = ui::queue_form::list(area, form).map_or(COMBO_ROWS, ui::combo::rows);
         match form.key(key, width, rows) {
             Step::Submit => self.submit_queue(),
-            Step::Cancel => self.overlay = None,
+            Step::Cancel => self.close_queue_form(false),
             Step::Chose(control) => self.queue_chose(control),
             Step::None => {}
         }
@@ -226,7 +233,7 @@ impl App {
             return;
         }
         match ui::queue_form::hit(area, form, pos) {
-            Some(ui::queue_form::Hit::Cancel) => self.overlay = None,
+            Some(ui::queue_form::Hit::Cancel) => self.close_queue_form(false),
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
             Some(ui::queue_form::Hit::Close) | None => form.close_lists(),
             Some(ui::queue_form::Hit::Choose(i)) => {
@@ -326,9 +333,8 @@ impl App {
         match (reply, form) {
             (Ok(id), form) => {
                 if form.is_some() {
-                    self.overlay = None;
+                    self.close_queue_form(true);
                 }
-                self.show_side(Some(Side::Queue));
                 self.toast = Some(Toast::new(format!("scheduled queue entry {id}"), ui::ToastIcon::Check));
             }
             (Err(reason), Some(form)) => {
@@ -339,6 +345,19 @@ impl App {
                 self.toast = Some(Toast::new(format!("could not schedule: {reason}"), ui::ToastIcon::Bug));
             }
         }
+    }
+
+    pub(super) fn close_queue_form(&mut self, scheduled: bool) {
+        self.overlay = self.queued.back.take().map(|mut browser| {
+            browser.scheduling = false;
+            if scheduled {
+                browser.screen = Screen::List;
+                browser.tab_to(Tab::Queue);
+                browser.search.reset();
+            }
+            Overlay::Issues(browser)
+        });
+        self.sync_queued();
     }
 
     pub(super) fn queue_form_view(form: &Form) -> Box<Form> {

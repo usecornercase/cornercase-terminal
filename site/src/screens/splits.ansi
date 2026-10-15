@@ -14,25 +14,25 @@
 [0m[38;5;239m ─────────────────────────────[39m [38;5;239m│[39m test returns::empty_address ... [38;5;1mFAILED[39m        [38;5;239m│[39m [2mervice                       
 [0;1m[38;5;8m Workspaces[0m                    [38;5;239m│[39m                                               [38;5;239m│[39m [2missue-482-returns-page-crashe
 [0m[38;5;8m  ↑ 3 more[39m                     [38;5;239m│[39m failures:                                     [38;5;239m│[39m [2ms-on-empty-address ❯         
-[0m  [1m[38;5;7mfeat/dark-mode[0m               [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
-[0m[38;5;6m  [38;5;239m├[39m [38;5;3m◐[39m [38;5;7mclaude[39m                   [38;5;239m│[39m ---- returns::empty_address stdout ----       [38;5;239m│[39m [2m                             
-[0m  [38;5;239m│[39m   [38;5;8mOpus 5.5 · 7%[39m            [38;5;239m│[39m panicked at src/returns/address.rs:12:33:     [38;5;239m│[39m [2m                             
-[0m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m called `Option::unwrap()` on a `None` value   [38;5;239m├──────────────────────────────
-[39m                               [38;5;239m│[39m                                               [38;5;239m│[39m [2missue-482-returns-page-crashe
-[0m  [1m[38;5;7mfeat/gift-cards[0m              [38;5;239m│[39m test result: [38;5;1mFAILED[39m. 6 passed; 1 failed       [38;5;239m│[39m [2ms-on-empty-address ❯ git stat
-[0m[38;5;6m  [38;5;239m├[39m [38;5;3m◐[39m [38;5;7mcodex[39m                    [38;5;239m│[39m issue-482-returns-page-crashes-on-empty-addres[38;5;239m│[39m [2mus -sb                       
-[0m  [38;5;239m│[39m   [38;5;8mgpt-5.4 · 20%[39m            [38;5;239m│[39m s ❯                                           [38;5;239m│[39m [2m## [38;5;2missue-482-returns-page-cra
-[0m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2m[38;5;2mshes-on-empty-address[39m        
-[0m                               [38;5;239m│[39m                                               [38;5;239m│[39m [2m [38;5;1mM[39m src/returns/address.rs    
-[0m  [1m[38;5;15m#482 Returns page cras…[0m      [38;5;239m│[39m                                               [38;5;239m│[39m [2m [38;5;1mM[39m src/returns/mod.rs        
-[0m[38;5;6m[48;5;236m▌ [38;5;239m├[39m [38;5;8m›[39m [38;5;15mbash[39m             [38;5;8m+2[39m      [38;5;239m[49m│[39m                                               [38;5;239m│[39m [2missue-482-returns-page-crashe
-[0m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2ms-on-empty-address ❯         
+[0m                               [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
+[0m  [1m[38;5;7mfeat/dark-mode[0m               [38;5;239m│[39m ---- returns::empty_address stdout ----       [38;5;239m│[39m [2m                             
+[0m[38;5;6m  [38;5;239m├[39m [38;5;3m◐[39m [38;5;7mclaude[39m                   [38;5;239m│[39m panicked at src/returns/address.rs:12:33:     [38;5;239m│[39m [2m                             
+[0m  [38;5;239m│[39m   [38;5;8mOpus 5.5 · 7%[39m            [38;5;239m│[39m called `Option::unwrap()` on a `None` value   [38;5;239m├──────────────────────────────
+[39m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2missue-482-returns-page-crashe
+[0m                               [38;5;239m│[39m test result: [38;5;1mFAILED[39m. 6 passed; 1 failed       [38;5;239m│[39m [2ms-on-empty-address ❯ git stat
+[0m  [1m[38;5;7mfeat/gift-cards[0m              [38;5;239m│[39m issue-482-returns-page-crashes-on-empty-addres[38;5;239m│[39m [2mus -sb                       
+[0m[38;5;6m  [38;5;239m├[39m [38;5;3m◐[39m [38;5;7mcodex[39m                    [38;5;239m│[39m s ❯                                           [38;5;239m│[39m [2m## [38;5;2missue-482-returns-page-cra
+[0m  [38;5;239m│[39m   [38;5;8mgpt-5.4 · 20%[39m            [38;5;239m│[39m                                               [38;5;239m│[39m [2m[38;5;2mshes-on-empty-address[39m        
+[0m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2m [38;5;1mM[39m src/returns/address.rs    
+[0m                               [38;5;239m│[39m                                               [38;5;239m│[39m [2m [38;5;1mM[39m src/returns/mod.rs        
+[0m  [1m[38;5;15m#482 Returns page cras…[0m      [38;5;239m│[39m                                               [38;5;239m│[39m [2missue-482-returns-page-crashe
+[0m[38;5;6m[48;5;236m▌ [38;5;239m├[39m [38;5;8m›[39m [38;5;15mbash[39m             [38;5;8m+2[39m      [38;5;239m[49m│[39m                                               [38;5;239m│[39m [2ms-on-empty-address ❯         
+[0m  [38;5;239m└[38;5;8m + Tab [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m                               [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;6m + New workspace [39m             [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m[38;5;239m ─────────────────────────────[39m [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;8m Issues [39m          [38;5;8m Changes 2 [39m [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;8m Files [39m                [38;5;8m TODO [39m [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
-[0m [38;5;8m Queue 0 [39m                     [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;8m Settings [39m                    [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;8m Usage [39m                       [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             
 [0m [38;5;8m Quit [39m                        [38;5;239m│[39m                                               [38;5;239m│[39m [2m                             

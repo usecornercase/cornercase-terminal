@@ -16,7 +16,7 @@ pub const COMPACT_WIDTH: u16 = 90;
 
 pub const COMPACT_PITCH: u16 = 3;
 
-const STACK_FOOTER: u16 = 7;
+const STACK_FOOTER: u16 = 6;
 
 pub(super) const COMPACT_BUTTON_WIDTH: u16 = 7;
 
@@ -93,7 +93,6 @@ pub struct Areas {
     pub(crate) changes_border: Rect,
     pub(crate) changes_button: Rect,
     pub todo_button: Rect,
-    pub(crate) queue_button: Rect,
     pub(crate) files_button: Rect,
     pub(crate) tab_bar: Rect,
 }
@@ -165,7 +164,6 @@ impl Areas {
                 workspaces_list: hidden,
                 workspaces_separator: hidden,
                 issues: hidden,
-                queue_button: hidden,
                 back: if nav == Some(Nav::Agents) { projects.back } else { hidden },
                 ..projects
             }
@@ -201,9 +199,9 @@ fn projects_column(r: Rect, icons: bool) -> [Rect; 6] {
     [title, list, separator, settings, usage, quit]
 }
 
-fn workspaces_column(r: Rect, icons: bool) -> [Rect; 6] {
+fn workspaces_column(r: Rect, icons: bool) -> [Rect; 5] {
     let footer = u16::from(!icons);
-    let [title, _, list, separator, issues, todo, queue] = Layout::vertical([
+    let [title, _, list, separator, issues, todo, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(GAP),
         Constraint::Min(1),
@@ -213,7 +211,7 @@ fn workspaces_column(r: Rect, icons: bool) -> [Rect; 6] {
         Constraint::Length(footer),
     ])
     .areas(r);
-    [title, list, separator, issues, todo, queue]
+    [title, list, separator, issues, todo]
 }
 
 fn below_header(r: Rect) -> Rect {
@@ -298,7 +296,7 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
     let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
     let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
     let [title, list] = if agents { section(lists) } else { [title, list] };
-    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo, queue] =
+    let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)), icons);
     Areas {
         pitch: 1,
@@ -329,7 +327,6 @@ fn wide_layout(area: Rect, widths: Widths, agents: bool, icons: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button: Rect::default(),
         todo_button: changes_button(todo, TODO_LABEL),
-        queue_button: queue,
         files_button: files_button(todo),
         ..agents_areas
     }
@@ -351,8 +348,8 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool, icons: bool) 
     let room = stack_room(inner, icons);
     let footer_y = inner.bottom().saturating_sub(stack_footer(icons)).max(room.y);
     let footer = Rect { y: footer_y, height: inner.bottom() - footer_y, ..inner };
-    let [separator, issues, todo, queue, settings, usage, quit] =
-        if icons { [Rect::default(); 7] } else { Layout::vertical([Constraint::Length(1); 7]).areas(footer) };
+    let [separator, issues, todo, settings, usage, quit] =
+        if icons { [Rect::default(); 6] } else { Layout::vertical([Constraint::Length(1); 6]).areas(footer) };
     let frame = Areas {
         pitch: 1,
         search,
@@ -367,7 +364,6 @@ fn one_column(area: Rect, widths: Widths, keep: u16, agents: bool, icons: bool) 
         pane,
         projects_border: right_edge(column),
         todo_button: changes_button(todo, TODO_LABEL),
-        queue_button: queue,
         files_button: files_button(todo),
         ..Areas::default()
     };
@@ -483,7 +479,6 @@ fn compact_layout(area: Rect, changes: bool, agents: bool) -> Areas {
         changes_border: Rect::default(),
         changes_button,
         todo_button,
-        queue_button: issues,
         files_button,
         tab_bar: Rect::default(),
     }
@@ -496,18 +491,4 @@ pub fn changes_button(issues: Rect, label: &str) -> Rect {
 
 pub(crate) fn files_button(row: Rect) -> Rect {
     Rect { x: row.x.saturating_add(1), width: button_width(files::LABEL), ..row }.intersection(row)
-}
-
-pub(crate) fn queue_label(pending: usize) -> String {
-    format!("Queue {pending}")
-}
-
-pub(crate) fn queue_button(areas: &Areas, pending: usize) -> Rect {
-    let label = queue_label(pending);
-    let row = areas.queue_button;
-    if areas.compact() {
-        changes_button(row, &label)
-    } else {
-        Rect { x: row.x.saturating_add(1), width: button_width(&label), ..row }.intersection(row)
-    }
 }

@@ -1,6 +1,6 @@
 import { BOLD, type Rect, type Style, rect } from '../term/grid';
 import { type Combo, COMBO_ROWS, combo, comboKey, comboList, comboRows, drawComboField, drawComboList, openCombo, scrollCombo } from './combo';
-import { type Areas, EMPTY, Rows, bottom, intersect, isEmpty, right } from './layout';
+import { EMPTY, bottom, intersect, isEmpty, right } from './layout';
 import type { Key } from './programs';
 import { paintRows, seg, wrapWords } from './text';
 import { editKey, fieldLines, fieldPosition, placeIn } from './todo';
@@ -12,7 +12,9 @@ export interface QueueEntry {
   prompt: string;
   label: string;
   project: number;
+  folder: string;
   workspace: number | null;
+  workspaceName?: string;
   branch: string;
   agent: string;
   mode: string;
@@ -335,7 +337,7 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
     p.g.clear(note);
     paragraph(p, note, o.error, { fg: 1 });
   }
-  p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'schedule', () => app.submitQueue(), () => app.closeOverlay());
+  p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'schedule', () => app.submitQueue(), () => app.closeQueueForm(false));
   const list = queueList(screen, o);
   if (open && list) {
     p.region({ r: union(area, list), click: () => { closeQueueLists(o); app.dirty(); }, wheel: scroll });
@@ -365,46 +367,4 @@ export function queueWhen(at: number): string {
   const date = new Date(at);
   const pad = (number: number) => String(number).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-export function drawQueue(p: Painter, areas: Areas): void {
-  const app = p.app;
-  const area = areas.changes;
-  p.g.clear(area);
-  p.span(area.x + 1, area.y, `Queue ${app.queued.filter((e) => e.state === 'pending').length}`, { ...MUTED, add: BOLD });
-  const close = rect(right(area) - 3, area.y, 3, 1);
-  p.span(close.x + 1, close.y, '×', p.hovered(close) ? { fg: 1, add: BOLD } : MUTED);
-  p.region({ r: close, click: () => app.toggleQueue(), cursor: 'pointer' });
-  if (app.queued.some((entry) => entry.state === 'started')) {
-    const clear = intersect(rect(close.x - 16, area.y + (area.w < 28 ? 1 : 0), 15, 1), area);
-    p.button(clear, '', 'clear started', p.hovered(clear) ? { fg: 0, bg: 6 } : MUTED);
-    p.region({ r: clear, click: () => app.removeQueued((entry) => entry.state === 'started', 'cleared {n} started'), cursor: 'pointer' });
-  }
-  const list = rect(area.x, area.y + 2, area.w, Math.max(0, area.h - 2));
-  const rows = new Rows(list, app.queued.map(() => 5), 1, app.queueScroll);
-  app.queued.forEach((entry, i) => {
-    const r = rows.item(i);
-    if (!r.h) return;
-    const lit = p.hovered(r);
-    const bg: Style = lit ? { bg: p.hoverSurface } : {};
-    if (lit) p.g.fill(r, bg);
-    const when = queueWhen(entry.at);
-    p.span(r.x + 1, r.y, when, MUTED, r.w - 2);
-    p.span(r.x + 1, r.y + 1, entry.label, {}, r.w - 5);
-    p.span(r.x + 1, r.y + 2, `${entry.agent} · ${entry.branch ? 'worktree' : 'tab'}`, MUTED, r.w - 2);
-    p.span(r.x + 1, r.y + 3, entry.error ? `failed · ${entry.error}` : entry.state, { fg: entry.state === 'failed' ? 1 : entry.state === 'started' ? 2 : 8 }, r.w - 14);
-    p.region({ r, click: () => app.openQueueForm(entry), cursor: 'pointer' });
-    const remove = rect(right(r) - 3, r.y + 1, 3, 1);
-    if (lit || areas.compact) p.button(remove, '', '×', p.hovered(remove) ? { ...bg, fg: 1, add: BOLD } : { ...bg, ...MUTED });
-    p.region({ r: remove, click: () => app.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`), cursor: 'pointer' });
-    if (entry.state !== 'started') {
-      const run = rect(right(r) - 12, r.y + 3, 11, 1);
-      p.button(run, '', 'start now', p.hovered(run) ? { fg: 0, bg: 6, add: BOLD } : { ...bg, fg: 6 });
-      p.region({ r: run, click: () => app.runQueue(entry), cursor: 'pointer' });
-    }
-  });
-  const add = rows.buttonRect();
-  p.button(add, '', '+ New', p.hovered(add) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
-  p.region({ r: add, click: () => app.openQueueForm(), cursor: 'pointer' });
-  p.region({ r: list, wheel: (dy) => { app.queueScroll = rows.scrolled(Math.sign(dy) * 3); app.dirty(); return true; } });
 }

@@ -1,4 +1,4 @@
-import { drawQueue, drawQueueForm, queueBounds } from './queue';
+import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
@@ -65,8 +65,6 @@ import {
   TODO_LABEL,
   FILES_LABEL,
   todoDot,
-  queueButton,
-  queueLabel,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -316,7 +314,6 @@ export class Painter {
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
-    else if (app.queueOpen && !isEmpty(areas.changes)) drawQueue(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
     this.overlay(areas);
@@ -930,13 +927,8 @@ export class Painter {
   private issuesRow(areas: Areas): void {
     const app = this.app;
     this.line(areas.workspacesSeparator, [seg(` ${'─'.repeat(Math.max(0, areas.workspacesSeparator.w - 2))}`, { fg: this.lineColour })]);
-    const pending = app.queued.filter((entry) => entry.state === 'pending').length;
-    const q = queueButton(areas, pending);
-    const issues = areas.compact ? rect(areas.issues.x, areas.issues.y, Math.max(0, q.x - areas.issues.x), areas.issues.h) : areas.issues;
-    this.button(issues, ' ', 'Issues', this.buttonStyle(issues, DARK, 6));
-    this.region({ r: issues, click: () => app.openIssues(), cursor: 'pointer' });
-    this.button(q, '', queueLabel(pending), this.buttonStyle(q, app.queueOpen ? { fg: 6, add: BOLD } : DARK, 6));
-    this.region({ r: q, click: () => app.toggleQueue(), cursor: 'pointer' });
+    this.button(areas.issues, ' ', 'Issues', this.buttonStyle(areas.issues, DARK, 6));
+    this.region({ r: areas.issues, click: () => app.openIssues(), cursor: 'pointer' });
     if (!areas.compact && hasChanges(app.workspace())) {
       const label = changesLabel(app.activeChangesDiff());
       const w = label.length + 2;
@@ -1371,7 +1363,7 @@ export class Painter {
           this.line(rect(row.x, row.y, 1, 1), [rail(chosen, bg)]);
           let x = this.span(row.x + 1, row.y, `${item.key.padEnd(keyWidth)}  `, { ...style, fg: item.danger ? 1 : 6 });
           x = this.span(x, row.y, title, style);
-          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: 8 });
+          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: item.colour ?? 8 });
           this.region({ r: row, click: () => app.issuesClick(i), cursor: 'pointer' });
         });
         this.region({ r: list, wheel: (dy) => app.issuesScroll(dy) });

@@ -19,4 +19,4 @@ expression: render(&v).backend()
 " ─────────────│                                                                      │              "
 "  Settings    │                                        ask agent   copy link   done  │              "
 "  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
-"  Quit                         │  Queue 0                │                                          "
+"  Quit                         │                         │                                          "

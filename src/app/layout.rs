@@ -25,7 +25,6 @@ pub(super) struct Scrolls {
 pub(super) enum Side {
     Changes,
     Todo,
-    Queue,
     Files,
 }
 
@@ -43,7 +42,7 @@ impl App {
     pub(super) fn panel_shown(&self) -> bool {
         match self.side {
             Some(Side::Changes) => self.changes_shown(),
-            Some(Side::Todo | Side::Queue) => true,
+            Some(Side::Todo) => true,
             Some(Side::Files) => self.files_shown(),
             None => false,
         }
@@ -57,7 +56,7 @@ impl App {
             Some(Side::Changes) => self.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.files.close(),
-            Some(Side::Queue) | None => {}
+            None => {}
         }
         self.side = side;
     }

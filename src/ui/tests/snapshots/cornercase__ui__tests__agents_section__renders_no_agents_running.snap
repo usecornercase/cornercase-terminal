@@ -29,7 +29,6 @@ expression: "render_sized(&shown(Sidebar::ProjectsOnTop, Vec::new()), W,\nTALL.h
 " ───────────────────────────── │                                                                    "
 "  Issues                       │                                                                    "
 "  Files                  TODO  │                                                                    "
-"  Queue 0                      │                                                                    "
 "  Settings                     │                                                                    "
 "  Usage                        │                                                                    "
 "  Quit                         │                                                                    "

@@ -19,4 +19,4 @@ expression: render(&scrolled_view()).backend()
 " ───────────────────────────── │                         │                                          "
 "  Settings                     │                         │                                          "
 "  Usage                        │                         │                                          "
-"  Quit                         │  Queue 0                │                               ↓ 42 more  "
+"  Quit                         │                         │                               ↓ 42 more  "

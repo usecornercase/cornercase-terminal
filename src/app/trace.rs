@@ -381,7 +381,6 @@ impl App {
         let panel = match self.side {
             Some(Side::Changes) => Some("changes"),
             Some(Side::Todo) => Some("todo"),
-            Some(Side::Queue) => Some("queue"),
             Some(Side::Files) => Some("files"),
             None => None,
         };

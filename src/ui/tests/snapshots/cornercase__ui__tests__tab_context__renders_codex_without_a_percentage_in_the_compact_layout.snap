@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/tab_context.rs
+assertion_line: 6495
 expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 ---
 "                                                                                "
@@ -30,5 +31,5 @@ expression: "render_sized(&view, SMALL.width, SMALL.height).backend()"
 "                                                                                "
 "                                                                                "
 "                                                                                "
-"                                                                       Queue 0  "
+"                                                                                "
 "                                                                                "

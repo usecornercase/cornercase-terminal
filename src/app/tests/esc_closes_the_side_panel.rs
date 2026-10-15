@@ -15,7 +15,6 @@ fn open(app: &mut App, side: Side) {
         Side::Changes => app.toggle_changes(),
         Side::Files => app.toggle_files(),
         Side::Todo => app.toggle_todo(),
-        Side::Queue => app.toggle_queue(),
     }
     assert!(app.panel_shown());
 }
@@ -26,7 +25,6 @@ fn focus_field(app: &mut App, side: Side) {
         Side::Changes => ui::changes::filter_button(area),
         Side::Files => ui::files::field(area),
         Side::Todo => ui::todo::rows(area, &app.todo_view(area)).button(),
-        Side::Queue => return,
     };
     click(app, field.as_position());
     assert!(typing(app));
@@ -53,7 +51,6 @@ fn only_the_next_esc_reaches_the_pane(app: &mut App, rx: &Receiver<AppEvent>) {
 #[case::changes(Side::Changes)]
 #[case::files(Side::Files)]
 #[case::todo(Side::Todo)]
-#[case::queue(Side::Queue)]
 fn closes_the_panel_without_reaching_the_pane(#[case] side: Side) {
     let (mut app, rx, _repo) = with_cat();
     open(&mut app, side);

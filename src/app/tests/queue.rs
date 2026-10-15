@@ -1,4 +1,5 @@
 use super::*;
+use crate::issues::browser::Tab as IssueTab;
 use crate::queue::form::When;
 use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
@@ -42,6 +43,27 @@ fn task(app: &App, at: i64, branch: Option<&str>) -> Task {
         },
         ..Task::default()
     }
+}
+
+fn queue_tab(app: &mut App) {
+    app.open_issues(AREA).expect("open issues");
+    let Some(Overlay::Issues(b)) = &mut app.overlay else { panic!("issues") };
+    b.tab_to(IssueTab::Queue);
+    app.sync_queued();
+}
+
+fn queue_row(i: u16) -> Position {
+    let list = ui::issues_list(ui::issues_area(AREA));
+    Position::new(list.x + 2, list.y + i)
+}
+
+fn press_button(app: &mut App, label: &str) {
+    app.sync_queued();
+    let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
+    let labels = b.labels(issues_dialog::room(AREA).buttons);
+    let i = labels.iter().position(|l| *l == label).unwrap_or_else(|| panic!("no {label} in {labels:?}"));
+    let button = ui::issue_buttons(ui::issues_area(AREA), &labels)[i];
+    click(app, button.as_position());
 }
 
 mod starts {
@@ -227,7 +249,6 @@ mod forms {
             assert!(form.worktree());
             app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
             assert!(app.overlay.is_none());
-            assert_eq!(app.side, Some(Side::Queue));
         }
         assert_eq!(app.queued.queue.pending(), Source::ALL.len());
         assert!(app.queued.queue.entries.iter().all(|entry| entry.task.submit));
@@ -237,18 +258,16 @@ mod forms {
     fn edits_and_cancels_a_pending_prompt_with_mouse_and_enter() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         let id = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("add");
-        app.toggle_queue();
-        let panel = app.layout(AREA).changes;
-        let row = ui::queue::rows(panel, &app.queue_view()).item(0);
-        click(&mut app, Position::new(row.x + 1, row.y + 1));
+        queue_tab(&mut app);
+        click(&mut app, queue_row(0));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
         form.prompt = todo::editor::Editor::new("fix logout instead");
         form.when = When::In.combo();
         form.amount = todo::editor::Editor::new("3");
         app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
         assert_eq!(app.queued.queue.entry(id).expect("edited").task.prompt, "fix logout instead");
-        let row = ui::queue::rows(panel, &app.queue_view()).item(0);
-        click(&mut app, Position::new(row.right() - 2, row.y + 1));
+        assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
+        press_button(&mut app, "remove");
         assert_eq!(app.queued.queue.entries, []);
     }
 }
@@ -464,15 +483,10 @@ mod panel {
     use crate::app::queue_panel::CLIENTS;
     use crate::queue::form::Control;
 
-    fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>, Rect) {
+    fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
         let (mut app, rx, repo, config, worktrees) = queued_app();
-        app.toggle_queue();
-        let panel = app.layout(AREA).changes;
-        (app, rx, vec![repo, config, worktrees], panel)
-    }
-
-    fn row(app: &App, panel: Rect, i: usize) -> Rect {
-        ui::queue::rows(panel, &app.queue_view()).item(i)
+        queue_tab(&mut app);
+        (app, rx, vec![repo, config, worktrees])
     }
 
     fn undo(app: &mut App) {
@@ -480,45 +494,75 @@ mod panel {
         click(app, button.as_position());
     }
 
+    fn ids(app: &App) -> Vec<u64> {
+        app.queued.queue.entries.iter().map(|entry| entry.id).collect()
+    }
+
     #[test]
     fn removing_an_entry_and_clearing_started_ones_can_be_undone() {
-        let (mut app, _rx, _dirs, panel) = opened();
+        let (mut app, _rx, _dirs) = opened();
         let pending = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("pending");
         let started = app.queued.queue.add(task(&app, time::now() + 7200, None)).expect("started");
         app.queued.queue.entry_mut(started).expect("entry").state =
             QueueState::Started { pane: 1, server: crate::control::server_token().into() };
         let before = app.queued.queue.entries.clone();
 
-        let first = row(&app, panel, 0);
-        click(&mut app, Position::new(first.right() - 2, first.y + 1));
-        assert_eq!(app.queued.queue.entries.iter().map(|e| e.id).collect::<Vec<_>>(), [started]);
+        press_button(&mut app, "remove");
+        assert_eq!(ids(&app), [started]);
         undo(&mut app);
         assert_eq!(app.queued.queue.entries, before);
 
-        let clear = ui::queue::clear(panel, &app.queue_view());
-        click(&mut app, clear.as_position());
-        assert_eq!(app.queued.queue.entries.iter().map(|e| e.id).collect::<Vec<_>>(), [pending]);
+        press_button(&mut app, "clear started");
+        assert_eq!(ids(&app), [pending]);
         undo(&mut app);
         assert_eq!(app.queued.queue.entries, before);
     }
 
     #[test]
     fn a_starting_entry_opens_no_form_and_cannot_be_removed() {
-        let (mut app, _rx, _dirs, panel) = opened();
+        let (mut app, _rx, _dirs) = opened();
         let id = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("add");
         app.queued.queue.entry_mut(id).expect("entry").state = QueueState::Starting;
         app.queued.running.insert(CLIENTS + 1, id);
-        let r = row(&app, panel, 0);
-        click(&mut app, Position::new(r.x + 1, r.y + 1));
-        assert!(app.overlay.is_none());
-        click(&mut app, Position::new(r.right() - 2, r.y + 1));
-        assert_eq!(app.queued.queue.entries.len(), 1);
+        click(&mut app, queue_row(0));
+        assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
+        let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
+        assert_eq!(b.labels(usize::MAX), ["new", "cancel"]);
         assert_eq!(app.outbox.notifications.len(), 0);
     }
 
     #[test]
+    fn a_new_entry_comes_back_to_the_queue_tab_and_escape_too() {
+        let (mut app, _rx, _dirs) = opened();
+        press_button(&mut app, "new");
+        assert!(matches!(app.overlay, Some(Overlay::Queue(_))));
+        app.queue_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), AREA);
+        assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
+        press_button(&mut app, "new");
+        let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
+        form.prompt = todo::editor::Editor::new("fix the login");
+        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        assert_eq!(app.queued.queue.entries.len(), 1);
+        let Some(Overlay::Issues(b)) = &app.overlay else { panic!("back in issues") };
+        assert_eq!((b.current(), b.queued.len()), (IssueTab::Queue, 1));
+    }
+
+    #[test]
+    fn a_started_entry_opens_its_pane() {
+        let (mut app, _rx, _dirs) = opened();
+        let pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
+        app.add_tab(0, 0, AREA).expect("a second tab");
+        let id = app.queued.queue.add(task(&app, time::now() + 3600, None)).expect("add");
+        app.queued.queue.entry_mut(id).expect("entry").state =
+            QueueState::Started { pane, server: crate::control::server_token().into() };
+        click(&mut app, queue_row(0));
+        assert!(app.overlay.is_none());
+        assert_eq!(app.term().map(|term| term.id), Some(pane));
+    }
+
+    #[test]
     fn shift_tab_goes_back_through_the_fields() {
-        let (mut app, _rx, _dirs, _panel) = opened();
+        let (mut app, _rx, _dirs) = opened();
         app.new_queue_form(None);
         let field = |app: &App| match &app.overlay {
             Some(Overlay::Queue(form)) => form.focus,
@@ -532,7 +576,7 @@ mod panel {
 
     #[test]
     fn a_click_in_a_scrolled_prompt_lands_on_the_line_it_shows() {
-        let (mut app, _rx, _dirs, _panel) = opened();
+        let (mut app, _rx, _dirs) = opened();
         app.new_queue_form(None);
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = todo::editor::Editor::new(&"word ".repeat(80));
@@ -546,7 +590,7 @@ mod panel {
 
     #[test]
     fn a_late_answer_for_a_form_that_is_gone_leaves_other_dialogs_and_says_why() {
-        let (mut app, _rx, _dirs, _panel) = opened();
+        let (mut app, _rx, _dirs) = opened();
         app.overlay = Some(Overlay::Usage);
         app.queue_form_done(Ok(7));
         assert!(matches!(app.overlay, Some(Overlay::Usage)));

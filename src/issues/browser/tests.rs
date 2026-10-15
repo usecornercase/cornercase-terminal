@@ -39,6 +39,7 @@ fn browser() -> Browser {
         place: None,
         filtering: None,
         members: HashMap::new(),
+        queued: Vec::new(),
     }
 }
 
@@ -116,7 +117,7 @@ mod tabs {
     use super::*;
 
     #[test]
-    fn are_all_seven_by_default() {
+    fn are_all_seven_and_the_queue_by_default() {
         assert_eq!(
             tabs(&[]),
             [
@@ -126,7 +127,8 @@ mod tabs {
                 Tab::One(Source::Shortcut),
                 Tab::One(Source::Linear),
                 Tab::One(Source::Jira),
-                Tab::One(Source::Plane)
+                Tab::One(Source::Plane),
+                Tab::Queue
             ]
         );
     }
@@ -134,7 +136,7 @@ mod tabs {
     #[test]
     fn follow_the_config_and_skip_unknown_names() {
         let names = ["linear", "nope", "GitHub", "linear"].map(String::from);
-        assert_eq!(tabs(&names), [Tab::One(Source::Linear), Tab::One(Source::Github)]);
+        assert_eq!(tabs(&names), [Tab::One(Source::Linear), Tab::One(Source::Github), Tab::Queue]);
     }
 
     #[test]
@@ -922,4 +924,69 @@ fn the_start_button_starts_the_selected_issue() {
     let mut b = with_lists();
     let pos = button(&b, "start");
     assert!(matches!(click(&mut b, pos), Action::Start(i, _, _) if i.key == "sc-2"));
+}
+
+mod queue_tab {
+    use super::*;
+    use crate::issues::browser::{Queued, Tab};
+    use crate::queue::State;
+
+    fn queued(id: u64, label: &str, state: State) -> Queued {
+        Queued { id, when: "2026-10-15 09:00".into(), label: label.into(), meta: "claude · shop".into(), state }
+    }
+
+    fn on_queue() -> Browser {
+        let mut b = browser();
+        b.tabs = tabs(&[]);
+        b.tab_to(Tab::Queue);
+        b.queued = vec![
+            queued(1, "Fix the login", State::Pending),
+            queued(2, "Update the docs", State::Started { pane: 7, server: "s".into() }),
+            queued(3, "Fix logout", State::Starting),
+        ];
+        b
+    }
+
+    #[test]
+    fn the_queue_is_the_last_tab_and_loads_nothing() {
+        let b = on_queue();
+        assert_eq!(b.tab_names().last(), Some(&"Queue"));
+        assert_eq!((b.needs_load(), b.toggles()), (Action::None, (Vec::new(), Vec::new())));
+    }
+
+    #[test]
+    fn the_buttons_follow_the_selected_entry() {
+        let mut b = on_queue();
+        assert_eq!(b.labels(ROOM.buttons), ["new", "start now", "remove", "clear started", "cancel"]);
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "remove", "clear started", "cancel"]);
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "clear started", "cancel"]);
+    }
+
+    #[test]
+    fn enter_and_a_click_open_the_entry_and_the_buttons_say_what_to_do() {
+        let mut b = on_queue();
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::QueueOpen(1));
+        assert_eq!(click(&mut b, IssuesHit::Item(1)), Action::QueueOpen(2));
+        for (label, action) in
+            [("remove", Action::QueueRemove(2)), ("new", Action::QueueNew), ("clear started", Action::QueueClear)]
+        {
+            let hit = button(&b, label);
+            assert_eq!(click(&mut b, hit), action);
+        }
+        press(&mut b, KeyCode::Up);
+        let hit = button(&b, "start now");
+        assert_eq!(click(&mut b, hit), Action::QueueRun(1));
+    }
+
+    #[test]
+    fn typing_filters_the_entries() {
+        let mut b = on_queue();
+        for c in "logout".chars() {
+            press(&mut b, KeyCode::Char(c));
+        }
+        assert_eq!(b.shown_queue().iter().map(|q| q.id).collect::<Vec<_>>(), [3]);
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::QueueOpen(3));
+    }
 }

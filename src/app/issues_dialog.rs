@@ -260,6 +260,7 @@ impl App {
             here,
             place: None,
             filtering: None,
+            queued: self.queued_rows(),
             members: self
                 .issues
                 .people_cache
@@ -314,6 +315,11 @@ impl App {
             }
             Action::Read(issue) => self.read_issue(issue),
             Action::Schedule(issue, agent, place) => self.schedule_issue(&issue, &agent, place),
+            Action::QueueNew => self.new_queue_form(None),
+            Action::QueueOpen(id) => self.open_queued(id, area),
+            Action::QueueRun(id) => self.run_queued_now(id),
+            Action::QueueRemove(id) => self.remove_queued(id),
+            Action::QueueClear => self.clear_queued(),
             Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, area),
             Action::LoadPeople(sources) => {
                 for source in sources {
@@ -572,12 +578,14 @@ impl App {
     }
 
     pub(super) fn issues_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
+        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let action = b.key(key, room(area));
         self.act(action, area)
     }
 
     pub(super) fn issues_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
+        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let room = room(area);
         let ui::Overlay::Issues(view) = view(b, room, time::now()) else { return Ok(()) };
@@ -673,7 +681,8 @@ fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
     let picker = browser.picker.as_ref();
     let choices = browser.choices();
     let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
-    let items = choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta }).collect();
+    let items =
+        choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta, colour: None }).collect();
     let body = ui::IssuesBody::List {
         filter: picker.map(|p| p.search.query().to_string()).unwrap_or_default(),
         items,
@@ -713,6 +722,7 @@ fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
             key: format!("{} {}", source.name(), source.people_fields()[*field]),
             title: browser.people.of(*source)[*field].describe(),
             meta: String::new(),
+            colour: None,
         })
         .collect();
     let body = ui::IssuesBody::List {
@@ -746,6 +756,7 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
             let hint = format!("enter starts it{more}");
             (ui::IssuesBody::Detail { lines, scroll }, note, hint)
         }
+        Screen::List if browser.current() == Tab::Queue => super::queue_panel::queue_tab(browser),
         Screen::List => match browser.token_form() {
             Some(source) => token_view(browser, source),
             None => list_view(browser, now),
@@ -867,7 +878,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
     };
     let account = match browser.current() {
         Tab::One(source) => browser.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
-        Tab::All => None,
+        Tab::All | Tab::Queue => None,
     };
     let action =
         selected.map(|i| format!("enter reads {} · start works on it {}", shown[i].key, browser.start_hint(shown[i])));
@@ -879,6 +890,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
             key: issue.key.clone(),
             title: issue.title.clone(),
             meta: issues::meta(issue, now),
+            colour: None,
         })
         .collect();
     let body = ui::IssuesBody::List {

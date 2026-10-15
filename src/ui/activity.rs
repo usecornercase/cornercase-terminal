@@ -20,7 +20,6 @@ pub(crate) enum Item {
     Changes,
     Files,
     Todo,
-    Queue,
     Update,
     Remote,
     Usage,
@@ -57,7 +56,6 @@ impl Item {
             Self::Changes => icons::NERD.changes,
             Self::Files => icons::NERD.files,
             Self::Todo => icons::NERD.todo,
-            Self::Queue => "󰥔",
             Self::Update => icons::UPDATE,
             Self::Remote => icons::REMOTE,
             Self::Usage => icons::USAGE,
@@ -72,7 +70,6 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().map_or_else(String::new, |b| b.label.clone()),
             Self::Files => files::LABEL.into(),
             Self::Todo => TODO_LABEL.into(),
-            Self::Queue => format!("Queue {}", view.queue_pending),
             Self::Update => view.update.clone().unwrap_or_default(),
             Self::Remote => remote_access::LABEL.into(),
             Self::Usage => USAGE_LABEL.into(),
@@ -87,7 +84,6 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().is_some_and(|b| b.open),
             Self::Files => view.files.is_some(),
             Self::Todo => view.todo.is_some(),
-            Self::Queue => view.queue.is_some(),
             Self::Remote => matches!(view.overlay, Some(Overlay::Remote(_))),
             Self::Usage => matches!(view.overlay, Some(Overlay::Usage(_))),
             Self::Settings => matches!(view.overlay, Some(Overlay::Settings(_))),
@@ -103,7 +99,6 @@ impl Item {
                 .as_ref()
                 .filter(|b| b.files > 0)
                 .map(|b| Span::styled(icons::count(b.files), Style::default().fg(Color::Cyan))),
-            Self::Queue => (view.queue_pending > 0).then(|| Span::styled(icons::count(view.queue_pending), muted)),
             Self::Todo => (view.todo_dot && view.todo_pending).then(|| Span::styled(icons::DOT, muted)),
             Self::Remote => {
                 view.remote.filter(|&on| on).map(|_| Span::styled(icons::DOT, Style::default().fg(Color::Green)))
@@ -132,13 +127,8 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         floor = y;
         placed.push((item, slot(y)));
     }
-    let top = [
-        (Item::Issues, shown.issues),
-        (Item::Changes, shown.changes),
-        (Item::Files, shown.files),
-        (Item::Todo, true),
-        (Item::Queue, true),
-    ];
+    let top =
+        [(Item::Issues, shown.issues), (Item::Changes, shown.changes), (Item::Files, shown.files), (Item::Todo, true)];
     let mut y = bar.y + 1;
     for (item, _) in top.into_iter().filter(|(_, on)| *on) {
         if y + PITCH > floor {

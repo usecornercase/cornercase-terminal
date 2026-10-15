@@ -5,15 +5,15 @@ description: Schedule issues and prompts for a clock time, a delay or the next p
 
 import Screen from '../../../../components/Screen.astro';
 
-Click **`Queue n`** below `Files` to open the queue in the right column. In a small terminal, open the menu with `≡`, then a project: **`Queue n`** sits at the right of **`Issues`** and opens the queue over the pane. The number counts pending entries. Changes, files, TODO and the queue share that column: opening one closes the others.
+The queue is the last tab of the [Issues](../issues-and-agents/) dialog: click **`Issues`** at the bottom of the sidebar, then **`Queue`**. It lists the scheduled agents of every project, each with its time, its name, and its state, agent and place. A failed entry is red, a missed one yellow and a started one green. Typing filters the list.
 
-<Screen name="queue" alt="The queue panel with pending, started, failed and missed agents, and buttons to start now, clear started and add a new entry" caption="See what is scheduled and what ran while you were away." />
+<Screen name="queue" alt="The Queue tab of the Issues dialog with pending, started, failed and missed agents, and the new, start now, remove, clear started and cancel buttons" caption="See what is scheduled and what ran while you were away." />
 
 ## Schedule an issue or a prompt
 
-In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. GitHub, GitLab, Shortcut, Linear, Jira and Plane issues use your configured [prompt template](../../reference/prompt/).
+In [Issues](../issues-and-agents/), click **`schedule`** beside **`start`**. Choose the agent and destination as usual, then enter the time. Once saved, the dialog comes back on the **`Queue`** tab with the new entry. GitHub, GitLab, Shortcut, Linear, Jira and Plane issues use your configured [prompt template](../../reference/prompt/).
 
-For a free prompt, click **`+ New`** in the queue and type the prompt. Then choose **When**, **Where**, the **Agent** and its **Mode**: each is a list that opens below it on a click, or with `Space`, `↑` or `↓` when it has the keys. Pick an option with a click or the arrows and `Enter`; typing filters a long list, such as the places. In a repository root, **Open in** chooses a **new tab** or a **new worktree**, and a new worktree asks for its branch beside it. A workspace always gets a new tab. An issue already supplies its usual branch name.
+For a free prompt, click **`new`** on the **`Queue`** tab and type the prompt. Then choose **When**, **Where**, the **Agent** and its **Mode**: each is a list that opens below it on a click, or with `Space`, `↑` or `↓` when it has the keys. Pick an option with a click or the arrows and `Enter`; typing filters a long list, such as the places. In a repository root, **Open in** chooses a **new tab** or a **new worktree**, and a new worktree asks for its branch beside it. A workspace always gets a new tab. An issue already supplies its usual branch name.
 
 <Screen name="queue-form" alt="The schedule form with the prompt, When set to in 2 hours, Where, Open in a new worktree with its branch, Agent and Mode" caption="Choose a kind of time first, then its values." />
 
@@ -43,9 +43,9 @@ The server starts every due entry, with no concurrency limit. Entries at the sam
 
 The server must be running, with its session opened at least once after a restart. Closing the UI leaves scheduled work running. The queue does not wake a sleeping machine or start a stopped server.
 
-An entry more than ten minutes late becomes **`missed`** and waits for you. Waking or restarting within ten minutes still starts it. Missed and failed entries have **`start now`**; pending entries do too. Click a pending, missed or failed row to edit and reschedule it, or its **`×`** to remove it; the notice that follows has **`undo`** for six seconds. An entry shows `starting` while its worktree or agent is being prepared; it cannot be cancelled or edited then.
+An entry more than ten minutes late becomes **`missed`** and waits for you. Waking or restarting within ten minutes still starts it. Select an entry to act on it: **`start now`** starts a pending, missed or failed one at once, and **`remove`** removes it; the notice that follows has **`undo`** for six seconds. Click a pending, missed or failed row, or press `Enter` on it, to edit and reschedule it. An entry shows `starting` while its worktree or agent is being prepared; it cannot be cancelled or edited then.
 
-Started entries stay until **`clear started`** or **`×`** removes them, both undoable from their notice. Click one to jump to its pane while it is still open in that server. After a restart, its historical pane link is unavailable; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
+Started entries stay until **`clear started`** or **`remove`** removes them, both undoable from their notice. Click one to close the dialog and jump to its pane while it is still open in that server. After a restart, its historical pane link is unavailable; it cannot point to a different pane with the same id. Removing a started entry does not stop its agent.
 
 The agent command, mode, prompt and destination are captured when scheduled. Editing the prompt or time keeps that agent and mode, even if their settings changed or a custom agent was removed; choosing another agent or mode captures its current command. A closed project or workspace, a workspace that cannot be uniquely identified after restart, or a missing executable fails with a reason. If the server stops partway through starting, the entry asks you to check its workspace before retrying.
 

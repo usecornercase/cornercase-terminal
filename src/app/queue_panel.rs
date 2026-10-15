@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
+use ratatui::style::Color;
 use serde_json::Value;
 
 use super::App;
-use super::layout::Side;
+use super::overlay::Overlay;
 use super::toast::{Toast, Undo};
 use crate::agents::launch;
 use crate::control;
 use crate::host::notify::Notification;
+use crate::issues::browser::{Browser, Queued};
 use crate::project::Hierarchy;
 use crate::queue::{self, Queue, State, Task};
 use crate::ui;
@@ -20,12 +21,12 @@ pub(super) const CLIENTS: u64 = 1 << 63;
 #[derive(Default)]
 pub(super) struct QueueRuntime {
     pub(super) queue: Queue,
-    pub(super) scroll: usize,
     pub(super) running: HashMap<u64, u64>,
     pub(super) next_client: u64,
     pub(super) zone: String,
     pub(super) area: Option<Rect>,
     pub(super) path: Option<std::path::PathBuf>,
+    pub(super) back: Option<Box<Browser>>,
 }
 
 #[derive(Debug)]
@@ -50,11 +51,6 @@ impl App {
 
     pub(crate) fn set_queue_zone(&mut self, zone: String) {
         self.queued.zone = zone;
-    }
-
-    pub(super) fn toggle_queue(&mut self) {
-        self.nav = None;
-        self.show_side((self.side != Some(Side::Queue)).then_some(Side::Queue));
     }
 
     pub(super) fn drive_queue(&mut self, clock: i64, now: Instant) {
@@ -127,10 +123,9 @@ impl App {
         }
     }
 
-    pub(super) fn queue_view(&self) -> ui::queue::View {
+    pub(super) fn queued_rows(&self) -> Vec<Queued> {
         let zone = if self.queued.zone.is_empty() { "UTC" } else { &self.queued.zone };
-        let entries = self
-            .queued
+        self.queued
             .queue
             .entries
             .iter()
@@ -148,60 +143,108 @@ impl App {
                     State::Failed { reason } => format!("failed · {reason}"),
                     State::Missed => "missed".into(),
                 };
-                ui::queue::Row {
+                let place = &entry.task.place;
+                let project = self.projects.iter().find(|project| project.path == place.project).map_or_else(
+                    || crate::text::folder_name(&place.project, self.home.as_deref()),
+                    |project| self.project_label(project),
+                );
+                let place = match (&place.branch, &place.workspace_name, &place.workspace) {
+                    (Some(branch), ..) => format!("{project} › {branch}"),
+                    (None, Some(name), _) => format!("{project} › {name}"),
+                    (None, None, Some(path)) if *path != place.project => {
+                        format!("{project} › {}", crate::text::folder_name(path, self.home.as_deref()))
+                    }
+                    _ => project,
+                };
+                Queued {
                     id: entry.id,
                     when: queue::clock::display(entry.task.at, zone),
                     label: entry.task.label.clone(),
-                    meta: format!(
-                        "{} · {}",
-                        entry.task.agent,
-                        if entry.task.place.branch.is_some() { "worktree" } else { "tab" }
-                    ),
-                    status,
+                    meta: format!("{status} · {} · {place}", entry.task.agent),
                     state: entry.state.clone(),
                 }
             })
-            .collect();
-        ui::queue::View { entries, scroll: self.queued.scroll, pending: self.queued.queue.pending() }
+            .collect()
     }
 
-    pub(super) fn queue_mouse(&mut self, event: MouseEvent, pos: Position, panel: Rect, area: Rect) {
-        let view = self.queue_view();
-        let rows = ui::queue::rows(panel, &view);
-        if let Some(delta) = super::input::wheel(event.kind) {
-            self.queued.scroll = rows.scrolled(delta);
-            return;
-        }
-        if event.kind != MouseEventKind::Down(MouseButton::Left) {
-            return;
-        }
-        match ui::queue::hit(panel, &view, pos) {
-            Some(ui::queue::Hit::Close) => self.close_panel(),
-            Some(ui::queue::Hit::New) => self.new_queue_form(None),
-            Some(ui::queue::Hit::Clear) => {
-                let cleared = self.queued.queue.clear_started();
-                self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
+    pub(super) fn sync_queued(&mut self) {
+        if matches!(self.overlay, Some(Overlay::Issues(_))) {
+            let rows = self.queued_rows();
+            if let Some(Overlay::Issues(browser)) = &mut self.overlay {
+                browser.queued = rows;
             }
-            Some(ui::queue::Hit::Remove(id)) => {
-                if self.queued.running.values().any(|running| *running == id) {
-                    self.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
-                } else if let Ok(entry) = self.queued.queue.remove(id) {
-                    self.queue_removed(format!("removed queue entry {id}"), vec![entry]);
-                }
-            }
-            Some(ui::queue::Hit::Run(id)) => {
-                if let Err(reason) = self.run_queued(id, Instant::now()) {
-                    self.fail_queued(id, &reason);
-                }
-            }
-            Some(ui::queue::Hit::Entry(id)) => match self.queued.queue.entry(id).map(|entry| &entry.state) {
-                Some(State::Started { pane, server }) if server == control::server_token() => {
-                    self.focus_queued(*pane, area);
-                }
-                Some(State::Started { .. } | State::Starting) | None => {}
-                Some(_) => self.new_queue_form(Some(id)),
-            },
-            None => {}
         }
     }
+
+    pub(super) fn open_queued(&mut self, id: u64, area: Rect) {
+        match self.queued.queue.entry(id).map(|entry| &entry.state) {
+            Some(State::Started { pane, server }) if server == control::server_token() => {
+                let pane = *pane;
+                self.overlay = None;
+                self.focus_queued(pane, area);
+            }
+            Some(State::Started { .. } | State::Starting) | None => {}
+            Some(_) => self.new_queue_form(Some(id)),
+        }
+    }
+
+    pub(super) fn run_queued_now(&mut self, id: u64) {
+        if let Err(reason) = self.run_queued(id, Instant::now()) {
+            self.fail_queued(id, &reason);
+        }
+        self.sync_queued();
+    }
+
+    pub(super) fn remove_queued(&mut self, id: u64) {
+        if self.queued.running.values().any(|running| *running == id) {
+            self.toast = Some(Toast::new("this entry is already starting", ui::ToastIcon::Bug));
+        } else if let Ok(entry) = self.queued.queue.remove(id) {
+            self.queue_removed(format!("removed queue entry {id}"), vec![entry]);
+        }
+        self.sync_queued();
+    }
+
+    pub(super) fn clear_queued(&mut self) {
+        let cleared = self.queued.queue.clear_started();
+        self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
+        self.sync_queued();
+    }
+}
+
+pub(super) fn queue_tab(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
+    let shown = browser.shown_queue();
+    let selected = shown.len().checked_sub(1).map(|last| browser.search.selected().min(last));
+    let items = shown
+        .iter()
+        .map(|queued| ui::IssueRow {
+            key: queued.when.clone(),
+            title: queued.label.clone(),
+            meta: queued.meta.clone(),
+            colour: match queued.state {
+                State::Failed { .. } => Some(Color::Red),
+                State::Missed => Some(Color::Yellow),
+                State::Started { .. } => Some(Color::Green),
+                State::Pending | State::Starting => None,
+            },
+        })
+        .collect();
+    let empty = if browser.queued.is_empty() {
+        "nothing queued: new schedules a prompt, and schedule on an issue queues it"
+    } else {
+        "nothing matches"
+    };
+    let hint = match selected.map(|i| &shown[i].state) {
+        Some(State::Started { .. }) => "enter opens its pane · every project's scheduled agents",
+        Some(State::Starting) => "starting… · every project's scheduled agents",
+        Some(_) => "enter edits it · start now runs it at once",
+        None => "every project's scheduled agents",
+    };
+    let body = ui::IssuesBody::List {
+        filter: browser.search.query().to_string(),
+        items,
+        selected,
+        scroll: browser.search.scroll(),
+        empty: empty.into(),
+    };
+    (body, None, hint.into())
 }

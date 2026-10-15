@@ -1,44 +1,46 @@
 use super::*;
 use crate::list::Combo;
+use crate::queue::Place;
 use crate::queue::form::{Choice, Control, Form, When};
-use crate::queue::{Place, State};
 use crate::todo::editor::Editor;
 
-fn queued_view() -> View<'static> {
-    let mut view = view(&["shop"]);
-    view.has_project = true;
-    view.queue_pending = 1;
-    let entries = [
-        (State::Pending, "pending", "#482 Fix the login form"),
-        (State::Started { pane: 7, server: "test".into() }, "started · pane 7", "Update the docs"),
-        (State::Failed { reason: "codex is not installed".into() }, "failed · codex is not installed", "Fix logout"),
-        (State::Missed, "missed", "Review the tests"),
-    ]
-    .into_iter()
-    .enumerate()
-    .map(|(i, (state, status, label))| crate::ui::queue::Row {
-        id: i as u64 + 1,
-        when: "2026-10-14 14:30".into(),
-        label: label.into(),
-        meta: "claude · worktree".into(),
-        status: status.into(),
-        state,
-    })
-    .collect();
-    view.queue = Some(crate::ui::queue::View { entries, scroll: 0, pending: 1 });
-    view
+fn queue_tab() -> View<'static> {
+    let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
+        key: when.into(),
+        title: label.into(),
+        meta: meta.into(),
+        colour,
+    };
+    let items = vec![
+        row("2026-10-14 14:30", "#482 Fix the login form", "pending · claude · shop › issue-482", None),
+        row("2026-10-14 15:00", "Update the docs", "started · pane 7 · codex · shop", Some(Color::Green)),
+        row("2026-10-14 16:00", "Fix logout", "failed · codex is not installed · codex · shop", Some(Color::Red)),
+        row("2026-10-14 17:00", "Review the tests", "missed · claude · api", Some(Color::Yellow)),
+    ];
+    let issues = Issues {
+        title: "Issues · shop".into(),
+        tabs: vec!["All", "GitHub", "Queue"],
+        tab: 2,
+        toggles: Vec::new(),
+        on: Vec::new(),
+        body: IssuesBody::List { filter: String::new(), items, selected: Some(0), scroll: 0, empty: String::new() },
+        note: None,
+        hint: "enter edits it · start now runs it at once".into(),
+        buttons: vec!["new", "start now", "remove", "clear started", "cancel"],
+    };
+    View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) }
 }
 
 #[test]
-fn renders_pending_started_failed_and_missed_in_wide_mode() {
-    let view = queued_view();
-    insta::assert_snapshot!(render_sized(&view, 140, 28).backend());
-}
-
-#[test]
-fn renders_pending_started_failed_and_missed_in_compact_mode() {
-    let view = queued_view();
-    insta::assert_snapshot!(render_sized(&view, 70, 28).backend());
+fn the_queue_tab_lists_every_entry_with_its_state_in_colour() {
+    let t = render_sized(&queue_tab(), 120, 24);
+    insta::assert_snapshot!(t.backend());
+    let lines = lines(&t);
+    let failed = lines.iter().position(|l| l.contains("Fix logout")).expect("the failed row");
+    let x = lines[failed].find("failed").expect("its state");
+    let x = u16::try_from(lines[failed][..x].chars().count()).expect("column");
+    let y = u16::try_from(failed).expect("row");
+    assert_eq!(t.backend().buffer()[(x, y)].fg, Color::Red);
 }
 
 fn form(prompt: &str, note: Option<&str>) -> Form {
@@ -63,7 +65,7 @@ fn lines(t: &Terminal<TestBackend>) -> Vec<String> {
 }
 
 fn shown(form: Form, width: u16, height: u16) -> Terminal<TestBackend> {
-    let mut view = queued_view();
+    let mut view = view(&["shop"]);
     view.overlay = Some(Overlay::Queue(Box::new(form)));
     render_sized(&view, width, height)
 }
@@ -121,62 +123,6 @@ fn a_tiny_form_keeps_its_rows_inside_its_border() {
 fn a_prompt_with_line_breaks_stays_on_its_rows() {
     let lines = lines(&shown(form("first line\nsecond line", None), 100, 24));
     assert!(lines.iter().any(|l| l.contains("first line↵second line")), "{lines:#?}");
-}
-
-#[test]
-fn a_hovered_entry_keeps_its_grey_text_readable() {
-    let mut view = queued_view();
-    let panel = full_layout(Rect::new(0, 0, 140, 28), Widths::default(), true, view.sidebar, false, false).changes;
-    let row = crate::ui::queue::rows(panel, view.queue.as_ref().expect("queue")).item(0);
-    view.hover = Some(Position::new(row.x + 3, row.y + 2));
-    let t = render_sized(&view, 140, 28);
-    let cell = &t.backend().buffer()[(row.x + 1, row.y)];
-    assert_eq!((cell.bg, cell.fg), (DARK_HOVER, view.muted));
-}
-
-#[test]
-fn the_queue_button_lines_up_with_files_and_is_as_wide_as_its_label() {
-    let mut view = view(&["shop"]);
-    view.has_project = true;
-    view.queue_pending = 3;
-    let areas = layout(AREA, Widths::default());
-    let button = queue_button(&areas, 3);
-    assert_eq!((button.x, button.width), (areas.files_button.x, 9));
-    assert_eq!(row_text(&render(&view), button), " Queue 3 ");
-}
-
-#[test]
-fn compact_mode_shows_the_queue_beside_issues_and_leaves_the_bar_alone() {
-    let mut view = view(&["shop"]);
-    (view.has_project, view.issues, view.queue_pending, view.nav) = (true, true, 2, Some(Nav::Workspaces));
-    let area = Rect::new(0, 0, 46, 24);
-    let areas = layout(area, Widths::default()).shown(view.nav);
-    let t = render_sized(&view, 46, 24);
-    let middle = |r: Rect| row_text(&t, Rect { y: r.y + 1, height: 1, ..r });
-    let button = queue_button(&areas, 2);
-    assert_eq!(middle(button), " Queue 2 ");
-    assert!(middle(Rect { width: button.x - areas.issues.x, ..areas.issues }).contains("Issues"));
-    assert!(!middle(areas.bar).contains('Q'));
-}
-
-#[test]
-fn the_pending_count_stays_visible_with_no_project_open() {
-    let mut view = view(&[]);
-    view.queue_pending = 2;
-    let areas = layout(AREA, Widths::default());
-    assert!(row_text(&render(&view), areas.queue_button).contains("Queue 2"));
-}
-
-#[test]
-fn the_panel_buttons_light_up_under_the_pointer() {
-    let mut view = queued_view();
-    let panel = full_layout(Rect::new(0, 0, 140, 28), Widths::default(), true, view.sidebar, false, false).changes;
-    let rows = crate::ui::queue::rows(panel, view.queue.as_ref().expect("queue"));
-    let (add, first) = (rows.button(), rows.item(0));
-    for pos in [Position::new(add.x + 2, add.y), Position::new(first.right() - 6, first.y + 3)] {
-        view.hover = Some(pos);
-        assert_eq!(render_sized(&view, 140, 28).backend().buffer()[(pos.x, pos.y)].bg, Color::Cyan, "{pos:?}");
-    }
 }
 
 #[test]

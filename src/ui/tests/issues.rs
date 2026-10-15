@@ -5,7 +5,7 @@ const TABS: [&str; 4] = ["All", "GitHub", "Shortcut", "Linear"];
 const TOGGLES: [&str; 2] = ["closed", "mine"];
 
 fn row(key: &str, title: &str, meta: &str) -> IssueRow {
-    IssueRow { key: key.into(), title: title.into(), meta: meta.into() }
+    IssueRow { key: key.into(), title: title.into(), meta: meta.into(), colour: None }
 }
 
 fn issues(body: IssuesBody) -> Issues {
