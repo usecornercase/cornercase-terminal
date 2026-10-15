@@ -45,6 +45,7 @@ impl Settings {
         }
         let (value, note) = match &messenger.chat {
             Some(chat) => (chat.clone(), "agents message it while you are away · enter pairs another"),
+            None if via.pairs_by_owner() => ("not paired".into(), "enter shows a link to add the app to your account"),
             None => ("not paired".into(), "enter shows a code to scan with your phone"),
         };
         ("phone".into(), value, note.into(), false)

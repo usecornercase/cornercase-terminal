@@ -185,6 +185,15 @@ mod messengers {
         assert!(!alone);
     }
 
+    #[rstest::rstest]
+    #[case::telegram(Via::Telegram, "enter shows a code to scan with your phone")]
+    #[case::discord(Via::Discord, "enter shows a link to add the app to your account")]
+    fn an_unpaired_phone_row_says_how_that_platform_pairs(#[case] via: Via, #[case] note: &str) {
+        let s = with_bot(via, None);
+
+        assert_eq!(s.row_text(&Row::Chat(via)).note, note);
+    }
+
     #[test]
     fn a_pasted_bot_token_is_hidden_and_checked() {
         let mut s = settings();
