@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.105
+
+- **Collapse a workspace.** Click `▾` beside a workspace in the workspaces list to hide its tabs, and `▸` to show them again. Shells and agents keep running; clicking the rest of the row opens the workspace and expands it. Folds are saved with your session and shared with the tree.
+- A collapsed workspace shows one icon for its agents, the most urgent first: orange `!`, red `!`, `●`, `✓`, `◐` (or the spinner) and `○`. In the tree, a collapsed workspace now shows working and idle agents too.
+
 ## 0.12.104
 
 - Click a workspace's pull request number (`#485✗`) to see its pull request and checks, the same dialog as **pull request #485** in its menu. It works in the lists, the tree and the compact menu, and the number is underlined under the pointer.
