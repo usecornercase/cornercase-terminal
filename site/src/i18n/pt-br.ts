@@ -154,8 +154,9 @@ export const page: Page = {
           ['Flows, uma equipe por tarefa', 'Um agente programa, outros revisam e testam, e um orquestrador os dirige, a partir de um modelo. O painel Flow mostra o trabalho andando.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
-          ['No Telegram', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
+          ['No Telegram ou Discord', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
           ['Worktrees, organizados', 'Cada frente de trabalho ganha seu próprio branch e pasta. Os criados em outro lugar aparecem também.'],
+          ['Agentes agendados', 'Agende uma issue ou um prompt para depois, ou para a próxima renovação do limite do plano.'],
         ],
       },
       {

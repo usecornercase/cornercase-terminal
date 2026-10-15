@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
-use crate::messenger::Markup;
+use crate::messenger::{Markup, markup};
 
 pub(crate) const LIMIT: usize = 4000;
 pub(crate) const MAX: usize = 4096;
@@ -86,34 +86,11 @@ pub(crate) fn fits(header: &str, part: &str) -> bool {
 }
 
 pub(crate) fn tail(text: &str, limit: usize) -> String {
-    let mut kept: Vec<&str> = Vec::new();
-    let mut used = 0;
-    for line in text.lines().rev() {
-        let size = length(line) + 1;
-        if used + size > limit {
-            break;
-        }
-        used += size;
-        kept.push(line);
-    }
-    kept.reverse();
-    kept.join("\n")
+    markup::tail(text, limit, length)
 }
 
 pub(crate) fn lines(lines: &[String]) -> Vec<String> {
-    let mut messages: Vec<(String, usize)> = Vec::new();
-    for line in lines {
-        let size = length(&plain(line));
-        match messages.last_mut() {
-            Some((message, used)) if *used + 1 + size <= LIMIT => {
-                message.push('\n');
-                message.push_str(line);
-                *used += 1 + size;
-            }
-            _ => messages.push((line.clone(), size)),
-        }
-    }
-    messages.into_iter().map(|(message, _)| message).collect()
+    markup::pack(lines, LIMIT, |line| length(&plain(line)))
 }
 
 pub(crate) fn markdown(source: &str) -> Vec<String> {

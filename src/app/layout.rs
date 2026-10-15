@@ -88,6 +88,7 @@ impl App {
     }
 
     pub(super) fn follow(&mut self, area: Rect) {
+        self.queued.area = Some(area);
         let areas = self.layout(area);
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;

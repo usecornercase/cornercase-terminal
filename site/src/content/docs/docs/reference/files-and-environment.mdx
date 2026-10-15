@@ -12,13 +12,15 @@ import { Aside } from '@astrojs/starlight/components';
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place. | `~/.local/bin/` with the install script; Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
-| `secrets.json` | GitLab, Shortcut, Linear, Jira and Plane tokens and the [Telegram](../../guides/telegram/) bot's token, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
+| `secrets.json` | GitLab, Shortcut, Linear, Jira and Plane tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `telegram.json` | The [Telegram](../../guides/telegram/) bot's name and the chat paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
+| `discord.json` | The [Discord](../../guides/discord/) bot's name and the direct message paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
 | `session.json` | The [saved session](../../guides/sessions/#what-is-saved): groups, projects, workspaces, tabs, splits, widths, the changes panel. | `~/.local/state/cornercase/` |
 | `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `stats.json` | Local counts of agent work, hourly buckets for 26 weeks and a day, and lifetime totals per agent. Compact versioned JSON, readable only by its owner (`0600`). | Next to `session.json` |
+| `queue.json` | The [agent queue](../../guides/queue/), including its history and persistent ids. | Next to `session.json` |
 | `todos.json` | Your [TODO list](../../guides/todo/). | Next to `session.json` |
 | `server.log` | What the server did, one line per event: windows attaching, commands run and their answers, tabs opened and closed, agents starting and changing status, background jobs and how long they took, errors and the bugs it hit. Never what you type, paste or see in a pane, nor tokens. Readable only by you (mode `0600`). `cornercase logs` prints it; see [Troubleshooting](../../help/troubleshooting/#the-server-log). | Next to `session.json` |
 | `server.log.1` | The previous log: past 8 MiB, `server.log` is moved here and starts over, so the two never take more than 16 MiB. | Next to `session.json` |
@@ -27,7 +29,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 Stats contains only numbers and counting times: no prompts, replies, models, projects, paths or conversation ids. It is saved at most once a minute while changed, and flushed on shutdown and before a restart. Deleting `stats.json` with the server stopped starts counting again; a running server keeps its copy in memory.
 
-The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json`, `todos.json`, `stats.json` and `server.log` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
+The folders follow the XDG base directory variables: `config.json` goes in `$XDG_CONFIG_HOME/cornercase/` when it is set, and `session.json`, `issues.json`, `todos.json`, `queue.json`, `stats.json` and `server.log` in `$XDG_STATE_HOME/cornercase/`. When `$XDG_RUNTIME_DIR` isn't set, the socket goes in a `cornercase-<your user id>` folder in the system's temporary directory (`$TMPDIR`, usually `/tmp`).
 
 ### With `CORNERCASE_SOCKET`
 
@@ -40,8 +42,10 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Your flows | `/tmp/cc-demo/flows/` |
 | Paired browsers | `/tmp/cc-demo/browsers.json` |
 | Telegram bot and chat | `/tmp/cc-demo/telegram.json` |
+| Discord bot and chat | `/tmp/cc-demo/discord.json` |
 | Session | `/tmp/cc-demo/server.json` |
 | Issue cache | `/tmp/cc-demo/issues.json` |
+| Agent queue | `/tmp/cc-demo/server.queue.json` |
 | TODO list | `/tmp/cc-demo/todos.json` |
 | Agent stats | `/tmp/cc-demo/stats.json` |
 

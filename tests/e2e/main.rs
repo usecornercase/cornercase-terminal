@@ -29,6 +29,7 @@ mod commands;
 mod input;
 mod panels;
 mod panes;
+mod queue;
 mod remote;
 mod server;
 mod sidebar;

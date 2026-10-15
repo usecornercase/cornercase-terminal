@@ -73,7 +73,7 @@ const ROOT: KeysItem[] = [
   run('t', 'todo', { kind: 'todo' }),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
-  run('o', 'away on Telegram', { kind: 'away' }),
+  run('o', 'away on chat apps', { kind: 'away' }),
   run('q', 'quit', { kind: 'quit' }),
 ];
 

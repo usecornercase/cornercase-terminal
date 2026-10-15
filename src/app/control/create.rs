@@ -130,11 +130,17 @@ impl App {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
-        let kind = self.agent_kind(caller, start.agent)?;
+        let queued = self.queued_spec(client);
+        let kind =
+            if queued.is_some() { start.agent.unwrap_or_default() } else { self.agent_kind(caller, start.agent)? };
         let prompt = start.prompt.filter(|p| !p.trim().is_empty());
-        let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
-        let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
-        let spec = launch::Spec { command, prompt, submit: true, trusted: false };
+        let spec = if let Some(spec) = queued {
+            spec
+        } else {
+            let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
+            let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
+            launch::Spec { command, prompt, submit: true, trusted: false }
+        };
         let name = name_of(start.name);
         let (p, w) = if let Some(id) = start.workspace {
             self.usable_workspace(id)?
@@ -149,6 +155,19 @@ impl App {
                 return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
             };
             found
+        } else if let Some(project) = start.project {
+            let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
+            let w = self.projects[p]
+                .workspaces
+                .iter()
+                .position(|workspace| workspace.open() && workspace.path == self.projects[p].path)
+                .unwrap_or_else(|| {
+                    let id = self.take_id();
+                    let path = self.projects[p].path.clone();
+                    self.projects[p].workspaces.push(crate::project::Workspace::new(id, path, None, false));
+                    self.projects[p].workspaces.len() - 1
+                });
+            (p, w)
         } else {
             self.here_workspace(caller)?
         };
@@ -162,7 +181,7 @@ impl App {
         Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(wait), timeout))
     }
 
-    fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
+    pub(in crate::app) fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
         let kinds = agents::kinds(&self.config);
         if let Some(agent) = agent {
             return if kinds.contains(&agent) {
@@ -259,6 +278,10 @@ impl App {
         let Some((spec, _)) = launch else { return Ok(false) };
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
+        launch.trust = pending
+            .client
+            .is_some_and(|client| self.queued.running.contains_key(&client))
+            .then_some(launch::Trust::Accepted);
         self.agents.launches.push(launch);
         pending.stage = Stage::launch(then.wait);
         Ok(true)

@@ -19,6 +19,7 @@ use crate::{log, server, update::restart};
 mod args;
 mod flow;
 mod help;
+mod queue;
 mod read;
 mod status;
 mod update;
@@ -144,6 +145,7 @@ fn run_control(command: Control) -> Result<bool> {
             say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
         }
         Control::Start(start) => run_start(start),
+        Control::Queue(queue) => queue::run(queue.action),
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
             let Target { pane, tab } = send.target;
@@ -195,19 +197,30 @@ fn run_control(command: Control) -> Result<bool> {
         }
         Control::Away(away) => {
             let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
-            let on = value.get("away").and_then(Value::as_bool) == Some(true);
-            let line = if on {
-                "away: agents message you on Telegram until you type in a window\n"
-            } else {
-                "back: agents no longer message you on Telegram\n"
-            };
-            print_out(line)
+            print_out(&away_line(&value))
         }
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
         Control::Flow(flow) => flow::run(flow.action),
     }?;
     Ok(true)
+}
+
+fn away_line(value: &Value) -> String {
+    let on = value.get("away").and_then(Value::as_bool) == Some(true);
+    let platforms: Option<Vec<&str>> =
+        value.get("platforms").and_then(Value::as_array).map(|list| list.iter().filter_map(Value::as_str).collect());
+    let names = match platforms {
+        None => "Telegram".to_string(),
+        Some(list) if list.is_empty() && !on => return "back: nothing was away\n".into(),
+        Some(list) if list.is_empty() => "Telegram or Discord".to_string(),
+        Some(list) => list.join(" and "),
+    };
+    if on {
+        format!("away: agents message you on {names} until you turn it off\n")
+    } else {
+        format!("back: agents no longer message you on {names}\n")
+    }
 }
 
 fn follow_events(args: EventsArgs) -> Result<()> {

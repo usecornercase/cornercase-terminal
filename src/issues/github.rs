@@ -108,6 +108,11 @@ pub(crate) fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
     Ok(people)
 }
 
+pub(crate) fn find(gh: &Path, dir: &Path, key: &str) -> Result<Issue> {
+    let raw: RawIssue = run(gh, dir, &["issue", "view", key, "--json", LIST_FIELDS])?;
+    Ok(raw.into())
+}
+
 pub(crate) fn view(gh: &Path, dir: &Path, number: u64) -> Result<Detail> {
     let number = number.to_string();
     let raw: RawView = run(gh, dir, &["issue", "view", &number, "--json", VIEW_FIELDS])?;

@@ -105,20 +105,20 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 
 ### Remote
 
-Using cornercase away from the computer: in your phone's browser, or through Telegram. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with both, and shows a green `●` while a browser is attached or you are away on Telegram.
+Using cornercase away from the computer: in your phone's browser, or through Telegram or Discord. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with each, and shows a green `●` while a browser is attached or you are away on a chat app.
 
 <Screen
   name="settings-remote"
-  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token"
-  crop={[2, 4, 106, 9]}
+  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token; under Discord, the bot not set, with a note to make an app in the Discord Developer Portal"
+  crop={[2, 4, 106, 11]}
 />
 
 | Row | What it sets |
 | --- | --- |
 | **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **Remote › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
-| **bot** | The [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. The note says whether cornercase reaches it. `Backspace` removes it. |
-| **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone; `Backspace` forgets the chat. |
+| **bot** | Under **Telegram**, the [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. Under **Discord**, the [Discord](../../guides/discord/) app's bot token, from the Developer Portal. The note says whether cornercase reaches it. `Backspace` removes it. |
+| **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone (for Discord, the link that adds the app to your account); `Backspace` forgets the chat. |
 
 ### Keys in the settings modal
 
@@ -128,7 +128,7 @@ Using cornercase away from the computer: in your phone's browser, or through Tel
 | `↑` `↓` | Select a row. The mouse wheel does the same. |
 | `Tab`, `→` / `Shift+Tab`, `←` | Next / previous tab. |
 | `Shift+↑` `Shift+↓` | Move the selected source up or down. |
-| `Delete`, `Backspace` | Remove the selected saved token or Telegram bot, or forget the paired phone. |
+| `Delete`, `Backspace` | Remove the selected saved token or chat bot, or forget the paired phone. |
 | `Esc` | Close the modal, or leave a list or a text field. |
 
 In a list, type to filter it and press `Enter` to pick. In a text field, `Enter` saves and `Esc` cancels.

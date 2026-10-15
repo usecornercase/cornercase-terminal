@@ -1,8 +1,10 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::discord;
 use crate::persist;
 use crate::telegram;
 
@@ -24,62 +26,93 @@ pub(crate) const MARKS: &str = "│┃|❯›>▶●○◯";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Via {
     Telegram,
+    Discord,
 }
 
 impl Via {
-    pub(crate) const ALL: [Self; 1] = [Self::Telegram];
+    pub(crate) const ALL: [Self; 2] = [Self::Telegram, Self::Discord];
 
     pub(crate) fn index(self) -> usize {
         match self {
             Self::Telegram => 0,
+            Self::Discord => 1,
         }
     }
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Telegram => "Telegram",
+            Self::Discord => "Discord",
         }
     }
 
     pub(crate) fn target(self) -> &'static str {
         match self {
             Self::Telegram => "telegram",
+            Self::Discord => "discord",
         }
     }
 
     pub(crate) fn checked(self) -> &'static str {
         match self {
             Self::Telegram => "telegram bot checked",
+            Self::Discord => "discord bot checked",
+        }
+    }
+
+    pub(crate) fn advised(self) -> &'static str {
+        match self {
+            Self::Telegram => "telegram app read",
+            Self::Discord => "discord app read",
+        }
+    }
+
+    pub(crate) fn pairing(self) -> &'static str {
+        match self {
+            Self::Telegram => "telegram pairing",
+            Self::Discord => "discord pairing",
+        }
+    }
+
+    pub(crate) fn token_field(self) -> &'static str {
+        match self {
+            Self::Telegram => "Telegram bot token, from @BotFather",
+            Self::Discord => "Discord bot token (needs User Install on, Install Link None, Public Bot off)",
         }
     }
 
     pub(crate) fn markup(self) -> &'static dyn Markup {
         match self {
             Self::Telegram => &telegram::html::Html,
+            Self::Discord => &discord::markdown::Markdown,
         }
     }
 
     pub(crate) fn data_bytes(self) -> usize {
         match self {
             Self::Telegram => telegram::DATA_BYTES,
+            Self::Discord => discord::DATA_BYTES,
         }
     }
 
     pub(crate) fn token_key(self) -> &'static str {
         match self {
             Self::Telegram => telegram::TOKEN_KEY,
+            Self::Discord => discord::TOKEN_KEY,
         }
     }
 
     pub(crate) fn saved(self, config: &Path) -> PathBuf {
         match self {
             Self::Telegram => crate::paths::telegram(config),
+            Self::Discord => crate::paths::discord(config),
         }
     }
 
     pub(crate) fn api(self) -> String {
         match self {
             Self::Telegram => std::env::var(telegram::API_ENV).unwrap_or_else(|_| telegram::API.into()),
+            Self::Discord => std::env::var(discord::API_ENV).unwrap_or_else(|_| discord::API.into()),
         }
     }
 
@@ -95,34 +128,60 @@ impl Via {
             Self::Telegram => {
                 telegram::link::start(id, &telegram::Bot::new(api, token), tx, telegram::link::POLL, since)
             }
+            Self::Discord => discord::gateway::start(id, &discord::Bot::new(api, token), tx, since),
         }
     }
 
-    pub(crate) fn check(self, api: &str, token: &str) -> Result<String, String> {
+    pub(crate) fn check(self, api: &str, token: &str) -> Result<Identity, String> {
         match self {
-            Self::Telegram => telegram::Bot::new(api, token).me().map_err(|e| e.to_string()),
+            Self::Telegram => {
+                let name = telegram::Bot::new(api, token).me().map_err(|e| e.to_string())?;
+                Ok(Identity { name, advice: Advice::Read(None) })
+            }
+            Self::Discord => {
+                let bot = discord::Bot::new(api, token);
+                let name = bot.me().map_err(|e| e.to_string())?;
+                Ok(Identity { name, advice: bot.read_advice().map_or(Advice::Unread, Advice::Read) })
+            }
+        }
+    }
+
+    pub(crate) fn advises(self) -> bool {
+        match self {
+            Self::Telegram => false,
+            Self::Discord => true,
+        }
+    }
+
+    pub(crate) fn read_advice(self, api: &str, token: &str) -> Result<Option<&'static str>, String> {
+        match self {
+            Self::Telegram => Ok(None),
+            Self::Discord => discord::Bot::new(api, token).read_advice().map_err(|e| e.to_string()),
         }
     }
 
     pub(crate) fn rejected(self) -> String {
         match self {
             Self::Telegram => telegram::Failure::Rejected.to_string(),
+            Self::Discord => discord::Failure::Rejected.to_string(),
         }
     }
 
     pub(crate) fn unset(self) -> &'static str {
         match self {
             Self::Telegram => "make a bot with @BotFather and paste its token here",
+            Self::Discord => "make a Discord app with User Install and paste its bot token",
         }
     }
 
     pub(crate) fn pairing_code(self, text: &str) -> Option<&str> {
         match self {
             Self::Telegram => text.trim().strip_prefix("/start").map(str::trim).filter(|code| !code.is_empty()),
+            Self::Discord => None,
         }
     }
 
-    pub(crate) fn pairing_link(self, bot: &str, code: &str) -> (String, Vec<String>) {
+    pub(crate) fn pairing_link(self, bot: &str, token: &str, code: &str) -> (String, Vec<String>) {
         match self {
             Self::Telegram => (
                 format!("https://t.me/{bot}?start={code}"),
@@ -131,8 +190,66 @@ impl Via {
                     "the bot then answers only that chat.".into(),
                 ],
             ),
+            Self::Discord => match discord::install_link(token) {
+                Some(url) => (
+                    url,
+                    vec![
+                        "open the link, add the app to your Discord account and authorize it.".into(),
+                        "cornercase then writes to you, and the bot answers only you.".into(),
+                    ],
+                ),
+                None => (String::new(), vec!["the token does not name its app: paste it again".into()]),
+            },
         }
     }
+
+    pub(crate) fn pairs_by_owner(self) -> bool {
+        match self {
+            Self::Telegram => false,
+            Self::Discord => true,
+        }
+    }
+
+    pub(crate) fn forces_reply(self) -> bool {
+        match self {
+            Self::Telegram => true,
+            Self::Discord => false,
+        }
+    }
+
+    pub(crate) fn pair(self, api: &str, token: &str, welcome: &str) -> (Advice, Result<Owned, String>) {
+        match self {
+            Self::Telegram => (Advice::Read(None), Ok(Owned::Later(Duration::ZERO))),
+            Self::Discord => {
+                let (advice, paired) = discord::Bot::new(api, token).pair(welcome);
+                let owned = match paired {
+                    Ok(chat) => Ok(Owned::Chat(chat)),
+                    Err(discord::Failure::Closed) => Ok(Owned::Later(Duration::ZERO)),
+                    Err(discord::Failure::Wait(seconds)) => Ok(Owned::Later(Duration::from_secs(seconds))),
+                    Err(failure) => Err(failure.to_string()),
+                };
+                (advice, owned)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Identity {
+    pub(crate) name: String,
+    pub(crate) advice: Advice,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Advice {
+    Unread,
+    Read(Option<&'static str>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Owned {
+    Chat(Chat),
+    Later(Duration),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

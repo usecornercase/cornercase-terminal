@@ -108,7 +108,7 @@ mod entries {
         let Some(Overlay::Issues(b)) = &mut s.app.overlay else { panic!("no issues") };
         let issue = issues::issue(Source::Github, 7, "Fix the login");
         b.screen = Screen::Detail { issue: Box::new(issue), detail: None, scroll: 0, raw: false };
-        let labels = b.labels();
+        let labels = b.labels(usize::MAX);
         let i = labels.iter().position(|l| *l == "start a flow").expect("the button");
         click_in(&mut s.app, ui::issue_buttons(ui::issues_area(WIDE), &labels)[i].as_position(), WIDE);
         let start = start(&s.app);
@@ -172,10 +172,10 @@ mod the_dialog {
         type_in(&mut s.app, "Add dark mode", WIDE);
         button(&mut s.app, WIDE, dialog::EDIT);
         let Some(Overlay::Flows { dialog: flows, .. }) = &s.app.overlay else { panic!("no flows dialog") };
-        assert_eq!(flows.edit.as_ref().map(|edit| edit.flow.name.as_str()), Some("Bug, test first"));
+        assert_eq!(flows.edit.as_ref().map(|edit| edit.flow.name.as_str()), Some("Full issue"));
         flows_button(&mut s.app, dialog::DONE);
         flows_button(&mut s.app, dialog::DONE);
-        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), ("Bug, test first".into(), "Add dark mode".into()));
+        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), ("Full issue".into(), "Add dark mode".into()));
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod the_dialog {
         flows_button(&mut s.app, dialog::DUPLICATE);
         flows_button(&mut s.app, dialog::DONE);
         flows_button(&mut s.app, dialog::DONE);
-        let expected = ("Bug, test first copy".to_string(), "Add dark mode".to_string());
+        let expected = ("Full issue copy".to_string(), "Add dark mode".to_string());
         assert_eq!((selected(&s.app), start(&s.app).prompt.text()), expected);
     }
 }
@@ -205,7 +205,7 @@ mod preview {
         mouse_in(&mut s.app, MouseEventKind::ScrollDown, body.as_position(), SHORT);
         assert!(start(&s.app).preview > 0);
         assert!(format!("{}", render(&mut s.app, SHORT).backend()).contains(" ↑ more "));
-        click_flow(&mut s.app, "Full issue", 0);
+        click_flow(&mut s.app, "Quick", 0);
         assert_eq!(start(&s.app).preview, 0);
     }
 }

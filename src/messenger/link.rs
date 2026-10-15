@@ -36,6 +36,10 @@ pub(crate) trait Transport: Send + 'static {
     fn next(failure: Self::Failure, attempt: &mut Self::Attempt) -> Next<Self::Failure>;
 
     fn method(order: &Order) -> &'static str;
+
+    fn more(_attempt: &Self::Attempt) -> Vec<i64> {
+        Vec::new()
+    }
 }
 
 pub(crate) struct Link {
@@ -93,19 +97,23 @@ pub(crate) fn backoff(failed: u32) -> Duration {
     Duration::from_secs(1u64.checked_shl(failed.saturating_sub(1)).unwrap_or(MOST_WAIT).min(MOST_WAIT))
 }
 
-fn perform<T: Transport>(transport: &T, order: &Order, stop: &AtomicBool) -> Result<Option<i64>, T::Failure> {
+fn perform<T: Transport>(transport: &T, order: &Order, stop: &AtomicBool) -> Result<Vec<i64>, T::Failure> {
     let mut attempt = T::Attempt::default();
+    let sent = |done: Result<Option<i64>, T::Failure>, attempt: &T::Attempt| {
+        done.map(|first| first.map_or_else(Vec::new, |first| [first].into_iter().chain(T::more(attempt)).collect()))
+    };
     for _ in 0..TRIES {
         match transport.perform(order, &attempt) {
             Err(failure) => match T::next(failure, &mut attempt) {
                 Next::Wait(seconds) => nap(stop, Duration::from_secs(seconds.min(MOST_WAIT))),
                 Next::Again => {}
-                Next::Done(done) => return done,
+                Next::Done(done) => return sent(done, &attempt),
             },
-            done => return done,
+            done => return sent(done, &attempt),
         }
     }
-    transport.perform(order, &attempt)
+    let done = transport.perform(order, &attempt);
+    sent(done, &attempt)
 }
 
 fn deliver<E: From<(Via, Event)>, T: Transport>(
@@ -123,14 +131,14 @@ fn deliver<E: From<(Via, Event)>, T: Transport>(
         let done = panics::job(|| Ok(perform(transport, &order, stop)))
             .unwrap_or_else(|e| Err(T::Failure::from(e.to_string())));
         match done {
-            Ok(Some(message)) => {
-                if let Some(tag) = order.tag()
-                    && tx.send((via, Event::Sent { link: id, tag, message }).into()).is_err()
-                {
-                    return;
+            Ok(messages) => {
+                let Some(tag) = order.tag() else { continue };
+                for message in messages {
+                    if tx.send((via, Event::Sent { link: id, tag, message }).into()).is_err() {
+                        return;
+                    }
                 }
             }
-            Ok(None) => {}
             Err(failure) => log::warning!(via.target(), "not delivered", method = T::method(&order), error = failure),
         }
     }

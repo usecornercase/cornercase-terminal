@@ -54,6 +54,7 @@ use layout::{Scrolls, Side};
 use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use pull_requests::PullRequests;
+use queue_panel::{QueueEvent, QueueRuntime};
 use session::not_restored;
 use toast::Toast;
 use update_dialog::{UpdateEvent, UpdateState};
@@ -85,6 +86,8 @@ mod overlay;
 mod panes;
 mod picker_dialog;
 mod pull_requests;
+mod queue_dialog;
+mod queue_panel;
 mod remote_access;
 mod search_dialog;
 mod session;
@@ -154,6 +157,7 @@ pub(crate) struct App {
     usage_page: usage::Page,
     usage_timeout: Duration,
     confirm_within: Duration,
+    queued: QueueRuntime,
     todos: Todos,
     runs: Vec<crate::flows::run::Run>,
     flow: flow_panel::FlowPanel,
@@ -211,6 +215,7 @@ impl App {
             usage_page: usage::Page::default(),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
+            queued: QueueRuntime::default(),
             todos: Todos::default(),
             runs: Vec::new(),
             flow: flow_panel::FlowPanel::default(),
@@ -322,11 +327,26 @@ impl App {
     }
 
     pub(crate) fn tick(&self, now: Instant) -> Option<Duration> {
+        self.tick_at(now, crate::time::now())
+    }
+
+    pub(super) fn tick_at(&self, now: Instant, clock: i64) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
         let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
-        [drag, launch, spin, self.flow_frame(now), self.next_request(now)].into_iter().flatten().min()
+        [
+            drag,
+            launch,
+            spin,
+            self.flow_frame(now),
+            self.next_request(now),
+            self.next_pairing(now),
+            self.queued.area.and_then(|_| self.queued.queue.next(clock)),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn agent_working(&self) -> bool {
@@ -334,7 +354,13 @@ impl App {
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
+        self.refresh_at(now, crate::time::now());
+    }
+
+    pub(super) fn refresh_at(&mut self, now: Instant, clock: i64) {
         self.reap();
+        self.drive_queue(clock, now);
+        self.sync_queued();
         if self.overlay.as_ref().is_some_and(Overlay::lists_running)
             && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
         {
@@ -346,6 +372,7 @@ impl App {
         self.watch_messengers(now);
         self.sync_remote();
         self.sync_messengers();
+        self.pair_by_owner(now);
         self.check_requests(now);
         self.close_gone_flow_message();
         self.check_updates(now);
@@ -475,6 +502,7 @@ impl App {
             AppEvent::Changes(event) => self.changes_answered(event),
             AppEvent::Files(event) => self.files_answered(event),
             AppEvent::Update(event) => self.update_answered(event),
+            AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),

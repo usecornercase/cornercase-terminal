@@ -134,10 +134,20 @@ impl Api {
         Ok(people)
     }
 
-    pub(crate) fn view(&self, number: u64) -> Result<Detail> {
+    pub(crate) fn find(&self, number: u64) -> Result<Issue> {
+        let (node, _) = self.node(number)?;
+        issue(&node).ok_or_else(|| Error::Api(format!("issue #{number} has no number")))
+    }
+
+    fn node(&self, number: u64) -> Result<(Value, String)> {
         let project = self.project()?;
         let path = Self::project_path(&project, &format!("/issues/{number}"));
         let node = self.get(&path, &[], &format!("issue #{number} not found in {project}"))?;
+        Ok((node, path))
+    }
+
+    pub(crate) fn view(&self, number: u64) -> Result<Detail> {
+        let (node, path) = self.node(number)?;
         let per_page = PAGE.to_string();
         let params = [("sort", "asc"), ("order_by", "created_at"), ("per_page", per_page.as_str())];
         let notes = self.get(&format!("{path}/notes"), &params, "the comments were not found")?;
@@ -268,6 +278,11 @@ fn remotes(output: &str) -> Vec<Remote> {
     }
     remotes.sort_by_key(|r| r.name != "origin");
     remotes
+}
+
+pub(crate) fn has_project(base: &str, urls: &[(String, String)]) -> bool {
+    let remotes: Vec<Remote> = urls.iter().filter_map(|(name, url)| remote(name, url)).collect();
+    project_of(base, &remotes).is_some()
 }
 
 fn project_of(base: &str, remotes: &[Remote]) -> Option<String> {

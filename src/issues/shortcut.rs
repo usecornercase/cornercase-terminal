@@ -120,9 +120,18 @@ impl Api<'_> {
         Err(Error::Api(format!("refusing to send the Shortcut token to {}", http::origin(next))))
     }
 
+    pub(crate) fn find(&self, id: u64) -> Result<Issue> {
+        let story = self.story(id)?;
+        Ok(issue(&story, &self.lookups()?))
+    }
+
+    fn story(&self, id: u64) -> Result<Value> {
+        self.request(&self.path(&format!("/stories/{id}")), &[], &format!("story sc-{id}"))
+    }
+
     pub(crate) fn view(&self, id: u64) -> Result<Detail> {
         let lookups = self.lookups()?;
-        let story = self.request(&self.path(&format!("/stories/{id}")), &[], &format!("story sc-{id}"))?;
+        let story = self.story(id)?;
         Ok(detail(&story, &lookups))
     }
 }

@@ -1,9 +1,11 @@
 use super::{Action, After, Browser, Pick, Place, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
+use crate::queue::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Button {
     Start,
+    Schedule,
     Flow,
     Agent,
     Where,
@@ -20,12 +22,17 @@ pub(super) enum Button {
     Next,
     Cancel,
     Back,
+    New,
+    RunNow,
+    Remove,
+    ClearStarted,
 }
 
 impl Button {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Start => "start",
+            Self::Schedule => "schedule",
             Self::Flow => "start a flow",
             Self::Agent => "agent…",
             Self::Where => "where…",
@@ -42,12 +49,27 @@ impl Button {
             Self::Next => "next",
             Self::Cancel => "cancel",
             Self::Back => "back",
+            Self::New => "new",
+            Self::RunNow => "start now",
+            Self::Remove => "remove",
+            Self::ClearStarted => "clear started",
         }
     }
 }
 
 impl Browser {
-    pub(super) fn buttons(&self) -> Vec<Button> {
+    pub(super) fn buttons(&self, width: usize) -> Vec<Button> {
+        let mut buttons = self.every_button();
+        for optional in [Button::Schedule, Button::Flow] {
+            let needed: usize = buttons.iter().map(|button| button.label().chars().count() + 3).sum();
+            if needed > width.saturating_add(1) {
+                buttons.retain(|button| *button != optional);
+            }
+        }
+        buttons
+    }
+
+    fn every_button(&self) -> Vec<Button> {
         if self.picker.is_some() {
             return vec![Button::Choose, Button::Back];
         }
@@ -56,7 +78,7 @@ impl Browser {
         }
         match &self.screen {
             Screen::Detail { raw, issue, .. } => {
-                let mut buttons = vec![Button::Start, Button::Flow, Button::Agent];
+                let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Agent];
                 if !issue.source.in_repository() && self.places.len() > 1 {
                     buttons.push(Button::Where);
                 }
@@ -81,7 +103,10 @@ impl Browser {
     }
 
     fn list_buttons(&self) -> Vec<Button> {
-        let mut buttons = vec![Button::Start, Button::Refresh];
+        if self.current() == Tab::Queue {
+            return self.queue_buttons();
+        }
+        let mut buttons = vec![Button::Start, Button::Schedule, Button::Refresh];
         if let Tab::One(source) = self.current()
             && self.connections.get(&source).is_some_and(|c| !c.from_env)
         {
@@ -91,8 +116,25 @@ impl Browser {
         buttons
     }
 
-    pub(crate) fn labels(&self) -> Vec<&'static str> {
-        self.buttons().into_iter().map(Button::label).collect()
+    fn queue_buttons(&self) -> Vec<Button> {
+        let mut buttons = vec![Button::New];
+        if let Some(queued) = self.selected_queued() {
+            if queued.runnable() {
+                buttons.push(Button::RunNow);
+            }
+            if queued.state != State::Starting {
+                buttons.push(Button::Remove);
+            }
+        }
+        if self.queued.iter().any(|queued| matches!(queued.state, State::Started { .. })) {
+            buttons.push(Button::ClearStarted);
+        }
+        buttons.push(Button::Cancel);
+        buttons
+    }
+
+    pub(crate) fn labels(&self, width: usize) -> Vec<&'static str> {
+        self.buttons(width).into_iter().map(Button::label).collect()
     }
 
     pub(crate) fn tab_names(&self) -> Vec<&'static str> {
@@ -100,6 +142,9 @@ impl Browser {
     }
 
     pub(crate) fn toggles(&self) -> (Vec<String>, Vec<bool>) {
+        if self.current() == Tab::Queue {
+            return (Vec::new(), Vec::new());
+        }
         let label = self.people_label();
         let filtered = label != "people";
         (vec!["closed".into(), label], vec![self.closed, filtered])
@@ -107,21 +152,24 @@ impl Browser {
 
     pub(super) fn press(&mut self, button: Button) -> Action {
         match button {
-            Button::Start => match &self.screen {
-                Screen::Detail { issue, .. } => {
-                    let issue = (**issue).clone();
-                    self.start(issue)
-                }
-                Screen::List => match self.selected() {
-                    Some(issue) if self.ready_to_start(&issue) => self.start(issue),
-                    Some(issue) => {
-                        let read = self.read(issue.clone());
-                        let _ = self.start(issue);
-                        read
+            Button::Start | Button::Schedule => {
+                self.scheduling = button == Button::Schedule;
+                match &self.screen {
+                    Screen::Detail { issue, .. } => {
+                        let issue = (**issue).clone();
+                        self.start(issue)
                     }
-                    None => Action::None,
-                },
-            },
+                    Screen::List => match self.selected() {
+                        Some(issue) if self.ready_to_start(&issue) => self.start(issue),
+                        Some(issue) => {
+                            let read = self.read(issue.clone());
+                            let _ = self.start(issue);
+                            read
+                        }
+                        None => Action::None,
+                    },
+                }
+            }
             Button::Flow => match &self.screen {
                 Screen::Detail { issue, .. } => {
                     let issue = (**issue).clone();
@@ -133,6 +181,10 @@ impl Browser {
                 self.open_picker(Pick::Agent, After::Nothing);
                 Action::None
             }
+            Button::New => Action::QueueNew,
+            Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
+            Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
+            Button::ClearStarted => Action::QueueClear,
             Button::Where => {
                 self.open_picker(Pick::Place, After::Nothing);
                 Action::None
@@ -165,7 +217,7 @@ impl Browser {
             },
             Button::Disconnect => match self.current() {
                 Tab::One(source) => Action::Disconnect(source),
-                Tab::All => Action::None,
+                Tab::All | Tab::Queue => Action::None,
             },
             Button::Connect | Button::Next => self.submit_token(),
             Button::Cancel => Action::Close,
@@ -215,7 +267,7 @@ impl Browser {
         }
         if let Some(kind) = self.agents.pick() {
             let place = self.place_for(&issue).cloned();
-            Action::Start(issue, kind, place)
+            if self.scheduling { Action::Schedule(issue, kind, place) } else { Action::Start(issue, kind, place) }
         } else {
             self.open_picker(Pick::Agent, After::Start);
             Action::None

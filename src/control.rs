@@ -65,6 +65,7 @@ pub(crate) enum Command {
     Stats(Stats),
     Away(Away),
     Mark(Mark),
+    Queue(Queue),
     FlowList(FlowList),
     FlowRun(FlowRun),
 }
@@ -94,15 +95,19 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
-            Self::StartWith(_) => 22,
-            Self::FlowList(_) => 23,
-            Self::FlowRun(_) => 24,
+            Self::Queue(_) => 22,
+            Self::StartWith(_) => 23,
+            Self::FlowList(_) => 24,
+            Self::FlowRun(_) => 25,
         }]
     }
 
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
+            Self::Queue(_) => {
+                fields.add("queue", true);
+            }
             Self::Status(_) | Self::Stats(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
@@ -195,7 +200,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 25] = [
+    pub(crate) const NAMES: [&str; 26] = [
         "status",
         "open",
         "new-workspace",
@@ -218,6 +223,7 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "queue",
         "start-with",
         "flow-list",
         "flow-run",
@@ -914,3 +920,30 @@ pub(crate) struct Stats {}
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
+pub(crate) enum Queue {
+    Add(QueueAdd),
+    Edit { id: u64, add: QueueAdd },
+    List,
+    Remove(u64),
+    Run(u64),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct QueueAdd {
+    pub(crate) at: String,
+    pub(crate) zone: String,
+    pub(crate) agent: Option<String>,
+    pub(crate) mode: Option<String>,
+    pub(crate) project: Option<u64>,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) worktree: Option<String>,
+    pub(crate) prompt: Option<String>,
+    pub(crate) issue: Option<String>,
+    pub(crate) source: Option<String>,
+    pub(crate) label: Option<String>,
+    pub(crate) submit: Option<bool>,
+}

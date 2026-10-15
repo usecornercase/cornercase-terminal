@@ -87,10 +87,17 @@ impl Api {
         Ok(Listed { account: Some(account), issues })
     }
 
-    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        Ok(self.issue(&self.node(key)?))
+    }
+
+    fn node(&self, key: &str) -> Result<Value> {
         let path = format!("/rest/api/3/issue/{}", path_segment(key));
-        let node = self.get(&path, &[("fields", VIEW_FIELDS)], &format!("issue {key} not found"))?;
-        Ok(self.detail(&node))
+        self.get(&path, &[("fields", VIEW_FIELDS)], &format!("issue {key} not found"))
+    }
+
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+        Ok(self.detail(&self.node(key)?))
     }
 
     fn issue(&self, node: &Value) -> Issue {

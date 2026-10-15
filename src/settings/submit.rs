@@ -173,15 +173,15 @@ impl Settings {
             Row::JiraJql => {
                 self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }
-            Row::TelegramBot => {
+            Row::Bot(via) => {
                 let token = edit.input.trim().to_string();
                 if token.is_empty() {
                     edit.error = Some("paste the bot's token first".into());
                     return Action::None;
                 }
                 edit.error = None;
-                self.telegram.checking = true;
-                Action::CheckTelegram(Secret(token))
+                self.messenger_mut(via).checking = true;
+                Action::CheckBot(via, Secret(token))
             }
             Row::Kind(kind) => {
                 let extra = agents::split_args(&edit.input);

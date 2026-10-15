@@ -477,6 +477,7 @@ mod flows_dialog;
 mod issue_list;
 mod path_links;
 mod pull_requests;
+mod queue;
 mod remote_access;
 mod restarting;
 mod todo_panel;

@@ -59,6 +59,7 @@ fn every_command_is_listed_by_name() {
         Command::Stats(Stats::default()),
         Command::Away(Away::default()),
         Command::Mark(Mark::default()),
+        Command::Queue(Queue::List),
         Command::StartWith(Start::default()),
         Command::FlowList(FlowList::default()),
         Command::FlowRun(FlowRun::default()),

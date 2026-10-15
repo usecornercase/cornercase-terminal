@@ -37,7 +37,7 @@ export function inputKey(app: App, e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'i
   if (e.metaKey || e.isComposing) return;
   if (e.ctrlKey && (e.key === 'v' || e.key === 'V')) return;
   const overlay = app.overlay?.kind;
-  if (e.key === 'Tab' && !(overlay === 'settings' || overlay === 'issues' || overlay === 'picker' || overlay === 'newWorkspace' || overlay === 'usage')) return;
+  if (e.key === 'Tab' && !(overlay === 'settings' || overlay === 'issues' || overlay === 'picker' || overlay === 'newWorkspace' || overlay === 'usage' || overlay === 'queue')) return;
   const named = KEYS.has(e.key);
   if (!named && e.key.length !== 1) return;
   const k: Key = { key: e.ctrlKey && e.key.length === 1 ? e.key.toLowerCase() : e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey };

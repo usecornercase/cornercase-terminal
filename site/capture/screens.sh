@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting flow-run flows-list flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -387,7 +387,7 @@ screen_issue_agent_picker() {
 
 screen_issue_started() {
   open_issue_482
-  cc_click 'start   start a flow'
+  cc_click 'start   schedule   start a flow'
   cc_wait 'aider'
   cc_click 'claude    claude'
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
@@ -819,4 +819,42 @@ screen_flow_start() {
   cc_wait '◆ open a pull request'
   cc_hover '╭─ Start a flow'
   cc_shot flow-start
+}
+
+screen_queue() {
+  cc_config '{"sidebar":"projects_on_top"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  node -e '
+    const fs = require("fs");
+    const path = process.argv[1];
+    const project = process.argv[2] + "/code/web-shop";
+    const labels = ["#482 Fix the login form", "Update the docs", "Fix logout", "Review the tests"];
+    const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
+    const entries = labels.map((label, i) => ({id:i+1,at:Math.floor(Date.now()/3600000)*3600+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
+    fs.writeFileSync(path, JSON.stringify({version:1,next_id:4,entries}));
+  ' "$CC_RUN/server.queue.json" "$CC_HOME"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'clear started'
+  cc_hover 'Issues · web-shop'
+  cc_shot queue
+}
+
+screen_queue_form() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  cc_start 110 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'nothing queued'
+  cc_click 'new   cancel'
+  cc_wait 'Schedule an agent'
+  cc_type 'Fix the login form'
+  cc_hover 'Workspaces'
+  cc_shot queue-form
 }

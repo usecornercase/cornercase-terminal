@@ -56,6 +56,10 @@ pub(crate) fn telegram(config: &Path) -> PathBuf {
     config.with_file_name("telegram.json")
 }
 
+pub(crate) fn discord(config: &Path) -> PathBuf {
+    config.with_file_name("discord.json")
+}
+
 pub(crate) fn session() -> PathBuf {
     match custom_socket() {
         Some(socket) => socket.with_extension("json"),
@@ -65,6 +69,14 @@ pub(crate) fn session() -> PathBuf {
 
 pub(crate) fn todos(state: &Path) -> PathBuf {
     state.with_file_name(TODOS_FILE)
+}
+
+pub(crate) fn queue(session: &Path) -> PathBuf {
+    if session.file_name().is_some_and(|name| name == "session.json") {
+        session.with_file_name("queue.json")
+    } else {
+        session.with_extension("queue.json")
+    }
 }
 
 pub(crate) fn stats(session: &Path) -> PathBuf {

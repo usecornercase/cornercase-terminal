@@ -1,119 +1,5 @@
 use super::*;
-use crate::app::messenger::{self as wiring, By, MessengerEvent};
-use crate::messenger::link::Event as LinkEvent;
-use crate::messenger::{Chat, Keyboard, Message, Order, Press, Update, Via};
-
-const CHAT: i64 = 42;
-const USER: i64 = 9;
-
-struct Phone {
-    orders: Receiver<Order>,
-    next: i64,
-    seen: Vec<(i64, Order)>,
-}
-
-fn chat() -> Chat {
-    Chat { id: CHAT, user: USER, name: "@ada".into(), paired: 1 }
-}
-
-fn html(order: &Order) -> &str {
-    match order {
-        Order::Send { text, .. } | Order::Edit { text, .. } => text,
-        _ => "",
-    }
-}
-
-fn keyboard(order: &Order) -> &Keyboard {
-    static NONE: Keyboard = Vec::new();
-    match order {
-        Order::Send { keyboard, .. } | Order::Edit { keyboard, .. } => keyboard,
-        _ => &NONE,
-    }
-}
-
-fn button(order: &Order, text: &str) -> String {
-    let key = keyboard(order).iter().flatten().find(|key| key.text.contains(text));
-    key.unwrap_or_else(|| panic!("no `{text}` button in {order:?}")).data.clone()
-}
-
-fn update(app: &mut App, update: Update) {
-    let event = AppEvent::Messenger(MessengerEvent::Link(Via::Telegram, LinkEvent::Updates(1, vec![update])));
-    app.handle_event(event, AREA).expect("the update is handled");
-}
-
-impl Phone {
-    fn set_up(app: &mut App, chat: Option<Chat>) -> Self {
-        wiring::set_up(app, "1:t", "cornercase_bot", chat);
-        Self { orders: wiring::capture(app), next: 1000, seen: Vec::new() }
-    }
-
-    fn paired(app: &mut App) -> Self {
-        Self::set_up(app, Some(chat()))
-    }
-
-    fn read(&mut self, app: &mut App) -> Vec<(i64, Order)> {
-        let mut got = Vec::new();
-        while let Ok(order) = self.orders.try_recv() {
-            self.next += 1;
-            if let Some(tag) = order.tag() {
-                let sent = LinkEvent::Sent { link: 1, tag, message: self.next };
-                app.handle_event(AppEvent::Messenger(MessengerEvent::Link(Via::Telegram, sent)), AREA).expect("sent");
-            }
-            got.push((self.next, order));
-        }
-        self.seen.extend(got.iter().cloned());
-        got
-    }
-
-    fn message(&mut self, app: &mut App, text: &str, reply_to: Option<i64>, from: (i64, i64)) -> i64 {
-        self.next += 1;
-        let (chat, user) = from;
-        let message = Message {
-            id: self.next,
-            chat,
-            user,
-            private: true,
-            date: 0,
-            name: "@ada".into(),
-            text: text.into(),
-            reply_to,
-        };
-        update(app, Update::Message(message));
-        self.next
-    }
-
-    fn says(&mut self, app: &mut App, text: &str) -> i64 {
-        self.message(app, text, None, (CHAT, USER))
-    }
-
-    fn replies(&mut self, app: &mut App, to: i64, text: &str) -> i64 {
-        self.message(app, text, Some(to), (CHAT, USER))
-    }
-
-    fn taps(app: &mut App, message: i64, data: &str) {
-        let press = Press { id: format!("q{message}"), chat: CHAT, user: USER, message, data: data.into() };
-        update(app, Update::Press(press));
-    }
-
-    fn waits(&mut self, agent: &mut Agent, what: &str, pick: impl Fn(&Order) -> bool) -> (i64, Order) {
-        let mut found = None;
-        wait_until(what, || {
-            drain(&mut agent.app, &agent.rx);
-            agent.app.refresh(Instant::now());
-            found = self.read(&mut agent.app).into_iter().find(|(_, order)| pick(order));
-            found.is_some()
-        });
-        found.expect("an order")
-    }
-
-    fn says_in_html(&mut self, agent: &mut Agent, what: &str, text: &str) -> (i64, Order) {
-        self.waits(agent, what, |order| html(order).contains(text))
-    }
-}
-
-fn reacted(message: i64) -> impl Fn(&Order) -> bool {
-    move |order| matches!(order, Order::React { message: m, .. } if *m == message)
-}
+use crate::app::messenger::By;
 
 mod pairing {
     use super::*;
@@ -165,7 +51,7 @@ mod pairing {
             text: format!("/start {token}"),
             reply_to: None,
         };
-        update(&mut app, Update::Message(group));
+        update(&mut app, Via::Telegram, Update::Message(group));
         app.overlay = None;
         app.refresh(Instant::now());
         phone.says(&mut app, &format!("/start {token}"));
@@ -207,7 +93,7 @@ mod away {
         click(&mut app, ui::remote_button(areas().usage, true).as_position());
         pick(&mut app, "stop messaging on Telegram");
 
-        assert_eq!(labels, ["set up your phone's browser…", "continue on Telegram"]);
+        assert_eq!(labels, ["set up your phone's browser…", "continue on Telegram", "set up Discord…"]);
         assert_eq!(away, (true, Some(true), Some("away: agents message you on Telegram".into())));
         assert!(still && !app.messenger(Via::Telegram).away);
         let said: Vec<String> = phone.read(&mut app).iter().map(|(_, order)| html(order).to_string()).collect();
@@ -225,7 +111,7 @@ mod away {
 
         let Some(Overlay::Settings(settings)) = &app.overlay else { panic!("settings are not open") };
         let row = settings.rows().get(settings.cursor).cloned();
-        assert_eq!((settings.page, row), (Page::Remote, Some(crate::settings::Row::TelegramBot)));
+        assert_eq!((settings.page, row), (Page::Remote, Some(crate::settings::Row::Bot(Via::Telegram))));
     }
 
     #[test]
@@ -413,7 +299,7 @@ mod agents {
         let (notice, order) = phone.says_in_html(&mut agent, "the question", "needs you");
         let text = phone.replies(&mut agent.app, notice, "yes");
         let refused = phone.waits(&mut agent, "the text is refused", |o| html(o).contains("waiting for an answer"));
-        Phone::taps(&mut agent.app, notice, &button(&order, "esc"));
+        phone.taps(&mut agent.app, notice, &button(&order, "esc"));
         let pressed = phone.waits(&mut agent, "the key is pressed", |o| matches!(o, Order::Answer { .. }));
 
         assert!(html(&order).starts_with("<b>! claude needs you</b> · ") && html(&order).contains("<pre>"));
@@ -441,7 +327,7 @@ mod agents {
         let mut phone = Phone::paired(&mut agent.app);
         let (_, notice, first) = asking(&mut agent, &mut phone);
 
-        Phone::taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
+        phone.taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
         let (_, second) = phone.says_in_html(&mut agent, "the second question", "Question 2 of 2");
 
         assert!(html(&second).starts_with("<b>! claude needs you</b> · "), "{}", html(&second));
@@ -460,7 +346,7 @@ mod agents {
         agent.refreshing("the redraw settles", |_| Instant::now() >= settled);
         phone.read(&mut agent.app);
         let after_redraw = questions(&phone);
-        Phone::taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
+        phone.taps(&mut agent.app, notice, &button(&first, "1 · Yes"));
         phone.says_in_html(&mut agent, "the second question", "Question 2 of 2");
 
         assert_eq!(after_redraw, 1);
@@ -506,7 +392,7 @@ mod agents {
         let asked = phone.says(&mut agent.app, "hello");
         let (which, order) = phone.says_in_html(&mut agent, "the question", "Which agent is this for?");
         let data = keyboard(&order)[1][0].data.clone();
-        Phone::taps(&mut agent.app, which, &data);
+        phone.taps(&mut agent.app, which, &data);
         phone.waits(&mut agent, "the text is confirmed", reacted(asked));
 
         assert!(data.ends_with(&format!(":d:{second}:1")), "{data}");
@@ -519,7 +405,7 @@ mod agents {
 
         phone.says(&mut agent.app, "/status");
         let (status, order) = phone.says_in_html(&mut agent, "the list", "<b>Agents</b>");
-        Phone::taps(&mut agent.app, status, &button(&order, "screen"));
+        phone.taps(&mut agent.app, status, &button(&order, "screen"));
         let (_, screen) = phone.says_in_html(&mut agent, "the screen", "<pre>");
 
         assert!(html(&order).contains("○ claude · "), "{}", html(&order));
@@ -531,9 +417,9 @@ mod agents {
     fn a_button_from_before_a_restart_is_refused() {
         let (mut app, _rx) = app();
         let mut phone = Phone::paired(&mut app);
-        let stale = if wiring::run(&app) == "ffff" { "eeee:s:1" } else { "ffff:s:1" };
+        let stale = if wiring::run(&app, Via::Telegram) == "ffff" { "eeee:s:1" } else { "ffff:s:1" };
 
-        Phone::taps(&mut app, 5, stale);
+        phone.taps(&mut app, 5, stale);
 
         let told = phone.read(&mut app);
         assert!(matches!(&told[0].1, Order::Answer { text, .. } if text.contains("before cornercase restarted")));

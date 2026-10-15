@@ -180,10 +180,10 @@ agent that needs you.
 Examples:
   cornercase notify the release build is ready";
 pub(super) const AWAY_HELP: &str =
-    "It needs a Telegram bot paired with your phone (Settings › Remote). While you are away, an
-agent that waits for you or ends its turn sends its question or its last message to that chat, and
-what you reply goes to the agent, until you turn it off: here with --off, from the chat with /back, or
-from Remote in the window.
+    "It needs a Telegram or Discord bot paired with your phone (Settings › Remote), and turns away on
+for each one paired. While you are away, an agent that waits for you or ends its turn sends its
+question or its last message to that chat, and what you reply goes to the agent, until you turn it
+off: here with --off, from the chat with /back, or from Remote in the window.
 
 Examples:
   cornercase away

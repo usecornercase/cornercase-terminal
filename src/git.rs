@@ -34,6 +34,24 @@ pub(crate) fn has_remote(dir: &Path) -> bool {
     config.lines().any(|line| line.trim_start().starts_with("[remote "))
 }
 
+pub(crate) fn remote_urls(dir: &Path) -> Vec<(String, String)> {
+    let Some(config) = common_dir(dir).and_then(|common| std::fs::read_to_string(common.join("config")).ok()) else {
+        return Vec::new();
+    };
+    let mut remote = None;
+    let mut urls = Vec::new();
+    for line in config.lines().map(str::trim) {
+        if line.starts_with('[') {
+            remote = line.strip_prefix("[remote \"").and_then(|rest| rest.strip_suffix("\"]")).map(str::to_string);
+        } else if let Some(name) = &remote
+            && let Some(url) = line.strip_prefix("url").map(str::trim_start).and_then(|rest| rest.strip_prefix('='))
+        {
+            urls.push((name.clone(), url.trim().to_string()));
+        }
+    }
+    urls
+}
+
 fn common_dir(dir: &Path) -> Option<PathBuf> {
     let git = git_dir(dir)?;
     Some(std::fs::read_to_string(git.join("commondir")).map_or_else(|_| git.clone(), |c| git.join(c.trim())))

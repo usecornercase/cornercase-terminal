@@ -1,3 +1,4 @@
+import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
@@ -183,8 +184,8 @@ const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 export class Painter {
   readonly regions: Region[] = [];
   cursor: Cursor | null = null;
-  private surface: number;
-  private hoverSurface: number;
+  readonly surface: number;
+  readonly hoverSurface: number;
   readonly lineColour: number;
 
   constructor(
@@ -988,6 +989,7 @@ export class Painter {
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
+    if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }
@@ -1030,7 +1032,7 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
+  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
     const cancel = intersect(rect(right(row) - buttonWidth(label), row.y, buttonWidth(label), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
     this.submitButton(ok, submit, onSubmit);
@@ -1389,7 +1391,7 @@ export class Painter {
           this.line(rect(row.x, row.y, 1, 1), [rail(chosen, bg)]);
           let x = this.span(row.x + 1, row.y, `${item.key.padEnd(keyWidth)}  `, { ...style, fg: item.danger ? 1 : 6 });
           x = this.span(x, row.y, title, style);
-          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: 8 });
+          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: item.colour ?? 8 });
           this.region({ r: row, click: () => app.issuesClick(i), cursor: 'pointer' });
         });
         this.region({ r: list, wheel: (dy) => app.issuesScroll(dy) });

@@ -187,10 +187,11 @@ impl App {
     }
 
     pub(super) fn cancel_form(&mut self) {
-        if matches!(self.overlay, Some(Overlay::Flows { .. })) {
-            self.close_flows();
-        } else if !self.overlay.as_ref().is_some_and(Overlay::busy) {
-            self.overlay = None;
+        match &self.overlay {
+            Some(overlay) if overlay.busy() => {}
+            Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::Flows { .. }) => self.close_flows(),
+            _ => self.overlay = None,
         }
     }
 

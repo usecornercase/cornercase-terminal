@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.95
+## 0.12.97
 
 - **Flows** start a whole team of agents on an issue or a prompt. A flow is a saved team and the plan it follows: an orchestrator agent, and roles such as coder, reviewer, security and tester, each with its own agent, model and effort. The plan is a list of stages, which can work in parallel and go back when there are findings. Choose ` start a flow ` next to ` start ` in an issue, **start a flow…** in the workspaces' `+ New`, or `w s` with a prefix key. cornercase makes a worktree, opens a tab per role and starts every agent there, and the orchestrator runs the plan with cornercase's own commands, from the first message to the pull request.
 - Four flows come built in (**Full issue**, **Cross review**, **Quick**, **Bug, test first**), with the agents you have installed. Change them to your liking, or make your own, in **Settings → Agents → flows**: stages, roles, agents, models, efforts and prompts, with the plan drawn beside them. **restore default** brings a built-in flow back. Yours are saved in `flows/` next to `config.json`, and a project's in its `.cornercase/flows/`.
@@ -12,6 +12,19 @@ Every pull request that changes the app adds a section here for its new version.
 - opencode has two modes in **Settings → Agents**: plan, and auto (which skips its permission prompts).
 - The workspaces' `+ New workspace` button is now `+ New`, with **new workspace** and **start a flow…**.
 - Text fields with long prompts take line breaks, and wide characters (Chinese, Japanese, emoji) no longer put the cursor in the wrong place, in the TODO panel too.
+
+## 0.12.96
+
+- Schedule issues or prompts for later from the **schedule** button in Issues, the new **Queue** tab at the end of the Issues dialog, or `cornercase queue add`. Choose a clock time, a date, a delay such as `in 2h`, or the next Claude/Codex five-hour plan reset, and pick the agent, mode and destination: a project root, a workspace tab or a worktree. Clock times use your client's time zone, including remote terminals and browsers.
+- Every due entry starts together, without moving your active pane. Queued starts submit the stored prompt automatically and always accept the agent's folder trust question, so they can run unattended; immediate starts keep your existing trust setting.
+- The queue survives server restarts and keeps started entries so you can see what ran. On the **Queue** tab, edit, remove or start entries now, and clear the started history; a removal can be undone from its notice for a few seconds. Work more than ten minutes late is marked **missed** and waits for you. A closed destination or failed start shows its reason; interrupted starts ask you to check the workspace before retrying.
+- `cornercase queue add --issue` takes an issue URL or key. A URL must point to the project's own repository, or to the Jira site or the Plane or Linear workspace you are connected to; a bare key such as `482` that more than one tracker could read asks for `--source`.
+
+## 0.12.95
+
+- cornercase can message you on Discord, as it does on Telegram: while you are away, an agent that needs you or finishes its turn sends you a direct message with its question and buttons to answer it, or what it wrote, and what you reply goes to that agent. `/status`, `/new`, `/away` and `/back` work there too, as slash commands: type `/` in the chat with the bot to pick one.
+- To set it up, make an application in the Discord Developer Portal with **User Install** on, **Install Link** set to **None** and **Public Bot** off (so the app stays yours alone; cornercase tells you in Settings when it is not), paste its bot token in **Settings › Remote › Discord › bot**, then select **phone** and scan the code to add the app to your account. No code to type and no server to share: the bot writes to the app's owner. The guide is at usecornercase.dev, **On Discord**.
+- Telegram and Discord can both be set up and away at the same time. `o` in the keys menu (now **away on chat apps**) and `cornercase away` turn away on or off on every one that is set up, and the **Remote** menu has an entry for each.
 
 ## 0.12.94
 

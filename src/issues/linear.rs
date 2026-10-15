@@ -88,13 +88,21 @@ impl Api<'_> {
         Ok(Listed { account: Some(account), issues: nodes.iter().map(issue).collect() })
     }
 
-    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        Ok(issue(&self.node(key)?))
+    }
+
+    fn node(&self, key: &str) -> Result<Value> {
         let request = format!("query Issue($id: String!) {{ issue(id: $id) {{ {LIST_FIELDS} {VIEW_FIELDS} }} }}");
         let data = self.request(&request, &json!({ "id": key }), &format!("issue {key}"))?;
         if data["issue"].is_null() {
             return Err(Error::Api(format!("issue {key} not found")));
         }
-        Ok(detail(&data["issue"]))
+        Ok(data["issue"].clone())
+    }
+
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+        Ok(detail(&self.node(key)?))
     }
 }
 

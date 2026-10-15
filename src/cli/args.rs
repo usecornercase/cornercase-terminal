@@ -1,3 +1,5 @@
+pub(crate) mod queue;
+
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -104,15 +106,14 @@ pub(crate) enum Control {
     Focus(FocusArgs),
     #[command(about = "Show a message in the window, with a desktop notification", after_help = NOTIFY_HELP)]
     Notify(NotifyArgs),
-    #[command(
-        about = "Have agents message you on Telegram when they need you or finish, until you type in a window",
-        after_help = AWAY_HELP
-    )]
+    #[command(about = "Have agents message you on Telegram or Discord until you turn it off", after_help = AWAY_HELP)]
     Away(AwayArgs),
     #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
     Mark(MarkArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
+    #[command(about = "Schedule issues or prompts for later; queued agents accept folder trust prompts")]
+    Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
     #[command(about = "List the flows, or start one: a team of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
@@ -438,7 +439,7 @@ pub(crate) struct MarkArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct AwayArgs {
-    #[arg(long, help = "Stop: agents no longer message you on Telegram")]
+    #[arg(long, help = "Stop: agents no longer message you on Telegram or Discord")]
     pub(crate) off: bool,
 }
 

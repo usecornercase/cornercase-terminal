@@ -262,3 +262,7 @@ The prompt is a template. Instead of just the link, you can send a whole instruc
 You don't need to keep an eye on the agent's tab. With Claude Code, Codex, Gemini CLI, opencode or Grok Build, the tab shows `◐` while it works (or a spinner, with [working icon](../../reference/configuration/#working_icon) set to *spinner*), and if it asks you something (Claude Code, Codex, Gemini CLI and Grok Build) or finishes while you are elsewhere, the tab, its workspace and its project show `!` or `✓`, and a [notification](../projects-workspaces-tabs/#notifications) tells you where; see [What your agents are doing](../projects-workspaces-tabs/#what-your-agents-are-doing).
 
 The issue's workspace is a git worktree, so its [changes panel](../changes/) shows what the agent is doing as it saves files. Open it with **`Changes`** next to `Issues`, switch to **All** to see the commits too, and hover a hunk to **ask agent** about it: cornercase types the file and lines into the agent's prompt for you.
+
+## Schedule for later
+
+Click **`schedule`** beside **`start`** to put an issue in the [agent queue](../queue/), the **`Queue`** tab at the end of this dialog. Choose a clock time, delay, or the next Claude or Codex five-hour plan reset. The queue starts each due agent in its chosen worktree or tab and accepts its folder trust question automatically.

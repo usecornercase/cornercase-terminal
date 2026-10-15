@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::issues::{Account, Source};
+use crate::messenger::Via;
 
 use super::{Action, Move, Row, Settings, Status};
 
@@ -73,14 +74,14 @@ impl Settings {
             Some(Row::Token(source)) if matches!(self.status(*source), Some(Status::Saved(_))) => {
                 Some(Action::RemoveToken(*source))
             }
-            Some(Row::TelegramBot) if self.telegram.bot.is_some() => Some(Action::RemoveTelegram),
-            Some(Row::TelegramChat) if self.telegram.chat.is_some() => Some(Action::ForgetTelegram),
+            Some(Row::Bot(via)) if self.messenger(*via).bot.is_some() => Some(Action::RemoveBot(*via)),
+            Some(Row::Chat(via)) if self.messenger(*via).chat.is_some() => Some(Action::ForgetChat(*via)),
             _ => None,
         }
     }
 
-    pub(crate) fn telegram_checked(&mut self, result: Result<String, String>, paired: bool) {
-        self.telegram.checking = false;
+    pub(crate) fn bot_checked(&mut self, via: Via, result: Result<String, String>, paired: bool) {
+        self.messenger_mut(via).checking = false;
         match result {
             Ok(name) => {
                 self.edit = None;

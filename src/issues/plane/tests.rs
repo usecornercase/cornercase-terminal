@@ -317,6 +317,8 @@ fn view_reads_the_description_and_the_comments() {
     ]);
 
     let detail = api(&server, "").view("ENG-42").expect("view");
+    let found = api(&server, "").find("ENG-42").expect("find for queue");
+    assert_eq!((found.key.as_str(), found.title.as_str()), ("ENG-42", "Login redirect loops"));
 
     assert_eq!(
         detail.info,

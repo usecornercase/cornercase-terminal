@@ -7,7 +7,9 @@ mod activity;
 mod agents_section;
 pub(crate) mod changes;
 mod chrome;
+pub(crate) mod combo;
 mod dialog;
+pub(crate) use dialog::queue as queue_form;
 mod drop;
 pub(crate) mod files;
 pub(crate) mod flow;
@@ -47,7 +49,7 @@ pub(crate) use dialog::group_style::{StyleHit, style_hit};
 #[cfg(test)]
 pub(crate) use dialog::group_style::{style_colour, style_done, style_icon};
 pub(crate) use dialog::issues::{
-    IssueRow, Issues, IssuesBody, issue_button_hit, issue_detail, issues_hit, issues_list,
+    IssueRow, Issues, IssuesBody, issue_button_hit, issue_buttons_width, issue_detail, issues_hit, issues_list,
 };
 pub use dialog::issues::{issue_buttons, issues_area};
 #[cfg(test)]
@@ -324,6 +326,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     match &view.overlay {
         Some(Overlay::Menu { at, items }) => draw_menu(f, view, *at, items),
         Some(Overlay::Form(form)) => draw_form(f, view, form),
+        Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
         Some(Overlay::Update(update)) => draw_update(f, view, update),
