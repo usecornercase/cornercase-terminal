@@ -220,8 +220,9 @@ says nothing, is a default branch or is already taken. A chosen branch that is m
 project's default or the one its own folder is on is refused: a flow works on a branch of its own.
 
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. A name is looked up in the built-in flows, then yours, then the project's, so a project's
-flow never stands in for another of the same name; the command says so on stderr when it happens.
+by a tab. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
+a built-in flow of its name, and a project's flow never stands in for another of the same name; the
+command says so on stderr when it happens.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'

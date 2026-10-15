@@ -2,7 +2,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 
-use super::geometry::{At, Cell, E, Geometry, N, Placed, S, W};
+use super::geometry::{At, Cell, E, Geometry, N, Place, Placed, S, W};
 use super::{Diagram, Hit, Node, State};
 use crate::agents::activity::Status;
 use crate::flows::progress::Edge;
@@ -185,7 +185,8 @@ const HEAVY: Borders = Borders { corners: ["┏", "┓", "┗", "┛"], across: 
 
 fn draw_box(frame: &mut Canvas, d: &Diagram, node: &Node, placed: &Placed, lit: bool) {
     let r = placed.rect;
-    let working = node.state == Some(State::Agent(Some(Status::Working)));
+    let focused = matches!(placed.place, Place::Role { stage, .. } if d.focus == Some(stage));
+    let working = node.state == Some(State::Agent(Some(Status::Working))) || focused;
     let closed = node.state == Some(State::Closed);
     let borders = if working { &HEAVY } else { &LIGHT };
     let bg = if lit { Style::default().bg(hover_colour(d.light)) } else { Style::default() };

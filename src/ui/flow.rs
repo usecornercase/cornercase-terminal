@@ -86,6 +86,7 @@ pub(crate) struct Diagram {
     pub(crate) light: bool,
     pub(crate) spin: Option<u8>,
     pub(crate) live: Option<Live>,
+    pub(crate) focus: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,7 +140,13 @@ impl Diagram {
             light,
             spin: None,
             live: None,
+            focus: None,
         }
+    }
+
+    #[must_use]
+    pub(crate) fn focused(self, stage: Option<usize>) -> Self {
+        Self { focus: stage, ..self }
     }
 
     pub(crate) fn live(mut self, progress: &Progress, of: impl Fn(&str) -> State, now: Instant) -> Self {
@@ -238,6 +245,43 @@ fn placed(diagram: &Diagram, area: Rect) -> (Geometry, Rect) {
     (layout(diagram, width), Rect { x, width, ..area })
 }
 
+pub(crate) fn max_scroll(diagram: &Diagram, area: Rect) -> u16 {
+    diagram_height(diagram, area.width).saturating_sub(area.height)
+}
+
+pub(crate) fn scroll_to(diagram: &Diagram, area: Rect, stage: usize, scroll: u16) -> u16 {
+    let (geometry, _) = placed(diagram, area);
+    let rows = geometry.boxes.iter().filter(|b| matches!(b.place, Place::Role { stage: s, .. } if s == stage));
+    let (top, bottom) = rows.fold((u16::MAX, 0), |(top, bottom), b| (top.min(b.rect.y), bottom.max(b.rect.bottom())));
+    if top == u16::MAX {
+        return scroll.min(max_scroll(diagram, area));
+    }
+    let scroll = if top < scroll {
+        top
+    } else if bottom > scroll.saturating_add(area.height) {
+        bottom.saturating_sub(area.height).min(top)
+    } else {
+        scroll
+    };
+    scroll.min(max_scroll(diagram, area))
+}
+
+pub(crate) fn draw_scrolled(buf: &mut Buffer, area: Rect, diagram: &Diagram, scroll: u16, hover: Option<Position>) {
+    let scroll = scroll.min(max_scroll(diagram, area));
+    draw_diagram(buf, area, diagram, scroll, hover);
+    let below = diagram_height(diagram, area.width).saturating_sub(scroll) > area.height;
+    let more = |buf: &mut Buffer, y: u16, text: &str| {
+        let x = area.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
+        put(buf, x, y, text, dim(diagram.muted), area.right());
+    };
+    if scroll > 0 && area.height > 0 {
+        more(buf, area.y, MORE_ABOVE);
+    }
+    if below && area.height > 0 {
+        more(buf, area.bottom() - 1, MORE_BELOW);
+    }
+}
+
 pub(crate) fn draw_diagram(buf: &mut Buffer, area: Rect, diagram: &Diagram, scroll: u16, hover: Option<Position>) {
     let (geometry, area) = placed(diagram, area);
     paint::paint(buf, area, diagram, &geometry, scroll, hover);
@@ -286,18 +330,7 @@ pub(crate) fn draw(f: &mut Frame, area: Rect, view: &View, hover: Option<Positio
     put(buf, row.x, row.y + 1, &task, dim(view.diagram.muted), row.right().min(area.right()));
     let body = body(area);
     let scroll = scrolled(area, view, 0);
-    draw_diagram(buf, body, &view.diagram, scroll, hover.filter(|p| body.contains(*p)));
-    let below = diagram_height(&view.diagram, body.width).saturating_sub(scroll) > body.height;
-    let more = |buf: &mut Buffer, y: u16, text: &str| {
-        let x = body.right().saturating_sub(u16::try_from(text::cells(text)).unwrap_or(0));
-        put(buf, x, y, text, dim(view.diagram.muted), body.right());
-    };
-    if scroll > 0 {
-        more(buf, body.y, MORE_ABOVE);
-    }
-    if below && body.height > 0 {
-        more(buf, body.bottom() - 1, MORE_BELOW);
-    }
+    draw_scrolled(buf, body, &view.diagram, scroll, hover.filter(|p| body.contains(*p)));
 }
 
 #[cfg(test)]

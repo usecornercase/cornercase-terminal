@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::store::{Listing, Origin, Saved};
+use super::store::{self, Listing, Origin, Saved};
 use super::{Flow, builtin};
 use crate::agents::{self, Known};
 
@@ -15,8 +15,9 @@ pub(crate) const DIAGRAM: &str = "diagram";
 pub(crate) const FORM: &str = "form";
 pub(crate) const DELETE_ROLE: &str = "delete role";
 pub(crate) const DISCARD: &str = "discard";
-pub(crate) const ADD_ROLE: &str = "+ role";
-const BUILT_IN_HINT: &str = "built-in flows are read only: duplicate one to change it";
+pub(crate) const ADD_ROLE: &str = "+ add role";
+pub(crate) const RESTORE: &str = "restore default";
+const BUILT_IN_HINT: &str = "a built-in flow: edit saves your version in your folder, in its place";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Place {
@@ -52,6 +53,7 @@ pub(crate) enum Then {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Confirm {
     Delete(usize),
+    Restore(usize),
     Leave(Then),
 }
 
@@ -130,6 +132,7 @@ pub(crate) struct Dialog {
     pub(crate) agents: Agents,
     pub(crate) last: Option<Origin>,
     pub(crate) project: Option<u64>,
+    pub(crate) builtins: Vec<String>,
 }
 
 impl Dialog {
@@ -137,6 +140,7 @@ impl Dialog {
         Self {
             flows: listing.flows,
             broken: listing.broken,
+            builtins: listing.builtins,
             cursor: 0,
             edit: None,
             confirm: None,
@@ -150,6 +154,7 @@ impl Dialog {
     pub(crate) fn set_listing(&mut self, listing: Listing) {
         self.flows = listing.flows;
         self.broken = listing.broken;
+        self.builtins = listing.builtins;
         self.cursor = self.cursor.min(self.entries().saturating_sub(1));
     }
 
@@ -192,11 +197,7 @@ impl Dialog {
         self.select(i);
         let Some(saved) = self.selected() else { return };
         let place = match &saved.origin {
-            Origin::BuiltIn => {
-                self.notice = Some(BUILT_IN_HINT.into());
-                return;
-            }
-            Origin::User(_) => Place::Yours,
+            Origin::BuiltIn | Origin::User(_) => Place::Yours,
             Origin::Project(_) => Place::Project,
         };
         let path = saved.origin.path().map(PathBuf::from);
@@ -232,7 +233,8 @@ impl Dialog {
     pub(crate) fn ask_delete(&mut self) {
         let deletable = self.selected().is_none_or(|saved| saved.origin.editable());
         if self.cursor < self.entries() && deletable {
-            self.confirm = Some(Confirm::Delete(self.cursor));
+            let edited = self.selected().is_some_and(|saved| store::edits_builtin(&self.builtins, saved));
+            self.confirm = Some(if edited { Confirm::Restore(self.cursor) } else { Confirm::Delete(self.cursor) });
         }
     }
 
@@ -285,7 +287,7 @@ impl Dialog {
 
     pub(crate) fn confirmed(&mut self) -> Action {
         match self.confirm.take() {
-            Some(Confirm::Delete(i)) => self.path_at(i).map_or(Action::None, Action::Delete),
+            Some(Confirm::Delete(i) | Confirm::Restore(i)) => self.path_at(i).map_or(Action::None, Action::Delete),
             Some(Confirm::Leave(Then::List)) => {
                 self.edit = None;
                 Action::None
@@ -304,6 +306,11 @@ impl Dialog {
                 };
                 Some(("Delete flow", message, DELETE))
             }
+            Confirm::Restore(i) => {
+                let name = self.flows.get(i).map(|saved| saved.flow.name.trim().to_string()).unwrap_or_default();
+                let message = format!("Bring back the built-in {name}? Your version's file goes.");
+                Some(("Restore default", message, RESTORE))
+            }
             Confirm::Leave(_) => {
                 let name = self.edit.as_ref().map(|e| e.flow.name.trim().to_string()).unwrap_or_default();
                 Some(("Unsaved changes", format!("{name} has changes that are not saved. Discard them?"), DISCARD))
@@ -320,9 +327,8 @@ impl Dialog {
     }
 
     pub(crate) fn list_rows(&self) -> Vec<RowText> {
-        let flows = self.flows.iter().map(flow_row);
+        let flows = self.flows.iter().map(|saved| flow_row(&self.flows, &self.builtins, saved));
         let broken = self.broken.iter().map(|(path, reason)| RowText {
-            section: "Unreadable files",
             label: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             value: reason.clone(),
             red: true,
@@ -337,8 +343,9 @@ impl Dialog {
         }
         let mut buttons = Vec::new();
         match self.selected() {
+            Some(saved) if store::edits_builtin(&self.builtins, saved) => buttons.extend([EDIT, DUPLICATE, RESTORE]),
             Some(saved) if saved.origin.editable() => buttons.extend([EDIT, DUPLICATE, DELETE]),
-            Some(_) => buttons.push(DUPLICATE),
+            Some(_) => buttons.extend([EDIT, DUPLICATE]),
             None if self.cursor < self.entries() => buttons.push(DELETE),
             None => {}
         }
@@ -368,7 +375,7 @@ impl Dialog {
     pub(crate) fn warnings(&self) -> Vec<String> {
         let Some(edit) = &self.edit else { return Vec::new() };
         let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
-        std::iter::once(permission_line(&edit.flow)).chain(risks).chain(edit.flow.problems()).collect()
+        risks.into_iter().chain(edit.flow.problems()).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {
@@ -379,7 +386,7 @@ impl Dialog {
         match label {
             EDIT => self.open(self.cursor),
             DUPLICATE => return self.duplicate(),
-            DELETE => self.ask_delete(),
+            DELETE | RESTORE => self.ask_delete(),
             NEW => self.open_new(),
             DONE => return Action::Close,
             _ => {}
@@ -417,25 +424,17 @@ impl Dialog {
     }
 }
 
-pub(crate) fn flow_row(saved: &Saved) -> RowText {
-    let problems = saved.flow.problems();
-    let section = match saved.origin {
-        Origin::BuiltIn => "Built in",
-        Origin::User(_) => "Yours",
-        Origin::Project(_) => "This project",
-    };
+pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], saved: &Saved) -> RowText {
+    let problems: Vec<String> = store::conflict(flows, saved).into_iter().chain(saved.flow.problems()).collect();
     let (value, note) = match problems.as_slice() {
-        [] => (agents_count(&saved.flow), plan_summary(&saved.flow)),
+        [] => {
+            let tag = store::tag(builtins, saved).map(|tag| format!("{tag} · ")).unwrap_or_default();
+            (agents_count(&saved.flow), format!("{tag}{}", plan_summary(&saved.flow)))
+        }
         [only] => (only.clone(), String::new()),
         [first, rest @ ..] => (format!("{first} (+{} more)", rest.len()), String::new()),
     };
-    RowText { section, label: saved.flow.name.clone(), value, note, red: !problems.is_empty(), ..RowText::default() }
-}
-
-pub(crate) fn permission_line(flow: &Flow) -> String {
-    let agents = flow.agents();
-    let run = if agents == 1 { "agent runs" } else { "agents run" };
-    format!("{agents} {run} without asking for permission")
+    RowText { label: saved.flow.name.clone(), value, note, red: !problems.is_empty(), ..RowText::default() }
 }
 
 pub(crate) fn project_risks(flow: &Flow) -> Option<String> {
@@ -452,6 +451,11 @@ pub(crate) fn project_risks(flow: &Flow) -> Option<String> {
     let (last, rest) = parts.split_last()?;
     let parts = if rest.is_empty() { last.clone() } else { format!("{} and {last}", rest.join(", ")) };
     Some(format!("this project's flow {parts}; they run without asking, so check them"))
+}
+
+pub(crate) fn scrolled(scroll: u16, delta: isize, most: u16) -> u16 {
+    let scroll = i32::from(scroll).saturating_add(i32::try_from(delta).unwrap_or(0)).max(0);
+    u16::try_from(scroll).unwrap_or(u16::MAX).min(most)
 }
 
 pub(crate) fn agents_count(flow: &Flow) -> String {

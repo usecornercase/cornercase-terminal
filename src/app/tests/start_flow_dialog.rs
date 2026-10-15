@@ -57,6 +57,13 @@ fn type_in(app: &mut App, text: &str, area: Rect) {
     }
 }
 
+fn click_flow(app: &mut App, name: &str, line: u16) {
+    let i = start(app).flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
+    let list = ui::start_list(WIDE, view(app, WIDE).shape());
+    let y = list.y + 1 + u16::try_from(i).expect("few flows") * 2 + line;
+    click_in(app, Position::new(list.x + 4, y), WIDE);
+}
+
 fn selected(app: &App) -> String {
     start(app).selected().map(|saved| saved.flow.name.clone()).unwrap_or_default()
 }
@@ -121,9 +128,10 @@ mod the_dialog {
     #[test]
     fn a_click_on_a_flow_selects_it() {
         let mut s = opened(true);
-        let list = ui::start_list(WIDE, view(&s.app, WIDE).shape());
-        click_in(&mut s.app, Position::new(list.x + 4, list.y + 3), WIDE);
+        click_flow(&mut s.app, "Quick", 0);
         assert_eq!(selected(&s.app), "Quick");
+        click_flow(&mut s.app, "Cross review", 1);
+        assert_eq!(selected(&s.app), "Cross review");
     }
 
     #[test]
@@ -131,7 +139,7 @@ mod the_dialog {
         let s = opened(true);
         let view = view(&s.app, WIDE);
         let (list, prompt) = (ui::start_list(WIDE, view.shape()), ui::start_prompt(WIDE, view.shape()));
-        assert_eq!((list.height, prompt.y - list.bottom()), (5, 2));
+        assert_eq!((list.height, prompt.y - list.bottom()), (9, 2));
         assert!(prompt.height > list.height);
     }
 
@@ -152,14 +160,15 @@ mod the_dialog {
     }
 
     #[test]
-    fn edit_opens_the_flows_dialog_on_the_selected_flow_and_done_comes_back() {
+    fn edit_opens_the_selected_flow_on_its_edit_page_and_done_comes_back() {
         let mut s = opened(true);
         type_in(&mut s.app, "Add dark mode", WIDE);
         button(&mut s.app, WIDE, dialog::EDIT);
         let Some(Overlay::Flows { dialog: flows, .. }) = &s.app.overlay else { panic!("no flows dialog") };
-        assert_eq!(flows.cursor, 0);
+        assert_eq!(flows.edit.as_ref().map(|edit| edit.flow.name.as_str()), Some("Bug, test first"));
         flows_button(&mut s.app, dialog::DONE);
-        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), ("Full issue".into(), "Add dark mode".into()));
+        flows_button(&mut s.app, dialog::DONE);
+        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), ("Bug, test first".into(), "Add dark mode".into()));
     }
 
     #[test]
@@ -167,10 +176,30 @@ mod the_dialog {
         let mut s = opened(true);
         type_in(&mut s.app, "Add dark mode", WIDE);
         button(&mut s.app, WIDE, dialog::EDIT);
+        flows_button(&mut s.app, dialog::DONE);
         flows_button(&mut s.app, dialog::DUPLICATE);
         flows_button(&mut s.app, dialog::DONE);
         flows_button(&mut s.app, dialog::DONE);
-        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), ("Full issue copy".into(), "Add dark mode".into()));
+        let expected = ("Bug, test first copy".to_string(), "Add dark mode".to_string());
+        assert_eq!((selected(&s.app), start(&s.app).prompt.text()), expected);
+    }
+}
+
+mod preview {
+    use super::*;
+
+    const SHORT: Rect = Rect { x: 0, y: 0, width: 150, height: 30 };
+
+    #[test]
+    fn the_wheel_over_it_scrolls_it_and_choosing_another_flow_brings_it_back_to_the_top() {
+        let mut s = opened(true);
+        let body = ui::start_preview(SHORT, view(&s.app, SHORT).shape()).map(ui::preview_body).expect("a preview");
+        assert!(format!("{}", render(&mut s.app, SHORT).backend()).contains(" ↓ more "));
+        mouse_in(&mut s.app, MouseEventKind::ScrollDown, body.as_position(), SHORT);
+        assert!(start(&s.app).preview > 0);
+        assert!(format!("{}", render(&mut s.app, SHORT).backend()).contains(" ↑ more "));
+        click_flow(&mut s.app, "Full issue", 0);
+        assert_eq!(start(&s.app).preview, 0);
     }
 }
 
@@ -190,6 +219,9 @@ mod running {
     fn start_opens_the_team_in_its_worktree_and_shows_the_orchestrator() {
         let mut s = opened(true);
         let _dirs = with_claude(&mut s);
+        click_flow(&mut s.app, "Full issue", 0);
+        let prompt = ui::start_prompt(WIDE, view(&s.app, WIDE).shape());
+        click_in(&mut s.app, prompt.as_position(), WIDE);
         type_in(&mut s.app, "Fix the login form", WIDE);
         button(&mut s.app, WIDE, START);
         click_in(&mut s.app, Position::new(0, 0), WIDE);

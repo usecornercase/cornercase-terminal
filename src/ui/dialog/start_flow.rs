@@ -1,7 +1,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::flows::{
@@ -9,16 +9,15 @@ use super::flows::{
     text_inside,
 };
 use super::issues::issue_buttons_in;
-use super::settings::{Columns, SettingsHit, SettingsRow, draw_rows, hit_in_rows, settings_lines};
-use super::{Note, draw_input, form_inner};
+use super::{Note, draw_input, form_inner, pick_background};
 use crate::flows::Flow;
-use crate::flows::start::{Focus, START};
+use crate::flows::start::{Focus, Item, START};
 use crate::text::truncate_right;
 use crate::todo::editor::Editor;
 use crate::ui::View;
 use crate::ui::widgets::overlay_block;
 
-const LIST_LABEL: usize = 22;
+const HEADING: &str = "Flow templates";
 const PLACEHOLDER: &str = "what the team should do: a feature, a bug, an issue's text…";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,8 +29,8 @@ pub(crate) struct Shape {
 }
 
 impl Shape {
-    pub(crate) fn new(sections: &[&str], warnings: usize, preview: bool, diagram: bool) -> Self {
-        Self { warnings, preview, diagram, lines: settings_lines(sections).len() }
+    pub(crate) fn new(items: usize, warnings: usize, preview: bool, diagram: bool) -> Self {
+        Self { warnings, preview, diagram, lines: 1 + 2 * items }
     }
 }
 
@@ -102,8 +101,9 @@ pub(crate) fn start_buttons(area: Rect, shape: Shape, labels: &[&str]) -> Vec<Re
 pub(crate) struct StartFlow {
     pub(crate) title: String,
     pub(crate) heading: String,
-    pub(crate) rows: Vec<SettingsRow>,
+    pub(crate) items: Vec<Item>,
     pub(crate) cursor: usize,
+    pub(crate) preview_scroll: u16,
     pub(crate) prompt: Editor,
     pub(crate) branch: String,
     pub(crate) focus: Focus,
@@ -117,8 +117,7 @@ pub(crate) struct StartFlow {
 
 impl StartFlow {
     pub(crate) fn shape(&self) -> Shape {
-        let sections: Vec<&str> = self.rows.iter().map(|row| row.section).collect();
-        Shape::new(&sections, self.warnings.len(), self.preview.is_some(), self.diagram)
+        Shape::new(self.items.len(), self.warnings.len(), self.preview.is_some(), self.diagram)
     }
 
     fn list_hidden(&self, area: Rect) -> bool {
@@ -157,9 +156,59 @@ pub(crate) fn start_hit(area: Rect, view: &StartFlow, pos: Position) -> Option<S
     if view.list_hidden(area) {
         return None;
     }
-    match hit_in_rows(view.list(area), &view.rows, view.cursor, pos)? {
-        SettingsHit::Row(i) => Some(StartHit::Row(i)),
-        _ => None,
+    let items = items_area(view.list(area));
+    if !items.contains(pos) {
+        return None;
+    }
+    let i = first_item(items, view.items.len(), view.cursor) + usize::from((pos.y - items.y) / 2);
+    (i < view.items.len()).then_some(StartHit::Row(i))
+}
+
+fn items_area(list: Rect) -> Rect {
+    Rect { y: list.y.saturating_add(1), height: list.height.saturating_sub(1), ..list }
+}
+
+fn first_item(items: Rect, count: usize, cursor: usize) -> usize {
+    let shown = usize::from(items.height / 2).max(1);
+    (cursor + 1).saturating_sub(shown).min(count.saturating_sub(shown))
+}
+
+fn draw_items(f: &mut Frame, view: &View, list: Rect, start: &StartFlow) {
+    let dim = Style::default().fg(view.muted);
+    f.render_widget(
+        Paragraph::new(Span::styled(HEADING, dim.add_modifier(Modifier::BOLD))),
+        Rect { height: 1, ..list },
+    );
+    let items = items_area(list);
+    let first = first_item(items, start.items.len(), start.cursor);
+    for (n, item) in start.items.iter().enumerate().skip(first) {
+        let y = items.y.saturating_add(u16::try_from((n - first) * 2).unwrap_or(u16::MAX));
+        if y.saturating_add(1) >= items.bottom() {
+            break;
+        }
+        let row = Rect { y, height: 2, ..items };
+        let selected = n == start.cursor;
+        let bg = pick_background(view, selected, row);
+        f.buffer_mut().set_style(row, bg);
+        let rail = Span::styled(if selected { "▌ " } else { "  " }, bg.fg(Color::Cyan));
+        let width = usize::from(row.width);
+        let agents = format!(" {} ", item.agents);
+        let tag = item.tag.map(|tag| format!("  {tag}")).unwrap_or_default();
+        let room = width.saturating_sub(2 + agents.chars().count() + tag.chars().count());
+        let name = truncate_right(&item.name, room);
+        let gap = width.saturating_sub(2 + name.chars().count() + tag.chars().count() + agents.chars().count());
+        let first = Line::from(vec![
+            rail.clone(),
+            Span::styled(name, bg.add_modifier(Modifier::BOLD)),
+            Span::styled(tag, bg.fg(view.muted)),
+            Span::styled(" ".repeat(gap), bg),
+            Span::styled(agents, bg.fg(view.muted)),
+        ]);
+        f.render_widget(Paragraph::new(first), Rect { height: 1, ..row });
+        let style = if item.red { bg.fg(Color::Red) } else { bg.fg(view.muted) };
+        let line = truncate_right(&item.line, width.saturating_sub(4));
+        let second = Line::from(vec![rail, Span::styled(format!("  {line}"), style)]);
+        f.render_widget(Paragraph::new(second), Rect { y: y + 1, height: 1, ..row });
     }
 }
 
@@ -175,11 +224,10 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
     let heading_text = truncate_right(&start.heading, usize::from(heading.width));
     f.render_widget(Paragraph::new(Span::styled(heading_text, dim.add_modifier(Modifier::BOLD))), heading);
     if let Some(preview) = start.preview_area(area) {
-        draw_preview(f, view, preview, start.preview.as_ref());
+        draw_preview(f, view, preview, start.preview.as_ref(), start.preview_scroll, None);
     }
     if !start.list_hidden(area) {
-        let columns = Columns { label: LIST_LABEL, fill: true };
-        draw_rows(f, view, start.list(area), &start.rows, start.cursor, &columns);
+        draw_items(f, view, start.list(area), start);
     }
     let lit = |focus: Focus| if start.focus == focus { Style::default().fg(Color::Cyan) } else { dim };
     f.render_widget(Paragraph::new(Span::styled("prompt", lit(Focus::Prompt))), label);

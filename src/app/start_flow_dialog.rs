@@ -2,7 +2,7 @@ use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::flows_dialog::settings_row;
+use super::flows_dialog::plan;
 use super::input::wheel;
 use super::overlay::Overlay;
 use crate::flows::start::{Action, Hit, Room, Start};
@@ -53,7 +53,11 @@ impl App {
         let Some(start) = self.start_flow() else { return };
         let room = room(start, area);
         if let Some(delta) = wheel(ev.kind) {
-            if ui::start_prompt(area, shape(start)).contains(pos) {
+            let preview = ui::start_preview(area, shape(start)).map(ui::preview_body).filter(|body| body.contains(pos));
+            if let (Some(body), Some(saved)) = (preview, start.selected()) {
+                let most = ui::flow::max_scroll(&plan(&saved.flow), body);
+                start.scroll_preview(delta, most);
+            } else if ui::start_prompt(area, shape(start)).contains(pos) {
                 start.scroll_prompt(delta, room);
             } else {
                 start.scroll_list(delta.signum());
@@ -121,9 +125,7 @@ impl App {
 }
 
 fn shape(start: &Start) -> ui::StartShape {
-    let rows = start.rows();
-    let sections: Vec<&str> = rows.iter().map(|row| row.section).collect();
-    ui::StartShape::new(&sections, start.warnings().len(), start.selected().is_some(), start.diagram)
+    ui::StartShape::new(start.flows.len(), start.warnings().len(), start.selected().is_some(), start.diagram)
 }
 
 fn room(start: &Start, area: Rect) -> Room {
@@ -136,8 +138,9 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
     ui::Overlay::StartFlow(Box::new(ui::StartFlow {
         title: start.title(),
         heading: start.heading(),
-        rows: start.rows().iter().map(settings_row).collect(),
+        items: start.items(),
         cursor: start.cursor,
+        preview_scroll: start.preview,
         prompt: start.prompt.clone(),
         branch: start.branch.clone(),
         focus: start.focus,

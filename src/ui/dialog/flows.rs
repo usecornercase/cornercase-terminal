@@ -14,7 +14,7 @@ use crate::flows::Flow;
 use crate::text::truncate_right;
 use crate::todo::editor::Editor;
 use crate::ui::View;
-use crate::ui::flow::{Diagram, draw_diagram};
+use crate::ui::flow::{Diagram, draw_scrolled};
 use crate::ui::widgets::overlay_block;
 
 const FLOWS_WIDTH: u16 = 140;
@@ -110,6 +110,8 @@ pub(crate) struct Flows {
     pub(crate) buttons: Vec<&'static str>,
     pub(crate) submit: &'static str,
     pub(crate) preview: Option<Flow>,
+    pub(crate) preview_scroll: u16,
+    pub(crate) focus: Option<usize>,
     pub(crate) diagram: bool,
 }
 
@@ -180,7 +182,7 @@ pub(in crate::ui) fn draw_flows(f: &mut Frame, view: &View, flows: &Flows) {
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
     }
     if let Some(preview) = flows.preview_area(area) {
-        draw_preview(f, view, preview, flows.preview.as_ref());
+        draw_preview(f, view, preview, flows.preview.as_ref(), flows.preview_scroll, flows.focus);
     }
     if let Some(editor) = &flows.text {
         cursor = draw_text(f, view, body, editor);
@@ -236,12 +238,23 @@ pub(in crate::ui) fn draw_warnings(f: &mut Frame, warnings: &[String], r: Rect) 
     }
 }
 
-pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, flow: Option<&Flow>) {
+pub(crate) fn preview_body(r: Rect) -> Rect {
+    r.inner(Margin::new(2, 1))
+}
+
+pub(in crate::ui) fn draw_preview(
+    f: &mut Frame,
+    view: &View,
+    r: Rect,
+    flow: Option<&Flow>,
+    scroll: u16,
+    focus: Option<usize>,
+) {
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
     if let Some(flow) = flow {
-        let diagram = Diagram::plan(flow, view.muted, view.light);
-        draw_diagram(f.buffer_mut(), r.inner(Margin::new(2, 1)), &diagram, 0, None);
+        let diagram = Diagram::plan(flow, view.muted, view.light).focused(focus);
+        draw_scrolled(f.buffer_mut(), preview_body(r), &diagram, scroll, None);
     }
 }
 

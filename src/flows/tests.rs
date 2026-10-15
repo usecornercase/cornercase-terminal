@@ -267,17 +267,33 @@ roles = ["coder"]
     }
 
     #[test]
-    fn listing_puts_built_in_flows_first_then_yours_then_the_projects_and_reports_broken_files() {
-        let user = TempDir::new();
-        let project = TempDir::new();
+    fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_both() {
+        let (user, project) = (TempDir::new(), TempDir::new());
         store::save(user.path(), &sample(), None).expect("save");
         let dir = store::project_dir(project.path());
         store::save(&dir, &sample(), None).expect("save");
+        let quick = Flow { name: "Quick".into(), ..sample() };
+        store::save(&dir, &quick, None).expect("save");
         std::fs::write(dir.join("broken.toml"), "name = ").expect("write");
-        let listing = store::list(vec![sample()], user.path(), Some(&dir));
-        let origins: Vec<_> = listing.flows.iter().map(|saved| saved.origin.label()).collect();
-        assert_eq!(origins, ["built in", "yours", "this project"]);
-        assert_eq!(listing.broken.len(), 1);
+        let builtins = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let listing = store::list(builtins, user.path(), Some(&dir));
+        let listed: Vec<(&str, &str)> =
+            listing.flows.iter().map(|saved| (saved.flow.name.as_str(), saved.origin.label())).collect();
+        assert_eq!(
+            listed,
+            [
+                ("Bug, test first", "built in"),
+                ("Cross review", "built in"),
+                ("Full issue", "yours"),
+                ("Full issue", "this project"),
+                ("Quick", "built in"),
+                ("Quick", "this project"),
+            ]
+        );
+        let conflicts: Vec<Option<String>> = listing.flows.iter().map(|saved| listing.conflict(saved)).collect();
+        assert_eq!(conflicts[3].as_deref(), Some("yours is also named `Full issue` and runs instead"));
+        assert_eq!(conflicts[5].as_deref(), Some("the built-in one is also named `Quick` and runs instead"));
+        assert!(store::edits_builtin(&listing.builtins, &listing.flows[2]));
         assert_eq!(listing.broken[0].0, dir.join("broken.toml"));
     }
 

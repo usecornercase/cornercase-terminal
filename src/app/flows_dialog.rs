@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 
 use super::App;
 use super::dialogs::confirm_view;
@@ -31,9 +32,7 @@ impl App {
         dialog.project = project;
         if let Some(i) = flow.and_then(|(origin, name)| dialog.find(origin, name)) {
             dialog.select(i);
-            if origin_editable(flow) {
-                dialog.open(i);
-            }
+            dialog.open(i);
         }
         let back = self.overlay.take().map(Box::new);
         self.overlay = Some(Overlay::Flows { dialog: Box::new(dialog), back });
@@ -56,6 +55,7 @@ impl App {
         let Some(dialog) = self.flows_dialog() else { return };
         let room = room(dialog, area);
         let action = dialog.key(key, room);
+        follow_preview(dialog, area);
         self.flows_act(action);
     }
 
@@ -63,6 +63,7 @@ impl App {
         if let Some(dialog) = self.flows_dialog() {
             let room = room(dialog, area);
             dialog.paste(text, room);
+            follow_preview(dialog, area);
         }
     }
 
@@ -91,7 +92,14 @@ impl App {
             return;
         }
         if let Some(delta) = wheel(ev.kind) {
-            dialog.wheel(delta, room);
+            let body = preview_body(dialog, area).filter(|body| body.contains(pos));
+            match (body, dialog.edit.as_deref_mut()) {
+                (Some(body), Some(edit)) => {
+                    let most = ui::flow::max_scroll(&plan(&edit.flow), body);
+                    edit.scroll_preview(delta, most);
+                }
+                _ => dialog.wheel(delta, room),
+            }
             return;
         }
         if ev.kind != MouseEventKind::Down(MouseButton::Left) {
@@ -110,6 +118,7 @@ impl App {
             Some(FlowsHit::Row(_)) | None => return,
         };
         let action = dialog.hit(hit, room);
+        follow_preview(dialog, area);
         self.flows_act(action);
     }
 
@@ -215,16 +224,29 @@ impl App {
     }
 }
 
-fn origin_editable(flow: Option<(&Origin, &str)>) -> bool {
-    flow.is_some_and(|(origin, _)| origin.editable())
-}
-
 fn save(dir: &std::path::Path, flow: &Flow, previous: Option<&std::path::Path>) -> Result<PathBuf, String> {
     store::save(dir, flow, previous).map_err(|e| e.to_string())
 }
 
 fn file_name(path: &std::path::Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+pub(super) fn plan(flow: &Flow) -> ui::flow::Diagram {
+    ui::flow::Diagram::plan(flow, Color::Reset, false)
+}
+
+fn preview_body(dialog: &Dialog, area: Rect) -> Option<Rect> {
+    let edit = dialog.edit.as_deref().filter(|edit| edit.text.is_none())?;
+    ui::flows_preview(area, dialog.warnings().len(), true, edit.diagram).map(ui::preview_body)
+}
+
+fn follow_preview(dialog: &mut Dialog, area: Rect) {
+    let Some(body) = preview_body(dialog, area) else { return };
+    let Some(edit) = dialog.edit.as_deref_mut() else { return };
+    if let Some(stage) = edit.newly_focused() {
+        edit.preview = ui::flow::scroll_to(&plan(&edit.flow), body, stage, edit.preview);
+    }
 }
 
 fn room(dialog: &Dialog, area: Rect) -> Room {
@@ -305,6 +327,8 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         buttons: dialog.buttons(room),
         submit: dialog.submit(),
         preview: edit.filter(|e| e.text.is_none()).map(|e| e.flow.clone()),
+        preview_scroll: edit.map_or(0, |e| e.preview),
+        focus: edit.and_then(Editing::preview_stage),
         diagram: edit.is_some_and(|e| e.diagram),
     }))
 }

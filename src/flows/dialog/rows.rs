@@ -50,7 +50,7 @@ impl Editing {
                 back(i).map(|b| format!("{} times", b.at_most)).unwrap_or_default(),
                 "then it moves on",
             ),
-            Row::AddStage => text("+ stage", String::new(), ""),
+            Row::AddStage => text("+ add stage", String::new(), ""),
             Row::End => text("◆ at the end", flow.end.label().into(), ""),
             Row::Notes => text("notes", one_line(&flow.notes), TEXT_MARK),
             Row::RoleName | Row::Agent | Row::Model | Row::Effort | Row::Args | Row::Env | Row::Edits | Row::Prompt => {

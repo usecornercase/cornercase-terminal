@@ -21,7 +21,11 @@ fn dialog() -> Dialog {
     let mut flows: Vec<Saved> = builtins.into_iter().map(|flow| Saved { flow, origin: Origin::BuiltIn }).collect();
     flows.push(Saved { flow: user_flow(), origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
     let broken = vec![(PathBuf::from("/flows/bad.toml"), "expected `=`".to_string())];
-    Dialog::new(Listing { flows, broken }, Agents::new(vec![Known::Claude, Known::Codex], Some(Known::Claude), true))
+    let builtins = flows.iter().take(4).map(|saved| saved.flow.name.clone()).collect();
+    Dialog::new(
+        Listing { flows, broken, builtins },
+        Agents::new(vec![Known::Claude, Known::Codex], Some(Known::Claude), true),
+    )
 }
 
 fn mine() -> usize {
@@ -69,10 +73,18 @@ mod the_list {
     use super::*;
 
     #[test]
-    fn flows_are_grouped_by_where_they_come_from() {
-        let rows = dialog().list_rows();
-        let sections: Vec<&str> = rows.iter().map(|r| r.section).collect();
-        assert_eq!(sections, ["Built in", "Built in", "Built in", "Built in", "Yours", "Unreadable files"],);
+    fn one_list_without_sections_tags_this_projects_flows_and_built_ins_you_edited() {
+        let mut d = dialog();
+        d.flows[mine()].flow.name = "Quick".into();
+        d.flows.remove(2);
+        d.flows.push(Saved { flow: user_flow(), origin: Origin::Project(PathBuf::from("/repo/theirs.toml")) });
+        d.flows[4].flow.name = "Theirs".into();
+        let rows = d.list_rows();
+        assert!(rows.iter().all(|r| r.section.is_empty()));
+        let notes: Vec<&str> = rows.iter().map(|r| r.note.as_str()).collect();
+        assert!(notes[3].starts_with("edited · "), "{notes:?}");
+        assert!(notes[4].starts_with("this project · "), "{notes:?}");
+        assert!(!notes[0].contains(" · "), "{notes:?}");
     }
 
     #[test]
@@ -105,7 +117,7 @@ mod the_list {
     }
 
     #[rstest]
-    #[case::built_in(0, vec![DUPLICATE, NEW, DONE])]
+    #[case::built_in(0, vec![EDIT, DUPLICATE, NEW, DONE])]
     #[case::yours(4, vec![EDIT, DUPLICATE, DELETE, NEW, DONE])]
     #[case::unreadable(5, vec![DELETE, NEW, DONE])]
     fn the_buttons_follow_the_selected_flow(#[case] selected: usize, #[case] expected: Vec<&str>) {
@@ -115,11 +127,25 @@ mod the_list {
     }
 
     #[test]
-    fn a_built_in_flow_does_not_open_and_says_why() {
+    fn a_built_in_flow_opens_and_saves_as_yours_under_its_name() {
         let mut d = dialog();
         d.open(0);
-        assert!(d.edit.is_none());
-        assert_eq!(d.hint(), BUILT_IN_HINT);
+        assert!(!d.dirty());
+        edit_mut(&mut d).flow.description = "mine now".into();
+        let Action::Save { flow, place, previous } = d.save() else { panic!("not saved") };
+        assert_eq!((flow.name.as_str(), place, previous), ("Full issue", Place::Yours, None));
+    }
+
+    #[test]
+    fn a_built_in_you_edited_offers_restore_default_which_deletes_your_file() {
+        let mut d = dialog();
+        d.flows[mine()].flow.name = "Full issue".into();
+        d.select(mine());
+        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, RESTORE, NEW, DONE]);
+        d.press(RESTORE);
+        assert_eq!(d.confirm, Some(Confirm::Restore(mine())));
+        assert_eq!(d.confirm_text().map(|(title, ..)| title), Some("Restore default"));
+        assert_eq!(d.confirmed(), Action::Delete(PathBuf::from("/flows/mine.toml")));
     }
 
     #[test]
@@ -230,11 +256,11 @@ mod saving {
     }
 
     #[test]
-    fn the_permission_line_and_the_problems_are_always_shown() {
+    fn the_problems_are_always_shown_and_nothing_else() {
         let mut d = editing();
-        assert_eq!(d.warnings(), ["5 agents run without asking for permission"]);
+        assert_eq!(d.warnings(), Vec::<String>::new());
         edit_mut(&mut d).flow.name.clear();
-        assert_eq!(d.warnings(), ["5 agents run without asking for permission", "the flow has no name"]);
+        assert_eq!(d.warnings(), ["the flow has no name"]);
     }
 
     #[test]
@@ -244,10 +270,10 @@ mod saving {
         d.flows[mine()].flow.roles[3].env.insert("PATH".into(), "/tmp/evil".into());
         d.open(mine());
         let warnings = d.warnings();
-        assert_eq!(warnings[1], "this project's flow sets PATH for `tester`; they run without asking, so check them");
+        assert_eq!(warnings[0], "this project's flow sets PATH for `tester`; they run without asking, so check them");
         let mut yours = editing();
         edit_mut(&mut yours).flow.roles[3].env.insert("PATH".into(), "/tmp/evil".into());
-        assert_eq!(yours.warnings().len(), 1);
+        assert_eq!(yours.warnings().len(), 0);
     }
 
     #[test]
@@ -707,6 +733,37 @@ mod stages_and_loops {
         d.hit(Hit::Remove(stage_row(&d, 2)), ROOM);
         assert!(edit(&d).field.is_none());
         assert_eq!(whens(&d), [None, Some("findings".into())]);
+    }
+
+    #[test]
+    fn the_new_stage_row_and_the_new_role_tab_say_add() {
+        let d = editing();
+        let label = edit(&d).row_texts(&d.agents).into_iter().find(|t| t.label.contains("stage")).map(|t| t.label);
+        assert_eq!(label.as_deref(), Some("+ add stage"));
+        assert_eq!(edit(&d).tabs().last().map(String::as_str), Some("+ add role"));
+    }
+
+    #[test]
+    fn the_stage_being_changed_is_the_one_the_preview_follows_once() {
+        let mut d = editing();
+        assert_eq!(edit_mut(&mut d).newly_focused(), None);
+        click_row(&mut d, Row::Stage(1));
+        click_row(&mut d, Row::When(1));
+        assert_eq!(edit(&d).preview_stage(), Some(1));
+        assert_eq!(edit_mut(&mut d).newly_focused(), Some(1));
+        assert_eq!(edit_mut(&mut d).newly_focused(), None);
+        key(&mut d, KeyCode::Esc);
+        d.hit(Hit::Tab(2), ROOM);
+        assert_eq!(edit(&d).preview_stage(), None);
+    }
+
+    #[test]
+    fn the_preview_scrolls_within_its_bounds() {
+        let mut d = editing();
+        edit_mut(&mut d).scroll_preview(5, 3);
+        assert_eq!(edit(&d).preview, 3);
+        edit_mut(&mut d).scroll_preview(-9, 3);
+        assert_eq!(edit(&d).preview, 0);
     }
 
     #[test]

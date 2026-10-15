@@ -25,11 +25,7 @@ impl App {
             .iter()
             .map(|saved| {
                 let mut info = flow_info(&saved.flow, &saved.origin);
-                let first = named(&listing, &saved.flow.name).next();
-                if let Some(first) = first.filter(|first| first.origin != saved.origin) {
-                    let runs = whose(&first.origin);
-                    info.problems.push(format!("{runs} is also named `{}` and runs instead", saved.flow.name));
-                }
+                info.problems.extend(listing.conflict(saved));
                 info
             })
             .collect();
@@ -174,22 +170,9 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
     }
 }
 
-fn named<'a>(listing: &'a Listing, name: &str) -> impl Iterator<Item = &'a Saved> {
-    let name = name.trim().to_lowercase();
-    listing.flows.iter().filter(move |saved| saved.flow.name.trim().to_lowercase() == name)
-}
-
-fn whose(origin: &Origin) -> &'static str {
-    match origin {
-        Origin::BuiltIn => "the built-in one",
-        Origin::User(_) => "yours",
-        Origin::Project(_) => "this project's",
-    }
-}
-
 fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String> {
     let name = name.trim();
-    let found: Vec<&Saved> = named(listing, name).collect();
+    let found: Vec<&Saved> = listing.named(name).collect();
     let Some(first) = found.first() else {
         let names: Vec<&str> = listing.flows.iter().map(|saved| saved.flow.name.as_str()).collect();
         return Err(format!(
@@ -198,13 +181,13 @@ fn pick(listing: &Listing, name: &str) -> Result<(Flow, Option<String>), String>
         ));
     };
     let note = (found.len() > 1).then(|| {
-        let places: Vec<&str> = found.iter().map(|saved| whose(&saved.origin)).collect();
+        let places: Vec<&str> = found.iter().map(|saved| saved.origin.whose()).collect();
         format!(
             "{} flows are named `{}` ({}); {} runs. Give the others names of their own to run them.",
             found.len(),
             first.flow.name,
             places.join(", "),
-            whose(&first.origin)
+            first.origin.whose()
         )
     });
     Ok((first.flow.clone(), note))

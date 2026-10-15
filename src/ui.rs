@@ -34,7 +34,9 @@ pub(crate) use activity::items as activity_items;
 pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as activity_hit};
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_hit, agent_row, agent_rows};
 pub(crate) use chrome::ChangesButton;
-pub(crate) use dialog::flows::{Flows, FlowsHit, flows_hit, flows_pick_rows, flows_text, flows_wide};
+pub(crate) use dialog::flows::{
+    Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_text, flows_wide, preview_body,
+};
 #[cfg(test)]
 pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
 pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit};
@@ -66,7 +68,7 @@ pub(crate) use dialog::settings::{
     SettingsLine, line_rect, pick_list_in, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
     settings_remove, settings_restart, settings_row, settings_scroll, settings_tabs,
 };
-pub(crate) use dialog::start_flow::{Shape as StartShape, StartFlow, StartHit, start_hit, start_prompt};
+pub(crate) use dialog::start_flow::{Shape as StartShape, StartFlow, StartHit, start_hit, start_preview, start_prompt};
 #[cfg(test)]
 pub(crate) use dialog::start_flow::{start_buttons, start_list};
 pub(crate) use dialog::update::{Update, update_buttons, update_extra, update_notes, update_scroll};

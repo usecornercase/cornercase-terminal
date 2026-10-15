@@ -84,6 +84,8 @@ pub(crate) struct Editing {
     pub(crate) text: Option<Text>,
     pub(crate) diagram: bool,
     pub(crate) notice: Option<String>,
+    pub(crate) preview: u16,
+    followed: Option<usize>,
 }
 
 impl Editing {
@@ -102,7 +104,33 @@ impl Editing {
             text: None,
             diagram: false,
             notice: None,
+            preview: 0,
+            followed: None,
         }
+    }
+
+    pub(crate) fn preview_stage(&self) -> Option<usize> {
+        if self.tab != Tab::Flow {
+            return None;
+        }
+        let row = self.pick.as_ref().map(|pick| pick.row).or_else(|| self.field.as_ref().map(|field| field.row));
+        match row.or_else(|| self.rows().get(self.cursor).copied())? {
+            Row::Stage(i) | Row::Roles(i) | Row::Back(i) | Row::When(i) | Row::AtMost(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn newly_focused(&mut self) -> Option<usize> {
+        let stage = self.preview_stage();
+        if stage == self.followed {
+            return None;
+        }
+        self.followed = stage;
+        stage
+    }
+
+    pub(crate) fn scroll_preview(&mut self, delta: isize, most: u16) {
+        self.preview = super::scrolled(self.preview, delta, most);
     }
 
     pub(crate) fn is_project_flow(&self) -> bool {

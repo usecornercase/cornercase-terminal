@@ -15,7 +15,8 @@ fn listing() -> Listing {
     let mut mine = flows[2].flow.clone();
     mine.name = "Mine".into();
     flows.push(Saved { flow: mine, origin: Origin::User(PathBuf::from("/flows/mine.toml")) });
-    Listing { flows, broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())] }
+    let builtins = flows.iter().take(4).map(|saved| saved.flow.name.clone()).collect();
+    Listing { flows, broken: vec![(PathBuf::from("/flows/bad.toml"), "broken".into())], builtins }
 }
 
 fn start() -> Start {
@@ -44,8 +45,35 @@ mod opening {
     #[test]
     fn it_lists_every_flow_but_files_that_cannot_be_read() {
         let s = start();
-        let names: Vec<String> = s.rows().iter().map(|r| r.label.clone()).collect();
+        let names: Vec<String> = s.items().iter().map(|item| item.name.clone()).collect();
         assert_eq!(names, ["Full issue", "Cross review", "Quick", "Bug, test first", "Mine"]);
+    }
+
+    #[test]
+    fn each_flow_shows_its_name_its_agents_and_its_description_or_its_first_problem() {
+        let mut listing = listing();
+        listing.flows[1].flow.stages.clear();
+        listing.flows[4].flow.name = "Quick".into();
+        let items = Start::new(7, "web-shop".into(), true, listing).items();
+        let full = &items[0];
+        assert_eq!(
+            (full.name.as_str(), full.agents.as_str(), full.tag, full.red),
+            ("Full issue", "5 agents", None, false)
+        );
+        assert!(full.line.starts_with("A coder, a reviewer and a security reviewer"), "{}", full.line);
+        assert_eq!((items[1].line.as_str(), items[1].red), ("`coder` is in no stage", true));
+        assert_eq!(items[4].tag, Some("edited"));
+    }
+
+    #[test]
+    fn choosing_another_flow_scrolls_the_preview_back_to_the_top() {
+        let mut s = start();
+        s.scroll_preview(4, 10);
+        assert_eq!(s.preview, 4);
+        s.scroll_preview(20, 10);
+        assert_eq!(s.preview, 10);
+        s.select(2);
+        assert_eq!(s.preview, 0);
     }
 
     #[test]
@@ -195,9 +223,9 @@ mod starting {
         let mut s = Start::new(7, "web-shop".into(), true, listing);
         type_text(&mut s, "Add dark mode");
         s.select(0);
-        assert!(s.rows()[0].red);
+        assert!(s.items()[0].red);
         assert_eq!(s.press(START), Action::None);
-        assert_eq!(s.warnings()[..2], ["5 agents run without asking for permission", "`coder` is in no stage"]);
+        assert_eq!(s.warnings()[0], "`coder` is in no stage");
     }
 
     #[test]
@@ -226,7 +254,7 @@ mod starting {
         let risk = "this project's flow sets NODE_OPTIONS for `coder` and passes --foo 'a b' to `reviewer`; they run \
                     without asking, so check them";
         s.select(5);
-        assert_eq!(s.warnings()[1], risk);
+        assert_eq!(s.warnings()[0], risk);
         s.select(4);
         assert!(!s.warnings().iter().any(|w| w.starts_with("this project's flow")));
     }

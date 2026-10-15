@@ -94,8 +94,15 @@ fn files(dir: &Path) -> Vec<String> {
     names
 }
 
+fn select_flow(app: &mut App, area: Rect, name: &str) {
+    let i = dialog(app).flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
+    if dialog(app).cursor != i {
+        click_list_row(app, area, i);
+    }
+}
+
 fn duplicate_full_issue(s: &mut Setup, area: Rect) {
-    click_list_row(&mut s.app, area, 0);
+    select_flow(&mut s.app, area, "Full issue");
     button(&mut s.app, area, dialog::DUPLICATE);
 }
 
@@ -176,7 +183,8 @@ mod files_on_disk {
         let mut s = open(false);
         duplicate_full_issue(&mut s, WIDE);
         button(&mut s.app, WIDE, dialog::DONE);
-        assert_eq!(dialog(&s.app).cursor, 4);
+        let copy = dialog(&s.app).flows.iter().position(|f| f.flow.name == "Full issue copy");
+        assert_eq!(Some(dialog(&s.app).cursor), copy);
         button(&mut s.app, WIDE, dialog::DELETE);
         assert_eq!(files(&user_dir(&s)), ["full-issue-copy.toml"]);
         let [submit, _] = ui::form_buttons(ui::form_area(WIDE), dialog::DELETE);
@@ -209,6 +217,91 @@ mod files_on_disk {
         button(&mut s.app, WIDE, dialog::SAVE);
         assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
         assert!(view(&s.app, WIDE).warnings.contains(&"the flow has no stages".to_string()));
+    }
+}
+
+mod built_in_flows {
+    use super::*;
+
+    fn origin_of(app: &App, name: &str) -> store::Origin {
+        let named: Vec<&store::Saved> = dialog(app).flows.iter().filter(|saved| saved.flow.name == name).collect();
+        assert_eq!(named.len(), 1, "one flow is named {name}");
+        named[0].origin.clone()
+    }
+
+    #[test]
+    fn saving_one_puts_your_version_in_its_place_and_restore_default_brings_it_back() {
+        let mut s = open(false);
+        select_flow(&mut s.app, WIDE, "Full issue");
+        button(&mut s.app, WIDE, dialog::EDIT);
+        click_row(&mut s.app, WIDE, Row::Notes);
+        type_in(&mut s.app, "Keep the API.", WIDE);
+        button(&mut s.app, WIDE, dialog::SAVE);
+        button(&mut s.app, WIDE, dialog::SAVE);
+        let file = user_dir(&s).join("full-issue.toml");
+        assert_eq!(files(&user_dir(&s)), ["full-issue.toml"]);
+        assert_eq!(store::read(&file).expect("read your version").notes, "Keep the API.");
+        button(&mut s.app, WIDE, dialog::DONE);
+        assert_eq!((dialog(&s.app).entries(), origin_of(&s.app, "Full issue")), (4, store::Origin::User(file)));
+        let note = view(&s.app, WIDE).rows[dialog(&s.app).cursor].note.clone();
+        assert!(note.starts_with("edited · "), "{note}");
+
+        button(&mut s.app, WIDE, dialog::RESTORE);
+        let [submit, _] = ui::form_buttons(ui::form_area(WIDE), dialog::RESTORE);
+        click_in(&mut s.app, submit.as_position(), WIDE);
+        assert_eq!(files(&user_dir(&s)), Vec::<String>::new());
+        assert_eq!(origin_of(&s.app, "Full issue"), store::Origin::BuiltIn);
+    }
+}
+
+mod preview {
+    use super::*;
+
+    const SHORT: Rect = Rect { x: 0, y: 0, width: 150, height: 28 };
+
+    fn preview_scroll(app: &App) -> u16 {
+        dialog(app).edit.as_ref().map(|edit| edit.preview).expect("the edit page is open")
+    }
+
+    fn body(app: &App) -> Rect {
+        let warnings = view(app, SHORT).warnings.len();
+        ui::flows_preview(SHORT, warnings, true, false).map(ui::preview_body).expect("the preview beside the form")
+    }
+
+    fn wheel(app: &mut App, kind: MouseEventKind, times: usize) {
+        for _ in 0..times {
+            let at = body(app).as_position();
+            mouse_in(app, kind, at, SHORT);
+        }
+    }
+
+    #[test]
+    fn the_wheel_scrolls_it_and_its_edges_say_there_is_more() {
+        let mut s = open(false);
+        duplicate_full_issue(&mut s, SHORT);
+        assert_eq!(preview_scroll(&s.app), 0);
+        assert!(shown(&mut s.app, SHORT).contains(" ↓ more "));
+        wheel(&mut s.app, MouseEventKind::ScrollDown, 1);
+        assert!(preview_scroll(&s.app) > 0);
+        let screen = shown(&mut s.app, SHORT);
+        assert!(screen.contains(" ↑ more ") && screen.contains(" ↓ more "), "{screen}");
+        wheel(&mut s.app, MouseEventKind::ScrollDown, 40);
+        let screen = shown(&mut s.app, SHORT);
+        assert!(screen.contains(" ↑ more ") && !screen.contains(" ↓ more "), "{screen}");
+        wheel(&mut s.app, MouseEventKind::ScrollUp, 40);
+        assert_eq!(preview_scroll(&s.app), 0);
+    }
+
+    #[test]
+    fn opening_a_stage_scrolls_to_its_boxes_and_draws_them_heavy() {
+        let mut s = open(false);
+        duplicate_full_issue(&mut s, SHORT);
+        assert!(!shown(&mut s.app, SHORT).contains("┏━ tester"));
+        click_row(&mut s.app, SHORT, Row::Stage(2));
+        assert!(preview_scroll(&s.app) > 0);
+        let screen = shown(&mut s.app, SHORT);
+        assert!(screen.contains("┏━ tester") && screen.contains(" ↑ more "), "{screen}");
+        assert!(!screen.contains("┏━ coder"), "{screen}");
     }
 }
 

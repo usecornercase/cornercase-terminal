@@ -336,6 +336,33 @@ fn a_projects_flow_never_shadows_yours_and_says_so() {
     assert_eq!(problems("project"), Some(vec!["yours is also named `Pair` and runs instead".to_string()]));
 }
 
+#[test]
+fn yours_replaces_a_built_in_of_its_name_and_a_projects_comes_after_the_built_in() {
+    let mut team = Team::new();
+    let mut quick = pair();
+    quick.name = "Quick".into();
+    store::save(&paths::flows(&team.app.config_path), &quick, None).expect("save your Quick");
+    let mut theirs = pair();
+    theirs.name = "Full issue".into();
+    store::save(&store::project_dir(team.repo.path()), &theirs, None).expect("save the project's flow");
+
+    let listed: wire::Flows =
+        serde_json::from_value(value(&mut team.app, None, Command::FlowList(wire::FlowList::default())))
+            .expect("flows");
+    let named = |name: &str| -> Vec<(String, Vec<String>)> {
+        listed.flows.iter().filter(|f| f.name == name).map(|f| (f.origin.clone(), f.problems.clone())).collect()
+    };
+    assert_eq!(named("Quick"), [("user".to_string(), Vec::new())]);
+    let refused = vec!["the built-in one is also named `Full issue` and runs instead".to_string()];
+    assert_eq!(named("Full issue"), [("built-in".to_string(), Vec::new()), ("project".to_string(), refused)]);
+
+    let run: RunInfo = match team.run("quick", None) {
+        Response::Ok(value) => serde_json::from_value(value).expect("a run"),
+        Response::Error(message) => panic!("your Quick did not start: {message}"),
+    };
+    assert_eq!((team.app.runs[0].flow.notes.as_str(), run.note), ("Keep it small.", None));
+}
+
 fn branch_of(response: Response) -> String {
     match response {
         Response::Ok(value) => serde_json::from_value::<RunInfo>(value).expect("a run").branch,

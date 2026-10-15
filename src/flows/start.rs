@@ -1,8 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::Flow;
-use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, RowText, flow_row, permission_line, project_risks};
-use super::store::{Listing, Origin, Saved};
+use super::dialog::{CANCEL, DIAGRAM, EDIT, FORM, agents_count, project_risks, scrolled};
+use super::store::{self, Listing, Origin, Saved};
 use crate::todo::editor::Editor;
 
 pub(crate) const START: &str = "start";
@@ -30,6 +30,15 @@ pub(crate) enum Hit {
     Button(&'static str),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Item {
+    pub(crate) name: String,
+    pub(crate) tag: Option<&'static str>,
+    pub(crate) agents: String,
+    pub(crate) line: String,
+    pub(crate) red: bool,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Room {
     pub(crate) width: usize,
@@ -48,7 +57,9 @@ pub(crate) struct Start {
     pub(crate) repo: bool,
     pub(crate) issue: Option<String>,
     pub(crate) flows: Vec<Saved>,
+    builtins: Vec<String>,
     pub(crate) cursor: usize,
+    pub(crate) preview: u16,
     pub(crate) prompt: Editor,
     pub(crate) branch: String,
     named: bool,
@@ -66,7 +77,9 @@ impl Start {
             repo,
             issue: None,
             flows: listing.flows,
+            builtins: listing.builtins,
             cursor: 0,
+            preview: 0,
             prompt: Editor::default(),
             branch: String::new(),
             named: false,
@@ -75,7 +88,7 @@ impl Start {
             notice: None,
             waiting: false,
         };
-        start.cursor = start.flows.iter().position(|saved| saved.flow.problems().is_empty()).unwrap_or(0);
+        start.cursor = start.flows.iter().position(|saved| start.problems(saved).is_empty()).unwrap_or(0);
         start
     }
 
@@ -91,19 +104,36 @@ impl Start {
     pub(crate) fn set_listing(&mut self, listing: Listing, select: Option<&Origin>) {
         let selected = self.selected().map(|saved| saved.origin.clone());
         self.flows = listing.flows;
+        self.builtins = listing.builtins;
         let find = |origin: &Origin| self.flows.iter().position(|saved| saved.origin == *origin && origin.editable());
-        self.cursor = select
+        let cursor = select
             .and_then(find)
             .or_else(|| selected.as_ref().and_then(find))
             .unwrap_or_else(|| self.cursor.min(self.flows.len().saturating_sub(1)));
+        self.select(cursor);
     }
 
     pub(crate) fn selected(&self) -> Option<&Saved> {
         self.flows.get(self.cursor)
     }
 
-    pub(crate) fn rows(&self) -> Vec<RowText> {
-        self.flows.iter().map(flow_row).collect()
+    fn problems(&self, saved: &Saved) -> Vec<String> {
+        store::conflict(&self.flows, saved).into_iter().chain(saved.flow.problems()).collect()
+    }
+
+    pub(crate) fn items(&self) -> Vec<Item> {
+        let item = |saved: &Saved| {
+            let problems = self.problems(saved);
+            let line = problems.first().cloned().unwrap_or_else(|| saved.flow.description.trim().to_string());
+            Item {
+                name: saved.flow.name.trim().to_string(),
+                tag: store::tag(&self.builtins, saved),
+                agents: agents_count(&saved.flow),
+                line,
+                red: !problems.is_empty(),
+            }
+        };
+        self.flows.iter().map(item).collect()
     }
 
     pub(crate) fn title(&self) -> String {
@@ -127,11 +157,10 @@ impl Start {
             ));
         }
         if let Some(saved) = self.selected() {
-            out.push(permission_line(&saved.flow));
             if matches!(saved.origin, Origin::Project(_)) {
                 out.extend(project_risks(&saved.flow));
             }
-            out.extend(saved.flow.problems());
+            out.extend(self.problems(saved));
         }
         out
     }
@@ -177,7 +206,7 @@ impl Start {
         let refused = match self.selected() {
             _ if !self.repo => Some("a flow needs a project that is the root of a git repository"),
             None => Some("there is no flow to start"),
-            Some(saved) if !saved.flow.problems().is_empty() => Some("fix this flow's problems first: edit it"),
+            Some(saved) if !self.problems(saved).is_empty() => Some("fix this flow's problems first: edit it"),
             Some(_) if self.prompt.text().trim().is_empty() => Some("say what the team should do in the prompt"),
             Some(_) if self.branch.trim().is_empty() => Some("the run needs a branch for its worktree"),
             Some(_) => None,
@@ -201,9 +230,14 @@ impl Start {
     }
 
     pub(crate) fn select(&mut self, i: usize) {
-        if i < self.flows.len() {
+        if i < self.flows.len() && i != self.cursor {
             self.cursor = i;
+            self.preview = 0;
         }
+    }
+
+    pub(crate) fn scroll_preview(&mut self, delta: isize, most: u16) {
+        self.preview = scrolled(self.preview, delta, most);
     }
 
     fn step_focus(&mut self, back: bool) {
@@ -226,7 +260,7 @@ impl Start {
             KeyCode::BackTab => self.step_focus(true),
             _ => match self.focus {
                 Focus::List => match key.code {
-                    KeyCode::Up => self.cursor = self.cursor.saturating_sub(1),
+                    KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
                     KeyCode::Down => self.select(self.cursor + 1),
                     KeyCode::Enter => self.focus = Focus::Prompt,
                     _ => {}
@@ -302,7 +336,7 @@ impl Start {
     }
 
     pub(crate) fn scroll_list(&mut self, delta: isize) {
-        self.cursor = self.cursor.saturating_add_signed(delta).min(self.flows.len().saturating_sub(1));
+        self.select(self.cursor.saturating_add_signed(delta).min(self.flows.len().saturating_sub(1)));
     }
 }
 
