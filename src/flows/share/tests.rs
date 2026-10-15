@@ -100,6 +100,17 @@ mod the_risks {
     }
 
     #[test]
+    fn control_characters_in_values_arguments_and_names_are_shown_not_sent() {
+        let mut flow = with_env();
+        flow.roles[0].env.insert("K".into(), "x\r\x1b[2Jy".into());
+        flow.roles[0].args = vec!["a\nb\x1b[1A".into()];
+        flow.name = "n\x1b[2Jm".into();
+        let shown = format!("{}{}", risks(&flow, "it").expect("risks"), summary(&flow));
+        assert!(shown.contains("K=x\\r\\u{1b}[2Jy") && shown.contains("a\\nb\\u{1b}[1A"), "{shown}");
+        assert!(!shown.chars().any(|c| c.is_control() && c != '\n'), "{shown:?}");
+    }
+
+    #[test]
     fn a_flow_without_variables_or_arguments_has_none() {
         assert_eq!(risks(&sample(), "it"), None);
         assert_eq!(env_warning(&sample()), None);

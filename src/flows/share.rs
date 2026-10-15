@@ -53,6 +53,10 @@ fn parts(flow: &Flow, values: bool) -> Vec<String> {
     parts
 }
 
+fn visible(text: &str) -> String {
+    text.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect()
+}
+
 pub(crate) fn env_keys(role: &Role) -> Vec<&str> {
     role.env.keys().map(String::as_str).collect()
 }
@@ -69,7 +73,7 @@ fn described(flow: &Flow, whose: &str, values: bool) -> Option<String> {
     let parts = parts(flow, values);
     let (last, rest) = parts.split_last()?;
     let parts = if rest.is_empty() { last.clone() } else { format!("{} and {last}", rest.join(", ")) };
-    Some(format!("{whose} {parts}; they run without asking, so check them"))
+    Some(visible(&format!("{whose} {parts}; they run without asking, so check them")))
 }
 
 pub(crate) fn env_warning(flow: &Flow) -> Option<String> {
@@ -90,10 +94,10 @@ pub(crate) fn missing_agents(flow: &Flow, installed: &[Known]) -> Vec<String> {
 }
 
 pub(crate) fn summary(flow: &Flow) -> String {
-    let mut out = format!("{}\n", flow.name.trim());
+    let mut out = format!("{}\n", visible(flow.name.trim()));
     for role in std::iter::once(&flow.orchestrator).chain(&flow.roles) {
         let name = if role.name == ORCHESTRATOR { ORCHESTRATOR } else { role.name.trim() };
-        let _ = writeln!(out, "  {name}: {}", role.summary());
+        let _ = writeln!(out, "  {}: {}", visible(name), visible(&role.summary()));
     }
     out
 }
