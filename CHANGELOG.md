@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.95
+
+- `cornercase confirm` asks the person at the window a question from a script, a git hook, a plugin or an agent: a dialog with a title, a Markdown body that scrolls when it is long and up to three buttons besides **cancel**. It prints the label of the button clicked, or `cancelled` with status 1 for **cancel**, `Esc` or a click outside the dialog. It waits behind a dialog you already have open, `Enter` answers nothing so a key meant for a pane can't accept it, and it fails at once when no window is open. Control characters and bidirectional marks are left out of what it shows, since the text may come from other people. `cornercase confirm --help` has examples.
+
 ## 0.12.94
 
 - No changes in the app. The Telegram bot's shared parts (the notices, replies, away, `/status` and `/new`) no longer depend on Telegram, so a second chat app can use them.
