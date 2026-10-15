@@ -48,6 +48,7 @@ group 9  personal  collapsed
 | `flow list`, `flow run NAME`, `flow export NAME`, `flow import FILE` | Lists the [flows](../flows/), starts one (a team of agents in a worktree, run by an orchestrator agent), prints one as text to share, or adds one someone shared. |
 | `send [TEXT]` | Pastes text into a pane, and presses Enter with `--enter`. |
 | `keys KEY…` | Presses keys in a pane. |
+| `search TEXT` | Finds the panes where some text was said: in the agents' prompts and replies and in every pane's history. |
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
@@ -114,6 +115,42 @@ done
 # the agents in the worktree of fix/login
 cornercase status --panes --json | jq '.panes[] | select(.branch == "fix/login" and .agent != null) | .pane'
 ```
+
+#### Find where something was said
+
+`search` answers "which pane dealt with this?" without opening tabs one by one. It looks, ignoring case, in what the coding agents in your panes were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build: the records `read --last-message` reads) and in the history of every pane, shells included. It is the same search as [in sessions](../search/#in-sessions) in the window, and leaves out panes of projects being closed and workspaces being removed.
+
+```sh
+cornercase search 'migration failed'
+cornercase search --json checkout
+pane=$(cornercase search --json 'tax bug' | jq -r '.matches[0].pane')
+cornercase focus --pane "$pane"
+```
+
+Text is one line per match under a header, separated by tabs, the way `status --panes` is. Matches come in the order of the sidebar, an agent's messages first, newest first, then the pane's history from the bottom up.
+
+```text
+pane	who	source	place	line	text
+4	claude	reply	web-shop › feat/dark-mode › claude	-	The checkout tax bug is in src/checkout.rs:42, where the rate is rounded twice.
+4	claude	prompt	web-shop › feat/dark-mode › claude	-	Why is the checkout tax wrong for gift cards?
+9	zsh	screen	orders-api › main › zsh	118	migration failed: duplicate key value violates unique constraint
+```
+
+| Column | What it holds |
+| --- | --- |
+| `pane` | The pane's id, for `read`, `send`, `focus` and the other commands. |
+| `who` | The agent's name, else the program in the foreground. |
+| `source` | `prompt` or `reply` when it comes from an agent's record, `screen` when it comes from what the pane printed. |
+| `place` | `project › workspace › tab`. |
+| `line` | The line in the pane's history, for `screen` matches; `-` for an agent's messages. |
+| `text` | The matching line, cut to about 160 characters around the match. |
+
+- A `-` stands where there is no value, and a tab or a line break shows as a space, so every row is one line with the same columns. New columns only ever go at the end.
+- A match of a screen that the agent's record already holds (agents print what they say) is listed once, as the agent's message.
+- It lists at most 20 matches per pane and 300 in all. With `--json` `capped` says some were left out.
+- No match prints the header alone and exits 0, since finding nothing is an answer. An empty search is an error.
+- `--json` prints `{"matches": [...], "capped": false}`, each match with `pane`, `tab`, `workspace`, `project` (the ids), `place`, `who`, `source`, `line` (`null` when there is none), `text` and `written` (when an agent's message was written, in UTC, or `null`).
+- The text you search for is never written to `server.log`.
 
 ### Create
 
@@ -356,6 +393,7 @@ cornercase stats --share
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
 | `wait --any`, `wait --all` | `panes`: one entry per line of text, each with `pane`, `tab` when it was given as a `--tab`, `ended` (as above, or `closed`) and `line` for a `--text` match. |
+| `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |

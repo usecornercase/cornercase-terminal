@@ -133,6 +133,10 @@ const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
+const NAMES_PLACEHOLDER = 'projects, workspaces, tabs';
+const SESSIONS_PLACEHOLDER = 'what was said in agents and panes';
+const SESSIONS_PITCH = 2;
+const MODE_WIDTH = 3;
 const NO_TAB = 'no tab open';
 const AGENTS_TITLE = 'Agents';
 const NO_AGENTS = 'no agents running';
@@ -530,11 +534,15 @@ export class Painter {
     const search = app.overlay?.kind === 'search' ? app.overlay : null;
     this.g.fill(r, { bg: this.surface });
     if (search) {
-      const max = Math.max(0, r.w - 4);
+      const button = rect(right(r) - Math.min(MODE_WIDTH, r.w), r.y, Math.min(MODE_WIDTH, r.w), 1);
+      const max = Math.max(0, r.w - button.w - 4);
       const query = truncateLeft(search.query, max);
       const x = this.span(r.x, r.y, ' ⌕ ', { fg: 6, bg: this.surface });
-      this.span(x, r.y, query, { add: BOLD, bg: this.surface });
+      if (search.query) this.span(x, r.y, query, { add: BOLD, bg: this.surface });
+      else this.span(x, r.y, truncateRight(search.mode === 'sessions' ? SESSIONS_PLACEHOLDER : NAMES_PLACEHOLDER, max), { fg: 8, bg: this.surface });
       if (x + [...query].length < right(r)) this.cursor = { x: x + [...query].length, y: r.y, shape: 'block' };
+      this.span(button.x, button.y, centered('❯', button.w), search.mode === 'sessions' ? PRESSED : { fg: 8, bg: this.surface });
+      this.region({ r: button, click: () => app.toggleSearchMode(), cursor: 'pointer' });
       return;
     }
     const icon = this.sidebarHovered(r) ? CYAN : DARK;
@@ -1422,18 +1430,24 @@ export class Painter {
     const o = app.overlay;
     if (!o || o.kind !== 'search') return;
     this.backdrop(true);
+    const bar = areas.compact ? middle(areas.bar) : areas.search;
     this.region({ r: areas.compact ? areas.bar : areas.search, click: () => {} });
+    const button = rect(right(bar) - Math.min(MODE_WIDTH, bar.w), bar.y, Math.min(MODE_WIDTH, bar.w), 1);
+    this.region({ r: button, click: () => app.toggleSearchMode(), cursor: 'pointer' });
     if (!o.query) return;
     const r = areas.results;
     this.g.clear(r);
     const list = rect(r.x, r.y, r.w, Math.max(0, r.h - 2));
     const hint = rect(r.x, bottom(r) - 1, r.w, 1);
-    const results = app.searchResults(o.query);
+    const sessions = o.mode === 'sessions';
+    const pitch = sessions ? SESSIONS_PITCH : 1;
+    const results = app.searchResults(o.query, o.mode);
     if (!results.length) this.span(list.x, list.y, '  no matches', DARK);
-    const first = Math.min(o.scroll, Math.max(0, results.length - list.h));
-    results.slice(first, first + list.h).forEach((res, k) => {
+    const visible = Math.max(1, Math.floor(list.h / pitch));
+    const first = Math.min(o.scroll, Math.max(0, results.length - visible));
+    results.slice(first, first + visible).forEach((res, k) => {
       const i = first + k;
-      const row = rect(list.x, list.y + k, list.w, 1);
+      const row = rect(list.x, list.y + k * pitch, list.w, pitch);
       const selected = o.selected === i;
       const bg = this.pickBackground(selected, row);
       const base: Style = selected ? { ...bg, add: BOLD } : bg;
@@ -1441,20 +1455,36 @@ export class Painter {
       const ctxStyle: Style = { ...bg, fg: 8 };
       this.g.fill(row, bg);
       const context = truncateLeft(res.context, Math.floor(row.w / 2));
-      const name = truncateRight(res.name, row.w - context.length - 5);
-      this.line(rect(row.x, row.y, 1, 1), [rail(selected, bg)]);
-      let x = row.x + 2;
-      const at = name.toLowerCase().indexOf(o.query.toLowerCase());
-      if (at >= 0) {
-        x = this.span(x, row.y, name.slice(0, at), base);
-        x = this.span(x, row.y, name.slice(at, at + o.query.length), matched);
-        x = this.span(x, row.y, name.slice(at + o.query.length), base);
-      } else x = this.span(x, row.y, name, base);
-      this.span(right(row) - context.length - 1, row.y, context, ctxStyle);
+      this.line(rect(row.x, row.y, 1, pitch), [rail(selected, bg)]);
+      if (sessions) {
+        const text = truncateRight(res.name, Math.max(0, row.w - 3));
+        const [from, to] = res.hit ?? [0, 0];
+        const chars = [...text];
+        let x = this.span(row.x + 2, row.y, chars.slice(0, from).join(''), base);
+        x = this.span(x, row.y, chars.slice(from, to).join(''), matched);
+        this.span(x, row.y, chars.slice(to).join(''), base);
+        const detail = truncateRight(res.detail ?? '', Math.max(0, row.w - 4));
+        const room = Math.max(0, row.w - [...detail].length - 4);
+        const shown = truncateLeft(res.context, room);
+        this.span(row.x + 1, row.y + 1, ` ${detail}`, ctxStyle);
+        this.span(right(row) - [...shown].length - 1, row.y + 1, shown, ctxStyle);
+      } else {
+        const name = truncateRight(res.name, row.w - context.length - 5);
+        let x = row.x + 2;
+        const at = name.toLowerCase().indexOf(o.query.toLowerCase());
+        if (at >= 0) {
+          x = this.span(x, row.y, name.slice(0, at), base);
+          x = this.span(x, row.y, name.slice(at, at + o.query.length), matched);
+          x = this.span(x, row.y, name.slice(at + o.query.length), base);
+        } else x = this.span(x, row.y, name, base);
+        this.span(right(row) - context.length - 1, row.y, context, ctxStyle);
+      }
       this.region({ r: row, click: () => app.searchGo(i), cursor: 'pointer' });
     });
     const selected = results[Math.min(o.selected, results.length - 1)];
-    if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
+    if (sessions && app.saidCapped(o.query)) this.span(hint.x, hint.y, '  the first 300 matches', DARK);
+    else if (sessions && selected) this.span(hint.x, hint.y, `  enter goes to ${truncateLeft(selected.context, hint.w - 16)}`, DARK);
+    else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
   private toast(message: string, status?: Status, undo?: () => void, bug?: boolean): void {

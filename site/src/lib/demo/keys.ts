@@ -22,6 +22,7 @@ export type KeysAction =
   | { kind: 'renameTab' }
   | { kind: 'findNames' }
   | { kind: 'findText' }
+  | { kind: 'findSaid' }
   | { kind: 'files' }
   | { kind: 'changes' }
   | { kind: 'base' }
@@ -83,6 +84,7 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('w', 'text in files', { kind: 'findText' }),
     run('e', 'file tree', { kind: 'files' }),
     run('p', 'projects, workspaces, tabs', { kind: 'search' }),
+    run('s', 'said in sessions', { kind: 'findSaid' }),
   ],
   git: [
     run('d', 'changes', { kind: 'changes' }),

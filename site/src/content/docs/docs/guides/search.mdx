@@ -1,6 +1,6 @@
 ---
 title: Search
-description: Jump to any group, project, workspace, branch or tab by typing a few letters.
+description: Jump to any group, project, workspace, branch or tab by typing a few letters, or find the pane where something was said.
 ---
 
 import Screen from '../../../../components/Screen.astro';
@@ -33,3 +33,42 @@ When your session grows, the quickest way to get somewhere is to search for it. 
 So typing a branch name finds the workspace on that branch and all the tabs inside it.
 
 Matching ignores case. Results are ranked by how well they match: exact names first, then names that start with your text, then names that contain it. Among equally good matches, groups come first, then projects, workspaces and tabs, in the order they appear in the sidebar. The part of each name that matches is highlighted.
+
+## In sessions
+
+Sometimes you don't remember the name, but what was said: which agent was talking about the checkout tax bug, or where that `migration failed` error showed up. Switch the search to **in sessions** and it looks in what was said, in every pane of every open project.
+
+<Screen
+  name="search-sessions"
+  alt="The search bar with the query checkout tax and its toggle lit, and two results over the column: the reply of the claude agent in web-shop's feat/dark-mode workspace, and a line of the zsh pane of orders-api, each with its snippet and its place"
+  crop={[0, 0, 40, 10]}
+/>
+
+1. Click the button at the right end of the search bar (`❯`), or press `Tab` while the search is open. The bar says `what was said in agents and panes`. With a [prefix key](../../reference/keyboard-and-mouse/#the-prefix-key), `f` `s` opens the search already in this mode. `Tab` or the button switch back to names.
+2. Type. Each result takes two lines: the matching line with your text in cyan, then who said it (`claude · reply`) and `project › workspace › tab`.
+3. Click a result, or move with `↑` `↓` and press `Enter`. cornercase shows that pane and scrolls to the match, with it selected. A press in the pane starts a new selection and clears it.
+
+The search always opens in names; it doesn't remember the mode, and the query isn't kept.
+
+### Where it looks
+
+| Source | What it finds |
+| --- | --- |
+| A coding agent's record | What you asked it (`prompt`) and what it answered (`reply`), whole, even once it scrolled off the screen. Claude Code, Codex, Gemini CLI, opencode and Grok Build, the same records [`cornercase read --last-message`](../scripts-and-agents/#talk-to-a-pane) reads. Tool output is not searched. |
+| The pane itself (`screen`) | Everything the pane printed, as far back as its scrollback goes, whatever runs in it: a shell, a build, a test run, an agent. |
+
+Matching ignores case, and a text a long line wrapped in two still matches. A line of the screen that an agent's message already holds is listed once, as the message. Panes of projects being closed and workspaces being removed are left out.
+
+Results come in the order of the sidebar: project by project, and in each pane an agent's messages first, newest first, then its screen from the bottom up. At most 20 matches per pane and 300 in all are listed; the hint under the results says when some were left out.
+
+The search runs in the background, so typing stays responsive even with long scrollbacks. While it runs the list says `searching…`, and pressing `Enter` meanwhile opens the first result once it arrives.
+
+### Limits
+
+- A pane running a full-screen program (an editor, `less`, an agent's own full-screen view) is searched as it shows: while it is up, the shell's earlier output is out of reach. Its agent's record is still searched.
+- A reply an agent wrote is selected on the screen only when the pane still shows it; otherwise cornercase only takes you to the pane, and `cornercase read --last-message` reads the whole message.
+- A program that reads the mouse (some agents' full-screen views) takes the pane back to the bottom, so the scroll to a match is lost there.
+
+### From a script
+
+[`cornercase search TEXT`](../scripts-and-agents/#find-where-something-was-said) prints the same matches, one per line with the pane's id, and `--json` gives them as JSON, so a script or an agent can find the pane that dealt with something.

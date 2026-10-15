@@ -163,7 +163,7 @@ export const page: Page = {
         name: 'Para seu código',
         items: [
           ['Arquivos, com as marcas do git', 'Navegue e busque no código, imagens incluídas. As linhas alteradas ficam marcadas. Clique num caminho que um agente imprime para abri-lo.'],
-          ['Busca', 'Qualquer projeto, branch ou aba, encontrado enquanto você digita.'],
+          ['Busca', 'Qualquer projeto, branch ou aba, encontrado enquanto você digita, ou o que foi dito: nas respostas dos agentes e em cada painel.'],
           ['Divisões', 'Clique direito, dividir. Arraste para redimensionar. Só isso.'],
           ['TODO, à mão', 'Sua lista, ao lado dos shells de que ela trata.'],
           ['Pull requests em dia', 'Cada worktree mostra seu pull request e se os checks passam. Algum falhou? Passe para o agente.'],
@@ -237,7 +237,7 @@ export const demo: Demo = {
     folder: 'Um workspace novo na pasta do projeto.',
     picker: 'Escolha uma pasta. Digite para filtrar, Enter para entrar, open para adicioná-la.',
     opened: (folder) => `${folder} aberto. Cada projeto guarda seus próprios workspaces e abas.`,
-    search: 'Digite qualquer coisa: projetos, branches, abas. Enter leva você até lá.',
+    search: 'Digite qualquer coisa: projetos, branches, abas. Enter leva você até lá. Tab busca o que foi dito.',
     usage: 'O trabalho dos seus agentes em paralelo e os limites dos seus planos do Claude e do Codex. Tudo em Usage.',
     settings: 'Mude o que quiser, é salvo na hora. Experimente Agents → default agent.',
     restart: (resume) =>

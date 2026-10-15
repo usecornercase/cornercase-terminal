@@ -150,7 +150,7 @@ export type Overlay =
   | { kind: 'closeWorkspace'; project: number; workspace: number }
   | { kind: 'closeTab'; project: number; workspace: number; tab: number }
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number; group?: number }
-  | { kind: 'search'; query: string; selected: number; scroll: number }
+  | { kind: 'search'; query: string; selected: number; scroll: number; mode: 'names' | 'sessions' }
   | { kind: 'usage' }
   | { kind: 'restart'; scroll: number }
   | { kind: 'keys'; group: KeysGroup | null }

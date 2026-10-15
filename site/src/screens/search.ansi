@@ -1,4 +1,4 @@
- [38;5;6m[48;5;236m ⌕ [1m[39mfeat[0m[48;5;236m                      [49m [38;5;239m│[39m [2m  1[0m use serde::Deserialize;                                                  
+ [38;5;6m[48;5;236m ⌕ [1m[39mfeat[0m[48;5;236m                   [38;5;8m ❯ [39m[49m [38;5;239m│[39m [2m  1[0m use serde::Deserialize;                                                  
                                [38;5;239m│[39m [2m  2[0m                                                                          
 [38;5;6m[48;5;236m▌[39m [1m[38;5;6mfeat[39m/dark-mode[0m[48;5;236m      [38;5;8mweb-shop [38;5;239m[49m│[39m [2m  3[0m #[derive(Debug, Deserialize)]                                            
   [1m[38;5;6mfeat[0m/gift-cards     [38;5;8mweb-shop [38;5;239m│[39m [2m  4[0m pub struct Address {                                                     

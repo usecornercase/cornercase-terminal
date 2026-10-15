@@ -161,7 +161,7 @@ export const page = {
         name: 'For your code',
         items: [
           ["Files, with git's marks", 'Browse and search the code, images included. Changed lines are marked. Click a path an agent prints to open it.'],
-          ['Search', 'Any project, branch or tab, found as you type.'],
+          ['Search', 'Any project, branch or tab, found as you type, or what was said: in agents’ answers and in every pane.'],
           ['Splits', "Right-click, split. Drag to resize. That's it."],
           ['TODO, at hand', 'Your list, next to the shells it is about.'],
           ['Pull requests, checked', 'Each worktree shows its pull request and whether its checks pass. One fails? Hand it to the agent.'],
@@ -237,7 +237,7 @@ export const demo = {
     folder: 'A new workspace in the project folder.',
     picker: 'Pick a folder. Type to filter, Enter to go in, open to add it.',
     opened: (folder: string) => `Opened ${folder}. Each project keeps its own workspaces and tabs.`,
-    search: 'Type anything: projects, branches, tabs. Enter takes you there.',
+    search: 'Type anything: projects, branches, tabs. Enter takes you there. Tab searches what was said instead.',
     usage: 'Your agents’ work in parallel, plus your Claude and Codex plan limits. All in Usage.',
     settings: 'Change anything, it’s saved at once. Try Agents → default agent.',
     restart: (resume: boolean) =>
