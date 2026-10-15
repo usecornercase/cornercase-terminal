@@ -3,6 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 use regex::Regex;
 
 use super::idle_restart::held;
+use super::question::{UNANSWERED, WINDOW_GONE};
 use super::{Handled, Pending, Reply, STARTS_WITHIN, Stage, deadline, duration, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
@@ -136,6 +137,7 @@ impl App {
         kept.append(&mut self.requests.pending);
         self.requests.pending = kept;
         self.show_pending_restart(now);
+        self.show_question();
     }
 
     fn advance(&self, pending: &mut Pending, launched: &[(u64, bool)], now: Instant) -> Option<Reply> {
@@ -201,6 +203,11 @@ impl App {
         {
             return Some(Ok(json(&self.report(caller))));
         }
+        if let Stage::Question(_) = pending.stage
+            && self.windows() == 0
+        {
+            return Some(Err(WINDOW_GONE.into()));
+        }
         let (at, seconds) = pending.timeout.filter(|_| pending.client.is_some())?;
         (now >= at).then(|| Err(format!("timed out after {seconds}s: {}", self.waiting_on(&pending.stage, pane))))
     }
@@ -224,6 +231,7 @@ impl App {
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
             Stage::Reading => return format!("the record of pane {pane} is still being read"),
             Stage::Restart { caller } => return held(&self.holding(*caller, Instant::now())),
+            Stage::Question(_) => return UNANSWERED.into(),
             Stage::Several { parts, .. } => {
                 let pending = parts.iter().filter(|part| part.done.ended.is_none());
                 let waits = pending.map(|part| self.waiting_on(&part.stage, part.done.ids.pane.unwrap_or_default()));

@@ -504,3 +504,25 @@ fn stats_asks_the_running_server_for_all_three_output_formats() {
     assert!(app.session.says(&["stats", "--share"]).starts_with("https://usecornercase.dev/stats/#v2&24h="));
     assert!(!app.session.dir.join("stats.json").exists());
 }
+
+#[test]
+fn confirm_asks_the_window_and_prints_the_button_clicked() {
+    let mut app = Harness::start();
+    let asking = app.session.spawn(&[
+        "confirm",
+        "--title",
+        "Ana shares PR #485",
+        "--body",
+        "It runs `npm install` first.",
+        "--button",
+        "set up and run",
+        "--button",
+        "check out only",
+    ]);
+
+    app.wait_for("the question shows", |s| s.contains("check out only"));
+    let at = app.position_of(" check out only ");
+    app.click(Position::new(at.x + 2, at.y));
+
+    assert_eq!(Session::output(asking), "check out only");
+}

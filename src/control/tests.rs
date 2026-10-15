@@ -59,6 +59,7 @@ fn every_command_is_listed_by_name() {
         Command::Stats(Stats::default()),
         Command::Away(Away::default()),
         Command::Mark(Mark::default()),
+        Command::Confirm(Confirm::default()),
     ];
 
     let names: Vec<String> = commands
@@ -87,6 +88,12 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::WaitSeveral(Wait { until: Until::Text(secret.into()), panes: vec![3, 4], ..Wait::default() }),
         Command::Notify(Notify { text: secret.into() }),
         Command::Todo(Todo::Add(secret.into())),
+        Command::Confirm(Confirm {
+            title: secret.into(),
+            body: secret.into(),
+            buttons: vec![secret.into()],
+            timeout: None,
+        }),
     ];
 
     for command in commands {

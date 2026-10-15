@@ -70,6 +70,7 @@ pub(super) enum Overlay {
     Branches(BranchPicker),
     PullRequest { workspace: u64, scroll: usize },
     Keys(Option<KeysGroup>),
+    Question { key: u64, scroll: usize },
 }
 
 impl Overlay {
@@ -98,6 +99,7 @@ impl Overlay {
             Self::Restart => "restart",
             Self::PullRequest { .. } => "pull request",
             Self::Keys(_) => "keys",
+            Self::Question { .. } => "question",
         }
     }
 
@@ -168,6 +170,7 @@ impl App {
             Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::PullRequest { .. }) => self.pull_request_mouse(ev, pos, area),
+            Some(Overlay::Question { .. }) => self.question_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::GroupStyle { group }) => self.group_style_mouse(*group, ev, pos, area),
@@ -218,6 +221,7 @@ impl App {
             Overlay::Pairing(via) => ui::Overlay::Remote(self.pairing_view(*via)),
             Overlay::Branches(picker) => Self::branches_view(picker),
             Overlay::PullRequest { workspace, scroll } => self.pull_request_view(*workspace, *scroll)?,
+            Overlay::Question { key, scroll } => self.question_view(*key, *scroll, area)?,
         })
     }
 }

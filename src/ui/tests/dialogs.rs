@@ -319,3 +319,25 @@ fn renders_an_update_with_its_notes() {
     };
     insta::assert_snapshot!(render(&with(Overlay::Update(update))).backend());
 }
+
+#[test]
+fn renders_a_question_with_its_buttons_and_what_is_left_below() {
+    let body = crate::highlight::markdown::render(
+        &(1..=30).map(|i| format!("- step {i}")).collect::<Vec<_>>().join("\n"),
+        usize::from(question_body(AREA).width),
+    );
+    let question = Question {
+        title: "Ana shares PR #485".into(),
+        body,
+        scroll: 2,
+        buttons: vec!["set up and run".into(), "check out only".into()],
+    };
+    let buttons = question.buttons.clone();
+    let v = with(Overlay::Question(question));
+    let hits: Vec<QuestionHit> = (0..W)
+        .map(|x| Position::new(x, AREA.bottom() - 3))
+        .filter_map(|pos| question_hit(AREA, &buttons, pos))
+        .collect();
+    assert!(hits.contains(&QuestionHit::Button(1)) && hits.contains(&QuestionHit::Cancel), "{hits:?}");
+    insta::assert_snapshot!(render(&v).backend());
+}

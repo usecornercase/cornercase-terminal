@@ -4,6 +4,7 @@ use super::*;
 
 mod display_path;
 mod folder_name;
+mod shown;
 mod truncate_left;
 mod truncate_right;
 

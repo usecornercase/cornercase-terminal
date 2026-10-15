@@ -3,6 +3,7 @@ pub(super) mod group_style;
 pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
+pub(super) mod question;
 pub(super) mod search;
 pub(super) mod settings;
 pub(super) mod update;
@@ -19,6 +20,7 @@ use super::View;
 use super::dialog::form::{Confirm, Form, form_area};
 use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
+use super::dialog::question::Question;
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
 use super::dialog::update::Update;
@@ -118,6 +120,7 @@ pub(crate) enum Overlay {
     Settings(Settings),
     Search(Search),
     Keys(keys::Keys),
+    Question(Question),
 }
 
 impl Overlay {
@@ -128,7 +131,7 @@ impl Overlay {
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
             Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
-            Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
+            Self::Update(_) | Self::Picker(_) | Self::Question(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Issues(_) => Some(issues_area(area)),

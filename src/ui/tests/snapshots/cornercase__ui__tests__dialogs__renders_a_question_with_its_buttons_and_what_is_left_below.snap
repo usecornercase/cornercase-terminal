@@ -1,0 +1,23 @@
+---
+source: src/ui/tests/dialogs.rs
+assertion_line: 343
+expression: render(&v).backend()
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"              ╭─ Ana shares PR #485 ─────────────────────────────────────────────────╮              "
+" Projects     │ • step 3                                                             │              "
+"              │ • step 4                                                             │              "
+"▌ cornercase (│ • step 5                                                             │              "
+"              │ • step 6                                                             │              "
+"  + New       │ • step 7                                                             │              "
+"              │ • step 8                                                             │              "
+"              │ • step 9                                                             │              "
+"              │ • step 10                                                            │              "
+"              │ • step 11                                                            │              "
+"              │ • step 12                                                            │              "
+"              │ • step 13                                                            │              "
+"              │ • step 14                                                            │              "
+" ─────────────│ ↓ 16 more lines                                                      │              "
+"  Settings    │                            set up and run   check out only   cancel  │              "
+"  Usage       ╰──────────────────────────────────────────────────────────────────────╯              "
+"  Quit                         │                         │                                          "

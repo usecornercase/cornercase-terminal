@@ -254,6 +254,7 @@ fn change(from: Option<&str>, to: Option<&str>) -> (Option<String>, Option<Strin
 
 mod agents;
 mod arranging;
+mod confirming;
 mod creating;
 mod events;
 mod gemini;

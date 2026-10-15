@@ -50,6 +50,7 @@ pub(crate) use dialog::menu::menu_hit;
 pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
+pub(crate) use dialog::question::{Question, QuestionHit, question_body, question_hit, question_scroll};
 #[cfg(test)]
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, Search, result_hit, results_list};
@@ -112,6 +113,7 @@ use dialog::group_style::draw_group_style;
 use dialog::issues::draw_issues;
 use dialog::menu::draw_menu;
 use dialog::picker::draw_picker;
+use dialog::question::draw_question;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
 use dialog::update::draw_update;
@@ -320,6 +322,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
+        Some(Overlay::Question(question)) => draw_question(f, view, question),
         Some(Overlay::Search(_)) | None => {}
     }
     if let Some(toast) = view.toast {

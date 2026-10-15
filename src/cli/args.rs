@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE,
-    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP,
-    NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP,
-    SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB,
-    WHEN_IDLE,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONFIRM_HELP, EVENTS_HELP, FOCUS_HELP,
+    HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP,
+    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT,
+    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP,
+    WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -109,6 +109,11 @@ pub(crate) enum Control {
         after_help = AWAY_HELP
     )]
     Away(AwayArgs),
+    #[command(
+        about = "Ask the person at the window a question in a dialog, and print the button they chose",
+        after_help = CONFIRM_HELP
+    )]
+    Confirm(ConfirmArgs),
     #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
     Mark(MarkArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
@@ -410,6 +415,27 @@ pub(crate) struct RenameArgs {
     pub(crate) renamed: Renamed,
     #[arg(value_name = "NAME", help = "The new name; an empty one goes back to the default")]
     pub(crate) name: String,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ConfirmArgs {
+    #[arg(long, value_name = "TEXT", help = "The question, shown as the dialog's title")]
+    pub(crate) title: String,
+    #[arg(long, value_name = "MARKDOWN", conflicts_with = "body_file", help = "What it is about, in Markdown")]
+    pub(crate) body: Option<String>,
+    #[arg(long, value_name = "FILE", help = "Read the body from a file, or from standard input with -")]
+    pub(crate) body_file: Option<PathBuf>,
+    #[arg(
+        long = "button",
+        value_name = "LABEL",
+        required = true,
+        help = "A button; repeat it for up to three, the first one highlighted (cancel is always there)"
+    )]
+    pub(crate) buttons: Vec<String>,
+    #[arg(long, value_name = "SECONDS", value_parser = seconds, help = "Give up after this long, with status 1")]
+    pub(crate) timeout: Option<f64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

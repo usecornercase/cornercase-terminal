@@ -184,6 +184,18 @@ from Remote in the window.
 Examples:
   cornercase away
   cornercase away --off";
+pub(super) const CONFIRM_HELP: &str =
+    "The dialog opens in every window and waits, after any dialog already open there, until someone
+clicks a button. It prints that button's label, or `cancelled` with status 1 when they press cancel
+or Esc, or click outside the dialog. Enter answers nothing, so a key meant for a pane cannot accept
+it. It fails at once when no window is open, and when the last one closes before an answer; ending
+the command takes the dialog away. Control and bidirectional characters are left out of what is
+shown, since the text may come from other people.
+
+Examples:
+  cornercase confirm --title 'Deploy to staging?' --button deploy
+  gh pr view 485 --json body -q .body | cornercase confirm --title 'Ana shares PR #485' \\
+    --body-file - --button 'set up and run' --button 'check out only' --timeout 600";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a purple ● on its tab, and on its workspace, project and
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
