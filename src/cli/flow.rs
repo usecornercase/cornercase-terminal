@@ -1,10 +1,13 @@
 use std::fmt::Write as _;
+use std::io::{IsTerminal as _, Read as _};
+use std::path::Path;
 
-use super::args::FlowAction;
+use super::args::{FlowAction, FlowImportArgs, ImportTo};
 use super::{print_json, print_out, read_prompt};
-use crate::client::{answer, ask};
-use crate::control::{self, FlowInfo, Flows, RunInfo};
-use crate::error::Result;
+use crate::client::{answer, ask, confirm};
+use crate::control::{self, Exported, FlowInfo, Flows, Imported, RunInfo};
+use crate::error::{Error, Result};
+use crate::flows::share;
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
@@ -33,7 +36,89 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
             }
             print_out(&started(&run))
         }
+        FlowAction::Export(export) => {
+            let request = control::FlowExport { name: export.name, project: export.project };
+            let value = ask("flow export", control::Command::FlowExport(request))?;
+            if export.print.json {
+                return print_json(&value);
+            }
+            let exported: Exported = answer(value)?;
+            if let Some(note) = &exported.note {
+                eprintln!("{note}");
+            }
+            print_out(&exported.text)
+        }
+        FlowAction::Import(import) => import_flow(import),
     }
+}
+
+fn import_flow(args: FlowImportArgs) -> Result<()> {
+    let from = args.file.display().to_string();
+    let text = read_shared(&args.file)?;
+    let flow = share::from_share(&text).map_err(|e| Error::Control(format!("cannot read `{from}`: {e}")))?;
+    eprint!("{}", share::summary(&flow));
+    let risks = share::risks(&flow, "it");
+    let mut request = control::FlowImport {
+        text,
+        name: args.name,
+        project: args.project,
+        place: args.to.name().to_string(),
+        replace: args.replace,
+        check: false,
+    };
+    if let Some(risks) = risks.filter(|_| !args.yes) {
+        request.check = true;
+        ask("flow import", control::Command::FlowImport(request.clone()))?;
+        request.check = false;
+        let asking = args.file != Path::new("-") && std::io::stdin().is_terminal();
+        if !asking {
+            return Err(Error::Control(format!("{risks}; pass --yes to import it")));
+        }
+        if !confirm(&confirmation(&risks, args.to)) {
+            println!("not imported");
+            return Ok(());
+        }
+    }
+    let value = ask("flow import", control::Command::FlowImport(request))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    let imported: Imported = answer(value)?;
+    if let Some(note) = &imported.note {
+        eprintln!("{note}");
+    }
+    print_out(&imported_line(&imported))
+}
+
+fn read_shared(file: &Path) -> Result<String> {
+    let limit = share::MAX_BYTES as u64 + 1;
+    let mut bytes = Vec::new();
+    if file == Path::new("-") {
+        std::io::stdin().take(limit).read_to_end(&mut bytes)?;
+    } else {
+        let open =
+            std::fs::File::open(file).map_err(|e| Error::Control(format!("cannot read `{}`: {e}", file.display())))?;
+        open.take(limit).read_to_end(&mut bytes)?;
+    }
+    if bytes.len() > share::MAX_BYTES {
+        return Err(Error::Control(format!("`{}` is too long for a flow (at most 256 KiB)", file.display())));
+    }
+    String::from_utf8(bytes).map_err(|_| Error::Control(format!("`{}` is not text", file.display())))
+}
+
+pub(super) fn confirmation(risks: &str, to: ImportTo) -> String {
+    let place = match to {
+        ImportTo::Yours => "your flows",
+        ImportTo::Project => "the project's flows",
+    };
+    format!("{risks}\nImport it into {place}?")
+}
+
+pub(super) fn imported_line(imported: &Imported) -> String {
+    let place = if imported.origin == "project" { "this project" } else { "yours" };
+    let path = imported.path.as_ref().map(|path| format!(": {}", path.display())).unwrap_or_default();
+    let replaced = if imported.replaced { " (replaced)" } else { "" };
+    format!("imported {} into {place}{replaced}{path}\n", imported.name)
 }
 
 pub(super) fn listing(flows: &Flows) -> String {

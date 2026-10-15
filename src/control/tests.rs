@@ -63,6 +63,8 @@ fn every_command_is_listed_by_name() {
         Command::StartWith(Start::default()),
         Command::FlowList(FlowList::default()),
         Command::FlowRun(FlowRun::default()),
+        Command::FlowExport(FlowExport::default()),
+        Command::FlowImport(FlowImport::default()),
     ];
 
     let names: Vec<String> = commands
@@ -265,4 +267,12 @@ fn an_answer_carries_only_the_ids_it_has() {
     let done = Done { ids: Ids { pane: Some(4), ..Ids::default() }, ended: Some("idle".into()), ..Done::default() };
 
     assert_eq!(serde_json::to_value(done).expect("json"), json!({"pane": 4, "ended": "idle"}));
+}
+
+#[test]
+fn an_imports_logged_fields_carry_its_size_and_never_its_text() {
+    let import = FlowImport { text: "name = \"SECRET\"".into(), name: Some("Mine".into()), ..FlowImport::default() };
+    let fields = Command::FlowImport(import).fields();
+    assert!(fields.contains(&("text_bytes", "15".to_string())), "{fields:?}");
+    assert!(fields.iter().all(|(_, value)| !value.contains("SECRET")), "{fields:?}");
 }

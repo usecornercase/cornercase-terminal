@@ -103,7 +103,7 @@ The messages are kept in memory only, at most the first 32 KiB of each: they nev
 
 ## Edit flows
 
-Open **settings → Agents → flows** to list them, in one list sorted by name: a project's flows are tagged `this project`, and built-in flows you changed `edited`. Click a flow to select it, and again (or **`edit`**) to open it. **`duplicate`** saves a copy in your folder and opens it, **`new`** starts a flow with a coder and a reviewer, and **`delete`** (yours and the project's) asks first. A built-in flow opens like the others: saving it keeps your version in your folder under the same name, in its place, and for it **`restore default`** takes the place of **`delete`**: it asks first, then deletes your file, and the built-in flow comes back.
+Open **settings → Agents → flows** to list them, in one list sorted by name: a project's flows are tagged `this project`, and built-in flows you changed `edited`. Click a flow to select it, and again (or **`edit`**) to open it. **`duplicate`** saves a copy in your folder and opens it, **`export`** and **`import`** [share a flow](#share-a-flow), **`new`** starts a flow with a coder and a reviewer, and **`delete`** (yours and the project's) asks first. A built-in flow opens like the others: saving it keeps your version in your folder under the same name, in its place, and for it **`restore default`** takes the place of **`delete`**: it asks first, then deletes your file, and the built-in flow comes back.
 
 <Screen
   name="flows-list"
@@ -126,6 +126,29 @@ A flow opens on its **Flow** tab, with a tab for the **Orchestrator** and one pe
 - **Prompts and notes** open a larger editor: `Enter` starts a new line, **`save`** keeps the text, **`cancel`** or `Esc` drops it.
 
 **`save`** refuses while the flow has problems, listed in red under the form (a role in no stage, a loop that goes forward, an agent cornercase cannot start…). Renaming a flow renames its file. Closing a flow with unsaved changes asks first.
+
+## Share a flow
+
+A flow is a file, so sharing one is sending text. Select a flow in **settings → Agents → flows** and click **`export`**: its text is copied to your clipboard, even when cornercase runs on another machine, and the dialog says so. A teammate opens the same dialog and pastes (or clicks **`import`** and then pastes) on the **Flows › import** page, and **`import`** there opens the flow in the editor, **not saved yet**. Nothing is saved until they click **`save`**, so they can read what it does first; a name already taken becomes `Quick 2`.
+
+<Screen
+  name="flows-import"
+  alt="The Flows › import page: paste a flow, as export copied it or cornercase flow export printed it; the pasted text of the Quick review flow, starting with its header comment; the buttons import and cancel"
+  caption="The import page, with a flow pasted from a teammate."
+  crop={[2, 1, 136, 36]}
+/>
+
+Whoever imports a flow runs its `env` and `args` and its prompts, with every agent starting without asking for permission, so the editor shows what the flow sets in red, as it does for a project's flow, and names the agents you do not have installed. The text is the flow's own file under one comment line, the same TOML as [the files below](#where-flows-are-kept), at most 256 KiB: a bigger text is refused, on export and on import.
+
+From a shell the same two steps are commands:
+
+```sh
+cornercase flow export Quick > quick.toml
+cornercase flow import quick.toml
+cornercase flow import quick.toml --to project --name 'Quick mine'
+```
+
+`flow export` prints the flow, and names on standard error any variable it sets, so you can check that no secret goes with it. `flow import` lists the roles, and when the flow sets variables or arguments it asks before saving (without a terminal, or reading `-` from standard input, it refuses unless you pass `--yes`). It saves in yours, or in the project's `.cornercase/flows/` with `--to project`. A name that is taken is refused: `--replace` overwrites that flow, and `--name` imports this one under another name. A built-in flow's name can be taken with `--replace`, and yours then stands in its place; a name of yours or a built-in's cannot be taken in the project's flows, since they would never run. To share a flow with a whole team, commit its file to `.cornercase/flows/` instead.
 
 ## Where flows are kept
 
@@ -178,9 +201,11 @@ at_most = 2
 ```sh
 cornercase flow list
 cornercase flow run 'Full issue' --prompt-file issue.md --worktree fix-login
+cornercase flow export Quick > quick.toml
+cornercase flow import quick.toml
 ```
 
-`flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 ## What is not covered
 

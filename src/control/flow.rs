@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::Fields;
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct FlowList {
@@ -73,4 +75,71 @@ pub(crate) struct MemberInfo {
     pub(crate) agent: String,
     pub(crate) tab: u64,
     pub(crate) pane: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowExport {
+    pub(crate) name: String,
+    pub(crate) project: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Exported {
+    pub(crate) name: String,
+    pub(crate) origin: String,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) note: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowImport {
+    pub(crate) text: String,
+    pub(crate) name: Option<String>,
+    pub(crate) project: Option<u64>,
+    pub(crate) place: String,
+    pub(crate) replace: bool,
+    pub(crate) check: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Imported {
+    pub(crate) name: String,
+    pub(crate) origin: String,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) replaced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) note: Option<String>,
+}
+
+impl FlowList {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("project", self.project);
+    }
+}
+
+impl FlowRun {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("flow", &self.name).maybe("worktree", self.worktree.as_ref()).maybe("project", self.project);
+        fields.add("prompt_bytes", self.prompt.len()).add("focus", self.focus);
+    }
+}
+
+impl FlowExport {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("flow", &self.name).maybe("project", self.project);
+    }
+}
+
+impl FlowImport {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("text_bytes", self.text.len()).maybe("name", self.name.as_ref());
+        fields.maybe("project", self.project).add("place", &self.place);
+        fields.add("replace", self.replace).add("check", self.check);
+    }
 }

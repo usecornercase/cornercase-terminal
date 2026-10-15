@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_HELP, FLOW_RUN_HELP,
-    FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP,
-    NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT,
-    SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP,
-    WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_EXPORT_HELP, FLOW_HELP,
+    FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP,
+    LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP,
+    RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP,
+    UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -116,7 +116,7 @@ pub(crate) enum Control {
     Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
-    #[command(about = "List the flows, or start one: a team of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
+    #[command(about = "List, start, export or import flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
     Flow(FlowArgs),
 }
 
@@ -491,6 +491,61 @@ pub(crate) enum FlowAction {
         after_help = FLOW_RUN_HELP
     )]
     Run(FlowRunArgs),
+    #[command(
+        about = "Print a flow as text to share it: a file to send to a teammate, or to commit",
+        after_help = FLOW_EXPORT_HELP
+    )]
+    Export(FlowExportArgs),
+    #[command(
+        about = "Add a flow someone shared, from a file or from standard input with -",
+        after_help = FLOW_IMPORT_HELP
+    )]
+    Import(FlowImportArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowExportArgs {
+    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
+    pub(crate) name: String,
+    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ImportTo {
+    #[value(help = "Your flows, in flows/ next to config.json")]
+    Yours,
+    #[value(help = "The project's, in .cornercase/flows/ in its repository")]
+    Project,
+}
+
+impl ImportTo {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Yours => "yours",
+            Self::Project => "project",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowImportArgs {
+    #[arg(value_name = "FILE", help = "The file `flow export` made, or - for standard input")]
+    pub(crate) file: PathBuf,
+    #[arg(long, value_enum, default_value = "yours", help = "Where the flow goes")]
+    pub(crate) to: ImportTo,
+    #[arg(long, value_name = "ID", help = "The project, for --to project [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[arg(long, value_name = "NAME", help = "Import it under another name")]
+    pub(crate) name: Option<String>,
+    #[arg(long, help = "Overwrite the flow that has its name")]
+    pub(crate) replace: bool,
+    #[arg(short = 'y', long, help = "Import without asking, though the flow sets variables or arguments")]
+    pub(crate) yes: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

@@ -145,7 +145,10 @@ pub(crate) fn read(path: &Path) -> Result<Flow> {
 }
 
 pub(crate) fn parse(text: &str) -> std::result::Result<Flow, String> {
-    let mut flow: Flow = toml::from_str(text).map_err(|e| e.message().to_string())?;
+    let mut flow: Flow = toml::from_str(text).map_err(|e| match e.span() {
+        Some(span) => format!("line {}: {}", text[..span.start.min(text.len())].matches('\n').count() + 1, e.message()),
+        None => e.message().to_string(),
+    })?;
     super::ORCHESTRATOR.clone_into(&mut flow.orchestrator.name);
     if flow.version > super::VERSION {
         return Err("it was made by a newer cornercase".to_string());

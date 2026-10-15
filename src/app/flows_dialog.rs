@@ -12,7 +12,7 @@ use super::overlay::Overlay;
 use crate::agents::Known;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Room, RowText};
 use crate::flows::store::{self, Origin};
-use crate::flows::{Flow, builtin};
+use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
 use crate::paths;
 use crate::project::Hierarchy;
@@ -20,6 +20,7 @@ use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;
 const FORM_LABEL: usize = 16;
+const IMPORT_HEADING: &str = "paste a flow, as export copied it or `cornercase flow export` printed it";
 const HEADING: &str = "teams of agents that work through a plan, started from an issue or a prompt";
 
 impl App {
@@ -164,7 +165,26 @@ impl App {
                     dialog.notice = Some(format!("could not delete the flow: {e}"));
                 }
             }
+            Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
+        }
+    }
+
+    fn flow_exported(&mut self, flow: &Flow) {
+        let notice = match share::to_share(flow) {
+            Ok(text) => {
+                self.copy(&text);
+                log::info!("flows", "flow exported", bytes = text.len());
+                let warning = share::env_warning(flow).map(|w| format!(" · {w}")).unwrap_or_default();
+                format!(
+                    "copied {}: a teammate pastes it in Flows › import, or saves it for `cornercase flow import`{warning}",
+                    flow.name.trim()
+                )
+            }
+            Err(e) => e,
+        };
+        if let Some(dialog) = self.flows_dialog() {
+            dialog.notice = Some(notice);
         }
     }
 
@@ -201,7 +221,7 @@ impl App {
         }
     }
 
-    fn refresh_flows(&mut self) {
+    pub(in crate::app) fn refresh_flows(&mut self) {
         let listing = self.flow_listing(self.flows_project().as_deref());
         if let Some(dialog) = self.flows_dialog() {
             dialog.set_listing(listing);
@@ -251,7 +271,7 @@ fn follow_preview(dialog: &mut Dialog, area: Rect) {
 
 fn room(dialog: &Dialog, area: Rect) -> Room {
     let warnings = dialog.warnings().len();
-    let preview = dialog.edit.as_ref().is_some_and(|edit| edit.text.is_none());
+    let preview = dialog.importing.is_none() && dialog.edit.as_ref().is_some_and(|edit| edit.text.is_none());
     let text = ui::flows_text(area, warnings, preview);
     Room {
         pick: ui::flows_pick_rows(area, warnings, preview),
@@ -309,7 +329,10 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
     });
     let field = edit
         .and_then(|e| e.field.as_ref().map(|f| ui::SettingsEdit { label: e.field_label(), value: f.input.clone() }));
-    let heading = edit.filter(|e| e.text.is_some()).map_or_else(|| HEADING.to_string(), Editing::text_heading);
+    let heading = match (&dialog.importing, edit.filter(|e| e.text.is_some())) {
+        (Some(_), _) => IMPORT_HEADING.to_string(),
+        (None, edit) => edit.map_or_else(|| HEADING.to_string(), Editing::text_heading),
+    };
     ui::Overlay::Flows(Box::new(ui::Flows {
         title: dialog.title(),
         heading,
@@ -320,13 +343,16 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         label: if edit.is_some() { FORM_LABEL } else { LIST_LABEL },
         edit: field,
         pick,
-        text: edit.and_then(|e| e.text.as_ref().map(|t| t.editor.clone())),
+        text: match &dialog.importing {
+            Some(importing) => Some(importing.editor.clone()),
+            None => edit.and_then(|e| e.text.as_ref().map(|t| t.editor.clone())),
+        },
         warnings: dialog.warnings(),
         note: dialog.error().map(ui::Note::Error),
         hint: dialog.hint(),
         buttons: dialog.buttons(room),
         submit: dialog.submit(),
-        preview: edit.filter(|e| e.text.is_none()).map(|e| e.flow.clone()),
+        preview: edit.filter(|e| e.text.is_none() && dialog.importing.is_none()).map(|e| e.flow.clone()),
         preview_scroll: edit.map_or(0, |e| e.preview),
         focus: edit.and_then(Editing::preview_stage),
         diagram: edit.is_some_and(|e| e.diagram),

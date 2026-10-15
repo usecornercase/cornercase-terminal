@@ -504,3 +504,64 @@ fn stats_asks_the_running_server_for_all_three_output_formats() {
     assert!(app.session.says(&["stats", "--share"]).starts_with("https://usecornercase.dev/stats/#v2&24h="));
     assert!(!app.session.dir.join("stats.json").exists());
 }
+
+fn windowless() -> (Arc<Session>, std::process::Child) {
+    let session = Session::new();
+    let server = session.command().arg("server").spawn().expect("start a server");
+    let deadline = Instant::now() + TIMEOUT;
+    while std::os::unix::net::UnixStream::connect(session.socket()).is_err() {
+        assert!(Instant::now() < deadline, "the server never listened");
+        thread::sleep(POLL);
+    }
+    (session, server)
+}
+
+#[test]
+fn a_flow_is_exported_to_a_file_imported_under_another_name_and_listed() {
+    let (session, mut server) = windowless();
+    let file = session.dir.join("quick.toml");
+
+    let exported = session.says(&["flow", "export", "Quick"]);
+    std::fs::write(&file, &exported).expect("write the file");
+    assert!(exported.starts_with("# A cornercase flow"), "{exported}");
+    let said = session.says(&["flow", "import", &file.display().to_string(), "--name", "Quick mine"]);
+    let listed = session.says(&["flow", "list"]);
+
+    assert!(said.starts_with("imported Quick mine into yours"), "{said}");
+    assert!(listed.contains("Quick mine (yours, "), "{listed}");
+    let again = session.cli(&["flow", "import", &file.display().to_string(), "--name", "Quick mine"]);
+    assert!(refused(&again, 1, "--replace"), "{again:?}");
+    drop(session);
+    let _ = server.wait();
+}
+
+#[test]
+fn an_import_that_sets_variables_needs_yes_without_a_terminal() {
+    use std::io::Write as _;
+
+    let (session, mut server) = windowless();
+    let exported = session.says(&["flow", "export", "Quick"]);
+    let risky = exported.replacen("[orchestrator]\n", "[orchestrator]\nenv = { AWS_PROFILE = \"work\" }\n", 1);
+    assert_ne!(risky, exported, "{exported}");
+    let run = |args: &[&str]| {
+        let mut child = session
+            .command()
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("run cornercase");
+        child.stdin.take().expect("stdin").write_all(risky.as_bytes()).expect("write");
+        child.wait_with_output().expect("wait")
+    };
+
+    let refused_import = run(&["flow", "import", "-", "--name", "Risky"]);
+    assert!(refused(&refused_import, 1, "pass --yes to import it"), "{refused_import:?}");
+    assert!(!session.says(&["flow", "list"]).contains("Risky"));
+    let accepted = run(&["flow", "import", "-", "--name", "Risky", "--yes"]);
+    assert!(accepted.status.success(), "{accepted:?}");
+    assert!(session.says(&["flow", "list"]).contains("Risky (yours"));
+    drop(session);
+    let _ = server.wait();
+}

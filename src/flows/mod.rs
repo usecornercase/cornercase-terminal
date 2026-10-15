@@ -10,6 +10,7 @@ pub(crate) mod builtin;
 pub(crate) mod dialog;
 pub(crate) mod progress;
 pub(crate) mod run;
+pub(crate) mod share;
 pub(crate) mod start;
 pub(crate) mod store;
 

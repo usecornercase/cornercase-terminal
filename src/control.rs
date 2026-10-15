@@ -8,7 +8,10 @@ use serde_json::Value;
 
 mod flow;
 
-pub(crate) use flow::{BrokenFlow, FlowInfo, FlowList, FlowRun, Flows, MemberInfo, RoleInfo, RunInfo};
+pub(crate) use flow::{
+    BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
+    RunInfo,
+};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -72,6 +75,8 @@ pub(crate) enum Command {
     Queue(Queue),
     FlowList(FlowList),
     FlowRun(FlowRun),
+    FlowExport(FlowExport),
+    FlowImport(FlowImport),
 }
 
 impl Command {
@@ -103,6 +108,8 @@ impl Command {
             Self::StartWith(_) => 23,
             Self::FlowList(_) => 24,
             Self::FlowRun(_) => 25,
+            Self::FlowExport(_) => 26,
+            Self::FlowImport(_) => 27,
         }]
     }
 
@@ -193,18 +200,15 @@ impl Command {
             Self::Mark(mark) => {
                 fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
             }
-            Self::FlowList(list) => {
-                fields.maybe("project", list.project);
-            }
-            Self::FlowRun(run) => {
-                fields.add("flow", &run.name).maybe("worktree", run.worktree.as_ref()).maybe("project", run.project);
-                fields.add("prompt_bytes", run.prompt.len()).add("focus", run.focus);
-            }
+            Self::FlowList(list) => list.fields(&mut fields),
+            Self::FlowRun(run) => run.fields(&mut fields),
+            Self::FlowExport(export) => export.fields(&mut fields),
+            Self::FlowImport(import) => import.fields(&mut fields),
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 26] = [
+    pub(crate) const NAMES: [&str; 28] = [
         "status",
         "open",
         "new-workspace",
@@ -231,6 +235,8 @@ impl Command {
         "start-with",
         "flow-list",
         "flow-run",
+        "flow-export",
+        "flow-import",
     ];
 }
 
