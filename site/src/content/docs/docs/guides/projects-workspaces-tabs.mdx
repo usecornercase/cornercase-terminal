@@ -111,7 +111,7 @@ When a workspace's branch is behind its upstream, its row ends with the number o
 
 ## Tabs
 
-Each workspace lists its tabs under its name. Click **`+ Tab`** under a workspace to open a new shell in the workspace's folder; the new tab goes at the end.
+Each workspace lists its tabs under its name. Click **`▾`** beside a workspace's name to collapse it and **`▸`** to expand it again: its tabs leave the list, but their shells and agents keep running, and a collapsed workspace shows one icon at the end of its row, the most urgent status of its agents (working and idle included). A click on the rest of the row opens the workspace and expands it. With [tabs above the pane](../../reference/configuration/#ui) there is nothing to collapse. Click **`+ Tab`** under a workspace to open a new shell in the workspace's folder; the new tab goes at the end.
 
 A tab is named after the program in the foreground of its pane, so the name follows what you do: `bash` while you are at the prompt, `nvim` while you edit, `claude` while an agent works. A [split](../panes-and-splits/) tab is named after its first pane, the top-left one, so the name stays put while you click between panes, and a grey `+n` at the end of its row says how many other panes it holds. A program run by an interpreter (Node, Bun, Deno, Python, Ruby) is named after its script file, so Codex or Gemini CLI installed with npm show as `codex` and `gemini`, not `node`. Without a script file, such as a bare Node prompt, `python3 -m http.server` or `node -e '…'`, the tab keeps the interpreter's name. A known [agent](../../reference/agents/) is named after its kind, such as `cursor` for `cursor-agent`. Tabs started from an issue in a folder that isn't a repository are named after the issue instead.
 
@@ -130,7 +130,7 @@ An icon before the tab's name tells you what a recognised agent is doing when it
 | `✓` green | The agent finished while you were looking at another tab. It goes away when you open the tab. |
 | `○` grey | The agent waits for your next message. |
 
-So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row, of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, orange `!` wins over red `!`, then `●`, then `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
+So that a finished or waiting agent in another project doesn't go unnoticed, `!`, `●` and `✓` also show at the end of its workspace's row (a collapsed workspace shows its most urgent status, `◐` and `○` too), of its project's row and, while the group is collapsed, of its group's header. When several tabs below a row disagree, orange `!` wins over red `!`, then `●`, then `✓`. In the [compact layout](../small-terminals/) the `≡` button shows them for every tab except the one on screen. To see every agent at once and jump to the one that needs you, turn on the [agents section](#the-agents-section).
 
 #### Pending review
 
@@ -345,7 +345,7 @@ With **settings → UI → sidebar** set to *tree*, one list holds your groups, 
 />
 
 - Click **`▾`** to collapse a project or a workspace and **`▸`** to expand it again. A click on the rest of its row opens it and expands it. Group headers collapse as everywhere else.
-- A collapsed project shows how many workspaces it has, and a collapsed project or workspace shows `!` or `✓` when something inside needs you; open rows leave that to their tabs.
+- A collapsed project shows how many workspaces it has, and a collapsed project shows `!` or `✓` when something inside needs you, and a collapsed workspace shows the most urgent status of its agents, working ones included; open rows leave that to their tabs.
 - The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while collapsed. Tabs hang from their workspace's arrow on thin tree lines.
 - Each project ends with **`+ New`** (**new workspace** or **start a flow…**, for that project) and each workspace with **`+ Tab`**: adding a tab under another project switches to it.
 - Drag rows to reorder them: projects among projects and groups, workspaces within their project, tabs within their workspace, as in the other layouts.
