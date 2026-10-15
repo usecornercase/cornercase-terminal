@@ -51,7 +51,7 @@ Examples:
   cornercase stats --share"
     )]
     Stats(StatsArgs),
-    #[command(about = "Add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
+    #[command(about = "Install, add, list, turn on and off the plugins that extend cornercase", after_help = PLUGIN_HELP)]
     Plugin(PluginArgs),
     #[command(hide = true)]
     Server,

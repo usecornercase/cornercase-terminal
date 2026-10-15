@@ -1,1 +1,331 @@
+use std::io::Write as _;
+use std::os::unix::fs::PermissionsExt;
 
+use flate2::Compression;
+use flate2::write::GzEncoder;
+use sha2::{Digest, Sha256};
+
+use super::*;
+use crate::test_util::{FakeHttp, TempDir, git, git_repo, write_executable};
+use crate::text::hex;
+
+const SCRIPT: &str = "#!/bin/sh\nexec sleep 60\n";
+
+fn manifest(version: &str, extra: &str) -> String {
+    format!(
+        "id = \"acme.notes\"\nname = \"Notes\"\nversion = \"{version}\"\npermissions = [\"read\"]\n\n\
+         [[service]]\nid = \"sync\"\ncommand = [\"bin/run\", \"sync\"]\n{extra}"
+    )
+}
+
+struct Remote {
+    work: TempDir,
+    bare: TempDir,
+}
+
+impl Remote {
+    fn new(manifest: &str) -> Self {
+        let work = git_repo(&[("cornercase-plugin.toml", manifest)]);
+        fs::create_dir_all(work.path().join("bin")).expect("bin");
+        write_executable(&work.path().join("bin/run"), SCRIPT);
+        git(work.path(), &["add", "--all"]);
+        git(work.path(), &["commit", "--quiet", "-m", "script"]);
+        let bare = TempDir::new();
+        git(bare.path(), &["clone", "--quiet", "--bare", &work.path().display().to_string(), "repo.git"]);
+        Self { work, bare }
+    }
+
+    fn url(&self) -> String {
+        self.bare.path().join("repo.git").display().to_string()
+    }
+
+    fn origin(&self, reference: Option<&str>) -> Origin {
+        Origin { repo: self.url(), url: self.url(), reference: reference.map(str::to_string) }
+    }
+
+    fn commit(&self, files: &[(&str, &str)]) {
+        for (name, contents) in files {
+            fs::write(self.work.path().join(name), contents).expect("write");
+        }
+        git(self.work.path(), &["commit", "--quiet", "-am", "change"]);
+        git(self.work.path(), &["push", "--quiet", &self.url(), "HEAD:main"]);
+    }
+
+    fn head(&self) -> String {
+        let out = Command::new("git").args(["-C", &self.url(), "rev-parse", "main"]).output().expect("rev-parse");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+}
+
+fn places(home: &TempDir) -> Places {
+    Places::new(&home.path().join("config.json"), &home.path().join("session.json"))
+}
+
+fn linked(places: &Places, folder: &TempDir) {
+    let text = "id = \"acme.notes\"\nname = \"N\"\nversion = \"1\"\n";
+    fs::write(folder.path().join(manifest::FILE), text).expect("manifest");
+    let mut registry = Registry::load(&places.registry);
+    registry.link(folder.path()).expect("link");
+    registry.save().expect("save");
+}
+
+fn root(places: &Places) -> PathBuf {
+    Registry::load(&places.registry).entries[0].source.root().to_path_buf()
+}
+
+fn refused(remote: &Remote) -> String {
+    let home = TempDir::new();
+    let places = places(&home);
+    let fetched = fetch(&remote.origin(None), &places).expect("fetch");
+    let error = install(fetched, &places).expect_err("refused");
+    assert_eq!((Registry::load(&places.registry).entries.len(), staged(&places)), (0, 0), "{error}");
+    error
+}
+
+fn staged(places: &Places) -> usize {
+    fs::read_dir(places.installs.join(STAGING)).map_or(0, Iterator::count)
+}
+
+mod installing {
+    use super::*;
+
+    #[test]
+    fn a_plugin_from_a_bare_repository_lands_turned_off_at_its_commit() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        let fetched = fetch(&remote.origin(None), &places).expect("fetch");
+        let preview = fetched.preview().join("\n");
+        assert!(preview.contains(&remote.head()), "{preview}");
+        assert!(preview.contains("service sync: bin/run sync"), "{preview}");
+        assert!(preview.contains("asks for read"), "{preview}");
+        assert!(preview.contains("It is installed turned off."), "{preview}");
+        let installed = install(fetched, &places).expect("install");
+        let entry = Registry::load(&places.registry).entries[0].clone();
+        let root = entry.source.root().to_path_buf();
+        assert_eq!(
+            (installed.enabled, installed.previous, root.clone(), root.join(".git").exists(), staged(&places)),
+            (false, None, places.installs.join("acme.notes").join(&remote.head()[..12]), false, 0)
+        );
+        assert!(Manifest::load(&root).is_ok());
+    }
+
+    #[test]
+    fn a_cancelled_preview_leaves_nothing_behind() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        drop(fetch(&remote.origin(None), &places).expect("fetch"));
+        assert_eq!((staged(&places), Registry::load(&places.registry).entries.len()), (0, 0));
+    }
+
+    #[test]
+    fn a_tag_pins_its_commit() {
+        let remote = Remote::new(&manifest("1.0", ""));
+        git(remote.work.path(), &["tag", "v1"]);
+        git(remote.work.path(), &["push", "--quiet", &remote.url(), "v1"]);
+        let tagged = remote.head();
+        remote.commit(&[("cornercase-plugin.toml", &manifest("2.0", ""))]);
+        let home = TempDir::new();
+        let fetched = fetch(&remote.origin(Some("v1")), &places(&home)).expect("fetch");
+        assert_eq!((fetched.commit.as_str(), fetched.manifest.version.as_str()), (tagged.as_str(), "1.0"));
+    }
+
+    #[test]
+    fn a_commit_is_never_taken_for_a_branch_or_tag_of_that_name() {
+        let remote = Remote::new(&manifest("1.0", ""));
+        let reviewed = remote.head();
+        remote.commit(&[("cornercase-plugin.toml", &manifest("6.6", ""))]);
+        for kind in ["refs/heads", "refs/tags"] {
+            let name = format!("{kind}/{reviewed}");
+            git(remote.work.path(), &["push", "--quiet", &remote.url(), &format!("HEAD:{name}")]);
+        }
+        let home = TempDir::new();
+        let fetched = fetch(&remote.origin(Some(&reviewed)), &places(&home)).expect("fetch");
+        assert_eq!((fetched.commit.as_str(), fetched.manifest.version.as_str()), (reviewed.as_str(), "1.0"));
+    }
+
+    #[test]
+    fn an_unknown_ref_is_refused() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let error = fetch(&remote.origin(Some("nope")), &places(&home)).expect_err("refused");
+        assert!(error.contains("no branch, tag or commit `nope`"), "{error}");
+    }
+
+    #[test]
+    fn an_id_that_is_linked_cannot_be_installed() {
+        let (remote, home, folder) = (Remote::new(&manifest("1.0", "")), TempDir::new(), TempDir::new());
+        let places = places(&home);
+        linked(&places, &folder);
+        let error = fetch(&remote.origin(None), &places).expect_err("refused");
+        assert!(error.contains("already linked from"), "{error}");
+    }
+
+    #[test]
+    fn a_program_that_leads_out_of_the_folder_is_refused() {
+        let remote = Remote::new(&manifest("1.0", ""));
+        fs::remove_file(remote.work.path().join("bin/run")).expect("remove");
+        std::os::unix::fs::symlink("/bin/sh", remote.work.path().join("bin/run")).expect("symlink");
+        git(remote.work.path(), &["add", "--all"]);
+        remote.commit(&[]);
+        let error = refused(&remote);
+        assert!(error.contains("outside the plugin's folder"), "{error}");
+    }
+}
+
+mod building {
+    use super::*;
+
+    fn with_make(script: &str) -> Remote {
+        let remote = Remote::new(&manifest("1.0", "\n[[build]]\ncommand = [\"./make\"]\n"));
+        fs::remove_file(remote.work.path().join("bin/run")).expect("the build makes it");
+        write_executable(&remote.work.path().join("make"), script);
+        git(remote.work.path(), &["add", "--all"]);
+        remote.commit(&[]);
+        remote
+    }
+
+    #[test]
+    fn build_steps_run_after_the_preview_and_make_the_program() {
+        let remote =
+            with_make("#!/bin/sh\nmkdir -p bin\nprintf '#!/bin/sh\\nexec sleep 60\\n' > bin/run\nchmod +x bin/run\n");
+        let home = TempDir::new();
+        let places = places(&home);
+        let fetched = fetch(&remote.origin(None), &places).expect("fetch");
+        assert!(!fetched.checkout().join("bin/run").exists(), "nothing ran before the confirmation");
+        assert!(fetched.preview().join("\n").contains("Installing it runs, in its folder:\n  ./make"));
+        install(fetched, &places).expect("install");
+        assert!(root(&places).join("bin/run").exists());
+    }
+
+    #[test]
+    fn a_build_that_changes_the_manifest_is_refused() {
+        let remote = with_make(
+            "#!/bin/sh\nprintf 'id = \"acme.notes\"\\nname = \"Notes\"\\nversion = \"9\"\\n' > cornercase-plugin.toml\n",
+        );
+        let error = refused(&remote);
+        assert!(error.contains("changed cornercase-plugin.toml"), "{error}");
+    }
+
+    #[test]
+    fn a_failing_build_installs_nothing() {
+        let error = refused(&with_make("#!/bin/sh\nexit 3\n"));
+        assert!(error.contains("`./make` failed"), "{error}");
+    }
+}
+
+mod downloading {
+    use super::*;
+
+    fn archive() -> Vec<u8> {
+        let mut builder = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::default()));
+        let mut header = tar::Header::new_gnu();
+        header.set_size(SCRIPT.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder.append_data(&mut header, "bin/tool", SCRIPT.as_bytes()).expect("append");
+        let mut gz = builder.into_inner().expect("tar");
+        gz.flush().expect("flush");
+        gz.finish().expect("gzip")
+    }
+
+    fn with_download(sha: &str, server: &FakeHttp) -> Option<Remote> {
+        let target = crate::update::target()?;
+        let extra = format!(
+            "\n[[actions]]\nid = \"tool\"\ntitle = \"tool\"\ncontexts = [\"pane\"]\ncommand = [\"bin/tool\"]\n\n\
+             [download.{target}]\nurl = \"{}/tool.tar.gz\"\nsha256 = \"{sha}\"\n",
+            server.url()
+        );
+        Some(Remote::new(&manifest("1.0", &extra)))
+    }
+
+    #[test]
+    fn a_download_that_matches_its_sha256_is_unpacked() {
+        let bytes = archive();
+        let server = FakeHttp::start(vec![("GET /tool.tar.gz", 200, bytes.clone())]);
+        let Some(remote) = with_download(&hex(&Sha256::digest(&bytes)), &server) else { return };
+        let home = TempDir::new();
+        let places = places(&home);
+        let fetched = fetch(&remote.origin(None), &places).expect("fetch");
+        assert!(fetched.preview().join("\n").contains("/tool.tar.gz and checks its sha256"));
+        install(fetched, &places).expect("install");
+        let mode = fs::metadata(root(&places).join("bin/tool")).expect("unpacked").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755);
+    }
+
+    #[test]
+    fn a_download_with_another_sha256_is_refused_before_unpacking() {
+        let server = FakeHttp::start(vec![("GET /tool.tar.gz", 200, archive())]);
+        let Some(remote) = with_download(&"0".repeat(64), &server) else { return };
+        let error = refused(&remote);
+        assert!(error.contains("does not match its sha256"), "{error}");
+    }
+}
+
+mod updating {
+    use super::*;
+
+    pub(super) fn installed(remote: &Remote, places: &Places) {
+        install(fetch(&remote.origin(None), places).expect("fetch"), places).expect("install");
+    }
+
+    #[test]
+    fn the_same_commit_is_up_to_date() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        installed(&remote, &places);
+        assert!(matches!(check_update(&places, "acme.notes"), Ok(Update::UpToDate(c)) if c == remote.head()));
+    }
+
+    #[test]
+    fn a_new_commit_is_shown_again_and_keeps_the_plugin_on() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        installed(&remote, &places);
+        let first = root(&places);
+        let mut registry = Registry::open(&places.registry).expect("open");
+        registry.set_enabled("acme.notes", true).expect("on");
+        registry.save().expect("save");
+        remote.commit(&[("cornercase-plugin.toml", &manifest("2.0", ""))]);
+        let Ok(Update::Changed(fetched)) = check_update(&places, "acme.notes") else { panic!("an update") };
+        let preview = fetched.preview();
+        assert!(preview[0].contains("Notes 2.0"));
+        assert!(preview.join("\n").contains("which is on: its new commands run right away"), "{preview:?}");
+        let done = install(*fetched, &places).expect("update");
+        let entry = Registry::load(&places.registry).entries[0].clone();
+        assert_eq!(
+            (done.enabled, entry.enabled, entry.source.root().ends_with(&remote.head()[..12]), first.exists()),
+            (true, true, true, true)
+        );
+    }
+
+    #[test]
+    fn a_linked_plugin_is_not_updated() {
+        let (home, folder) = (TempDir::new(), TempDir::new());
+        let places = places(&home);
+        linked(&places, &folder);
+        let error = check_update(&places, "acme.notes").expect_err("refused");
+        assert!(error.contains("linked plugin is read from its folder"), "{error}");
+    }
+}
+
+mod removing {
+    use super::*;
+
+    #[test]
+    fn an_installed_plugin_is_forgotten_and_its_copy_deleted() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        updating::installed(&remote, &places);
+        assert_eq!(remove(&places, "acme.notes"), Ok(Removed::Deleted));
+        assert!(!places.installs.join("acme.notes").exists());
+        assert_eq!(Registry::load(&places.registry).entries.len(), 0);
+    }
+
+    #[test]
+    fn a_linked_plugin_keeps_its_folder() {
+        let (home, folder) = (TempDir::new(), TempDir::new());
+        let places = places(&home);
+        linked(&places, &folder);
+        assert_eq!(remove(&places, "acme.notes"), Ok(Removed::Unlinked));
+        assert!(folder.path().join(manifest::FILE).exists());
+    }
+}

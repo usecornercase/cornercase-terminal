@@ -1,5 +1,4 @@
 mod archive;
-pub(crate) mod catalogue;
 pub(crate) mod install;
 pub(crate) mod manifest;
 pub(crate) mod registry;

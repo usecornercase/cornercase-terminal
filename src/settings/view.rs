@@ -2,13 +2,9 @@ use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
 use crate::shortcuts::Prefix;
 
-use super::{Catalogue, NO_PLUGINS, Page, Row, RowText, Settings, Status};
+use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 
 const RESUME_NOTE: &str = "Claude Code, Codex, Gemini and Grok, in their tabs";
-
-const CATALOGUE_NOTE: &str = "plugins reviewed for cornercase; enter fetches the list from usecornercase.dev";
-
-const NO_ENTRIES: &str = "no plugins listed yet; usecornercase.dev/plugins says how to submit one";
 
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
 
@@ -19,9 +15,6 @@ impl Settings {
     }
 
     fn plugin_row(&self, row: &Row) -> (String, String, String, bool) {
-        if matches!(row, Row::Catalogue | Row::Available(_)) {
-            return self.catalogue_row(row);
-        }
         let Row::Plugin(id) = row else {
             return ("no plugins yet".into(), String::new(), NO_PLUGINS.into(), false);
         };
@@ -34,32 +27,6 @@ impl Settings {
             (false, false) => "[ ] off",
         };
         (plugin.label.clone(), value.into(), plugin.note.clone(), plugin.broken)
-    }
-
-    fn catalogue_row(&self, row: &Row) -> (String, String, String, bool) {
-        if let Row::Available(id) = row {
-            let Catalogue::Loaded(available) = &self.catalogue else {
-                return (id.clone(), String::new(), String::new(), false);
-            };
-            return available.iter().find(|plugin| plugin.id == *id).map_or_else(
-                || (id.clone(), String::new(), String::new(), false),
-                |plugin| (plugin.label.clone(), plugin.value.clone(), plugin.note.clone(), false),
-            );
-        }
-        let (value, note, failed) = match &self.catalogue {
-            Catalogue::Closed => ("show", CATALOGUE_NOTE.to_string(), false),
-            Catalogue::Loading => ("loading…", CATALOGUE_NOTE.to_string(), false),
-            Catalogue::Failed(error) => ("try again", error.clone(), true),
-            Catalogue::Loaded(available) if available.is_empty() => ("refresh", NO_ENTRIES.to_string(), false),
-            Catalogue::Loaded(available) => {
-                let count = match available.len() {
-                    1 => "1 plugin".to_string(),
-                    n => format!("{n} plugins"),
-                };
-                ("refresh", format!("{count} reviewed for cornercase · enter on one shows what it installs"), false)
-            }
-        };
-        ("catalogue".into(), value.into(), note, failed)
     }
 
     fn telegram_row(&self, row: &Row) -> (String, String, String, bool) {
@@ -172,7 +139,7 @@ impl Settings {
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
             Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
-            Row::Plugin(_) | Row::NoPlugins | Row::Catalogue | Row::Available(_) => self.plugin_row(row),
+            Row::Plugin(_) | Row::NoPlugins => self.plugin_row(row),
         };
         RowText { label, value, note, dangerous }
     }

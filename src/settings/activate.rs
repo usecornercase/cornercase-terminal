@@ -3,7 +3,7 @@ use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
 use crate::host::notify;
 use crate::list::Search;
 
-use super::{Action, Catalogue, EXTRA_ARGS, Edit, NO_PLUGINS, Pick, PickItem, Row, Settings, Status};
+use super::{Action, EXTRA_ARGS, Edit, NO_PLUGINS, Pick, PickItem, Row, Settings, Status};
 
 impl Settings {
     fn flip(&mut self, switch: fn(&mut Config) -> &mut bool, [on, off]: [&str; 2]) -> Action {
@@ -91,9 +91,6 @@ impl Settings {
             Row::TelegramBot => self.start_edit(row, String::new()),
             Row::TelegramChat => Action::PairTelegram,
             Row::Plugin(_) | Row::NoPlugins => self.switch_plugin(row),
-            Row::Catalogue if self.catalogue == Catalogue::Loading => Action::None,
-            Row::Catalogue => Action::OpenCatalogue,
-            Row::Available(id) => self.install_plugin(id),
             Row::AddAgent => {
                 let listed = self.listed_kinds();
                 let items: Vec<PickItem> = agents::kinds(&self.config)
@@ -122,18 +119,6 @@ impl Settings {
                 Action::None
             }
             Some(plugin) => Action::Plugin(id, !plugin.on),
-            None => Action::None,
-        }
-    }
-
-    fn install_plugin(&mut self, id: String) -> Action {
-        let Catalogue::Loaded(available) = &self.catalogue else { return Action::None };
-        match available.iter().find(|plugin| plugin.id == id) {
-            Some(plugin) if plugin.installable => Action::InstallPlugin(id),
-            Some(plugin) => {
-                self.notice = Some(format!("{} {}: {}", plugin.label, plugin.value, plugin.note));
-                Action::None
-            }
             None => Action::None,
         }
     }

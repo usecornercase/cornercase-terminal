@@ -2,7 +2,6 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Position, Rect};
 
 use super::App;
-use super::catalogue_dialog::{INSTALL_SUBMIT, Installing, Step};
 use super::issues_dialog::{room, view};
 use super::menus::MenuAction;
 use super::menus::Target;
@@ -63,7 +62,6 @@ pub(super) enum Overlay {
     Search(Search),
     Update(UpdateStep),
     Restart,
-    InstallPlugin(Box<Installing>),
     Usage,
     Remote,
     Telegram,
@@ -95,7 +93,6 @@ impl Overlay {
             Self::Telegram => "telegram",
             Self::Branches(_) => "branches",
             Self::Restart => "restart",
-            Self::InstallPlugin(_) => "install plugin",
             Self::Keys(_) => "keys",
         }
     }
@@ -115,7 +112,6 @@ impl Overlay {
             Self::Update(UpdateStep::Installed) | Self::Restart => RESTART_SUBMIT,
             Self::Update(UpdateStep::Manual(_)) => COPY_COMMAND_SUBMIT,
             Self::Update(_) => UPDATE_SUBMIT,
-            Self::InstallPlugin(_) => INSTALL_SUBMIT,
             _ => CREATE_SUBMIT,
         }
     }
@@ -147,7 +143,6 @@ impl Overlay {
             || matches!(self, Self::Issues(b) if b.starting)
             || matches!(self, Self::Settings(s) if s.busy())
             || matches!(self, Self::Update(UpdateStep::Updating))
-            || matches!(self, Self::InstallPlugin(i) if matches!(i.step, Step::Installing))
     }
 }
 
@@ -164,9 +159,7 @@ impl App {
             Some(Overlay::Branches(_)) => self.branches_mouse(ev, pos, area),
             Some(Overlay::Issues(_)) => return self.issues_mouse(ev, pos, area),
             Some(Overlay::Settings(_)) => self.settings_mouse(ev, pos, area),
-            Some(Overlay::Update(_) | Overlay::Restart | Overlay::InstallPlugin(_)) => {
-                return self.update_mouse(ev, pos, area);
-            }
+            Some(Overlay::Update(_) | Overlay::Restart) => return self.update_mouse(ev, pos, area),
             Some(Overlay::Usage) => self.usage_mouse(ev, pos, area),
             Some(Overlay::Remote) => self.remote_mouse(ev, pos, area),
             Some(Overlay::Telegram) => self.telegram_mouse(ev, pos, area),
@@ -213,7 +206,6 @@ impl App {
             Overlay::Search(search) => self.search_view(search),
             Overlay::Update(step) => self.update_view(step, area),
             Overlay::Restart => self.restart_view(area),
-            Overlay::InstallPlugin(installing) => self.install_view(installing, area),
             Overlay::Usage => ui::Overlay::Usage(self.usage_view()),
             Overlay::Remote => ui::Overlay::Remote(self.remote_view()),
             Overlay::Telegram => ui::Overlay::Remote(self.telegram_view()),

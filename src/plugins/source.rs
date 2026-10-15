@@ -17,9 +17,9 @@ impl Origin {
         if spec.chars().any(|c| c.is_whitespace() || c.is_control()) || spec.len() > MAX_URL {
             return Err(format!("`{spec}` is not a repository: no spaces or control characters"));
         }
-        let (place, reference) = match (spec.rfind('@'), spec.rfind('/')) {
-            (Some(at), Some(slash)) if at > slash => (&spec[..at], Some(&spec[at + 1..])),
-            _ => (spec, None),
+        let (place, reference) = match spec.split_once('@') {
+            Some((place, reference)) => (place, Some(reference)),
+            None => (spec, None),
         };
         if let Some(reference) = reference {
             valid_ref(reference)?;

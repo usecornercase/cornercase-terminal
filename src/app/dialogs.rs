@@ -177,13 +177,8 @@ impl App {
     }
 
     pub(super) fn cancel_form(&mut self) {
-        match &self.overlay {
-            Some(overlay) if overlay.busy() => {}
-            Some(Overlay::InstallPlugin(installing)) => {
-                let id = installing.entry.id.clone();
-                self.cancel_install(&id);
-            }
-            _ => self.overlay = None,
+        if !self.overlay.as_ref().is_some_and(Overlay::busy) {
+            self.overlay = None;
         }
     }
 
@@ -207,7 +202,6 @@ impl App {
             Overlay::ClosePane { pane } => self.submit_close_pane(pane, area)?,
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
-            Overlay::InstallPlugin(installing) => self.submit_install(*installing),
             busy => Some(busy),
         };
         Ok(())

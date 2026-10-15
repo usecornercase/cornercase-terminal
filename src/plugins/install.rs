@@ -36,6 +36,7 @@ pub(crate) struct Fetched {
     pub(crate) origin: Origin,
     pub(crate) commit: String,
     pub(crate) manifest: Manifest,
+    pub(crate) replacing: Option<bool>,
     staging: Staging,
 }
 
@@ -98,13 +99,21 @@ impl Fetched {
             lines.push("Once on, it runs:".into());
             lines.extend(commands.iter().map(|(what, command)| format!("  {what}: {}", shown(command))));
         }
+        lines.push(match self.replacing {
+            None => "It is installed turned off.".into(),
+            Some(false) => "It replaces the version you have, which is off, and stays off.".into(),
+            Some(true) => "It replaces the version you have, which is on: its new commands run right away.".into(),
+        });
         lines.push(
-            "It is installed turned off. Once on, it runs as you and can do anything you can, in every terminal: \
-             read its code or trust its author."
+            "Once on, it runs as you and can do anything you can, in every terminal: read its code or trust its author."
                 .into(),
         );
-        lines
+        lines.iter().map(|line| printable(line)).collect()
     }
+}
+
+fn printable(text: &str) -> String {
+    text.chars().map(|c| if c.is_control() { c.escape_default().to_string() } else { c.to_string() }).collect()
 }
 
 fn shown(command: &[String]) -> String {
@@ -136,7 +145,9 @@ pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String>
             checkout.as_os_str(),
         ],
     )?;
+    let pinned = origin.reference.as_ref().filter(|r| is_commit(r)).map(|r| r.to_ascii_lowercase());
     let candidates: Vec<String> = match &origin.reference {
+        Some(_) if let Some(pinned) = &pinned => vec![pinned.clone()],
         Some(r) => vec![format!("refs/remotes/origin/{r}"), format!("refs/tags/{r}"), r.clone()],
         None => vec!["HEAD".into()],
     };
@@ -152,11 +163,24 @@ pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String>
             Some(r) => format!("{} has no branch, tag or commit `{r}`", origin.repo),
             None => format!("{} has no commits", origin.repo),
         })?;
+    if pinned.as_ref().is_some_and(|pinned| *pinned != commit) {
+        return Err(format!("{} gave {commit} for the commit {}; nothing was installed", origin.repo, origin.spec()));
+    }
     git(origin, Some(&checkout), ["checkout", "--quiet", "--detach", commit.as_str()])?;
+    let head = git(origin, Some(&checkout), ["rev-parse", "--verify", "HEAD^{commit}"])?;
+    if String::from_utf8_lossy(&head).trim() != commit {
+        return Err(format!("the checkout of {} is not at {commit}; nothing was installed", origin.repo));
+    }
     fs::remove_dir_all(checkout.join(".git")).map_err(|e| format!("cannot drop the history: {e}"))?;
     let manifest = Manifest::read(&checkout)?;
-    conflict(&Registry::load(&places.registry), &manifest.id, origin)?;
-    Ok(Fetched { origin: origin.clone(), commit, manifest, staging })
+    let registry = Registry::load(&places.registry);
+    conflict(&registry, &manifest.id, origin)?;
+    let replacing = registry.entry(&manifest.id).ok().map(|entry| entry.enabled);
+    Ok(Fetched { origin: origin.clone(), commit, manifest, replacing, staging })
+}
+
+fn is_commit(reference: &str) -> bool {
+    reference.len() == 40 && reference.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 fn stage(places: &Places) -> std::io::Result<PathBuf> {

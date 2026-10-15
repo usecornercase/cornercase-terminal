@@ -101,9 +101,9 @@ fn folder_spec(spec: &str) -> String {
     if !spec.starts_with(['.', '~', '/']) {
         return spec.to_string();
     }
-    let (place, at) = match spec.rsplit_once('@') {
-        Some((place, at)) if !at.contains('/') => (place, Some(at)),
-        _ => (spec, None),
+    let (place, at) = match spec.split_once('@') {
+        Some((place, at)) => (place, Some(at)),
+        None => (spec, None),
     };
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let path = config::expand_home(place, home.as_deref());

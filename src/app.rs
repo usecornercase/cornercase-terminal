@@ -61,7 +61,6 @@ use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 
 mod actions;
 mod agent_watch;
-mod catalogue_dialog;
 mod changes_panel;
 mod control;
 mod dialogs;

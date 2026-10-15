@@ -122,9 +122,13 @@ When the log is short since it last [moved to `server.log.1`](../files-and-envir
 
 ### `cornercase plugin`
 
-Adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running; a running server picks up the change within a second.
+Installs, adds, lists and turns on and off [plugins](../../guides/plugins/). It reads and writes `plugins.json` directly, so it works with no server running; a running server picks up the change within a second.
 
 ```sh
+cornercase plugin install acme/notes      # fetch it, show what it runs, ask, install it turned off
+cornercase plugin install acme/notes@v1.2 # the same, at a tag, branch or commit
+cornercase plugin update                  # fetch installed plugins again; ask before installing a change
+cornercase plugin remove notes            # stop it and delete its installed copy
 cornercase plugin link ~/code/my-plugin   # add the plugin in that folder, turned off
 cornercase plugin unlink my-plugin        # forget it; its folder stays
 cornercase plugin list                    # every plugin, on or off, and what it runs (--json for scripts)
@@ -133,7 +137,7 @@ cornercase plugin disable my-plugin       # turn it off: its service and window 
 cornercase plugin logs my-plugin          # what its commands printed; -n, --follow and --path as for logs
 ```
 
-A plugin whose manifest cannot be read is listed with the reason, and cannot be turned on. An unknown id exits with status 1.
+`install` takes `owner/repo` (GitHub), an `https://` git address or a git folder. With no terminal to ask in, `install` and `update` need `--yes`. A plugin whose manifest cannot be read, or whose command leads out of its folder, is listed with the reason, and cannot be turned on. An unknown id exits with status 1.
 
 ### `cornercase --version`
 

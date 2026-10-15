@@ -78,7 +78,7 @@ mod parsing {
     #[case::an_unknown_event(&with("[[events]]\non = \"typed\"\ncommand = [\"x\"]"), "unknown variant `typed`")]
     #[case::an_empty_command(&with("[[service]]\nid = \"s\"\ncommand = []"), "has no command")]
     #[case::a_command_leaving_the_folder(&with("[[service]]\nid = \"s\"\ncommand = [\"../bin/x\"]"), "outside the plugin's folder")]
-    #[case::a_nul_in_an_argument(&with("[[service]]\nid = \"s\"\ncommand = [\"x\", \"a\\u0000b\"]"), "NUL")]
+    #[case::a_nul_in_an_argument(&with("[[service]]\nid = \"s\"\ncommand = [\"x\", \"a\\u0000b\"]"), "control character")]
     #[case::two_services_with_one_id(&with("[[service]]\nid = \"s\"\ncommand = [\"x\"]\n[[service]]\nid = \"s\"\ncommand = [\"y\"]"), "two service entries")]
     fn it_refuses(#[case] text: &str, #[case] reason: &str) {
         let error = Manifest::parse(text).expect_err("refused");
@@ -187,4 +187,13 @@ mod owners {
                 .contains("other users can write to cornercase-plugin.toml")
         );
     }
+}
+
+#[rstest::rstest]
+#[case::an_escape_in_a_command("[[build]]\ncommand = [\"x\", \"\\u001b[6A\\u001b[J\"]")]
+#[case::a_carriage_return_in_the_description("description = \"safe\\rhidden\"")]
+#[case::a_new_line_in_a_permission("permissions = [\"read\\nsend\"]")]
+fn a_control_character_that_could_rewrite_the_preview_is_refused(#[case] extra: &str) {
+    let error = Manifest::parse(&with(extra)).expect_err("refused");
+    assert!(error.contains("control character"), "{error}");
 }

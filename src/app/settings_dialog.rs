@@ -48,7 +48,6 @@ impl App {
         settings.browsers = self.remote.web.paired();
         settings.telegram = self.telegram_settings();
         settings.plugins = self.plugin_rows();
-        settings.catalogue = self.catalogue_view();
         self.overlay = Some(Overlay::Settings(Box::new(settings)));
     }
 
@@ -166,8 +165,6 @@ impl App {
                 }
             }
             settings::Action::Plugin(id, on) => self.switch_plugin(&id, on),
-            settings::Action::OpenCatalogue => self.open_catalogue(),
-            settings::Action::InstallPlugin(id) => self.open_install(&id),
             settings::Action::RemoveToken(source) => {
                 let removed = source.secret_key().map(|key| secrets::remove(&self.issues.secrets_path, key));
                 let Some(Overlay::Settings(s)) = &mut self.overlay else { return };
