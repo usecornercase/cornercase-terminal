@@ -3193,7 +3193,8 @@ export class App {
           form.label = `${issue.key} ${issue.title}`;
           form.branch = this.branchFor(issue);
           form.focus = 'when';
-          const agent = form.agent.options.indexOf(this.pickedAgent(o) ?? 'claude');
+          const picked = this.pickedAgent(o);
+          const agent = picked ? form.agent.options.indexOf(picked) : -1;
           if (agent >= 0) chooseCombo(form.agent, agent);
           form.place = combo(form.place.options, form.places.findIndex((choice) => choice.project === o.project && choice.workspace === null));
           chooseCombo(form.openIn, this.projects.find((p) => p.id === o.project)?.repo ? 1 : 0);
