@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.98
+
+- **Share a flow with a teammate.** In **Settings → Agents → flows**, **export** copies the selected flow's text to your clipboard, and **import** (or just pasting on the list) opens a flow your teammate sent you in the editor, unsaved, so you can read it before you save it. What the flow sets for its agents (variables and arguments, which run without asking) is shown in red, and agents you do not have installed are named.
+- `cornercase flow export NAME > file.toml` and `cornercase flow import FILE` do the same from a shell, into yours or, with `--to project`, the project's flows. A flow that sets variables or arguments asks first (or needs `--yes` without a terminal). A name that is already taken is refused unless you pass `--replace` or `--name`.
+- A flow file that cannot be read now says which line is wrong.
+
 ## 0.12.97
 
 - **Flows** start a whole team of agents on an issue or a prompt. A flow is a saved team and the plan it follows: an orchestrator agent, and roles such as coder, reviewer, security and tester, each with its own agent, model and effort. The plan is a list of stages, which can work in parallel and go back when there are findings. Choose ` start a flow ` next to ` start ` in an issue, **start a flow…** in the workspaces' `+ New`, or `w s` with a prefix key. cornercase makes a worktree, opens a tab per role and starts every agent there, and the orchestrator runs the plan with cornercase's own commands, from the first message to the pull request.
