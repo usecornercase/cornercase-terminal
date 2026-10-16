@@ -121,12 +121,12 @@ fn new_workspace_answers_once_the_setup_is_done_and_status_shows_it_meanwhile() 
     let mut team = team("sleep 1\necho done > MARKER", "");
     new_worktree(&mut team.app, "feat/slow");
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
-        a.projects[0].workspaces.iter().any(|w| w.setting_up())
+        a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
     let report = value(&mut team.app, None, Command::Status(wire::Status {}));
     let setup = report.pointer("/projects/0/workspaces").and_then(|w| w.as_array()).expect("workspaces");
     assert!(setup.iter().any(|w| w["setup"] == "running"), "{report}");
-    assert!(answers(&mut team.app).is_empty());
+    assert_eq!(answers(&mut team.app).len(), 0);
 
     done(answered(&mut team.app, &team.rx, "the answer comes after the setup"));
 
@@ -162,7 +162,7 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
     let mut team = team("sleep 30", "");
     start_in_worktree(&mut team.app);
     pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
-        a.projects[0].workspaces.iter().any(|w| w.setting_up())
+        a.projects[0].workspaces.iter().any(Workspace::setting_up)
     });
     refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.setups.is_empty());
     let (pane, (_, status)) = team.app.setups.iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
