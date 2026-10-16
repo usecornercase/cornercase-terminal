@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { MAX_BYTES, installCommand, sourceUrl, validate } from '../src/lib/plugins/catalogue';
-import { type Found, type Repo, assemble, crawl, manifestPaths, pluginFrom, previousScans, repoFrom, scan } from '../src/lib/plugins/crawl';
+import { type Found, type Repo, assemble, crawl, keep, manifestPaths, pluginFrom, previousScans, repoFrom, scan } from '../src/lib/plugins/crawl';
 
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = '89abcdef0123456789abcdef0123456789abcdef';
@@ -151,25 +151,114 @@ test('the page gives each plugin its pinned install command and source folder', 
   assert.equal(sourceUrl(card, card.plugins[1]), `https://github.com/acme/notes/tree/${C1}/plugins/tasks`);
 });
 
-test('a failed GitHub request fails the crawl instead of dropping the repository', async () => {
-  const first = assemble(await crawl(github([]), undefined, null), empty, when);
-  const failing = (broken: (url: string) => boolean, status: number) => async (url: string) =>
-    broken(url) ? answer(status, {}) : github([])(url);
-  await assert.rejects(crawl(failing((u) => u.includes('/commits/'), 503), undefined, first), /503/);
-  await assert.rejects(crawl(failing((u) => u.includes('/git/trees/'), 403), undefined, null), /403/);
-  const vanished = await crawl(failing((u) => u.includes('/commits/'), 404), undefined, null);
-  assert.deepEqual(vanished, []);
-});
+const quiet = async <T>(run: () => Promise<T>): Promise<{ value: T; warnings: string[] }> => {
+  const warn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (message: string) => void warnings.push(String(message));
+  try {
+    return { value: await run(), warnings };
+  } finally {
+    console.warn = warn;
+  }
+};
 
-test('a head answer without a commit fails the crawl', async () => {
-  await assert.rejects(crawl(async (u) => (u.includes('/commits/') ? answer(200, {}) : github([])(u)), undefined, null), /no commit/);
-});
+const broken = (match: string, status: number, base = github([])) => async (url: string) => (url.includes(match) ? answer(status, {}) : base(url));
+const published = async () => {
+  const index = assemble(await crawl(github([]), undefined, null), empty, when);
+  index.repos[0].commit = C1;
+  return index;
+};
+const ids = (found: Found[]) => found.map((f) => [f.repo.repo, f.scan.plugins.map((p) => p.id)]);
+const RAW_HOST = 'https://raw.githubusercontent.com';
+const failures: [string, (url: string) => boolean][] = [
+  ['head', (u) => u.includes('/commits/')],
+  ['tree', (u) => u.includes('/git/trees/')],
+  ['manifest', (u) => u.startsWith(RAW_HOST)],
+];
 
-test('a failed manifest download fails the crawl and is never counted as invalid', async () => {
-  await assert.rejects(
-    crawl(async (u) => (u.startsWith('https://raw.githubusercontent.com') ? answer(503, '') : github([])(u)), undefined, null),
-    /503/,
+for (const status of [404, 410, 451]) {
+  for (const [what, match] of failures.slice(0, 2)) {
+    test(`a repository whose ${what} answers ${status} is skipped, not kept`, async () => {
+      const { value, warnings } = await quiet(async () => crawl(async (u) => (match(u) ? answer(status, {}) : github([])(u)), undefined, await published()));
+      assert.deepEqual(value, []);
+      assert.match(warnings[0], /acme\/notes/);
+    });
+  }
+}
+
+for (const [what, match] of failures) {
+  test(`a 503 on the ${what} keeps the published card`, async () => {
+    const { value, warnings } = await quiet(async () => crawl(async (u) => (match(u) ? answer(503, {}) : github([])(u)), undefined, await published()));
+    assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+    assert.equal(value[0].commit, C1);
+    assert.match(warnings[0], /acme\/notes.*503.*keeping/);
+  });
+  test(`a 503 on the ${what} with no published card skips the repository`, async () => {
+    const { value, warnings } = await quiet(() => crawl(async (u) => (match(u) ? answer(503, {}) : github([])(u)), undefined, null));
+    assert.deepEqual(value, []);
+    assert.match(warnings[0], /skipping/);
+  });
+}
+
+test('a network error for one repository keeps its published card', async () => {
+  const { value } = await quiet(async () =>
+    crawl(async (u) => { if (u.includes('/commits/')) throw new Error('socket hang up'); return github([])(u); }, undefined, await published()),
   );
+  assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+});
+
+test('a head answer without a commit keeps the published card', async () => {
+  const { value } = await quiet(async () => crawl(async (u) => (u.includes('/commits/') ? answer(200, {}) : github([])(u)), undefined, await published()));
+  assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+});
+
+test('one failing repository does not stop the others', async () => {
+  const two = async (url: string) => {
+    if (url.includes('/search/repositories')) {
+      const items = ['acme/notes', 'acme/clock'].map((full_name) => ({ full_name, default_branch: 'trunk', stargazers_count: 1, created_at: '2026-01-01T00:00:00Z', pushed_at: '2026-10-01T00:00:00Z' }));
+      return answer(200, { total_count: 2, incomplete_results: false, items });
+    }
+    if (url.includes('/repos/acme/clock/commits/')) return answer(503, {});
+    return github([])(url);
+  };
+  const { value } = await quiet(() => crawl(two, undefined, null));
+  assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+});
+
+test('a failing search still fails the whole crawl', async () => {
+  await assert.rejects(crawl(broken('/search/repositories', 503), undefined, await published()), /503/);
+});
+
+test('a manifest that 404s after the tree listed it is unreadable, not a failure', async () => {
+  const { value } = await quiet(() => crawl(broken(RAW_HOST, 404), undefined, null));
+  assert.deepEqual(value.map((f) => f.scan), [{ plugins: [], invalid: 1 }]);
+});
+
+test('the kept index gets the current blocklist, and stays valid', () => {
+  const index = assemble(
+    [
+      found('acme/tools', [{ path: '', text: MANIFEST }, { path: 'tasks', text: withId('acme.tasks') }], 3, '2026-02-01T00:00:00Z'),
+      found('bad/actor', [{ path: '', text: withId('bad.actor') }], 500, '2026-03-01T00:00:00Z'),
+      found('acme/clock', [{ path: '', text: withId('acme.clock') }], 10, '2026-04-01T00:00:00Z'),
+    ],
+    empty,
+    when,
+  );
+  const kept = keep(index, { repos: ['Bad/Actor'], ids: ['acme.tasks'] });
+  assert.deepEqual(kept.repos.map((c) => [c.repo, c.plugins.map((p) => p.id), c.blocked]), [['acme/clock', ['acme.clock'], undefined], ['acme/tools', ['acme.notes'], 1]]);
+  assert.equal(kept.generated, index.generated);
+  assert.ok(validate(JSON.stringify(kept)));
+  const again = keep(kept, empty);
+  assert.deepEqual(again.repos.map((c) => c.repo), ['acme/clock', 'acme/tools']);
+  assert.equal(again.repos[1].blocked, 1);
+  assert.equal(keep(index, empty).repos.length, 3);
+});
+
+test('a card that lost plugins to the blocklist stays marked after being kept', () => {
+  const index = assemble([found('acme/notes', [{ path: '', text: MANIFEST }])], { repos: [], ids: ['acme.notes'] }, when);
+  const kept = keep(index, { repos: [], ids: ['acme.notes'] });
+  assert.deepEqual(kept.skipped, [{ repo: 'acme/notes', commit: C1, invalid: 0, blocked: 1 }]);
+  assert.equal(previousScans(kept).size, 0);
 });
 
 test('manifests the app would refuse are invalid', () => {

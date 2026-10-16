@@ -11,7 +11,7 @@ try {
   const out = join(dir, 'index.mjs');
   await build({
     stdin: {
-      contents: "export { crawl, assemble } from './src/lib/plugins/crawl'; export { validate } from './src/lib/plugins/catalogue';",
+      contents: "export { crawl, assemble, keep } from './src/lib/plugins/crawl'; export { validate } from './src/lib/plugins/catalogue';",
       resolveDir: process.cwd(),
       loader: 'ts',
     },
@@ -20,7 +20,7 @@ try {
     platform: 'node',
     format: 'esm',
   });
-  const { crawl, assemble, validate } = await import(pathToFileURL(out).href);
+  const { crawl, assemble, keep, validate } = await import(pathToFileURL(out).href);
   const published = async () => {
     try {
       const live = await fetch(PUBLISHED);
@@ -41,7 +41,7 @@ try {
   } catch (error) {
     if (!previous) throw error;
     console.warn(`the crawl failed (${error.message}); keeping the published index`);
-    text = `${JSON.stringify(previous, null, 2)}\n`;
+    text = `${JSON.stringify(keep(previous, blocklist), null, 2)}\n`;
   }
   validate(text);
   await writeFile('plugins/index.json', text);

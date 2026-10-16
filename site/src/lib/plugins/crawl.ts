@@ -37,7 +37,7 @@ export type Repo = {
 
 export type Blocklist = { repos: string[]; ids: string[] };
 
-export type Scan = { plugins: Plugin[]; invalid: number };
+export type Scan = { plugins: Plugin[]; invalid: number; blocked?: number };
 
 export type Found = { repo: Repo; commit: string; scan: Scan };
 
@@ -163,10 +163,10 @@ export function assemble(found: Found[], blocklist: Blocklist, generated: Date):
     }
     source.invalid += scan.invalid;
     const plugins = scan.plugins.filter((p) => !blocklist.ids.includes(p.id));
-    const withheld = scan.plugins.length - plugins.length;
+    const withheld = (scan.blocked ?? 0) + scan.plugins.length - plugins.length;
     if (withheld) source.blocked += 1;
     if (plugins.length === 0) {
-      if (scan.plugins.length === 0 && scan.invalid === 0) source.missing += 1;
+      if (scan.plugins.length === 0 && scan.invalid === 0 && !withheld) source.missing += 1;
       skipped.push({ repo: repo.repo, commit, invalid: scan.invalid, ...(withheld ? { blocked: withheld } : {}) });
       continue;
     }
@@ -192,6 +192,29 @@ export function assemble(found: Found[], blocklist: Blocklist, generated: Date):
   shown.sort((a, b) => b.stars - a.stars || a.repo.localeCompare(b.repo));
   return { version: VERSION, generated: generated.toISOString(), source, repos: shown, skipped };
 }
+
+export function foundFrom(index: Index): Found[] {
+  const origin = (repo: string, stars: number, created: string, pushed: string): Repo => ({
+    repo, branch: 'main', stars, created, pushed, fork: false, archived: false,
+  });
+  const cards = index.repos.map(({ plugins, invalid, blocked, commit, ...card }): Found => {
+    const repo = origin(card.repo, card.stars, card.created, card.pushed);
+    if (card.description) repo.description = card.description;
+    if (card.language) repo.language = card.language;
+    const scan: Scan = { plugins: plugins.map(({ duplicate: _, ...plugin }) => plugin), invalid: invalid ?? 0 };
+    if (blocked) scan.blocked = blocked;
+    return { repo, commit, scan };
+  });
+  const skips = index.skipped.map(({ repo, commit, invalid, blocked }): Found => {
+    const scan: Scan = { plugins: [], invalid };
+    if (blocked) scan.blocked = blocked;
+    return { repo: origin(repo, 0, new Date(0).toISOString(), new Date(0).toISOString()), commit, scan };
+  });
+  return [...cards, ...skips];
+}
+
+export const keep = (published: Index, blocklist: Blocklist): Index =>
+  assemble(foundFrom(published), blocklist, new Date(published.generated));
 
 export function previousScans(previous: Index | null): Map<string, { commit: string; scan: Scan }> {
   const scans = new Map<string, { commit: string; scan: Scan }>();
@@ -246,17 +269,39 @@ export async function crawl(get: Fetch, token: string | undefined, previous: Ind
     if (items.length < 100) break;
   }
   const known = previousScans(previous);
+  const cards = new Map(foundFrom(previous ?? EMPTY).filter((f) => f.scan.plugins.length > 0).map((f) => [f.repo.repo.toLowerCase(), f]));
   const found: Found[] = [];
   for (let i = 0; i < repos.length; i += AT_ONCE) {
-    const batch = await Promise.all(repos.slice(i, i + AT_ONCE).map((repo) => look(get, headers, repo, known)));
+    const batch = await Promise.all(
+      repos.slice(i, i + AT_ONCE).map(async (repo) => {
+        try {
+          return await look(get, headers, repo, known);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          if (error instanceof Gone) {
+            console.warn(`plugins: skipping ${repo.repo}: ${reason}`);
+            return null;
+          }
+          const card = cards.get(repo.repo.toLowerCase());
+          console.warn(`plugins: ${repo.repo} failed (${reason}); ${card ? 'keeping its published card' : 'skipping it'}`);
+          return card ?? null;
+        }
+      }),
+    );
     found.push(...batch.filter((f): f is Found => f !== null));
   }
   return found;
 }
 
+class Gone extends Error {}
+
+const GONE = [404, 410, 451];
+const EMPTY: Index = { version: VERSION, generated: new Date(0).toISOString(), source: { total: 0, missing: 0, invalid: 0, duplicate: 0, blocked: 0 }, repos: [], skipped: [] };
+
 async function look(get: Fetch, headers: Record<string, string>, repo: Repo, known: Map<string, { commit: string; scan: Scan }>): Promise<Found | null> {
   const head = await get(`${API}/repos/${repo.repo}/commits/${encodeURIComponent(repo.branch)}`, { headers });
-  if (head.status === 404 || head.status === 409) return null;
+  if (GONE.includes(head.status)) throw new Gone(`gone (${head.status})`);
+  if (head.status === 409) return null;
   if (!head.ok) throw new Error(`GitHub answered ${head.status} for the head of ${repo.repo}`);
   const body = await head.json();
   const commit = isObject(body) && typeof body.sha === 'string' && /^[0-9a-f]{40}$/.test(body.sha) ? body.sha : null;
@@ -264,7 +309,7 @@ async function look(get: Fetch, headers: Record<string, string>, repo: Repo, kno
   const seen = known.get(repo.repo.toLowerCase());
   if (seen?.commit === commit) return { repo, commit, scan: seen.scan };
   const tree = await get(`${API}/repos/${repo.repo}/git/trees/${commit}?recursive=1`, { headers });
-  if (tree.status === 404) return null;
+  if (GONE.includes(tree.status)) throw new Gone(`its tree is gone (${tree.status})`);
   if (!tree.ok) throw new Error(`GitHub answered ${tree.status} for the tree of ${repo.repo}`);
   const paths = manifestPaths(await tree.json());
   const manifests = await Promise.all(
