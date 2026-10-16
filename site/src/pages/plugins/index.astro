@@ -9,7 +9,7 @@ import Nav from '../../components/landing/Nav.astro';
 import Avatar from '../../components/plugins/Avatar.astro';
 import Command from '../../components/plugins/Command.astro';
 import { MANIFEST, TOPIC, validate } from '../../lib/plugins/catalogue';
-import { PAGE_SIZE, csp, view } from '../../lib/plugins/page';
+import { PAGE_SIZE, csp, headline, view } from '../../lib/plugins/page';
 
 const dev = import.meta.env.DEV && process.env.PLUGINS_INDEX === 'dev';
 const source = dev ? readFileSync('plugins/index.dev.json', 'utf8') : (await import('../../../plugins/index.json?raw')).default;
@@ -19,7 +19,6 @@ const origin = Astro.site ?? new URL('https://usecornercase.dev');
 const guide = `${base}docs/guides/plugins/`;
 const number = (n: number) => n.toLocaleString('en-US');
 const day = (iso: string) => iso.slice(0, 10);
-const plural = (n: number, one: string, many: string) => `${number(n)} ${n === 1 ? one : many}`;
 const description = `Community plugins for cornercase, published on GitHub and found by their ${TOPIC} topic. Install any of them with cornercase plugin install.`;
 const rest = page.line.slice(2);
 const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
@@ -49,23 +48,17 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     <main id="main">
       <div class="wrap">
         <header class="intro">
-          <div>
-            <p class="eyebrow">the marketplace</p>
-            <h1>Built by the community.</h1>
-            <p class="lead">
-              Community plugins published on GitHub, discovered automatically from the <code>{TOPIC}</code> topic. Install any of them with <code>cornercase plugin install</code>, or publish your own and get listed.
-            </p>
-            <p class="trust">
-              <span class="dot" aria-hidden="true"></span>
-              Listings aren't reviewed, so install at your own discretion.
-              <a href={`${guide}#trust-and-security`}>Trust guidance →</a>
-            </p>
-          </div>
-          <aside class="side" aria-label="Totals">
-            <b data-hero-count>{number(page.plugins)}</b>
-            <span>{page.plugins === 1 ? 'plugin' : 'plugins'} across {plural(page.repos, 'repository', 'repositories')}</span>
-            <a href={`${guide}#publish-a-plugin`}>Publish yours →</a>
-          </aside>
+          <p class="eyebrow cmd-line" aria-hidden="true">$ cornercase plugin list</p>
+          <h1>Extend your terminal.</h1>
+          <p class="out">{headline(page.plugins, page.repos)}</p>
+          <p class="lead">
+            Small tools other people built on cornercase's commands. Install one with <code>cornercase plugin install</code>.
+          </p>
+          <p class="trust">
+            <span class="dot" aria-hidden="true"></span>
+            Listings aren't reviewed, so install at your own discretion.
+            <a href={`${guide}#trust-and-security`}>Trust guidance →</a>
+          </p>
         </header>
 
         {
@@ -276,11 +269,12 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     font-size: 0.88em;
     overflow-wrap: anywhere;
   }
-  .plugins-page .intro {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: clamp(24px, 5vw, 72px);
-    align-items: end;
+  .plugins-page .out {
+    margin: 14px 0 0;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-3);
+    overflow-wrap: anywhere;
   }
   .plugins-page .trust {
     display: flex;
@@ -297,35 +291,12 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     border-radius: 50%;
     background: var(--text-3);
   }
-  .plugins-page .trust a,
-  .plugins-page .side a {
+  .plugins-page .trust a {
     color: var(--purple-2);
     text-decoration: none;
   }
-  .plugins-page .trust a:hover,
-  .plugins-page .side a:hover {
+  .plugins-page .trust a:hover {
     text-decoration: underline;
-  }
-  .plugins-page .side {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 22px 26px;
-    border: 1px solid var(--line-2);
-    border-radius: var(--radius);
-    background: var(--panel);
-    min-width: 220px;
-  }
-  .plugins-page .side b {
-    font-family: var(--font-display);
-    font-size: clamp(44px, 6vw, 72px);
-    line-height: 1;
-    letter-spacing: -0.04em;
-    color: var(--text);
-  }
-  .plugins-page .side span {
-    color: var(--text-2);
-    font-size: 15px;
   }
   .plugins-page .shelf,
   .plugins-page .browse {
@@ -774,12 +745,6 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     }
   }
   @media (max-width: 560px) {
-    .plugins-page .intro {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .plugins-page .side {
-      min-width: 0;
-    }
     .plugins-page .shelf-head {
       align-items: start;
     }

@@ -44,6 +44,11 @@ export type View = {
 
 const number = (n: number): string => n.toLocaleString('en-US');
 
+export const noun = (n: number, one: string, many: string): string => `${number(n)} ${n === 1 ? one : many}`;
+
+export const headline = (plugins: number, repos: number): string =>
+  `${noun(plugins, 'plugin', 'plugins')} · ${noun(repos, 'repository', 'repositories')} · refreshed every hour`;
+
 export function view(index: Index): View {
   const cards = shown(index);
   const generated = index.generated;
@@ -71,7 +76,7 @@ export function view(index: Index): View {
   const all = new Map(cards.map((card) => [card.repo, make(card)]));
   const pick = (list: Shown[]) => list.map((card) => all.get(card.repo) as CardView);
   const total = counts(cards, generated);
-  const line = [`${number(total.plugins)} ${total.plugins === 1 ? 'plugin' : 'plugins'}`, `${number(total.repos)} ${total.repos === 1 ? 'repository' : 'repositories'}`];
+  const line = [noun(total.plugins, 'plugin', 'plugins'), noun(total.repos, 'repository', 'repositories')];
   if (total.gained > 0) line.push(`+${number(total.gained)} ★ this week`);
   if (total.joined > 0) line.push(`${number(total.joined)} joined this week`);
   return {

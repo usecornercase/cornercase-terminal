@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { Index } from '../src/lib/plugins/catalogue';
 import { languageColour } from '../src/lib/plugins/market';
-import { CSP, csp, view } from '../src/lib/plugins/page';
+import { CSP, csp, headline, view } from '../src/lib/plugins/page';
 import { fixtureIndex } from './fixtures/plugins/fixture';
 
 const NOW = new Date('2026-10-20T12:00:00Z');
@@ -139,4 +139,24 @@ test('the publish block is a terminal line built from the topic and manifest con
   assert.ok(astro.includes('#publish-a-plugin'));
   assert.ok(!astro.includes('cornercase-plugin'), 'the topic and manifest names come from the constants');
   assert.ok(!astro.includes('class="kicker"'));
+});
+
+test('the header is a command, a title, its output and one sentence, in one column', () => {
+  const header = astro.slice(astro.indexOf('<header class="intro">'), astro.indexOf('</header>'));
+  assert.ok(header.includes('<p class="eyebrow cmd-line" aria-hidden="true">$ cornercase plugin list</p>'));
+  assert.ok(header.includes('<h1>Extend your terminal.</h1>'));
+  assert.ok(header.includes('<p class="out">{headline(page.plugins, page.repos)}</p>'));
+  assert.ok(header.includes("Small tools other people built on cornercase's commands. Install one with <code>cornercase plugin install</code>."));
+  assert.ok(header.includes("Listings aren't reviewed, so install at your own discretion.") && header.includes('Trust guidance →'));
+  for (const old of ['the marketplace', 'Built by the community', 'class="side"', 'data-hero-count', 'Publish yours', 'plugins across', 'discovered automatically']) {
+    assert.ok(!astro.includes(old), old);
+  }
+  assert.ok(!/\.intro \{\s*display: grid/.test(astro), 'the header has no second column');
+});
+
+test('the header count is the command\'s output with singular and plural forms', () => {
+  assert.equal(headline(page.plugins, page.repos), '13 plugins · 10 repositories · refreshed every hour');
+  assert.equal(headline(1, 1), '1 plugin · 1 repository · refreshed every hour');
+  assert.equal(headline(0, 0), '0 plugins · 0 repositories · refreshed every hour');
+  assert.equal(headline(1200, 2), '1,200 plugins · 2 repositories · refreshed every hour');
 });
