@@ -229,11 +229,11 @@ mod gitlab_discovery {
 
     fn glab(tmp: &TempDir) -> std::path::PathBuf {
         std::fs::write(tmp.path().join("status.json"), GLAB_STATUS).expect("status");
-        std::fs::write(tmp.path().join("merges.json"), GLAB_MERGES).expect("merges");
+        std::fs::write(tmp.path().join("page-1.json"), GLAB_MERGES).expect("merges");
         fake_glab(
             tmp.path(),
             &format!(
-                "D={dir}\necho \"$*\" >> $D/log\ncase \"$1\" in\nauth) cat $D/status.json; exit 1;;\napi) cat $D/merges.json;;\nesac",
+                "D={dir}\necho \"$*\" >> $D/log\ncase \"$1\" in\nauth) cat $D/status.json; exit 1;;\napi) p=${{*##*page=}}; cat $D/page-$p.json || exit 1;;\nesac",
                 dir = tmp.path().display()
             ),
         )
@@ -250,7 +250,7 @@ mod gitlab_discovery {
         assert_eq!(found[0].source.login, "ana");
         assert_eq!(found[0].source.ssh_host.as_deref(), Some("altssh.gitlab.com"));
         let log = std::fs::read_to_string(tmp.path().join("log")).expect("log");
-        assert!(log.contains("api --hostname gitlab.com --paginate merge_requests?scope=created_by_me&state=merged"));
+        assert!(log.contains("api --hostname gitlab.com merge_requests?scope=created_by_me&state=merged"));
     }
 
     #[test]
@@ -263,6 +263,80 @@ mod gitlab_discovery {
         let keys: Vec<_> = one.merged.iter().map(|m| (m.key.path.as_str(), m.key.number)).collect();
         assert_eq!(keys, [("acme/team/shop", 4), ("acme/team/shop", 5)]);
         assert_eq!(one.merged[1].at, UNIX_EPOCH + Duration::from_hours(497_671));
+    }
+
+    fn pages(tmp: &TempDir, full: u32, last: Option<usize>) {
+        let page = |n: u32, count: usize| {
+            let nodes: Vec<String> = (0..count)
+                .map(|i| {
+                    format!(
+                        r#"{{"iid":{},"merged_at":"2026-10-15T09:00:00.000Z","references":{{"full":"acme/shop!{}"}}}}"#,
+                        n as usize * 1000 + i,
+                        n as usize * 1000 + i
+                    )
+                })
+                .collect();
+            std::fs::write(tmp.path().join(format!("page-{n}.json")), format!("[{}]", nodes.join(","))).expect("page");
+        };
+        for n in 1..=full {
+            page(n, 100);
+        }
+        if let Some(count) = last {
+            page(full + 1, count);
+        }
+    }
+
+    fn first(read: Read) -> Listed {
+        let Read::Accounts(found) = read else { panic!("expected accounts") };
+        found[0].listed.clone().expect("listed")
+    }
+
+    #[test]
+    fn a_short_page_ends_the_list_complete() {
+        let tmp = TempDir::new();
+        let glab = glab(&tmp);
+        pages(&tmp, 1, Some(3));
+
+        let listed = first(gitlab::read(&glab, tmp.path(), since()));
+
+        assert_eq!((listed.merged.len(), listed.truncated), (103, false));
+        let log = std::fs::read_to_string(tmp.path().join("log")).expect("log");
+        assert_eq!(log.lines().filter(|l| l.starts_with("api")).count(), 2);
+    }
+
+    #[test]
+    fn stops_at_the_page_bound_and_says_the_count_is_partial() {
+        let tmp = TempDir::new();
+        let glab = glab(&tmp);
+        pages(&tmp, gitlab::MAX_PAGES, Some(100));
+
+        let listed = first(gitlab::read(&glab, tmp.path(), since()));
+
+        assert_eq!((listed.merged.len(), listed.truncated), (100 * gitlab::MAX_PAGES as usize, true));
+        let log = std::fs::read_to_string(tmp.path().join("log")).expect("log");
+        assert_eq!(log.lines().filter(|l| l.starts_with("api")).count(), gitlab::MAX_PAGES as usize);
+    }
+
+    #[test]
+    fn a_later_page_failing_keeps_the_pages_read_as_partial() {
+        let tmp = TempDir::new();
+        let glab = glab(&tmp);
+        pages(&tmp, 1, None);
+
+        let listed = first(gitlab::read(&glab, tmp.path(), since()));
+
+        assert_eq!((listed.merged.len(), listed.truncated), (100, true));
+    }
+
+    #[test]
+    fn the_first_page_failing_is_an_error_of_the_account() {
+        let tmp = TempDir::new();
+        let glab = glab(&tmp);
+        let _ = std::fs::remove_file(tmp.path().join("page-1.json"));
+
+        let Read::Accounts(found) = gitlab::read(&glab, tmp.path(), since()) else { panic!("expected accounts") };
+
+        assert!(found[0].listed.is_err());
     }
 
     #[rstest]

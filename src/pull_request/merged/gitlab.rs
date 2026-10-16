@@ -13,6 +13,8 @@ use crate::git::remote::split_url;
 use crate::process;
 use crate::time::{self, Stamp};
 
+pub(super) const MAX_PAGES: u32 = 20;
+const PAGE: usize = 100;
 const TIMEOUT: Duration = Duration::from_secs(60);
 const MISSING: &str = "install glab, GitLab's CLI, to count merged merge requests";
 const LOGGED_OUT: &str = "glab is not logged in: run glab auth login";
@@ -103,21 +105,37 @@ fn discover(glab: &Path, dir: &Path) -> std::result::Result<Vec<Host>, Read> {
 }
 
 fn list(glab: &Path, dir: &Path, host: &str, since: SystemTime) -> Result<Listed> {
-    let path = format!(
-        "merge_requests?scope=created_by_me&state=merged&updated_after={}&order_by=updated_at&sort=desc&per_page=100",
-        Stamp(since)
-    );
-    let out = run(glab, dir, &["api", "--hostname", host, "--paginate", &path])?;
+    let mut merged = Vec::new();
+    let mut truncated = false;
+    for page in 1..=MAX_PAGES {
+        let path = format!(
+            "merge_requests?scope=created_by_me&state=merged&updated_after={}&order_by=updated_at&sort=desc&per_page={PAGE}&page={page}",
+            Stamp(since)
+        );
+        let nodes = match page_of(glab, dir, host, &path) {
+            Ok(nodes) => nodes,
+            Err(e) if page == 1 => return Err(e),
+            Err(_) => {
+                truncated = true;
+                break;
+            }
+        };
+        merged.extend(nodes.iter().filter_map(|node| node_of(node, host)));
+        if nodes.len() < PAGE {
+            break;
+        }
+        truncated = page == MAX_PAGES;
+    }
+    merged.retain(|m: &Merged| m.at >= since);
+    Ok(Listed { merged, truncated })
+}
+
+fn page_of(glab: &Path, dir: &Path, host: &str, path: &str) -> Result<Vec<Value>> {
+    let out = run(glab, dir, &["api", "--hostname", host, path])?;
     if !out.status.success() {
         return Err(Error::Glab(gh::failure(&out, "glab")));
     }
-    let mut merged = Vec::new();
-    for page in serde_json::Deserializer::from_slice(&out.stdout).into_iter::<Value>() {
-        let page = page.map_err(|e| Error::Glab(format!("glab printed something unexpected: {e}")))?;
-        merged.extend(page.as_array().into_iter().flatten().filter_map(|node| node_of(node, host)));
-    }
-    merged.retain(|m: &Merged| m.at >= since);
-    Ok(Listed { merged, truncated: false })
+    serde_json::from_slice(&out.stdout).map_err(|e| Error::Glab(format!("glab printed something unexpected: {e}")))
 }
 
 fn node_of(node: &Value, host: &str) -> Option<Merged> {
