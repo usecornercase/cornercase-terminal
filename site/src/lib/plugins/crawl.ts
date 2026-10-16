@@ -311,7 +311,11 @@ async function look(get: Fetch, headers: Record<string, string>, repo: Repo, kno
   const tree = await get(`${API}/repos/${repo.repo}/git/trees/${commit}?recursive=1`, { headers });
   if (GONE.includes(tree.status)) throw new Gone(`its tree is gone (${tree.status})`);
   if (!tree.ok) throw new Error(`GitHub answered ${tree.status} for the tree of ${repo.repo}`);
-  const paths = manifestPaths(await tree.json());
+  const listing = await tree.json();
+  if (!isObject(listing) || !Array.isArray(listing.tree) || !listing.tree.every(isObject)) {
+    throw new Error(`GitHub gave a malformed tree for ${repo.repo}`);
+  }
+  const paths = manifestPaths(listing);
   const manifests = await Promise.all(
     paths.map(async (path) => {
       const file = await get(`${RAW}/${repo.repo}/${commit}/${path ? `${path}/` : ''}${MANIFEST}`);

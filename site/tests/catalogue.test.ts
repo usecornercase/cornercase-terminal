@@ -207,6 +207,28 @@ test('a network error for one repository keeps its published card', async () => 
   assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
 });
 
+for (const [what, body] of [['an empty object', {}], ['a tree that is not a list', { tree: 'x' }], ['entries that are not objects', { tree: ['a', 1] }]] as const) {
+  const malformed = (url: string) => (url.includes('/git/trees/') ? answer(200, body) : github([])(url));
+  test(`a tree answer that is ${what} keeps the published card`, async () => {
+    const { value, warnings } = await quiet(async () => crawl(async (u) => malformed(u), undefined, await published()));
+    assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+    assert.equal(value[0].commit, C1);
+    assert.match(warnings[0], /acme\/notes.*malformed tree.*keeping/);
+  });
+  test(`a tree answer that is ${what} with no published card skips the repository`, async () => {
+    const { value, warnings } = await quiet(() => crawl(async (u) => malformed(u), undefined, null));
+    assert.deepEqual(value, []);
+    assert.match(warnings[0], /malformed tree.*skipping/);
+  });
+}
+
+test('a truncated but well-formed tree is still read', async () => {
+  const { value } = await quiet(() =>
+    crawl(async (u) => (u.includes('/git/trees/') ? answer(200, { truncated: true, tree: [{ type: 'blob', path: 'plugin/cornercase-plugin.toml' }] }) : github([])(u)), undefined, null),
+  );
+  assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
+});
+
 test('a head answer without a commit keeps the published card', async () => {
   const { value } = await quiet(async () => crawl(async (u) => (u.includes('/commits/') ? answer(200, {}) : github([])(u)), undefined, await published()));
   assert.deepEqual(ids(value), [['acme/notes', ['acme.notes']]]);
