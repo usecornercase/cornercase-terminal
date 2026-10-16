@@ -62,7 +62,7 @@ mod pages {
 
     #[test]
     fn the_first_one_is_worktrees() {
-        assert_eq!(settings().rows(), [Row::Folder, Row::Fetch, Row::PullRequests]);
+        assert_eq!(settings().rows(), [Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests]);
     }
 
     #[rstest]
@@ -95,10 +95,10 @@ mod pages {
     #[test]
     fn down_stays_on_the_page() {
         let mut s = settings();
-        for _ in 0..3 {
+        for _ in 0..4 {
             press(&mut s, KeyCode::Down);
         }
-        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::PullRequests)));
+        assert_eq!((s.page, s.row()), (Page::Worktrees, Some(Row::MergedPullRequests)));
     }
 }
 
@@ -609,6 +609,29 @@ mod pull_requests {
 
         assert_eq!((text.label.as_str(), text.value.as_str()), ("pull requests", "[x] shown"));
         assert_eq!(text.note, "install gh, GitHub's CLI, to see them");
+    }
+}
+
+mod merged_pull_requests {
+    use super::*;
+
+    #[test]
+    fn is_a_switch_that_starts_on() {
+        let mut s = settings();
+        let before = s.config.merged_pull_requests;
+        go_to(&mut s, &Row::MergedPullRequests);
+        assert_eq!((before, saved(press(&mut s, KeyCode::Enter)).merged_pull_requests), (true, false));
+    }
+
+    #[test]
+    fn its_note_is_what_the_app_says() {
+        let mut s = settings();
+        s.merged = "from 1 GitHub account".into();
+
+        let text = s.row_text(&Row::MergedPullRequests);
+
+        assert_eq!((text.label.as_str(), text.value.as_str()), ("merged PRs in stats", "[x] shown"));
+        assert_eq!(text.note, "from 1 GitHub account");
     }
 }
 

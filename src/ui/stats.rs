@@ -24,7 +24,7 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     let (line, muted, light) = colours;
     let colour = |level| shade(line, light, level);
     let dim = Style::default().fg(muted);
-    if stats.empty {
+    if stats.empty && stats.merged.is_none() {
         let mut lines = markdown::wrap_text(stats::EMPTY, dim, width);
         lines.push(Line::default());
         return lines;
@@ -34,12 +34,8 @@ pub(super) fn lines(colours: (Color, Color, bool), stats: &stats::View, width: u
     let column = width.saturating_sub(20) / 3;
     let header = format!("{:18}{:>column$} {:>column$} {:>column$}", "", "24 h", "7 days", "total");
     lines.push(Line::from(Span::styled(header, dim)));
-    let columns = stats.columns();
-    for (i, label) in stats::LABELS.iter().enumerate() {
-        lines.push(Line::from(format!(
-            "{label:18}{:>column$} {:>column$} {:>column$}",
-            columns[0][i], columns[1][i], columns[2][i]
-        )));
+    for (label, [day, week, total]) in stats.rows() {
+        lines.push(Line::from(format!("{label:18}{day:>column$} {week:>column$} {total:>column$}")));
     }
     lines.push(Line::default());
     let weeks = (width / 2).min(WEEKS);

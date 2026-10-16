@@ -52,6 +52,7 @@ use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::Focus;
 use layout::{Scrolls, Side};
+use merged_pull_requests::MergedPulls;
 use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use pull_requests::PullRequests;
@@ -84,6 +85,7 @@ mod launches;
 mod layout;
 mod links;
 mod menus;
+mod merged_pull_requests;
 mod messenger;
 mod overlay;
 mod panes;
@@ -126,6 +128,7 @@ struct Outbox {
 pub(crate) struct App {
     upstream: Upstream,
     pulls: PullRequests,
+    merged: MergedPulls,
     scroll: Scrolls,
     outbox: Outbox,
     agents: AgentRuntime,
@@ -188,6 +191,7 @@ impl App {
         Self {
             upstream: Upstream::default(),
             pulls: PullRequests::default(),
+            merged: MergedPulls::default(),
             scroll: Scrolls::default(),
             outbox: Outbox::default(),
             agents: AgentRuntime::new(home.as_deref()),
@@ -407,6 +411,7 @@ impl App {
         self.forget_files();
         self.count_behind(now);
         self.ask_pull_requests(now);
+        self.ask_merged(now);
     }
 
     pub(crate) fn shows(&self, pane: u64) -> bool {
@@ -530,6 +535,7 @@ impl App {
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
             AppEvent::Messenger(event) => self.messenger_event(event, area),
+            AppEvent::Merged(answer) => self.merged_answered(answer),
         }
         Ok(())
     }

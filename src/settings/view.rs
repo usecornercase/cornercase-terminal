@@ -30,6 +30,10 @@ impl Settings {
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
+            Row::MergedPullRequests => {
+                let value = if config.merged_pull_requests { "[x] shown" } else { "[ ] hidden" };
+                ("merged PRs in stats".into(), value.into(), self.merged.clone(), false)
+            }
             _ => {
                 let value = if config.pull_requests { "[x] shown" } else { "[ ] hidden" };
                 ("pull requests".into(), value.into(), self.pulls.clone(), false)
@@ -54,7 +58,7 @@ impl Settings {
     pub(crate) fn row_text(&self, row: &Row) -> RowText {
         let config = &self.config;
         let (label, value, note, dangerous) = match row {
-            Row::Folder | Row::Fetch | Row::PullRequests => self.worktrees_row(row),
+            Row::Folder | Row::Fetch | Row::PullRequests | Row::MergedPullRequests => self.worktrees_row(row),
             Row::Token(source) => self.token_row(*source),
             Row::GitlabUrl
             | Row::JiraSite

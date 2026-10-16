@@ -249,10 +249,18 @@ impl Drop for Running {
     }
 }
 
-pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
-    let path = dir.join("gh");
+pub(crate) fn fake_tool(dir: &Path, name: &str, script: &str) -> PathBuf {
+    let path = dir.join(name);
     write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
     path
+}
+
+pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
+    fake_tool(dir, "gh", script)
+}
+
+pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
+    fake_tool(dir, "glab", script)
 }
 
 pub(crate) fn git(dir: &Path, args: &[&str]) {

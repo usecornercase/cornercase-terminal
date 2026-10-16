@@ -23,6 +23,7 @@ pub(crate) enum Row {
     Folder,
     Fetch,
     PullRequests,
+    MergedPullRequests,
     Sidebar,
     Tabs,
     IconBar,
@@ -69,6 +70,7 @@ impl Row {
             Self::Folder
             | Self::Fetch
             | Self::PullRequests
+            | Self::MergedPullRequests
             | Self::Sidebar
             | Self::Tabs
             | Self::IconBar
@@ -97,7 +99,7 @@ impl Row {
 
     pub(crate) fn page(&self) -> Page {
         match self {
-            Self::Folder | Self::Fetch | Self::PullRequests => Page::Worktrees,
+            Self::Folder | Self::Fetch | Self::PullRequests | Self::MergedPullRequests => Page::Worktrees,
             Self::DefaultAgent
             | Self::Submit
             | Self::Trust
@@ -287,6 +289,7 @@ pub(crate) struct Settings {
     pub(crate) capturing: bool,
     pub(crate) awake: String,
     pub(crate) pulls: String,
+    pub(crate) merged: String,
     pub(crate) flows: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
@@ -309,6 +312,7 @@ impl Settings {
             capturing: false,
             awake: String::new(),
             pulls: String::new(),
+            merged: String::new(),
             flows: String::new(),
             remote: String::new(),
             browsers: 0,
@@ -358,7 +362,7 @@ impl Settings {
     pub(crate) fn rows(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
-        let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests];
+        let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
         for (source, _) in &self.tokens {
             match source {
                 Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),

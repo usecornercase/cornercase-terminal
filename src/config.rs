@@ -118,6 +118,7 @@ pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
+pub(crate) const DEFAULT_GLAB: &str = "glab";
 pub(crate) const DEFAULT_ISSUE_TABS: [&str; 7] = ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 
@@ -148,6 +149,7 @@ pub(crate) struct Config {
     pub(crate) worktrees_dir: String,
     pub(crate) fetch_minutes: u64,
     pub(crate) pull_requests: bool,
+    pub(crate) merged_pull_requests: bool,
     pub(crate) issue_tabs: Vec<String>,
     pub(crate) gitlab_url: String,
     pub(crate) jira_site: String,
@@ -167,6 +169,7 @@ pub(crate) struct Config {
     pub(crate) keep_awake: bool,
     pub(crate) trust_prompt_pattern: String,
     pub(crate) gh: String,
+    pub(crate) glab: String,
     pub(crate) sidebar: String,
     pub(crate) tabs: String,
     pub(crate) icon_bar: bool,
@@ -193,6 +196,7 @@ impl Default for Config {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
             pull_requests: true,
+            merged_pull_requests: true,
             issue_tabs: DEFAULT_ISSUE_TABS.map(String::from).to_vec(),
             gitlab_url: String::new(),
             jira_site: String::new(),
@@ -212,6 +216,7 @@ impl Default for Config {
             keep_awake: false,
             trust_prompt_pattern: agents::DEFAULT_TRUST_PROMPT.into(),
             gh: DEFAULT_GH.into(),
+            glab: DEFAULT_GLAB.into(),
             sidebar: Sidebar::default().id().into(),
             tabs: Tabs::default().id().into(),
             icon_bar: false,
@@ -241,6 +246,10 @@ impl Config {
 
     pub(crate) fn gh(&self, home: Option<&Path>) -> PathBuf {
         expand_home(&self.gh, home)
+    }
+
+    pub(crate) fn glab(&self, home: Option<&Path>) -> PathBuf {
+        expand_home(&self.glab, home)
     }
 
     pub(crate) fn prefix(&self) -> Option<Prefix> {

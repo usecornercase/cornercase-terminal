@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.106
+## 0.12.107
 
 - **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
+## 0.12.106
+
+- **Merged pull requests in Stats.** Usage → Stats has a new row, `merged PRs`, with the pull requests and merge requests you opened that were merged, for the last 24 h, 7 days and in total since counting began. It reads them with your own `gh` (every GitHub account you are logged in to, including the ones that are not active, without switching) and `glab`, and counts only repositories that one of your open projects has as a remote, once each however many accounts or projects see them. A `+` after a number means some account could not be read, so the real number may be higher. The row is hidden when `gh` and `glab` are missing, logged out or too old, or when no project has a remote.
+- It also shows in `cornercase stats` and its `--json` (`merged_pull_requests`), and goes on the shared card (link version 3) only when every account was read. Turn it off in **Settings → Worktrees → merged PRs in stats** (`merged_pull_requests`); `glab` in `config.json` names the GitLab CLI to run.
 
 ## 0.12.105
 
