@@ -47,6 +47,7 @@ pub(crate) fn locator(text: &str, source: Option<&str>, available: &[Source]) ->
             Source::Shortcut => "story",
             Source::Linear => "issue",
             Source::Jira | Source::Plane => "browse",
+            Source::Asana => "task",
         };
         let key = parts
             .windows(2)
@@ -104,6 +105,7 @@ pub(crate) fn find(client: &Client, locator: &Locator) -> Result<Issue> {
         Client::Linear { url, token } => crate::issues::linear::Api { url, token }.find(key),
         Client::Jira(api) => api.find(key),
         Client::Plane(api) => api.find(key),
+        Client::Asana(api) => api.find(key),
     }?;
     match &locator.url {
         Some(url) if place(url) != place(&issue.url) => Err(Error::Api(format!(

@@ -1,3 +1,4 @@
+pub(crate) mod asana;
 pub(crate) mod browser;
 pub(crate) mod cache;
 pub(crate) mod github;
@@ -31,12 +32,14 @@ pub(crate) enum Source {
     Linear,
     Jira,
     Plane,
+    Asana,
 }
 
 impl Source {
-    pub(crate) const ALL: [Self; 6] =
-        [Self::Github, Self::Gitlab, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
-    pub(crate) const REMOTE: [Self; 5] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane, Self::Gitlab];
+    pub(crate) const ALL: [Self; 7] =
+        [Self::Github, Self::Gitlab, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane, Self::Asana];
+    pub(crate) const REMOTE: [Self; 6] =
+        [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane, Self::Gitlab, Self::Asana];
 
     pub(crate) fn in_repository(self) -> bool {
         matches!(self, Self::Github | Self::Gitlab)
@@ -50,6 +53,7 @@ impl Source {
             Self::Linear => "linear",
             Self::Jira => "jira",
             Self::Plane => "plane",
+            Self::Asana => "asana",
         }
     }
 
@@ -61,13 +65,14 @@ impl Source {
             Self::Linear => "Linear",
             Self::Jira => "Jira",
             Self::Plane => "Plane",
+            Self::Asana => "Asana",
         }
     }
 
     pub(crate) fn token_name(self) -> &'static str {
         match self {
             Self::Github | Self::Shortcut | Self::Jira => "API token",
-            Self::Gitlab => "access token",
+            Self::Gitlab | Self::Asana => "access token",
             Self::Linear | Self::Plane => "API key",
         }
     }
@@ -80,6 +85,7 @@ impl Source {
             Self::Linear => Some(linear::TOKEN_ENV),
             Self::Jira => Some(jira::TOKEN_ENV),
             Self::Plane => Some(plane::TOKEN_ENV),
+            Self::Asana => Some(asana::TOKEN_ENV),
         }
     }
 
@@ -91,6 +97,7 @@ impl Source {
             Self::Linear => Some("linear_api_key"),
             Self::Jira => Some("jira_api_token"),
             Self::Plane => Some("plane_api_key"),
+            Self::Asana => Some("asana_token"),
         }
     }
 
@@ -98,7 +105,7 @@ impl Source {
         match self {
             Self::Github | Self::Gitlab => ["assignee", "author"],
             Self::Shortcut => ["owner", "requester"],
-            Self::Linear | Self::Plane => ["assignee", "creator"],
+            Self::Linear | Self::Plane | Self::Asana => ["assignee", "creator"],
             Self::Jira => ["assignee", "reporter"],
         }
     }
@@ -120,6 +127,9 @@ impl Source {
             }
             Self::Plane => {
                 "Create an API key in Plane under Profile settings → Personal access tokens, paste it here and press Enter."
+            }
+            Self::Asana => {
+                "Create a personal access token in Asana under Settings → Apps → Developer apps, paste it here and press Enter."
             }
         }
     }
@@ -173,6 +183,7 @@ pub(crate) struct People {
     pub(crate) linear: [Who; 2],
     pub(crate) jira: [Who; 2],
     pub(crate) plane: [Who; 2],
+    pub(crate) asana: [Who; 2],
 }
 
 impl People {
@@ -184,6 +195,7 @@ impl People {
             Source::Linear => &self.linear,
             Source::Jira => &self.jira,
             Source::Plane => &self.plane,
+            Source::Asana => &self.asana,
         }
     }
 
@@ -195,6 +207,7 @@ impl People {
             Source::Linear => &mut self.linear,
             Source::Jira => &mut self.jira,
             Source::Plane => &mut self.plane,
+            Source::Asana => &mut self.asana,
         }
     }
 
@@ -284,6 +297,7 @@ pub(crate) enum Client {
     Linear { url: String, token: String },
     Jira(jira::Api),
     Plane(plane::Api),
+    Asana(asana::Api),
 }
 
 impl Client {
@@ -295,6 +309,7 @@ impl Client {
             Self::Linear { url, token } => linear::Api { url, token }.people(),
             Self::Jira(api) => api.people(),
             Self::Plane(api) => api.people(),
+            Self::Asana(api) => api.people(),
         }
     }
 
@@ -306,6 +321,7 @@ impl Client {
             Self::Linear { url, token } => linear::Api { url, token }.list(query),
             Self::Jira(api) => api.list(query),
             Self::Plane(api) => api.list(query),
+            Self::Asana(api) => api.list(query),
         }
     }
 
@@ -317,6 +333,7 @@ impl Client {
             Self::Linear { url, token } => linear::Api { url, token }.view(&issue.key),
             Self::Jira(api) => api.view(&issue.key),
             Self::Plane(api) => api.view(&issue.key),
+            Self::Asana(api) => api.view(&issue.key),
         }
     }
 
@@ -328,6 +345,7 @@ impl Client {
             Self::Linear { url, token } => linear::Api { url, token }.whoami(),
             Self::Jira(api) => api.whoami(),
             Self::Plane(api) => api.whoami(),
+            Self::Asana(api) => api.whoami(),
         }
     }
 }
@@ -355,7 +373,8 @@ pub(crate) fn branch(issue: &Issue) -> String {
         Source::Github => format!("issue-{}", issue.number),
         Source::Gitlab => issue.number.to_string(),
         Source::Shortcut => format!("sc-{}", issue.number),
-        Source::Linear | Source::Jira | Source::Plane => issue.key.clone(),
+        Source::Asana if issue.key.bytes().all(|b| b.is_ascii_digit()) => format!("asana-{}", issue.key),
+        Source::Linear | Source::Jira | Source::Plane | Source::Asana => issue.key.clone(),
     };
     let slug = slug(&issue.title, SLUG_MAX);
     if slug.is_empty() { prefix } else { format!("{prefix}-{slug}") }
@@ -474,7 +493,7 @@ pub(crate) fn issue(source: Source, number: u64, title: &str) -> Issue {
     let key = match source {
         Source::Github | Source::Gitlab => format!("#{number}"),
         Source::Shortcut => format!("sc-{number}"),
-        Source::Linear => format!("ENG-{number}"),
+        Source::Linear | Source::Asana => format!("ENG-{number}"),
         Source::Jira => format!("PROJ-{number}"),
         Source::Plane => format!("WEB-{number}"),
     };

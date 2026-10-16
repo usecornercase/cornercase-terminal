@@ -464,7 +464,7 @@ mod tabs {
         let mut s = settings();
         go_to(&mut s, &Row::Tab("shortcut"));
         let tabs = saved(press(&mut s, KeyCode::Enter)).issue_tabs;
-        assert_eq!(tabs, ["all", "github", "gitlab", "linear", "jira", "plane"]);
+        assert_eq!(tabs, ["all", "github", "gitlab", "linear", "jira", "plane", "asana"]);
     }
 
     #[test]
@@ -488,7 +488,7 @@ mod tabs {
         let mut s = settings();
         go_to(&mut s, &Row::Tab("linear"));
         let config = saved(key(&mut s, KeyCode::Up, KeyModifiers::SHIFT));
-        assert_eq!(config.issue_tabs, ["all", "github", "gitlab", "linear", "shortcut", "jira", "plane"]);
+        assert_eq!(config.issue_tabs, ["all", "github", "gitlab", "linear", "shortcut", "jira", "plane", "asana"]);
         assert_eq!(s.row(), Some(Row::Tab("linear")));
     }
 }

@@ -35,6 +35,8 @@ mod file {
             plane_url: "https://plane.example".into(),
             plane_workspace: "shop".into(),
             plane_filter: "state:todo".into(),
+            asana_workspace: "Acme".into(),
+            asana_projects: "1200000000000001 1200000000000002".into(),
             agent: "codex".into(),
             agent_args: [("codex".into(), vec!["--sandbox".into(), "workspace-write".into()])].into(),
             agent_modes: [("claude".into(), [("plan".into(), vec!["--permission-mode".into(), "plan".into()])].into())]
@@ -211,27 +213,35 @@ mod added_tabs {
     #[rstest]
     #[case::a_list_from_before_jira(
         r#"{"issue_tabs": ["linear", "all"]}"#,
-        &["linear", "all", "jira", "plane", "gitlab"]
+        &["linear", "all", "jira", "plane", "asana", "gitlab"]
     )]
     #[case::a_list_from_before_plane(
         r#"{"issue_tabs": ["linear", "all"], "jira_site": ""}"#,
-        &["linear", "all", "plane", "gitlab"]
+        &["linear", "all", "plane", "asana", "gitlab"]
     )]
-    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane", "gitlab"])]
+    #[case::a_list_from_before_asana(
+        r#"{"issue_tabs": ["linear", "all"], "jira_site": "", "plane_workspace": "", "gitlab_url": ""}"#,
+        &["linear", "all", "asana"]
+    )]
+    #[case::asana_already_there(
+        r#"{"issue_tabs": ["Asana", "all"], "jira_site": "", "plane_workspace": "", "gitlab_url": ""}"#,
+        &["Asana", "all"]
+    )]
+    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane", "asana", "gitlab"])]
     #[case::plane_already_there(
         r#"{"issue_tabs": ["Plane", "all"], "jira_site": ""}"#,
-        &["Plane", "all", "gitlab"]
+        &["Plane", "all", "asana", "gitlab"]
     )]
     #[case::gitlab_goes_after_github(
         r#"{"issue_tabs": ["all", "GitHub", "linear"], "jira_site": "", "plane_workspace": ""}"#,
-        &["all", "GitHub", "gitlab", "linear"]
+        &["all", "GitHub", "gitlab", "linear", "asana"]
     )]
     #[case::gitlab_already_there(
         r#"{"issue_tabs": ["gitlab", "all"], "jira_site": "", "plane_workspace": ""}"#,
-        &["gitlab", "all"]
+        &["gitlab", "all", "asana"]
     )]
     #[case::hidden_since(
-        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": "", "gitlab_url": ""}"#,
+        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": "", "asana_workspace": "", "gitlab_url": ""}"#,
         &["all"]
     )]
     #[case::no_list("{}", &DEFAULT_ISSUE_TABS)]

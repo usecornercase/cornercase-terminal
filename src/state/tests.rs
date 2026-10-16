@@ -144,6 +144,7 @@ mod file {
                     linear: [Who::Anyone, Who::Me],
                     jira: [Who::Person("zoe".into()), Who::Anyone],
                     plane: [Who::Anyone, Who::User { id: "u-2".into(), name: "Kai".into() }],
+                    asana: [Who::Anyone, Who::Anyone],
                 },
             }),
             changes: Some(ChangesState { open: true, mode: Mode::All, scope: Some(Scope::Every) }),

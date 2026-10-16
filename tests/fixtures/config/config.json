@@ -15,6 +15,8 @@
   "plane_url": "https://plane.example",
   "plane_workspace": "shop",
   "plane_filter": "state:todo",
+  "asana_workspace": "Acme",
+  "asana_projects": "1200000000000001 1200000000000002",
   "agent": "codex",
   "agent_args": {
     "codex": [

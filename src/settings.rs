@@ -8,7 +8,7 @@ use crate::messenger::Via;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
-const TAB_IDS: [&str; 7] = DEFAULT_ISSUE_TABS;
+const TAB_IDS: [&str; 8] = DEFAULT_ISSUE_TABS;
 const EXTRA_ARGS: &str = "extra arguments…";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

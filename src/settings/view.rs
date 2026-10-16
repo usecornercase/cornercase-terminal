@@ -168,7 +168,8 @@ impl Settings {
             "shortcut" => "Shortcut",
             "linear" => "Linear",
             "jira" => "Jira",
-            _ => "Plane",
+            "plane" => "Plane",
+            _ => "Asana",
         };
         let note = if id == "all" { "every source together".into() } else { String::new() };
         (format!("{} {name}", if on { "[x]" } else { "[ ]" }), String::new(), note, false)

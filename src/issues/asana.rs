@@ -1,0 +1,358 @@
+use std::collections::{HashMap, HashSet};
+use std::time::SystemTime;
+
+use serde_json::Value;
+
+use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, html, join_body};
+use crate::error::{Error, Result};
+use crate::http::{self, Answer, Service, into_json, path_segment, text};
+use crate::time::{Stamp, parse_time};
+
+pub(crate) const TOKEN_ENV: &str = "ASANA_ACCESS_TOKEN";
+pub(crate) const API_ENV: &str = "CORNERCASE_ASANA_API";
+pub(crate) const DEFAULT_API: &str = "https://app.asana.com/api/1.0";
+const REJECTED: &str = "Asana rejected the access token";
+const SERVICE: Service = Service { name: "Asana", rejected: REJECTED };
+const PAGE: &str = "100";
+const LIST_PAGES: usize = 10;
+const PEOPLE_PAGES: usize = 20;
+const COMMENT_PAGES: usize = 5;
+const PROJECTS: usize = 10;
+const LIST_FIELDS: &str = "name,completed,modified_at,created_at,permalink_url,resource_subtype,\
+    is_rendered_as_separator,assignee.name,created_by,tags.name,memberships.section.name,\
+    custom_fields.display_value,custom_fields.representation_type,custom_fields.id_prefix";
+const DETAIL_FIELDS: &str = "name,completed,modified_at,created_at,permalink_url,resource_subtype,\
+    is_rendered_as_separator,assignee.name,created_by,tags.name,memberships.section.name,\
+    custom_fields.display_value,custom_fields.representation_type,custom_fields.id_prefix,\
+    html_notes,notes,due_on,memberships.project.name";
+const IMAGE: &str = "\u{E000}";
+const COMMENT_FIELDS: &str = "resource_subtype,html_text,text,created_by.name,created_at";
+
+pub(crate) struct Api {
+    pub(crate) base: String,
+    pub(crate) token: String,
+    pub(crate) workspace: String,
+    pub(crate) projects: Vec<String>,
+}
+
+struct Me {
+    gid: String,
+    name: String,
+    workspace: String,
+    workspace_name: String,
+}
+
+impl Api {
+    fn get(&self, path: &str, query: &[(&str, &str)], missing: &str) -> Result<Value> {
+        let url = format!("{}{path}", self.base.trim_end_matches('/'));
+        let bearer = format!("Bearer {}", self.token);
+        let answer = http::get_without_redirects(&SERVICE, &url, query, &[("Authorization", &bearer)])?;
+        into_json(answer, missing, failure)
+    }
+
+    fn rows(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        missing: &str,
+        pages: usize,
+        wanted: impl Fn(&Value) -> bool,
+        cap: usize,
+    ) -> Result<Vec<Value>> {
+        let mut rows = Vec::new();
+        let mut offset = String::new();
+        for _ in 0..pages {
+            let mut pairs = query.to_vec();
+            if !offset.is_empty() {
+                pairs.push(("offset", offset.as_str()));
+            }
+            let page = self.get(path, &pairs, missing)?;
+            rows.extend(page["data"].as_array().into_iter().flatten().filter(|row| wanted(row)).cloned());
+            offset = text(&page, "/next_page/offset");
+            if rows.len() >= cap || offset.is_empty() {
+                break;
+            }
+        }
+        Ok(rows)
+    }
+
+    fn me(&self) -> Result<Me> {
+        let answer = self.get(
+            "/users/me",
+            &[("opt_fields", "name,email,workspaces.name")],
+            "no Asana user was found for this access token",
+        )?;
+        let user = &answer["data"];
+        let gid = text(user, "/gid");
+        if gid.is_empty() {
+            return Err(Error::Api(format!("{} does not look like the Asana API", self.base)));
+        }
+        let (workspace, workspace_name) =
+            choose(&self.workspace, user["workspaces"].as_array().map_or(&[], Vec::as_slice))?;
+        Ok(Me { gid, name: display(user), workspace, workspace_name })
+    }
+
+    fn users(&self, me: &Me) -> Result<Vec<Value>> {
+        let path = format!("/workspaces/{}/users", path_segment(&me.workspace));
+        let query = [("opt_fields", "name,email"), ("limit", PAGE)];
+        self.rows(&path, &query, "the workspace users were not found", PEOPLE_PAGES, |_| true, usize::MAX)
+    }
+
+    pub(crate) fn whoami(&self) -> Result<Account> {
+        let me = self.me()?;
+        Ok(Account { handle: me.name, workspace: me.workspace_name })
+    }
+
+    pub(crate) fn people(&self) -> Result<Vec<Person>> {
+        let mut people: Vec<Person> = self
+            .users(&self.me()?)?
+            .iter()
+            .map(|u| Person { handle: text(u, "/name"), name: text(u, "/email"), id: Some(text(u, "/gid")) })
+            .filter(|p| !p.handle.is_empty() && p.id.as_ref().is_some_and(|id| !id.is_empty()))
+            .collect();
+        people.sort_by_key(|p| p.handle.to_lowercase());
+        Ok(people)
+    }
+
+    pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
+        let me = self.me()?;
+        let names = names(&self.users(&me)?);
+        let account = Account { handle: me.name.clone(), workspace: me.workspace_name.clone() };
+        let mut assignee = person(&query.people[0], &me.gid);
+        let creator = person(&query.people[1], &me.gid);
+        if self.projects.is_empty() {
+            if !matches!(query.people[0], Who::Anyone | Who::Me) {
+                return Err(Error::Api(
+                    "this list is your tasks: set Asana projects in Settings → Issues → Asana to filter by someone \
+                     else"
+                        .into(),
+                ));
+            }
+            assignee = None;
+        }
+        let wanted = |task: &Value| {
+            text(task, "/resource_subtype") == "default_task"
+                && task["is_rendered_as_separator"].as_bool() != Some(true)
+                && assignee.as_deref().is_none_or(|id| text(task, "/assignee/gid") == id)
+                && creator.as_deref().is_none_or(|id| text(task, "/created_by/gid") == id)
+        };
+        let since = (!query.closed).then(|| {
+            let now = Stamp(SystemTime::now()).to_string();
+            format!("{}Z", now.get(..19).unwrap_or_default())
+        });
+        let mut base = vec![("opt_fields", LIST_FIELDS), ("limit", PAGE)];
+        base.extend(since.as_deref().map(|since| ("completed_since", since)));
+        let sources: Vec<(String, Vec<(&str, &str)>)> = if self.projects.is_empty() {
+            let mut query = base.clone();
+            query.extend([("assignee", "me"), ("workspace", me.workspace.as_str())]);
+            vec![("/tasks".to_string(), query)]
+        } else {
+            let project = |gid: &String| (format!("/projects/{}/tasks", path_segment(gid)), base.clone());
+            self.projects.iter().take(PROJECTS).map(project).collect()
+        };
+        let mut seen = HashSet::new();
+        let mut issues = Vec::new();
+        for (path, query) in &sources {
+            for task in self.rows(path, query, "the tasks were not found", LIST_PAGES, wanted, LIMIT)? {
+                if seen.insert(text(&task, "/gid")) {
+                    issues.extend(issue(&task, &names));
+                }
+            }
+        }
+        issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(0)));
+        issues.truncate(LIMIT);
+        Ok(Listed { account: Some(account), issues })
+    }
+
+    fn node(&self, me: &Me, key: &str) -> Result<Value> {
+        let gid = if !key.is_empty() && key.bytes().all(|b| b.is_ascii_digit()) {
+            key.to_string()
+        } else {
+            let path = format!("/workspaces/{}/tasks/custom_id/{}", path_segment(&me.workspace), path_segment(key));
+            text(&self.get(&path, &[], &format!("task {key} not found"))?, "/data/gid")
+        };
+        let missing = format!("task {key} not found");
+        let node = self.get(&format!("/tasks/{}", path_segment(&gid)), &[("opt_fields", DETAIL_FIELDS)], &missing)?;
+        Ok(node["data"].clone())
+    }
+
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        let me = self.me()?;
+        let node = self.node(&me, key)?;
+        issue(&node, &names(&self.users(&me)?)).ok_or_else(|| Error::Api(format!("task {key} has no readable key")))
+    }
+
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+        let me = self.me()?;
+        let node = self.node(&me, key)?;
+        let names = names(&self.users(&me).unwrap_or_default());
+        let comments = self.comments(&text(&node, "/gid"))?;
+        Ok(detail(&node, &names, comments))
+    }
+
+    fn comments(&self, gid: &str) -> Result<Vec<Comment>> {
+        let path = format!("/tasks/{}/stories", path_segment(gid));
+        let query = [("resource_subtype", "comment_added"), ("opt_fields", COMMENT_FIELDS), ("limit", PAGE)];
+        let wanted = |story: &Value| text(story, "/resource_subtype") == "comment_added";
+        let stories = self.rows(&path, &query, "the comments were not found", COMMENT_PAGES, wanted, usize::MAX)?;
+        let mut comments: Vec<Comment> = stories
+            .iter()
+            .map(|c| Comment {
+                author: text(c, "/created_by/name"),
+                created_at: text(c, "/created_at"),
+                body: body(c, "/html_text", "/text"),
+            })
+            .filter(|c| !c.body.trim().is_empty())
+            .collect();
+        comments.sort_by_key(|c| parse_time(&c.created_at).unwrap_or(0));
+        Ok(comments)
+    }
+}
+
+fn choose(setting: &str, workspaces: &[Value]) -> Result<(String, String)> {
+    let setting = setting.trim();
+    let named = |w: &Value| (text(w, "/gid"), text(w, "/name"));
+    let all: Vec<String> = workspaces.iter().map(|w| named(w).1).collect();
+    if !setting.is_empty() {
+        return workspaces
+            .iter()
+            .map(named)
+            .find(|(gid, name)| gid == setting || name.eq_ignore_ascii_case(setting))
+            .ok_or_else(|| Error::Api(format!("no Asana workspace named {setting}; yours are {}", all.join(", "))));
+    }
+    match workspaces {
+        [only] => Ok(named(only)),
+        [] => Err(Error::Api("this Asana account belongs to no workspace".into())),
+        _ => Err(Error::Api(format!(
+            "this Asana account has several workspaces ({}): set the one to use in Settings → Issues → Asana",
+            all.join(", ")
+        ))),
+    }
+}
+
+fn display(user: &Value) -> String {
+    ["/name", "/email"].iter().map(|p| text(user, p)).find(|n| !n.is_empty()).unwrap_or_default()
+}
+
+fn names(users: &[Value]) -> HashMap<String, String> {
+    users
+        .iter()
+        .map(|u| (text(u, "/gid"), display(u)))
+        .filter(|(gid, name)| !gid.is_empty() && !name.is_empty())
+        .collect()
+}
+
+fn person(who: &Who, me: &str) -> Option<String> {
+    match who {
+        Who::Anyone => None,
+        Who::Me => Some(me.to_string()),
+        Who::User { id, .. } | Who::Person(id) => Some(id.clone()),
+    }
+}
+
+fn custom_id(task: &Value) -> String {
+    task["custom_fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|f| text(f, "/representation_type") == "custom_id" || !f["id_prefix"].is_null())
+        .map(|f| text(f, "/display_value"))
+        .find(|value| !value.is_empty())
+        .unwrap_or_default()
+}
+
+fn issue(task: &Value, names: &HashMap<String, String>) -> Option<Issue> {
+    let gid = text(task, "/gid");
+    if gid.is_empty() {
+        return None;
+    }
+    let completed = task["completed"].as_bool() == Some(true);
+    let section =
+        task["memberships"].as_array().into_iter().flatten().map(|m| text(m, "/section/name")).find(|s| !s.is_empty());
+    let state = if completed { "completed".to_string() } else { section.unwrap_or_else(|| "open".into()) };
+    let key = Some(custom_id(task)).filter(|id| !id.is_empty()).unwrap_or_else(|| gid.clone());
+    let updated_at = ["/modified_at", "/created_at"].iter().map(|p| text(task, p)).find(|t| !t.is_empty());
+    Some(Issue {
+        source: Source::Asana,
+        number: gid.parse().unwrap_or_default(),
+        key,
+        title: text(task, "/name"),
+        url: text(task, "/permalink_url"),
+        state,
+        closed: completed,
+        labels: task["tags"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|t| text(t, "/name"))
+            .filter(|n| !n.is_empty())
+            .collect(),
+        assignees: Some(text(task, "/assignee/name")).filter(|n| !n.is_empty()).into_iter().collect(),
+        author: names.get(&text(task, "/created_by/gid")).cloned().unwrap_or_default(),
+        updated_at: updated_at.unwrap_or_default(),
+    })
+}
+
+fn rich(html: &str) -> String {
+    let html = html.trim();
+    let html = html.strip_prefix("<body>").unwrap_or(html);
+    let mut html = html.strip_suffix("</body>").unwrap_or(html).to_string();
+    while let Some(start) = html.find("<img") {
+        let end = html[start..].find('>').map_or(html.len(), |i| start + i + 1);
+        html.replace_range(start..end, IMAGE);
+    }
+    html
+}
+
+fn body(node: &Value, html_field: &str, plain: &str) -> String {
+    let markdown = html::markdown(&rich(&text(node, html_field))).replace(IMAGE, "[image]");
+    if markdown.is_empty() { text(node, plain).trim().to_string() } else { markdown }
+}
+
+fn detail(node: &Value, names: &HashMap<String, String>, comments: Vec<Comment>) -> Detail {
+    let due = text(node, "/due_on");
+    let author = names.get(&text(node, "/created_by/gid")).cloned().unwrap_or_default();
+    let found = issue(node, names);
+    let projects: Vec<String> = node["memberships"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| text(m, "/project/name"))
+        .filter(|n| !n.is_empty())
+        .collect();
+    let mut info = vec![found.as_ref().map(|i| i.state.clone()).unwrap_or_default()];
+    info.extend((!due.is_empty()).then(|| format!("due {due}")));
+    info.extend((!author.is_empty()).then(|| format!("created by @{author}")));
+    info.extend(found.and_then(|i| i.assignees.first().map(|a| format!("assigned to @{a}"))));
+    info.push(projects.join(", "));
+    info.retain(|part| !part.is_empty());
+    Detail { info, body: join_body(&[&body(node, "/html_notes", "/notes")]), comments }
+}
+
+fn failure(answer: &Answer) -> Error {
+    if answer.status == 402 {
+        return Error::Api("this needs a paid Asana plan".into());
+    }
+    let message = text(&answer.json, "/errors/0/message");
+    if message.trim().is_empty() {
+        Error::Api(format!("Asana answered {}", answer.status))
+    } else {
+        Error::Api(format!("Asana answered: {}", message.trim()))
+    }
+}
+
+pub(crate) fn project_gids(input: &str) -> Vec<String> {
+    input.split(|c: char| c.is_whitespace() || c == ',').filter_map(project_gid).collect()
+}
+
+fn project_gid(token: &str) -> Option<String> {
+    let link = token.contains("://");
+    let path = token.split_once("://").map_or(token, |(_, rest)| rest);
+    let parts: Vec<&str> = path.split(['/', '?', '#']).filter(|part| !part.is_empty()).collect();
+    let after = ["project", "0"].iter().find_map(|marker| parts.iter().position(|part| part == marker)).map(|i| i + 1);
+    let part = parts.get(after.or_else(|| (!link).then_some(0))?)?;
+    part.bytes().all(|b| b.is_ascii_digit()).then(|| (*part).to_string())
+}
+
+#[cfg(test)]
+mod tests;
