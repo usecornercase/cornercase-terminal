@@ -1,0 +1,37 @@
+{
+  "fetched": "2026-10-16T00:00:00Z",
+  "flows": [
+    {
+      "repo": "octocat/docs-pass",
+      "stars": 42,
+      "description": "Docs, checked",
+      "topics": [
+        "cornercase-flow",
+        "docs"
+      ],
+      "file": "flow.toml",
+      "text": "version = 1\nname = \"Docs pass\"\ndescription = \"A writer updates the documentation, a checker compares it with the code\"\nend = \"pull_request\"\n\n[orchestrator]\nagent = \"claude\"\nprompt = \"Keep every message self-contained.\"\n\n[[role]]\nname = \"writer\"\nagent = \"claude\"\nedits = true\nprompt = \"You are the writer. Update the docs to match the code. Commit locally.\"\n\n[[role]]\nname = \"checker\"\nagent = \"codex\"\nprompt = \"You check docs against code. Do not edit files.\\nAnswer with findings or No findings.\"\n\n[[stage]]\nroles = [\"writer\"]\n\n[[stage]]\nroles = [\"checker\"]\n\n[stage.back]\nto = 1\nwhen = \"findings\"\nat_most = 2\n"
+    },
+    {
+      "repo": "hubot/with-env",
+      "stars": 99,
+      "description": "sets env",
+      "topics": [
+        "cornercase-flow"
+      ],
+      "file": "flow.toml",
+      "text": "version = 1\nname = \"Docs pass\"\ndescription = \"A writer updates the documentation, a checker compares it with the code\"\nend = \"pull_request\"\n\n[orchestrator]\nagent = \"claude\"\nprompt = \"Keep every message self-contained.\"\n\n[[role]]\nname = \"writer\"\nagent = \"claude\"\nedits = true\nenv = { A = \"b\" }\nprompt = \"You are the writer. Update the docs to match the code. Commit locally.\"\n\n[[role]]\nname = \"checker\"\nagent = \"codex\"\nprompt = \"You check docs against code. Do not edit files.\\nAnswer with findings or No findings.\"\n\n[[stage]]\nroles = [\"writer\"]\n\n[[stage]]\nroles = [\"checker\"]\n\n[stage.back]\nto = 1\nwhen = \"findings\"\nat_most = 2\n"
+    },
+    {
+      "repo": "mona/quiet",
+      "stars": 7,
+      "description": "Fewer stars",
+      "topics": [
+        "cornercase-flow",
+        "security"
+      ],
+      "file": "cornercase-flow.toml",
+      "text": "version = 1\nname = \"Quiet audit\"\ndescription = \"A writer updates the documentation, a checker compares it with the code\"\nend = \"pull_request\"\n\n[orchestrator]\nagent = \"claude\"\nprompt = \"Keep every message self-contained.\"\n\n[[role]]\nname = \"writer\"\nagent = \"claude\"\nedits = true\nprompt = \"You are the writer. Update the docs to match the code. Commit locally.\"\n\n[[role]]\nname = \"checker\"\nagent = \"codex\"\nprompt = \"You check docs against code. Do not edit files.\\nAnswer with findings or No findings.\"\n\n[[stage]]\nroles = [\"writer\"]\n\n[[stage]]\nroles = [\"checker\"]\n\n[stage.back]\nto = 1\nwhen = \"findings\"\nat_most = 2\n"
+    }
+  ]
+}

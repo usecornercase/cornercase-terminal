@@ -7,6 +7,7 @@ use super::{print_json, print_out, read_prompt};
 use crate::client::{answer, ask, confirm};
 use crate::control::{self, Exported, FlowInfo, Flows, Imported, RunInfo};
 use crate::error::{Error, Result};
+use crate::flows::registry::{self, Source};
 use crate::flows::share;
 
 pub(super) fn run(action: FlowAction) -> Result<()> {
@@ -53,12 +54,24 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
 }
 
 fn import_flow(args: FlowImportArgs) -> Result<()> {
-    let from = args.file.display().to_string();
-    let text = read_shared(&args.file)?;
+    let source = registry::source(&args.source, Path::exists).map_err(Error::Control)?;
+    let from = args.source.clone();
+    let text = match &source {
+        Source::Stdin => read_shared(Path::new("-"))?,
+        Source::File(path) => read_shared(path)?,
+        remote => {
+            eprintln!("fetching {}", remote.label());
+            registry::fetch(remote).map_err(|e| Error::Control(share::visible(&e)))?
+        }
+    };
     let flow =
         share::from_share(&text).map_err(|e| Error::Control(share::visible(&format!("cannot read `{from}`: {e}"))))?;
     eprint!("{}", share::summary(&flow));
     let risks = share::risks(&flow, "it");
+    let asked = match &source {
+        Source::Url(_) | Source::Repo(_) => Some(fetched(&source, risks)),
+        _ => risks,
+    };
     let mut request = control::FlowImport {
         text,
         name: args.name,
@@ -67,11 +80,11 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         replace: args.replace,
         check: false,
     };
-    if let Some(risks) = risks.filter(|_| !args.yes) {
+    if let Some(risks) = asked.filter(|_| !args.yes) {
         request.check = true;
         ask("flow import", control::Command::FlowImport(request.clone()))?;
         request.check = false;
-        let asking = args.file != Path::new("-") && std::io::stdin().is_terminal();
+        let asking = source != Source::Stdin && std::io::stdin().is_terminal();
         if !asking {
             return Err(Error::Control(format!("{risks}; pass --yes to import it")));
         }
@@ -89,6 +102,15 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         eprintln!("{note}");
     }
     print_out(&imported_line(&imported))
+}
+
+pub(super) fn fetched(source: &Source, risks: Option<String>) -> String {
+    let rest = risks.map(|risks| format!("; {risks}")).unwrap_or_default();
+    share::visible(&format!(
+        "from {}, which nobody here reviewed: its prompts drive agents that never ask for permission; read them above or at {}{rest}",
+        source.label(),
+        source.page()
+    ))
 }
 
 fn read_shared(file: &Path) -> Result<String> {

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::registry;
 use super::store::{self, Listing, Origin, Saved};
 use super::{Flow, builtin, share};
 use crate::agents::Known;
@@ -47,6 +48,7 @@ pub(crate) enum Action {
     Export(Box<Flow>),
     Delete(PathBuf),
     ReadModels(Known),
+    Fetch(registry::Source),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -449,8 +451,11 @@ impl Dialog {
         if let Some(notice) = &self.notice {
             return notice.clone();
         }
-        if self.importing.is_some() {
-            return IMPORT_HINT.into();
+        if let Some(importing) = &self.importing {
+            return importing
+                .fetching
+                .as_ref()
+                .map_or_else(|| IMPORT_HINT.into(), |source| format!("fetching {}…", source.address()));
         }
         match &self.edit {
             Some(edit) => edit.hint(),

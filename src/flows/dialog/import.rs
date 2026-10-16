@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{Action, CANCEL, Dialog, Editing, IMPORT, Room};
+use crate::flows::registry::{self, Source};
 use crate::flows::share;
 use crate::todo::editor::Editor;
 
@@ -8,13 +9,14 @@ use crate::todo::editor::Editor;
 pub(crate) struct Importing {
     pub(crate) editor: Editor,
     pub(crate) error: Option<String>,
+    pub(crate) fetching: Option<Source>,
 }
 
 impl Importing {
     pub(crate) fn new(text: &str) -> Self {
         let mut editor = Editor::new(text);
         editor.home();
-        Self { editor, error: None }
+        Self { editor, error: None, fetching: None }
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, room: Room) {
@@ -44,7 +46,7 @@ impl Dialog {
 
     pub(crate) fn press_import(&mut self, label: &str) -> Action {
         match label {
-            IMPORT => self.import(),
+            IMPORT => return self.import(),
             CANCEL => self.importing = None,
             _ => {}
         }
@@ -55,9 +57,36 @@ impl Dialog {
         self.importing.get_or_insert_with(|| Importing::new("")).paste(text, room);
     }
 
-    fn import(&mut self) {
+    fn import(&mut self) -> Action {
+        let Some(importing) = &mut self.importing else { return Action::None };
+        if importing.fetching.is_some() {
+            return Action::None;
+        }
+        let text = importing.editor.text();
+        if let Some(source) = registry::typed(&text) {
+            importing.error = None;
+            importing.fetching = Some(source.clone());
+            return Action::Fetch(source);
+        }
+        self.import_text(&text, None);
+        Action::None
+    }
+
+    pub(crate) fn fetched(&mut self, source: &Source, result: Result<String, String>) {
         let Some(importing) = &mut self.importing else { return };
-        let mut flow = match share::from_share(&importing.editor.text()) {
+        if importing.fetching.as_ref() != Some(source) {
+            return;
+        }
+        importing.fetching = None;
+        match result {
+            Ok(text) => self.import_text(&text, Some(source)),
+            Err(e) => importing.error = Some(share::visible(&e)),
+        }
+    }
+
+    fn import_text(&mut self, text: &str, from: Option<&Source>) {
+        let Some(importing) = &mut self.importing else { return };
+        let mut flow = match share::from_share(text) {
             Ok(flow) => flow,
             Err(e) => {
                 importing.error = Some(share::visible(&e));
@@ -70,9 +99,15 @@ impl Dialog {
         }
         self.importing = None;
         flow.name = self.unique(flow.name.trim(), "");
-        let missing = share::missing_agents(&flow, &self.agents.installed);
+        let mut notices = share::missing_agents(&flow, &self.agents.installed);
+        if let Some(source) = from {
+            notices.push(share::visible(&format!(
+                "from {}: nobody reviewed it, read its prompts before saving",
+                source.label()
+            )));
+        }
         let mut edit = Editing::imported(flow);
-        edit.notice = (!missing.is_empty()).then(|| missing.join("; "));
+        edit.notice = (!notices.is_empty()).then(|| notices.join("; "));
         self.edit = Some(Box::new(edit));
     }
 }
