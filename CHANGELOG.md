@@ -10,6 +10,10 @@ Every pull request that changes the app adds a section here for its new version.
 - `cornercase queue add --issue` takes an Asana link, in the old or the new format, or an ID-field key such as `ENG-42`; a bare task id needs `--source asana`.
 - **Settings → Issues → Asana** has the workspace, the projects and the access token. Lists saved before get the Asana tab added once, at the end.
 
+## 0.12.110
+
+- **Community flows.** Anyone can publish a flow: add the topic `cornercase-flow` to a public GitHub repository with a `flow.toml`, and usecornercase.dev/flows lists it, most starred first, within a day, after the built-in flows that come with cornercase, which have pages of their own. `cornercase flow import OWNER/REPO` (or typing it on the Flows import page, or an `https://` address) fetches one, shows its roles and always asks before saving: nobody reviews these flows, and their agents never ask for permission.
+
 ## 0.12.109
 
 - **`cornercase contract`** says what the running server supports, for scripts and other programs that drive cornercase: its version, the version of its contract, the boot that its ids belong to, its commands and the version of each stream it sends (`--json` for the full description). `cornercase status --json` now names the boot too.

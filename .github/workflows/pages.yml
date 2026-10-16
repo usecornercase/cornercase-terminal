@@ -10,6 +10,8 @@ on:
     paths:
       - site/**
       - .github/workflows/pages.yml
+  schedule:
+    - cron: '23 5 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -42,6 +44,18 @@ jobs:
 
       - name: install
         run: npm ci
+
+      - id: flows
+        name: refresh the community flows
+        if: ${{ github.event_name != 'pull_request' }}
+        continue-on-error: true
+        run: npm run flows
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: warn that the community flows are stale
+        if: ${{ steps.flows.outcome == 'failure' }}
+        run: echo "::warning title=Community flows::the refresh failed, so the site was built with the last snapshot"
 
       - name: check
         run: npm run check

@@ -91,3 +91,32 @@ fn an_unreachable_server_says_so() {
 fn a_key_cannot_leave_its_path_segment() {
     assert_eq!(path_segment("../x?y"), "..%2Fx%3Fy");
 }
+
+fn chain(hops: usize) -> (String, Vec<FakeHttp>) {
+    let mut servers = vec![FakeHttp::start(vec![("GET /x", 200, "end")])];
+    for _ in 0..hops {
+        let next = servers.last().expect("a server").url();
+        servers.push(FakeHttp::start(vec![("GET /x", 302, format!("{next}/x"))]));
+    }
+    (format!("{}/x", servers.last().expect("a server").url()), servers)
+}
+
+#[test]
+fn a_strict_download_follows_three_redirects() {
+    let (url, _servers) = chain(3);
+    let bytes = download_strictly(&SERVICE, &url, 1024, Duration::from_secs(5)).expect("three hops");
+    assert_eq!(bytes, b"end");
+}
+
+#[test]
+fn a_strict_download_stops_at_the_fourth_redirect() {
+    let (url, _servers) = chain(4);
+    let err = download_strictly(&SERVICE, &url, 1024, Duration::from_secs(5)).err().map(|e| e.to_string());
+    assert!(err.is_some_and(|e| e.starts_with("could not reach Tracker")), "four hops must fail");
+}
+
+#[test]
+fn a_plain_download_still_follows_longer_chains() {
+    let (url, _servers) = chain(4);
+    assert_eq!(download_within(&SERVICE, &url, 1024, Duration::from_secs(5)).expect("four hops"), b"end");
+}

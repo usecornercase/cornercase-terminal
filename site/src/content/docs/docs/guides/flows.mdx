@@ -133,7 +133,7 @@ A flow is a file, so sharing one is sending text. Select a flow in **settings �
 
 <Screen
   name="flows-import"
-  alt="The Flows › import page: paste a flow, as export copied it or cornercase flow export printed it; the pasted text of the Quick review flow, starting with its header comment; the buttons import and cancel"
+  alt="The Flows › import page: paste a flow, or type owner/repo or an https address; the pasted text of the Quick review flow, starting with its header comment; the buttons import and cancel"
   caption="The import page, with a flow pasted from a teammate."
   crop={[2, 1, 136, 36]}
 />
@@ -148,7 +148,24 @@ cornercase flow import quick.toml
 cornercase flow import quick.toml --to project --name 'Quick mine'
 ```
 
-`flow export` prints the flow, and names on standard error any variable it sets, so you can check that no secret goes with it. `flow import` lists the roles, and when the flow sets variables or arguments it asks before saving (without a terminal, or reading `-` from standard input, it refuses unless you pass `--yes`). It saves in yours, or in the project's `.cornercase/flows/` with `--to project`. A name that is taken is refused: `--replace` overwrites that flow, and `--name` imports this one under another name. A built-in flow's name can be taken with `--replace`, and yours then stands in its place; a name of yours or a built-in's cannot be taken in the project's flows, since they would never run. To share a flow with a whole team, commit its file to `.cornercase/flows/` instead.
+`flow export` prints the flow, and names on standard error any variable it sets, so you can check that no secret goes with it. `flow import` takes a file, `-` for standard input, an `https://` address or `OWNER/REPO` of a [community flow](#community-flows). It lists the roles, and when the flow sets variables or arguments, or comes from an address or a repository, it asks before saving (without a terminal, or reading `-` from standard input, it refuses unless you pass `--yes`). It saves in yours, or in the project's `.cornercase/flows/` with `--to project`. A name that is taken is refused: `--replace` overwrites that flow, and `--name` imports this one under another name. A built-in flow's name can be taken with `--replace`, and yours then stands in its place; a name of yours or a built-in's cannot be taken in the project's flows, since they would never run. To share a flow with a whole team, commit its file to `.cornercase/flows/` instead.
+
+## Community flows
+
+[usecornercase.dev/flows](../../../flows/) lists the built-in flows first, tagged built in (they already come with cornercase, so there is nothing to import), then flows that other people published in their own GitHub repositories, most starred first, with a search box. Each page shows the plan, the team and every prompt in full, and the file. To use one, import it from its repository:
+
+```sh
+cornercase flow import octocat/security-audit
+```
+
+`OWNER/REPO` is read from the repository's default branch: `flow.toml` at its root, else `cornercase-flow.toml`. The command lists the roles, **always asks** before saving (without a terminal it refuses unless you pass `--yes`) and saves the flow in yours. In the dialog, type `owner/repo` or an `https://` address on the **Flows › import** page and click **`import`**: cornercase fetches it and opens it in the editor, not saved yet, with a note that nobody reviewed it. An import is a copy that does not update itself; `--replace` brings in a newer one. A name that is also a folder or file on your disk is read as that path. To publish yours, see [Publish a flow](../../contributing/flows/).
+
+### Trust and security
+
+- **Nobody reviews community flows.** Anyone can publish one, and the list is built by a script that skips a flow that is not valid, is longer than 256 KiB or sets `env` or `args`. That is all it checks.
+- A flow's prompts drive agents that start in the mode that never asks for permission, so a prompt that tells an agent to run a command, read a file or send something runs it, on your machine. Read the page of a flow, every prompt of it, before you import it, and pass `--yes` only for one you have read. What a flow does is your responsibility.
+- An import is a copy: a repository changed or deleted later does not change yours, and the page shows the file as it was at the last refresh, so read the file you actually import.
+- The list leaves out flows that set `env` or `args`, but a flow you import from any address can; the import shows them in red.
 
 ## Where flows are kept
 

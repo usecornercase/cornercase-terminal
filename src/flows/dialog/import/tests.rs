@@ -156,3 +156,73 @@ mod the_page {
         assert!(!edit(&d).imported && d.warnings().iter().all(|w| !w.contains("imported")));
     }
 }
+
+mod fetching {
+    use super::*;
+    use crate::flows::registry::Source;
+
+    fn typed(d: &mut Dialog, text: &str) {
+        d.paste(text, ROOM);
+    }
+
+    fn repo() -> Source {
+        Source::Repo("octocat/fresh".into())
+    }
+
+    #[test]
+    fn a_repo_or_an_address_starts_a_fetch_and_waits() {
+        let mut d = dialog();
+        typed(&mut d, "octocat/fresh");
+        assert!(matches!(press(&mut d, IMPORT), Action::Fetch(source) if source == repo()));
+        assert_eq!(d.hint(), format!("fetching {}…", repo().address()));
+        assert!(d.hint().contains("/octocat/fresh/HEAD/flow.toml"), "{}", d.hint());
+        assert!(matches!(press(&mut d, IMPORT), Action::None), "a second press waits");
+        let mut d = dialog();
+        typed(&mut d, "https://example.com/fresh.toml");
+        assert!(matches!(press(&mut d, IMPORT), Action::Fetch(Source::Url(_))));
+    }
+
+    #[test]
+    fn the_answer_opens_the_editor_unsaved_with_a_notice() {
+        let mut d = dialog();
+        typed(&mut d, "octocat/fresh");
+        press(&mut d, IMPORT);
+        d.fetched(&repo(), Ok(shared("Fresh")));
+        assert!(d.importing.is_none());
+        let imported = edit(&d);
+        assert_eq!(imported.flow.name, "Fresh");
+        assert!(imported.dirty() && imported.path.is_none());
+        let notice = imported.notice.clone().expect("a notice");
+        assert!(notice.contains("from octocat/fresh: nobody reviewed it, read its prompts before saving"), "{notice}");
+    }
+
+    #[test]
+    fn a_failure_stays_on_the_page() {
+        let mut d = dialog();
+        typed(&mut d, "octocat/fresh");
+        press(&mut d, IMPORT);
+        d.fetched(&repo(), Err("cannot fetch it".into()));
+        assert_eq!(d.error().as_deref(), Some("cannot fetch it"));
+        assert!(d.importing.as_ref().is_some_and(|i| i.fetching.is_none()));
+    }
+
+    #[test]
+    fn an_answer_for_another_source_or_a_closed_page_is_ignored() {
+        let mut d = dialog();
+        typed(&mut d, "octocat/fresh");
+        press(&mut d, IMPORT);
+        d.fetched(&Source::Repo("octocat/other".into()), Ok(shared("Other")));
+        assert!(d.importing.is_some() && d.edit.is_none());
+        d.key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), ROOM);
+        d.fetched(&repo(), Ok(shared("Fresh")));
+        assert!(d.edit.is_none());
+    }
+
+    #[test]
+    fn text_with_lines_is_never_fetched() {
+        let mut d = dialog();
+        typed(&mut d, "octocat/flow\nname = = 1");
+        assert!(matches!(press(&mut d, IMPORT), Action::None));
+        assert!(d.importing.as_ref().is_some_and(|i| i.fetching.is_none()));
+    }
+}

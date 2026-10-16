@@ -258,8 +258,11 @@ Examples:
   cornercase flow export 'Full issue' --json";
 pub(super) const FLOW_IMPORT_HELP: &str =
     "It reads a flow at most 256 KiB long, lists its roles, and saves it in yours (or the project's, with
---to project). Every agent of a flow runs without permission prompts, so when it sets variables or
-arguments it asks first, and refuses without a terminal unless you pass --yes.
+--to project). The source is a file, - for standard input, an https:// address, or OWNER/REPO, a GitHub
+repository with a flow.toml (or cornercase-flow.toml) at its root; usecornercase.dev/flows lists them.
+Every agent of a flow runs without permission prompts, so a flow from an address or a repository,
+which nobody reviewed, always asks first, and so does one that sets
+variables or arguments; without a terminal it refuses unless you pass --yes.
 
 A name that is already taken is refused: pass --replace to overwrite that flow, or --name to import
 this one under another name. A built-in flow's name is yours to take, with --replace, and it then
@@ -267,6 +270,8 @@ stands in its place. A project's flow never takes the place of one of yours or a
 
 Examples:
   cornercase flow import quick.toml
+  cornercase flow import octocat/security-audit
+  cornercase flow import https://example.com/flows/mine.toml
   cornercase flow import quick.toml --to project --name 'Quick mine'
   ssh host cornercase flow export Quick | cornercase flow import - --yes";
 pub(super) const TODO_HELP: &str = "Examples:

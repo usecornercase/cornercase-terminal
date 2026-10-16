@@ -448,3 +448,46 @@ mod runs {
         assert_eq!(run.messages.front().and_then(|m| m.text.as_deref()), Some("1"));
     }
 }
+
+mod site_copy {
+    use std::path::Path;
+
+    use super::*;
+    use crate::flows::share;
+
+    const UPDATE_ENV: &str = "CORNERCASE_UPDATE_BUILTIN_FLOWS";
+
+    fn generated() -> String {
+        let flows: Vec<serde_json::Value> = builtin::flows(&Known::ALL, Some(Known::Claude))
+            .iter()
+            .map(|flow| {
+                let slug = store::file_name(&flow.name);
+                serde_json::json!({ "slug": slug, "file": format!("{slug}.toml"), "text": share::to_share(flow).expect("export") })
+            })
+            .collect();
+        format!("{}\n", serde_json::to_string_pretty(&serde_json::json!({ "flows": flows })).expect("json"))
+    }
+
+    #[test]
+    fn the_website_lists_the_built_in_flows_as_they_are() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/src/data/builtin-flows.json");
+        let wanted = generated();
+        if std::env::var_os(UPDATE_ENV).is_some() {
+            std::fs::write(&path, &wanted).expect("write the site's copy");
+        }
+        let found = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            found == wanted,
+            "site/src/data/builtin-flows.json differs from the built-in flows: run `{UPDATE_ENV}=1 cargo test --locked site_copy` and commit it"
+        );
+    }
+
+    #[test]
+    fn it_has_every_built_in_flow_once_with_a_distinct_file() {
+        let flows = builtin::flows(&Known::ALL, Some(Known::Claude));
+        let mut slugs: Vec<String> = flows.iter().map(|flow| store::file_name(&flow.name)).collect();
+        slugs.sort();
+        slugs.dedup();
+        assert_eq!(slugs.len(), flows.len());
+    }
+}

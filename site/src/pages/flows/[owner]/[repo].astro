@@ -1,0 +1,112 @@
+---
+import { Aside } from '@astrojs/starlight/components';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { diagramSvg } from '../../../lib/registry-diagram';
+import { BUILT_IN_NOTE, type RegistryFlow, endLabel, everyFlow, fileUrl, importCommand, repoUrl } from '../../../lib/registry';
+
+export function getStaticPaths() {
+  return everyFlow().map((flow) => {
+    const [owner, repo] = flow.slug.split('/');
+    return { params: { owner, repo }, props: { flow } };
+  });
+}
+
+const { flow } = Astro.props as { flow: RegistryFlow };
+const base = import.meta.env.BASE_URL;
+const everyone = [flow.orchestrator, ...flow.roles];
+const svg = diagramSvg(flow, `The plan of ${flow.name}`);
+const stages = flow.stages.map((stage) => {
+  const back = stage.back ? `, and goes back to stage ${stage.back.to} when there are ${stage.back.when}, at most ${stage.back.atMost} times` : '';
+  return `${stage.roles.join(' and ')}${back}`;
+});
+---
+
+<StarlightPage frontmatter={{ title: flow.name, description: flow.description, tableOfContents: false }}>
+  <p>{flow.description}</p>
+  <p class="meta">
+    {flow.builtIn ? <>Built in · by cornercase · <a href={repoUrl(flow.repo)}>{flow.repo}</a></> : <>By <a href={`https://github.com/${flow.owner}`}>@{flow.owner}</a> · ★ {flow.stars} · <a href={repoUrl(flow.repo)}>{flow.repo}</a></>} · {everyone.length} agents · {endLabel(flow.end)}
+    {flow.tags.length > 0 && <> · {flow.tags.join(', ')}</>}
+  </p>
+
+  {flow.builtIn && <Aside type="note" title="Built in">{BUILT_IN_NOTE} <a href={`${base}docs/guides/flows/#the-built-in-flows`}>The built-in flows</a>.</Aside>}
+  {!flow.builtIn && <Aside type="caution" title="Nobody reviewed this flow">
+    Its {everyone.length} agents run without asking for permission, and its prompts, below, tell them what to do on your machine. Read every prompt before you import it; what it does is your
+    responsibility. <a href={`${base}docs/guides/flows/#trust-and-security`}>Trust and security</a>.
+  </Aside>}
+
+  {!flow.builtIn && <>
+  <h2 id="import">Import it</h2>
+  <pre class="code"><code>{importCommand(flow)}</code></pre>
+  <p>
+    Or type <code>{flow.repo}</code> in Settings → Agents → flows → import. Both show the team and ask before they save anything. An import is a copy that does not update itself.
+  </p>
+  </>}
+
+  <h2 id="plan">The plan</h2>
+  <div class="diagram" set:html={svg} />
+  <ol class="stages">
+    {stages.map((line) => <li>{line}</li>)}
+  </ol>
+
+  <h2 id="roles">The team</h2>
+  <table>
+    <thead>
+      <tr><th>Role</th><th>Agent</th><th>Model</th><th>Effort</th><th>Edits</th></tr>
+    </thead>
+    <tbody>
+      {everyone.map((role) => (
+        <tr>
+          <td>{role.name}</td>
+          <td>{role.agent}</td>
+          <td>{role.model ?? 'default'}</td>
+          <td>{role.effort ?? 'default'}</td>
+          <td>{role.edits ? 'yes' : 'no'}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <h2 id="prompts">The prompts</h2>
+  {
+    everyone.map((role) => (
+      <>
+        <h3>{role.name}</h3>
+        <p class="prompt">{role.prompt}</p>
+      </>
+    ))
+  }
+
+  <h2 id="file">The file</h2>
+  {flow.builtIn ? <p>As cornercase builds it when every agent is installed; with fewer installed, the agents are spread over the ones you have.</p> : <p>
+    <a href={fileUrl(flow)}>{flow.file} on GitHub</a>. This page shows it as it was when the list was last refreshed, so check the repository for changes.
+  </p>}
+  <pre class="code"><code>{flow.text}</code></pre>
+</StarlightPage>
+
+<style>
+  .meta {
+    color: var(--sl-color-gray-3);
+  }
+  .diagram {
+    background: #1a1b26;
+    border-radius: 0.7rem;
+    padding: 0.8rem 1rem;
+    max-width: 34rem;
+    line-height: 0;
+  }
+  .diagram :global(svg) {
+    width: 100%;
+    height: auto;
+  }
+  .code {
+    background: var(--sl-color-black);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.7rem;
+    padding: 0.9rem 1.1rem;
+    overflow-x: auto;
+    font-size: var(--sl-text-sm);
+  }
+  .prompt {
+    white-space: pre-wrap;
+  }
+</style>

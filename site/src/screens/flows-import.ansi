@@ -1,6 +1,6 @@
 [2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m web-shop ❯                                                                                                 
   [0m[38;5;8m╭─[1m[39m Flows › import [0m[38;5;8m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[2m[39m  
-[1m[38;5;8m P[0m[38;5;8m│[39m [1m[38;5;8mpaste a flow, as export copied it or `cornercase flow export` printed it[0m                                                             [38;5;8m│[2m[39m  
+[1m[38;5;8m P[0m[38;5;8m│[39m [1m[38;5;8mpaste a flow, or type owner/repo or an https address[0m                                                                                 [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m                                                                                                                                      [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m [48;5;236m # A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import                          [49m [38;5;8m│[2m[39m  
 [38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [48;5;236m name = "Quick review"                                                                                                              [49m [38;5;8m│[2m[39m  

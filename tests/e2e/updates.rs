@@ -1,7 +1,7 @@
 use super::*;
 use cornercase::version;
 
-fn serve(files: impl FnOnce(&str) -> Vec<(String, Vec<u8>)>) -> String {
+pub(super) fn serve(files: impl FnOnce(&str) -> Vec<(String, Vec<u8>)>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind a port");
     let url = format!("http://{}", listener.local_addr().expect("its address"));
     let files = files(&url);
