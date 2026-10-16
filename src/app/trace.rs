@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use super::layout::Side;
 use super::{App, Toast};
@@ -257,6 +257,7 @@ impl App {
         if logged || self.following() {
             self.publish(logged);
         }
+        self.publish_snapshot(Instant::now());
     }
 
     pub(super) fn publish(&mut self, logged: bool) {

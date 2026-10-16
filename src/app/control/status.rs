@@ -24,6 +24,8 @@ impl App {
                 .enumerate()
                 .map(|(i, term)| self.pane_info(term, i == tab.active, caller))
                 .collect(),
+            custom_name: tab.name.clone(),
+            layout: Some(control::Layout::from(&tab.layout)),
         };
         let workspace_info = |w: usize, ws: &Workspace, active: usize| WorkspaceInfo {
             id: ws.id,
@@ -49,6 +51,8 @@ impl App {
                 .or_else(|| ws.run_dirs.last().cloned()),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
+            custom_name: ws.name.clone(),
+            collapsed: ws.collapsed,
         };
         let projects = self.projects.iter().enumerate().filter(|(_, p)| !p.closing).map(|(p, project)| ProjectInfo {
             id: project.id,
@@ -63,11 +67,15 @@ impl App {
                 .filter(|(_, w)| !w.closing())
                 .map(|(w, ws)| workspace_info(w, ws, project.active))
                 .collect(),
+            custom_name: project.name.clone(),
+            collapsed: project.collapsed,
         });
         let groups = self.groups.iter().map(|g| GroupInfo {
             id: g.id,
             name: g.entry.name.clone(),
             collapsed: g.entry.collapsed,
+            icon: g.entry.icon.to_string(),
+            colour: g.entry.colour,
         });
         Report {
             version: version::CURRENT.to_string(),

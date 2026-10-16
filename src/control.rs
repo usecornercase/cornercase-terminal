@@ -10,6 +10,7 @@ pub(crate) mod contract;
 mod flow;
 mod search;
 pub(crate) mod start_server;
+mod watch;
 
 pub(crate) use contract::Contract;
 pub(crate) use flow::{
@@ -18,6 +19,7 @@ pub(crate) use flow::{
 };
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
+pub(crate) use watch::{Layout, Snapshot, Watch};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
@@ -90,6 +92,7 @@ pub(crate) enum Command {
     Search(Search),
     Contract(Contract),
     StartServer(StartServer),
+    Watch(Watch),
 }
 
 impl Command {
@@ -126,6 +129,7 @@ impl Command {
             Self::Search(_) => 28,
             Self::Contract(_) => 29,
             Self::StartServer(_) => 30,
+            Self::Watch(_) => 31,
         }]
     }
 
@@ -135,7 +139,7 @@ impl Command {
             Self::Queue(_) => {
                 fields.add("queue", true);
             }
-            Self::Status(_) | Self::Stats(_) | Self::Contract(_) => {}
+            Self::Status(_) | Self::Stats(_) | Self::Contract(_) | Self::Watch(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -230,7 +234,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 31] = [
+    pub(crate) const NAMES: [&str; 32] = [
         "status",
         "open",
         "new-workspace",
@@ -262,6 +266,7 @@ impl Command {
         "search",
         "contract",
         "start-server",
+        "watch",
     ];
 }
 
@@ -609,7 +614,7 @@ pub(crate) struct Done {
     pub(crate) turn_over: Option<bool>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Report {
     pub(crate) version: String,
@@ -789,9 +794,11 @@ pub(crate) struct GroupInfo {
     pub(crate) id: u64,
     pub(crate) name: String,
     pub(crate) collapsed: bool,
+    pub(crate) icon: String,
+    pub(crate) colour: u8,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProjectInfo {
     pub(crate) id: u64,
@@ -800,9 +807,11 @@ pub struct ProjectInfo {
     pub(crate) group: Option<u64>,
     pub(crate) active: bool,
     pub workspaces: Vec<WorkspaceInfo>,
+    pub(crate) custom_name: Option<String>,
+    pub(crate) collapsed: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WorkspaceInfo {
     pub id: u64,
@@ -816,6 +825,8 @@ pub struct WorkspaceInfo {
     pub(crate) run_dir: Option<PathBuf>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
+    pub(crate) custom_name: Option<String>,
+    pub(crate) collapsed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -829,7 +840,7 @@ pub(crate) struct PullRequestInfo {
     pub(crate) failed: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TabInfo {
     pub(crate) id: u64,
@@ -837,6 +848,8 @@ pub struct TabInfo {
     pub(crate) status: Option<String>,
     pub(crate) active: bool,
     pub panes: Vec<PaneInfo>,
+    pub(crate) custom_name: Option<String>,
+    pub(crate) layout: Option<Layout>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

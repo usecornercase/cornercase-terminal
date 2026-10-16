@@ -393,6 +393,7 @@ impl App {
             self.flow_frame(now),
             self.next_request(now),
             self.next_pairing(now),
+            self.events.snapshots.wake(now),
             self.queued.area.and_then(|_| self.queued.queue.next(clock)),
         ]
         .into_iter()

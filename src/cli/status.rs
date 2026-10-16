@@ -1,15 +1,19 @@
 use std::fmt::Write as _;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use super::args::StatusArgs;
-use super::{print_json, print_out};
-use crate::client::{answer, ask};
+use super::{print_json, print_out, quietly};
+use crate::client::{self, answer, ask};
 use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
 use crate::error::{Error, Result};
 
 pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
+    if status.follow {
+        return follow();
+    }
     let value = ask("status", control::Command::Status(control::Status {}))?;
     match (status.panes, status.print.json) {
         (false, true) => print_json(&value),
@@ -17,6 +21,13 @@ pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
         (true, true) => print_json(&PaneRows { panes: answer::<Report>(value)?.panes() }),
         (true, false) => print_out(&pane_table(&answer::<Report>(value)?.panes())?),
     }
+}
+
+fn follow() -> Result<()> {
+    let mut out = std::io::stdout().lock();
+    client::follow_all("watch", control::Command::Watch(control::Watch {}), |value| {
+        quietly(writeln!(out, "{value}").and_then(|()| out.flush()))
+    })
 }
 
 fn home() -> Option<PathBuf> {

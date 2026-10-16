@@ -158,6 +158,36 @@ fn events_follow_what_opens_ends_and_closes_until_the_server_stops() {
     );
 }
 
+fn first_tab(snapshot: &serde_json::Value) -> &serde_json::Value {
+    &snapshot["projects"][0]["workspaces"][0]["tabs"][0]
+}
+
+#[test]
+fn status_follow_streams_whole_snapshots_and_a_new_one_starts_from_now() {
+    let app = Harness::start();
+    let mut watching = app.session.spawn(&["status", "--follow"]);
+    let mut followed = Followed::of(&mut watching);
+    followed.until("the first snapshot", |snapshot| snapshot["revision"].as_u64().is_some());
+    let first = followed.seen[0].clone();
+
+    app.session.says(&["rename", "renamed-by-script"]);
+    followed.until("the new name", |snapshot| first_tab(snapshot)["name"] == "renamed-by-script");
+    let renamed = followed.seen.last().expect("a snapshot").clone();
+    let mut again = app.session.spawn(&["status", "--follow"]);
+    let mut refollowed = Followed::of(&mut again);
+    refollowed.until("the current state", |snapshot| snapshot["revision"].as_u64().is_some());
+    let current = refollowed.seen[0].clone();
+    let stopped = app.session.run("kill-server");
+
+    assert!(stopped.status.success(), "{stopped:?}");
+    assert!(finish_within(watching, TIMEOUT).status.success(), "status --follow ends with the server");
+    assert!(finish_within(again, TIMEOUT).status.success(), "the second one too");
+    assert!(first["groups"].is_array() && first_tab(&first)["layout"]["leaf"].is_u64(), "{first}");
+    assert!(renamed["revision"].as_u64() > first["revision"].as_u64(), "{renamed}");
+    assert_eq!((&current["boot"], first_tab(&current)["name"].as_str()), (&first["boot"], Some("renamed-by-script")));
+    assert!(current["revision"].as_u64() >= renamed["revision"].as_u64(), "{current}");
+}
+
 #[test]
 fn several_panes_are_waited_for_at_once() {
     let app = Harness::start();

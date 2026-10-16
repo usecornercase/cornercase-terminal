@@ -107,7 +107,7 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
     }
 }
 
-fn quietly(written: io::Result<()>) -> Result<bool> {
+pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
     match written {
         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(true),
         written => written.map(|()| false).map_err(Into::into),

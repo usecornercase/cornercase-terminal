@@ -40,11 +40,19 @@ number, full paths), with - where there is none and a space for a tab or line br
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.
 
+With --follow it keeps running and prints the whole state as one JSON line: first as it is now,
+then again shortly after each time something in it changes, always JSON, with
+--json or without. Each line is what --json prints plus `revision`, which grows with every line;
+`boot` names the server's run, and revisions only compare within one boot. Each line replaces the
+one before. It ends when the server stops or restarts; to go on, run it again, and its first line
+is the state then, so nothing is missed. A reader that falls behind gets the latest state only.
+
 Examples:
   cornercase status
   cornercase status --json
   cornercase status --panes | awk -F'\\t' '$7 == \"waiting\" { print $1 }'
-  cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'";
+  cornercase status --panes --json | jq '.panes[] | select(.agent) | .pane'
+  cornercase status --follow | jq -c '[.revision, (.projects | length)]'";
 pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open ~/src/shop
   cornercase open . --focus";
