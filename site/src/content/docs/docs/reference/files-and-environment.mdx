@@ -95,7 +95,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API`, `CORNERCASE_JIRA_API`, `CORNERCASE_PLANE_API`, `CORNERCASE_ASANA_API` | Base URL of the Shortcut REST API, of the Linear GraphQL API, of the Jira REST API, of the Plane REST API and of the Asana REST API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3`, `https://api.linear.app/graphql`, `https://<your Jira site>` and `https://api.plane.so` (or your Plane URL, when set) and `https://app.asana.com/api/1.0`. |
 
 <Aside type="caution" title="The server keeps the environment it started with">
-The server is started by the first `cornercase` you run, and keeps that command's environment for as long as it runs. Variables such as `SHELL`, `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY` or `CORNERCASE_RELEASES_URL` are read then. After changing them, run `cornercase kill-server` and start again.
+The server is started by the first `cornercase` you run, and keeps that command's environment for as long as it runs. Variables such as `SHELL`, `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY`, `ASANA_ACCESS_TOKEN` or `CORNERCASE_RELEASES_URL` are read then. After changing them, run `cornercase kill-server` and start again.
 </Aside>
 
 ### Read from Claude Code

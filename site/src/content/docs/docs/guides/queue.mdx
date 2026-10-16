@@ -56,6 +56,7 @@ cornercase queue add --at 'in 2h' --agent claude --prompt 'Fix the login form'
 cornercase queue add --at 'tomorrow 9:00' --agent codex --worktree fix-login --prompt 'Fix the login form'
 cornercase queue add --at 'claude reset' --agent claude --issue https://github.com/acme/shop/issues/482
 cornercase queue add --at 14:30 --agent codex --source linear --issue ENG-123 --workspace 12
+cornercase queue add --at 14:30 --agent codex --source asana --issue 1205551234567890 --workspace 12
 cornercase queue list
 cornercase queue list --json
 cornercase queue edit 1 --at 'in 3h' --prompt 'Fix logout too'
