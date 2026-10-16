@@ -27,7 +27,7 @@ exec "$3"
 #[derive(Debug)]
 pub(crate) enum Pane {
     Running { status: PathBuf, since: Instant },
-    Failed { code: String, unseen: bool },
+    Failed { code: String, unseen: bool, blame: bool },
 }
 
 impl Pane {

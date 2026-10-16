@@ -120,7 +120,7 @@ impl App {
         let script = self.setup_script(p).filter(|_| setup);
         for i in 0..roles.len() {
             let term = match (&script, i) {
-                (Some(script), 0) => self.spawn_setup(area, p, path.clone(), script),
+                (Some(script), 0) => self.spawn_setup(area, (p, id), path.clone(), script),
                 _ => self.spawn(area, path.clone()),
             };
             terms.push(term.map_err(|e| e.to_string())?);

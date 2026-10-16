@@ -39,7 +39,13 @@ impl App {
         (!text.trim().is_empty()).then_some(text)
     }
 
-    pub(super) fn spawn_setup(&mut self, area: Rect, p: usize, path: PathBuf, script: &str) -> Result<Term> {
+    pub(super) fn spawn_setup(
+        &mut self,
+        area: Rect,
+        (p, workspace): (usize, u64),
+        path: PathBuf,
+        script: &str,
+    ) -> Result<Term> {
         let (rows, cols) = self.pane_size(area);
         let id = self.take_id();
         if let Err(e) = std::fs::create_dir_all(&self.setup_dir) {
@@ -61,6 +67,7 @@ impl App {
             theme: &self.theme,
         };
         let mut term = Term::spawn(opts, self.tx.clone())?;
+        self.setups.insert(id, (workspace, status.clone()));
         term.setup = Some(setup::Pane::Running { status, since: Instant::now() });
         log::info!("worktree", "setup started", pane = id, bytes = script.len());
         Ok(term)
@@ -70,7 +77,8 @@ impl App {
         self.projects[p].workspaces[w].clear_failed_setups();
         let Some(script) = self.setup_script(p) else { return self.push_tab(p, w, area, name) };
         let path = self.projects[p].workspaces[w].path.clone();
-        let term = self.spawn_setup(area, p, path, &script)?;
+        let workspace = self.projects[p].workspaces[w].id;
+        let term = self.spawn_setup(area, (p, workspace), path, &script)?;
         let tab = Tab::new(self.take_id(), name, term);
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);
@@ -115,7 +123,7 @@ impl App {
             .flat_map(|p| &p.workspaces)
             .find(|w| w.tabs.iter().any(|t| t.index_of(pane).is_some()))?;
         let (at, state) = workspace.setup()?;
-        let setup::Pane::Failed { code, .. } = state else { return None };
+        let setup::Pane::Failed { code, blame: true, .. } = state else { return None };
         Some(format!(
             "the setup of workspace {} failed with {code}, so its agent did not start; \
              `cornercase read --pane {at}` shows its output",
@@ -155,8 +163,14 @@ impl App {
             .collect();
         for (pane, workspace, status) in vanished {
             let _ = std::fs::remove_file(&status);
-            let (dropped, _) = self.drop_workspace_launches(workspace);
+            let (dropped, ended) = self.drop_workspace_launches(workspace, Some(pane), "setup closed");
             log::info!("worktree", "setup pane closed", pane = pane, dropped = dropped);
+            if dropped + ended > 0
+                && let Some(place) = self.workspace_place(workspace)
+            {
+                let message = format!("setup was closed in {place}: its agent did not start");
+                self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
+            }
         }
         self.setups = running;
         for (pane, code) in ended {
@@ -164,8 +178,9 @@ impl App {
         }
     }
 
-    fn drop_workspace_launches(&mut self, workspace: u64) -> (usize, usize) {
-        let panes = self.workspace_panes(workspace);
+    fn drop_workspace_launches(&mut self, workspace: u64, gone: Option<u64>, reason: &str) -> (usize, usize) {
+        let mut panes = self.workspace_panes(workspace);
+        panes.extend(gone);
         let dropped: Vec<_> = self.agents.launches.iter().filter(|l| panes.contains(&l.term)).map(|l| l.key).collect();
         self.agents.launches.retain(|l| !panes.contains(&l.term));
         for key in dropped.iter().flatten() {
@@ -174,7 +189,7 @@ impl App {
         let ended = self.runs.iter().filter(|r| r.workspace == workspace).count();
         self.runs.retain(|r| r.workspace != workspace);
         if ended > 0 {
-            log::info!("flow", "run ended", workspace = workspace, reason = "setup failed");
+            log::info!("flow", "run ended", workspace = workspace, reason = reason);
         }
         (dropped.len(), ended)
     }
@@ -208,9 +223,9 @@ impl App {
         let failed = format!("exit status {code}");
         log::warning!("worktree", "setup failed", pane = pane, status = failed, ms = ms);
         if let Some(term) = self.projects.pane_by_mut(pane) {
-            term.setup = Some(setup::Pane::Failed { code: failed, unseen: visible != Some(tab) });
+            term.setup = Some(setup::Pane::Failed { code: failed, unseen: visible != Some(tab), blame: true });
         }
-        let (dropped, ended) = self.drop_workspace_launches(workspace);
+        let (dropped, ended) = self.drop_workspace_launches(workspace, None, "setup failed");
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let place = format!("{} › {}", self.project_label(&self.projects[p]), self.projects[p].workspaces[w].label());
         let tail = if dropped == 0 && ended == 0 { "" } else { ": its agent did not start" };
@@ -221,6 +236,12 @@ impl App {
                 .extend(Notification::new(&crate::host::notify::clean(&message), &self.config.desktop_notifications));
         }
         self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Failed)));
+    }
+
+    fn workspace_place(&self, workspace: u64) -> Option<String> {
+        let project = self.projects.iter().find(|p| p.workspaces.iter().any(|w| w.id == workspace))?;
+        let found = project.workspaces.iter().find(|w| w.id == workspace)?;
+        Some(format!("{} › {}", self.project_label(project), found.label()))
     }
 
     fn workspace_panes(&self, workspace: u64) -> Vec<u64> {

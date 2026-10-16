@@ -194,5 +194,62 @@ fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
         got.into_iter().find_map(|r| if let Response::Error(m) = r { Some(m) } else { None }).expect("the start fails");
 
     assert!(message.contains("closed before it was ready") || message.contains("did not"), "{message}");
+    let toast = team.app.toast.as_ref().map(|t| t.message.clone()).unwrap_or_default();
+    assert!(toast.contains("setup was closed in") && toast.contains("its agent did not start"), "{toast}");
     assert!(!status.exists());
+}
+
+#[test]
+fn a_setup_closed_before_the_first_watch_still_drops_the_agent() {
+    let mut team = team("sleep 30", "");
+    start_in_worktree(&mut team.app);
+    pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
+        a.projects[0].workspaces.iter().any(Workspace::setting_up)
+    });
+    assert_eq!(team.app.setups.len(), 1);
+    let pane = *team.app.setups.keys().next().expect("a setup");
+    let tab = team.app.projects[0]
+        .workspaces
+        .iter()
+        .flat_map(|w| &w.tabs)
+        .find(|t| t.index_of(pane).is_some())
+        .expect("tab")
+        .id;
+    ask(
+        &mut team.app,
+        None,
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+    );
+
+    let mut got = Vec::new();
+    wait_until("the start fails", || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        got.extend(answers(&mut team.app));
+        got.len() >= 2
+    });
+
+    assert!(got.iter().any(|r| matches!(r, Response::Error(_))));
+}
+
+#[test]
+fn a_later_unrelated_failure_is_not_blamed_on_a_failed_setup() {
+    let mut team = team("exit 3", "");
+    new_worktree(&mut team.app, "feat/blame");
+    error(answered(&mut team.app, &team.rx, "the request fails"));
+    let workspace = team.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("worktree").id;
+    let before =
+        team.app.projects[0].workspaces.iter().flat_map(Workspace::terms).find(|t| t.setup.is_some()).expect("pane").id;
+    assert!(team.app.setup_failure(before).is_some());
+
+    let new = wire::NewTab { workspace: Some(workspace), ..wire::NewTab::default() };
+    let pane = done(now_done(&mut team.app, Command::NewTab(new))).ids.pane.expect("pane");
+
+    assert!(team.app.setup_failure(pane).is_none() && team.app.setup_failure(before).is_none());
+    let target = team.app.projects[0].workspaces.iter().find(|w| w.id == workspace).expect("workspace");
+    assert!(target.setup().is_some_and(|(_, s)| !s.running()));
+}
+
+fn now_done(app: &mut App, command: Command) -> Response {
+    now(app, None, command)
 }
