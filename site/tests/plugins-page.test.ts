@@ -102,3 +102,41 @@ test('duplicate plugins never render, and a card left with none is dropped by th
   assert.equal(built.plugins, 1);
   assert.equal(built.repos, 1);
 });
+
+const footer = readFileSync('src/components/landing/Footer.astro', 'utf8');
+
+test('the standalone footer leaves out the landing\'s call to action, and the landing keeps it', () => {
+  assert.match(footer, /!standalone && \(\s*<div class="cta reveal">/);
+  assert.ok(footer.includes('class:list={[\'footer\', { standalone }]}'));
+  assert.ok(astro.includes('<Footer standalone />'));
+  assert.ok(readFileSync('src/components/landing/Home.astro', 'utf8').includes('<Footer />'));
+});
+
+test('the sections have command lines above their titles, and none of herdr\'s titles or subtitles remain', () => {
+  const sections: [string, string, string][] = [
+    ['trending-title', '$ sort --stars --since 7d', 'Rising this week'],
+    ['new-title', '$ ls --newest', 'Just landed'],
+    ['browse-title', '$ ls --all', 'Every plugin'],
+  ];
+  for (const [id, command, title] of sections) {
+    const at = astro.indexOf(`id="${id}"`);
+    assert.ok(at > 0, id);
+    assert.ok(astro.slice(Math.max(0, at - 160), at).includes(`<p class="eyebrow cmd-line" aria-hidden="true">${command}</p>`), command);
+    assert.ok(astro.slice(at, at + 80).includes(`>${title}</h2>`), title);
+    assert.ok(astro.includes(`aria-labelledby="${id}"`));
+  }
+  for (const old of ['Trending this week', 'New to cornercase', 'Browse everything', 'fastest-growing', 'fresh projects', 'the full index', 'Want your plugin listed']) {
+    assert.ok(!astro.includes(old), old);
+  }
+  assert.ok(astro.includes('data-see="trending"') && astro.includes('data-see="newest"'));
+});
+
+test('the publish block is a terminal line built from the topic and manifest constants', () => {
+  assert.ok(astro.includes('const topicCommand = `gh repo edit --add-topic ${TOPIC}`;'));
+  assert.ok(astro.includes('<code>{topicCommand}</code>'));
+  assert.ok(astro.includes('data-plugin-copy={topicCommand}'));
+  assert.ok(astro.includes('<code>{MANIFEST}</code>'));
+  assert.ok(astro.includes('#publish-a-plugin'));
+  assert.ok(!astro.includes('cornercase-plugin'), 'the topic and manifest names come from the constants');
+  assert.ok(!astro.includes('class="kicker"'));
+});

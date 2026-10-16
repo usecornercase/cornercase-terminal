@@ -42,7 +42,7 @@ test('the fixture index is read only by the dev server', () => {
 test('the plugin copy listener only handles plugin command buttons, never the footer\'s', () => {
   const client = read('src/lib/plugins/client.ts');
   assert.ok(!client.includes("[data-copy]"), 'the footer install box uses data-copy');
-  assert.ok(client.includes("'.plugins-page .cmd [data-plugin-copy]'"));
+  assert.ok(client.includes("'.plugins-page [data-plugin-copy]'"));
   assert.ok(read('src/components/plugins/Command.astro').includes('data-plugin-copy={command}'));
   assert.ok(!read('src/components/plugins/Command.astro').includes(' data-copy='));
   assert.ok(read('src/components/landing/InstallBox.astro').includes('data-copy'));

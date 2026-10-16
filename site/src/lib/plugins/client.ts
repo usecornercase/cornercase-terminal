@@ -75,7 +75,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.plugins-page .cmd [data-plugin-copy]');
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.plugins-page [data-plugin-copy]');
   if (!button) return;
   const label = button.textContent;
   try {
