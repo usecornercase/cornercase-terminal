@@ -18,7 +18,7 @@ const LIST_PAGES: usize = 10;
 const PEOPLE_PAGES: usize = 20;
 const COMMENT_PAGES: usize = 5;
 const PROJECTS: usize = 10;
-const LIST_FIELDS: &str = "name,completed,modified_at,created_at,permalink_url,resource_subtype,\
+const LIST_FIELDS: &str = "name,completed,modified_at,created_at,permalink_url,resource_subtype,parent,\
     is_rendered_as_separator,assignee.name,created_by,tags.name,memberships.section.name,\
     custom_fields.display_value,custom_fields.representation_type,custom_fields.id_prefix";
 const DETAIL_FIELDS: &str = "name,completed,modified_at,created_at,permalink_url,resource_subtype,\
@@ -147,6 +147,7 @@ impl Api {
         let wanted = |task: &Value| {
             text(task, "/resource_subtype") == "default_task"
                 && task["is_rendered_as_separator"].as_bool() != Some(true)
+                && task["parent"].is_null()
                 && assignee.as_deref().is_none_or(|id| text(task, "/assignee/gid") == id)
                 && creator.as_deref().is_none_or(|id| text(task, "/created_by/gid") == id)
         };
@@ -230,7 +231,19 @@ fn workspace_names(workspaces: &[(String, String)]) -> String {
 fn choose(setting: &str, workspaces: &[(String, String)]) -> Result<(String, String)> {
     let setting = setting.trim();
     if !setting.is_empty() {
-        let found = workspaces.iter().find(|(gid, name)| gid == setting || name.eq_ignore_ascii_case(setting));
+        let named = |(_, name): &&(String, String)| name.eq_ignore_ascii_case(setting);
+        let by_name: Vec<_> = workspaces.iter().filter(named).collect();
+        let found = workspaces.iter().find(|(gid, _)| gid == setting).or(match by_name.as_slice() {
+            [only] => Some(only),
+            _ => None,
+        });
+        if found.is_none() && by_name.len() > 1 {
+            let gids: Vec<&str> = by_name.iter().map(|(gid, _)| gid.as_str()).collect();
+            return Err(Error::Api(format!(
+                "several of your Asana workspaces are named {setting}: use the ID of one, {}",
+                gids.join(" or ")
+            )));
+        }
         return found.cloned().ok_or_else(|| {
             Error::Api(format!("no Asana workspace named {setting}; yours are {}", workspace_names(workspaces)))
         });
@@ -249,7 +262,7 @@ pub(crate) fn pick_workspace(input: &str, workspaces: &[(String, String)]) -> st
     if input.trim().is_empty() {
         return Err(format!("type one of your workspaces: {}", workspace_names(workspaces)));
     }
-    choose(input, workspaces).map(|(_, name)| name).map_err(|e| e.to_string())
+    choose(input, workspaces).map(|(gid, _)| gid).map_err(|e| e.to_string())
 }
 
 #[expect(clippy::unnecessary_wraps, reason = "the settings take every row's check as one function type")]

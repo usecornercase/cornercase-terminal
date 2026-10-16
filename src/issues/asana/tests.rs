@@ -99,6 +99,31 @@ fn a_workspace_that_cannot_be_chosen_says_why(#[case] setting: &str, #[case] me:
     assert_eq!(err, Some(message.replace("{url}", &server.url())));
 }
 
+const TWINS: &str = r#"{"data":{"gid":"u-me","name":"Ana Pérez","workspaces":[{"gid":"w-1","name":"Acme"},{"gid":"w-2","name":"Acme"}]}}"#;
+
+#[test]
+fn a_workspace_chosen_by_id_stays_that_one_when_another_has_the_same_name() {
+    let server = FakeHttp::start(vec![
+        ("GET /users/me", 200, TWINS.to_string()),
+        ("GET /workspaces/w-2/users", 200, USERS.to_string()),
+        ("GET /tasks", 200, tasks(&[], None)),
+    ]);
+
+    api(&server, "w-2", &[]).list(&Query::default()).expect("list");
+
+    assert!(decoded(&server.request(2)).contains("workspace=w-2"), "{}", server.request(2));
+    let twins = [("w-1".to_string(), "Acme".to_string()), ("w-2".to_string(), "Acme".to_string())];
+    assert_eq!(pick_workspace("w-2", &twins), Ok("w-2".to_string()));
+}
+
+#[test]
+fn a_name_shared_by_two_workspaces_asks_for_an_id() {
+    let server = FakeHttp::start(vec![("GET /users/me", 200, TWINS.to_string())]);
+    let err = api(&server, "acme", &[]).whoami().err().map(|e| e.to_string());
+    let expected = "several of your Asana workspaces are named acme: use the ID of one, w-1 or w-2";
+    assert_eq!(err.as_deref(), Some(expected));
+}
+
 #[rstest]
 #[case::unauthorized(401, "{}", "Asana rejected the access token")]
 #[case::forbidden(403, "{}", "Asana rejected the access token")]
@@ -296,7 +321,7 @@ mod list {
     }
 
     #[test]
-    fn milestones_approvals_separators_and_subtasks_of_other_kinds_are_left_out() {
+    fn milestones_approvals_and_separators_are_left_out() {
         let milestone = task("2", "").replace("default_task", "milestone");
         let approval = task("3", "").replace("default_task", "approval");
         let separator = task("4", r#","is_rendered_as_separator":true"#);
@@ -306,6 +331,20 @@ mod list {
         let (listed, _server) = listed(&Query::default(), &[], mine(tasks(&rows, None)));
 
         assert_eq!(titles(&listed), ["Task 1"]);
+    }
+
+    #[test]
+    fn an_ordinary_subtask_is_left_out_in_both_modes() {
+        let subtask = task("2", r#","parent":{"gid":"1","name":"Task 1"}"#);
+        let rows = [task("1", ""), subtask];
+        let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+
+        let (yours, _server) = listed(&Query::default(), &[], mine(tasks(&rows, None)));
+        let pages = vec![("GET /projects/p1/tasks", 200, tasks(&rows, None))];
+        let (projects, server) = listed(&Query::default(), &["p1"], pages);
+
+        assert_eq!((titles(&yours), titles(&projects)), (vec!["Task 1"], vec!["Task 1"]));
+        assert!(decoded(&server.request(2)).contains("parent"), "{}", server.request(2));
     }
 
     fn assigned_to_luis() -> String {

@@ -63,7 +63,7 @@ fn a_token_for_several_workspaces_asks_which_and_saves_the_choice() {
 
     pump_until(&mut s.app, &s.rx, "the issues load", |a| loaded(a, Source::Asana));
     assert_eq!(shown(&s.app), ["ENG-42"]);
-    assert_eq!(config::load(&s.config.path().join("config.json")).asana_workspace, "Beta");
+    assert_eq!(config::load(&s.config.path().join("config.json")).asana_workspace, "w-2");
     assert_eq!(secrets::read(&secrets_file(&s), "asana_token").as_deref(), Some("t0k"));
 }
 

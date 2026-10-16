@@ -294,7 +294,7 @@ Query parameters added to every Plane list, written as in a URL: `priority=high&
 
 #### `asana_workspace`
 
-Your Asana workspace, by name (any case) or ID. Empty means the only workspace your token belongs to; when it belongs to several and this names none of them, the issue browser asks which one and the Asana tab says so. Set from the issue browser or the settings modal. The access token is never stored here: it goes in `secrets.json` or comes from `ASANA_ACCESS_TOKEN` (see [Files and environment](../files-and-environment/)).
+Your Asana workspace, by name (any case) or ID. Choosing one in the issue browser saves its ID, since two workspaces can share a name; a name that two share is refused, with their IDs. Empty means the only workspace your token belongs to; when it belongs to several and this names none of them, the issue browser asks which one and the Asana tab says so. Set from the issue browser or the settings modal. The access token is never stored here: it goes in `secrets.json` or comes from `ASANA_ACCESS_TOKEN` (see [Files and environment](../files-and-environment/)).
 
 #### `asana_projects`
 

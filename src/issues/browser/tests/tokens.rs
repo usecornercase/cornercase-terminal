@@ -235,9 +235,9 @@ mod asana {
     }
 
     #[rstest::rstest]
-    #[case::by_name("beta", "Beta")]
-    #[case::ignoring_case_and_spaces("  ACME ", "Acme")]
-    #[case::by_id("w-2", "Beta")]
+    #[case::by_name("beta", "w-2")]
+    #[case::ignoring_case_and_spaces("  ACME ", "w-1")]
+    #[case::by_id("w-2", "w-2")]
     fn a_workspace_of_the_token_is_saved_with_the_token(#[case] typed: &str, #[case] saved: &str) {
         let mut b = at_the_workspace_step();
         type_text(&mut b, typed);
