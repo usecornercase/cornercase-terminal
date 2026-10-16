@@ -12,7 +12,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place. | `~/.local/bin/` with the install script; Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
-| `secrets.json` | GitLab, Shortcut, Linear, Jira and Plane tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
+| `secrets.json` | GitLab, Shortcut, Linear, Jira, Plane and Asana tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `telegram.json` | The [Telegram](../../guides/telegram/) bot's name and the chat paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
 | `discord.json` | The [Discord](../../guides/discord/) bot's name and the direct message paired with it. Readable only by you (mode `0600`). | Next to `config.json` |
@@ -77,6 +77,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `LINEAR_API_KEY` | Linear API key. Takes precedence over a saved one. |
 | `JIRA_API_TOKEN` | Jira API token, sent with the email of your Jira settings. Takes precedence over a saved one. |
 | `PLANE_API_KEY` | Plane API key, used with the workspace of your Plane settings. Takes precedence over a saved one. |
+| `ASANA_ACCESS_TOKEN` | Asana personal access token, used with the workspace of your Asana settings (or your only one). Takes precedence over a saved one. |
 | `HOME` | Expands `~` in paths, and is the base of the default folders. |
 | `CLAUDE_CONFIG_DIR` | Where Claude Code keeps its files; cornercase reads its running sessions from `sessions/` in it, their transcripts from `projects/` and its `settings.json`. Without it, `~/.claude`. The `claude` that the [usage dialog](../../guides/projects-workspaces-tabs/#usage-and-stats) runs gets it too. |
 | `GEMINI_CLI_HOME` | Gemini CLI's home override; cornercase reads `.gemini/projects.json` and main session JSONL under `.gemini/tmp` in it. Without it, the running agent's `HOME/.gemini`. |
@@ -91,7 +92,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | `XDG_STATE_HOME` | Folder for `session.json`, `issues.json` and `todos.json`. |
 | `XDG_RUNTIME_DIR`, `TMPDIR` | Folder for the socket, lock and log. |
 | `CORNERCASE_RELEASES_URL` | Where the update check asks for the latest release. Meant for testing; the default is `https://api.github.com/repos/usecornercase/cornercase-terminal/releases/latest`. |
-| `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API`, `CORNERCASE_JIRA_API`, `CORNERCASE_PLANE_API` | Base URL of the Shortcut REST API, of the Linear GraphQL API, of the Jira REST API and of the Plane REST API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3`, `https://api.linear.app/graphql`, `https://<your Jira site>` and `https://api.plane.so` (or your Plane URL, when set). |
+| `CORNERCASE_SHORTCUT_API`, `CORNERCASE_LINEAR_API`, `CORNERCASE_JIRA_API`, `CORNERCASE_PLANE_API`, `CORNERCASE_ASANA_API` | Base URL of the Shortcut REST API, of the Linear GraphQL API, of the Jira REST API, of the Plane REST API and of the Asana REST API. Meant for testing; the defaults are `https://api.app.shortcut.com/api/v3`, `https://api.linear.app/graphql`, `https://<your Jira site>` and `https://api.plane.so` (or your Plane URL, when set) and `https://app.asana.com/api/1.0`. |
 
 <Aside type="caution" title="The server keeps the environment it started with">
 The server is started by the first `cornercase` you run, and keeps that command's environment for as long as it runs. Variables such as `SHELL`, `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY` or `CORNERCASE_RELEASES_URL` are read then. After changing them, run `cornercase kill-server` and start again.

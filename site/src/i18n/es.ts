@@ -99,7 +99,7 @@ export const page: Page = {
       {
         num: '1 · Empieza',
         title: 'De una issue a un agente trabajando, en un clic.',
-        text: 'Elige una issue de GitHub, GitLab, Linear, Jira, Plane o Shortcut y pulsa start. cornercase crea un worktree en una rama con el nombre de la issue, abre una pestaña en él y le pasa la issue a tu agente como primer prompt. Ninguna rama que nombrar, ninguna carpeta que crear, nada que pegar.',
+        text: 'Elige una issue de GitHub, GitLab, Linear, Jira, Plane, Asana o Shortcut y pulsa start. cornercase crea un worktree en una rama con el nombre de la issue, abre una pestaña en él y le pasa la issue a tu agente como primer prompt. Ninguna rama que nombrar, ninguna carpeta que crear, nada que pegar.',
         more: 'De issues a agentes →',
         label:
           'El diálogo de issues de web-shop con la #482, Returns page crashes on empty address, seleccionada: start la abre en su propio worktree.',
@@ -242,7 +242,7 @@ export const demo: Demo = {
     settings: 'Cambia lo que quieras, se guarda al momento. Prueba Agents → default agent.',
     restart: (resume) =>
       `De verdad, el servidor arranca de nuevo y cada pestaña vuelve con una shell nueva${resume ? ', y los agentes, en sus conversaciones' : ''}. La demo mantiene las tuyas en marcha.`,
-    issues: 'Tus issues de GitHub, GitLab, Shortcut, Linear, Jira y Plane. Haz clic en una para leerla y luego pulsa start.',
+    issues: 'Tus issues de GitHub, GitLab, Shortcut, Linear, Jira, Plane y Asana. Haz clic en una para leerla y luego pulsa start.',
     issue: (key) => `${key}. Pulsa start y un agente se encarga, en su propia rama.`,
     branch: (branch) => `Una rama nueva para ella: ${branch}.`,
     agentTab: 'Una pestaña nueva para el agente.',

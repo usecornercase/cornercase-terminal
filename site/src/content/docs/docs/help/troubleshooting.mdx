@@ -187,13 +187,15 @@ The row shows only after `gh` (GitHub) or `glab` (GitLab) answered, and counts o
 - *this project is not in a git repository*: open the repository's folder as the project.
 - An error mentioning `gh`: install the [GitHub CLI](https://cli.github.com) and run `gh auth login`. If `gh` isn't on the server's `PATH`, set its path with the `gh` key in [`config.json`](../../reference/configuration/).
 
-### GitLab, Shortcut, Linear, Jira or Plane rejects my token
+### GitLab, Shortcut, Linear, Jira, Plane or Asana rejects my token
 
-Create a new one (GitLab: **Edit profile → Access tokens**, with the `read_api` scope; Shortcut: **Settings → Your account → API Tokens**; Linear: **Settings → Security & access → Personal API keys**; Jira: **Security → Create and manage API tokens** at id.atlassian.com; Plane: **Profile settings → Personal access tokens**) and paste it in the tracker's tab of the issue browser. If `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `PLANE_API_KEY` is set, it is used instead of what you paste: fix or unset the variable, then restart the server.
+Create a new one (GitLab: **Edit profile → Access tokens**, with the `read_api` scope; Shortcut: **Settings → Your account → API Tokens**; Linear: **Settings → Security & access → Personal API keys**; Jira: **Security → Create and manage API tokens** at id.atlassian.com; Plane: **Profile settings → Personal access tokens**; Asana: **Settings → Apps → Developer apps**) and paste it in the tracker's tab of the issue browser. If `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN`, `PLANE_API_KEY` or `ASANA_ACCESS_TOKEN` is set, it is used instead of what you paste: fix or unset the variable, then restart the server.
 
 For Jira, the token is sent with your site and email: check them in **settings → Issues → Jira**. Use a classic API token; tokens with scopes only work through Atlassian's gateway, which cornercase doesn't use. *no Jira site at …* means the site is misspelled.
 
 For Plane, the key is checked together with your workspace: *no Plane workspace named …* means the workspace is misspelled (it is the part after the server's name in Plane's address), and a self-hosted server needs its address in **settings → Issues → Plane → Plane URL**.
+
+For Asana, *Asana rejected the access token* means the token was revoked or mistyped. *this Asana account has several workspaces (…)* means the token belongs to more than one and none is chosen: set **Asana workspace** in **settings → Issues → Asana** (a name or an ID), or pick one when the issue browser asks. *no Asana workspace named …* means the setting names none of yours. *this needs a paid Asana plan* means Asana refused a request for plan reasons; the list doesn't use Asana's premium search, so this is unexpected. *Asana rate limit reached* means too many requests in a minute (150 on free plans): wait a moment and **refresh**.
 
 For GitLab, the token is checked against the server in **settings → Issues → GitLab → GitLab URL** (gitlab.com when empty): a token made on your company's server is rejected by gitlab.com.
 

@@ -99,7 +99,7 @@ export const page: Page = {
       {
         num: '1 · Comece',
         title: 'De uma issue a um agente trabalhando, em um clique.',
-        text: 'Escolha uma issue do GitHub, GitLab, Linear, Jira, Plane ou Shortcut e aperte start. O cornercase cria um worktree num branch com o nome da issue, abre uma aba nele e entrega a issue ao seu agente como primeiro prompt. Nenhum branch para nomear, nenhuma pasta para criar, nada para colar.',
+        text: 'Escolha uma issue do GitHub, GitLab, Linear, Jira, Plane, Asana ou Shortcut e aperte start. O cornercase cria um worktree num branch com o nome da issue, abre uma aba nele e entrega a issue ao seu agente como primeiro prompt. Nenhum branch para nomear, nenhuma pasta para criar, nada para colar.',
         more: 'De issues a agentes →',
         label:
           'O diálogo de issues do web-shop com a #482, Returns page crashes on empty address, selecionada: start a abre no seu próprio worktree.',
@@ -242,7 +242,7 @@ export const demo: Demo = {
     settings: 'Mude o que quiser, é salvo na hora. Experimente Agents → default agent.',
     restart: (resume) =>
       `De verdade, o servidor reinicia e cada aba volta com um shell novo${resume ? ', com os agentes de volta às suas conversas' : ''}. A demo mantém os seus rodando.`,
-    issues: 'Suas issues do GitHub, GitLab, Shortcut, Linear, Jira e Plane. Clique numa para ler, depois aperte start.',
+    issues: 'Suas issues do GitHub, GitLab, Shortcut, Linear, Jira, Plane e Asana. Clique numa para ler, depois aperte start.',
     issue: (key) => `${key}. Aperte start e um agente assume, no seu próprio branch.`,
     branch: (branch) => `Um branch novo para ela: ${branch}.`,
     agentTab: 'Uma aba nova para o agente.',
