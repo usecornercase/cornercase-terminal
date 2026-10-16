@@ -354,3 +354,85 @@ for (const [what, body] of [
 test('a complete, empty search is accepted', async () => {
   assert.deepEqual(await crawl(search({ total_count: 0, incomplete_results: false, items: [] }), undefined, null), []);
 });
+
+const T1 = new Date('2026-10-15T08:00:00Z');
+const T2 = new Date('2026-10-16T08:00:00Z');
+const stamped = (name: string, stars: number, extra: Partial<Found> = {}): Found => ({ ...found(name, [{ path: '', text: withId(`${name.replace('/', '.')}`) }], stars), ...extra });
+const only = (index: ReturnType<typeof assemble>, name: string) => index.repos.find((c) => c.repo === name);
+
+test('a repository the published index lacks joins at the crawl time with its first sample', () => {
+  const card = only(assemble([stamped('acme/new', 7)], empty, T1), 'acme/new');
+  assert.equal(card?.joined, T1.toISOString());
+  assert.deepEqual(card?.stars_history, [['2026-10-15', 7]]);
+});
+
+test('joined and the history are carried from the published card', () => {
+  const first = assemble([stamped('acme/new', 7)], empty, T1);
+  const next = only(assemble([stamped('acme/new', 9)], empty, T2, first), 'acme/new');
+  assert.equal(next?.joined, T1.toISOString());
+  assert.deepEqual(next?.stars_history, [['2026-10-15', 7], ['2026-10-16', 9]]);
+});
+
+test('a second crawl on the same day updates nothing', () => {
+  const first = assemble([stamped('acme/new', 7)], empty, T1);
+  const later = new Date('2026-10-15T20:00:00Z');
+  const next = only(assemble([stamped('acme/new', 50)], empty, later, first), 'acme/new');
+  assert.deepEqual(next?.stars_history, [['2026-10-15', 7]]);
+});
+
+test('a published card without joined gets its created date, not the crawl time', () => {
+  const first = assemble([stamped('acme/old', 7)], empty, T1);
+  const legacy = JSON.parse(JSON.stringify(first));
+  delete legacy.repos[0].joined;
+  delete legacy.repos[0].stars_history;
+  const next = only(assemble([stamped('acme/old', 8)], empty, T2, legacy), 'acme/old');
+  assert.equal(next?.joined, '2026-01-01T00:00:00Z');
+  assert.deepEqual(next?.stars_history, [['2026-10-16', 8]]);
+});
+
+test('the history keeps eight samples and drops the oldest', () => {
+  let index = assemble([stamped('acme/new', 1)], empty, new Date('2026-10-01T08:00:00Z'));
+  for (let d = 2; d <= 10; d += 1) index = assemble([stamped('acme/new', d)], empty, new Date(`2026-10-${String(d).padStart(2, '0')}T08:00:00Z`), index);
+  const history = only(index, 'acme/new')?.stars_history ?? [];
+  assert.equal(history.length, 8);
+  assert.deepEqual(history[0], ['2026-10-03', 3]);
+  assert.deepEqual(history[7], ['2026-10-10', 10]);
+});
+
+test('a card kept after a failed request keeps its joined and history, without a new sample', async () => {
+  const first = assemble(await crawl(github([]), undefined, null), empty, T1);
+  first.repos[0].commit = C1;
+  const { value } = await quiet(() => crawl(async (u) => (u.includes('/commits/') ? answer(503, {}) : github([])(u)), undefined, first));
+  const kept = only(assemble(value, empty, T2, first), 'acme/notes');
+  assert.equal(kept?.joined, T1.toISOString());
+  assert.deepEqual(kept?.stars_history, [['2026-10-15', 4]]);
+});
+
+test('the kept-index path keeps joined and history', () => {
+  const first = assemble([stamped('acme/new', 7)], empty, T1);
+  const kept = keep(first, empty);
+  assert.equal(kept.repos[0].joined, T1.toISOString());
+  assert.deepEqual(kept.repos[0].stars_history, [['2026-10-15', 7]]);
+  assert.ok(validate(JSON.stringify(kept)));
+});
+
+test('the new card fields validate, and bad ones are refused', () => {
+  const good = assemble([stamped('acme/new', 7)], empty, T1);
+  const card = (change: Record<string, unknown>) => JSON.stringify({ ...good, repos: [{ ...good.repos[0], ...change }] });
+  assert.ok(validate(card({ stars_history: [['2026-10-14', 3], ['2026-10-15', 7]], joined: '2026-10-01T00:00:00Z' })));
+  const bad: [string, string][] = [
+    ['not a list', card({ stars_history: 'x' })],
+    ['nine samples', card({ stars_history: Array.from({ length: 9 }, (_, i) => [`2026-10-0${i + 1}`, 1]) })],
+    ['a sample of three', card({ stars_history: [['2026-10-01', 1, 2]] })],
+    ['a bad day', card({ stars_history: [['2026-13-01', 1]] })],
+    ['a day that rolls over', card({ stars_history: [['2026-02-30', 1]] })],
+    ['a day without zeros', card({ stars_history: [['2026-1-1', 1]] })],
+    ['a day with a time', card({ stars_history: [['2026-10-01T00:00', 1]] })],
+    ['a day twice', card({ stars_history: [['2026-10-01', 1], ['2026-10-01', 2]] })],
+    ['descending days', card({ stars_history: [['2026-10-02', 1], ['2026-10-01', 2]] })],
+    ['negative stars', card({ stars_history: [['2026-10-01', -1]] })],
+    ['fractional stars', card({ stars_history: [['2026-10-01', 1.5]] })],
+    ['a bad joined', card({ joined: 'yesterday' })],
+  ];
+  for (const [what, source] of bad) assert.throws(() => validate(source), Error, what);
+});

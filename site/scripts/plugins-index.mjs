@@ -33,7 +33,7 @@ try {
   const blocklist = JSON.parse(await readFile('plugins/blocklist.json', 'utf8'));
   let text;
   try {
-    const index = assemble(await crawl(fetch, process.env.GITHUB_TOKEN, previous), blocklist, new Date());
+    const index = assemble(await crawl(fetch, process.env.GITHUB_TOKEN, previous), blocklist, new Date(), previous);
     text = `${JSON.stringify(index, null, 2)}\n`;
     const plugins = index.repos.reduce((n, card) => n + card.plugins.filter((p) => !p.duplicate).length, 0);
     const { total, missing, invalid, duplicate, blocked } = index.source;

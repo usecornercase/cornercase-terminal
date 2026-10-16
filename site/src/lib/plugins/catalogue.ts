@@ -5,8 +5,9 @@ export const MAX_BYTES = 8 * 1024 * 1024;
 export const MAX_MANIFESTS = 20;
 const MAX_REPOS = 1000;
 const MAX_PERMISSIONS = 16;
+export const MAX_HISTORY = 8;
 const PLATFORMS = ['macos', 'linux'];
-const REPO_FIELDS = ['repo', 'description', 'stars', 'language', 'pushed', 'created', 'commit', 'invalid', 'blocked', 'plugins'];
+const REPO_FIELDS = ['repo', 'description', 'stars', 'language', 'pushed', 'created', 'commit', 'invalid', 'blocked', 'joined', 'stars_history', 'plugins'];
 const PLUGIN_FIELDS = ['path', 'id', 'name', 'version', 'description', 'min_cornercase', 'platforms', 'permissions', 'duplicate'];
 const COUNTS = ['total', 'missing', 'invalid', 'duplicate', 'blocked'] as const;
 export const UNSAFE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/;
@@ -23,6 +24,8 @@ export type Plugin = {
   duplicate?: boolean;
 };
 
+export type Star = [day: string, stars: number];
+
 export type Card = {
   repo: string;
   description?: string;
@@ -33,6 +36,8 @@ export type Card = {
   commit: string;
   invalid?: number;
   blocked?: number;
+  joined?: string;
+  stars_history?: Star[];
   plugins: Plugin[];
 };
 
@@ -63,6 +68,23 @@ const count = (where: string, value: unknown): number => {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error(`${where} must be a whole number`);
   return value;
 };
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export const dayOf = (when: Date): string => when.toISOString().slice(0, 10);
+
+function history(where: string, value: unknown): Star[] {
+  if (!Array.isArray(value) || value.length > MAX_HISTORY) throw new Error(`${where} must be a list of at most ${MAX_HISTORY} samples`);
+  const out: Star[] = [];
+  for (const [i, sample] of value.entries()) {
+    if (!Array.isArray(sample) || sample.length !== 2) throw new Error(`${where}[${i}] must be a day and a number of stars`);
+    const [day, stars] = sample;
+    if (typeof day !== 'string' || !DAY.test(day) || Number.isNaN(Date.parse(day)) || dayOf(new Date(day)) !== day) throw new Error(`${where}[${i}] must start with a day as YYYY-MM-DD`);
+    if (out.length > 0 && out[out.length - 1][0] >= day) throw new Error(`${where} must list each day once, oldest first`);
+    out.push([day, count(`${where}[${i}]`, stars)]);
+  }
+  return out;
+}
 
 const date = (where: string, value: unknown): string => {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) throw new Error(`${where} must be a date`);
@@ -157,6 +179,8 @@ function card(raw: unknown, at: number): Card {
   if (language) out.language = language;
   if (raw.invalid !== undefined) out.invalid = count(where('invalid'), raw.invalid);
   if (raw.blocked !== undefined) out.blocked = count(where('blocked'), raw.blocked);
+  if (raw.joined !== undefined) out.joined = date(where('joined'), raw.joined);
+  if (raw.stars_history !== undefined) out.stars_history = history(where('stars_history'), raw.stars_history);
   if (new Set(out.plugins.map((p) => p.path)).size !== out.plugins.length) throw new Error(`${where('plugins')} lists a folder twice`);
   return out;
 }

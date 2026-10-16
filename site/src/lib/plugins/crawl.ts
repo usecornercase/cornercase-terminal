@@ -4,12 +4,15 @@ import {
   type Counts,
   type Index,
   MANIFEST,
+  MAX_HISTORY,
   MAX_MANIFESTS,
   type Plugin,
+  type Star,
   type Skipped,
   TOPIC,
   UNSAFE,
   VERSION,
+  dayOf,
   isObject,
   manifestFields,
   validId,
@@ -39,7 +42,7 @@ export type Blocklist = { repos: string[]; ids: string[] };
 
 export type Scan = { plugins: Plugin[]; invalid: number; blocked?: number };
 
-export type Found = { repo: Repo; commit: string; scan: Scan };
+export type Found = { repo: Repo; commit: string; scan: Scan; joined?: string; history?: Star[] };
 
 const MAX_ENTRIES = 64;
 const CONTEXTS = ['project', 'workspace', 'tab', 'pane'];
@@ -151,12 +154,23 @@ export function manifestPaths(tree: unknown): string[] {
   return paths.sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b)).slice(0, MAX_MANIFESTS);
 }
 
-export function assemble(found: Found[], blocklist: Blocklist, generated: Date): Index {
+function carried(entry: Found, before: Card | undefined, generated: Date): { joined: string; history: Star[] } {
+  const joined = entry.joined ?? before?.joined ?? before?.created ?? generated.toISOString();
+  if (entry.history) return { joined, history: entry.history };
+  const history = [...(before?.stars_history ?? [])];
+  const day = dayOf(generated);
+  if (history.length === 0 || history[history.length - 1][0] < day) history.push([day, entry.repo.stars]);
+  return { joined, history: history.slice(-MAX_HISTORY) };
+}
+
+export function assemble(found: Found[], blocklist: Blocklist, generated: Date, previous: Index | null = null): Index {
+  const before = new Map((previous?.repos ?? []).map((card) => [card.repo.toLowerCase(), card]));
   const source: Counts = { total: found.length, missing: 0, invalid: 0, duplicate: 0, blocked: 0 };
   const blockedRepos = new Set(blocklist.repos.map((repo) => repo.toLowerCase()));
   const repos: Card[] = [];
   const skipped: Skipped[] = [];
-  for (const { repo, commit, scan } of [...found].sort((a, b) => a.repo.created.localeCompare(b.repo.created) || a.repo.repo.localeCompare(b.repo.repo))) {
+  for (const entry of [...found].sort((a, b) => a.repo.created.localeCompare(b.repo.created) || a.repo.repo.localeCompare(b.repo.repo))) {
+    const { repo, commit, scan } = entry;
     if (blockedRepos.has(repo.repo.toLowerCase())) {
       source.blocked += 1;
       continue;
@@ -175,6 +189,9 @@ export function assemble(found: Found[], blocklist: Blocklist, generated: Date):
     if (repo.language) card.language = repo.language;
     if (scan.invalid) card.invalid = scan.invalid;
     if (withheld) card.blocked = withheld;
+    const { joined, history } = carried(entry, before.get(repo.repo.toLowerCase()), generated);
+    card.joined = joined;
+    if (history.length) card.stars_history = history;
     repos.push(card);
   }
   const ids = new Set<string>();
@@ -203,7 +220,7 @@ export function foundFrom(index: Index): Found[] {
     if (card.language) repo.language = card.language;
     const scan: Scan = { plugins: plugins.map(({ duplicate: _, ...plugin }) => plugin), invalid: invalid ?? 0 };
     if (blocked) scan.blocked = blocked;
-    return { repo, commit, scan };
+    return { repo, commit, scan, joined: card.joined ?? card.created, history: card.stars_history ?? [] };
   });
   const skips = index.skipped.map(({ repo, commit, invalid, blocked }): Found => {
     const scan: Scan = { plugins: [], invalid };

@@ -9,7 +9,8 @@
     "check": "astro check && npm test",
     "test": "node scripts/test-demo.mjs",
     "flows": "node scripts/refresh-flows.mjs",
-    "plugins": "node scripts/plugins-index.mjs"
+    "plugins": "node scripts/plugins-index.mjs",
+    "plugins:dev": "node scripts/plugins-dev.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.5",
