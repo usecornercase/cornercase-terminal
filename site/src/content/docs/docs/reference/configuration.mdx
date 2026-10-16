@@ -26,6 +26,7 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | --- | --- |
 | **worktrees folder** | Where new [worktrees](../../guides/worktrees/) are checked out: `<folder>/<repository>/<branch>`. Must be an absolute path or start with `~/`. |
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
+| **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
 | **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub shows its number and the state of its checks, read with `gh`. Off: nothing is asked. The note says why none show when `gh` is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
 
 ### Agents
@@ -149,6 +150,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
   "pull_requests": true,
+  "merged_pull_requests": true,
   "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"],
   "gitlab_url": "",
   "jira_site": "",
@@ -170,6 +172,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
+  "glab": "glab",
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "icon_bar": false,
@@ -197,6 +200,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
 | [`pull_requests`](#pull_requests) | boolean | `true` |
+| [`merged_pull_requests`](#merged_pull_requests) | boolean | `true` |
 | [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"]` |
 | [`gitlab_url`](#gitlab_url) | string | `""` |
 | [`jira_site`](#jira_site) | string | `""` |
@@ -216,6 +220,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`keep_awake`](#keep_awake) | boolean | `false` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
+| [`glab`](#glab) | string | `"glab"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`tabs`](#tabs) | string | `"sidebar"` |
 | [`icon_bar`](#icon_bar) | boolean | `false` |
@@ -245,6 +250,10 @@ How often, in minutes, each project's remotes are fetched to show the [commits t
 #### `pull_requests`
 
 Whether each workspace shows the pull request of its branch and the state of its checks, asked of GitHub with [`gh`](#gh). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
+
+#### `merged_pull_requests`
+
+Whether Usage → Stats counts the pull requests and merge requests you opened that were merged, read with [`gh`](#gh) and [`glab`](#glab). On by default; off asks nothing. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats).
 
 #### `issue_tabs`
 
@@ -325,6 +334,10 @@ trust the files|trust this (folder|directory|workspace|repository)|do you trust|
 #### `gh`
 
 The GitHub CLI to run for GitHub issues and for the [pull requests](../../guides/worktrees/#pull-requests-and-their-checks) of workspaces: a name looked up in your `PATH`, or a path, which may start with `~/`.
+
+#### `glab`
+
+The GitLab CLI to run for the [merged merge requests](../../guides/projects-workspaces-tabs/#usage-and-stats) of Stats: a name looked up in your `PATH`, or a path, which may start with `~/`.
 
 #### `sidebar`
 

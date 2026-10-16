@@ -45,7 +45,7 @@ pub(crate) enum Command {
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats

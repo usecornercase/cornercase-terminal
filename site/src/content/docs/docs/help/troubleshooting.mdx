@@ -176,6 +176,10 @@ cornercase asks your terminal to report these keys unambiguously, using the kitt
 
 The server reads your terminal's colours once, from the first client that attaches to it. Restart it with `cornercase restart` (or **settings → restart**) to pick up a new theme.
 
+### The merged PRs row is missing from Stats
+
+The row shows only after `gh` (GitHub) or `glab` (GitLab) answered, and counts only repositories that an open project has as a remote. Check that `gh auth status` or `glab auth status` lists an account, that the project has a remote (`git remote -v`), and read **Settings → Worktrees → merged PRs in stats**: its note names the accounts read or says why none were. A `+` after a number means one account failed or a search was too large; `server.log` has a `pr` line with the reason. `cornercase stats` reads the row only from a running server.
+
 ## Issues and agents
 
 ### The GitHub tab is empty or shows an error

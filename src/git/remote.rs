@@ -43,3 +43,7 @@ pub(crate) fn remotes(output: &str) -> Vec<Remote> {
     remotes.sort_by_key(|r| r.name != "origin");
     remotes
 }
+
+pub(crate) fn of(dir: &std::path::Path) -> Vec<Remote> {
+    super::remote_urls(dir).iter().filter_map(|(name, url)| remote(name, url)).collect()
+}

@@ -14,6 +14,7 @@ impl Settings {
         self.save(config, notice.into())
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per row")]
     pub(crate) fn activate(&mut self) -> Action {
         let Some(row) = self.row() else { return Action::None };
         self.notice = None;
@@ -23,6 +24,10 @@ impl Settings {
             Row::PullRequests => self.flip(
                 |c| &mut c.pull_requests,
                 ["workspaces show their pull request and its checks", "workspaces no longer show pull requests"],
+            ),
+            Row::MergedPullRequests => self.flip(
+                |c| &mut c.merged_pull_requests,
+                ["Stats counts your merged pull requests", "Stats no longer counts merged pull requests"],
             ),
             Row::Token(source) => {
                 if self.status(source) == Some(&Status::Env) {

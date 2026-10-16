@@ -6,6 +6,8 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::gh;
 
+pub(crate) mod merged;
+
 const FIELDS: &str = "number,title,url,state,isDraft,statusCheckRollup";
 
 const NOT_FOUND: &str = "no pull requests found";

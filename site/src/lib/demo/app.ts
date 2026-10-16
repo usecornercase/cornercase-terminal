@@ -96,6 +96,8 @@ const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neith
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
 
+const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
+
 const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
 
 const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays the flow in payments';
@@ -2579,6 +2581,7 @@ export class App {
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
         { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
+        { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
       ];
     }
     if (page === 1) {
@@ -2755,6 +2758,8 @@ export class App {
       o.notice = ICON_BAR_NEEDS;
     } else if (row.id === 'pulls') {
       o.notice = PULL_REQUESTS_NEED;
+    } else if (row.id === 'merged') {
+      o.notice = MERGED_NEED;
     } else if (row.id === 'flows') {
       o.notice = FLOWS_NEED;
     } else if (row.id.startsWith('token:')) {

@@ -152,6 +152,7 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
     if app.config.gh == config::DEFAULT_GH {
         app.config.gh = "/nonexistent/gh".into();
+        app.config.glab = "/nonexistent/glab".into();
     }
     (app, rx)
 }
@@ -432,6 +433,7 @@ mod groups;
 mod icon_bar;
 mod keys;
 mod lock_text;
+mod merged_pull_requests;
 mod muted_text;
 mod picker;
 mod projects;

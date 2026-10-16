@@ -2,6 +2,7 @@
   "worktrees_dir": "worktrees",
   "fetch_minutes": 12,
   "pull_requests": false,
+  "merged_pull_requests": false,
   "issue_tabs": [
     "shortcut",
     "github",
@@ -39,6 +40,7 @@
   "keep_awake": true,
   "trust_prompt_pattern": "Allow this folder",
   "gh": "fake-gh",
+  "glab": "fake-glab",
   "sidebar": "tree",
   "tabs": "top",
   "icon_bar": true,

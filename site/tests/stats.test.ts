@@ -12,6 +12,8 @@ const fixture = JSON.parse(readFileSync('../tests/fixtures/stats/share-v2.txt', 
 const fragment = new URL(fixture.link).hash;
 const older = JSON.parse(readFileSync('../tests/fixtures/stats/share-v1.txt', 'utf8'));
 const v1 = new URL(older.link).hash;
+const merged = JSON.parse(readFileSync('../tests/fixtures/stats/share-v3.txt', 'utf8'));
+const v3 = new URL(merged.link).hash;
 
 for (const [name, link] of [['Rust share link', fixture], ['link shared before v2', older]] as const) {
   test(`the ${name} is parsed without losing any values`, () => {
@@ -35,6 +37,7 @@ for (const [name, hash] of [
   ['invalid level', '#v1&24h=0.0.0.0.0.0&7d=0.0.0.0.0.0&all=0.0.0.0.0.0&days=1&map=4A'],
   ['nonzero spare bits', '#v1&24h=0.0.0.0.0.0&7d=0.0.0.0.0.0&all=0.0.0.0.0.0&days=1&map=AQ'],
   ['wrong version', fragment.replace('#v2', '#v3')],
+  ['v3 with v2 numbers', v3.replace('#v3', '#v2')],
   ['v1 with v2 numbers', fragment.replace('#v2', '#v1')],
   ['v2 with v1 numbers', v1.replace('#v1', '#v2')],
 ] as const) {
@@ -55,9 +58,18 @@ test('the card shows the rows of the Stats tab in its order', () => {
   const grid = cardGrid(stats, '7d');
   const shown = Array.from({ length: 9 }, (_, i) => grid.line(i + 2).slice(4, 31).replace(/\s+/g, ' ').trim());
   assert.deepEqual(shown, ['agents started 31', 'prompts 402', 'turns 377', 'agent time 41h 03m', 'most at once 7', 'waited for you 3h 40m', 'tokens out 3.1M', 'tokens in 11M', 'tokens from cache 310M']);
-  assert.deepEqual(ROWS.map(([label]) => label), ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache']);
+  assert.deepEqual(ROWS.map(([label]) => label), ['agents started', 'prompts', 'turns', 'agent time', 'most at once', 'waited for you', 'tokens out', 'tokens in', 'tokens from cache', 'merged PRs']);
   assert.equal(grid.at(30, 7)?.ch, 'm');
   for (const text of ['claude', 'codex']) assert.equal(grid.plain().includes(text), false);
+});
+
+test('a v3 link carries the merged pull requests and round trips', () => {
+  const stats = parse(v3); assert.ok(stats);
+  assert.deepEqual([stats.windows['24h'][10], stats.windows['7d'][10], stats.windows.all[10]], [merged.merged['24h'], merged.merged['7d'], merged.merged.all]);
+  assert.equal(shareLink(stats), merged.link);
+  const shown = cardGrid(stats, 'all').plain();
+  assert.match(shown, /merged PRs\s+61/);
+  assert.equal(cardGrid(parse(fragment)!, 'all').plain().includes('merged PRs'), false);
 });
 
 test('a card from a link shared before v2 shows the five numbers it holds', () => {
@@ -93,5 +105,5 @@ test('the first counting day shares its current heatmap square', () => {
 test('the legend ends at the right edge of the heatmap', () => {
   const grid = cardGrid(EXAMPLE, '7d');
   assert.equal(grid.line(11).slice(77, 96), 'less · ■ ■ ■ ■ more');
-  assert.equal(grid.line(11).slice(1, 77).trim(), '');
+  assert.equal(grid.line(11).slice(32, 77).trim(), '');
 });

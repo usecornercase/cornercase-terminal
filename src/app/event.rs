@@ -31,6 +31,7 @@ pub(crate) enum AppEvent {
     Web(web::Event),
     Tailscale(std::result::Result<tailscale::Node, tailscale::Problem>),
     Messenger(MessengerEvent),
+    Merged(crate::pull_request::merged::Answer),
 }
 
 impl AppEvent {
@@ -53,6 +54,7 @@ impl AppEvent {
             Self::Web(_) => "web",
             Self::Tailscale(_) => "tailscale",
             Self::Messenger(event) => event.name(),
+            Self::Merged(_) => "merged pull requests",
         }
     }
 }

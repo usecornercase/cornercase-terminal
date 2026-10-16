@@ -16,7 +16,8 @@ pub(crate) const BLOCKS: usize = WEEKS * 7;
 const RETAIN: u64 = (BLOCKS as u64 + 1) * 24;
 pub(crate) const SHARE_BASE: &str = "https://usecornercase.dev/stats/";
 pub(crate) const EMPTY: &str = "nothing counted yet: agents running in cornercase count from now on";
-pub(crate) const LABELS: [&str; 9] = [
+pub(crate) const MERGED_LABEL: &str = "merged PRs";
+const LABELS: [&str; 9] = [
     "agents started",
     "prompts",
     "turns",
@@ -327,6 +328,9 @@ impl Stats {
         }
         bucket
     }
+    pub(crate) fn since(&self) -> SystemTime {
+        self.since
+    }
     pub(crate) fn days(&self, now: SystemTime) -> u64 {
         now.duration_since(self.since).unwrap_or_default().as_secs() / 86_400
     }
@@ -354,6 +358,7 @@ impl Stats {
             blocks,
             days: self.days(now),
             empty: self.total == Bucket::default(),
+            merged: None,
         }
     }
 }
@@ -450,6 +455,36 @@ pub(crate) struct Window {
 pub(crate) struct Block {
     pub(crate) agent_seconds: f64,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct MergedAccount {
+    pub(crate) provider: String,
+    pub(crate) host: String,
+    pub(crate) login: String,
+    pub(crate) error: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct MergedRow {
+    #[serde(rename = "24h")]
+    pub(crate) day: u64,
+    #[serde(rename = "7d")]
+    pub(crate) week: u64,
+    pub(crate) total: u64,
+    pub(crate) complete: bool,
+    pub(crate) accounts: Vec<MergedAccount>,
+}
+pub(crate) fn windows(merged: impl Iterator<Item = SystemTime>, since: SystemTime, now: SystemTime) -> [u64; 3] {
+    let end = hour(now);
+    let mut counts = [0; 3];
+    for at in merged.filter(|at| *at >= since) {
+        counts[2] += 1;
+        let h = hour(at);
+        if h <= end {
+            counts[1] += u64::from(h + 168 > end);
+            counts[0] += u64::from(h + 24 > end);
+        }
+    }
+    counts
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct View {
     pub(crate) since: String,
@@ -459,6 +494,8 @@ pub(crate) struct View {
     pub(crate) days: u64,
     #[serde(skip)]
     pub(crate) empty: bool,
+    #[serde(default, rename = "merged_pull_requests")]
+    pub(crate) merged: Option<MergedRow>,
 }
 impl Default for View {
     fn default() -> Self {
@@ -534,6 +571,16 @@ impl View {
             ]
         })
     }
+    pub(crate) fn rows(&self) -> Vec<(&'static str, [String; 3])> {
+        let columns = self.columns();
+        let mut rows: Vec<(&'static str, [String; 3])> =
+            LABELS.iter().enumerate().map(|(i, label)| (*label, [0, 1, 2].map(|c| columns[c][i].clone()))).collect();
+        if let Some(m) = &self.merged {
+            let plus = if m.complete { "" } else { "+" };
+            rows.push((MERGED_LABEL, [m.day, m.week, m.total].map(|n| format!("{}{plus}", count(n)))));
+        }
+        rows
+    }
     pub(crate) fn levels(&self, weeks: usize) -> Vec<u8> {
         let shown = weeks.min(WEEKS) * 7;
         let seconds = |i: usize| self.blocks.get(i).map_or(0.0, |b| b.agent_seconds);
@@ -557,9 +604,8 @@ impl View {
         let mut out = self.headline(false);
         out.push_str("\n\n");
         let _ = writeln!(out, "{:18} {:>10} {:>10} {:>10}", "", "24 h", "7 days", "total");
-        let c = self.columns();
-        for (i, label) in LABELS.iter().enumerate() {
-            let _ = writeln!(out, "{label:18} {:>10} {:>10} {:>10}", c[0][i], c[1][i], c[2][i]);
+        for (label, [day, week, total]) in self.rows() {
+            let _ = writeln!(out, "{label:18} {day:>10} {week:>10} {total:>10}");
         }
         out.push('\n');
         let levels = self.levels(WEEKS);
@@ -579,7 +625,8 @@ impl View {
         out
     }
     pub(crate) fn share_link(&self) -> String {
-        let mut link = format!("{SHARE_BASE}#v2");
+        let merged = self.merged.as_ref().filter(|m| m.complete);
+        let mut link = format!("{SHARE_BASE}#v{}", if merged.is_some() { 3 } else { 2 });
         for (key, name) in [("24h", "24h"), ("7d", "7d"), ("total", "all")] {
             let w = &self.windows[key];
             let c = &w.counts;
@@ -597,6 +644,17 @@ impl View {
                 c.tokens.input.saturating_add(c.tokens.cache_write),
                 c.tokens.cache_read
             );
+            if let Some(m) = merged {
+                let _ = write!(
+                    link,
+                    ".{}",
+                    match key {
+                        "24h" => m.day,
+                        "7d" => m.week,
+                        _ => m.total,
+                    }
+                );
+            }
         }
         let counted = usize::try_from(self.days.saturating_add(1)).unwrap_or(usize::MAX);
         let levels: Vec<u8> = self.levels(WEEKS).into_iter().take(counted).collect();

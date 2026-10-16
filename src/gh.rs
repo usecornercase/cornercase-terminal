@@ -1,6 +1,6 @@
 use std::io;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -18,20 +18,29 @@ pub(crate) fn run<T: DeserializeOwned>(gh: &Path, dir: &Path, args: &[&str]) -> 
 }
 
 pub(crate) fn run_raw(gh: &Path, dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    run_raw_env(gh, dir, args, &[])
+}
+
+pub(crate) fn run_raw_env(gh: &Path, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Result<Vec<u8>> {
     let mut command = Command::new(gh);
     command.current_dir(dir).args(args).envs(ENV);
+    if !env.is_empty() {
+        command.env_remove("GITHUB_TOKEN").env_remove("GITHUB_ENTERPRISE_TOKEN").envs(env.iter().copied());
+    }
     let out = process::output_within(&mut command, TIMEOUT)
         .map_err(Error::RunGh)?
         .ok_or_else(|| Error::RunGh(io::Error::new(io::ErrorKind::TimedOut, "no answer within a minute")))?;
     if !out.status.success() {
-        let text = [&out.stderr, &out.stdout].map(|bytes| String::from_utf8_lossy(bytes).into_owned());
-        let message = text
-            .iter()
-            .flat_map(|t| t.lines())
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .map_or_else(|| format!("gh failed with {}", out.status), str::to_string);
-        return Err(Error::Gh(message));
+        return Err(Error::Gh(failure(&out, "gh")));
     }
     Ok(out.stdout)
+}
+
+pub(crate) fn failure(out: &Output, tool: &str) -> String {
+    let text = [&out.stderr, &out.stdout].map(|bytes| String::from_utf8_lossy(bytes).into_owned());
+    text.iter()
+        .flat_map(|t| t.lines())
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map_or_else(|| format!("{tool} failed with {}", out.status), str::to_string)
 }

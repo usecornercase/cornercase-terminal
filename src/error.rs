@@ -46,6 +46,10 @@ pub enum Error {
     RunGh(std::io::Error),
     #[error("{0}")]
     Gh(String),
+    #[error("failed to run glab: {0}")]
+    RunGlab(std::io::Error),
+    #[error("{0}")]
+    Glab(String),
     #[error("gh printed something unexpected: {0}")]
     GhOutput(serde_json::Error),
     #[error("{0}")]

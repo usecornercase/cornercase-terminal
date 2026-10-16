@@ -2,6 +2,7 @@
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
   "pull_requests": true,
+  "merged_pull_requests": true,
   "issue_tabs": [
     "all",
     "github",
@@ -29,6 +30,7 @@
   "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
+  "glab": "glab",
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "icon_bar": false,

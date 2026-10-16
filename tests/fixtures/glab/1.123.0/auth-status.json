@@ -1,0 +1,1 @@
+{"hosts":[{"host":"gitlab.com","state":"success","user":"ana","error":"","token_source":"keyring","api_endpoint":"https://gitlab.com/api/v4/","subfolder":"","ssh_host":"altssh.gitlab.com"},{"host":"gitlab.acme.dev","state":"error","user":"","error":"401 Unauthorized","token_source":"keyring","api_endpoint":"https://gitlab.acme.dev/api/v4/","subfolder":"","ssh_host":""}]}

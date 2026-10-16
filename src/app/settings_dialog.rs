@@ -49,6 +49,7 @@ impl App {
         let mut settings = Settings::new(self.config.clone(), self.home.clone(), tokens, self.settings_page);
         settings.awake = self.agents.awake.state().note();
         settings.pulls = self.pull_requests_note();
+        settings.merged = self.merged_note();
         settings.flows = self.flows_note();
         settings.remote = self.remote.note();
         settings.browsers = self.remote.web.paired();

@@ -132,6 +132,28 @@ fn stats_usage(empty: bool) -> Usage {
     Usage { page: crate::agents::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
 }
 
+fn merged_usage(complete: bool) -> Usage {
+    let mut usage = stats_usage(false);
+    usage.stats.merged =
+        Some(crate::agents::stats::MergedRow { day: 2, week: 12, total: 61, complete, accounts: Vec::new() });
+    usage
+}
+
+#[test]
+fn renders_merged_pull_requests_in_the_stats() {
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(merged_usage(true))), W, 38).backend());
+}
+#[test]
+fn renders_the_merged_row_before_any_agent_work_was_counted() {
+    let mut usage = stats_usage(true);
+    usage.stats.merged =
+        Some(crate::agents::stats::MergedRow { day: 1, week: 2, total: 3, complete: true, accounts: Vec::new() });
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, 38).backend());
+}
+#[test]
+fn renders_a_partial_merged_count_with_a_plus() {
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(merged_usage(false))), 46, 38).backend());
+}
 #[test]
 fn renders_work_stats_in_the_wide_dialog() {
     insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(false))), W, 38).backend());

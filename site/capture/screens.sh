@@ -751,9 +751,12 @@ const hours = Array.from({ length: 182 }, (_, i) => [hour - i*24, [[i === 0 ? 4 
 const file = path.join(process.env.CC_RUN, 'stats.json');
 fs.writeFileSync(file, JSON.stringify({ version: 1, since: now - 182 * 86400, total, hours }), { mode: 0o600 });
 JS
+  touch "$CC_DATA/gh/merged"
+  git -C "$CC_HOME/code/web-shop" remote set-url origin git@github.com:acme/web-shop.git
   cc_s1
   cc_click 'Usage'
   cc_wait 'in parallel'
+  cc_wait 'merged PRs'
   cc_shot usage-stats
 }
 
