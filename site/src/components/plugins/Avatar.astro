@@ -1,0 +1,12 @@
+---
+interface Props {
+  owner: string;
+}
+
+const { owner } = Astro.props;
+const initial = (owner.charAt(0) || '?').toUpperCase();
+---
+
+<span class="avatar" data-avatar data-initial={initial}>
+  <img src={`https://github.com/${encodeURIComponent(owner)}.png?size=64`} width="32" height="32" alt="" loading="lazy" referrerpolicy="no-referrer" />
+</span>

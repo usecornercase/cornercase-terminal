@@ -35,13 +35,17 @@ cornercase plugin remove acme.notes   # turns it off, waits for it to stop, dele
 
 `update` fetches the same address, folder and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.
 
-## Find and publish plugins
+## Find plugins
 
-[The plugin list](../../../plugins/) shows every public GitHub repository with the `cornercase-plugin` topic and a valid `cornercase-plugin.toml`, at its root or in a folder, refreshed every hour. Each repository is a card with its description, stars, language and last push, and lists each plugin it holds with the command that installs it, pinned to the commit the list saw. Search it, and sort by stars, recent activity or newest.
+[The plugin list](../../../plugins/) is a marketplace of every public GitHub repository with the `cornercase-plugin` topic and a valid `cornercase-plugin.toml`, at its root or in a folder, refreshed every hour. The page has a **Trending this week** shelf (the fastest-growing repositories relative to their own size), **New to cornercase** (projects that joined recently), and **Browse everything**: a search over repositories, owners, languages and plugins, and five sorts (popular, trending, recently updated, newest, name). Each repository is a card with its description, stars, language and last push, and the command that installs it, pinned to the commit the list saw; a repository with several plugins lists each one's command under its **N plugins** pill. The shelves need a few weeks of history to appear, and stay hidden until three repositories qualify.
 
-Nobody reviews them: a listing only means the repository tagged itself. Read a plugin's code or trust its author before you turn it on.
+## Publish a plugin
 
-To publish yours, put it in a public repository, with its manifest at the root or in a folder (one repository can hold several plugins), and add the `cornercase-plugin` topic (the gear next to **About** on GitHub). It shows within an hour, at the latest commit of its default branch, and is read again when that commit changes. Forks, archived repositories and manifests that cannot be read or have malformed metadata are left out, and when two repositories declare the same `id` the older one keeps it.
+Put your plugin in a public repository, with its manifest at the root or in a folder (one repository can hold several plugins), and add the `cornercase-plugin` topic (the gear next to **About** on GitHub). It shows within an hour, at the latest commit of its default branch, and is read again when that commit changes. There is nothing to submit and no review queue. Forks, archived repositories and manifests that cannot be read or have malformed metadata are left out, and when two repositories declare the same `id` the older one keeps it.
+
+## Trust and security
+
+Nobody reviews the listed plugins: a listing only means the repository tagged itself. A plugin runs as you, so read its code or trust its author before you turn it on. The install command shows where the plugin comes from, the commit and every command it will run before anything installs, and a plugin installs turned off. The list's pages load each owner's avatar from GitHub in your browser, which tells GitHub you opened the page.
 
 ## Link a folder, turn on and off
 

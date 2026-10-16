@@ -87,17 +87,21 @@ export function sorted(cards: Shown[], sort: Sort, generated: string): Shown[] {
   return [...cards].sort(order[sort]);
 }
 
+export function haystack(card: Shown): string {
+  const [owner = '', name = ''] = card.repo.split('/');
+  return [card.repo, owner, name, card.description, card.language, ...card.plugins.flatMap((p) => [p.name, p.id, p.description])]
+    .filter((part): part is string => typeof part === 'string')
+    .join('\n')
+    .toLowerCase();
+}
+
+export const words = (query: string): string[] => query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+export const matches = (text: string, query: string): boolean => words(query).every((word) => text.includes(word));
+
 export function search(cards: Shown[], query: string): Shown[] {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return cards;
-  return cards.filter((card) => {
-    const [owner = '', name = ''] = card.repo.split('/');
-    const haystack = [card.repo, owner, name, card.description, card.language, ...card.plugins.flatMap((p) => [p.name, p.id, p.description])]
-      .filter((part): part is string => typeof part === 'string')
-      .join('\n')
-      .toLowerCase();
-    return words.every((word) => haystack.includes(word));
-  });
+  if (words(query).length === 0) return cards;
+  return cards.filter((card) => matches(haystack(card), query));
 }
 
 export function counts(cards: Shown[], generated: string): { plugins: number; repos: number; gained: number; joined: number } {

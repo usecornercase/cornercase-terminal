@@ -10,7 +10,7 @@ Every pull request that changes the app adds a section here for its new version.
 - `cornercase plugin update` fetches installed plugins again and, when one changed, shows the new version's commands and asks before updating; `cornercase plugin remove` turns a plugin off, waits (up to 10 seconds) until its service and window processes have stopped, then deletes its installed copy; if something still runs, cannot be checked, or the plugin was turned on again meanwhile, it says so and deletes nothing, leaving the plugin installed.
 - A plugin whose command is a link leading out of its folder can no longer be linked or turned on, and `plugin list` and Settings say why.
 - A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown before you turn it on, but not enforced: only turn on plugins you trust.
-- Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; search it and sort by stars, recent activity or newest. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
+- Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; see what is trending and new, search it, and sort by stars, trending, recent activity, newest or name. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
 
 ## 0.12.110
 

@@ -10,7 +10,8 @@
     "test": "node scripts/test-demo.mjs",
     "flows": "node scripts/refresh-flows.mjs",
     "plugins": "node scripts/plugins-index.mjs",
-    "plugins:dev": "node scripts/plugins-dev.mjs"
+    "plugins:dev": "node scripts/plugins-dev.mjs",
+    "dev:plugins": "npm run plugins:dev && PLUGINS_INDEX=dev astro dev"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.5",
