@@ -3168,8 +3168,14 @@ export class App {
     const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
       .filter((i) => i.source !== 'jira' || !project || i.key.startsWith(`${project}-`))
+      .filter((i) => i.source !== 'asana' || this.asanaListed(i))
       .filter((i) => !o.mine || i.mine)
       .filter((i) => !f || [i.key, i.title, i.author, i.state, ...i.labels].some((k) => k.toLowerCase().includes(f)));
+  }
+
+  private asanaListed(i: Issue): boolean {
+    const projects = this.config.asanaProjects.split(/[\s,]+/).map(projectGid).filter((g): g is string => !!g);
+    return projects.length ? projects.some((gid) => i.projects?.includes(gid)) : i.mine;
   }
 
   branchFor(i: Issue): string {

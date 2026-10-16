@@ -276,6 +276,7 @@ export interface Issue {
   body: string;
   mine: boolean;
   closed?: boolean;
+  projects?: string[];
 }
 
 const BODY_482 = `When a customer starts a return without an address line, the returns page crashes with a 500.
@@ -463,6 +464,7 @@ export const ISSUES: Issue[] = [
     url: 'https://app.asana.com/1/1200/project/1201/task/1205551234567801',
     body: 'A checkbox on the payment step.\n\n- [ ] Add the **gift wrap** price to the total\n- [ ] Print it on the packing slip',
     mine: true,
+    projects: ['1201'],
   },
   {
     source: 'asana',
@@ -476,6 +478,7 @@ export const ISSUES: Issue[] = [
     url: 'https://app.asana.com/1/1200/project/1201/task/1205551234567890',
     body: 'It says *undefined items* when the cart is empty.',
     mine: false,
+    projects: ['1201'],
   },
 ];
 

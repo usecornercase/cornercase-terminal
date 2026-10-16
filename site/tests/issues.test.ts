@@ -98,6 +98,7 @@ test('a narrow issue list drops schedule, then start a flow, and keeps start, re
 
 test('the Asana tab takes a token, lists its tasks and names the branches after them', () => {
   const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.config.asanaProjects = '1201';
   app.openIssues();
   app.advance(500);
   app.issuesTab(app.config.sources.indexOf('asana'));
@@ -116,4 +117,31 @@ test('the Asana tab takes a token, lists its tasks and names the branches after 
   assert.equal(app.branchFor(withId), 'SHOP-23-offer-gift-wrapping-at-checkout');
   assert.equal(app.branchFor(withoutId), 'asana-1205551234567890-fix-the-empty-cart-message');
   app.destroy();
+});
+
+test('the Asana tab lists your tasks without projects, and the tasks of the projects set otherwise', () => {
+  const open = (projects: string) => {
+    const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+    app.config.accounts.asana = true;
+    app.config.asanaWorkspaceName = 'Acme';
+    app.config.asanaProjects = projects;
+    app.openIssues();
+    app.advance(500);
+    app.issuesTab(app.config.sources.indexOf('asana'));
+    app.advance(1500);
+    app.render();
+    return app;
+  };
+  const yours = open('');
+  assert.ok(yours.textAt('Offer gift wrapping at checkout'));
+  assert.ok(!yours.textAt('Fix the empty cart message'));
+  yours.destroy();
+  const project = open('1201');
+  assert.ok(project.textAt('Offer gift wrapping at checkout'));
+  assert.ok(project.textAt('Fix the empty cart message'));
+  project.destroy();
+  const other = open('https://app.asana.com/1/1200/project/9999/list');
+  assert.ok(!other.textAt('Offer gift wrapping at checkout'));
+  assert.ok(!other.textAt('Fix the empty cart message'));
+  other.destroy();
 });
