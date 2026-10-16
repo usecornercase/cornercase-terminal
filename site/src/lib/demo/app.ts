@@ -146,6 +146,8 @@ const SAID_MATCHES = 300;
 type Listener = (event: string, detail?: string) => void;
 
 const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane', asana: 'Asana' };
+const DEMO_WORKSPACE = 'Acme';
+const DEMO_WORKSPACE_ID = '1200';
 const QUEUE = 'queue';
 const QUEUE_EVERY = "every project's scheduled agents";
 const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2 };
@@ -3136,7 +3138,11 @@ export class App {
 
   private setAccount(source: Remote, on: boolean): void {
     this.config.accounts[source] = on;
-    if (source === 'asana') this.config.asanaWorkspaceName = on ? 'Acme' : '';
+    if (source === 'asana') {
+      const saved = this.config.asanaWorkspace.trim();
+      const demo = !saved || saved === DEMO_WORKSPACE_ID || saved.toLowerCase() === DEMO_WORKSPACE.toLowerCase();
+      this.config.asanaWorkspaceName = on && demo ? DEMO_WORKSPACE : '';
+    }
   }
 
   private asanaWorkspaceRow(): SettingsRow {

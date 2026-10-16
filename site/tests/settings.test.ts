@@ -80,3 +80,26 @@ test('the Asana workspace row names the workspace with its saved ID in the note,
   assert.deepEqual([row()?.value, row()?.note, token()?.value], ['1200000000000002', 'name or ID', 'connected']);
   app.destroy();
 });
+
+test('connecting Asana names only the demo workspace, whatever ID is saved', () => {
+  const connect = (saved: string) => {
+    const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+    app.config.asanaWorkspace = saved;
+    app.openIssues();
+    app.advance(500);
+    app.issuesTab(app.config.sources.indexOf('asana'));
+    for (const ch of 'tok') inputKey(app, key(ch));
+    inputKey(app, key('Enter'));
+    app.advance(1500);
+    app.closeOverlay();
+    app.openSettings();
+    app.settingsPage(2);
+    const row = app.settingsRows(2).find((r) => r.id === 'asana-workspace');
+    app.destroy();
+    return [row?.value, row?.note];
+  };
+  assert.deepEqual(connect(''), ['Acme', 'name or ID']);
+  assert.deepEqual(connect('1200'), ['Acme', 'ID 1200']);
+  assert.deepEqual(connect('acme'), ['Acme', 'name or ID']);
+  assert.deepEqual(connect('1300'), ['1300', 'name or ID']);
+});
