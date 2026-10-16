@@ -38,7 +38,19 @@ const image = new URL(`${base}stats-og.png`, origin).href;
           <button role="tab" data-window="all" aria-selected="false">total</button>
         </div>
         <p data-example>This is an example. Copy your own link with <code>cornercase stats --share</code> or <strong>share</strong> in Usage → Stats.</p>
-        <canvas data-card aria-label="Agent work stats card" role="img"></canvas>
+        <div class="stage" data-stage role="img" aria-label="cornercase stats ticket">
+          <canvas class="backdrop" data-backdrop aria-hidden="true"></canvas>
+          <div class="space" data-space aria-hidden="true">
+            <canvas class="blur" data-halo></canvas>
+            <canvas class="blur" data-shadow></canvas>
+            <div class="ticket" data-ticket>
+              <canvas data-face></canvas>
+              <div class="foil" data-foil="iris"><i></i></div>
+              <div class="foil" data-foil="edge"><i></i></div>
+              <div class="glare" data-glare><i></i></div>
+            </div>
+          </div>
+        </div>
         <div class="buttons">
           <button data-download>download PNG</button>
           <button data-copy-image hidden>copy image</button>
@@ -72,7 +84,15 @@ const image = new URL(`${base}stats-og.png`, origin).href;
   p { color: #bdb4cc; line-height: 1.6; }
   a { color: #b294ff; text-decoration: none; }
   .home { color: var(--text); font-size: 24px; font-weight: 700; }
-  canvas { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 18px; border: 1px solid #342749; margin: 18px 0; }
+  .stage { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 18px; border: 1px solid #2c2242; margin: 18px 0; background: #07060b; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  .backdrop { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .space { position: absolute; left: 0; top: 0; width: 1200px; height: 675px; transform-origin: 0 0; }
+  .blur, .ticket { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  .ticket { width: 1000px; height: 520px; }
+  .ticket canvas { display: block; width: 100%; height: 100%; }
+  .foil, .glare { position: absolute; inset: 0; overflow: hidden; pointer-events: none; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
+  .foil i, .glare i { position: absolute; left: 0; top: 0; will-change: transform; }
+  @media (max-width: 600px) { .stage { margin-inline: -24px; border-radius: 0; border-inline: 0; } }
   [role='tablist'], .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
   button, .buttons a { border: 1px solid #453357; color: var(--text); border-radius: 9px; padding: 10px 16px; background: #20162e; font: inherit; cursor: pointer; }
   [aria-selected='true'], [data-download] { background: #7552f2; border-color: #9975ff; }

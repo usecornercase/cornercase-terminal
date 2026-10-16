@@ -30,16 +30,16 @@ export class CanvasView {
   onImage: (() => void) | null = null;
   private pictures = new Map<string, HTMLImageElement>();
 
-  constructor(canvas: HTMLCanvasElement, t: Theme = defaultTheme, private transparent = false) {
+  constructor(canvas: HTMLCanvasElement, t: Theme = defaultTheme) {
     this.canvas = canvas;
-    const ctx = canvas.getContext('2d', { alpha: transparent });
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('no 2d context');
     this.ctx = ctx;
     this.theme = t;
   }
 
-  measure(cssWidth: number, cols: number, rows: number, scale?: number): Size {
-    this.dpr = Math.max(1, Math.min(3, scale ?? (window.devicePixelRatio || 1)));
+  measure(cssWidth: number, cols: number, rows: number): Size {
+    this.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     this.cols = cols;
     this.rows = rows;
     this.cwD = Math.max(4, (cssWidth / cols) * this.dpr);
@@ -68,8 +68,8 @@ export class CanvasView {
     const { ctx, cwD, chD } = this;
     const t = this.theme;
     ctx.globalAlpha = 1;
-    if (this.transparent) ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    else { ctx.fillStyle = t.background; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height); }
+    ctx.fillStyle = t.background;
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const lw = Math.max(1, Math.round(this.dpr));
     const ops = paint(grid, { cw: cwD, ch: chD, lw, snap: Math.round, theme: t });
     const size = cwD / 0.6;
