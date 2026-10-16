@@ -1,5 +1,6 @@
 use super::*;
 use crate::config;
+use crate::protocol::Hello;
 use crate::state;
 use crate::test_util::TempDir;
 use crate::version;
