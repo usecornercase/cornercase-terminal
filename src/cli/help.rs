@@ -5,7 +5,7 @@ pub(super) const LONG_ABOUT: &str =
 
 Without a command, cornercase opens its window, starting the server if none is running. The other
 commands drive the running server from scripts, git hooks and the agents in its panes; they never
-start a server.";
+start a server, except `start-server`.";
 pub(super) const AFTER_HELP: &str =
     "Ids come from `cornercase status` and last while the server runs. Inside a pane, the commands
 act on that pane, its tab, workspace and project unless told otherwise; elsewhere on what the window

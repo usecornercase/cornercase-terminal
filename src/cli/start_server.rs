@@ -17,7 +17,7 @@ pub(super) fn run(args: &StartServerArgs) -> Result<()> {
     if args.print.json { print_json(&value) } else { print_out(&summary(&started)) }
 }
 
-pub(crate) fn summary(started: &Started) -> String {
+fn summary(started: &Started) -> String {
     let size = format!("{}×{}", started.cols, started.rows);
     if started.already {
         let from = match started.size {
@@ -30,7 +30,7 @@ pub(crate) fn summary(started: &Started) -> String {
     format!("started: {what} ({size})\n")
 }
 
-pub(crate) fn warnings(started: &Started) -> Vec<String> {
+fn warnings(started: &Started) -> Vec<String> {
     let mut warnings = Vec::new();
     if !started.complete {
         warnings.push("the session came back incomplete: some tabs could not be restored, see server.log".to_string());

@@ -76,7 +76,7 @@ You ran `cornercase` from a pane of cornercase itself, where `CORNERCASE=1` is s
 
 ### "no cornercase server is running"
 
-The [commands for scripts and agents](../../guides/scripts-and-agents/) talk to a running server and never start one. Run `cornercase` first. If cornercase is running, check that the command uses the same socket: a different `CORNERCASE_SOCKET`, `XDG_RUNTIME_DIR` or `TMPDIR` points it at another server.
+The [commands for scripts and agents](../../guides/scripts-and-agents/) talk to a running server and never start one, except `cornercase start-server`. Run `cornercase` first, or `cornercase start-server` without a window. If cornercase is running, check that the command uses the same socket: a different `CORNERCASE_SOCKET`, `XDG_RUNTIME_DIR` or `TMPDIR` points it at another server.
 
 ### "the running cornercase server is too old for `cornercase …`"
 

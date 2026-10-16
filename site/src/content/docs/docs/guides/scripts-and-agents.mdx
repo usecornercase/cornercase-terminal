@@ -11,7 +11,7 @@ cornercase wait --pane "$pane" --until shell --timeout 900
 cornercase read --pane "$pane" --lines 40
 ```
 
-These commands never start a server. Without one, they say `no cornercase server is running` and exit with status 1.
+These commands never start a server, except [`start-server`](#start-without-a-window). Without one, they say `no cornercase server is running` and exit with status 1.
 
 ## Start without a window
 
@@ -426,7 +426,7 @@ Some messages you may meet:
 
 | Message | Meaning |
 | --- | --- |
-| `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; these commands never start a server. |
+| `no cornercase server is running` | Start cornercase first, or [`cornercase start-server`](#start-without-a-window) without a window; the other commands never start one. |
 | `the running cornercase server is too old for cornercase …` | The server comes from a release without these commands, or without this one. Restart it: `cornercase kill-server` (it closes all its terminals), then `cornercase`. |
 | `the running cornercase server (…) has no … command` | The command is newer than the server. Restart the server so it runs the version you installed. |
 | `this cornercase server has not started its session yet …` | A server started without a window has no size to give a new terminal, and hasn't restored your session yet. Run [`cornercase start-server`](#start-without-a-window), or open a window with `cornercase`. |

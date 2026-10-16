@@ -105,7 +105,6 @@ impl Server {
             boot: control::server_token().to_string(),
             version: version::CURRENT.to_string(),
         };
-        log::info!("server", "start-server answered", client = client, already = already);
         self.app.answer_start(client, &started);
     }
 

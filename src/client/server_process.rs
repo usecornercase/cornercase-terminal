@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::error::{Error, Result};
 use crate::process::reap;
 use crate::protocol::{self, ClientMessage, ServerMessage};
-use crate::{log, paths};
+use crate::{control, log, paths};
 
 pub(crate) fn kill_server() -> Result<bool> {
     Ok(stop_server(&ClientMessage::KillServer)?.is_some())
@@ -79,6 +79,8 @@ fn start_server(log: &Path) -> io::Result<Child> {
     Command::new(std::env::current_exe()?)
         .arg("server")
         .env_remove(protocol::RESTARTED_ENV)
+        .env_remove(control::PANE_ENV)
+        .env_remove(control::SERVER_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log)
