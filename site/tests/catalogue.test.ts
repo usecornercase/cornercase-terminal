@@ -173,6 +173,8 @@ test('manifests the app would refuse are invalid', () => {
     `api = "invalid"\n${MANIFEST}`,
     `api = -1\n${MANIFEST}`,
     `api = 1.5\n${MANIFEST}`,
+    `api = 1.0\n${MANIFEST}`,
+    `api = 4294967296\n${MANIFEST}`,
     `actions = "not a list"\n${MANIFEST.split('[[actions]]')[0]}`,
     MANIFEST.replace('contexts = ["pane"]', 'contexts = []'),
     MANIFEST.replace('contexts = ["pane"]', 'contexts = ["window"]'),
@@ -184,6 +186,7 @@ test('manifests the app would refuse are invalid', () => {
     `${MANIFEST}\n[[events]]\non = "started"\ncommand = ["x"]\n`,
     `${MANIFEST}\n[[service]]\nid = "Bad Id"\ncommand = ["x"]\n`,
     `${MANIFEST}\n[download.macos-arm]\nurl = "http://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`,
+    `${MANIFEST}\n[download.macos-arm]\nurl = "https://example.com/a b.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`,
     `${MANIFEST}\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "abc"\n`,
     `${MANIFEST}\n${'[[events]]\non = "opened"\ncommand = ["x"]\n'.repeat(64)}`,
   ];

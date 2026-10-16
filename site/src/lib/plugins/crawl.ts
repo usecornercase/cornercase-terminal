@@ -77,8 +77,8 @@ function identified(where: string, entry: Record<string, unknown>, seen: Set<str
 
 function checkManifest(raw: Record<string, unknown>): void {
   if (unsafeIn(raw)) throw new Error('the manifest holds control characters');
-  if (raw.api !== undefined && (typeof raw.api !== 'number' || !Number.isInteger(raw.api) || raw.api < 0)) throw new Error('api must be a whole number');
-  if (typeof raw.api === 'number' && raw.api > 1) throw new Error('needs a newer plugin API');
+  if (raw.api !== undefined && (typeof raw.api !== 'bigint' || raw.api < 0n || raw.api > 4294967295n)) throw new Error('api must be a whole number');
+  if (typeof raw.api === 'bigint' && raw.api > 1n) throw new Error('needs a newer plugin API');
   const actions = tables('actions', raw.actions);
   const events = tables('events', raw.events);
   const service = tables('service', raw.service);
@@ -111,14 +111,14 @@ function checkManifest(raw: Record<string, unknown>): void {
     for (const [target, entry] of Object.entries(raw.download)) {
       if (!isObject(entry) || typeof entry.url !== 'string' || typeof entry.sha256 !== 'string') throw new Error(`download ${target} needs a url and a sha256`);
       if (!/^[0-9a-fA-F]{64}$/.test(entry.sha256)) throw new Error(`download ${target} needs a sha256 of 64 hexadecimal digits`);
-      if (!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost):)/.test(entry.url)) throw new Error(`download ${target} must be an https:// address`);
+      if (!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost):)/.test(entry.url) || /\s/.test(entry.url)) throw new Error(`download ${target} must be an https:// address`);
     }
   }
 }
 
 export function pluginFrom(path: string, manifest: string): Plugin {
   if (new TextEncoder().encode(manifest).length > MANIFEST_BYTES) throw new Error('the manifest is too large');
-  const raw: unknown = parse(manifest);
+  const raw: unknown = parse(manifest, { integersAsBigInt: true });
   if (!isObject(raw)) throw new Error('the manifest is not a table');
   checkManifest(raw);
   return { path, ...manifestFields(raw, (field) => `${path ? `${path}/` : ''}${MANIFEST}: ${field}`) };
