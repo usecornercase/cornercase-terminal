@@ -6,10 +6,10 @@ export const MAX_MANIFESTS = 20;
 const MAX_REPOS = 1000;
 const MAX_PERMISSIONS = 16;
 const PLATFORMS = ['macos', 'linux'];
-const REPO_FIELDS = ['repo', 'description', 'stars', 'language', 'pushed', 'created', 'commit', 'invalid', 'plugins'];
+const REPO_FIELDS = ['repo', 'description', 'stars', 'language', 'pushed', 'created', 'commit', 'invalid', 'blocked', 'plugins'];
 const PLUGIN_FIELDS = ['path', 'id', 'name', 'version', 'description', 'min_cornercase', 'platforms', 'permissions', 'duplicate'];
 const COUNTS = ['total', 'missing', 'invalid', 'duplicate', 'blocked'] as const;
-const UNSAFE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/;
+export const UNSAFE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/;
 
 export type Plugin = {
   path: string;
@@ -32,10 +32,11 @@ export type Card = {
   created: string;
   commit: string;
   invalid?: number;
+  blocked?: number;
   plugins: Plugin[];
 };
 
-export type Skipped = { repo: string; commit: string; invalid: number };
+export type Skipped = { repo: string; commit: string; invalid: number; blocked?: number };
 
 export type Counts = Record<(typeof COUNTS)[number], number>;
 
@@ -155,6 +156,7 @@ function card(raw: unknown, at: number): Card {
   const language = optional(where('language'), raw.language, 40);
   if (language) out.language = language;
   if (raw.invalid !== undefined) out.invalid = count(where('invalid'), raw.invalid);
+  if (raw.blocked !== undefined) out.blocked = count(where('blocked'), raw.blocked);
   if (new Set(out.plugins.map((p) => p.path)).size !== out.plugins.length) throw new Error(`${where('plugins')} lists a folder twice`);
   return out;
 }
@@ -162,10 +164,12 @@ function card(raw: unknown, at: number): Card {
 function skipped(raw: unknown, at: number): Skipped {
   if (!isObject(raw)) throw new Error(`skipped[${at}] must be an object`);
   const where = (field: string) => `skipped[${at}].${field}`;
-  keys(raw, ['repo', 'commit', 'invalid'], where);
+  keys(raw, ['repo', 'commit', 'invalid', 'blocked'], where);
   const repo = text(where('repo'), raw.repo, 140);
   if (!validRepo(repo)) throw new Error(`${where('repo')} must be owner/repo on github.com`);
-  return { repo, commit: commitOf(where('commit'), raw.commit), invalid: count(where('invalid'), raw.invalid) };
+  const out: Skipped = { repo, commit: commitOf(where('commit'), raw.commit), invalid: count(where('invalid'), raw.invalid) };
+  if (raw.blocked !== undefined) out.blocked = count(where('blocked'), raw.blocked);
+  return out;
 }
 
 export function validate(source: string): Index {

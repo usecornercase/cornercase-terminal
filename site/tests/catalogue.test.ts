@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { MAX_BYTES, installCommand, sourceUrl, validate } from '../src/lib/plugins/catalogue';
-import { type Found, type Repo, assemble, crawl, manifestPaths, pluginFrom, repoFrom, scan } from '../src/lib/plugins/crawl';
+import { type Found, type Repo, assemble, crawl, manifestPaths, pluginFrom, previousScans, repoFrom, scan } from '../src/lib/plugins/crawl';
 
 const C1 = '0123456789abcdef0123456789abcdef01234567';
 const C2 = '89abcdef0123456789abcdef0123456789abcdef';
@@ -149,4 +149,65 @@ test('the page gives each plugin its pinned install command and source folder', 
   assert.equal(installCommand(card, card.plugins[0]), `cornercase plugin install acme/notes@${C1}`);
   assert.equal(installCommand(card, card.plugins[1]), `cornercase plugin install acme/notes/plugins/tasks@${C1}`);
   assert.equal(sourceUrl(card, card.plugins[1]), `https://github.com/acme/notes/tree/${C1}/plugins/tasks`);
+});
+
+test('a failed GitHub request fails the crawl instead of dropping the repository', async () => {
+  const first = assemble(await crawl(github([]), undefined, null), empty, when);
+  const failing = (broken: (url: string) => boolean, status: number) => async (url: string) =>
+    broken(url) ? answer(status, {}) : github([])(url);
+  await assert.rejects(crawl(failing((u) => u.includes('/commits/'), 503), undefined, first), /503/);
+  await assert.rejects(crawl(failing((u) => u.includes('/git/trees/'), 403), undefined, null), /403/);
+  const vanished = await crawl(failing((u) => u.includes('/commits/'), 404), undefined, null);
+  assert.deepEqual(vanished, []);
+});
+
+test('a failed manifest download fails the crawl and is never counted as invalid', async () => {
+  await assert.rejects(
+    crawl(async (u) => (u.startsWith('https://raw.githubusercontent.com') ? answer(503, '') : github([])(u)), undefined, null),
+    /503/,
+  );
+});
+
+test('manifests the app would refuse are invalid', () => {
+  const bad = [
+    `api = "invalid"\n${MANIFEST}`,
+    `api = -1\n${MANIFEST}`,
+    `api = 1.5\n${MANIFEST}`,
+    `actions = "not a list"\n${MANIFEST.split('[[actions]]')[0]}`,
+    MANIFEST.replace('contexts = ["pane"]', 'contexts = []'),
+    MANIFEST.replace('contexts = ["pane"]', 'contexts = ["window"]'),
+    MANIFEST.replace('command = ["./notes"]', 'command = []'),
+    MANIFEST.replace('command = ["./notes"]', 'command = ["../notes"]'),
+    MANIFEST.replace('command = ["./notes"]', 'command = [1]'),
+    `${MANIFEST}\n[[build]]\ncommand = ["make", "a\\u001bb"]\n`,
+    `${MANIFEST}\n[[build]]\ncommand = ["make", "a\\u202eb"]\n`,
+    `${MANIFEST}\n[[events]]\non = "started"\ncommand = ["x"]\n`,
+    `${MANIFEST}\n[[service]]\nid = "Bad Id"\ncommand = ["x"]\n`,
+    `${MANIFEST}\n[download.macos-arm]\nurl = "http://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`,
+    `${MANIFEST}\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "abc"\n`,
+    `${MANIFEST}\n${'[[events]]\non = "opened"\ncommand = ["x"]\n'.repeat(64)}`,
+  ];
+  assert.deepEqual(scan(bad.map((text) => ({ path: '', text }))), { plugins: [], invalid: bad.length });
+  const good = `${MANIFEST}\napi = 0\n[[events]]\non = "opened"\ncommand = ["x"]\n[[service]]\nid = "s"\ncommand = ["./s"]\n[[build]]\ncommand = ["make"]\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`;
+  assert.equal(scan([{ path: '', text: good.replace(`api = 0\n`, '') }]).plugins.length, 1);
+});
+
+test('unblocking an id brings its unchanged plugin back', async () => {
+  const blocklist = { repos: [], ids: ['acme.notes'] };
+  const blocked = assemble(await crawl(github([]), undefined, null), blocklist, when);
+  assert.equal(blocked.repos.length, 0);
+  assert.equal(blocked.skipped[0].blocked, 1);
+  assert.equal(previousScans(blocked).size, 0);
+  const asked: string[] = [];
+  const again = assemble(await crawl(github(asked), undefined, blocked), empty, when);
+  assert.deepEqual(again.repos.map((c) => c.plugins.map((p) => p.id)), [['acme.notes']]);
+  assert.ok(asked.some((u) => u.includes('/git/trees/')));
+  assert.ok(validate(JSON.stringify(blocked)));
+});
+
+test('a card that lost one plugin to the blocklist is read again, not reused', () => {
+  const one = assemble([found('acme/tools', [{ path: '', text: MANIFEST }, { path: 'tasks', text: withId('acme.tasks') }])], { repos: [], ids: ['acme.tasks'] }, when);
+  assert.equal(one.repos[0].blocked, 1);
+  assert.equal(previousScans(one).size, 0);
+  assert.ok(validate(JSON.stringify(one)));
 });
