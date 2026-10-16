@@ -285,6 +285,38 @@ mod asana {
         assert_eq!(error.as_deref(), Some(expected));
     }
 
+    fn known(workspace: &str, saved: &str) -> Settings {
+        let mut s = settings();
+        let account = Account { handle: "ana".into(), workspace: workspace.into() };
+        s.tokens.push((Source::Asana, Status::Saved(Some(account))));
+        s.config.asana_workspace = saved.into();
+        s
+    }
+
+    #[rstest::rstest]
+    #[case::the_name_and_the_saved_id("Acme", "1200000000000001", "Acme", "ID 1200000000000001")]
+    #[case::the_name_typed_as_the_name("Acme", "acme", "Acme", "name or ID")]
+    #[case::the_only_workspace("Acme", "", "Acme", "name or ID")]
+    fn the_workspace_row_names_the_workspace_and_gives_its_id(
+        #[case] name: &str,
+        #[case] saved: &str,
+        #[case] value: &str,
+        #[case] note: &str,
+    ) {
+        let row = known(name, saved).row_text(&Row::AsanaWorkspace);
+        assert_eq!((row.value.as_str(), row.note.as_str()), (value, note));
+    }
+
+    #[rstest::rstest]
+    #[case::no_account_yet("1200000000000001", "1200000000000001")]
+    #[case::nothing_set("", "your only one")]
+    fn the_workspace_row_shows_the_plain_value_without_a_name(#[case] saved: &str, #[case] value: &str) {
+        let mut s = with_asana();
+        s.config.asana_workspace = saved.into();
+        let row = s.row_text(&Row::AsanaWorkspace);
+        assert_eq!((row.value.as_str(), row.note.as_str()), (value, "name or ID"));
+    }
+
     #[test]
     fn the_token_does_not_need_the_workspace_first() {
         let mut s = with_asana();

@@ -2661,7 +2661,7 @@ export class App {
         { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
         { id: 'gitlab-url', section: 'GitLab', label: 'GitLab URL', value: c.gitlabUrl || 'gitlab.com', note: 'for a self-hosted server' },
         token('gitlab', 'GitLab'),
-        { id: 'asana-workspace', section: 'Asana', label: 'Asana workspace', value: c.asanaWorkspace || 'your only one', note: 'name or ID' },
+        this.asanaWorkspaceRow(),
         { id: 'asana-projects', section: 'Asana', label: 'Asana projects', value: c.asanaProjects || 'your tasks', note: 'IDs or links, empty lists your tasks' },
         token('asana', 'Asana'),
       ];
@@ -3131,6 +3131,13 @@ export class App {
       buttons,
       picking: false,
     };
+  }
+
+  private asanaWorkspaceRow(): SettingsRow {
+    const saved = this.config.asanaWorkspace;
+    const name = this.config.accounts.asana ? saved || 'Acme' : '';
+    const note = name && saved && saved.toLowerCase() !== name.toLowerCase() ? `ID ${saved}` : 'name or ID';
+    return { id: 'asana-workspace', section: 'Asana', label: 'Asana workspace', value: name || saved || 'your only one', note };
   }
 
   private accountOf(source: Remote): string {

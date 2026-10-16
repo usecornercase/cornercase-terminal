@@ -75,7 +75,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
 | **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
 | **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
-| **Asana workspace** | Your Asana workspace, by name or ID. Empty means the only workspace your token belongs to; with several, the Asana tab of the issue browser asks which one. |
+| **Asana workspace** | Your Asana workspace, by name or ID; the row shows its name once the account is known, with the saved ID in the note. Empty means the only workspace your token belongs to; with several, the Asana tab of the issue browser asks which one. |
 | **Asana projects** | The projects whose tasks the Asana tab lists, as IDs or links separated by spaces or commas (saved as IDs). Empty lists the tasks assigned to you. |
 | **Asana access token** | Like the tokens above; it needs no workspace first. |
 | **GitLab URL** | The address of a self-hosted GitLab server, such as `https://gitlab.acme.dev`. Empty means gitlab.com. The GitLab tab of the issue browser asks for it before the token. |

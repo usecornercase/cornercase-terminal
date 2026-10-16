@@ -67,8 +67,8 @@ impl Settings {
             | Row::PlaneWorkspace
             | Row::PlaneUrl
             | Row::PlaneFilter
-            | Row::AsanaWorkspace
             | Row::AsanaProjects => tracker_row(config, row),
+            Row::AsanaWorkspace => self.asana_workspace_row(),
             Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
@@ -148,6 +148,20 @@ impl Settings {
             Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
         };
         RowText { label, value, note, dangerous }
+    }
+
+    fn asana_workspace_row(&self) -> (String, String, String, bool) {
+        let saved = &self.config.asana_workspace;
+        let name = match self.status(Source::Asana) {
+            Some(Status::Saved(Some(account))) if !account.workspace.is_empty() => Some(account.workspace.clone()),
+            _ => None,
+        };
+        let value = name.clone().or_else(|| (!saved.is_empty()).then(|| saved.clone()));
+        let note = match &name {
+            Some(name) if !saved.is_empty() && !saved.eq_ignore_ascii_case(name) => format!("ID {saved}"),
+            _ => "name or ID".to_string(),
+        };
+        ("Asana workspace".into(), value.unwrap_or_else(|| "your only one".into()), note, false)
     }
 
     fn token_row(&self, source: Source) -> (String, String, String, bool) {
@@ -273,7 +287,6 @@ fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {
         Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
         Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
         Row::PlaneFilter => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
-        Row::AsanaWorkspace => ("Asana workspace", &config.asana_workspace, "your only one", "name or ID"),
         _ => ("Asana projects", &config.asana_projects, "your tasks", "IDs or links, empty lists your tasks"),
     };
     let value = if value.is_empty() { empty.to_string() } else { value.clone() };
