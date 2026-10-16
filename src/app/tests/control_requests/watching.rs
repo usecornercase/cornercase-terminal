@@ -34,11 +34,15 @@ fn snapshots(app: &mut App) -> Vec<Snapshot> {
 
 fn settled(app: &mut App, rx: &Receiver<AppEvent>, from: u64) -> u64 {
     let mut revision = from;
-    wait_until("the session stops changing", || {
+    wait_until("every pane runs its shell and the session stops changing", || {
         drain(app, rx);
+        let report = app.report(None);
+        let mut panes = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|t| &t.panes);
+        let shells = panes.all(|pane| pane.program.as_deref().is_some_and(is_sh) && pane.at_prompt == Some(true));
+        app.trace();
         let got = snapshots(app);
         revision = got.last().map_or(revision, |snapshot| snapshot.revision);
-        got.is_empty()
+        shells && got.is_empty()
     });
     revision
 }
