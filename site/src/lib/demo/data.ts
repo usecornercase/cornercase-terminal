@@ -261,7 +261,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   ],
 };
 
-export type SourceId = 'github' | 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
+export type SourceId = 'github' | 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane' | 'asana';
 
 export interface Issue {
   source: SourceId;
@@ -449,6 +449,32 @@ export const ISSUES: Issue[] = [
     age: '1w',
     url: 'https://app.plane.so/acme/browse/WEB-19/',
     body: 'Say *Only 3 left* when the stock is low.',
+    mine: false,
+  },
+  {
+    source: 'asana',
+    number: 1205551234567801,
+    key: 'SHOP-23',
+    title: 'Offer gift wrapping at checkout',
+    labels: ['feature'],
+    state: 'In progress',
+    author: 'ana',
+    age: '2d',
+    url: 'https://app.asana.com/1/1200/project/1201/task/1205551234567801',
+    body: 'A checkbox on the payment step.\n\n- [ ] Add the **gift wrap** price to the total\n- [ ] Print it on the packing slip',
+    mine: true,
+  },
+  {
+    source: 'asana',
+    number: 1205551234567890,
+    key: '1205551234567890',
+    title: 'Fix the empty cart message',
+    labels: [],
+    state: 'To do',
+    author: 'luis',
+    age: '5d',
+    url: 'https://app.asana.com/1/1200/project/1201/task/1205551234567890',
+    body: 'It says *undefined items* when the cart is empty.',
     mine: false,
   },
 ];

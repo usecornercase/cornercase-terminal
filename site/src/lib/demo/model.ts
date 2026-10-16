@@ -187,7 +187,7 @@ export interface Config {
   prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
-  accounts: { gitlab: boolean; shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
+  accounts: { gitlab: boolean; shortcut: boolean; linear: boolean; jira: boolean; plane: boolean; asana: boolean };
   gitlabUrl: string;
   jiraSite: string;
   jiraEmail: string;
@@ -195,6 +195,8 @@ export interface Config {
   planeWorkspace: string;
   planeUrl: string;
   planeFilter: string;
+  asanaWorkspace: string;
+  asanaProjects: string;
 }
 
 export const defaultConfig = (): Config => ({
@@ -220,8 +222,8 @@ export const defaultConfig = (): Config => ({
   starPrompt: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
-  sources: ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'],
-  accounts: { gitlab: false, shortcut: false, linear: false, jira: false, plane: false },
+  sources: ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane', 'asana'],
+  accounts: { gitlab: false, shortcut: false, linear: false, jira: false, plane: false, asana: false },
   gitlabUrl: '',
   jiraSite: '',
   jiraEmail: '',
@@ -229,6 +231,8 @@ export const defaultConfig = (): Config => ({
   planeWorkspace: '',
   planeUrl: '',
   planeFilter: '',
+  asanaWorkspace: '',
+  asanaProjects: '',
 });
 
 export const projectLabel = (p: Project) => p.name || p.folder;
