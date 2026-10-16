@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.110
 
-- **Community flows.** Anyone can publish a flow: add the topic `cornercase-flow` to a public GitHub repository with a `flow.toml`, and usecornercase.dev/flows lists it, most starred first, within a day. `cornercase flow import OWNER/REPO` (or typing it on the Flows import page, or an `https://` address) fetches one, shows its roles and always asks before saving: nobody reviews these flows, and their agents never ask for permission.
+- **Community flows.** Anyone can publish a flow: add the topic `cornercase-flow` to a public GitHub repository with a `flow.toml`, and usecornercase.dev/flows lists it, most starred first, within a day, after the built-in flows that come with cornercase, which have pages of their own. `cornercase flow import OWNER/REPO` (or typing it on the Flows import page, or an `https://` address) fetches one, shows its roles and always asks before saving: nobody reviews these flows, and their agents never ask for permission.
 
 ## 0.12.109
 

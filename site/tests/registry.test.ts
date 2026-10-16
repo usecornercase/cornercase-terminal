@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 
-import { problems, registry, toFlow } from '../src/lib/registry';
+import { builtIns, everyFlow, problems, registry, toFlow } from '../src/lib/registry';
 import { diagramSvg } from '../src/lib/registry-diagram';
 
 const fixture = resolve(process.cwd(), 'tests/fixtures/flows.json');
@@ -74,4 +76,34 @@ test('lengths and types are capped', () => {
   assert.ok(problems(text.replace('edits = true', 'edits = "yes"')).some((p) => p.includes('edits')));
   assert.ok(problems(text.replace('roles = ["writer"]', 'roles = [1]')).some((p) => p.includes('not a name')));
   assert.ok(problems(text.replace('when = "findings"', `when = "${'x'.repeat(61)}"`)).some((p) => p.includes('loop label')));
+});
+
+test('the built-in flows come first, as built in, and each draws a plan', () => {
+  const all = everyFlow();
+  const built = builtIns();
+  assert.deepEqual(built.map((f) => f.name), ['Full issue', 'Cross review', 'Quick', 'Bug, test first']);
+  assert.deepEqual(all.slice(0, built.length).map((f) => f.slug), built.map((f) => f.slug));
+  for (const flow of built) {
+    assert.ok(flow.builtIn && flow.owner === 'cornercase' && flow.repo === 'usecornercase/cornercase-terminal' && flow.stars === 0);
+    assert.ok(flow.slug.startsWith('built-in/') && flow.roles.length > 0 && flow.text.includes('prompt'));
+    assert.ok(diagramSvg(flow, flow.name).startsWith('<svg'));
+  }
+  assert.equal(new Set(all.map((f) => f.slug)).size, all.length);
+});
+
+test('a community repository cannot take the built-in flows folder', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'flows-'));
+  const [{ text }] = JSON.parse(JSON.stringify(registry(fixture)));
+  const file = join(dir, 'flows.json');
+  writeFileSync(file, JSON.stringify({ flows: [{ repo: 'Built-In/x', stars: 5, description: '', topics: [], file: 'flow.toml', text }] }));
+  const warn = console.warn;
+  const said: string[] = [];
+  console.warn = (m: string) => said.push(m);
+  try {
+    assert.deepEqual(registry(file), []);
+  } finally {
+    console.warn = warn;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  assert.ok(said[0].includes('built-in'));
 });

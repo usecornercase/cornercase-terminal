@@ -9,6 +9,9 @@ export const MAX_NAME = 80;
 export const MAX_DESCRIPTION = 300;
 export const MAX_PROMPT = 32 * 1024;
 export const MAX_WORD = 60;
+export const BUILT_IN_AUTHOR = 'cornercase';
+export const BUILT_IN_DIR = 'built-in';
+export const PROJECT = 'usecornercase/cornercase-terminal';
 export const REPO = /^[\w.-]+\/[\w.-]+$/;
 export const TOPIC = 'cornercase-flow';
 export const FILES = ['flow.toml', 'cornercase-flow.toml'];
@@ -30,6 +33,8 @@ export interface RegistryStage {
 
 export interface Snapshot {
   repo: string;
+  builtIn?: boolean;
+  slug?: string;
   stars: number;
   description: string;
   topics: string[];
@@ -38,6 +43,7 @@ export interface Snapshot {
 }
 
 export interface RegistryFlow {
+  builtIn: boolean;
   repo: string;
   owner: string;
   name: string;
@@ -130,10 +136,11 @@ export function toFlow(entry: Snapshot): RegistryFlow {
   const data = parse(entry.text.replace(/^﻿/, '')) as Record<string, unknown>;
   const [owner] = entry.repo.split('/');
   return {
+    builtIn: entry.builtIn === true,
     repo: entry.repo,
-    owner,
+    owner: entry.builtIn ? BUILT_IN_AUTHOR : owner,
     name: String(data.name).trim(),
-    slug: entry.repo.toLowerCase(),
+    slug: entry.slug ?? entry.repo.toLowerCase(),
     stars: entry.stars,
     description: (typeof data.description === 'string' && data.description) || entry.description,
     tags: entry.topics.filter((t) => t !== TOPIC),
@@ -152,12 +159,25 @@ export function toFlow(entry: Snapshot): RegistryFlow {
   };
 }
 
+export const builtInPath = (): string => resolve(process.cwd(), process.env.CORNERCASE_BUILTIN_FLOWS ?? 'src/data/builtin-flows.json');
+
+export function builtIns(file = builtInPath()): RegistryFlow[] {
+  const data = JSON.parse(readFileSync(file, 'utf8')) as { flows: { slug: string; file: string; text: string }[] };
+  return data.flows.map((f) =>
+    toFlow({ repo: PROJECT, builtIn: true, slug: `${BUILT_IN_DIR}/${f.slug}`, stars: 0, description: '', topics: [], file: f.file, text: f.text }),
+  );
+}
+
 export const dataPath = (): string => resolve(process.cwd(), process.env.CORNERCASE_FLOWS_DATA ?? 'src/data/flows.json');
 
 export function registry(file = dataPath()): RegistryFlow[] {
   const snapshot = JSON.parse(readFileSync(file, 'utf8')) as { flows?: Snapshot[] };
   const flows: RegistryFlow[] = [];
   for (const entry of snapshot.flows ?? []) {
+    if (entry.repo.split('/')[0].toLowerCase() === BUILT_IN_DIR) {
+      console.warn(`flows: skipped ${entry.repo}: its owner is the name of the built-in flows' folder`);
+      continue;
+    }
     try {
       flows.push(toFlow(entry));
     } catch (e) {
@@ -167,7 +187,10 @@ export function registry(file = dataPath()): RegistryFlow[] {
   return flows.sort((a, b) => b.stars - a.stars || a.name.localeCompare(b.name));
 }
 
+export const everyFlow = (): RegistryFlow[] => [...builtIns(), ...registry()];
+
 export const endLabel = (end: RegistryFlow['end']): string => (end === 'commits' ? 'leaves the commits' : 'opens a pull request');
 export const repoUrl = (repo: string): string => `https://github.com/${repo}`;
 export const fileUrl = (flow: RegistryFlow): string => `${repoUrl(flow.repo)}/blob/HEAD/${flow.file}`;
+export const BUILT_IN_NOTE = 'It already comes with cornercase, so there is nothing to import: edit it in Settings → Agents → flows.';
 export const importCommand = (flow: RegistryFlow): string => `cornercase flow import ${flow.repo}`;

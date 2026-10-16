@@ -2,10 +2,10 @@
 import { Aside } from '@astrojs/starlight/components';
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import { diagramSvg } from '../../../lib/registry-diagram';
-import { type RegistryFlow, endLabel, fileUrl, importCommand, registry, repoUrl } from '../../../lib/registry';
+import { BUILT_IN_NOTE, type RegistryFlow, endLabel, everyFlow, fileUrl, importCommand, repoUrl } from '../../../lib/registry';
 
 export function getStaticPaths() {
-  return registry().map((flow) => {
+  return everyFlow().map((flow) => {
     const [owner, repo] = flow.slug.split('/');
     return { params: { owner, repo }, props: { flow } };
   });
@@ -24,20 +24,23 @@ const stages = flow.stages.map((stage) => {
 <StarlightPage frontmatter={{ title: flow.name, description: flow.description, tableOfContents: false }}>
   <p>{flow.description}</p>
   <p class="meta">
-    By <a href={`https://github.com/${flow.owner}`}>@{flow.owner}</a> · ★ {flow.stars} · <a href={repoUrl(flow.repo)}>{flow.repo}</a> · {everyone.length} agents · {endLabel(flow.end)}
+    {flow.builtIn ? <>Built in · by cornercase · <a href={repoUrl(flow.repo)}>{flow.repo}</a></> : <>By <a href={`https://github.com/${flow.owner}`}>@{flow.owner}</a> · ★ {flow.stars} · <a href={repoUrl(flow.repo)}>{flow.repo}</a></>} · {everyone.length} agents · {endLabel(flow.end)}
     {flow.tags.length > 0 && <> · {flow.tags.join(', ')}</>}
   </p>
 
-  <Aside type="caution" title="Nobody reviewed this flow">
+  {flow.builtIn && <Aside type="note" title="Built in">{BUILT_IN_NOTE} <a href={`${base}docs/guides/flows/#the-built-in-flows`}>The built-in flows</a>.</Aside>}
+  {!flow.builtIn && <Aside type="caution" title="Nobody reviewed this flow">
     Its {everyone.length} agents run without asking for permission, and its prompts, below, tell them what to do on your machine. Read every prompt before you import it; what it does is your
     responsibility. <a href={`${base}docs/guides/flows/#trust-and-security`}>Trust and security</a>.
-  </Aside>
+  </Aside>}
 
+  {!flow.builtIn && <>
   <h2 id="import">Import it</h2>
   <pre class="code"><code>{importCommand(flow)}</code></pre>
   <p>
     Or type <code>{flow.repo}</code> in Settings → Agents → flows → import. Both show the team and ask before they save anything. An import is a copy that does not update itself.
   </p>
+  </>}
 
   <h2 id="plan">The plan</h2>
   <div class="diagram" set:html={svg} />
@@ -74,9 +77,9 @@ const stages = flow.stages.map((stage) => {
   }
 
   <h2 id="file">The file</h2>
-  <p>
+  {flow.builtIn ? <p>As cornercase builds it when every agent is installed; with fewer installed, the agents are spread over the ones you have.</p> : <p>
     <a href={fileUrl(flow)}>{flow.file} on GitHub</a>. This page shows it as it was when the list was last refreshed, so check the repository for changes.
-  </p>
+  </p>}
   <pre class="code"><code>{flow.text}</code></pre>
 </StarlightPage>
 
