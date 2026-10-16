@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
-use super::args::{KillServerArgs, RestartArgs, UpdateArgs};
+use super::args::{KillServerArgs, RestartArgs, StartServerArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
@@ -50,6 +50,19 @@ mod parsing {
         assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true, .. }))));
         assert!(matches!(kill.command, Some(Command::KillServer(KillServerArgs { yes: false }))));
         assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true, .. }))));
+    }
+
+    #[rstest]
+    #[case::defaults(&["start-server"], (None, None, false))]
+    #[case::a_size(&["start-server", "--cols", "200", "--rows", "60"], (Some(200), Some(60), false))]
+    #[case::json(&["start-server", "--json"], (None, None, true))]
+    fn start_server_takes_a_size_and_json(#[case] args: &[&str], #[case] expected: (Option<u16>, Option<u16>, bool)) {
+        let cli = parse(args).expect("parse");
+
+        let Some(Command::StartServer(StartServerArgs { cols, rows, print })) = cli.command else {
+            panic!("not start-server")
+        };
+        assert_eq!((cols, rows, print.json), expected);
     }
 
     #[rstest]

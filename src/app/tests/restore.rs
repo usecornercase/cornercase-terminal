@@ -352,3 +352,15 @@ fn state_lists_projects_workspaces_and_tabs() {
         (2, &canonical(&dirs[1]), 2, Some(Path::new("/")), 1)
     );
 }
+
+#[test]
+fn a_window_that_comes_later_gives_its_colours_to_the_panes_already_open() {
+    let (mut app, _rx, _dirs) = app_with(2);
+    let background = libghostty_vt::style::RgbColor { r: 0x1d, g: 0x20, b: 0x22 };
+    assert_eq!(app.projects.terms().count(), 2);
+
+    app.retheme(HostTheme { background: Some(background), ..HostTheme::default() });
+
+    assert!(app.projects.terms().all(|term| term.emulator.default_background() == Some(background)));
+    assert_eq!(app.theme.background, Some(background));
+}

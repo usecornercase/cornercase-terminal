@@ -482,7 +482,7 @@ fn a_server_without_a_window_refuses_new_terminals() {
 
     let out = session.cli(&["new-tab"]);
 
-    assert!(refused(&out, 1, "has not opened a window yet"), "{out:?}");
+    assert!(refused(&out, 1, "cornercase start-server"), "{out:?}");
     assert_eq!(session.report().projects, []);
     drop(session);
     let _ = server.wait();

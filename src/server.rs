@@ -19,6 +19,7 @@ use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::app::{App, AppEvent, Streamed};
+use crate::control::start_server::SizeFrom;
 use crate::control::{self, Ids, What};
 use crate::error::{Error, Result};
 use crate::host::notify::{self, Channel};
@@ -38,6 +39,7 @@ mod images;
 mod startup;
 
 use images::Graphics;
+use startup::Startup;
 
 const TICK: Duration = Duration::from_millis(500);
 const SLOW_STEP: Duration = Duration::from_millis(100);
@@ -283,7 +285,8 @@ struct Server {
     area: Option<Rect>,
     next_client: u64,
     uses: u64,
-    started: bool,
+    startup: Startup,
+    size_from: SizeFrom,
     build: String,
     session: PathBuf,
     saver: Saver<state::State>,
@@ -445,7 +448,8 @@ impl Server {
             area: None,
             next_client: 1,
             uses: 0,
-            started: false,
+            startup: Startup::Waiting,
+            size_from: SizeFrom::Window,
             build: version::build_id(),
             saver: Saver::new(session.clone(), None),
             session,
@@ -579,7 +583,7 @@ impl Server {
             return;
         }
         self.observed = Some(now);
-        if self.started {
+        if self.started() {
             match self.saver.observe(self.app.state(), now) {
                 Ok(true) => log::debug!("server", "session saved", path = self.session.display()),
                 Ok(false) => {}
@@ -690,6 +694,9 @@ impl Server {
             }
             ServerEvent::Message(id, ClientMessage::Request(text)) => {
                 self.app.request(id, &text, self.area, Instant::now());
+                if let Some((client, size)) = self.app.take_start() {
+                    self.start_server(client, size);
+                }
             }
             ServerEvent::Message(id, ClientMessage::Graphics(graphics)) => {
                 log::info!(
@@ -833,7 +840,7 @@ impl Server {
             log::error!("server", "failed to save the todo list", error = e);
         }
         if self.restart.is_some()
-            && self.started
+            && self.started()
             && let Err(e) = persist::save(&self.session, &self.app.state())
         {
             log::error!("server", "failed to save the session", error = e);

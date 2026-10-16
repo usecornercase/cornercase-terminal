@@ -173,6 +173,12 @@ impl Term {
         }
     }
 
+    pub(crate) fn set_theme(&mut self, theme: &HostTheme) {
+        if let Err(error) = self.emulator.set_theme(theme) {
+            crate::log::warning!("app", "cannot apply the window's colours to a pane", pane = self.id, error = error);
+        }
+    }
+
     pub(crate) fn resize(&mut self, rows: u16, cols: u16) {
         if self.size == (rows, cols) || rows == 0 || cols == 0 {
             return;

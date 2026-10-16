@@ -1,14 +1,35 @@
 use ratatui::layout::Rect;
 
 use super::{Graphics, OTHER_BUILD, Server};
+use crate::control::{
+    self,
+    start_server::{SizeFrom, Started},
+};
 use crate::error::Result;
 use crate::host::pointer;
 use crate::log;
 use crate::persist::{self, Saver};
 use crate::protocol::{self, Hello};
 use crate::state;
+use crate::version;
+
+pub(super) struct Opened {
+    restored: bool,
+    complete: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Startup {
+    Waiting,
+    Headless,
+    Windowed,
+}
 
 impl Server {
+    pub(super) fn started(&self) -> bool {
+        self.startup != Startup::Waiting
+    }
+
     pub(super) fn hello(&mut self, id: u64, hello: Hello) {
         if hello.version != protocol::VERSION || hello.build != self.build {
             log::warning!("server", "client from another build", client = id, build = hello.build);
@@ -42,19 +63,56 @@ impl Server {
         client.graphics = Graphics::new(id, hello.graphics, background);
         self.touch(id);
         self.fit(Some(id));
-        if !self.started {
-            self.started = true;
+        if !self.started() {
+            self.startup = Startup::Windowed;
             self.app.set_theme(hello.theme);
             if let Err(e) = self.open_first_terminals() {
                 log::error!("server", "could not open a first terminal", error = e);
             }
             self.app.start_plugins();
+        } else if self.startup == Startup::Headless {
+            self.startup = Startup::Windowed;
+            log::info!("server", "first window gives its colours to the open terminals", client = id);
+            self.app.retheme(hello.theme);
         }
     }
 
-    pub(super) fn open_first_terminals(&mut self) -> Result<()> {
+    pub(super) fn start_server(&mut self, client: u64, (cols, rows): (u16, u16)) {
+        let already = self.started();
+        if self.area.is_none() {
+            self.area = Some(Rect::new(0, 0, cols, rows));
+            self.size_from = SizeFrom::StartServer;
+            log::info!("server", "size", cols = cols, rows = rows, from = "start-server");
+        }
+        let area = self.area.unwrap_or_default();
+        let mut opened = Opened { restored: false, complete: true };
+        if !already {
+            self.startup = Startup::Headless;
+            self.app.set_queue_area(area);
+            match self.open_first_terminals() {
+                Ok(done) => opened = done,
+                Err(e) => log::error!("server", "could not open a first terminal", error = e),
+            }
+            self.app.start_plugins();
+        }
+        let started = Started {
+            already,
+            restored: opened.restored,
+            complete: opened.complete,
+            cols: area.width,
+            rows: area.height,
+            size: self.size_from,
+            boot: control::server_token().to_string(),
+            version: version::CURRENT.to_string(),
+        };
+        log::info!("server", "start-server answered", client = client, already = already);
+        self.app.answer_start(client, &started);
+    }
+
+    pub(super) fn open_first_terminals(&mut self) -> Result<Opened> {
         let area = self.area.unwrap_or_default();
         let saved = state::load(&self.session);
+        let restored = saved.is_some();
         let complete = saved.as_ref().is_none_or(|saved| self.app.restore(saved, area));
         match &saved {
             Some(saved) => log::info!(
@@ -76,7 +134,7 @@ impl Server {
         if self.app.is_empty() || !(complete || self.app.has_terms()) {
             self.app.open_here(area)?;
         }
-        Ok(())
+        Ok(Opened { restored, complete })
     }
 
     pub(super) fn fit(&mut self, resized: Option<u64>) {
@@ -88,6 +146,7 @@ impl Server {
             log::info!("server", "size", cols = cols, rows = rows);
         }
         self.area = Some(area);
+        self.size_from = SizeFrom::Window;
         for client in self.clients.iter_mut().filter(|c| area_changed || Some(c.id) == resized) {
             client.reset_screen(area);
         }

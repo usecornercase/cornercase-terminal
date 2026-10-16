@@ -5,6 +5,12 @@ use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
 
 fn queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
+    let (mut app, rx, repo, config, worktrees) = undrawn_queued_app();
+    render(&mut app, AREA);
+    (app, rx, repo, config, worktrees)
+}
+
+fn undrawn_queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
     let repo = git_repo(&[("README", "hello")]);
     let (config, worktrees) = (TempDir::new(), TempDir::new());
     let agent = config.path().join("fake-agent");
@@ -19,7 +25,6 @@ fn queued_app() -> (App, Receiver<AppEvent>, TempDir, TempDir, TempDir) {
     let config_path = write_config(config.path(), &settings);
     let (mut app, rx) = app_in(repo.path(), config_path);
     app.issues.env_tokens.clear();
-    render(&mut app, AREA);
     (app, rx, repo, config, worktrees)
 }
 
@@ -113,6 +118,21 @@ mod starts {
         app.refresh_at(Instant::now(), at);
         assert_eq!(app.agents.launches.len(), 1);
         assert_eq!(app.agents.launches[0].trust, Some(agents::launch::Trust::Accepted));
+    }
+
+    #[test]
+    fn a_server_given_a_size_without_a_window_starts_what_is_due() {
+        let (mut app, _rx, _repo, _config, _worktrees) = undrawn_queued_app();
+        let at = time::now() + 3600;
+        app.queued.queue.add(task(&app, at, None)).expect("add");
+        app.refresh_at(Instant::now(), at);
+        assert!(app.agents.launches.is_empty());
+
+        app.set_queue_area(AREA);
+        app.refresh_at(Instant::now(), at);
+
+        assert_eq!(app.agents.launches.len(), 1);
+        assert_eq!(app.queued.queue.pending(), 0);
     }
 
     #[test]

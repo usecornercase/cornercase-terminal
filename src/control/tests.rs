@@ -67,6 +67,7 @@ fn every_command_is_listed_by_name() {
         Command::FlowImport(FlowImport::default()),
         Command::Search(Search::default()),
         Command::Contract(Contract::default()),
+        Command::StartServer(StartServer::default()),
     ];
 
     let names: Vec<String> = commands

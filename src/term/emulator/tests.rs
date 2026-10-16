@@ -377,6 +377,33 @@ mod host_theme {
     }
 
     #[test]
+    fn a_theme_set_later_answers_the_queries() {
+        let (mut emu, replies) = emulator();
+        let mut theme = with_background(DARK);
+        theme.foreground = Some(LIGHT);
+        theme.palette[1] = Some(RED);
+
+        emu.set_theme(&theme).expect("theme");
+        emu.feed(b"\x1b]11;?\x07\x1b]10;?\x07\x1b]4;1;?\x07\x1b[?996n");
+
+        let answered = String::from_utf8_lossy(&replies.borrow()).into_owned();
+        assert!(answered.contains("rgb:1212/3434/5656"), "{answered:?}");
+        assert!(answered.contains("rgb:fdfd/f6f6/e3e3"), "{answered:?}");
+        assert!(answered.contains("rgb:cccc/1111/2222"), "{answered:?}");
+        assert!(answered.ends_with("\x1b[?997;1n"), "{answered:?}");
+    }
+
+    #[test]
+    fn a_theme_set_again_replaces_the_colour_scheme() {
+        let (mut emu, replies) = themed_emulator(&with_background(DARK));
+
+        emu.set_theme(&with_background(LIGHT)).expect("theme");
+        emu.feed(b"\x1b[?996n");
+
+        assert_eq!(String::from_utf8_lossy(&replies.borrow()), "\x1b[?997;2n");
+    }
+
+    #[test]
     fn palette_colors_still_render_as_indices() {
         let mut theme = HostTheme::default();
         theme.palette[1] = Some(RED);
