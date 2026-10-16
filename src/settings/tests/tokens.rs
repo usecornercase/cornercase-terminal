@@ -203,6 +203,96 @@ mod plane {
     }
 }
 
+mod asana {
+    use super::*;
+
+    fn with_asana() -> Settings {
+        let mut s = settings();
+        s.tokens.push((Source::Asana, Status::Missing));
+        s
+    }
+
+    #[test]
+    fn has_its_own_section_after_the_accounts() {
+        let mut s = with_asana();
+        s.open_page(Page::Issues);
+        let rows: Vec<(&str, Row)> = s.rows().into_iter().map(|r| (r.section(), r)).take(5).collect();
+        assert_eq!(
+            rows,
+            [
+                ("Accounts", Row::Token(Source::Shortcut)),
+                ("Accounts", Row::Token(Source::Linear)),
+                ("Asana", Row::AsanaWorkspace),
+                ("Asana", Row::AsanaProjects),
+                ("Asana", Row::Token(Source::Asana))
+            ]
+        );
+    }
+
+    #[test]
+    fn the_rows_say_what_empty_means() {
+        let s = with_asana();
+        let workspace = s.row_text(&Row::AsanaWorkspace);
+        let projects = s.row_text(&Row::AsanaProjects);
+        assert_eq!(
+            [&workspace.label, &workspace.value, &workspace.note],
+            ["Asana workspace", "your only one", "name or ID"]
+        );
+        assert_eq!(
+            [&projects.label, &projects.value, &projects.note],
+            ["Asana projects", "your tasks", "IDs or links, empty lists your tasks"]
+        );
+    }
+
+    #[test]
+    fn the_workspace_is_saved_as_typed_without_the_spaces_around() {
+        let mut s = with_asana();
+        assert_eq!(saved(edit(&mut s, &Row::AsanaWorkspace, "  Acme Corp ")).asana_workspace, "Acme Corp");
+        assert_eq!(s.row_text(&Row::AsanaWorkspace).value, "Acme Corp");
+    }
+
+    #[test]
+    fn an_empty_workspace_goes_back_to_the_only_one() {
+        let mut s = with_asana();
+        s.config.asana_workspace = "Acme".into();
+        assert_eq!(saved(edit(&mut s, &Row::AsanaWorkspace, "")).asana_workspace, "");
+        assert_eq!(s.notice.as_deref(), Some("the Asana workspace was cleared"));
+    }
+
+    #[test]
+    fn projects_are_saved_as_ids_whatever_way_they_were_typed() {
+        let mut s = with_asana();
+        let typed = "https://app.asana.com/0/123/list, 456  https://app.asana.com/1/9/project/789/board";
+        assert_eq!(saved(edit(&mut s, &Row::AsanaProjects, typed)).asana_projects, "123, 456, 789");
+        assert_eq!(s.notice.as_deref(), Some("Asana projects: 123, 456, 789"));
+    }
+
+    #[test]
+    fn no_projects_list_your_tasks() {
+        let mut s = with_asana();
+        s.config.asana_projects = "123".into();
+        assert_eq!(saved(edit(&mut s, &Row::AsanaProjects, " ")).asana_projects, "");
+        assert_eq!(s.notice.as_deref(), Some("Asana lists your tasks"));
+    }
+
+    #[test]
+    fn something_that_is_no_project_stays_in_the_field() {
+        let mut s = with_asana();
+        assert_eq!(edit(&mut s, &Row::AsanaProjects, "123 web shop"), Action::None);
+        let error = s.edit.and_then(|e| e.error);
+        let expected =
+            "type project IDs or links, such as 1200000000000001 or https://app.asana.com/0/1200000000000001/list";
+        assert_eq!(error.as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn the_token_does_not_need_the_workspace_first() {
+        let mut s = with_asana();
+        let action = edit(&mut s, &Row::Token(Source::Asana), "t0k");
+        assert_eq!(action, Action::CheckToken(Source::Asana, Secret("t0k".into())));
+    }
+}
+
 mod gitlab {
     use super::*;
 

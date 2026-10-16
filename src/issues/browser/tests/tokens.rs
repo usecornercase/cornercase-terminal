@@ -200,6 +200,72 @@ mod plane {
     }
 }
 
+mod asana {
+    use super::*;
+
+    fn on_asana() -> Browser {
+        let mut b = browser();
+        b.tab_to(Tab::One(Source::Asana));
+        b
+    }
+
+    fn at_the_workspace_step() -> Browser {
+        let mut b = on_asana();
+        let workspaces = vec![("w-1".to_string(), "Acme".to_string()), ("w-2".to_string(), "Beta".to_string())];
+        b.choose_workspace(Source::Asana, Secret("t0k".into()), workspaces);
+        b
+    }
+
+    fn error(b: &Browser) -> Option<String> {
+        b.forms.get(&Source::Asana).and_then(|f| f.error.clone())
+    }
+
+    #[test]
+    fn asks_for_the_token_first() {
+        let mut b = on_asana();
+        assert_eq!((field(&b), b.labels(ROOM.buttons)), (("access token", String::new()), vec!["connect", "cancel"]));
+        type_text(&mut b, "t0k");
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Asana, Secret("t0k".into())));
+    }
+
+    #[test]
+    fn asks_which_workspace_once_the_token_is_known() {
+        let b = at_the_workspace_step();
+        assert_eq!((field(&b), b.labels(ROOM.buttons)), (("workspace", String::new()), vec!["next", "back", "cancel"]));
+    }
+
+    #[rstest::rstest]
+    #[case::by_name("beta", "Beta")]
+    #[case::ignoring_case_and_spaces("  ACME ", "Acme")]
+    #[case::by_id("w-2", "Beta")]
+    fn a_workspace_of_the_token_is_saved_with_the_token(#[case] typed: &str, #[case] saved: &str) {
+        let mut b = at_the_workspace_step();
+        type_text(&mut b, typed);
+        assert_eq!(
+            press(&mut b, KeyCode::Enter),
+            Action::SaveAsana { workspace: saved.into(), token: Secret("t0k".into()) }
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::another("gamma", "no Asana workspace named gamma; yours are Acme, Beta")]
+    #[case::nothing("", "type one of your workspaces: Acme, Beta")]
+    fn any_other_workspace_stays_with_its_error(#[case] typed: &str, #[case] message: &str) {
+        let mut b = at_the_workspace_step();
+        type_text(&mut b, typed);
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::None);
+        assert_eq!((field(&b).0, error(&b).as_deref()), ("workspace", Some(message)));
+    }
+
+    #[test]
+    fn back_returns_to_the_token() {
+        let mut b = at_the_workspace_step();
+        let pos = button(&b, "back");
+        click(&mut b, pos);
+        assert_eq!((field(&b), b.labels(ROOM.buttons)), (("access token", String::new()), vec!["connect", "cancel"]));
+    }
+}
+
 mod gitlab {
     use super::*;
 

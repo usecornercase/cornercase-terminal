@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Secret, Source, gitlab, jira, plane};
+use crate::issues::{Secret, Source, asana, gitlab, jira, plane};
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
 
@@ -94,6 +94,25 @@ impl Settings {
         self.save(config, notice)
     }
 
+    fn submit_asana(&mut self, row: &Row) -> Action {
+        if *row == Row::AsanaWorkspace {
+            self.submit_checked(asana::check_workspace, |config, value| {
+                let notice = if value.is_empty() {
+                    "the Asana workspace was cleared".into()
+                } else {
+                    format!("Asana workspace: {value}")
+                };
+                (Config { asana_workspace: value, ..config.clone() }, notice)
+            })
+        } else {
+            self.submit_checked(asana::check_projects, |config, value| {
+                let notice =
+                    if value.is_empty() { "Asana lists your tasks".into() } else { format!("Asana projects: {value}") };
+                (Config { asana_projects: value, ..config.clone() }, notice)
+            })
+        }
+    }
+
     pub(super) fn submit_edit(&mut self) -> Action {
         let Some(edit) = &mut self.edit else { return Action::None };
         match edit.row.clone() {
@@ -170,6 +189,7 @@ impl Settings {
             }),
             Row::PlaneFilter => self
                 .submit_filter("Plane", "work item", |config, plane_filter| Config { plane_filter, ..config.clone() }),
+            row @ (Row::AsanaWorkspace | Row::AsanaProjects) => self.submit_asana(&row),
             Row::JiraJql => {
                 self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }

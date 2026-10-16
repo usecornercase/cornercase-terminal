@@ -480,6 +480,7 @@ mod files_panel;
 mod flow_panel;
 mod flow_runs;
 mod flows_dialog;
+mod issue_asana;
 mod issue_list;
 mod path_links;
 mod pull_requests;

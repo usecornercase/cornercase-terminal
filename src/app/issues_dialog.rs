@@ -361,6 +361,17 @@ impl App {
                 let config = Config { plane_workspace: workspace, ..self.config.clone() };
                 return self.save_connection(Source::Plane, config, area);
             }
+            Action::SaveAsana { workspace, token } => {
+                let key = Source::Asana.secret_key().unwrap_or_default();
+                if let Err(e) = secrets::write(&self.issues.secrets_path, key, &token.0) {
+                    if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                        b.token_rejected(Source::Asana, format!("failed to save the access token: {e}"));
+                    }
+                    return Ok(());
+                }
+                let config = Config { asana_workspace: workspace, ..self.config.clone() };
+                return self.save_connection(Source::Asana, config, area);
+            }
             Action::SaveGitlab { url } => {
                 let config = Config { gitlab_url: url, ..self.config.clone() };
                 return self.save_connection(Source::Gitlab, config, area);
@@ -550,6 +561,16 @@ impl App {
         result: Result<Account>,
         area: Rect,
     ) -> Result<()> {
+        let result = match result {
+            Err(Error::Workspaces(found)) => {
+                if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                    b.choose_workspace(source, token.clone(), found.choices);
+                    return Ok(());
+                }
+                Ok(Account { handle: found.handle, workspace: String::new() })
+            }
+            other => other,
+        };
         let saved = result.and_then(|account| {
             let key = source.secret_key().ok_or_else(|| Error::Api("nothing to save".into()))?;
             secrets::write(&self.issues.secrets_path, key, &token.0)
@@ -826,6 +847,13 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
         Step::Email => {
             help.push("Type the email you sign in to Atlassian with and press Enter.".into());
         }
+        Step::Workspace if source == Source::Asana => {
+            let names = form.map_or_else(String::new, |f| {
+                f.choices.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>().join(", ")
+            });
+            help.push(format!("Your Asana token belongs to several workspaces: {names}."));
+            help.push("Type the one to use and press Enter.".into());
+        }
         Step::Workspace => {
             help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
             help.push("Then press Enter.".into());
@@ -864,6 +892,9 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
             ));
         }
         _ if source == Source::Plane => {
+            help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
+        _ if source == Source::Asana => {
             help.extend([String::new(), "The workspace is saved in your settings.".into()]);
         }
         _ if source == Source::Gitlab => {

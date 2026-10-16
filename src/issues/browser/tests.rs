@@ -117,7 +117,7 @@ mod tabs {
     use super::*;
 
     #[test]
-    fn are_all_seven_and_the_queue_by_default() {
+    fn are_all_eight_and_the_queue_by_default() {
         assert_eq!(
             tabs(&[]),
             [
@@ -128,6 +128,7 @@ mod tabs {
                 Tab::One(Source::Linear),
                 Tab::One(Source::Jira),
                 Tab::One(Source::Plane),
+                Tab::One(Source::Asana),
                 Tab::Queue
             ]
         );

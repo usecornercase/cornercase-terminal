@@ -76,20 +76,25 @@ impl Api {
         Ok(rows)
     }
 
-    fn me(&self) -> Result<Me> {
+    fn profile(&self) -> Result<(Value, Vec<(String, String)>)> {
         let answer = self.get(
             "/users/me",
             &[("opt_fields", "name,email,workspaces.name")],
             "no Asana user was found for this access token",
         )?;
-        let user = &answer["data"];
-        let gid = text(user, "/gid");
-        if gid.is_empty() {
+        let user = answer["data"].clone();
+        if text(&user, "/gid").is_empty() {
             return Err(Error::Api(format!("{} does not look like the Asana API", self.base)));
         }
-        let (workspace, workspace_name) =
-            choose(&self.workspace, user["workspaces"].as_array().map_or(&[], Vec::as_slice))?;
-        Ok(Me { gid, name: display(user), workspace, workspace_name })
+        let workspaces = user["workspaces"].as_array().into_iter().flatten();
+        let workspaces = workspaces.map(|w| (text(w, "/gid"), text(w, "/name"))).collect();
+        Ok((user, workspaces))
+    }
+
+    fn me(&self) -> Result<Me> {
+        let (user, workspaces) = self.profile()?;
+        let (workspace, workspace_name) = choose(&self.workspace, &workspaces)?;
+        Ok(Me { gid: text(&user, "/gid"), name: display(&user), workspace, workspace_name })
     }
 
     fn users(&self, me: &Me) -> Result<Vec<Value>> {
@@ -99,8 +104,17 @@ impl Api {
     }
 
     pub(crate) fn whoami(&self) -> Result<Account> {
-        let me = self.me()?;
-        Ok(Account { handle: me.name, workspace: me.workspace_name })
+        let (user, workspaces) = self.profile()?;
+        let handle = display(&user);
+        match choose(&self.workspace, &workspaces) {
+            Ok((_, workspace)) => Ok(Account { handle, workspace }),
+            Err(e) if workspaces.len() > 1 => Err(Error::Workspaces(Box::new(crate::error::Workspaces {
+                handle,
+                choices: workspaces,
+                message: e.to_string(),
+            }))),
+            Err(e) => Err(e),
+        }
     }
 
     pub(crate) fn people(&self) -> Result<Vec<Person>> {
@@ -209,25 +223,49 @@ impl Api {
     }
 }
 
-fn choose(setting: &str, workspaces: &[Value]) -> Result<(String, String)> {
+fn workspace_names(workspaces: &[(String, String)]) -> String {
+    workspaces.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>().join(", ")
+}
+
+fn choose(setting: &str, workspaces: &[(String, String)]) -> Result<(String, String)> {
     let setting = setting.trim();
-    let named = |w: &Value| (text(w, "/gid"), text(w, "/name"));
-    let all: Vec<String> = workspaces.iter().map(|w| named(w).1).collect();
     if !setting.is_empty() {
-        return workspaces
-            .iter()
-            .map(named)
-            .find(|(gid, name)| gid == setting || name.eq_ignore_ascii_case(setting))
-            .ok_or_else(|| Error::Api(format!("no Asana workspace named {setting}; yours are {}", all.join(", "))));
+        let found = workspaces.iter().find(|(gid, name)| gid == setting || name.eq_ignore_ascii_case(setting));
+        return found.cloned().ok_or_else(|| {
+            Error::Api(format!("no Asana workspace named {setting}; yours are {}", workspace_names(workspaces)))
+        });
     }
     match workspaces {
-        [only] => Ok(named(only)),
+        [only] => Ok(only.clone()),
         [] => Err(Error::Api("this Asana account belongs to no workspace".into())),
         _ => Err(Error::Api(format!(
             "this Asana account has several workspaces ({}): set the one to use in Settings → Issues → Asana",
-            all.join(", ")
+            workspace_names(workspaces)
         ))),
     }
+}
+
+pub(crate) fn pick_workspace(input: &str, workspaces: &[(String, String)]) -> std::result::Result<String, String> {
+    if input.trim().is_empty() {
+        return Err(format!("type one of your workspaces: {}", workspace_names(workspaces)));
+    }
+    choose(input, workspaces).map(|(_, name)| name).map_err(|e| e.to_string())
+}
+
+#[expect(clippy::unnecessary_wraps, reason = "the settings take every row's check as one function type")]
+pub(crate) fn check_workspace(input: &str) -> std::result::Result<String, &'static str> {
+    Ok(input.trim().to_string())
+}
+
+pub(crate) fn check_projects(input: &str) -> std::result::Result<String, &'static str> {
+    let tokens: Vec<&str> = input.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty()).collect();
+    let gids = project_gids(input);
+    if gids.len() != tokens.len() {
+        return Err(
+            "type project IDs or links, such as 1200000000000001 or https://app.asana.com/0/1200000000000001/list",
+        );
+    }
+    Ok(gids.join(", "))
 }
 
 fn display(user: &Value) -> String {

@@ -66,7 +66,9 @@ impl Settings {
             | Row::JiraJql
             | Row::PlaneWorkspace
             | Row::PlaneUrl
-            | Row::PlaneFilter => tracker_row(config, row),
+            | Row::PlaneFilter
+            | Row::AsanaWorkspace
+            | Row::AsanaProjects => tracker_row(config, row),
             Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
@@ -201,6 +203,10 @@ impl Settings {
                 Row::PlaneWorkspace => "Plane workspace, the part after app.plane.so/, such as acme".to_string(),
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
+                Row::AsanaWorkspace => "Asana workspace, its name or ID (empty is your only one)".to_string(),
+                Row::AsanaProjects => {
+                    "Asana projects, IDs or links separated by spaces (empty lists your tasks)".to_string()
+                }
                 Row::Kind(kind) => format!("{kind} extra arguments"),
                 Row::Bot(via) => via.token_field().to_string(),
                 _ => String::new(),
@@ -266,7 +272,9 @@ fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {
         Row::JiraJql => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
         Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
         Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
-        _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
+        Row::PlaneFilter => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),
+        Row::AsanaWorkspace => ("Asana workspace", &config.asana_workspace, "your only one", "name or ID"),
+        _ => ("Asana projects", &config.asana_projects, "your tasks", "IDs or links, empty lists your tasks"),
     };
     let value = if value.is_empty() { empty.to_string() } else { value.clone() };
     (label.into(), value, note.into(), false)

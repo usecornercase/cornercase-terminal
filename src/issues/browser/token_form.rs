@@ -1,5 +1,5 @@
 use super::{Action, Browser, Step, Tab, TokenForm};
-use crate::issues::{Secret, Source, gitlab, jira, plane};
+use crate::issues::{Secret, Source, asana, gitlab, jira, plane};
 
 const TOKEN_DOTS: usize = 40;
 
@@ -52,6 +52,11 @@ impl Browser {
         }
     }
 
+    pub(crate) fn choose_workspace(&mut self, source: Source, token: Secret, choices: Vec<(String, String)>) {
+        let form = self.form(source);
+        *form = TokenForm { step: Step::Workspace, token: Some(token), choices, ..TokenForm::default() };
+    }
+
     pub(crate) fn token_rejected(&mut self, source: Source, error: String) {
         let form = self.form(source);
         form.checking = false;
@@ -81,6 +86,14 @@ impl Browser {
                     return Action::SaveJira { site: self.jira_site.clone(), email };
                 }
                 Err(e) => form.error = Some(e.into()),
+            },
+            Step::Workspace if source == Source::Asana => match asana::pick_workspace(&input, &form.choices) {
+                Ok(workspace) => {
+                    let token = form.token.take().unwrap_or_else(|| Secret(String::new()));
+                    *form = TokenForm::default();
+                    return Action::SaveAsana { workspace, token };
+                }
+                Err(e) => form.error = Some(e),
             },
             Step::Workspace => match plane::check_workspace(&input) {
                 Ok(workspace) => {
@@ -117,6 +130,7 @@ impl Browser {
             return;
         }
         *form = match (form.step, source) {
+            (Step::Workspace, Source::Asana) => TokenForm::default(),
             (Step::Token, Source::Gitlab) | (Step::Server, _) => {
                 TokenForm { input: url, step: Step::Server, ..TokenForm::default() }
             }

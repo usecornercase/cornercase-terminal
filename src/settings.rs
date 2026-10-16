@@ -45,6 +45,8 @@ pub(crate) enum Row {
     PlaneWorkspace,
     PlaneUrl,
     PlaneFilter,
+    AsanaWorkspace,
+    AsanaProjects,
     Tab(&'static str),
     DefaultAgent,
     Submit,
@@ -88,6 +90,7 @@ impl Row {
             Self::Bot(via) | Self::Chat(via) => via.name(),
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
+            Self::Token(Source::Asana) | Self::AsanaWorkspace | Self::AsanaProjects => "Asana",
             Self::Token(Source::Gitlab) | Self::GitlabUrl => "GitLab",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
@@ -116,6 +119,8 @@ impl Row {
             | Self::PlaneWorkspace
             | Self::PlaneUrl
             | Self::PlaneFilter
+            | Self::AsanaWorkspace
+            | Self::AsanaProjects
             | Self::Tab(_) => Page::Issues,
             Self::Sidebar
             | Self::Tabs
@@ -370,6 +375,9 @@ impl Settings {
                     rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
                 }
                 Source::Gitlab => rows.extend([Row::GitlabUrl, Row::Token(Source::Gitlab)]),
+                Source::Asana => {
+                    rows.extend([Row::AsanaWorkspace, Row::AsanaProjects, Row::Token(Source::Asana)]);
+                }
                 _ => rows.push(Row::Token(*source)),
             }
         }

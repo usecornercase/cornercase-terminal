@@ -44,6 +44,8 @@ impl Settings {
             Row::PlaneWorkspace => self.start_edit(row, self.config.plane_workspace.clone()),
             Row::PlaneUrl => self.start_edit(row, self.config.plane_url.clone()),
             Row::PlaneFilter => self.start_edit(row, self.config.plane_filter.clone()),
+            Row::AsanaWorkspace => self.start_edit(row, self.config.asana_workspace.clone()),
+            Row::AsanaProjects => self.start_edit(row, self.config.asana_projects.clone()),
             Row::Tab(id) => self.toggle_tab(id),
             Row::DefaultAgent => self.pick_default_agent(row),
             Row::Submit => {
