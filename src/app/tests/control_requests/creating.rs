@@ -25,8 +25,14 @@ fn a_pane_of_another_server_is_not_the_caller() {
     let (mut app, _rx, _dirs) = app_with(1);
     let caller = Some(term(&app, 0).id);
     let status = Command::Status(wire::Status {});
-    let text = serde_json::to_string(&wire::Request { caller, server: Some("another".into()), command: status })
-        .expect("json");
+    let text = serde_json::to_string(&wire::Request {
+        caller,
+        server: Some("another".into()),
+        contract: None,
+        boot: None,
+        command: status,
+    })
+    .expect("json");
 
     app.request(CLIENT, &text, Some(AREA), Instant::now());
 

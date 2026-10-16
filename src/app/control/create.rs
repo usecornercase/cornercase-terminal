@@ -27,7 +27,7 @@ impl App {
     pub(super) fn open_request(&mut self, open: &control::Open, area: Option<Rect>) -> Handled {
         let path = open.path.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
-            return Err(format!("`{}` is not a folder", path.display()));
+            return Err(format!("`{}` is not a folder", path.display()).into());
         }
         let p = match self.projects.iter().position(|p| p.path == path && !p.closing) {
             Some(p) => p,
@@ -55,10 +55,11 @@ impl App {
         };
         if new.worktree {
             if let Some(open) = self.workspace_on(p, &name) {
-                return Err(format!("branch {name} is already open in workspace {open}"));
+                return Err(format!("branch {name} is already open in workspace {open}").into());
             }
             let then = Then { start: None, wait: None, focus: new.focus };
-            return self.create_worktree(client, p, &name, then, None).map(|()| None);
+            self.create_worktree(client, p, &name, then, None)?;
+            return Ok(None);
         }
         let path = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, path, Some(name), false).map_err(|e| e.to_string())?;
@@ -107,7 +108,7 @@ impl App {
         let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
         if !self.projects[p].workspaces[w].tabs[t].can_split(self.layout(area).pane, pane, dir) {
-            return Err(format!("pane {pane} is too small to split {way}"));
+            return Err(format!("pane {pane} is too small to split {way}").into());
         }
         let new =
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
@@ -152,7 +153,8 @@ impl App {
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
                 let then = Then { start: Some((spec, name)), wait, focus: start.focus };
-                return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
+                self.create_worktree(client, p, branch, then, timeout)?;
+                return Ok(None);
             };
             found
         } else if let Some(project) = start.project {

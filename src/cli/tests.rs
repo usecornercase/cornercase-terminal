@@ -283,6 +283,7 @@ mod output {
         };
         Report {
             version: "0.9.0".into(),
+            boot: String::new(),
             caller: Some(5),
             shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
             groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true }],

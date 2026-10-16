@@ -41,10 +41,7 @@ fn a_pending_entry_and_its_id_survive_a_server_restart() {
         "--prompt",
         "follow up after restart",
     ]);
-    app.send(b"echo before-\"\"restart\r");
-    app.wait_for("the old shell answers", |text| text.contains("before-restart"));
-    app.session.says(&["restart", "--yes"]);
-    app.wait_for("the new shell comes back", |text| !text.contains("before-restart") && text.contains(&first_entry()));
+    app.restart_server();
     let list: Value = serde_json::from_str(&app.session.says(&["queue", "list", "--json"])).expect("restored queue");
     assert_eq!(list["entries"][0]["id"].as_u64().expect("id").to_string(), id);
     assert_eq!(list["entries"][0]["state"], "pending");

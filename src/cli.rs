@@ -17,6 +17,7 @@ use crate::remote::{self, Remote};
 use crate::{log, server};
 
 mod args;
+mod contract;
 mod flow;
 mod help;
 mod queue;
@@ -201,6 +202,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
         Control::Flow(flow) => flow::run(flow.action),
+        Control::Contract(contract) => contract::run(contract.print.json),
     }?;
     Ok(true)
 }

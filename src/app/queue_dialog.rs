@@ -321,7 +321,7 @@ impl App {
                     form.busy = true;
                 }
             }
-            Err(reason) => self.queue_form_done(Err(reason)),
+            Err(reason) => self.queue_form_done(Err(reason.into())),
         }
     }
 

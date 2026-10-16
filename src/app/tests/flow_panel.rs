@@ -36,7 +36,8 @@ fn pane(app: &App, role: &str) -> u64 {
 
 fn ask(app: &mut App, caller: Option<u64>, command: Command) {
     let server = Some(wire::server_token().to_string());
-    let text = serde_json::to_string(&wire::Request { caller, server, command }).expect("json");
+    let text =
+        serde_json::to_string(&wire::Request { caller, server, contract: None, boot: None, command }).expect("json");
     app.request(CLIENT, &text, Some(AREA), Instant::now());
 }
 

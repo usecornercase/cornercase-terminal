@@ -8,7 +8,7 @@ fn read(pane: u64) -> Command {
 
 #[test]
 fn a_request_names_its_command_next_to_its_arguments() {
-    let request = Request { caller: Some(7), server: Some("1-2".into()), command: read(3) };
+    let request = Request { caller: Some(7), server: Some("1-2".into()), contract: None, boot: None, command: read(3) };
 
     let sent = serde_json::to_value(&request).expect("json");
 
@@ -24,7 +24,7 @@ fn fields_from_a_newer_command_are_ignored() {
 
     let request: Request = serde_json::from_str(text).expect("a request");
 
-    assert_eq!(request, Request { caller: Some(7), server: None, command: read(3) });
+    assert_eq!(request, Request { caller: Some(7), server: None, contract: None, boot: None, command: read(3) });
 }
 
 #[test]
@@ -66,12 +66,13 @@ fn every_command_is_listed_by_name() {
         Command::FlowExport(FlowExport::default()),
         Command::FlowImport(FlowImport::default()),
         Command::Search(Search::default()),
+        Command::Contract(Contract::default()),
     ];
 
     let names: Vec<String> = commands
         .iter()
         .map(|command| {
-            let request = Request { caller: None, server: None, command: command.clone() };
+            let request = Request { caller: None, server: None, contract: None, boot: None, command: command.clone() };
             let sent = serde_json::to_value(request).expect("json");
             command_name(&sent).expect("a name").to_string()
         })
@@ -106,7 +107,13 @@ fn the_fields_to_log_leave_out_what_is_typed() {
 
 #[test]
 fn a_search_travels_as_its_query_and_logs_only_its_size() {
-    let request = Request { caller: None, server: None, command: Command::Search(Search { query: "checkout".into() }) };
+    let request = Request {
+        caller: None,
+        server: None,
+        contract: None,
+        boot: None,
+        command: Command::Search(Search { query: "checkout".into() }),
+    };
     let sent = serde_json::to_string(&request).expect("json");
 
     assert_eq!(sent, r#"{"caller":null,"server":null,"command":"search","args":{"query":"checkout"}}"#);
@@ -240,7 +247,8 @@ fn new_columns_of_a_pane_row_go_after_the_released_ones() {
 fn turn_over_is_spelt_as_on_the_command_line() {
     let wait = Command::Wait(Wait { until: Until::TurnOver, ..Wait::default() });
 
-    let sent = serde_json::to_value(Request { caller: None, server: None, command: wait }).expect("json");
+    let sent = serde_json::to_value(Request { caller: None, server: None, contract: None, boot: None, command: wait })
+        .expect("json");
 
     assert_eq!(sent["args"]["until"], json!("turn-over"));
 }
@@ -295,4 +303,126 @@ fn an_imports_logged_fields_carry_its_size_and_never_its_text() {
     let fields = Command::FlowImport(import).fields();
     assert!(fields.contains(&("text_bytes", "15".to_string())), "{fields:?}");
     assert!(fields.iter().all(|(_, value)| !value.contains("SECRET")), "{fields:?}");
+}
+
+mod events_v1 {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::test_util::fixture;
+
+    const TIME: &str = "2026-10-16T09:30:00.123Z";
+
+    fn event(what: What, ids: Ids) -> Event {
+        Event { time: TIME.into(), what, ids }
+    }
+
+    fn pane() -> Ids {
+        Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
+    }
+
+    fn samples() -> [(Event, &'static str); 5] {
+        [
+            (
+                event(What::Opened { kind: Kind::Tab }, Ids { pane: None, ..pane() }),
+                fixture!("control/events/v1/opened.json"),
+            ),
+            (event(What::Closed { kind: Kind::Pane }, pane()), fixture!("control/events/v1/closed.json")),
+            (
+                event(
+                    What::Status { agent: "claude".into(), from: Some("working".into()), to: Some("waiting".into()) },
+                    pane(),
+                ),
+                fixture!("control/events/v1/status.json"),
+            ),
+            (event(What::Exited { program: "cargo".into() }, pane()), fixture!("control/events/v1/exited.json")),
+            (event(What::Dropped { count: 12 }, Ids::default()), fixture!("control/events/v1/dropped.json")),
+        ]
+    }
+
+    #[test]
+    fn the_fixtures_are_of_the_events_version_the_contract_names() {
+        assert_eq!(contract::EVENTS_VERSION, 1);
+    }
+
+    #[rstest]
+    #[case::opened(0)]
+    #[case::closed(1)]
+    #[case::status(2)]
+    #[case::exited(3)]
+    #[case::dropped(4)]
+    fn an_event_is_written_as_its_fixture(#[case] index: usize) {
+        let (event, fixture) = &samples()[index];
+
+        assert_eq!(serde_json::to_string(event).expect("json"), fixture.trim_end());
+    }
+
+    #[rstest]
+    #[case::opened(0)]
+    #[case::closed(1)]
+    #[case::status(2)]
+    #[case::exited(3)]
+    #[case::dropped(4)]
+    fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
+        let (event, fixture) = &samples()[index];
+
+        assert_eq!(&serde_json::from_str::<Event>(fixture).expect("an event"), event);
+    }
+
+    #[test]
+    fn a_streamed_event_is_its_fixture_under_ok() {
+        let (event, fixture) = &samples()[2];
+
+        let line: Value = serde_json::from_str(&event.streamed().expect("a line")).expect("json");
+
+        assert_eq!(line, json!({"ok": serde_json::from_str::<Value>(fixture).expect("json")}));
+    }
+}
+
+mod answers {
+    use rstest::rstest;
+
+    use super::*;
+    use crate::control::contract::{Code, Refusal};
+    use crate::test_util::fixture;
+
+    const MISSING: &str = "there is no pane 9; `cornercase status` lists them";
+
+    fn found() -> Value {
+        json!({"pane": 4, "tab": 3})
+    }
+
+    #[rstest]
+    #[case::legacy_ok(Ok(found()), false, fixture!("control/responses/legacy-ok.json"))]
+    #[case::legacy_error(Err(Refusal::new(Code::NotFound, MISSING)), false, fixture!("control/responses/legacy-error.json"))]
+    #[case::structured_ok(Ok(found()), true, fixture!("control/responses/structured-ok.json"))]
+    #[case::structured_error(
+        Err(Refusal::new(Code::NotFound, MISSING)),
+        true,
+        fixture!("control/responses/structured-error.json")
+    )]
+    fn an_answer_is_written_as_its_fixture(
+        #[case] reply: Result<Value, Refusal>,
+        #[case] structured: bool,
+        #[case] fixture: &str,
+    ) {
+        assert_eq!(contract::render(reply, structured).expect("an answer"), fixture.trim_end());
+    }
+
+    #[test]
+    fn a_legacy_answer_reads_back_as_a_response() {
+        let ok: Response = serde_json::from_str(fixture!("control/responses/legacy-ok.json")).expect("ok");
+        let error: Response = serde_json::from_str(fixture!("control/responses/legacy-error.json")).expect("error");
+
+        assert_eq!((ok, error), (Response::Ok(found()), Response::Error(MISSING.into())));
+    }
+
+    #[test]
+    fn a_structured_error_reads_back_with_its_code() {
+        let text = fixture!("control/responses/structured-error.json");
+
+        let error: contract::Structured = serde_json::from_str(text).expect("an error");
+
+        assert_eq!(error, contract::Structured::Error(Refusal::new(Code::NotFound, MISSING)));
+    }
 }

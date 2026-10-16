@@ -26,6 +26,7 @@ use sha2::{Digest, Sha256};
 mod agents;
 mod browser;
 mod commands;
+mod contract;
 mod input;
 mod panels;
 mod panes;
@@ -320,6 +321,15 @@ impl Harness {
                 Some(Position::new(u16::try_from(row[..at].chars().count()).ok()?, y))
             })
             .expect("the text is on screen")
+    }
+
+    fn restart_server(&mut self) {
+        self.send(b"echo before-\"\"restart\r");
+        self.wait_for("the old shell answers", |text| text.contains("before-restart"));
+        self.session.says(&["restart", "--yes"]);
+        self.wait_for("the new shell comes back", |text| {
+            !text.contains("before-restart") && text.contains(&first_entry())
+        });
     }
 
     fn wait_for(&mut self, what: &str, cond: impl Fn(&str) -> bool) {

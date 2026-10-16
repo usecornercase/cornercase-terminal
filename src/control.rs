@@ -6,9 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod contract;
 mod flow;
 mod search;
 
+pub(crate) use contract::Contract;
 pub(crate) use flow::{
     BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
     RunInfo,
@@ -24,6 +26,10 @@ pub(crate) struct Request {
     pub(crate) caller: Option<u64>,
     #[serde(default)]
     pub(crate) server: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) contract: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) boot: Option<String>,
     #[serde(flatten)]
     pub(crate) command: Command,
 }
@@ -80,6 +86,7 @@ pub(crate) enum Command {
     FlowExport(FlowExport),
     FlowImport(FlowImport),
     Search(Search),
+    Contract(Contract),
 }
 
 impl Command {
@@ -114,6 +121,7 @@ impl Command {
             Self::FlowExport(_) => 26,
             Self::FlowImport(_) => 27,
             Self::Search(_) => 28,
+            Self::Contract(_) => 29,
         }]
     }
 
@@ -123,7 +131,7 @@ impl Command {
             Self::Queue(_) => {
                 fields.add("queue", true);
             }
-            Self::Status(_) | Self::Stats(_) => {}
+            Self::Status(_) | Self::Stats(_) | Self::Contract(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -215,7 +223,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 29] = [
+    pub(crate) const NAMES: [&str; 30] = [
         "status",
         "open",
         "new-workspace",
@@ -245,6 +253,7 @@ impl Command {
         "flow-export",
         "flow-import",
         "search",
+        "contract",
     ];
 }
 
@@ -596,6 +605,7 @@ pub(crate) struct Done {
 #[serde(default)]
 pub struct Report {
     pub(crate) version: String,
+    pub(crate) boot: String,
     pub caller: Option<u64>,
     pub shown: Ids,
     pub(crate) groups: Vec<GroupInfo>,

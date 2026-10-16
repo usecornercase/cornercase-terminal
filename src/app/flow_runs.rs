@@ -46,7 +46,9 @@ impl App {
         area: Rect,
     ) -> Result<(), String> {
         let branch = if branch.trim() == flows::branch(&task) { String::new() } else { branch };
-        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area).map(drop)
+        self.run_flow(None, project, Starting { flow, task, branch, focus, note: None }, area)
+            .map(drop)
+            .map_err(String::from)
     }
 
     pub(super) fn run_refusal(&self, p: usize, starting: &Starting) -> Result<(), String> {

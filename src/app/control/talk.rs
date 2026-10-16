@@ -54,21 +54,24 @@ impl App {
             return Err(format!(
                 "the agent in pane {pane} is waiting for an answer to a question or a permission prompt, and what \
                  you send would answer it; ask the user, then answer with `cornercase keys`"
-            ));
+            )
+            .into());
         }
         if !send.force && term.dialog() {
             return Err(format!(
                 "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
                  what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
                  closed, or with --force"
-            ));
+            )
+            .into());
         }
         if !send.force && term.survey() {
             return Err(format!(
                 "the agent in pane {pane} shows Claude Code's feedback survey above its input box (`1: Bad  2: Fine  \
                  3: Good  0: Dismiss`), and a digit sent alone would answer it; dismiss it with `cornercase keys \
                  --pane {pane} 0` and send again, or send with --force"
-            ));
+            )
+            .into());
         }
         let local = agents::detect(&self.config, &term.foreground_args())
             .as_deref()
@@ -88,7 +91,7 @@ impl App {
             && let Some(term) = self.projects.pane_by_mut(pane)
             && !term.paste(text)
         {
-            return Err(not_reading(pane));
+            return Err(not_reading(pane).into());
         }
         if !send.enter {
             return Ok(Some(json(&pane_ids(pane))));
@@ -124,7 +127,7 @@ impl App {
         let enter = events.iter().any(|key| key.code == KeyCode::Enter);
         let bytes: Vec<u8> = events.into_iter().flat_map(|key| term.emulator.encode_key(key)).collect();
         if !term.write(&bytes) {
-            return Err(not_reading(pane));
+            return Err(not_reading(pane).into());
         }
         if enter {
             term.submitted = Some(now);
@@ -157,7 +160,8 @@ impl App {
             let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
             return Err(format!(
                 "pane {pane} {runs}, and {CANNOT_READ}; `cornercase read --pane {pane}` prints its screen"
-            ));
+            )
+            .into());
         };
         let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
         let key = self.requests.key();

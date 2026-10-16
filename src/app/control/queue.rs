@@ -45,7 +45,7 @@ impl App {
                     {
                         self.fail_queued(id, &reason);
                     }
-                    return Err(reason);
+                    return Err(reason.into());
                 }
                 Ok(Some(json!({ "id": id })))
             }
@@ -234,6 +234,7 @@ impl App {
             }
             Ok(None) => {}
             Err(reason) => {
+                let reason = String::from(reason);
                 self.queued.running.remove(&client);
                 if let Some(entry) = self.queued.queue.entry_mut(id) {
                     entry.state = State::Failed { reason: reason.clone() };

@@ -65,6 +65,7 @@ impl App {
         });
         Report {
             version: version::CURRENT.to_string(),
+            boot: control::server_token().to_string(),
             caller,
             shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
             groups: groups.collect(),

@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_EXPORT_HELP, FLOW_HELP,
-    FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP,
-    LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP,
-    RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
-    STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONTRACT_HELP, EVENTS_HELP, FLOW_EXPORT_HELP,
+    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP,
+    KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
+    READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP,
+    START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -120,6 +120,11 @@ pub(crate) enum Control {
     Events(EventsArgs),
     #[command(about = "List, start, export or import flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
     Flow(FlowArgs),
+    #[command(
+        about = "Print what this server offers to scripts: its version, contract, boot, commands and streams",
+        after_help = CONTRACT_HELP
+    )]
+    Contract(ContractArgs),
 }
 
 #[derive(Debug, Args)]
@@ -437,6 +442,12 @@ pub(crate) struct MarkArgs {
     pub(crate) target: Target,
     #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
     pub(crate) reviewed: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct ContractArgs {
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]

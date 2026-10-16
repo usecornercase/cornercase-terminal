@@ -365,7 +365,7 @@ impl App {
         let offset = CLIENTS_PER_VIA * u64::try_from(via.index()).unwrap_or_default();
         let client = CLIENTS + offset + messenger.next_client;
         messenger.asked.insert(client, asked);
-        let request = Request { caller: None, server: None, command };
+        let request = Request { caller: None, server: None, contract: None, boot: None, command };
         self.run_request(client, Ok(request), 0, area, Instant::now());
     }
 

@@ -360,5 +360,17 @@ pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this ru
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
 
+pub(super) const CONTRACT_HELP: &str =
+    "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
+the server for it before anything else. `contract` is the version of the requests and answers: it
+goes up only when one changes in a way an older client would misread, while new commands, fields
+and events are added without it. `boot` names this run of the server and changes on every restart,
+since ids last only one run. Each command is listed with whether it is available, and each stream
+with its version. A server without this command is older than the contract.
+
+Examples:
+  cornercase contract
+  cornercase contract --json";
+
 #[cfg(test)]
 mod tests;

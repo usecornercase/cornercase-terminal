@@ -25,7 +25,7 @@ impl App {
                 let (p, w) = self.usable_workspace(id)?;
                 if close.remove_worktree {
                     if !self.projects[p].workspaces[w].worktree {
-                        return Err(format!("workspace {id} is not a git worktree"));
+                        return Err(format!("workspace {id} is not a git worktree").into());
                     }
                     let key = self.requests.key();
                     self.spawn_check(p, w, Some(key));
@@ -50,7 +50,7 @@ impl App {
                 self.projects.project_index(id).ok_or_else(|| none("project", id))?;
                 self.close_project(id);
             }
-            Item::Group(id) => return Err(format!("group {id} cannot be closed; close its projects")),
+            Item::Group(id) => return Err(format!("group {id} cannot be closed; close its projects").into()),
         }
         Ok(Some(json(&Done::default())))
     }
@@ -69,14 +69,14 @@ impl App {
             return;
         }
         let Some(pending) = self.requests.take(key) else { return };
-        let message = if let Some(lock) = &status.lock {
-            self.locked(workspace, lock)
+        let refusal = if let Some(lock) = &status.lock {
+            self.locked(workspace, lock).into()
         } else if status.changed && !force {
-            format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway")
+            format!("workspace {workspace} has changes that are not committed; add --force to remove it anyway").into()
         } else {
             self.usable_workspace(workspace).err().unwrap_or_else(|| none("workspace", workspace))
         };
-        self.answer(pending.client, Err(message));
+        self.refuse_or_answer(pending.client, Err(refusal));
     }
 
     fn locked(&self, workspace: u64, lock: &worktree::Lock) -> String {

@@ -18,7 +18,7 @@ cornercase --version    # print the version
 cornercase --help       # list every command; cornercase COMMAND --help explains one
 ```
 
-The commands for scripts and agents, `status`, `stats`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `search`, `close`, `rename`, `focus`, `notify`, `todo`, `queue`, `away`, `mark` and `skill`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/).
+The commands for scripts and agents, `status`, `stats`, `open`, `new-workspace`, `new-tab`, `split`, `start`, `send`, `keys`, `read`, `wait`, `events`, `search`, `close`, `rename`, `focus`, `notify`, `todo`, `queue`, `away`, `mark`, `skill` and `contract`, have their own page: [Scripts and agents](../../guides/scripts-and-agents/).
 
 ### `cornercase`
 
@@ -122,6 +122,10 @@ cornercase logs --path       # print only where the log is
 
 When the log is short since it last [moved to `server.log.1`](../files-and-environment/#files), the lines before come from there. Without a log yet, it says so and exits with status 1.
 
+### `cornercase contract`
+
+Prints what the running server supports: its version, the version of the contract it speaks, which start of the server it is (`boot`), and its requests and streams. `--json` prints it as an object, for programs that talk to cornercase. A server too old to have it says so. See [Contract and compatibility](../../guides/scripts-and-agents/#contract-and-compatibility).
+
 ### `cornercase --version`
 
 Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the server.
@@ -138,6 +142,8 @@ The commands find the server through the same socket: `CORNERCASE_SOCKET` if it 
 CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase
 CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 ```
+
+`cornercase contract` says what the server on it supports, and a program of your own can talk to the socket without `cornercase`: see [Contract and compatibility](../../guides/scripts-and-agents/#contract-and-compatibility).
 
 ## Messages
 

@@ -54,7 +54,7 @@ impl App {
     }
 
     pub(super) fn flow_import_request(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
-        self.import_flow(caller, import).map_err(|e| share::visible(&e))
+        self.import_flow(caller, import).map_err(|e| share::visible(&e.message).into())
     }
 
     fn import_flow(&mut self, caller: Option<u64>, import: &control::FlowImport) -> Handled {
@@ -64,16 +64,16 @@ impl App {
         }
         let problems = flow.problems();
         if !problems.is_empty() {
-            return Err(format!("the flow cannot run: {}", problems.join("; ")));
+            return Err(format!("the flow cannot run: {}", problems.join("; ")).into());
         }
         let to = match import.place.as_str() {
             "" | "yours" => To::Yours,
             "project" => To::Project,
-            other => return Err(format!("`{other}` is not a place for a flow: use yours or project")),
+            other => return Err(format!("`{other}` is not a place for a flow: use yours or project").into()),
         };
         let path = self.flows_scope(caller, import.project)?;
         if to == To::Project && path.is_none() {
-            return Err(NO_PROJECT.to_string());
+            return Err(NO_PROJECT.into());
         }
         let listing = self.flow_listing(path.as_deref());
         let replaced = share::collision(&listing, &flow.name, to, import.replace)?;
@@ -140,14 +140,14 @@ impl App {
         let branch = starting.branch.clone();
         let busy = |pending: &Pending| matches!(&pending.stage, Stage::Run(other, starting) if *other == project && starting.branch == branch);
         if self.requests.pending.iter().any(busy) {
-            return Err(format!("a flow is already starting on branch {branch}"));
+            return Err(format!("a flow is already starting on branch {branch}").into());
         }
         if let Some(id) = self.workspace_on(p, &branch) {
             let (p, w) = self.usable_workspace(id)?;
             if !self.projects[p].workspaces[w].worktree {
-                return Err(own_folder(&branch));
+                return Err(own_folder(&branch).into());
             }
-            return self.open_run(p, w, starting, area, false).map(|info| Some(json(&info)));
+            return Ok(Some(json(&self.open_run(p, w, starting, area, false)?)));
         }
         let key = self.requests.key();
         self.spawn_worktree(p, branch, None, Some(key));

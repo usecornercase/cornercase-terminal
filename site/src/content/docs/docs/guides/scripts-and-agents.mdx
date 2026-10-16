@@ -59,6 +59,7 @@ group 9  personal  collapsed
 | `todo` | Adds to, lists, checks off and removes items of the [TODO list](../todo/). |
 | `away` | Has agents message you [on Telegram](../telegram/) or [Discord](../discord/); `--off` stops it. |
 | `skill` | Prints the instructions that teach coding agents these commands. |
+| `contract` | Says what the running server supports: its version, the [contract](#contract-and-compatibility) it speaks, its boot and its operations and streams. |
 
 `cornercase --help` and `cornercase COMMAND --help` describe every option, with examples.
 
@@ -389,7 +390,7 @@ cornercase stats --share
 
 | Command | Fields |
 | --- | --- |
-| `status` | `version`, `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`). `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
+| `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`), `projects` (`id`, `name`, `path`, `group`, `active`, `workspaces`), each workspace (`id`, `name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `active`, `tabs`), each tab (`id`, `name`, `status`, `active`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`). `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane). |
 | `send`, `wait` | `pane`, and, once a wait ended, `ended` (`idle`, `done`, `pending`, `waiting`, `working`, `shell`, `text` or `quiet`) and `line` for a `--text` match. `start --wait` adds `ended` and `line` too. |
@@ -399,6 +400,7 @@ cornercase stats --share
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
+| `contract` | `version`, `contract`, `boot`, `operations` (`name`, `available`, and `reason` when it is not), `features` and `streams` (`name`, `version`). See [Contract and compatibility](#contract-and-compatibility). |
 
 ## Exit status
 
@@ -426,6 +428,70 @@ Some messages you may meet:
 | `the restart was cancelled in the window …` | Someone pressed **cancel** on the window's notice while `restart --when-idle` waited; the server keeps running. |
 | `cornercase hit a bug, see server.log` | cornercase hit a bug while it handled the command or waited for it. Your shells keep running; see [this message in troubleshooting](../../help/troubleshooting/#cornercase-hit-a-bug-see-serverlog). |
 
+## Contract and compatibility
+
+The commands and the server don't have to come from the same release: after `cornercase update`, a command of the new version talks to the server still running the old one, and the other way round. A program of your own, such as another UI for cornercase, can rely on the same rules, through the commands or straight through the socket.
+
+### Ask the server first
+
+```sh
+cornercase contract
+cornercase contract --json
+```
+
+```text
+cornercase 0.12.108
+contract 1
+boot 4242-1700000000
+commands 30 (30 available)
+stream events 1
+features boot, structured-errors, strict-fields
+```
+
+`--json` prints an object with:
+
+- `version`: the server's release.
+- `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
+- `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
+- `operations`: every request the server takes, by name, with `available`. One that is not available on this server has `available: false` and a `reason`; the others keep working.
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`.
+- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events).
+
+A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
+
+### What stays compatible
+
+- Fields are only added, never renamed or removed. Read answers leniently: ignore keys you don't know, and don't depend on their order (`events` lines come out with their keys sorted).
+- A new behaviour that must not be ignored gets a new request name, which an older server refuses with `has no … command` rather than doing something else.
+- `contract` goes up when something that was there changes. Additions show in `operations`, `features` and `streams` instead.
+- The format of each stream has its own version. Format 1 of `events` is the one described in [Follow events](#follow-events).
+
+### Errors with a code
+
+A request through the socket is JSON: `{"command": "status", "args": {}}`, its `args` named after the command's options; the repository's `tests/fixtures/control/` holds examples of what goes over the socket. It is answered with `{"ok": …}` or `{"error": "…"}`. A request that also carries `"contract": 1`, or `"boot": "…"`, gets errors with a code instead:
+
+```json
+{"error": {"code": "not-found", "message": "there is no pane 9; `cornercase status` lists them"}}
+```
+
+| Code | Meaning |
+| --- | --- |
+| `unsupported` | The server has no such request, or the request's `contract` is newer than the server's. Nothing was done. |
+| `malformed` | The request is not one: its arguments don't have the expected types. |
+| `stale-boot` | The request's `boot` is not this server's: it restarted since, and the ids you hold may name other panes now. Nothing was done. |
+| `not-found` | No group, project, workspace, tab or pane has that id. |
+| `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
+| `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
+| `failed` | Anything else. |
+
+The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.
+
+With `boot` set to the value from `contract` or `status`, a request kept across a restart is refused before it acts on an id the new server gave to something else.
+
+### Talking to the socket directly
+
+The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted). Only your own user can connect. Nothing needs to be sent before the request.
+
 ## Teach your agents
 
 An agent only knows what is in its context, so it doesn't know about these commands until you tell it. cornercase ships a short set of instructions as an agent skill (a `SKILL.md` in the repository); install it for Claude Code, Codex and other agents with:
@@ -444,7 +510,7 @@ The instructions tell agents to use the commands only when you ask them to open 
 | --- | --- |
 | `CORNERCASE` | `1` in every pane. The commands work there; only opening the window inside cornercase is refused. |
 | `CORNERCASE_PANE` | The id of the pane a shell runs in. The commands use it to know where they run. |
-| `CORNERCASE_SERVER` | Which server started the shell. A server only takes `CORNERCASE_PANE` as the pane a command runs in when this is its own, since every server numbers its panes from 1. |
+| `CORNERCASE_SERVER` | Which server started the shell, the `boot` of [`contract`](#contract-and-compatibility). A server only takes `CORNERCASE_PANE` as the pane a command runs in when this is its own, since every server numbers its panes from 1. |
 | `CORNERCASE_SOCKET` | Which server to talk to, as for every `cornercase` command. Panes don't get it: a shell inherits the server's environment, so `cornercase` in a pane finds its own server anyway, and setting it would also move `config.json` and the session (see [Files and environment](../../reference/files-and-environment/#with-cornercase_socket)). |
 
 ## Security

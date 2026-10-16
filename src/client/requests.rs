@@ -40,8 +40,8 @@ fn ask_on(mut stream: UnixStream, name: &'static str, command: control::Command)
 pub(crate) fn request(stream: &mut UnixStream, command: control::Command) -> Result<()> {
     let caller = std::env::var(control::PANE_ENV).ok().and_then(|id| id.parse().ok());
     let server = std::env::var(control::SERVER_ENV).ok();
-    let request =
-        serde_json::to_string(&Request { caller, server, command }).map_err(|e| Error::Control(e.to_string()))?;
+    let request = serde_json::to_string(&Request { caller, server, contract: None, boot: None, command })
+        .map_err(|e| Error::Control(e.to_string()))?;
     protocol::send(stream, &ClientMessage::Request(request))?;
     Ok(())
 }
@@ -93,3 +93,6 @@ pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
 const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 const LOST: &str = "the cornercase server closed the connection without stopping: it crashed, or this command \
     fell too far behind reading its events";
+
+#[cfg(test)]
+mod tests;
