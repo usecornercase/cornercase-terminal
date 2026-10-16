@@ -85,6 +85,21 @@ mod file {
     }
 
     #[test]
+    fn a_key_through_a_symlink_names_the_same_folder() {
+        let dir = TempDir::new();
+        let real = dir.path().join("real");
+        std::fs::create_dir(&real).expect("dir");
+        std::os::unix::fs::symlink(&real, dir.path().join("link")).expect("symlink");
+        let mut config = Config::default();
+        let settings = ProjectSettings { setup: "make".into(), teardown: String::new() };
+        config.projects.insert(format!("{}/link/", dir.path().display()), settings.clone());
+
+        assert_eq!(config.project(&real, None), settings);
+        config.set_project(&real, None, ProjectSettings::default());
+        assert!(config.projects.is_empty());
+    }
+
+    #[test]
     fn saving_a_project_replaces_its_key_and_empty_settings_remove_it() {
         let home = Path::new("/home/ana");
         let folder = Path::new("/home/ana/code/shop");

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -18,6 +19,7 @@ use crate::ui;
 impl App {
     pub(crate) fn set_setup_dir(&mut self, dir: &Path) {
         self.setup_dir = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        setup::sweep(&self.setup_dir);
     }
 
     pub(super) fn setup_script(&self, p: usize) -> Option<String> {
@@ -59,12 +61,13 @@ impl App {
             theme: &self.theme,
         };
         let mut term = Term::spawn(opts, self.tx.clone())?;
-        term.setup = Some(setup::Pane::Running { status, since: Instant::now(), seen: false });
+        term.setup = Some(setup::Pane::Running { status, since: Instant::now() });
         log::info!("worktree", "setup started", pane = id, bytes = script.len());
         Ok(term)
     }
 
     pub(super) fn push_setup_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
+        self.projects[p].workspaces[w].clear_failed_setups();
         let Some(script) = self.setup_script(p) else { return self.push_tab(p, w, area, name) };
         let path = self.projects[p].workspaces[w].path.clone();
         let term = self.spawn_setup(area, p, path, &script)?;
@@ -101,6 +104,10 @@ impl App {
         held.flat_map(|w| w.tabs.iter().flat_map(|t| t.panes.iter().map(|term| term.id))).collect()
     }
 
+    pub(super) fn workspace_setting_up(&self, workspace: u64) -> bool {
+        self.projects.iter().flat_map(|p| &p.workspaces).any(|w| w.id == workspace && w.setting_up())
+    }
+
     pub(super) fn setup_failure(&self, pane: u64) -> Option<String> {
         let workspace = self
             .projects
@@ -119,60 +126,46 @@ impl App {
     pub(super) fn watch_setups(&mut self, now: Instant) {
         let visible = self.visible_tab();
         let mut ended = Vec::new();
+        let mut running = HashMap::new();
         for project in &mut self.projects {
-            for tab in project.workspaces.iter_mut().flat_map(|w| &mut w.tabs) {
-                let shown = visible == Some(tab.id);
-                for term in &mut tab.panes {
-                    let shell = term.shell_pid();
-                    match &mut term.setup {
-                        Some(setup::Pane::Running { status, seen, .. }) => {
-                            let running = shell.is_some_and(setup::running_args);
-                            *seen |= running;
-                            let gone = *seen && shell.is_some() && !running;
-                            if let Some(code) = setup::read_status(status) {
-                                ended.push((term.id, Some(code)));
-                            } else if gone {
-                                ended.push((term.id, None));
+            for workspace in &mut project.workspaces {
+                let id = workspace.id;
+                for tab in &mut workspace.tabs {
+                    let shown = visible == Some(tab.id);
+                    for term in &mut tab.panes {
+                        match &mut term.setup {
+                            Some(setup::Pane::Running { status, .. }) => {
+                                running.insert(term.id, (id, status.clone()));
+                                if let Some(code) = setup::read_status(status) {
+                                    ended.push((term.id, code));
+                                }
                             }
+                            Some(setup::Pane::Failed { unseen, .. }) if shown => *unseen = false,
+                            _ => {}
                         }
-                        Some(setup::Pane::Failed { unseen, .. }) if shown => *unseen = false,
-                        _ => {}
                     }
                 }
             }
         }
+        let vanished: Vec<_> = self
+            .setups
+            .iter()
+            .filter(|(pane, _)| !running.contains_key(pane))
+            .map(|(pane, (workspace, status))| (*pane, *workspace, status.clone()))
+            .collect();
+        for (pane, workspace, status) in vanished {
+            let _ = std::fs::remove_file(&status);
+            let (dropped, _) = self.drop_workspace_launches(workspace);
+            log::info!("worktree", "setup pane closed", pane = pane, dropped = dropped);
+        }
+        self.setups = running;
         for (pane, code) in ended {
             self.setup_finished(pane, code, now);
         }
     }
 
-    fn setup_finished(&mut self, pane: u64, code: Option<i32>, now: Instant) {
-        let visible = self.visible_tab();
-        let Some((project, workspace, tab)) = self.projects.iter().find_map(|p| {
-            p.workspaces
-                .iter()
-                .find_map(|w| w.tabs.iter().find(|t| t.index_of(pane).is_some()).map(|t| (p.id, w.id, t.id)))
-        }) else {
-            return;
-        };
-        let Some(term) = self.projects.pane_by_mut(pane) else { return };
-        let Some(setup::Pane::Running { status, since, .. }) = term.setup.take() else { return };
-        term.became_shell();
-        let _ = std::fs::remove_file(&status);
-        let ms = u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);
+    fn drop_workspace_launches(&mut self, workspace: u64) -> (usize, usize) {
         let panes = self.workspace_panes(workspace);
-        if code == Some(0) {
-            log::info!("worktree", "setup finished", pane = pane, status = 0, ms = ms);
-            for launch in self.agents.launches.iter_mut().filter(|l| panes.contains(&l.term)) {
-                launch.wait_from(now);
-            }
-            return;
-        }
-        let failed = code.map_or_else(|| "no exit status".to_string(), |c| format!("exit status {c}"));
-        log::warning!("worktree", "setup failed", pane = pane, status = failed, ms = ms);
-        if let Some(term) = self.projects.pane_by_mut(pane) {
-            term.setup = Some(setup::Pane::Failed { code: failed, unseen: visible != Some(tab) });
-        }
         let dropped: Vec<_> = self.agents.launches.iter().filter(|l| panes.contains(&l.term)).map(|l| l.key).collect();
         self.agents.launches.retain(|l| !panes.contains(&l.term));
         for key in dropped.iter().flatten() {
@@ -183,9 +176,44 @@ impl App {
         if ended > 0 {
             log::info!("flow", "run ended", workspace = workspace, reason = "setup failed");
         }
+        (dropped.len(), ended)
+    }
+
+    fn setup_finished(&mut self, pane: u64, code: i32, now: Instant) {
+        let visible = self.visible_tab();
+        let Some((project, workspace, tab)) = self.projects.iter().find_map(|p| {
+            p.workspaces
+                .iter()
+                .find_map(|w| w.tabs.iter().find(|t| t.index_of(pane).is_some()).map(|t| (p.id, w.id, t.id)))
+        }) else {
+            return;
+        };
+        let Some(term) = self.projects.pane_by_mut(pane) else { return };
+        let Some(setup::Pane::Running { status, since }) = term.setup.take() else { return };
+        term.became_shell();
+        let _ = std::fs::remove_file(&status);
+        self.setups.remove(&pane);
+        let ms = u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);
+        if code == 0 {
+            log::info!("worktree", "setup finished", pane = pane, status = 0, ms = ms);
+            if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
+                self.projects[p].workspaces[w].clear_failed_setups();
+            }
+            let panes = self.workspace_panes(workspace);
+            for launch in self.agents.launches.iter_mut().filter(|l| panes.contains(&l.term)) {
+                launch.wait_from(now);
+            }
+            return;
+        }
+        let failed = format!("exit status {code}");
+        log::warning!("worktree", "setup failed", pane = pane, status = failed, ms = ms);
+        if let Some(term) = self.projects.pane_by_mut(pane) {
+            term.setup = Some(setup::Pane::Failed { code: failed, unseen: visible != Some(tab) });
+        }
+        let (dropped, ended) = self.drop_workspace_launches(workspace);
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
         let place = format!("{} › {}", self.project_label(&self.projects[p]), self.projects[p].workspaces[w].label());
-        let tail = if dropped.is_empty() && ended == 0 { "" } else { ": its agent did not start" };
+        let tail = if dropped == 0 && ended == 0 { "" } else { ": its agent did not start" };
         let message = format!("setup failed in {place}{tail}");
         if visible != Some(tab) {
             self.outbox

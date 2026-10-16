@@ -74,10 +74,12 @@ mod status_file {
     }
 
     #[test]
-    fn the_wrapper_is_recognised_by_its_name_in_the_arguments() {
-        assert!(!names_wrapper(&[]));
-        assert!(names_wrapper(&["/bin/sh".into(), NAME.into()]));
-        assert!(!names_wrapper(&["/bin/zsh".into()]));
+    fn a_sweep_removes_only_status_files() {
+        let dir = TempDir::new();
+        std::fs::write(status_file(dir.path(), 3), "0").expect("write");
+        std::fs::write(dir.path().join("config.json"), "{}").expect("write");
+        sweep(dir.path());
+        assert!(!status_file(dir.path(), 3).exists() && dir.path().join("config.json").exists());
     }
 }
 
@@ -107,6 +109,12 @@ mod teardown {
         let out = std::fs::read_to_string(root.path().join("out")).expect("out");
         let (d, r) = (dir.path().display(), root.path().display());
         assert_eq!(out.trim(), format!("{d} {r} {d} feat"));
+    }
+
+    #[test]
+    fn a_folder_that_is_gone_is_skipped_quietly() {
+        let dir = TempDir::new();
+        assert_eq!(teardown("false", &dir.path().join("gone"), dir.path(), "b", TEARDOWN_WITHIN), None);
     }
 
     #[test]

@@ -362,6 +362,9 @@ impl App {
                 let failed = teardown.and_then(|(script, branch)| {
                     setup::teardown(&script, &path, &repo, &branch, setup::TEARDOWN_WITHIN)
                 });
+                if let Some(why) = &failed {
+                    crate::log::debug!("worktree", "teardown failed", why = why);
+                }
                 worktree::remove(&repo, &path, force, unlock).map(|()| failed)
             },
             move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Removed { project, workspace, result, request })),
@@ -407,7 +410,10 @@ impl App {
             .unwrap_or_default();
         let teardown = found.is_some_and(|(p, _)| self.teardown_script(p).is_some());
         let (message, note) = match lock {
-            Some(lock) => (lock_message(&label, lock), lock_note(lock, check == Check::Changed).map(ui::Note::Error)),
+            Some(lock) => (
+                lock_message(&label, lock) + if teardown { " Its teardown runs first." } else { "" },
+                lock_note(lock, check == Check::Changed).map(ui::Note::Error),
+            ),
             None => (
                 format!(
                     "Remove the workspace {label} and delete its worktree folder {path}? {}The branch is kept.",

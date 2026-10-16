@@ -254,13 +254,13 @@ impl Config {
     pub(crate) fn project(&self, folder: &Path, home: Option<&Path>) -> ProjectSettings {
         self.projects
             .iter()
-            .find(|(key, _)| expand_home(key, home) == folder)
+            .find(|(key, _)| names_folder(key, folder, home))
             .map(|(_, s)| s.clone())
             .unwrap_or_default()
     }
 
     pub(crate) fn set_project(&mut self, folder: &Path, home: Option<&Path>, settings: ProjectSettings) {
-        self.projects.retain(|key, _| expand_home(key, home) != folder);
+        self.projects.retain(|key, _| !names_folder(key, folder, home));
         let settings = settings.normalised();
         if !settings.is_empty() {
             self.projects.insert(crate::text::display_path(folder, home), settings);
@@ -309,6 +309,11 @@ fn add_tab(keys: &mut Map<String, Value>, written_since: &str, tab: &str, after:
 
 pub(crate) fn save(path: &Path, config: &Config) -> io::Result<()> {
     persist::save(path, config)
+}
+
+fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
+    let key = expand_home(key, home);
+    key == folder || key.canonicalize().is_ok_and(|key| key == folder)
 }
 
 pub(crate) fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {

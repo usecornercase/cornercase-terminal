@@ -275,7 +275,14 @@ impl App {
         if then.focus {
             self.show(Item::Pane(pane))?;
         }
-        let Some((spec, _)) = launch else { return Ok(false) };
+        let Some((spec, _)) = launch else {
+            let workspace = self.projects[p].workspaces[w].id;
+            if self.projects[p].workspaces[w].setting_up() {
+                pending.stage = Stage::Setup(workspace);
+                return Ok(true);
+            }
+            return Ok(false);
+        };
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
         launch.trust = pending

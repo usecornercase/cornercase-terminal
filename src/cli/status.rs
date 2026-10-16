@@ -72,6 +72,10 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
         let mut parts = vec![workspace.name.clone(), place(&workspace.path)];
         parts.extend(workspace.branch.as_ref().map(|branch| format!("branch {branch}")));
         parts.extend(workspace.worktree.then(|| "worktree".to_string()));
+        parts.extend(workspace.setup.as_deref().map(|state| match state {
+            "running" => "setting up".to_string(),
+            _ => "setup failed".to_string(),
+        }));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
         parts.extend(workspace.pull_request.as_ref().map(|pull| match &pull.checks {
             Some(checks) => format!("pull request #{} {}, checks {checks}", pull.number, pull.state),

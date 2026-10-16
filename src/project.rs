@@ -222,6 +222,14 @@ impl Workspace {
         panes().find(|(_, s)| s.running()).or_else(|| panes().next())
     }
 
+    pub(crate) fn clear_failed_setups(&mut self) {
+        for term in self.tabs.iter_mut().flat_map(|t| &mut t.panes) {
+            if matches!(term.setup, Some(setup::Pane::Failed { .. })) {
+                term.setup = None;
+            }
+        }
+    }
+
     pub(crate) fn setting_up(&self) -> bool {
         self.setup().is_some_and(|(_, s)| s.running())
     }

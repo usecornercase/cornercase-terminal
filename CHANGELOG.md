@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.105
+
+- **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
 ## 0.12.104
 
 - Click a workspace's pull request number (`#485✗`) to see its pull request and checks, the same dialog as **pull request #485** in its menu. It works in the lists, the tree and the compact menu, and the number is underlined under the pointer.
@@ -16,10 +20,6 @@ Every pull request that changes the app adds a section here for its new version.
 - Cursor shows `!` when it needs you only with `/status-indicators` turned on in Cursor; without it a permission prompt shows as working. Cursor keeps no token counts on disk, so Stats has none for it.
 - This was built from Cursor CLI's code and has not been checked against a live session: if its chat store looks different from what cornercase expects, the tab shows no model or context rather than a wrong one.
 - A tab running a Node 24 program started through a launcher is named after the program instead of `MainThread`.
-
-## 0.12.104
-
-- **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
 
 ## 0.12.101
 

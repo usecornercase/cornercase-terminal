@@ -110,3 +110,89 @@ fn the_teardown_runs_before_the_folder_goes_and_a_failure_still_removes_it() {
     assert_eq!(std::fs::read_to_string(&team.marker).expect("marker").trim(), path.display().to_string());
     assert!(!path.exists());
 }
+
+fn new_worktree(app: &mut App, name: &str) {
+    let new = wire::NewWorkspace { name: name.into(), worktree: true, ..wire::NewWorkspace::default() };
+    ask(app, None, Command::NewWorkspace(new));
+}
+
+#[test]
+fn new_workspace_answers_once_the_setup_is_done_and_status_shows_it_meanwhile() {
+    let mut team = team("sleep 1\necho done > MARKER", "");
+    new_worktree(&mut team.app, "feat/slow");
+    pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
+        a.projects[0].workspaces.iter().any(|w| w.setting_up())
+    });
+    let report = value(&mut team.app, None, Command::Status(wire::Status {}));
+    let setup = report.pointer("/projects/0/workspaces").and_then(|w| w.as_array()).expect("workspaces");
+    assert!(setup.iter().any(|w| w["setup"] == "running"), "{report}");
+    assert!(answers(&mut team.app).is_empty());
+
+    done(answered(&mut team.app, &team.rx, "the answer comes after the setup"));
+
+    assert!(team.marker.exists());
+}
+
+#[test]
+fn a_failed_setup_is_forgotten_once_it_is_run_again_successfully() {
+    let mut team = team("test -f \"$CORNERCASE_ROOT/ok\"", "");
+    new_worktree(&mut team.app, "feat/retry");
+    let message = error(answered(&mut team.app, &team.rx, "the request fails"));
+    assert!(message.contains("exit status 1"), "{message}");
+    let workspace = team.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("worktree").id;
+    std::fs::write(team.repo.path().join("ok"), "").expect("write");
+
+    team.app.run_setup(workspace, AREA);
+    refreshing(&mut team.app, &team.rx, "the setup passes", |a| {
+        a.projects[0].workspaces.iter().all(|w| !w.setting_up()) && a.setup_failure(1).is_none()
+    });
+
+    let target = team.app.projects[0].workspaces.iter().find(|w| w.id == workspace).expect("workspace");
+    assert!(
+        target
+            .tabs
+            .iter()
+            .flat_map(|t| &t.panes)
+            .all(|t| !matches!(t.setup, Some(git::worktree::setup::Pane::Failed { .. })))
+    );
+}
+
+#[test]
+fn closing_the_setup_tab_drops_the_agent_and_its_status_file() {
+    let mut team = team("sleep 30", "");
+    start_in_worktree(&mut team.app);
+    pump_until(&mut team.app, &team.rx, "the setup starts", |a| {
+        a.projects[0].workspaces.iter().any(|w| w.setting_up())
+    });
+    refreshing(&mut team.app, &team.rx, "it is watched", |a| !a.setups.is_empty());
+    let (pane, (_, status)) = team.app.setups.iter().next().map(|(p, v)| (*p, v.clone())).expect("watched");
+    std::fs::write(&status, "").expect("status");
+    let tab = team.app.projects[0]
+        .workspaces
+        .iter()
+        .flat_map(|w| &w.tabs)
+        .find(|t| t.index_of(pane).is_some())
+        .expect("tab")
+        .id;
+    let (project, workspace) =
+        (team.app.projects[0].id, team.app.projects[0].workspaces.iter().find(|w| w.worktree).expect("w").id);
+    ask(
+        &mut team.app,
+        None,
+        Command::Close(wire::Close { item: Item::Tab(tab), remove_worktree: false, force: false }),
+    );
+    let _ = (project, workspace);
+
+    let mut got = Vec::new();
+    wait_until("the tab closes and the start fails", || {
+        drain(&mut team.app, &team.rx);
+        team.app.refresh(Instant::now());
+        got.extend(answers(&mut team.app));
+        got.len() >= 2
+    });
+    let message =
+        got.into_iter().find_map(|r| if let Response::Error(m) = r { Some(m) } else { None }).expect("the start fails");
+
+    assert!(message.contains("closed before it was ready") || message.contains("did not"), "{message}");
+    assert!(!status.exists());
+}

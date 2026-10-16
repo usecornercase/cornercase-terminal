@@ -26,7 +26,7 @@ exec "$3"
 
 #[derive(Debug)]
 pub(crate) enum Pane {
-    Running { status: PathBuf, since: Instant, seen: bool },
+    Running { status: PathBuf, since: Instant },
     Failed { code: String, unseen: bool },
 }
 
@@ -61,15 +61,21 @@ pub(crate) fn read_status(path: &Path) -> Option<i32> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-pub(crate) fn names_wrapper(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == NAME)
-}
-
-pub(crate) fn running_args(pid: i32) -> bool {
-    names_wrapper(&process::args(pid))
+pub(crate) fn sweep(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("setup-") && name.ends_with(".status") {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 pub(crate) fn teardown(script: &str, worktree: &Path, root: &Path, branch: &str, within: Duration) -> Option<String> {
+    if !worktree.is_dir() {
+        return None;
+    }
     let mut command = Command::new("/bin/sh");
     command
         .args(["-ec", script])

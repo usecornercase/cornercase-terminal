@@ -90,6 +90,7 @@ enum Stage {
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
     Reading,
+    Setup(u64),
     Restart { caller: Option<u64> },
 }
 
