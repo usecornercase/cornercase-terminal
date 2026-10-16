@@ -30,7 +30,7 @@ A plugin can ship ready-made archives, one per platform, each with its sha256. c
 ```sh
 cornercase plugin update              # every installed plugin
 cornercase plugin update acme.notes   # one
-cornercase plugin remove acme.notes   # stops it and deletes its installed copy
+cornercase plugin remove acme.notes   # turns it off, waits for it to stop, deletes its installed copy
 ```
 
 `update` fetches the same address, folder and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.

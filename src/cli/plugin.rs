@@ -13,6 +13,7 @@ use crate::paths;
 use crate::plugins::install::{self, Fetched, Removed, Update};
 use crate::plugins::registry::{Source, missing, short};
 use crate::plugins::source::Origin;
+use crate::plugins::supervise;
 use crate::plugins::{Places, Plugin, Registry};
 
 pub(super) fn run(action: PluginAction) -> Result<bool> {
@@ -31,10 +32,15 @@ pub(super) fn run(action: PluginAction) -> Result<bool> {
         }
         PluginAction::Install { source, yes } => install_from(&places, &source, yes)?,
         PluginAction::Update { id, yes } => update(&places, &registry, id, yes)?,
-        PluginAction::Remove { id } => match install::remove(&places, &id).map_err(Error::Plugin)? {
-            Removed::Unlinked => println!("forgot {id}; its folder and its files stay where they are"),
-            Removed::Deleted => println!("removed {id} and deleted its installed copy; its settings and data stay"),
-        },
+        PluginAction::Remove { id } => {
+            if supervise::running(&places, &id).is_ok_and(|pids| !pids.is_empty()) {
+                println!("stopping {id}…");
+            }
+            match install::remove(&places, &id).map_err(Error::Plugin)? {
+                Removed::Unlinked => println!("forgot {id}; its folder and its files stay where they are"),
+                Removed::Deleted => println!("removed {id} and deleted its installed copy; its settings and data stay"),
+            }
+        }
         PluginAction::Unlink { id } => {
             if registry.entry(&id).is_ok_and(|entry| entry.source.installed()) {
                 return Err(Error::Plugin(format!("`{id}` was installed; `cornercase plugin remove {id}` removes it")));

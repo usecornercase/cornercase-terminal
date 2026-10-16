@@ -3,18 +3,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::archive;
 use super::manifest::{self, Manifest};
 use super::registry::{Entry, Plugin, Registry, Source, short};
 use super::run::{self, Places, private_dir};
 use super::source::Origin;
+use super::supervise;
 use crate::git::worktree;
 use crate::http::{self, Service};
 use crate::process;
 
 const BUILD_WITHIN: Duration = Duration::from_mins(15);
+const STOP_WAIT: Duration = Duration::from_secs(10);
+const QUIET_POLLS: u32 = 2;
 const STAGING: &str = ".staging";
 const CHECKOUT: &str = "plugin";
 const SERVICE: Service = Service { name: "the plugin's download", rejected: "the plugin's download was refused" };
@@ -365,10 +368,37 @@ fn build(fetched: &Fetched, places: &Places) -> Result<(), String> {
 }
 
 pub(crate) fn remove(places: &Places, id: &str) -> Result<Removed, String> {
+    remove_within(places, id, supervise::SETTLE, STOP_WAIT)
+}
+
+fn remove_within(places: &Places, id: &str, settle: Duration, within: Duration) -> Result<Removed, String> {
+    let save =
+        |registry: &Registry| registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()));
     let mut registry = Registry::open(&places.registry)?;
-    let installed = registry.entry(id)?.source.installed();
+    if registry.entry(id)?.enabled {
+        registry.set_enabled(id, false)?;
+        save(&registry)?;
+    }
+    let off = registry.entry(id)?.clone();
+    let left = stopped(places, id, settle, within).map_err(|e| {
+        format!("cannot tell whether `{id}` still runs: {e}; it is turned off and still installed, nothing was deleted")
+    })?;
+    if !left.is_empty() {
+        let pids = left.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+        return Err(format!(
+            "`{id}` is turned off but still runs (pid {pids}) after {} s; it is still installed, run `cornercase plugin remove {id}` again",
+            within.as_secs().max(1)
+        ));
+    }
+    let mut registry = Registry::open(&places.registry)?;
+    if registry.entry(id).ok() != Some(&off) {
+        return Err(format!(
+            "`{id}` changed while it was being removed; nothing was deleted, run `cornercase plugin remove {id}` again"
+        ));
+    }
+    let installed = off.source.installed();
     registry.unlink(id);
-    registry.save().map_err(|e| format!("cannot save {}: {e}", places.registry.display()))?;
+    save(&registry)?;
     if !installed {
         return Ok(Removed::Unlinked);
     }
@@ -377,6 +407,21 @@ pub(crate) fn remove(places: &Places, id: &str) -> Result<Removed, String> {
         Ok(()) => Ok(Removed::Deleted),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::Deleted),
         Err(e) => Err(format!("removed from the list, but cannot delete {}: {e}", folder.display())),
+    }
+}
+
+fn stopped(places: &Places, id: &str, settle: Duration, within: Duration) -> Result<Vec<i32>, String> {
+    let start = Instant::now();
+    std::thread::sleep(settle);
+    let until = start + settle + within;
+    let mut quiet = 0;
+    loop {
+        let left = supervise::running(places, id)?;
+        quiet = if left.is_empty() { quiet + 1 } else { 0 };
+        if quiet >= QUIET_POLLS || Instant::now() >= until {
+            return Ok(left);
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
 
