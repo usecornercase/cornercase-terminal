@@ -161,6 +161,10 @@ test('a failed GitHub request fails the crawl instead of dropping the repository
   assert.deepEqual(vanished, []);
 });
 
+test('a head answer without a commit fails the crawl', async () => {
+  await assert.rejects(crawl(async (u) => (u.includes('/commits/') ? answer(200, {}) : github([])(u)), undefined, null), /no commit/);
+});
+
 test('a failed manifest download fails the crawl and is never counted as invalid', async () => {
   await assert.rejects(
     crawl(async (u) => (u.startsWith('https://raw.githubusercontent.com') ? answer(503, '') : github([])(u)), undefined, null),
@@ -183,6 +187,12 @@ test('manifests the app would refuse are invalid', () => {
     MANIFEST.replace('command = ["./notes"]', 'command = [1]'),
     `${MANIFEST}\n[[build]]\ncommand = ["make", "a\\u001bb"]\n`,
     `${MANIFEST}\n[[build]]\ncommand = ["make", "a\\u202eb"]\n`,
+    `"a\\u001bb" = 1\n${MANIFEST}`,
+    `${MANIFEST}\n[[actions]]\nid = "open"\ntitle = "again"\ncontexts = ["tab"]\ncommand = ["x"]\n`,
+    MANIFEST.replace('title = "open notes"', 'title = "  "'),
+    MANIFEST.replace('command = ["./notes"]', 'command = ["./notes", 1]'),
+    `${MANIFEST}\n[[build]]\ncommand = ["../make"]\n`,
+    `${MANIFEST}\n[[build]]\ncommand = []\n`,
     `${MANIFEST}\n[[events]]\non = "started"\ncommand = ["x"]\n`,
     `${MANIFEST}\n[[service]]\nid = "Bad Id"\ncommand = ["x"]\n`,
     `${MANIFEST}\n[download.macos-arm]\nurl = "http://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`,
@@ -193,6 +203,7 @@ test('manifests the app would refuse are invalid', () => {
   assert.deepEqual(scan(bad.map((text) => ({ path: '', text }))), { plugins: [], invalid: bad.length });
   const good = `${MANIFEST}\napi = 0\n[[events]]\non = "opened"\ncommand = ["x"]\n[[service]]\nid = "s"\ncommand = ["./s"]\n[[build]]\ncommand = ["make"]\n[download.macos-arm]\nurl = "https://example.com/a.tar.gz"\nsha256 = "${'a'.repeat(64)}"\n`;
   assert.equal(scan([{ path: '', text: good.replace(`api = 0\n`, '') }]).plugins.length, 1);
+  for (const api of [0, 1]) assert.equal(scan([{ path: '', text: `api = ${api}\n${MANIFEST}` }]).plugins.length, 1, `api = ${api}`);
 });
 
 test('unblocking an id brings its unchanged plugin back', async () => {
