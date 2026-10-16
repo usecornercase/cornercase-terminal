@@ -141,6 +141,25 @@ test('the publish block is a terminal line built from the topic and manifest con
   assert.ok(!astro.includes('class="kicker"'));
 });
 
+test('the publish block has a visible title, a paragraph, its own guide link and a plain command box', () => {
+  const block = astro.slice(astro.indexOf('<section class="publish"'), astro.indexOf('</section>', astro.indexOf('<section class="publish"')));
+  const order = [
+    '<p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>',
+    '<h2 id="publish-title">Publish yours</h2>',
+    'Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic.',
+    'with no submission and no review.',
+    '<p class="guide-link"><a href={`${guide}#publish-a-plugin`}>How publishing works →</a></p>',
+    '<div class="term">',
+  ].map((part) => block.indexOf(part));
+  assert.ok(order.every((at) => at >= 0), String(order));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+  assert.ok(!block.includes('sr-only'));
+  assert.ok(!astro.includes('.plugins-page .publish code'), 'the light inline-code field must not reach the command box');
+  assert.ok(astro.includes('.plugins-page .publish .after code'));
+  const rule = astro.slice(astro.indexOf('.plugins-page .term code {'), astro.indexOf('}', astro.indexOf('.plugins-page .term code {')));
+  assert.ok(/padding: 0;/.test(rule) && /border: 0;/.test(rule) && /background: none;/.test(rule), 'the command sits on the box, not in a field');
+});
+
 test('the header is a command, a title, its output and one sentence, in one column', () => {
   const header = astro.slice(astro.indexOf('<header class="intro">'), astro.indexOf('</header>'));
   assert.ok(header.includes('<p class="eyebrow cmd-line" aria-hidden="true">$ cornercase plugin list</p>'));
@@ -148,9 +167,10 @@ test('the header is a command, a title, its output and one sentence, in one colu
   assert.ok(header.includes('<p class="out">{headline(page.plugins, page.repos)}</p>'));
   assert.ok(header.includes("Small tools other people built on cornercase's commands. Install one with <code>cornercase plugin install</code>."));
   assert.ok(header.includes("Listings aren't reviewed, so install at your own discretion.") && header.includes('Trust guidance →'));
-  for (const old of ['the marketplace', 'Built by the community', 'class="side"', 'data-hero-count', 'Publish yours', 'plugins across', 'discovered automatically']) {
+  for (const old of ['the marketplace', 'Built by the community', 'class="side"', 'data-hero-count', 'plugins across', 'discovered automatically']) {
     assert.ok(!astro.includes(old), old);
   }
+  assert.ok(!header.includes('Publish yours'), 'the header has no publish link');
   assert.ok(!/\.intro \{\s*display: grid/.test(astro), 'the header has no second column');
 });
 

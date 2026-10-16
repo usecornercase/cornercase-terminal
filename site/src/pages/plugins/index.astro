@@ -213,16 +213,21 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
         </section>
 
         <section class="publish" aria-labelledby="publish-title">
-          <h2 class="sr-only" id="publish-title">Publish your plugin</h2>
+          <div class="shelf-head">
+            <div>
+              <p class="eyebrow cmd-line" aria-hidden="true">$ {topicCommand}</p>
+              <h2 id="publish-title">Publish yours</h2>
+            </div>
+          </div>
+          <p class="after">
+            Add a <code>{MANIFEST}</code> to a public repository, then tag it with the topic. It shows up here on the next refresh, with no submission and no review.
+          </p>
+          <p class="guide-link"><a href={`${guide}#publish-a-plugin`}>How publishing works →</a></p>
           <div class="term">
             <span class="ps" aria-hidden="true">$</span>
             <code>{topicCommand}</code>
             <button type="button" class="copy" data-plugin-copy={topicCommand} aria-label="Copy the command that adds the topic">copy</button>
           </div>
-          <p class="after">
-            It gets listed on the next index refresh: no submission and no review queue. The repository also needs a <code>{MANIFEST}</code>.
-            <a href={`${guide}#publish-a-plugin`}>how publishing works →</a>
-          </p>
         </section>
       </div>
     </main>
@@ -262,7 +267,7 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     text-wrap: pretty;
   }
   .plugins-page .lead code,
-  .plugins-page .publish code {
+  .plugins-page .publish .after code {
     padding: 1px 6px;
     border-radius: 6px;
     background: rgb(255 255 255 / 0.07);
@@ -687,6 +692,10 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
   .plugins-page .term code {
     flex: 1;
     min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
     font-size: 14px;
     line-height: 1.5;
     color: var(--text);
@@ -708,21 +717,19 @@ const topicCommand = `gh repo edit --add-topic ${TOPIC}`;
     color: #fff;
   }
   .plugins-page .after {
-    margin: 14px 0 0;
+    margin: 0;
+    font-size: 15.5px;
+    color: var(--text-2);
+  }
+  .plugins-page .guide-link {
+    margin: 10px 0 22px;
     font-size: 14.5px;
-    color: var(--text-3);
   }
-  .plugins-page .after code {
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: rgb(255 255 255 / 0.07);
-    font-size: 0.9em;
-  }
-  .plugins-page .after a {
+  .plugins-page .guide-link a {
     color: var(--purple-2);
     text-decoration: none;
   }
-  .plugins-page .after a:hover {
+  .plugins-page .guide-link a:hover {
     text-decoration: underline;
   }
   @media (max-width: 56rem) {
