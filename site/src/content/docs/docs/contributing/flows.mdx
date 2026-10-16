@@ -12,13 +12,13 @@ The [community flows](../../../flows/) are not a folder in this repository and n
 1. Export the flow you made: `cornercase flow export 'My flow' > flow.toml`.
 2. Put it in a public repository, as `flow.toml` at the root (or `cornercase-flow.toml`). The repository's description and topics are shown next to it; a `description` in the flow is shown first.
 3. Add the topic `cornercase-flow` to the repository (the gear next to **About**).
-4. Wait for the daily refresh. The page lists the repository, its stars and the flow, and people import it with `cornercase flow import you/your-repo`.
+4. Wait for the hourly refresh. The page lists the repository, its stars and the flow, and people import it with `cornercase flow import you/your-repo`.
 
 Try the file first with the cornercase you have: `cornercase flow import ./flow.toml --name test`, then `cornercase flow list` shows the flow with anything that stops it from running.
 
 ## What gets listed
 
-A script reads the repositories with the topic once a day, most starred first, and skips with a log line any that:
+A script reads the repositories with the topic once an hour, most starred first, and skips with a log line any that:
 
 - has neither `flow.toml` nor `cornercase-flow.toml` at its root, is a fork, or is archived;
 - has a file over 256 KiB or one cornercase cannot read, with no roles, an unknown agent, a role that is in no stage or a loop that goes back to a stage that does not exist;
