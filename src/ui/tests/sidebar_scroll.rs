@@ -82,6 +82,7 @@ fn hidden_workspace_rows_count_workspaces_and_tabs_only() {
     let v = View {
         has_project: true,
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "main".into(),
             tabs: vec!["zsh".into(); 10],
             behind: 0,

@@ -319,7 +319,7 @@ fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
 
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {
     let r = row_rect(app, row);
-    Position::new(r.x + 3, r.y)
+    Position::new(r.x + 6, r.y)
 }
 
 fn row_close(app: &App, row: WorkspaceRow) -> Position {
@@ -457,6 +457,7 @@ mod start_flow_dialog;
 mod tab_bar;
 mod tabs;
 mod tree_sidebar;
+mod workspace_folds;
 mod workspaces;
 
 #[test]

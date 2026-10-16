@@ -57,13 +57,14 @@ impl App {
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
         let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
+        let folds = tree || self.drawn.tab_bar.is_empty();
         let jobs = self.events.listening();
         let mut notices = Vec::new();
         let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
         for (project, open) in self.projects.iter_mut().zip(open) {
             let shown = if tree { open } else { active == Some(project.id) };
             for workspace in &mut project.workspaces {
-                let measure = config.memory && shown && !(tree && workspace.collapsed);
+                let measure = config.memory && shown && !(folds && workspace.collapsed);
                 for tab in &mut workspace.tabs {
                     let seen = visible == Some(tab.id);
                     for term in &mut tab.panes {

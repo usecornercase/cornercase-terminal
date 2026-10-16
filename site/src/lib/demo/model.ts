@@ -301,6 +301,7 @@ function mostUrgent(statuses: (Status | null)[]): Status | null {
 }
 
 export const needsYou = (s: Status | null): boolean => s === 'done' || s === 'pending' || s === 'failed' || s === 'waiting';
+export const highest = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses);
 export const attention = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses.filter(needsYou));
 
 export function markPane(pane: Pane, pending: boolean): void {

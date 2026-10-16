@@ -151,7 +151,8 @@ impl App {
     pub(super) fn tab_lines(&self) -> ui::TabLines {
         let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         let lines = self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default();
-        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty())
+        let folded = self.project().map(|p| p.workspaces.iter().map(|w| w.collapsed).collect()).unwrap_or_default();
+        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty()).folded(folded)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {
@@ -179,6 +180,10 @@ impl App {
             Some(WorkspaceHit::Workspace(w)) => {
                 let target = Target::Workspace(project.id, project.workspaces[w].id);
                 self.grab(target, rect(WorkspaceRow::Workspace(w)), area, false);
+            }
+            Some(WorkspaceHit::Fold(w)) => {
+                let target = Target::Workspace(project.id, project.workspaces[w].id);
+                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, true);
             }
             Some(WorkspaceHit::CloseWorkspace(w)) if ask && !project.workspaces[w].worktree => {
                 self.overlay =
@@ -255,9 +260,12 @@ impl App {
     pub(super) fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let Some(project) = self.project() else { return };
         let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
-            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w)) => {
-                Target::Workspace(project.id, project.workspaces[w].id)
-            }
+            Some(
+                WorkspaceHit::Workspace(w)
+                | WorkspaceHit::Fold(w)
+                | WorkspaceHit::CloseWorkspace(w)
+                | WorkspaceHit::WorkspaceMenu(w),
+            ) => Target::Workspace(project.id, project.workspaces[w].id),
             Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
                 let workspace = &project.workspaces[w];
                 Target::Tab(project.id, workspace.id, workspace.tabs[t].id)

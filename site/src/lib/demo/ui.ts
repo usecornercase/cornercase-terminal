@@ -69,7 +69,7 @@ import {
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -692,14 +692,15 @@ export class Painter {
     this.rowButtons(b.r, b.pitch, b.bg, () => app.askCloseProject(project.id), menu);
   }
 
-  private workspaceRow(b: Band, p: number, w: number, badge: boolean, click: (x: number, y: number) => void): void {
+  private workspaceRow(b: Band, p: number, w: number, badge: 'off' | 'attention' | 'highest', click: (x: number, y: number) => void): void {
     const app = this.app;
     const project = app.projects[p];
     const ws = project.workspaces[w];
     const active = p === app.active && w === project.active;
     const style: Style = ws.removing ? { fg: 8, add: BOLD } : active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
     const room = this.room(b);
-    const status = badge ? attention(ws.tabs.map(tabStatus)) : null;
+    const statuses = ws.tabs.map(tabStatus);
+    const status = badge === 'highest' ? highest(statuses) : badge === 'attention' ? attention(statuses) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
     const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...behind];
     const marks = fitTags(tags, room);
@@ -824,7 +825,7 @@ export class Painter {
       else if (row.kind === 'project') {
         this.projectRow({ r, pitch, lead, bg }, row.p, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p) : app.selectProject(row.p)));
       } else if (row.kind === 'ws') {
-        this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, !!shape.tabBar || folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
+        this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, shape.tabBar ? 'attention' : folded(row) ? 'highest' : 'off', (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
       } else if (row.kind === 'tab') {
         this.tabRow({ r, pitch, lead: [marker(mark), spaces], bg }, row.p, row.w, row.t, mark);
         this.guide(guide, r, 'tee');
@@ -913,7 +914,9 @@ export class Painter {
     if (!p) return;
     const list = areas.workspacesList;
     const tabs = app.tabLines();
-    const all = workspaceRows(tabs, app.tabsListed());
+    const listed = app.tabsListed();
+    const folds = app.workspacesFolded();
+    const all = workspaceRows(tabs, listed, folds);
     const base = workspaceLayout(list, areas.pitch, all, tabs, app.workspacesScroll);
     const drag = app.rowDragView();
     const landing = drag?.list === 'workspaces' ? drag.landing : null;
@@ -933,8 +936,14 @@ export class Painter {
         return;
       }
       if (spec.kind === 'ws') {
-        this.workspaceRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, dragged(spec)) }, app.active, spec.w, true, () => app.selectWorkspace(app.active, spec.w));
-        this.guide(guide, r, 'top');
+        const folded = listed && !!folds[spec.w];
+        const marked = folded && spec.w === p.active;
+        const lead = [marker(marked), listed ? arrow(folded) : seg('  ')];
+        const fold = rect(r.x, r.y, 4, r.h);
+        const click = (x: number, y: number) => (listed && contains(fold, x, y) ? app.toggleFold(app.active, spec.w) : app.selectWorkspace(app.active, spec.w));
+        this.workspaceRow({ r, pitch, lead, bg: this.rowBackground(r, marked || dragged(spec)) }, app.active, spec.w, folded ? 'highest' : 'attention', click);
+        if (!folded) this.guide(guide, r, 'top');
+        if (marked) this.rail(r);
       } else if (spec.kind === 'tab') {
         const active = spec.w === p.active && spec.t === p.workspaces[spec.w].active;
         this.tabRow({ r, pitch, lead: [marker(active), seg('  ')], bg: this.rowBackground(r, active || dragged(spec)) }, app.active, spec.w, spec.t, active);

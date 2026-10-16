@@ -6,7 +6,7 @@ expression: render(&with_bar()).backend()
 "                                                         │  Opus 5.5 · 15%                          "
 " Projects                      │ Workspaces              │                                          "
 "                               │                         │                                          "
-"▌ cornercase (1)               │  main                   │                                          "
+"▌ cornercase (1)               │    main                 │                                          "
 "                               │                         │                                          "
 "  + New                        │  + New                  │                                          "
 "                               │                         │                                          "

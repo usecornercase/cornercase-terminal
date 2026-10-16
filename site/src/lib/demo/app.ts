@@ -545,7 +545,7 @@ export class App {
     const now = this.now();
     for (const p of this.projects) {
       for (const w of p.workspaces) {
-        const measured = this.config.memory && shown(p) && !(tree && w.collapsed);
+        const measured = this.config.memory && shown(p) && !((tree || this.tabsListed()) && w.collapsed);
         for (const t of w.tabs) {
           for (const pane of t.panes) {
             const agent = agentIn(pane);
@@ -662,6 +662,10 @@ export class App {
       this.projects.map((p) => this.groupIndex(p.group)),
       this.groups.map((g) => g.collapsed),
     );
+  }
+
+  workspacesFolded(): boolean[] {
+    return this.project()?.workspaces.map((w) => !!w.collapsed) ?? [];
   }
 
   tabLines(): number[][] {
@@ -811,7 +815,7 @@ export class App {
     }
     if ((row.kind !== 'ws' && row.kind !== 'tab') || row.p !== this.active) return null;
     const listed: WorkspaceRow = row.kind === 'ws' ? { kind: 'ws', w: row.w } : { kind: 'tab', w: row.w, t: row.t };
-    const landing = workspaceDrop(areas.workspacesList, areas.pitch, this.tabLines(), this.workspacesScroll, listed, h.x, h.y, this.tabsListed());
+    const landing = workspaceDrop(areas.workspacesList, areas.pitch, this.tabLines(), this.workspacesScroll, listed, h.x, h.y, this.tabsListed(), this.workspacesFolded());
     return { list: 'workspaces', row: listed, landing };
   }
 
@@ -865,7 +869,7 @@ export class App {
       ? treeLayout(areas.list, shape, treeRows(shape), this.projectsScroll)
       : sidebar
         ? sidebarLayout(areas.list, areas.pitch, this.sidebarRows(), this.projectsScroll)
-        : workspaceLayout(areas.workspacesList, areas.pitch, workspaceRows(this.tabLines(), this.tabsListed()), this.tabLines(), this.workspacesScroll);
+        : workspaceLayout(areas.workspacesList, areas.pitch, workspaceRows(this.tabLines(), this.tabsListed(), this.workspacesFolded()), this.tabLines(), this.workspacesScroll);
     const delta = rows.edge(h.x, h.y);
     if (!delta) return;
     if (sidebar) this.projectsScroll = rows.scrolled(delta);

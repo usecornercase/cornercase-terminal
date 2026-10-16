@@ -43,6 +43,7 @@ impl App {
     pub(super) fn workspace_entry(&self, w: &Workspace) -> ui::WorkspaceEntry {
         ui::WorkspaceEntry {
             name: w.label(),
+            collapsed: w.collapsed,
             tabs: w.tabs.iter().map(|t| self.tab_entry(t)).collect(),
             behind: w.behind,
             pull: self.pull_mark(w),
@@ -73,6 +74,7 @@ impl App {
                     behind: workspace.behind,
                     pull: self.pull_mark(workspace),
                     removing: workspace.removing(),
+                    collapsed: workspace.collapsed,
                     setting_up: workspace.setting_up(),
                 }
             };

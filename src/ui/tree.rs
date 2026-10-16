@@ -13,7 +13,7 @@ use super::rows::{
 };
 use super::sidebar::{NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
-use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band, pull_badge};
+use super::workspaces::{Badge, Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band, pull_badge};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TreeShape {
@@ -130,6 +130,14 @@ fn tree_indent(shape: &TreeShape, row: TreeRow) -> u16 {
     2 + 2 * tree_depth(shape, row)
 }
 
+fn badge_of(shape: &TreeShape, row: TreeRow) -> Badge {
+    match (shape.tab_bar, folded(shape, row)) {
+        (true, _) => Badge::Attention,
+        (false, true) => Badge::Highest,
+        (false, false) => Badge::Off,
+    }
+}
+
 fn arrow_in(r: Rect, shape: &TreeShape, row: TreeRow) -> Rect {
     match row {
         TreeRow::Workspace(..) if shape.tab_bar => Rect::default(),
@@ -205,7 +213,7 @@ pub(crate) fn tree_pull(
 ) -> Option<Rect> {
     let row = TreeRow::Workspace(p, w);
     let lead = usize::from(tree_indent(shape, row)) + 2;
-    pull_badge(tree_row(list, shape, scroll, row), 1, lead, entry, shape.tab_bar || folded(shape, row))
+    pull_badge(tree_row(list, shape, scroll, row), 1, lead, entry, badge_of(shape, row))
 }
 
 pub(crate) struct TreeView {
@@ -282,7 +290,7 @@ pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
                 let fold = if shape.tab_bar { Span::raw("  ") } else { arrow(view.muted, folded(shape, row)) };
                 let band = band(vec![marker(mark), Span::raw(lead), fold]);
                 let active = p == view.active && w == view.active_workspace;
-                draw_workspace_band(f, view, band, entry, active, shape.tab_bar || folded(shape, row));
+                draw_workspace_band(f, view, band, entry, active, badge_of(shape, row));
             }
             TreeRow::Tab(p, w, tab) => {
                 let Some(entry) = workspace(p, w).and_then(|w| w.tabs.get(tab)) else { continue };

@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.105
+## 0.12.106
 
 - **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
+## 0.12.105
+
+- **Collapse a workspace.** Click `▾` beside a workspace in the workspaces list to hide its tabs, and `▸` to show them again. Shells and agents keep running; clicking the rest of the row opens the workspace and expands it. Folds are saved with your session and shared with the tree.
+- A collapsed workspace shows one icon for its agents, the most urgent first: orange `!`, red `!`, `●`, `✓`, `◐` (or the spinner) and `○`. In the tree, a collapsed workspace now shows working and idle agents too.
 
 ## 0.12.104
 

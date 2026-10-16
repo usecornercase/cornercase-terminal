@@ -52,6 +52,7 @@ fn with_panel() -> View<'static> {
         has_project: true,
         issues: true,
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "main".into(),
             tabs: vec!["zsh".into()],
             behind: 0,

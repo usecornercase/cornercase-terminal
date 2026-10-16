@@ -17,6 +17,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
         has_project: true,
         workspaces: vec![
             WorkspaceEntry {
+                collapsed: false,
                 name: "login".into(),
                 tabs: vec!["claude".into(), "nvim".into()],
                 behind: 0,
@@ -25,6 +26,7 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 setting_up: false,
             },
             WorkspaceEntry {
+                collapsed: false,
                 name: "main".into(),
                 tabs: vec!["zsh".into()],
                 behind: 0,
@@ -110,6 +112,7 @@ fn renders_commits_to_pull_before_the_close_button() {
 fn renders_a_workspace_being_removed_without_its_buttons() {
     let mut v = View { hover: Some(at(0)), active_workspace: 1, ..with_workspaces(Some(0)) };
     v.workspaces[0] = WorkspaceEntry {
+        collapsed: false,
         behind: 3,
         pull: None,
         removing: true,
@@ -121,12 +124,12 @@ fn renders_a_workspace_being_removed_without_its_buttons() {
 }
 
 #[rstest]
-#[case::nothing_to_pull("login", 0, "  login")]
-#[case::some("login", 3, "  login          ↓3")]
-#[case::long_name_is_cut_first("feature-with-a-very-long-name", 3, "  feature-with-… ↓3")]
+#[case::nothing_to_pull("login", 0, "  ▾ login")]
+#[case::some("login", 3, "  ▾ login        ↓3")]
+#[case::long_name_is_cut_first("feature-with-a-very-long-name", 3, "  ▾ feature-wit… ↓3")]
 fn commits_to_pull_sit_at_the_end_of_the_row(#[case] name: &str, #[case] behind: u32, #[case] expected: &str) {
     let mut v = with_workspaces(Some(0));
-    v.workspaces[0] = WorkspaceEntry { name: name.into(), behind, ..v.workspaces.remove(0) };
+    v.workspaces[0] = WorkspaceEntry { collapsed: false, name: name.into(), behind, ..v.workspaces.remove(0) };
     assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), expected);
 }
 
@@ -146,6 +149,7 @@ fn plus_tab_is_filled_on_hover() {
 fn an_empty_workspace_says_so_in_the_pane() {
     let v = View {
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "main".into(),
             tabs: Vec::new(),
             behind: 0,
@@ -204,13 +208,13 @@ mod pull_request_tag {
     ) {
         let v = tagged("login", 0, mark);
 
-        assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), format!("  login{tag:>12}"));
+        assert_eq!(row_text(&v, WorkspaceRow::Workspace(0)).trim_end(), format!("  ▾ login{tag:>10}"));
         assert_eq!(tag_style(&v), (colour, crossed));
     }
 
     #[rstest]
-    #[case::before_commits_to_pull("login", "  login    #482✓ ↓3")]
-    #[case::a_long_name_is_cut_first("feature-with-a-very-long-name", "  feature… #482✓ ↓3")]
+    #[case::before_commits_to_pull("login", "  ▾ login  #482✓ ↓3")]
+    #[case::a_long_name_is_cut_first("feature-with-a-very-long-name", "  ▾ featu… #482✓ ↓3")]
     fn sits_at_the_end_of_the_row(#[case] name: &str, #[case] expected: &str) {
         let v = tagged(name, 3, mark(State::Open, Some(Ci::Passing)));
 
@@ -254,8 +258,8 @@ mod pull_request_tag {
         let mut terminal = Terminal::new(TestBackend::new(160, 60)).expect("terminal");
         terminal
             .draw(|f| {
-                let band = Band { r: row, pitch: 1, lead: vec![Span::raw("  ")], bg: Style::default() };
-                workspaces::draw_workspace_band(f, &v, band, &v.workspaces[0], false, true);
+                let band = Band { r: row, pitch: 1, lead: vec![Span::raw("    ")], bg: Style::default() };
+                workspaces::draw_workspace_band(f, &v, band, &v.workspaces[0], false, workspaces::Badge::Attention);
             })
             .expect("draw");
         let buffer = terminal.backend().buffer();
@@ -277,7 +281,7 @@ mod pull_request_tag {
     }
 
     fn pull_badge_for(row: Rect, entry: &WorkspaceEntry) -> Option<Rect> {
-        workspaces::pull_badge(row, 1, 2, entry, true)
+        workspaces::pull_badge(row, 1, 4, entry, workspaces::Badge::Attention)
     }
 
     #[test]

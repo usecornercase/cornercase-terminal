@@ -154,7 +154,7 @@ An agent that starts there (from an issue, `cornercase start --worktree`, the qu
 
 **teardown** runs before a worktree is removed, once its programs have stopped and before git deletes the folder, in the background with the same variables and a limit of five minutes. If it fails, the worktree is removed anyway and the message says `removed <workspace>, but its teardown failed` with the reason; `cornercase close --remove-worktree` prints it as a warning on stderr.
 
-The commands are stored on your computer, not in the repository, so a cloned project cannot run anything until you have written it yourself; to share a setup with your team, commit a script and put one line, `./scripts/setup.sh`, in the field. Cornercase's log records only sizes, exit statuses and timings, never the commands or their output.
+The commands are stored on your computer, not in the repository, so a cloned project cannot run anything until you have written it yourself; to share a setup with your team, commit a script and put one line, `./scripts/setup.sh`, in the field. Cornercase's log records sizes, exit statuses and timings, never the commands or their output; the only exception is a failed teardown, whose last output line (at most 160 characters) is logged at debug level.
 
 ## Remove a worktree
 
