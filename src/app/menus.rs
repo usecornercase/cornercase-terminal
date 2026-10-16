@@ -93,6 +93,8 @@ pub(super) enum MenuAction {
     Away(Via),
     NewWorkspace(u64),
     StartFlow(u64),
+    ProjectSettings(u64),
+    RunSetup(u64),
 }
 
 impl App {
@@ -130,6 +132,8 @@ impl App {
             MenuAction::NewGroup => "new group".into(),
             MenuAction::NewWorkspace(_) => "new workspace".into(),
             MenuAction::StartFlow(_) => "start a flow…".into(),
+            MenuAction::ProjectSettings(_) => "project settings".into(),
+            MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
@@ -155,7 +159,11 @@ impl App {
             Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
             _ => None,
         };
-        std::iter::once(MenuAction::Rename(target)).chain(more).chain(flow).collect()
+        let setup = match target {
+            Target::Workspace(project, workspace) => self.setup_action(project, workspace),
+            _ => None,
+        };
+        std::iter::once(MenuAction::Rename(target)).chain(more).chain(flow).chain(setup).collect()
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -205,6 +213,8 @@ impl App {
                 }
             }
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
+            MenuAction::ProjectSettings(project) => self.open_project_settings(project),
+            MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);

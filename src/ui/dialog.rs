@@ -4,6 +4,7 @@ pub(super) mod group_style;
 pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
+pub(super) mod project_settings;
 pub(crate) mod queue;
 pub(super) mod search;
 pub(super) mod settings;
@@ -116,6 +117,7 @@ pub(super) fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, 
 pub(crate) enum Note {
     Error(String),
     Busy(&'static str),
+    Info(String),
 }
 
 pub(crate) enum Overlay {
@@ -132,6 +134,7 @@ pub(crate) enum Overlay {
     Settings(Settings),
     Flows(Box<Flows>),
     StartFlow(Box<StartFlow>),
+    ProjectSettings(Box<project_settings::ProjectSettings>),
     Search(Search),
     Keys(keys::Keys),
 }
@@ -151,6 +154,7 @@ impl Overlay {
             Self::Issues(_) => Some(issues_area(area)),
             Self::Settings(_) => Some(settings_area(area)),
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
+            Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }
@@ -174,6 +178,9 @@ fn draw_note(f: &mut Frame, muted: Color, note: Option<&Note>, r: Rect) {
         ),
         Some(Note::Busy(text)) => {
             f.render_widget(Paragraph::new(Span::styled(*text, Style::default().fg(muted))), r);
+        }
+        Some(Note::Info(text)) => {
+            f.render_widget(Paragraph::new(Span::styled(text.as_str(), Style::default().fg(muted))), r);
         }
         None => {}
     }

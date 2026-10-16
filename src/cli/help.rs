@@ -50,7 +50,9 @@ pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open . --focus";
 pub(super) const NEW_WORKSPACE_HELP: &str =
     "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
-branch from HEAD when the branch does not exist yet; the command returns once git made it.
+branch from HEAD when the branch does not exist yet; the command returns once git made it. The
+project's setup (settings → project settings) then runs in the new tab, which `start --worktree`
+waits for before it types the agent.
 
 Examples:
   cornercase new-workspace experiments
@@ -164,6 +166,8 @@ Examples:
 pub(super) const CLOSE_HELP: &str =
     "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
+--remove-worktree runs the project's teardown first; a teardown that fails is a warning on
+stderr, and the worktree is removed anyway.
 
 Examples:
   cornercase close --tab 9

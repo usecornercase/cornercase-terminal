@@ -32,6 +32,7 @@ fn sample(light: bool) -> View<'static> {
             behind: 3,
             pull: None,
             removing: false,
+            setting_up: false,
         }],
         active_tab: Some(0),
         light,

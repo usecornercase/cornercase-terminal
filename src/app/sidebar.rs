@@ -221,6 +221,9 @@ impl App {
         if !self.groups.is_empty() {
             actions.push(MenuAction::MoveToGroup(id));
         }
+        if git::is_repo_root(&self.projects[p].path) {
+            actions.push(MenuAction::ProjectSettings(id));
+        }
         actions
     }
 

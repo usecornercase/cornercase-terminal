@@ -35,6 +35,7 @@ fn with_tree() -> View<'static> {
                 behind: 0,
                 pull: None,
                 removing: false,
+                setting_up: false,
             },
             WorkspaceEntry {
                 name: "issue-50-reorder".into(),
@@ -42,6 +43,7 @@ fn with_tree() -> View<'static> {
                 behind: 2,
                 pull: None,
                 removing: false,
+                setting_up: false,
             },
         ],
         Vec::new(),

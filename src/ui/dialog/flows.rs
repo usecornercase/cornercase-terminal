@@ -221,6 +221,7 @@ pub(in crate::ui) fn draw_hint(f: &mut Frame, view: &View, note: Option<&Note>, 
     let (text, style) = match note {
         Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
         Some(Note::Busy(text)) => (*text, dim),
+        Some(Note::Info(text)) => (text.as_str(), dim),
         None => (hint, dim),
     };
     f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(r.width)), style)), r);

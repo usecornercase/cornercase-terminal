@@ -87,8 +87,16 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
                 behind: 0,
                 pull: None,
                 removing: false,
+                setting_up: false,
             },
-            WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, pull: None, removing: false },
+            WorkspaceEntry {
+                name: "main".into(),
+                tabs: vec!["zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
         ],
         ..view(&["tmp", "api", "cornercase"])
     };

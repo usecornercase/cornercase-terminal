@@ -7,7 +7,7 @@ use crate::process;
 
 pub(crate) const NAME: &str = "cornercase-setup";
 
-pub(crate) const TEARDOWN_WITHIN: Duration = Duration::from_secs(5 * 60);
+pub(crate) const TEARDOWN_WITHIN: Duration = Duration::from_mins(5);
 
 const MAX_FAILURE: usize = 160;
 

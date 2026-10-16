@@ -22,8 +22,16 @@ fn with_workspaces(active_tab: Option<usize>) -> View<'static> {
                 behind: 0,
                 pull: None,
                 removing: false,
+                setting_up: false,
             },
-            WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, pull: None, removing: false },
+            WorkspaceEntry {
+                name: "main".into(),
+                tabs: vec!["zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
         ],
         active_tab,
         ..view(&["cornercase"])
@@ -101,7 +109,14 @@ fn renders_commits_to_pull_before_the_close_button() {
 #[test]
 fn renders_a_workspace_being_removed_without_its_buttons() {
     let mut v = View { hover: Some(at(0)), active_workspace: 1, ..with_workspaces(Some(0)) };
-    v.workspaces[0] = WorkspaceEntry { behind: 3, pull: None, removing: true, tabs: Vec::new(), name: "login".into() };
+    v.workspaces[0] = WorkspaceEntry {
+        behind: 3,
+        pull: None,
+        removing: true,
+        setting_up: false,
+        tabs: Vec::new(),
+        name: "login".into(),
+    };
     insta::assert_snapshot!(render(&v).backend());
 }
 
@@ -136,6 +151,7 @@ fn an_empty_workspace_says_so_in_the_pane() {
             behind: 0,
             pull: None,
             removing: false,
+            setting_up: false,
         }],
         ..with_workspaces(None)
     };

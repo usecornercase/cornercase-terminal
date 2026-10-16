@@ -161,6 +161,7 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     let (text, style) = match &issues.note {
         Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
         Some(Note::Busy(text)) => (*text, dim),
+        Some(Note::Info(text)) => (text.as_str(), dim),
         None => (issues.hint.as_str(), dim),
     };
     f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(note.width)), style)), note);

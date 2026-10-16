@@ -13,6 +13,7 @@ pub mod group;
 mod hierarchy;
 pub(crate) mod picker;
 pub(crate) mod search;
+pub(crate) mod settings;
 pub mod split;
 pub(crate) mod vscode;
 

@@ -25,6 +25,13 @@ impl App {
         (!text.trim().is_empty()).then_some(text)
     }
 
+    pub(super) fn setup_note(&self, project: u64, worktree: Option<bool>) -> Option<ui::Note> {
+        let script = self.setup_script(self.projects.project_index(project)?).filter(|_| worktree == Some(true))?;
+        let first = script.lines().map(str::trim).find(|line| !line.is_empty())?;
+        let more = if script.lines().filter(|line| !line.trim().is_empty()).count() > 1 { " …" } else { "" };
+        Some(ui::Note::Info(format!("then runs the project's setup: {first}{more}")))
+    }
+
     pub(super) fn teardown_script(&self, p: usize) -> Option<String> {
         let text = self.config.project(&self.projects[p].path, self.home.as_deref()).teardown;
         (!text.trim().is_empty()).then_some(text)
@@ -65,6 +72,13 @@ impl App {
         let workspace = &mut self.projects[p].workspaces[w];
         workspace.tabs.push(tab);
         Ok(workspace.tabs.len() - 1)
+    }
+
+    pub(super) fn setup_action(&self, project: u64, workspace: u64) -> Option<super::menus::MenuAction> {
+        let (p, w) = self.projects.workspace_in(project, workspace)?;
+        let target = &self.projects[p].workspaces[w];
+        let offered = target.worktree && target.open() && !target.setting_up() && self.setup_script(p).is_some();
+        offered.then_some(super::menus::MenuAction::RunSetup(workspace))
     }
 
     pub(super) fn run_setup(&mut self, workspace: u64, area: Rect) {
@@ -109,11 +123,13 @@ impl App {
             for tab in project.workspaces.iter_mut().flat_map(|w| &mut w.tabs) {
                 let shown = visible == Some(tab.id);
                 for term in &mut tab.panes {
+                    let shell = term.shell_pid();
                     match &mut term.setup {
                         Some(setup::Pane::Running { status, .. }) => {
+                            let gone = shell.is_some_and(|pid| !setup::running_args(pid));
                             if let Some(code) = setup::read_status(status) {
                                 ended.push((term.id, Some(code)));
-                            } else if term.shell_pid().is_some_and(|pid| !setup::running_args(pid)) {
+                            } else if gone {
                                 ended.push((term.id, None));
                             }
                         }

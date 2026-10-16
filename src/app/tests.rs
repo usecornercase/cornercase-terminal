@@ -434,6 +434,7 @@ mod keys;
 mod lock_text;
 mod muted_text;
 mod picker;
+mod project_settings;
 mod projects;
 mod remove_worktree;
 mod rename;

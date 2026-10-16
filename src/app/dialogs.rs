@@ -52,7 +52,11 @@ impl App {
             value: input.into(),
             hint: format!("in {}", crate::text::display_path(&path, home)),
             toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
-            note: if creating { Some(ui::Note::Busy("creating…")) } else { error.map(|e| ui::Note::Error(e.into())) },
+            note: if creating {
+                Some(ui::Note::Busy("creating…"))
+            } else {
+                error.map(|e| ui::Note::Error(e.into())).or_else(|| self.setup_note(project, worktree))
+            },
             submit: CREATE_SUBMIT,
         })
     }

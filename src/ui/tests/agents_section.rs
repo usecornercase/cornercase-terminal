@@ -53,6 +53,7 @@ fn shown(sidebar: Sidebar, entries: Vec<AgentEntry>) -> View<'static> {
             behind: 0,
             pull: None,
             removing: false,
+            setting_up: false,
         }],
         tree: (sidebar == Sidebar::Tree).then_some(tree),
         agents: Some(AgentsView { entries, scroll: 0 }),

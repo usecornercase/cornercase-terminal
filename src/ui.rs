@@ -60,6 +60,11 @@ pub use dialog::menu::{menu_area, menu_item};
 pub(crate) use dialog::picker::{Entry, Picker, PickerHit, picker_hit, picker_list};
 pub use dialog::picker::{picker_area, picker_buttons, picker_item};
 #[cfg(test)]
+pub(crate) use dialog::project_settings::project_settings_buttons;
+pub(crate) use dialog::project_settings::{
+    ProjectSettings, ProjectSettingsHit, project_settings_field, project_settings_hit,
+};
+#[cfg(test)]
 pub(crate) use dialog::search::result_item;
 pub(crate) use dialog::search::{ResultRow, SESSIONS_PITCH, Search, mode_button, result_hit, results_list};
 pub(crate) use dialog::settings::{
@@ -128,6 +133,7 @@ use dialog::group_style::draw_group_style;
 use dialog::issues::draw_issues;
 use dialog::menu::draw_menu;
 use dialog::picker::draw_picker;
+use dialog::project_settings::draw_project_settings;
 use dialog::search::draw_results;
 use dialog::settings::draw_settings;
 use dialog::start_flow::draw_start_flow;
@@ -343,6 +349,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
         Some(Overlay::Settings(settings)) => draw_settings(f, view, settings),
         Some(Overlay::Flows(flows)) => draw_flows(f, view, flows),
         Some(Overlay::StartFlow(start)) => draw_start_flow(f, view, start),
+        Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),
         Some(Overlay::Keys(menu)) => keys::draw(f, view, menu, areas.pane),
         Some(Overlay::Search(_)) | None => {}

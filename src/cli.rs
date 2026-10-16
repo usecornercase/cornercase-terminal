@@ -176,7 +176,11 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
             let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
-            ask("close", control::Command::Close(request)).map(drop)
+            let value = ask("close", control::Command::Close(request))?;
+            if let Some(warning) = value.get("warning").and_then(Value::as_str) {
+                eprintln!("warning: {warning}");
+            }
+            Ok(())
         }
         Control::Rename(rename) => {
             let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;

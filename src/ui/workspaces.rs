@@ -31,6 +31,7 @@ pub(crate) const ICON_WIDTH: usize = 2;
 const BEHIND_ICON: &str = "↓";
 
 const REMOVING_LABEL: &str = "removing…";
+const SETTING_UP_LABEL: &str = "setting up…";
 
 const CONTEXT_SEPARATOR: &str = " · ";
 
@@ -168,6 +169,7 @@ pub(crate) struct WorkspaceEntry {
     pub(crate) behind: u32,
     pub(crate) pull: Option<Mark>,
     pub(crate) removing: bool,
+    pub(crate) setting_up: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,13 +340,14 @@ fn marks(
         .then(|| activity::attention(entry.tabs.iter().map(|t| t.status)))
         .flatten()
         .map(|status| status_icon(muted, status, spin));
-    let pull_at = usize::from(badge.is_some());
+    let setting = entry.setting_up.then(|| Span::styled(SETTING_UP_LABEL, Style::default().fg(muted)));
+    let pull_at = usize::from(badge.is_some()) + usize::from(setting.is_some());
     let pull = entry.pull.map(|mark| pull_tag(muted, mark));
     let pull_index = pull.is_some().then_some(pull_at);
     let behind = Some(entry.behind)
         .filter(|n| *n > 0)
         .map(|n| Span::styled(format!("{BEHIND_ICON}{n}"), Style::default().fg(Color::Yellow)));
-    (badge.into_iter().chain(pull).chain(behind).collect(), pull_index)
+    (badge.into_iter().chain(setting).chain(pull).chain(behind).collect(), pull_index)
 }
 
 pub(super) fn pull_badge(row: Rect, pitch: u16, lead: usize, entry: &WorkspaceEntry, attention: bool) -> Option<Rect> {
