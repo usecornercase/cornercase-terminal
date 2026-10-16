@@ -235,7 +235,10 @@ export async function crawl(get: Fetch, token: string | undefined, previous: Ind
     const answer = await get(`${API}/search/repositories?q=${query}&per_page=100&page=${page}`, { headers });
     if (!answer.ok) throw new Error(`GitHub search answered ${answer.status}`);
     const body = await answer.json();
-    const items = isObject(body) && Array.isArray(body.items) ? body.items : [];
+    if (!isObject(body) || body.incomplete_results === true || !Array.isArray(body.items) || typeof body.total_count !== 'number') {
+      throw new Error('GitHub answered the search with incomplete or malformed results');
+    }
+    const items = body.items;
     for (const item of items) {
       const repo = repoFrom(item);
       if (repo && !repo.fork && !repo.archived) repos.push(repo);

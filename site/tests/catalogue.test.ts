@@ -93,7 +93,7 @@ function github(asked: string[]) {
   return async (url: string) => {
     asked.push(url);
     if (url.includes('/search/repositories')) {
-      return answer(200, { items: [
+      return answer(200, { total_count: 3, incomplete_results: false, items: [
         { full_name: 'acme/notes', default_branch: 'trunk', stargazers_count: 4, created_at: '2026-01-01T00:00:00Z', pushed_at: '2026-10-01T00:00:00Z', language: 'Go', description: 'Notes\u001b[31m' },
         { full_name: 'some/fork', default_branch: 'main', fork: true },
         { full_name: 'https://evil', default_branch: 'main' },
@@ -224,4 +224,22 @@ test('a card that lost one plugin to the blocklist is read again, not reused', (
   assert.equal(one.repos[0].blocked, 1);
   assert.equal(previousScans(one).size, 0);
   assert.ok(validate(JSON.stringify(one)));
+});
+
+const search = (body: unknown) => async (url: string) => (url.includes('/search/repositories') ? answer(200, body) : answer(404, {}));
+
+for (const [what, body] of [
+  ['an incomplete search', { total_count: 0, incomplete_results: true, items: [] }],
+  ['a search without items', { total_count: 0, incomplete_results: false }],
+  ['a search whose items are not a list', { total_count: 0, incomplete_results: false, items: 'none' }],
+  ['a search without a total', { incomplete_results: false, items: [] }],
+  ['a search that is not an object', []],
+] as const) {
+  test(`${what} fails the crawl`, async () => {
+    await assert.rejects(crawl(search(body), undefined, null), /incomplete or malformed/);
+  });
+}
+
+test('a complete, empty search is accepted', async () => {
+  assert.deepEqual(await crawl(search({ total_count: 0, incomplete_results: false, items: [] }), undefined, null), []);
 });
