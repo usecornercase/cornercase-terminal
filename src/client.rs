@@ -29,7 +29,7 @@ mod requests;
 mod server_process;
 mod window;
 
-pub(crate) use requests::{answer, ask, follow, running_now};
+pub(crate) use requests::{answer, ask, follow, report_now, running_now};
 pub(crate) use requests::{answered, connect, request};
 pub(crate) use server_process::{connect_or_start, wait_for_exit};
 pub(crate) use server_process::{kill_server, restart_server};

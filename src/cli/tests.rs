@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
-use super::args::{RestartArgs, UpdateArgs};
+use super::args::{KillServerArgs, RestartArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
 use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
@@ -48,8 +48,18 @@ mod parsing {
         let restart = parse(&["restart", "--yes"]).expect("parse");
 
         assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true, .. }))));
-        assert!(matches!(kill.command, Some(Command::KillServer)));
+        assert!(matches!(kill.command, Some(Command::KillServer(KillServerArgs { yes: false }))));
         assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true, .. }))));
+    }
+
+    #[rstest]
+    #[case::plain(&["kill-server"], false)]
+    #[case::short(&["kill-server", "-y"], true)]
+    #[case::long(&["kill-server", "--yes"], true)]
+    fn kill_server_takes_yes(#[case] args: &[&str], #[case] expected: bool) {
+        let cli = parse(args).expect("parse");
+
+        assert!(matches!(cli.command, Some(Command::KillServer(KillServerArgs { yes })) if yes == expected));
     }
 
     #[rstest]

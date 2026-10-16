@@ -14,7 +14,7 @@ use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
-use crate::{log, server, update::restart};
+use crate::{log, server};
 
 mod args;
 mod flow;
@@ -61,14 +61,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,
-        Command::KillServer => {
-            let running = client::running_now();
-            if !client::kill_server()? {
-                eprintln!("no cornercase server is running");
-            } else if let Some(line) = running.as_deref().and_then(restart::stopped) {
-                println!("{line}");
-            }
-        }
+        Command::KillServer(kill) => update::kill(kill.yes)?,
         Command::Logs(args) => return print_logs(&args),
         Command::Stats(args) => return print_stats(&args),
         Command::Server => server::run()?,

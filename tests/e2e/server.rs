@@ -292,3 +292,44 @@ fn refused_with(out: &std::process::Output, advice: &str) -> bool {
         && stderr.contains(advice)
         && (advice == REMOVE_THE_FOLDER || !removal)
 }
+
+fn pane_kill_server(app: &mut Harness, args: &str, marker: &str) {
+    let exe = env!("CARGO_BIN_EXE_cornercase");
+    app.send(format!("\"{exe}\" kill-server {args}; echo {marker}-\"\"$?\r").as_bytes());
+}
+
+#[test]
+fn kill_server_inside_its_own_terminal_refuses_without_a_terminal_or_yes() {
+    let mut app = Harness::start();
+    app.send(b"echo ready-\"\"here\r");
+    app.wait_for("the shell runs", |s| s.contains("ready-here"));
+
+    pane_kill_server(&mut app, "</dev/null", "refused");
+
+    app.wait_for("kill-server refuses", |s| s.contains("refused-1") && s.contains("--yes"));
+    app.send(b"echo alive-\"\"still\r");
+    app.wait_for("the server and the shell are still there", |s| s.contains("alive-still"));
+}
+
+#[test]
+fn kill_server_inside_its_own_terminal_asks_and_a_no_keeps_the_server() {
+    let mut app = Harness::start();
+
+    pane_kill_server(&mut app, "", "answered");
+    app.wait_for("it asks", |s| s.contains("Stop it now? [y/N]"));
+    app.send(b"n\r");
+
+    app.wait_for("the server keeps running", |s| s.contains("the server keeps running") && s.contains("answered-0"));
+    assert!(app.session.report().caller.is_none());
+    app.send(b"echo alive-\"\"still\r");
+    app.wait_for("the shell still works", |s| s.contains("alive-still"));
+}
+
+#[test]
+fn kill_server_inside_its_own_terminal_stops_with_yes() {
+    let mut app = Harness::start();
+
+    pane_kill_server(&mut app, "--yes", "gone");
+
+    app.wait_exit("the window closes with the server");
+}

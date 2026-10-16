@@ -78,7 +78,7 @@ An agent in the middle of a turn still loses that turn. To restart only once no 
 cornercase kill-server
 ```
 
-This ends every shell and program in every pane, and closes all attached clients. When something was running, it says what it stopped, such as `stopped 1 agent and 2 other programs`. If no server is running, it says `no cornercase server is running`. The server also stops when it receives `SIGTERM` or `SIGINT`; it ignores `SIGHUP`, so a closed terminal or SSH connection doesn't take it down.
+This ends every shell and program in every pane, and closes all attached clients. When something was running, it says what it stopped, such as `stopped 1 agent and 2 other programs`. If no server is running, it says `no cornercase server is running`. Run inside one of the server's own panes, it asks before stopping it (this terminal closes too), and refuses without a terminal unless you pass `--yes`. The server also stops when it receives `SIGTERM` or `SIGINT`; it ignores `SIGHUP`, so a closed terminal or SSH connection doesn't take it down.
 
 ## Updating cornercase
 

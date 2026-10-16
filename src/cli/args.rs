@@ -6,8 +6,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FLOW_EXPORT_HELP, FLOW_HELP,
-    FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP,
-    LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP,
+    FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, KILL_SERVER_HELP,
+    LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP, READ_HELP, REMOTE_HELP,
     RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP, SKILL_HELP, SPLIT_HELP, START_HELP,
     STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
@@ -39,8 +39,8 @@ pub(crate) enum Command {
         after_help = RESTART_HELP
     )]
     Restart(RestartArgs),
-    #[command(about = "Stop the server and every shell in it")]
-    KillServer,
+    #[command(about = "Stop the server and every shell in it", after_help = KILL_SERVER_HELP)]
+    KillServer(KillServerArgs),
     #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
     Logs(LogsArgs),
     #[command(
@@ -631,6 +631,12 @@ pub(crate) struct LogsArgs {
     pub(crate) follow: bool,
     #[arg(long, conflicts_with_all = ["lines", "follow"], help = "Print only where the log is")]
     pub(crate) path: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct KillServerArgs {
+    #[arg(short, long, help = "Stop the server without asking, even if this terminal is one of its own")]
+    pub(crate) yes: bool,
 }
 
 #[derive(Debug, Args)]
