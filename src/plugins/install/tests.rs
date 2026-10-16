@@ -1,12 +1,13 @@
 use std::io::Write as _;
 use std::os::unix::fs::PermissionsExt;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use sha2::{Digest, Sha256};
 
 use super::*;
-use crate::plugins::supervise::SETTLE;
 use crate::plugins::{Kind, Supervisor};
 use crate::process;
 use crate::test_util::{FakeHttp, Sleeper, TempDir, exited_pid, git, git_repo, wait_until, write_executable};
@@ -378,7 +379,7 @@ mod removing {
         turned_on(&places);
         let sleeper = Sleeper::with_env(&[]);
         mark_running(&places, sleeper.pid());
-        let err = remove_within(&places, "acme.notes", SETTLE, Duration::from_millis(300)).expect_err("still running");
+        let err = remove_within(&places, "acme.notes", Duration::from_millis(300)).expect_err("still running");
         assert!(err.contains(&sleeper.pid().to_string()) && err.contains("remove acme.notes"), "{err}");
         let entry = Registry::load(&places.registry).entries[0].clone();
         assert_eq!((entry.enabled, entry.source.root().exists()), (false, true));
@@ -392,32 +393,68 @@ mod removing {
         let pid = exited_pid();
         mark_running(&places, pid);
         let stale = places.state("acme.notes").join("running").join(pid.to_string());
-        assert_eq!(remove_within(&places, "acme.notes", SETTLE, Duration::from_millis(300)), Ok(Removed::Deleted));
+        assert_eq!(remove_within(&places, "acme.notes", Duration::from_millis(300)), Ok(Removed::Deleted));
         assert!(!places.installs.join("acme.notes").exists());
         assert!(!stale.exists());
     }
 
-    fn during_the_grace(places: &Places, work: impl FnOnce(&Places) + Send + 'static) -> std::thread::JoinHandle<()> {
+    type Spawning = (std::thread::JoinHandle<()>, Arc<AtomicBool>);
+
+    fn mid_spawn(places: &Places, work: impl FnOnce(&Places) + Send + 'static) -> Spawning {
+        let lock = supervise::try_shared(places, "acme.notes").expect("lock").expect("free");
         let places = places.clone();
-        std::thread::spawn(move || {
+        let done = Arc::new(AtomicBool::new(false));
+        let flag = done.clone();
+        let handle = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(150));
             work(&places);
-        })
+            std::thread::sleep(Duration::from_millis(150));
+            flag.store(true, Ordering::SeqCst);
+            drop(lock);
+        });
+        (handle, done)
     }
 
     #[test]
-    fn a_process_that_starts_during_the_grace_stops_the_removal() {
+    fn a_spawn_in_progress_delays_the_removal_until_it_is_done() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        updating::installed(&remote, &places);
+        turned_on(&places);
+        let (spawning, released) = mid_spawn(&places, |_| {});
+        let result = remove_within(&places, "acme.notes", Duration::from_secs(5));
+        assert!(released.load(Ordering::SeqCst), "remove returned while a spawn held the lock");
+        spawning.join().expect("spawn");
+        assert_eq!(result, Ok(Removed::Deleted));
+    }
+
+    #[test]
+    fn a_process_started_by_that_spawn_stops_the_removal() {
         let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
         let places = places(&home);
         updating::installed(&remote, &places);
         turned_on(&places);
         let sleeper = Sleeper::with_env(&[]);
         let pid = sleeper.pid();
-        let late = during_the_grace(&places, move |places| mark_running(places, pid));
-        let result = remove_within(&places, "acme.notes", Duration::from_millis(500), Duration::from_millis(300));
-        late.join().expect("late marker");
-        assert!(result.is_err(), "{result:?}");
+        let (spawning, _) = mid_spawn(&places, move |places| mark_running(places, pid));
+        let result = remove_within(&places, "acme.notes", Duration::from_millis(600));
+        spawning.join().expect("spawn");
+        assert!(result.is_err_and(|e| e.contains(&pid.to_string())));
         assert!(places.installs.join("acme.notes").exists());
+    }
+
+    #[test]
+    fn a_spawn_that_outlasts_the_wait_stops_the_removal() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        updating::installed(&remote, &places);
+        turned_on(&places);
+        let (spawning, _) = mid_spawn(&places, |_| {});
+        let err = remove_within(&places, "acme.notes", Duration::from_millis(100)).expect_err("still starting");
+        spawning.join().expect("spawn");
+        assert!(err.contains("still starting") && err.contains("nothing was deleted"), "{err}");
+        let entry = Registry::load(&places.registry).entries[0].clone();
+        assert_eq!((entry.enabled, entry.source.root().exists()), (false, true));
     }
 
     #[test]
@@ -428,8 +465,7 @@ mod removing {
         let state = places.state("acme.notes");
         fs::create_dir_all(&state).expect("state folder");
         fs::write(state.join("running"), "not a folder").expect("running as a file");
-        let err =
-            remove_within(&places, "acme.notes", Duration::ZERO, Duration::from_millis(300)).expect_err("unreadable");
+        let err = remove_within(&places, "acme.notes", Duration::from_millis(300)).expect_err("unreadable");
         assert!(err.contains("cannot tell whether") && err.contains("nothing was deleted"), "{err}");
         assert!(places.installs.join("acme.notes").exists());
         assert_eq!(Registry::load(&places.registry).entries.len(), 1);
@@ -440,23 +476,12 @@ mod removing {
         let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
         let places = places(&home);
         updating::installed(&remote, &places);
-        let again = during_the_grace(&places, turned_on);
-        let err = remove_within(&places, "acme.notes", Duration::from_millis(500), Duration::from_millis(300))
-            .expect_err("changed");
+        let (again, _) = mid_spawn(&places, turned_on);
+        let err = remove_within(&places, "acme.notes", Duration::from_secs(5)).expect_err("changed");
         again.join().expect("turned on");
         assert!(err.contains("changed while it was being removed"), "{err}");
         assert!(places.installs.join("acme.notes").exists());
         assert!(Registry::load(&places.registry).entries[0].enabled);
-    }
-
-    #[test]
-    fn remove_waits_out_the_grace_before_accepting_no_markers() {
-        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
-        let places = places(&home);
-        updating::installed(&remote, &places);
-        let start = Instant::now();
-        remove_within(&places, "acme.notes", Duration::from_millis(400), Duration::from_millis(300)).expect("removed");
-        assert!(start.elapsed() >= Duration::from_millis(400));
     }
 
     #[test]

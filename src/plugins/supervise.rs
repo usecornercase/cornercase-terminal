@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, File};
 use std::io::Write as _;
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::Child;
@@ -10,16 +10,18 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
+use rustix::fs::{FlockOperation, flock};
+use rustix::io::Errno;
 use rustix::process::Signal;
 
-use super::registry::{Plugin, Watch};
+use super::registry::{Entry, Plugin, Registry, Watch};
 use super::run::{Places, private_dir};
 use crate::log;
 use crate::panics;
 use crate::process;
 
 const CHECK_EVERY: Duration = Duration::from_millis(250);
-pub(crate) const SETTLE: Duration = CHECK_EVERY.saturating_mul(3);
+const LOCK_FILE: &str = "running.lock";
 const HEALTHY_AFTER: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const STOP_WITHIN: Duration = Duration::from_secs(2);
@@ -171,10 +173,17 @@ impl State {
 
     fn spawn(&mut self, key: &Key, spec: &Spec, now: Instant) {
         let kind = self.kind.name();
-        let child = if spec.plugin.root().is_dir() {
-            self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
-        } else {
-            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
+        let lock = try_shared(&self.places, &key.plugin);
+        let child = match &lock {
+            Ok(Some(_)) if !on_disk(&self.places, &spec.plugin.entry) => return,
+            Ok(Some(_)) if !spec.plugin.root().is_dir() => {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "the plugin's folder is gone"))
+            }
+            Ok(Some(_)) => {
+                self.places.command(&spec.plugin, &spec.command, &self.env, None).and_then(|mut c| c.spawn())
+            }
+            Ok(None) => return,
+            Err(e) => Err(std::io::Error::new(e.kind(), e.to_string())),
         };
         match child {
             Ok(child) => {
@@ -286,6 +295,40 @@ impl State {
 
 pub(crate) fn backoff(failures: u32) -> Duration {
     Duration::from_secs(1u64 << failures.saturating_sub(1).min(6)).min(MAX_BACKOFF)
+}
+
+fn lock_file(places: &Places, plugin: &str) -> std::io::Result<File> {
+    let dir = places.state(plugin);
+    private_dir(&dir)?;
+    fs::OpenOptions::new().create(true).write(true).truncate(false).mode(0o600).open(dir.join(LOCK_FILE))
+}
+
+fn locked(file: File, operation: FlockOperation) -> std::io::Result<Option<File>> {
+    match flock(&file, operation) {
+        Ok(()) => Ok(Some(file)),
+        Err(Errno::WOULDBLOCK) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub(crate) fn try_shared(places: &Places, plugin: &str) -> std::io::Result<Option<File>> {
+    locked(lock_file(places, plugin)?, FlockOperation::NonBlockingLockShared)
+}
+
+pub(crate) fn exclude_spawns(places: &Places, plugin: &str, until: Instant) -> Result<(), String> {
+    let file = lock_file(places, plugin).map_err(|e| format!("cannot open the lock of `{plugin}`: {e}"))?;
+    loop {
+        match flock(&file, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => return Ok(()),
+            Err(Errno::WOULDBLOCK) if Instant::now() < until => thread::sleep(Duration::from_millis(20)),
+            Err(Errno::WOULDBLOCK) => return Err(format!("a supervisor is still starting `{plugin}`")),
+            Err(e) => return Err(format!("cannot lock `{plugin}`: {e}")),
+        }
+    }
+}
+
+fn on_disk(places: &Places, entry: &Entry) -> bool {
+    Registry::load(&places.registry).entry(&entry.id).is_ok_and(|current| current == entry)
 }
 
 fn running_dir(places: &Places, plugin: &str) -> std::path::PathBuf {

@@ -69,6 +69,7 @@ export default defineConfig({
             { label: 'TODO list', slug: 'docs/guides/todo' },
             { label: 'Issues and agents', slug: 'docs/guides/issues-and-agents' },
             { label: 'Flows', slug: 'docs/guides/flows' },
+            { label: 'Community flows', link: '/flows/' },
             { label: 'Queue agents', slug: 'docs/guides/queue' },
             { label: 'Scripts and agents', slug: 'docs/guides/scripts-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
@@ -105,6 +106,7 @@ export default defineConfig({
           items: [
             { label: 'Architecture', slug: 'docs/contributing/architecture' },
             { label: 'Development', slug: 'docs/contributing/development' },
+            { label: 'Publish a flow', slug: 'docs/contributing/flows' },
           ],
         },
       ],

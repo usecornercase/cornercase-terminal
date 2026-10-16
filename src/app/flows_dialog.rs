@@ -10,7 +10,9 @@ use super::event::AppEvent;
 use super::input::wheel;
 use super::overlay::Overlay;
 use crate::agents::Known;
+use crate::error::Error;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
+use crate::flows::registry::{self, Source};
 use crate::flows::store::{self, Origin};
 use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
@@ -20,7 +22,7 @@ use crate::ui::{self, FlowsHit, SettingsHit};
 
 const LIST_LABEL: usize = 26;
 const FORM_LABEL: usize = 16;
-const IMPORT_HEADING: &str = "paste a flow, as export copied it or `cornercase flow export` printed it";
+const IMPORT_HEADING: &str = "paste a flow, or type owner/repo or an https address";
 const HEADING: &str = "teams of agents that work through a plan, started from an issue or a prompt";
 
 impl App {
@@ -169,6 +171,7 @@ impl App {
             }
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
+            Action::Fetch(source) => self.fetch_flow(source),
         }
     }
 
@@ -237,6 +240,21 @@ impl App {
             move || Ok(read()),
             move |result, _| Some(AppEvent::FlowModels(kind, result.unwrap_or_default())),
         );
+    }
+
+    fn fetch_flow(&self, source: Source) {
+        let asked = source.clone();
+        self.spawn_job(
+            Job::new(Level::Info, "flows", "fetch"),
+            move || registry::fetch(&asked).map_err(Error::Api),
+            move |result, _| Some(AppEvent::FlowFetched(source, result.map_err(|e| e.to_string()))),
+        );
+    }
+
+    pub(super) fn flow_fetched(&mut self, source: &Source, result: Result<String, String>) {
+        if let Some(dialog) = self.flows_dialog() {
+            dialog.fetched(source, result);
+        }
     }
 
     pub(super) fn flow_models(&mut self, kind: Known, ids: Vec<String>) {

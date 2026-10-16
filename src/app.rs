@@ -536,6 +536,7 @@ impl App {
             AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
+            AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Web(event) => self.web_event(event),

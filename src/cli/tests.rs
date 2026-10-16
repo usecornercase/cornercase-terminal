@@ -208,15 +208,15 @@ mod parsing {
         let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
         let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
         assert_eq!(
-            (import.file, import.to, import.name.as_deref()),
-            ("f.toml".into(), args::ImportTo::Project, Some("X"))
+            (import.source, import.to, import.name.as_deref()),
+            ("f.toml".to_string(), args::ImportTo::Project, Some("X"))
         );
         assert!(import.replace && import.yes && import.print.json);
 
         let cli = parse(&["flow", "import", "-"]).expect("parse");
         let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
         let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
-        assert_eq!((import.file, import.to, import.yes), ("-".into(), args::ImportTo::Yours, false));
+        assert_eq!((import.source, import.to, import.yes), ("-".to_string(), args::ImportTo::Yours, false));
     }
 
     #[test]
@@ -503,8 +503,20 @@ mod output {
 
 mod flows {
     use super::args::ImportTo;
-    use super::flow::{confirmation, imported_line, listing, started};
+    use super::flow::{confirmation, fetched, imported_line, listing, started};
     use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
+    use crate::flows::registry::Source;
+
+    #[test]
+    fn a_fetched_flow_says_where_it_is_from_and_that_nobody_reviewed_it() {
+        let said = fetched(&Source::Repo("octocat/audit".into()), None);
+        assert_eq!(
+            said,
+            "from octocat/audit, which nobody here reviewed: its prompts drive agents that never ask for permission; read them above or at https://github.com/octocat/audit"
+        );
+        let said = fetched(&Source::Url("https://x.dev/a.toml".into()), Some("it sets A for `coder`".into()));
+        assert!(said.starts_with("from https://x.dev/a.toml, which") && said.ends_with("; it sets A for `coder`"));
+    }
 
     #[test]
     fn an_import_is_confirmed_with_what_it_sets_and_reported_with_where_it_went() {

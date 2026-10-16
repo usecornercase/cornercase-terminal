@@ -556,8 +556,11 @@ impl ImportTo {
 
 #[derive(Debug, Args)]
 pub(crate) struct FlowImportArgs {
-    #[arg(value_name = "FILE", help = "The file `flow export` made, or - for standard input")]
-    pub(crate) file: PathBuf,
+    #[arg(
+        value_name = "SOURCE",
+        help = "A file `flow export` made, - for standard input, an https:// address, or OWNER/REPO on GitHub (usecornercase.dev/flows)"
+    )]
+    pub(crate) source: String,
     #[arg(long, value_enum, default_value = "yours", help = "Where the flow goes")]
     pub(crate) to: ImportTo,
     #[arg(long, value_name = "ID", help = "The project, for --to project [default: the one this runs in]")]
@@ -566,7 +569,11 @@ pub(crate) struct FlowImportArgs {
     pub(crate) name: Option<String>,
     #[arg(long, help = "Overwrite the flow that has its name")]
     pub(crate) replace: bool,
-    #[arg(short = 'y', long, help = "Import without asking, though the flow sets variables or arguments")]
+    #[arg(
+        short = 'y',
+        long,
+        help = "Import without asking, though the flow comes from the web or sets variables or arguments"
+    )]
     pub(crate) yes: bool,
     #[command(flatten)]
     pub(crate) print: Print,

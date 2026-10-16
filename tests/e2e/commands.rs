@@ -586,3 +586,32 @@ fn an_import_that_sets_variables_needs_yes_without_a_terminal() {
     drop(session);
     let _ = server.wait();
 }
+
+#[test]
+fn a_flow_from_a_repo_is_fetched_and_always_asks_first() {
+    let (session, mut server) = windowless();
+    let exported = session.says(&["flow", "export", "Quick"]);
+    let url =
+        updates::serve(|_| vec![("/octocat/shared/HEAD/cornercase-flow.toml".to_string(), exported.into_bytes())]);
+    let run = |args: &[&str]| {
+        session
+            .command()
+            .env("CORNERCASE_FLOWS_URL", &url)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("run cornercase")
+    };
+
+    let refused_import = run(&["flow", "import", "octocat/shared", "--name", "From the web"]);
+    assert!(refused(&refused_import, 1, "pass --yes to import it"), "{refused_import:?}");
+    assert!(String::from_utf8_lossy(&refused_import.stderr).contains("fetching octocat/shared"), "{refused_import:?}");
+    assert!(!session.says(&["flow", "list"]).contains("From the web"));
+    let accepted = run(&["flow", "import", "octocat/shared", "--name", "From the web", "--yes"]);
+    assert!(accepted.status.success(), "{accepted:?}");
+    assert!(session.says(&["flow", "list"]).contains("From the web (yours"));
+    let missing = run(&["flow", "import", "octocat/nothing", "--yes"]);
+    assert!(refused(&missing, 1, "no flow.toml or cornercase-flow.toml in octocat/nothing"), "{missing:?}");
+    drop(session);
+    let _ = server.wait();
+}

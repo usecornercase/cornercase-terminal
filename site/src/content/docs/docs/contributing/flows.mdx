@@ -1,0 +1,35 @@
+---
+title: Publish a flow
+description: List a flow you made at usecornercase.dev/flows by adding a topic to its GitHub repository.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The [community flows](../../../flows/) are not a folder in this repository and need no pull request. Any public GitHub repository with the topic `cornercase-flow` is listed.
+
+## Publish yours
+
+1. Export the flow you made: `cornercase flow export 'My flow' > flow.toml`.
+2. Put it in a public repository, as `flow.toml` at the root (or `cornercase-flow.toml`). The repository's description and topics are shown next to it; a `description` in the flow is shown first.
+3. Add the topic `cornercase-flow` to the repository (the gear next to **About**).
+4. Wait for the daily refresh. The page lists the repository, its stars and the flow, and people import it with `cornercase flow import you/your-repo`.
+
+Try the file first with the cornercase you have: `cornercase flow import ./flow.toml --name test`, then `cornercase flow list` shows the flow with anything that stops it from running.
+
+## What gets listed
+
+A script reads the repositories with the topic once a day, most starred first, and skips with a log line any that:
+
+- has neither `flow.toml` nor `cornercase-flow.toml` at its root, is a fork, or is archived;
+- has a file over 256 KiB or one cornercase cannot read, with no roles, an unknown agent, a role that is in no stage or a loop that goes back to a stage that does not exist;
+- sets `env` or `args` in any role: a flow in the list may not.
+
+The list shows the flow as it was at the last refresh. Importing reads the repository's current file, so what a reader imports can be newer than what the page showed; keep prompts honest, and a reader will not be surprised.
+
+## Trust
+
+<Aside type="caution">
+Nobody reviews the flows in the list, and their agents never ask for permission. Whoever imports a flow is responsible for what it does, so write prompts that say plainly what they do, and never put secrets, tokens or machine-specific paths in one.
+</Aside>
+
+See [Trust and security](../../guides/flows/#trust-and-security) for what readers are told.

@@ -125,3 +125,42 @@ fn a_process_that_cannot_be_recorded_is_stopped() {
     wait_until("the process is gone", || !process::alive(pid));
     drop((supervisor, fixture.home));
 }
+
+#[test]
+fn a_plugin_turned_off_on_disk_is_not_started_from_a_stale_list() {
+    let fixture = Fixture::new(true);
+    let plugin = Registry::load(&fixture.places.registry).plugins().remove(0);
+    let command = plugin.runs().expect("runs").service[0].command.clone();
+    fixture.switch(false);
+    let mut state = State {
+        kind: Kind::Service,
+        places: fixture.places.clone(),
+        env: Vec::new(),
+        notes: Notes::default(),
+        running: BTreeMap::new(),
+        waiting: BTreeMap::new(),
+    };
+    let key = Key { plugin: "acme.notes".into(), entry: "sync".into() };
+    state.spawn(&key, &Spec { plugin, command }, Instant::now());
+    assert!(state.running.is_empty() && fixture.pids().is_empty());
+}
+
+#[test]
+fn a_spawn_is_skipped_while_removal_holds_the_lock() {
+    let fixture = Fixture::new(true);
+    let plugin = Registry::load(&fixture.places.registry).plugins().remove(0);
+    let command = plugin.runs().expect("runs").service[0].command.clone();
+    let held = lock_file(&fixture.places, "acme.notes").expect("lock file");
+    flock(&held, FlockOperation::NonBlockingLockExclusive).expect("exclusive");
+    let mut state = State {
+        kind: Kind::Service,
+        places: fixture.places.clone(),
+        env: Vec::new(),
+        notes: Notes::default(),
+        running: BTreeMap::new(),
+        waiting: BTreeMap::new(),
+    };
+    let key = Key { plugin: "acme.notes".into(), entry: "sync".into() };
+    state.spawn(&key, &Spec { plugin, command }, Instant::now());
+    assert!(state.running.is_empty() && fixture.pids().is_empty());
+}

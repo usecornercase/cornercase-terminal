@@ -1,0 +1,147 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { TOPIC, endLabel, everyFlow, repoUrl } from '../../lib/registry';
+
+const base = import.meta.env.BASE_URL;
+const flows = everyFlow();
+const community = flows.filter((flow) => !flow.builtIn);
+const search = (flow: (typeof flows)[number]) => [flow.name, flow.description, flow.owner, flow.repo, flow.builtIn ? 'built in' : '', ...flow.tags].join(' ').toLowerCase();
+---
+
+<StarlightPage frontmatter={{ title: 'Community flows', description: 'Teams of agents that anyone can publish from a GitHub repository. Read one, then import it into cornercase with one command.', tableOfContents: false }}>
+  <p>
+    Flows are saved teams of coding agents and the plan they follow. The built-in flows that come with cornercase are listed first, then the community's. Any public GitHub repository with the topic <code>{TOPIC}</code> and a <code>flow.toml</code> is listed here, most
+    starred first, and refreshed every day.
+  </p>
+  <aside class="notice" aria-label="Trust">
+    <strong>Nobody reviews these.</strong> A flow's prompts drive agents that never ask for permission. Read every prompt on a flow's page before you import it: what it does on your
+    machine is on you. <a href={`${base}docs/guides/flows/#trust-and-security`}>Trust and security</a>.
+  </aside>
+  <p>
+    Made one? <a href={`${base}docs/contributing/flows/`}>Publish it</a> by adding the topic to its repository.
+  </p>
+  <label class="search">
+    <span>Search</span>
+    <input type="search" id="flow-search" placeholder="name, description, author or tag" autocomplete="off" />
+  </label>
+  <p class="meta" id="flow-count" aria-live="polite">{flows.length} flows</p>
+  <ul class="flows" id="flow-list">
+    {
+      flows.map((flow) => (
+        <li data-search={search(flow)}>
+          <h2>
+            <a href={`${base}flows/${flow.slug}/`}>{flow.name}</a>
+          </h2>
+          <p>{flow.description}</p>
+          <p class="meta">
+            {flow.builtIn ? <>by cornercase · </> : <>by <a href={`https://github.com/${flow.owner}`}>@{flow.owner}</a> · ★ {flow.stars} · </>}{flow.roles.length + 1} agents · {endLabel(flow.end)}
+          </p>
+          <p class="chips">
+            {flow.builtIn && <span class="chip built">built in</span>}
+            {[...new Set([flow.orchestrator, ...flow.roles].map((r) => r.agent))].map((agent) => (
+              <span class="chip agent">{agent}</span>
+            ))}
+            {flow.tags.map((tag) => (
+              <span class="chip">{tag}</span>
+            ))}
+          </p>
+          <p class="meta">
+            {flow.builtIn ? <>comes with cornercase</> : <><code>cornercase flow import {flow.repo}</code> · <a href={repoUrl(flow.repo)}>repository</a></>}
+          </p>
+        </li>
+      ))
+    }
+  </ul>
+  {community.length === 0 && <p>No community flows yet. Be the first: <a href={`${base}docs/contributing/flows/`}>publish one</a>.</p>}
+  <p class="empty meta" id="flow-none" hidden>No flow matches.</p>
+</StarlightPage>
+
+<script>
+  const input = document.querySelector<HTMLInputElement>('#flow-search');
+  const items = [...document.querySelectorAll<HTMLElement>('#flow-list li')];
+  const count = document.querySelector<HTMLElement>('#flow-count');
+  const none = document.querySelector<HTMLElement>('#flow-none');
+  input?.addEventListener('input', () => {
+    const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const item of items) {
+      const match = words.every((w) => (item.dataset.search ?? '').includes(w));
+      item.hidden = !match;
+      if (match) shown += 1;
+    }
+    if (count) count.textContent = `${shown} flows`;
+    if (none) none.hidden = shown > 0 || items.length === 0;
+  });
+</script>
+
+<style>
+  .notice {
+    border: 1px solid var(--sl-color-orange);
+    background: var(--sl-color-orange-low);
+    border-radius: 0.7rem;
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+  }
+  .search {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-width: 28rem;
+  }
+  .search input {
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .flows {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 1rem;
+    list-style: none;
+    padding: 0;
+    margin-top: 1rem;
+  }
+  .flows li {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.7rem;
+    padding: 1rem 1.1rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .flows li[hidden] {
+    display: none;
+  }
+  .flows h2 {
+    font-size: var(--sl-text-h4);
+    margin: 0 0 0.4rem;
+  }
+  .flows p {
+    margin: 0.4rem 0 0;
+  }
+  .meta {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .chip {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 999px;
+    padding: 0 0.6rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+  }
+  .chip.built {
+    color: var(--sl-color-green-high);
+    border-color: var(--sl-color-green-low);
+  }
+  .chip.agent {
+    color: var(--sl-color-accent-high);
+    border-color: var(--sl-color-accent-low);
+  }
+</style>
