@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.109
+
+- **`cornercase contract`** says what the running server supports, for scripts and other programs that drive cornercase: its version, the version of its contract, the boot that its ids belong to, its commands and the version of each stream it sends (`--json` for the full description). `cornercase status --json` now names the boot too.
+- Programs talking to the socket can opt into a strict mode by sending `contract` or `boot` with a request: errors then carry a code (`unsupported`, `malformed`, `stale-boot`, `not-found`, `unknown-field`, `unavailable`, `failed`), a field the server does not know is refused instead of ignored, a `contract` newer than the server's is refused as `unsupported`, and a request from an earlier boot is refused before it acts on an id that may name something else now. Requests without them are answered exactly as before. See Scripts and agents → Contract and compatibility.
+
 ## 0.12.108
 
 - **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
