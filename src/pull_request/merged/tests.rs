@@ -233,7 +233,7 @@ mod gitlab_discovery {
         fake_glab(
             tmp.path(),
             &format!(
-                "D={dir}\necho \"$*\" >> $D/log\ncase \"$1\" in\nauth) cat $D/status.json; exit 1;;\napi) p=${{*##*page=}}; cat $D/page-$p.json || exit 1;;\nesac",
+                "D={dir}\necho \"$*\" >> $D/log\ncase \"$1\" in\nauth) cat $D/status.json; exit 1;;\napi) for last; do :; done; p=${{last##*page=}}; cat $D/page-$p.json || exit 1;;\nesac",
                 dir = tmp.path().display()
             ),
         )
