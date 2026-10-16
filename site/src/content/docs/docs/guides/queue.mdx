@@ -41,7 +41,7 @@ Press `Enter` or click **`schedule`** to save; `Esc` or **`cancel`** closes the 
 
 The server starts every due entry, with no concurrency limit. Entries at the same instant start in insertion order. Each uses the normal worktree, tab and agent launch path and leaves the active pane selected. A toast and desktop notification announce success or failure.
 
-The server must be running, with its session opened at least once after a restart. Closing the UI leaves scheduled work running. The queue does not wake a sleeping machine or start a stopped server.
+The server must be running, with its session opened at least once after a restart, by a window or by `cornercase start-server`. Closing the UI leaves scheduled work running. The queue does not wake a sleeping machine or start a stopped server.
 
 An entry more than ten minutes late becomes **`missed`** and waits for you. Waking or restarting within ten minutes still starts it. Select an entry to act on it: **`start now`** starts a pending, missed or failed one at once, and **`remove`** removes it; the notice that follows has **`undo`** for six seconds. Click a pending, missed or failed row, or press `Enter` on it, to edit and reschedule it. An entry shows `starting` while its worktree or agent is being prepared; it cannot be cancelled or edited then.
 

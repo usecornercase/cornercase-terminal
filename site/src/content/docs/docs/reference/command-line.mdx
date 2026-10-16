@@ -12,6 +12,7 @@ cornercase              # open the UI, starting the server if needed
 cornercase remote HOST  # open the UI on the server of another machine, over ssh
 cornercase update       # install the latest release and restart the server
 cornercase restart      # restart the server; the session comes back with new shells, agents resume
+cornercase start-server # start the server and restore the session without opening a window
 cornercase kill-server  # stop the server and every shell in it
 cornercase logs         # print the end of the server's log
 cornercase --version    # print the version
@@ -103,6 +104,22 @@ It lists what is running and asks `Restart it once no agent is working? [y/N]`, 
 
 Other programs, such as a dev server, don't hold the restart; they stop as with any restart. Neither does the pane the command runs in, so an agent can run it as its last step. `--timeout SECONDS` gives up after that long with status 1 and leaves the server running, as do **cancel** and `Ctrl+C`. `update --when-idle` installs the release before it waits, so the new version is on disk whatever happens next. A server from a release without `--when-idle` can't wait: the command says so, and the server keeps running.
 
+### `cornercase start-server`
+
+Starts the server without opening a window, for a script or a program that drives cornercase on its own. It needs no terminal. If no server runs on the socket, it starts one; then the server restores your saved session once, as the first window would (the same projects, tabs and splits, agents [resuming their conversations](../../guides/sessions/#agents-resume-their-conversations)), or opens the folder you ran it from when there is no session. It returns once the terminals exist:
+
+```sh
+cornercase start-server                       # started: restored the session (160×48)
+cornercase start-server --cols 200 --rows 60  # a size of your own
+cornercase start-server --json                # the answer as an object
+```
+
+Until a window attaches, the terminals are 160 columns by 48 rows, or what `--cols` (90 to 1000) and `--rows` (10 to 500) say; a size out of range exits with status 1 and starts nothing. The first window that attaches takes the size over, as any window does, and gives the terminals its colours. A program that asked for the colours before that window came keeps the default ones.
+
+Run again, or with a window already attached, it starts and restores nothing, changes no size, and prints `already running (window size 120×40)` (or `start-server size`, when no window gave one yet). So it is also how a script learns that the server is ready. `--json` prints `already`, `restored` (a saved session was found), `complete`, `cols`, `rows`, `size` (`window` or `start-server`), `boot` and `version`. When some tabs could not be restored, or the server runs another version than the command, it says so on stderr and still exits 0.
+
+Agents that resume their conversations are still being typed in when it returns: [`cornercase status`](../../guides/scripts-and-agents/#look) and `cornercase wait` tell you when they are back. `cornercase restart` with no window attached leaves no server running: run `start-server` again.
+
 ### `cornercase kill-server`
 
 Stops the server: every shell and program in every pane ends, and every attached client exits. It waits for the server to be gone before returning, then prints what it stopped when something was running, such as `stopped 1 agent and 2 other programs`. If no server is running on the socket, it prints `no cornercase server is running`.
@@ -152,7 +169,7 @@ Prints the version, such as `cornercase 0.1.0`, and exits. It doesn't touch the 
 
 ### `cornercase server` and `cornercase proxy`
 
-`cornercase proxy` is what [`cornercase remote`](#cornercase-remote) runs on the other machine; it passes the window's messages to the server there. `cornercase server` runs the server itself. You don't need either: `cornercase remote` runs the proxy, and `cornercase` starts the server in the background for you, with its output going to [`server.log`](../files-and-environment/#files). They are listed here so you recognise them in your process list.
+`cornercase proxy` is what [`cornercase remote`](#cornercase-remote) runs on the other machine; it passes the window's messages to the server there. `cornercase server` runs the server itself. You don't need either: `cornercase remote` runs the proxy, and `cornercase` and `cornercase start-server` start the server in the background for you, with its output going to [`server.log`](../files-and-environment/#files). They are listed here so you recognise them in your process list.
 
 ## The socket
 

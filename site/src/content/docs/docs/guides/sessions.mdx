@@ -19,6 +19,7 @@ cornercase is two programs in one binary. A **server** runs in the background an
 
 - **The first `cornercase`** starts the server for you and attaches to it. The server opens the folder you started from as your first project, unless it restores a saved session (see below).
 - **Detach** by clicking `Quit` at the bottom of the projects column, or by closing the terminal window. Only the client goes away; everything in your panes keeps running.
+- **Without a window**, `cornercase start-server` starts the server and restores your session for scripts and other programs; the first `cornercase` after it attaches to that session (see [Scripts and agents](../scripts-and-agents/#start-without-a-window)).
 - **Reattach** by running `cornercase` again, from any terminal and any folder. You find everything as you left it, including programs that kept printing while you were away.
 
 This also works over SSH: run `cornercase` on the remote machine, close the connection when you leave, and reattach when you log in again. Or keep the window on your laptop with `cornercase remote <host>`, which reconnects by itself when the connection drops: see [Remote machines](../remote/).
@@ -50,9 +51,9 @@ It saves once your layout has stayed the same for two seconds, so the burst of s
 
 ## What is restored
 
-Processes can't be saved. When a **new** server starts, after `cornercase kill-server`, a reboot or a restart after an [update](../../installation/#update), its first client restores the saved layout: the same projects, workspaces, tabs and splits, each pane with a **fresh shell in its saved folder**. Folders that no longer exist are skipped; a pane whose folder is gone starts in its workspace's folder. If a shell can't start in some folder (one you can no longer enter, say), that tab is left out, everything else comes back, and a message names the projects it was in. If no shell could start at all, a new one opens in the folder you started cornercase from. The session as it was is kept in `session.json.bak`, next to `session.json`.
+Processes can't be saved. When a **new** server starts, after `cornercase kill-server`, a reboot or a restart after an [update](../../installation/#update), its first window, or `cornercase start-server`, restores the saved layout, once: the same projects, workspaces, tabs and splits, each pane with a **fresh shell in its saved folder**. Folders that no longer exist are skipped; a pane whose folder is gone starts in its workspace's folder. If a shell can't start in some folder (one you can no longer enter, say), that tab is left out, everything else comes back, and a message names the projects it was in. If no shell could start at all, a new one opens in the folder you started cornercase from. The session as it was is kept in `session.json.bak`, next to `session.json`.
 
-A server that is already running never restores: reattaching just shows what is there.
+A server that is already running never restores: reattaching just shows what is there, also after `start-server`.
 
 ### Agents resume their conversations
 
@@ -68,7 +69,7 @@ Click **Settings**, then **restart** next to **done**, or run:
 cornercase restart
 ```
 
-Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it: your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI [resume their conversations](#agents-resume-their-conversations).
+Restarting stops every program in your terminals, agents included, so cornercase first lists what is running and asks. Then it saves your session, starts a new server and reopens every attached window on it (with no window attached, no new server starts: run `cornercase start-server` again): your projects, workspaces, tabs and splits come back, each pane with a new shell in its folder, and Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI [resume their conversations](#agents-resume-their-conversations).
 
 An agent in the middle of a turn still loses that turn. To restart only once no agent is working, run `cornercase restart --when-idle`: every window says a restart is pending until then (see [Command line](../../reference/command-line/#once-no-agent-is-working)).
 
@@ -126,7 +127,7 @@ To attach a second view, use another terminal window.
 
 ## The environment of your shells
 
-The server is started by the first client, from that terminal, and keeps that client's environment. Every shell it opens inherits it, plus `TERM=xterm-256color` and `CORNERCASE=1`. The shell itself is your `$SHELL`, or `/bin/sh` if it isn't set.
+The server is started by the first client (a window, or `cornercase start-server`), from that terminal, and keeps that client's environment. Every shell it opens inherits it, plus `TERM=xterm-256color` and `CORNERCASE=1`. The shell itself is your `$SHELL`, or `/bin/sh` if it isn't set.
 
 So if you change an environment variable in your login files, open a new tab to get a shell that reads them again, and restart the server for variables cornercase itself reads, such as `SHORTCUT_API_TOKEN`. The full list is in [Files and environment](../../reference/files-and-environment/).
 
