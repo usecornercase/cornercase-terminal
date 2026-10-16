@@ -1,10 +1,8 @@
-pub(crate) mod html;
-
 use std::collections::HashMap;
 
 use serde_json::Value;
 
-use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, join_body};
+use super::{Account, Comment, Detail, Issue, LIMIT, Listed, Person, Query, Source, Who, html, join_body};
 use crate::error::{Error, Result};
 use crate::http::{self, Answer, Service, into_json, path_segment, text};
 use crate::time::parse_time;

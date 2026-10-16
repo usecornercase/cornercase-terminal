@@ -2,6 +2,7 @@ pub(crate) mod browser;
 pub(crate) mod cache;
 pub(crate) mod github;
 pub(crate) mod gitlab;
+pub(crate) mod html;
 pub(crate) mod jira;
 pub(crate) mod linear;
 pub(crate) mod md;
