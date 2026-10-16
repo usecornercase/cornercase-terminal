@@ -131,7 +131,7 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 | `config.rs` | User settings in `config.json`, with the `Sidebar` and `Tabs` choices. |
 | `files/` | The files panel: its state per workspace, the tree's git marks and the marks beside each line (`mod.rs`), reading folders and files on threads (`disk.rs`), the list of files and the name and text searches (`search.rs`), and the paths printed in panes (`link.rs`); `ui/files.rs` draws the panel, `app/files_panel.rs` wires it into `App`, and `app/links.rs` wires the paths printed in panes. |
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
-| `git/worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
+| `git/worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`; `git/worktree/setup.rs` the setup wrapper and the teardown. |
 | `git/upstream.rs` | `git fetch` and the commits each workspace can pull (`↓n`). |
 | `graphics/` | Images in the files panel: which protocol each window's terminal understands (`detect.rs`), decoding an image and fitting it to the panel (`decode.rs`, `encode.rs`), the bytes for kitty graphics, iTerm2 inline images and sixel (`kitty.rs`, `iterm.rs`, `sixel.rs`), and wrapping them for tmux (`tmux.rs`). |
 | `highlight.rs` | Syntax highlighting of Markdown code blocks with palette colours. |

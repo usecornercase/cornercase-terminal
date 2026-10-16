@@ -26,7 +26,7 @@ exec "$3"
 
 #[derive(Debug)]
 pub(crate) enum Pane {
-    Running { status: PathBuf, since: Instant },
+    Running { status: PathBuf, since: Instant, seen: bool },
     Failed { code: String, unseen: bool },
 }
 
@@ -61,12 +61,12 @@ pub(crate) fn read_status(path: &Path) -> Option<i32> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-pub(crate) fn wrapper_gone(args: &[String]) -> bool {
-    !args.is_empty() && !args.iter().any(|arg| arg == NAME)
+pub(crate) fn names_wrapper(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == NAME)
 }
 
 pub(crate) fn running_args(pid: i32) -> bool {
-    !wrapper_gone(&process::args(pid))
+    names_wrapper(&process::args(pid))
 }
 
 pub(crate) fn teardown(script: &str, worktree: &Path, root: &Path, branch: &str, within: Duration) -> Option<String> {

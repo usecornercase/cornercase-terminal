@@ -107,6 +107,16 @@ To work out the size of Claude's context window, cornercase reads these from the
 | `CLAUDE_CODE_DISABLE_1M_CONTEXT` | A 200k window even for models that have 1M. |
 | `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `DISABLE_COMPACT` | The window of a model Claude Code doesn't know, or of any model while compacting is turned off. |
 
+### Set for setup and teardown
+
+| Variable | Value |
+| --- | --- |
+| `CORNERCASE_ROOT` | The project folder |
+| `CORNERCASE_WORKTREE` | The worktree being set up or removed |
+| `CORNERCASE_BRANCH` | Its branch |
+
+They are set only for the project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree) commands, not for your shell. While a setup runs, a short-lived `setup-<pane>.status` file is kept next to the socket.
+
 ### Set by cornercase in every pane
 
 | Variable | Value | Why |

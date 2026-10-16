@@ -35,7 +35,7 @@ cornercase then, in the background:
 - checks out the branch if it already exists, or creates it from the project's current `HEAD` if it doesn't;
 - runs `git worktree add` into `<worktrees folder>/<repository>/<branch>`;
 - copies the files listed in [`.worktreeinclude`](#bring-your-ignored-files-along);
-- opens the new workspace with a shell in the checkout.
+- opens the new workspace with a shell in the checkout, which first runs the project's [setup](#set-up-each-new-worktree) if it has one.
 
 If something goes wrong, the reason appears in red in the dialog and no workspace is added: for example when the checkout folder already exists, when git doesn't accept the branch name, or when the branch is already checked out in another worktree.
 
@@ -137,9 +137,28 @@ secret.txt
 
 Files keep their place in the tree. If a file can't be copied, the worktree is still created and the reason is written to the server log.
 
+## Set up each new worktree
+
+A fresh checkout has no `node_modules`, no build and no local configuration. Give a project the commands that fix that and they run in every worktree cornercase creates: click `⋯` (or right-click) on the project and choose **project settings**. It is offered for projects whose folder is a repository root.
+
+The dialog has two fields, **setup** and **teardown**; `Enter` adds a line, `Tab` moves between them, and **save** stores them in [`config.json`](../../reference/configuration/#projects) under `projects`.
+
+```sh title="setup"
+npm ci
+cp "$CORNERCASE_ROOT/.env.local" .env.local
+```
+
+The order in a new worktree is: `git worktree add`, the [`.worktreeinclude`](#bring-your-ignored-files-along) files, the **setup** in the workspace's first tab, then the agent. The setup runs visibly in that tab, so progress bars, colours and prompts work and the output stays in the scrollback; when it ends, the same tab becomes your shell. Commands run with `/bin/sh -e` (the first failing command stops the script) in the worktree, with three variables set: `CORNERCASE_ROOT` (the project folder), `CORNERCASE_WORKTREE` (the new worktree) and `CORNERCASE_BRANCH`. To use your own shell's functions, call it: `zsh -lic 'nvm use && npm ci'`.
+
+An agent that starts there (from an issue, `cornercase start --worktree`, the queue, a chat app or a flow) **waits for the setup** and starts only if it succeeded. If it fails, the tab shows a red `!`, a message says `setup failed in project › workspace`, nothing else starts and the output is there to read. Fix the cause and choose **run setup** in the workspace's menu to run it again in a new tab. The setup runs only for worktrees cornercase just created, not for ones made elsewhere, workspaces reused on an existing branch, or after a restart. There is no time limit: press `Ctrl+C` in the tab to stop it. While it runs the workspace row shows `setting up…`.
+
+**teardown** runs before a worktree is removed, once its programs have stopped and before git deletes the folder, in the background with the same variables and a limit of five minutes. If it fails, the worktree is removed anyway and the message says `removed <workspace>, but its teardown failed` with the reason; `cornercase close --remove-worktree` prints it as a warning on stderr.
+
+The commands are stored on your computer, not in the repository, so a cloned project cannot run anything until you have written it yourself; to share a setup with your team, commit a script and put one line, `./scripts/setup.sh`, in the field. Cornercase's log records only sizes, exit statuses and timings, never the commands or their output.
+
 ## Remove a worktree
 
-Hover the workspace and click its `×`. Because removing the workspace also deletes its checkout, cornercase asks first:
+Hover the workspace and click its `×`. Because removing the workspace also deletes its checkout, cornercase asks first (the message adds `Its teardown runs first.` when the project has a [teardown](#set-up-each-new-worktree)):
 
 <Screen
   name="remove-workspace"

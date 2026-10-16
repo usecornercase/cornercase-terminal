@@ -91,7 +91,8 @@ export type MenuAction =
   | { kind: 'base'; branch: string }
   | { kind: 'showFlow'; workspace: number }
   | { kind: 'newWorkspace'; project: number }
-  | { kind: 'startFlow'; project: number };
+  | { kind: 'startFlow'; project: number }
+  | { kind: 'projectSettings'; project: number };
 
 export interface PickItem {
   value: string;

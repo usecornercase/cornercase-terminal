@@ -186,7 +186,8 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "check_updates": true,
   "star_prompt": true,
   "remote": false,
-  "remote_port": 47681
+  "remote_port": 47681,
+  "projects": {}
 }
 ```
 
@@ -233,6 +234,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`star_prompt`](#star_prompt) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
+| [`projects`](#projects) | object | `{}` |
 
 #### `worktrees_dir`
 
@@ -395,6 +397,14 @@ Whether this cornercase can be opened in a browser over Tailscale, from a phone 
 #### `remote_port`
 
 The port cornercase listens on for browsers, on your computer only (`127.0.0.1`); `tailscale serve` passes Tailscale's port 8443 to it. Change it when something else uses 47681.
+
+#### `projects`
+
+Per-project commands, keyed by the project's folder (`~/` is expanded): `setup` runs in the first tab of each new [worktree](../../guides/worktrees/#set-up-each-new-worktree) before its agent starts, `teardown` runs before a worktree is removed. Edit them in the project's `⋯` menu, **project settings**; an entry with both empty is removed.
+
+```json
+"projects": { "~/code/web-shop": { "setup": "npm ci\ncp ../.env .env", "teardown": "docker compose down" } }
+```
 
 ### A customised example
 

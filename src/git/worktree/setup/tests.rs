@@ -74,10 +74,10 @@ mod status_file {
     }
 
     #[test]
-    fn the_wrapper_is_gone_only_when_arguments_are_known_and_lack_its_name() {
-        assert!(!wrapper_gone(&[]));
-        assert!(!wrapper_gone(&["/bin/sh".into(), NAME.into()]));
-        assert!(wrapper_gone(&["/bin/zsh".into()]));
+    fn the_wrapper_is_recognised_by_its_name_in_the_arguments() {
+        assert!(!names_wrapper(&[]));
+        assert!(names_wrapper(&["/bin/sh".into(), NAME.into()]));
+        assert!(!names_wrapper(&["/bin/zsh".into()]));
     }
 }
 

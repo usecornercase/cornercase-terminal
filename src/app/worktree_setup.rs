@@ -59,7 +59,7 @@ impl App {
             theme: &self.theme,
         };
         let mut term = Term::spawn(opts, self.tx.clone())?;
-        term.setup = Some(setup::Pane::Running { status, since: Instant::now() });
+        term.setup = Some(setup::Pane::Running { status, since: Instant::now(), seen: false });
         log::info!("worktree", "setup started", pane = id, bytes = script.len());
         Ok(term)
     }
@@ -125,8 +125,10 @@ impl App {
                 for term in &mut tab.panes {
                     let shell = term.shell_pid();
                     match &mut term.setup {
-                        Some(setup::Pane::Running { status, .. }) => {
-                            let gone = shell.is_some_and(|pid| !setup::running_args(pid));
+                        Some(setup::Pane::Running { status, seen, .. }) => {
+                            let running = shell.is_some_and(setup::running_args);
+                            *seen |= running;
+                            let gone = *seen && shell.is_some() && !running;
                             if let Some(code) = setup::read_status(status) {
                                 ended.push((term.id, Some(code)));
                             } else if gone {
@@ -154,7 +156,7 @@ impl App {
             return;
         };
         let Some(term) = self.projects.pane_by_mut(pane) else { return };
-        let Some(setup::Pane::Running { status, since }) = term.setup.take() else { return };
+        let Some(setup::Pane::Running { status, since, .. }) = term.setup.take() else { return };
         term.became_shell();
         let _ = std::fs::remove_file(&status);
         let ms = u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);

@@ -218,3 +218,15 @@ test('starting and editing flows need a real cornercase', () => {
   assert.ok(shown(app, 'the demo only plays the flow in payments'));
   app.destroy();
 });
+
+test('a repository project offers project settings, which need a real cornercase', () => {
+  const app = demo(110, 38);
+  app.openMenu({ x: 2, y: 2 }, { kind: 'project', project: app.projects[app.active].id });
+  if (app.overlay?.kind !== 'menu') return assert.fail('no menu');
+  const at = app.overlay.actions.findIndex((a) => a.kind === 'projectSettings');
+  assert.ok(at >= 0);
+  assert.equal(app.menuLabel(app.overlay.actions[at]), 'project settings');
+  app.chooseMenu(at);
+  assert.ok(shown(app, 'the demo runs no setup scripts'));
+  app.destroy();
+});
