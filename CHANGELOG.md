@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.111
+
+- A new **Asana** tab in the issues browser reads tasks from Asana and starts an agent on one like on any other tracker's issue. Connect it from the tab: paste a personal access token from **Settings → Apps → Developer apps** in Asana (`ASANA_ACCESS_TOKEN` works too). When the account belongs to several workspaces, cornercase asks which one to use; it is saved in **Settings → Issues → Asana**.
+- The tab lists your open tasks, or, when you set **Asana projects** in **Settings → Issues → Asana** (IDs or links, separated by spaces or commas), the open tasks of those projects. **closed** adds completed tasks, and **people** filters by assignee and creator. In your-tasks mode the assignee is always you, so choosing someone else asks you to set Asana projects instead. Subtasks, milestones and approvals are not listed.
+- A task's description and comments are read as Markdown (mentions show as plain `@name`, images as `[image]`). Its branch is named after its ID field, such as `ENG-42-fix-login`, or `asana-<task id>-fix-login` when its project has none.
+- `cornercase queue add --issue` takes an Asana link, in the old or the new format, or an ID-field key such as `ENG-42`; a bare task id needs `--source asana`.
+- **Settings → Issues → Asana** has the workspace, the projects and the access token. Lists saved before get the Asana tab added once, at the end.
+
 ## 0.12.109
 
 - **`cornercase contract`** says what the running server supports, for scripts and other programs that drive cornercase: its version, the version of its contract, the boot that its ids belong to, its commands and the version of each stream it sends (`--json` for the full description). `cornercase status --json` now names the boot too.
