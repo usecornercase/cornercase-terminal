@@ -30,7 +30,7 @@ const search = (card: (typeof cards)[number]) =>
 >
   <p>
     Every public GitHub repository with the <code>{TOPIC}</code> topic and a valid <code>{MANIFEST}</code>, at its root or in
-    a folder, is listed here, refreshed every 30 minutes. What a plugin is and how to write one is in the
+    a folder, is listed here, refreshed every hour. What a plugin is and how to write one is in the
     <a href={`${base}docs/guides/plugins/`}>plugins guide</a>. The list is also published as
     <a href={`${base}plugins/index.json`}><code>index.json</code></a>.
   </p>
@@ -101,7 +101,7 @@ const search = (card: (typeof cards)[number]) =>
     <li>Add the <code>{TOPIC}</code> topic to the repository (the gear next to <strong>About</strong>).</li>
   </ol>
   <p>
-    That is all. Within 30 minutes it shows here, at the latest commit of its default branch, and it is read again whenever
+    That is all. Within an hour it shows here, at the latest commit of its default branch, and it is read again whenever
     that commit changes. Forks, archived repositories, and manifests that cannot be read or have malformed metadata are
     left out. When two repositories declare the same <code>id</code>, the older repository keeps it. The card shows the
     repository's description, stars, language and last push, and each manifest's <code>name</code>, <code>version</code>,
