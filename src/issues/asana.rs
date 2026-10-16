@@ -180,13 +180,16 @@ impl Api {
     }
 
     fn node(&self, me: &Me, key: &str) -> Result<Value> {
+        let missing = format!("task {key} not found");
         let gid = if !key.is_empty() && key.bytes().all(|b| b.is_ascii_digit()) {
             key.to_string()
         } else {
             let path = format!("/workspaces/{}/tasks/custom_id/{}", path_segment(&me.workspace), path_segment(key));
-            text(&self.get(&path, &[], &format!("task {key} not found"))?, "/data/gid")
+            text(&self.get(&path, &[], &missing)?, "/data/gid")
         };
-        let missing = format!("task {key} not found");
+        if gid.is_empty() {
+            return Err(Error::Api(missing));
+        }
         let node = self.get(&format!("/tasks/{}", path_segment(&gid)), &[("opt_fields", DETAIL_FIELDS)], &missing)?;
         Ok(node["data"].clone())
     }

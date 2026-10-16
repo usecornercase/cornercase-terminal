@@ -479,6 +479,21 @@ mod read {
     }
 
     #[test]
+    fn a_custom_id_answer_without_a_gid_is_a_missing_task_and_asks_for_no_task() {
+        let server = FakeHttp::start(vec![
+            ("GET /users/me", 200, ME.to_string()),
+            ("GET /workspaces/w-1/tasks/custom_id/ENG-9", 200, r#"{"data":{}}"#.to_string()),
+        ]);
+
+        let err = api(&server, "", &[]).view("ENG-9").err().map(|e| e.to_string());
+
+        assert_eq!(err.as_deref(), Some("task ENG-9 not found"));
+        let requests = server.requests();
+        assert!(requests.iter().all(|r| !r.starts_with("GET /tasks")), "{requests:?}");
+        assert_eq!(requests.len(), 2);
+    }
+
+    #[test]
     fn mentions_inaccessible_links_and_images_become_text() {
         let html = r#"<body>Hi <a href="https://app.asana.com/0/1/2" data-asana-gid="2" data-asana-type="user">@Tim</a>,
             see <a href="https://app.asana.com/0/9/9" data-asana-accessible="false">Private task</a>
