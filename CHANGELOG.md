@@ -17,6 +17,10 @@ Every pull request that changes the app adds a section here for its new version.
 - This was built from Cursor CLI's code and has not been checked against a live session: if its chat store looks different from what cornercase expects, the tab shows no model or context rather than a wrong one.
 - A tab running a Node 24 program started through a launcher is named after the program instead of `MainThread`.
 
+## 0.12.104
+
+- **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
 ## 0.12.101
 
 - **Search what was said.** The search has a second mode, **in sessions**, that looks in what your agents were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build) and in everything every pane printed, shells included, in every open project. Click the `❯` button at the right end of the search bar, or press `Tab`, to switch; with a prefix key, `f` `s` opens the search already there. Each result shows the matching line, who said it and `project › workspace › tab`. Choosing one goes to that pane and scrolls to the match, selected.
