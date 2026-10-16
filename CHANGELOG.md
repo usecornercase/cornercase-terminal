@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.111
+## 0.12.112
 
 - A new **Asana** tab in the issues browser reads tasks from Asana and starts an agent on one like on any other tracker's issue. Connect it from the tab: paste a personal access token from **Settings → Apps → Developer apps** in Asana (`ASANA_ACCESS_TOKEN` works too). When the account belongs to several workspaces, cornercase asks which one to use; it is saved in **Settings → Issues → Asana**.
 - The tab lists your open tasks, or, when you set **Asana projects** in **Settings → Issues → Asana** (IDs or links, separated by spaces or commas), the open tasks of those projects. **closed** adds completed tasks, and **people** filters by assignee and creator. In your-tasks mode the assignee is always you, so choosing someone else asks you to set Asana projects instead. Subtasks, milestones and approvals are not listed.
