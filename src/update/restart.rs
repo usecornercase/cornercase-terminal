@@ -4,6 +4,7 @@ use crate::control::{PaneInfo, Report};
 use crate::text::CRUMB_SEPARATOR;
 
 const STOPS: &str = "Restarting stops every program running in cornercase's terminals.";
+const STOPS_SERVER: &str = "Stopping the server stops every program running in cornercase's terminals.";
 const NOTHING: &str = "Nothing is running in your terminals.";
 const COMES_BACK: &str =
     "Your projects, workspaces, tabs and splits come back, each tab with a new shell in its folder.";
@@ -58,13 +59,8 @@ fn busy(pane: &PaneInfo) -> bool {
 }
 
 pub(crate) fn confirmation(running: Option<&[Running]>) -> String {
-    let Some(running) = running else { return format!("{STOPS} {COMES_BACK}") };
-    if running.is_empty() {
-        return format!("{NOTHING} {COMES_BACK}");
-    }
-    let now: Vec<String> =
-        parts(running).into_iter().map(|(counted, detail)| format!("{counted} ({detail})")).collect();
-    let text = format!("{STOPS} Running now: {}. {COMES_BACK}", now.join(" and "));
+    let text = format!("{} {COMES_BACK}", now(STOPS, running));
+    let Some(running) = running else { return text };
     match running.iter().filter(|r| r.resumes).count() {
         0 if running.iter().any(|r| r.agent.as_deref().and_then(agents::Known::of) == Some(agents::Known::Claude)) => {
             format!("{text} {RESUME}")
@@ -73,6 +69,20 @@ pub(crate) fn confirmation(running: Option<&[Running]>) -> String {
         1 => format!("{text} 1 agent conversation resumes in its tab."),
         n => format!("{text} {n} agent conversations resume in their tabs."),
     }
+}
+
+pub(crate) fn stopping(running: Option<&[Running]>) -> String {
+    format!("{} {COMES_BACK}", now(STOPS_SERVER, running))
+}
+
+fn now(stops: &str, running: Option<&[Running]>) -> String {
+    let Some(running) = running else { return stops.into() };
+    if running.is_empty() {
+        return NOTHING.into();
+    }
+    let listed: Vec<String> =
+        parts(running).into_iter().map(|(counted, detail)| format!("{counted} ({detail})")).collect();
+    format!("{stops} Running now: {}.", listed.join(" and "))
 }
 
 pub(crate) fn stopped(running: &[Running]) -> Option<String> {

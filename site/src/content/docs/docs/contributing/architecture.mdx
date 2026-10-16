@@ -171,7 +171,7 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 
 | Module | Responsibility |
 | --- | --- |
-| `cli.rs` | Running every command: the commands for scripts send a request and print its answer. `cli/args.rs` holds the `clap` definitions and `cli/help.rs` their help texts, `cli/status.rs` the output of `status`, `cli/update.rs` `update` and `restart`. |
+| `cli.rs` | Running every command: the commands for scripts send a request and print its answer. `cli/args.rs` holds the `clap` definitions and `cli/help.rs` their help texts, `cli/status.rs` the output of `status`, `cli/update.rs` `update`, `restart` and `kill-server`. |
 | `client.rs` | Terminal setup and teardown. `client/window.rs` forwards events, writes frames and reconnects a remote window, `client/probe.rs` asks the outer terminal for its colours and what it can show, `client/requests.rs` sends a command's request, `client/server_process.rs` starts and stops the server (`kill-server`). |
 | `control.rs` | The JSON of requests and answers, shared by the commands and the server. |
 | `protocol.rs` | Messages and framing. |

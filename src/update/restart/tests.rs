@@ -96,3 +96,20 @@ fn an_old_server_s_shells_are_told_apart_by_name() {
     let found = from_report(&report(vec![pane("zsh", None), pane("nvim", None)]));
     assert_eq!(found, [running("nvim", None, None)]);
 }
+
+#[test]
+fn stopping_the_server_says_what_stops_and_what_comes_back() {
+    let all = [running("claude", Some("claude"), Some("working")), running("vite", None, None)];
+
+    let text = stopping(Some(&all));
+
+    assert!(text.starts_with("Stopping the server stops every program"), "{text}");
+    assert!(text.contains("1 agent (1 working) and 1 other program (`vite` in shop › main)"), "{text}");
+    assert!(text.ends_with("each tab with a new shell in its folder."), "{text}");
+    assert!(!text.contains("resume"), "{text}");
+}
+
+#[test]
+fn stopping_an_unreadable_server_names_no_programs() {
+    assert!(stopping(None).starts_with("Stopping the server stops every program"));
+}

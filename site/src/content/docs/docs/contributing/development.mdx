@@ -31,13 +31,15 @@ CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cargo run
 CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cargo run -- kill-server
 ```
 
+If you work on cornercase from a terminal inside cornercase, always give the build its own absolute socket before `kill-server`: a plain one would stop the server you are in. It asks first, and refuses without a terminal unless you pass `--yes`.
+
 ### Check it in a real terminal
 
 To drive the app from a script, or from a terminal that already runs cornercase, start it in a separate tmux server and send it keys and mouse events:
 
 ```sh
 T() { tmux -L cctest "$@"; }
-T new-session -d -s t -x 100 -y 20 ./target/debug/cornercase
+T new-session -d -s t -x 100 -y 20 env CORNERCASE_SOCKET=/tmp/cc-dev/server.sock ./target/debug/cornercase
 T send-keys -t t 'echo hi' Enter
 T send-keys -t t -l $'\e[<0;6;5M'          # mouse press at column 6, row 5 (1-based)
 T capture-pane -p -t t

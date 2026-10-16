@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.107
+## 0.12.108
 
 - **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
+## 0.12.107
+
+- `cornercase kill-server` no longer stops the server it runs in without asking. Typed in a terminal inside cornercase, it says what would stop, including that terminal, and asks `Stop it now? [y/N]`; without a terminal, such as from an agent's tool, it refuses unless you pass `--yes`. To stop another server from inside cornercase, set `CORNERCASE_SOCKET` to its socket. Outside cornercase nothing changes.
 
 ## 0.12.106
 

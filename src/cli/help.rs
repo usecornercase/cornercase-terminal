@@ -319,6 +319,14 @@ Examples:
   cornercase logs -n 50
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
+pub(super) const KILL_SERVER_HELP: &str =
+    "Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
+it, so it asks first; without a terminal it refuses unless --yes is given. To stop another server from
+inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock.
+
+Examples:
+  cornercase kill-server
+  CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cornercase kill-server";
 pub(super) const RESTART_HELP: &str =
     "It lists what runs in the terminals and asks first, since every program in them stops; agents
 resume their conversations afterwards. Every attached window reopens on the new server.

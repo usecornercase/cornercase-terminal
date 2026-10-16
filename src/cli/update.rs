@@ -2,7 +2,10 @@ use std::fs;
 use std::io::{self, IsTerminal, Write, stdin, stdout};
 use std::os::unix::net::UnixStream;
 
-use crate::client::{RESTART, answer, answered, confirm, connect, request, restart_server, running_now, wait_for_exit};
+use crate::client::{
+    RESTART, answer, answered, confirm, connect, kill_server, report_now, request, restart_server, running_now,
+    wait_for_exit,
+};
 use crate::error::{Error, Result};
 use crate::protocol::{self, ServerMessage};
 use crate::update::{self, Install, Outcome};
@@ -15,6 +18,10 @@ const RESTARTED: &str = "restarted the cornercase server; your session comes bac
 const TOO_OLD_TO_WAIT: &str = "the running cornercase server is too old to wait for its agents; run \
     `cornercase restart` once none is working";
 const STOPPED_INSTEAD: &str = "the cornercase server was stopped before every agent was idle, so it did not restart";
+const KILL_INSIDE: &str = "This terminal runs inside the server you are about to stop, so it closes too.";
+const KILL_ASK: &str = "Stop it now? [y/N] ";
+const KILL_REFUSED: &str = "this terminal runs inside the cornercase server, so kill-server would stop the server it runs \
+    in; pass --yes to stop it anyway, or set CORNERCASE_SOCKET to the socket of the server you mean";
 const INSIDE: &str = "This terminal is one of them, so it closes too.";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -71,6 +78,44 @@ fn offer_restart(yes: bool, when: When) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Kill {
+    Go,
+    Ask,
+    Refuse,
+}
+
+fn decide(inside: bool, yes: bool, terminal: bool) -> Kill {
+    match (inside && !yes, terminal) {
+        (false, _) => Kill::Go,
+        (true, true) => Kill::Ask,
+        (true, false) => Kill::Refuse,
+    }
+}
+
+pub(super) fn kill(yes: bool) -> Result<bool> {
+    let report = report_now();
+    let running = report.as_ref().map(restart::from_report);
+    let inside = report.is_some_and(|report| report.caller.is_some());
+    match decide(inside, yes, stdin().is_terminal()) {
+        Kill::Refuse => {
+            eprintln!("error: {KILL_REFUSED}");
+            return Ok(false);
+        }
+        Kill::Ask if !confirm(&format!("{KILL_INSIDE}\n{}\n{KILL_ASK}", restart::stopping(running.as_deref()))) => {
+            println!("the server keeps running");
+            return Ok(true);
+        }
+        Kill::Ask | Kill::Go => {}
+    }
+    if !kill_server()? {
+        eprintln!("no cornercase server is running");
+    } else if let Some(line) = running.as_deref().and_then(restart::stopped) {
+        println!("{line}");
+    }
+    Ok(true)
 }
 
 pub(super) fn restart(yes: bool, when: When) -> Result<()> {

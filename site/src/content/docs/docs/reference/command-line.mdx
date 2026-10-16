@@ -107,6 +107,8 @@ Other programs, such as a dev server, don't hold the restart; they stop as with 
 
 Stops the server: every shell and program in every pane ends, and every attached client exits. It waits for the server to be gone before returning, then prints what it stopped when something was running, such as `stopped 1 agent and 2 other programs`. If no server is running on the socket, it prints `no cornercase server is running`.
 
+Run from a terminal inside the server it would stop, it asks first: it lists what stops, says that this terminal closes too, and waits for `y`. Anything else keeps the server running. Without a terminal (an agent's tool, a script) it refuses with status 1 unless you pass `-y` or `--yes`. To stop another server from inside cornercase, set `CORNERCASE_SOCKET` to its socket.
+
 ### `cornercase logs`
 
 Prints the end of the server's log, `server.log`: what the server did, one line per event, as described in [Troubleshooting](../../help/troubleshooting/#the-server-log). It reads the file directly, so it works with no server running.
@@ -144,6 +146,7 @@ CORNERCASE_SOCKET=/tmp/cc-demo/server.sock cornercase kill-server
 | `cornercase is already running in this terminal; nesting it is not supported` | You ran `cornercase` inside one of its own panes. Use another terminal. The [other commands](../../guides/scripts-and-agents/) work in a pane. |
 | `the running cornercase server comes from another build. Run cornercase kill-server (it closes all its terminals) and start cornercase again` | You updated or rebuilt cornercase while the old server kept running, and didn't [restart it](#a-server-from-another-build). |
 | `the running cornercase server is incompatible with this build. Run cornercase kill-server …` | Same cause, detected while talking to the server. |
+| `this terminal runs inside the cornercase server, so kill-server would stop the server it runs in; pass --yes …` | You ran `kill-server` without a terminal inside one of the server's own panes. Pass `--yes` to stop it anyway, or set `CORNERCASE_SOCKET` to the other server's socket. |
 | `failed to start the cornercase server; see <log>` | The server didn't come up within a few seconds. The log next to the socket says why. |
 | `a cornercase server is already running on <socket>` | Printed by `cornercase server` when another server holds the socket's lock. |
 | `the restart was cancelled in the window; the server keeps running` | Someone pressed **cancel** on the window's notice while `restart --when-idle` or `update --when-idle` waited. |

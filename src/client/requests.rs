@@ -80,12 +80,15 @@ pub(crate) fn answer<T: DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(|e| Error::Control(format!("cannot read the server's answer: {e}")))
 }
 
-pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
+pub(crate) fn report_now() -> Option<control::Report> {
     let stream = connect().ok()?;
     stream.set_read_timeout(Some(STATUS_TIMEOUT)).ok()?;
     let value = ask_on(stream, "status", control::Command::Status(control::Status {})).ok()?;
-    let report: control::Report = answer(value).ok()?;
-    Some(restart::from_report(&report))
+    answer(value).ok()
+}
+
+pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
+    report_now().map(|report| restart::from_report(&report))
 }
 const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 const LOST: &str = "the cornercase server closed the connection without stopping: it crashed, or this command \
