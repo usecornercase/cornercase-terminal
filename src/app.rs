@@ -282,6 +282,11 @@ impl App {
         self.theme = theme;
     }
 
+    #[cfg(test)]
+    pub(crate) fn backgrounds(&self) -> Vec<Option<libghostty_vt::style::RgbColor>> {
+        self.projects.terms().map(|term| term.emulator.default_background()).collect()
+    }
+
     pub(crate) fn retheme(&mut self, theme: HostTheme) {
         for term in self.projects.terms_mut() {
             term.set_theme(&theme);

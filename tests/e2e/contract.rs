@@ -26,6 +26,7 @@ fn contract_describes_the_running_server_and_its_boot() {
     let operations = contract["operations"].as_array().expect("operations");
     assert!(operations.iter().any(|op| op["name"] == "contract" && op["available"] == true), "{contract}");
     assert!(operations.iter().any(|op| op["name"] == "status"), "{contract}");
+    assert!(operations.iter().any(|op| op["name"] == "start-server" && op["available"] == true), "{contract}");
     assert!(
         contract["streams"].as_array().expect("streams").iter().any(|s| s["name"] == "events" && s["version"] == 1),
         "{contract}"

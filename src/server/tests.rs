@@ -27,7 +27,7 @@ mod lock {
     }
 }
 
-mod a_bug {
+pub(super) mod a_bug {
     use std::cell::Cell;
 
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
@@ -37,8 +37,8 @@ mod a_bug {
     use crate::state::{PaneState, ProjectState, State, TabState, WorkspaceState};
     use crate::test_util::wait_until;
 
-    pub(super) const COLS: u16 = 100;
-    pub(super) const ROWS: u16 = 20;
+    pub(in crate::server) const COLS: u16 = 100;
+    pub(in crate::server) const ROWS: u16 = 20;
     const BUG: &str = "cornercase hit a bug, see server.log";
     const PANE_MENU: &str = "split right";
     const NOBODY: u64 = u64::MAX;
@@ -58,7 +58,7 @@ mod a_bug {
         server.step(step)
     }
 
-    pub(super) fn one_shell_in(dir: &Path) -> State {
+    pub(in crate::server) fn one_shell_in(dir: &Path) -> State {
         let tabs = vec![TabState {
             name: None,
             panes: vec![PaneState {
@@ -89,6 +89,12 @@ mod a_bug {
         State { version: state::VERSION, projects: vec![project], ..State::default() }
     }
 
+    pub(in crate::server) fn half_locked(dir: &Path, locked: &Path) -> State {
+        let mut saved = one_shell_in(dir);
+        saved.projects.extend(one_shell_in(locked).projects);
+        saved
+    }
+
     pub(super) struct Attached {
         pub(super) server: Server,
         rx: Receiver<ServerEvent>,
@@ -105,6 +111,22 @@ mod a_bug {
         clears: usize,
     }
 
+    pub(in crate::server) fn hello(theme: HostTheme) -> Hello {
+        Hello {
+            version: protocol::VERSION,
+            build: version::build_id(),
+            cols: COLS,
+            rows: ROWS,
+            theme,
+            notify: Channel::Bell,
+            terminal: None,
+            pointer: None,
+            graphics: Support::default(),
+            probe: String::new(),
+            zone: "UTC".into(),
+        }
+    }
+
     fn connect(
         server: &mut Server,
         tx: Sender<ServerEvent>,
@@ -114,21 +136,7 @@ mod a_bug {
     ) -> Client {
         let (ours, mut theirs) = UnixStream::pair().expect("a socket pair");
         let _ = server.handle(ServerEvent::Accepted(ours));
-        let (version, build, theme) = (protocol::VERSION, version::build_id(), HostTheme::default());
-        let (notify, probe) = (Channel::Bell, String::new());
-        let hello = Hello {
-            version,
-            build,
-            cols: COLS,
-            rows: ROWS,
-            theme,
-            notify,
-            terminal: None,
-            pointer,
-            graphics,
-            probe,
-            zone: "UTC".into(),
-        };
+        let hello = Hello { pointer, graphics, ..hello(HostTheme::default()) };
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
@@ -417,7 +425,7 @@ mod restarting_when_idle {
 }
 
 mod restore {
-    use super::a_bug::{Attached, one_shell_in};
+    use super::a_bug::{Attached, half_locked, one_shell_in};
     use super::*;
     use crate::test_util::Locked;
 
@@ -435,8 +443,7 @@ mod restore {
     #[test]
     fn an_incomplete_restore_keeps_the_session_it_read() {
         let (dir, locked) = (TempDir::new(), Locked::new());
-        let mut saved = one_shell_in(dir.path());
-        saved.projects.extend(one_shell_in(locked.path()).projects);
+        let saved = half_locked(dir.path(), locked.path());
 
         let attached = Attached::with(dir, &saved);
 
