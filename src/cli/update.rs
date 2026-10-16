@@ -95,15 +95,18 @@ fn decide(inside: bool, yes: bool, terminal: bool) -> Kill {
     }
 }
 
-pub(super) fn kill(yes: bool) -> Result<()> {
+pub(super) fn kill(yes: bool) -> Result<bool> {
     let report = report_now();
     let running = report.as_ref().map(restart::from_report);
     let inside = report.is_some_and(|report| report.caller.is_some());
     match decide(inside, yes, stdin().is_terminal()) {
-        Kill::Refuse => return Err(Error::Control(KILL_REFUSED.into())),
+        Kill::Refuse => {
+            eprintln!("error: {KILL_REFUSED}");
+            return Ok(false);
+        }
         Kill::Ask if !confirm(&format!("{KILL_INSIDE}\n{}\n{KILL_ASK}", restart::stopping(running.as_deref()))) => {
             println!("the server keeps running");
-            return Ok(());
+            return Ok(true);
         }
         Kill::Ask | Kill::Go => {}
     }
@@ -112,7 +115,7 @@ pub(super) fn kill(yes: bool) -> Result<()> {
     } else if let Some(line) = running.as_deref().and_then(restart::stopped) {
         println!("{line}");
     }
-    Ok(())
+    Ok(true)
 }
 
 pub(super) fn restart(yes: bool, when: When) -> Result<()> {

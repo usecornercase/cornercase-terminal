@@ -61,7 +61,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,
-        Command::KillServer(kill) => update::kill(kill.yes)?,
+        Command::KillServer(kill) => return update::kill(kill.yes),
         Command::Logs(args) => return print_logs(&args),
         Command::Stats(args) => return print_stats(&args),
         Command::Server => server::run()?,
