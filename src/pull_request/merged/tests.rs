@@ -72,7 +72,7 @@ mod github_discovery {
                  'auth token') echo \"token-$6\";;\n\
                  'api graphql') cat $D/search.json;;\n\
                  esac",
-                dir = tmp.path().display()
+                dir = crate::agents::quote(&tmp.path().display().to_string())
             ),
         )
     }
@@ -172,7 +172,7 @@ mod github_discovery {
             &format!(
                 "case \"$1 $2\" in\n'auth status') cat {dir}/status.json;;\n'auth token') echo secret-$6;;\n\
                  'api graphql') if [ -n \"$GH_TOKEN\" ]; then echo \"bad $GH_TOKEN\" >&2; exit 1; fi; echo '{{\"data\":{{\"search\":{{\"issueCount\":0,\"nodes\":[]}}}}}}';;\nesac",
-                dir = tmp.path().display()
+                dir = crate::agents::quote(&tmp.path().display().to_string())
             ),
         );
 
@@ -234,7 +234,7 @@ mod gitlab_discovery {
             tmp.path(),
             &format!(
                 "D={dir}\necho \"$*\" >> $D/log\ncase \"$1\" in\nauth) cat $D/status.json; exit 1;;\napi) for last; do :; done; p=${{last##*page=}}; cat $D/page-$p.json || exit 1;;\nesac",
-                dir = tmp.path().display()
+                dir = crate::agents::quote(&tmp.path().display().to_string())
             ),
         )
     }
