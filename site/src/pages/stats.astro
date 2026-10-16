@@ -3,6 +3,7 @@ import '@fontsource-variable/bricolage-grotesque';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import InstallBox from '../components/landing/InstallBox.astro';
+import { policy } from '../lib/csp';
 const base = import.meta.env.BASE_URL;
 const origin = Astro.site ?? new URL('https://usecornercase.dev');
 const image = new URL(`${base}stats-og.png`, origin).href;
@@ -12,7 +13,7 @@ const image = new URL(`${base}stats-og.png`, origin).href;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content={policy("'self' blob: data:", import.meta.env.DEV)} />
     <meta name="description" content="Your agents' work in parallel, on a card you can share. Made privately in your browser." />
     <meta property="og:title" content="cornercase stats" />
     <meta property="og:description" content="See how much work your agents do in parallel. Make a card and share it." />

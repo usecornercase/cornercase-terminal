@@ -75,11 +75,11 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-copy]');
+  const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.plugins-page .cmd [data-plugin-copy]');
   if (!button) return;
   const label = button.textContent;
   try {
-    await navigator.clipboard.writeText(button.dataset.copy ?? '');
+    await navigator.clipboard.writeText(button.dataset.pluginCopy ?? '');
     button.textContent = 'copied';
     setTimeout(() => {
       button.textContent = label === 'copied' ? 'copy' : label;

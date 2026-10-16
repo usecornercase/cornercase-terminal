@@ -1,16 +1,12 @@
+import { policy } from '../csp';
 import { type Index, installCommand } from './catalogue';
 import { SORTS, type Shown, type Sort, counts, fresh, haystack, languageColour, shown, sorted, trending, weeklyGain } from './market';
 
-export const CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "font-src 'self'",
-  "img-src 'self' data: https://avatars.githubusercontent.com https://github.com",
-  "connect-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ');
+const IMAGES = "'self' data: https://avatars.githubusercontent.com https://github.com";
+
+export const CSP = policy(IMAGES);
+
+export const csp = (dev: boolean): string => policy(IMAGES, dev);
 
 export const PAGE_SIZE = 24;
 

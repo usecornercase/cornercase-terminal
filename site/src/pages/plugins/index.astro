@@ -9,9 +9,9 @@ import Nav from '../../components/landing/Nav.astro';
 import Avatar from '../../components/plugins/Avatar.astro';
 import Command from '../../components/plugins/Command.astro';
 import { TOPIC, validate } from '../../lib/plugins/catalogue';
-import { CSP, PAGE_SIZE, view } from '../../lib/plugins/page';
+import { PAGE_SIZE, csp, view } from '../../lib/plugins/page';
 
-const dev = process.env.PLUGINS_INDEX === 'dev';
+const dev = import.meta.env.DEV && process.env.PLUGINS_INDEX === 'dev';
 const source = dev ? readFileSync('plugins/index.dev.json', 'utf8') : (await import('../../../plugins/index.json?raw')).default;
 const page = view(validate(source));
 const base = import.meta.env.BASE_URL;
@@ -29,7 +29,7 @@ const rest = page.line.slice(2);
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="Content-Security-Policy" content={CSP} />
+    <meta http-equiv="Content-Security-Policy" content={csp(import.meta.env.DEV)} />
     <title>cornercase plugins</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(`${base}plugins/`, origin)} />

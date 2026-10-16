@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { Index } from '../src/lib/plugins/catalogue';
 import { languageColour } from '../src/lib/plugins/market';
-import { CSP, view } from '../src/lib/plugins/page';
+import { CSP, csp, view } from '../src/lib/plugins/page';
 import { fixtureIndex } from './fixtures/plugins/fixture';
 
 const NOW = new Date('2026-10-20T12:00:00Z');
@@ -65,7 +65,8 @@ test('the policy lets images come from GitHub and nothing else, and the script n
   assert.ok(CSP.includes("connect-src 'none'"));
   assert.ok(CSP.includes("script-src 'self'"));
   assert.ok(!CSP.includes('unsafe-inline'));
-  assert.ok(astro.includes('content={CSP}'));
+  assert.ok(astro.includes('content={csp(import.meta.env.DEV)}'));
+  assert.equal(csp(false), CSP);
   assert.ok(!/<script is:inline|style="|onerror=|onclick=/.test(astro), 'no inline script, style or handler under the policy');
   assert.ok(!/fetch\(|XMLHttpRequest|WebSocket/.test(readFileSync('src/lib/plugins/client.ts', 'utf8')));
 });
@@ -87,7 +88,7 @@ test('the language dots in the stylesheet use market\'s colours', () => {
 });
 
 test('the page reads the dev index only when asked, and is built by the standalone nav', () => {
-  assert.ok(astro.includes("process.env.PLUGINS_INDEX === 'dev'"));
+  assert.ok(astro.includes("import.meta.env.DEV && process.env.PLUGINS_INDEX === 'dev'"));
   assert.ok(astro.includes('<Nav standalone />') && astro.includes('<Footer standalone />'));
   assert.ok(!astro.includes('StarlightPage'));
 });
