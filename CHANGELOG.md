@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.107
+
+- `cornercase kill-server` no longer stops the server it runs in without asking. Typed in a terminal inside cornercase, it says what would stop, including that terminal, and asks `Stop it now? [y/N]`; without a terminal, such as from an agent's tool, it refuses unless you pass `--yes`. To stop another server from inside cornercase, set `CORNERCASE_SOCKET` to its socket. Outside cornercase nothing changes.
+
 ## 0.12.106
 
 - **Merged pull requests in Stats.** Usage → Stats has a new row, `merged PRs`, with the pull requests and merge requests you opened that were merged, for the last 24 h, 7 days and in total since counting began. It reads them with your own `gh` (every GitHub account you are logged in to, including the ones that are not active, without switching) and `glab`, and counts only repositories that one of your open projects has as a remote, once each however many accounts or projects see them. A `+` after a number means some account could not be read, so the real number may be higher. The row is hidden when `gh` and `glab` are missing, logged out or too old, or when no project has a remote.
