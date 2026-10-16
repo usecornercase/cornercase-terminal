@@ -39,10 +39,14 @@ pub(crate) fn render(report: &Report, home: Option<&Path>) -> String {
 }
 
 pub(crate) fn pane_table(rows: &[PaneRow]) -> Result<String> {
-    let mut text = PaneRow::COLUMNS.join("\t") + "\n";
+    tsv(&PaneRow::COLUMNS, rows)
+}
+
+pub(super) fn tsv(columns: &[&str], rows: &[impl serde::Serialize]) -> Result<String> {
+    let mut text = columns.join("\t") + "\n";
     for row in rows {
         let value = serde_json::to_value(row).map_err(|e| Error::Control(e.to_string()))?;
-        let cells: Vec<String> = PaneRow::COLUMNS.iter().map(|column| cell(&value[*column])).collect();
+        let cells: Vec<String> = columns.iter().map(|column| cell(&value[*column])).collect();
         text.push_str(&cells.join("\t"));
         text.push('\n');
     }
@@ -68,7 +72,15 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
         let mut parts = vec![workspace.name.clone(), place(&workspace.path)];
         parts.extend(workspace.branch.as_ref().map(|branch| format!("branch {branch}")));
         parts.extend(workspace.worktree.then(|| "worktree".to_string()));
+        parts.extend(workspace.setup.as_deref().map(|state| match state {
+            "running" => "setting up".to_string(),
+            _ => "setup failed".to_string(),
+        }));
         parts.extend((workspace.behind > 0).then(|| format!("{} behind", workspace.behind)));
+        parts.extend(workspace.pull_request.as_ref().map(|pull| match &pull.checks {
+            Some(checks) => format!("pull request #{} {}, checks {checks}", pull.number, pull.state),
+            None => format!("pull request #{} {}", pull.number, pull.state),
+        }));
         lines.push(line(depth + 1, "workspace", workspace.id, &parts, &marks(shown.workspace == Some(workspace.id))));
         for tab in &workspace.tabs {
             let parts = [tab.name.clone(), tab.status.clone().unwrap_or_default()];

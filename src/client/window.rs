@@ -148,7 +148,19 @@ impl Window<'_> {
         let (theme, notify, terminal) = (self.theme.clone(), self.notify, self.name.clone());
         let (pointer, graphics, probe) = (self.pointer, self.graphics.clone(), self.probe.clone());
         let (cols, rows) = (size.width, size.height);
-        let hello = Hello { version, build, cols, rows, theme, notify, terminal, pointer, graphics, probe };
+        let hello = Hello {
+            version,
+            build,
+            cols,
+            rows,
+            theme,
+            notify,
+            terminal,
+            pointer,
+            graphics,
+            probe,
+            zone: crate::queue::clock::local_zone(),
+        };
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));
         spawn_reader(self.generation, reader, self.tx.clone());
         self.out = Some(out);

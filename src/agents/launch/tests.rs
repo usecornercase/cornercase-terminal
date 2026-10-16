@@ -5,7 +5,12 @@ use super::*;
 const MS: Duration = Duration::from_millis(1);
 
 fn spec(submit: bool) -> Spec {
-    Spec { command: "claude --permission-mode plan".into(), prompt: Some("https://x.dev/7\nplease".into()), submit }
+    Spec {
+        command: "claude --permission-mode plan".into(),
+        prompt: Some("https://x.dev/7\nplease".into()),
+        submit,
+        trusted: false,
+    }
 }
 
 struct World {
@@ -189,6 +194,24 @@ fn a_launch_waiting_for_you_needs_no_polling_until_the_agent_prints() {
     launch.output(t + 2 * AGENT_QUIET);
 
     assert_eq!((parked, launch.waits_for_you()), (true, false));
+}
+
+#[test]
+fn never_answers_claudes_bypass_consent_even_when_trusted() {
+    let consent = "Claude Code running in Bypass Permissions mode\n❯ 1. No, exit\n  2. Yes, I accept";
+    let t0 = Instant::now();
+    let mut launch = Launch::new(1, Spec { trusted: true, ..spec(true) }, t0);
+    launch.output(t0);
+    step(&mut launch, t0 + 300 * MS, &shell());
+    let t = t0 + 300 * MS;
+
+    assert_eq!(step(&mut launch, t + AGENT_QUIET, &agent(consent)), Step::Wait);
+    assert_eq!(step(&mut launch, t + 10 * AGENT_LATEST, &agent(consent)), Step::Wait);
+    assert_eq!((launch.waits_for_you(), launch.stage()), (true, "consent"));
+
+    launch.output(t + 11 * AGENT_LATEST);
+
+    assert_eq!(launch.stage(), "agent");
 }
 
 #[test]

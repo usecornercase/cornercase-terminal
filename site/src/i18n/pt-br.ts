@@ -15,6 +15,7 @@ export const page: Page = {
     docs: 'Docs (EN)',
     github: 'cornercase no GitHub',
     stars: 'cornercase no GitHub, {n} estrelas',
+    discord: 'cornercase no Discord',
     install: 'Instalar',
     language: 'Idioma',
   },
@@ -98,7 +99,7 @@ export const page: Page = {
       {
         num: '1 · Comece',
         title: 'De uma issue a um agente trabalhando, em um clique.',
-        text: 'Escolha uma issue do GitHub, Linear, Jira, Plane ou Shortcut e aperte start. O cornercase cria um worktree num branch com o nome da issue, abre uma aba nele e entrega a issue ao seu agente como primeiro prompt. Nenhum branch para nomear, nenhuma pasta para criar, nada para colar.',
+        text: 'Escolha uma issue do GitHub, GitLab, Linear, Jira, Plane ou Shortcut e aperte start. O cornercase cria um worktree num branch com o nome da issue, abre uma aba nele e entrega a issue ao seu agente como primeiro prompt. Nenhum branch para nomear, nenhuma pasta para criar, nada para colar.',
         more: 'De issues a agentes →',
         label:
           'O diálogo de issues do web-shop com a #482, Returns page crashes on empty address, selecionada: start a abre no seu próprio worktree.',
@@ -107,7 +108,7 @@ export const page: Page = {
         num: '2 · Em paralelo',
         title: 'Dez agentes, uma olhada.',
         text: 'Cada agente ganha seu próprio branch, pasta e aba, então dois deles nunca mexem no mesmo arquivo. A barra lateral mostra quem está trabalhando {working}, quem está esperando por você {waiting} e quem terminou {done}, com o modelo e quanto do contexto já foi usado. Quando um precisa de você, seu terminal te cutuca no ombro. Até por SSH.',
-        more: 'Funciona com Claude Code, Codex, Gemini, Grok e mais 11 →',
+        more: 'Funciona com Claude Code, Codex, Gemini, Grok, Cursor e mais 10 →',
         label:
           'Uma janela estreita do cornercase: em cima, os sete projetos, onde orders-api precisa de você e o agente de blog terminou; embaixo, os três worktrees de web-shop, cada um com um Claude trabalhando; e no painel, a conversa sobre o modo escuro, com o caminho que ela cita sublinhado.',
       },
@@ -150,19 +151,22 @@ export const page: Page = {
         name: 'Para seus agentes',
         items: [
           ['Status, modelo e contexto', 'Trabalhando, precisa de você ou pronto, embaixo de cada aba. E o modelo e quanto do contexto já foi usado.'],
+          ['Flows, uma equipe por tarefa', 'Um agente programa, outros revisam e testam, e um orquestrador os dirige, a partir de um modelo. O painel Flow mostra o trabalho andando.'],
           ['Notificações', 'O Claude precisa de você? Seu terminal te cutuca no ombro. Até por SSH.'],
           ['Uso e estatísticas', 'Os limites dos seus planos e o trabalho dos seus agentes em paralelo.'],
-          ['No Telegram', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
+          ['No Telegram ou Discord', 'Longe da mesa? Seus agentes te escrevem lá. Você responde e chega até eles.'],
           ['Worktrees, organizados', 'Cada frente de trabalho ganha seu próprio branch e pasta. Os criados em outro lugar aparecem também.'],
+          ['Agentes agendados', 'Agende uma issue ou um prompt para depois, ou para a próxima renovação do limite do plano.'],
         ],
       },
       {
         name: 'Para seu código',
         items: [
           ['Arquivos, com as marcas do git', 'Navegue e busque no código, imagens incluídas. As linhas alteradas ficam marcadas. Clique num caminho que um agente imprime para abri-lo.'],
-          ['Busca', 'Qualquer projeto, branch ou aba, encontrado enquanto você digita.'],
+          ['Busca', 'Qualquer projeto, branch ou aba, encontrado enquanto você digita, ou o que foi dito: nas respostas dos agentes e em cada painel.'],
           ['Divisões', 'Clique direito, dividir. Arraste para redimensionar. Só isso.'],
           ['TODO, à mão', 'Sua lista, ao lado dos shells de que ela trata.'],
+          ['Pull requests em dia', 'Cada worktree mostra seu pull request e se os checks passam. Algum falhou? Passe para o agente.'],
         ],
       },
       {
@@ -183,6 +187,7 @@ export const page: Page = {
     cta: ['Dê a cada caso', 'o seu ', 'canto', '.'],
     first: 'Primeiros passos',
     star: 'Dê uma estrela no GitHub',
+    discord: 'Entre no Discord',
     tagline: 'Cada agente no seu canto. No seu terminal, a um clique.',
     product: 'Produto',
     docs: 'Documentação (em inglês)',
@@ -233,12 +238,12 @@ export const demo: Demo = {
     folder: 'Um workspace novo na pasta do projeto.',
     picker: 'Escolha uma pasta. Digite para filtrar, Enter para entrar, open para adicioná-la.',
     opened: (folder) => `${folder} aberto. Cada projeto guarda seus próprios workspaces e abas.`,
-    search: 'Digite qualquer coisa: projetos, branches, abas. Enter leva você até lá.',
+    search: 'Digite qualquer coisa: projetos, branches, abas. Enter leva você até lá. Tab busca o que foi dito.',
     usage: 'O trabalho dos seus agentes em paralelo e os limites dos seus planos do Claude e do Codex. Tudo em Usage.',
     settings: 'Mude o que quiser, é salvo na hora. Experimente Agents → default agent.',
     restart: (resume) =>
       `De verdade, o servidor reinicia e cada aba volta com um shell novo${resume ? ', com os agentes de volta às suas conversas' : ''}. A demo mantém os seus rodando.`,
-    issues: 'Suas issues do GitHub, Shortcut, Linear, Jira e Plane. Clique numa para ler, depois aperte start.',
+    issues: 'Suas issues do GitHub, GitLab, Shortcut, Linear, Jira e Plane. Clique numa para ler, depois aperte start.',
     issue: (key) => `${key}. Aperte start e um agente assume, no seu próprio branch.`,
     branch: (branch) => `Um branch novo para ela: ${branch}.`,
     agentTab: 'Uma aba nova para o agente.',
@@ -249,5 +254,7 @@ export const demo: Demo = {
     prompt: 'A issue está no prompt. Clique no painel e aperte Enter para enviá-la.',
     detached: (shells) => `Saiu, mas nada parou: seus ${shells} shells continuam rodando, agentes incluídos.`,
     attached: 'E voltamos. Os mesmos projetos, as mesmas abas, tudo ainda rodando.',
+    flowHint: 'Este worktree roda um flow, uma equipe de agentes. Clique com o botão direito nele e escolha show flow para ver o plano.',
+    flow: 'O flow Full issue: um agente orquestrador passa o trabalho de um papel a outro. As caixas acendem enquanto trabalham. Clique em uma para ver a aba dela, numa seta para ler o que passou por ela.',
   },
 };

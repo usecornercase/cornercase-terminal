@@ -110,6 +110,26 @@ mod installing {
     }
 
     #[test]
+    fn installing_again_at_the_same_commit_records_the_new_ref_and_keeps_it_on() {
+        let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
+        let places = places(&home);
+        install(fetch(&remote.origin(None), &places).expect("fetch"), &places).expect("install");
+        let mut registry = Registry::open(&places.registry).expect("open");
+        registry.set_enabled("acme.notes", true).expect("on");
+        registry.save().expect("save");
+        git(remote.work.path(), &["tag", "stable"]);
+        git(remote.work.path(), &["push", "--quiet", &remote.url(), "stable"]);
+        let done = install(fetch(&remote.origin(Some("stable")), &places).expect("fetch"), &places).expect("again");
+        let entries = Registry::load(&places.registry).entries;
+        let Source::Git { reference, commit, path, .. } = &entries[0].source else { panic!("a git source") };
+        assert_eq!(
+            (entries.len(), entries[0].enabled, done.enabled, reference.as_deref(), commit.as_str()),
+            (1, true, true, Some("stable"), remote.head().as_str())
+        );
+        assert_eq!((path.join("cornercase-plugin.toml").exists(), staged(&places)), (true, 0));
+    }
+
+    #[test]
     fn a_cancelled_preview_leaves_nothing_behind() {
         let (remote, home) = (Remote::new(&manifest("1.0", "")), TempDir::new());
         let places = places(&home);

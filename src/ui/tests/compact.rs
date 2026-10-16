@@ -15,12 +15,23 @@ fn in_a_project(nav: Option<Nav>) -> View<'static> {
         has_project: true,
         workspaces: vec![
             WorkspaceEntry {
+                collapsed: false,
                 name: "feat/login".into(),
                 tabs: vec!["claude".into(), "nvim".into()],
                 behind: 0,
+                pull: None,
                 removing: false,
+                setting_up: false,
             },
-            WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false },
+            WorkspaceEntry {
+                collapsed: false,
+                name: "main".into(),
+                tabs: vec!["zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
         ],
         active_tab: Some(0),
         nav,
@@ -184,7 +195,15 @@ fn the_bar_shows_the_brand_without_a_project() {
 
 #[test]
 fn the_search_field_takes_the_whole_bar() {
-    let search = Search { query: "feat".into(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
+    let search = Search {
+        query: "feat".into(),
+        results: Vec::new(),
+        selected: 0,
+        scroll: 0,
+        hint: String::new(),
+        sessions: false,
+        searching: false,
+    };
     let v = View { overlay: Some(Overlay::Search(search)), ..in_a_project(None) };
     let t = render_small(&v);
     let row: String = (0..SMALL.width).map(|x| t.backend().buffer()[(x, 1)].symbol().to_string()).collect();

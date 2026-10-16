@@ -1,0 +1,25 @@
+# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import
+name = "Quick review"
+end = "commits"
+
+[orchestrator]
+agent = "claude"
+model = "opus"
+prompt = "Keep every message to an agent self-contained."
+
+[[role]]
+name = "coder"
+agent = "codex"
+edits = true
+prompt = "Implement what the orchestrator asks, run the checks and commit locally."
+
+[[role]]
+name = "reviewer"
+agent = "claude"
+prompt = "Review the changes on this branch. Do not edit files."
+
+[[stage]]
+roles = ["coder"]
+
+[[stage]]
+roles = ["reviewer"]

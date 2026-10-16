@@ -43,9 +43,12 @@ impl App {
     pub(super) fn workspace_entry(&self, w: &Workspace) -> ui::WorkspaceEntry {
         ui::WorkspaceEntry {
             name: w.label(),
+            collapsed: w.collapsed,
             tabs: w.tabs.iter().map(|t| self.tab_entry(t)).collect(),
             behind: w.behind,
+            pull: self.pull_mark(w),
             removing: w.removing(),
+            setting_up: w.setting_up(),
         }
     }
 
@@ -69,7 +72,10 @@ impl App {
                     name: if named { workspace.label() } else { String::new() },
                     tabs: workspace.tabs.iter().enumerate().map(tab).collect(),
                     behind: workspace.behind,
+                    pull: self.pull_mark(workspace),
                     removing: workspace.removing(),
+                    collapsed: workspace.collapsed,
+                    setting_up: workspace.setting_up(),
                 }
             };
             if open[p] { project.workspaces.iter().enumerate().map(entry).collect() } else { Vec::new() }

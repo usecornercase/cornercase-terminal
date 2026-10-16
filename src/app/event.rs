@@ -1,6 +1,9 @@
 use crossterm::event::Event;
 
-use super::{ChangesEvent, FilesEvent, IssueEvent, PluginEvent, TelegramEvent, UpdateEvent, WorktreeEvent};
+use super::{
+    ChangesEvent, FilesEvent, IssueEvent, MessengerEvent, PluginEvent, QueueEvent, SearchEvent, UpdateEvent,
+    WorktreeEvent,
+};
 use crate::agents::context::{self};
 use crate::agents::launch::{self};
 use crate::agents::usage;
@@ -13,6 +16,7 @@ use crate::web::{self};
 #[derive(Debug)]
 pub(crate) enum AppEvent {
     Input(Event),
+    Queue(Box<QueueEvent>),
     Output(u64, Vec<u8>),
     Exited(u64),
     Worktree(WorktreeEvent),
@@ -20,12 +24,15 @@ pub(crate) enum AppEvent {
     Changes(ChangesEvent),
     Files(FilesEvent),
     Update(UpdateEvent),
+    Search(SearchEvent),
     Usage(crate::agents::Known, Result<usage::Report>),
+    FlowModels(crate::agents::Known, Vec<String>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
     Encoded { key: encode::Key, result: Result<Vec<u8>> },
     Web(web::Event),
     Tailscale(std::result::Result<tailscale::Node, tailscale::Problem>),
-    Telegram(TelegramEvent),
+    Messenger(MessengerEvent),
+    Merged(crate::pull_request::merged::Answer),
     Plugin(PluginEvent),
 }
 
@@ -33,6 +40,7 @@ impl AppEvent {
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Self::Input(_) => "input",
+            Self::Queue(_) => "queue prepared",
             Self::Output(..) => "output",
             Self::Exited(_) => "exited",
             Self::Worktree(event) => event.name(),
@@ -40,12 +48,15 @@ impl AppEvent {
             Self::Changes(event) => event.name(),
             Self::Files(event) => event.name(),
             Self::Update(event) => event.name(),
+            Self::Search(event) => event.name(),
             Self::Usage(..) => "usage",
+            Self::FlowModels(..) => "flow models",
             Self::LastMessage { .. } => "last message",
             Self::Encoded { .. } => "image encoded",
             Self::Web(_) => "web",
             Self::Tailscale(_) => "tailscale",
-            Self::Telegram(event) => event.name(),
+            Self::Messenger(event) => event.name(),
+            Self::Merged(_) => "merged pull requests",
             Self::Plugin(event) => event.name(),
         }
     }

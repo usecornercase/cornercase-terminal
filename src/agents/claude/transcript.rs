@@ -5,6 +5,7 @@ use std::time::SystemTime;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::MODEL_FLAG;
 use crate::agents::context::counting::{self, Record as CountRecord, Usage as CountUsage};
 use crate::agents::context::jsonl::Tail;
 use crate::agents::context::{Context, Look, percent};
@@ -20,7 +21,6 @@ const COMPACT_BOUNDARY: &str = r#""compact_boundary""#;
 const COMMAND: &str = "<command-name>";
 const SHELL_INPUT: &str = "<bash-input>";
 const NOT_TYPED: [&str; 2] = ["<task-notification>", "<agent-message"];
-const MODEL_FLAG: &str = "--model";
 const MODEL_ENV: &str = "ANTHROPIC_MODEL";
 pub(crate) const NO_LONG_ENV: &str = "CLAUDE_CODE_DISABLE_1M_CONTEXT";
 const MAX_TOKENS_ENV: &str = "CLAUDE_CODE_MAX_CONTEXT_TOKENS";

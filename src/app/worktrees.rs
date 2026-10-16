@@ -13,9 +13,10 @@ use crate::agents::launch::Launch;
 use crate::error::Result;
 use crate::git;
 use crate::git::upstream;
-use crate::git::worktree;
+use crate::git::worktree::{self, setup};
 use crate::log::{Job, Level};
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
+use crate::pull_request::PullRequest;
 use crate::ui::{self};
 
 #[derive(Default)]
@@ -47,8 +48,9 @@ pub(super) enum Check {
 pub(crate) enum WorktreeEvent {
     Created { project: u64, result: Result<PathBuf>, start: Option<Start>, request: Option<u64> },
     Checked { project: u64, workspace: u64, status: worktree::Status, request: Option<u64> },
-    Removed { project: u64, workspace: u64, result: Result<()>, request: Option<u64> },
+    Removed { project: u64, workspace: u64, result: Result<Option<String>>, request: Option<u64> },
     Behind { project: u64, behind: Vec<(u64, u32)> },
+    PullRequests { project: u64, found: Vec<(u64, String, Option<PullRequest>)>, error: Option<String> },
 }
 
 impl WorktreeEvent {
@@ -58,6 +60,7 @@ impl WorktreeEvent {
             Self::Checked { .. } => "worktree checked",
             Self::Removed { .. } => "worktree removed",
             Self::Behind { .. } => "behind",
+            Self::PullRequests { .. } => "pull requests",
         }
     }
 }
@@ -84,6 +87,7 @@ impl App {
                 self.worktree_removed(project, workspace, result);
             }
             WorktreeEvent::Behind { project, behind } => self.behind_counted(project, &behind),
+            WorktreeEvent::PullRequests { project, found, error } => self.pull_requests_found(project, found, error),
         }
         Ok(())
     }
@@ -235,7 +239,7 @@ impl App {
         }
         let Some(p) = self.projects.project_index(project) else { return Ok(()) };
         let w = self.worktree_workspace(p, path);
-        self.open_workspace(p, w, start, area)
+        self.open_workspace(p, w, start, area, true)
     }
 
     pub(super) fn worktree_workspace(&mut self, p: usize, path: PathBuf) -> usize {
@@ -247,7 +251,14 @@ impl App {
         self.projects[p].workspaces.len() - 1
     }
 
-    pub(super) fn open_workspace(&mut self, p: usize, w: usize, start: Option<Start>, area: Rect) -> Result<()> {
+    pub(super) fn open_workspace(
+        &mut self,
+        p: usize,
+        w: usize,
+        start: Option<Start>,
+        area: Rect,
+        setup: bool,
+    ) -> Result<()> {
         let workspace = &mut self.projects[p].workspaces[w];
         if let Some(start) = &start
             && workspace.name.is_none()
@@ -255,7 +266,12 @@ impl App {
             workspace.name = Some(start.name.clone());
         }
         if workspace.tabs.is_empty() {
-            self.add_tab(p, w, area)?;
+            if setup {
+                let t = self.push_setup_tab(p, w, area, None)?;
+                self.projects[p].workspaces[w].active = t;
+            } else {
+                self.add_tab(p, w, area)?;
+            }
             let term = self.projects[p].workspaces[w].tab().and_then(Tab::pane).map(|t| t.id);
             if let (Some(term), Some(start)) = (term, start) {
                 self.agents.launches.push(Launch::new(term, start.spec, Instant::now()));
@@ -337,20 +353,30 @@ impl App {
         self.changes.forget(workspace);
         self.projects[p].step_off(w);
         let (repo, path) = (self.projects[p].path.clone(), self.projects[p].workspaces[w].path.clone());
+        let teardown = self.teardown_script(p).map(|script| (script, git::branch(&path).unwrap_or_default()));
         let job = Job::new(Level::Info, "worktree", "remove").with("workspace", workspace).with("path", path.display());
-        let job = job.with("force", force).with("unlock", unlock);
+        let job = job.with("force", force).with("unlock", unlock).with("teardown", teardown.is_some());
         self.spawn_job(
             job,
-            move || worktree::remove(&repo, &path, force, unlock),
+            move || {
+                let failed = teardown.and_then(|(script, branch)| {
+                    setup::teardown(&script, &path, &repo, &branch, setup::TEARDOWN_WITHIN)
+                });
+                if let Some(why) = &failed {
+                    crate::log::debug!("worktree", "teardown failed", why = why);
+                }
+                worktree::remove(&repo, &path, force, unlock).map(|()| failed)
+            },
             move |result, _| Some(AppEvent::Worktree(WorktreeEvent::Removed { project, workspace, result, request })),
         );
         true
     }
 
-    pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<()>) {
+    pub(super) fn worktree_removed(&mut self, project: u64, workspace: u64, result: Result<Option<String>>) {
         let Some(name) = self.settle_removal(project, workspace, result.is_ok()) else { return };
         let toast = match result {
-            Ok(()) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
+            Ok(None) => Toast::new(format!("removed {name}"), ui::ToastIcon::Check),
+            Ok(Some(why)) => Toast::new(format!("removed {name}, but its teardown failed: {why}"), ui::ToastIcon::Bug),
             Err(e) => Toast::new(format!("could not remove {name}: {e}"), ui::ToastIcon::Bug),
         };
         self.toast = Some(toast);
@@ -375,18 +401,24 @@ impl App {
         lock: Option<&worktree::Lock>,
         submit: &'static str,
     ) -> ui::Overlay {
-        let (label, path) = self
-            .projects
-            .workspace_in(project, workspace)
+        let found = self.projects.workspace_in(project, workspace);
+        let (label, path) = found
             .map(|(p, w)| {
                 let ws = &self.projects[p].workspaces[w];
                 (ws.label(), crate::text::display_path(&ws.path, self.home.as_deref()))
             })
             .unwrap_or_default();
+        let teardown = found.is_some_and(|(p, _)| self.teardown_script(p).is_some());
         let (message, note) = match lock {
-            Some(lock) => (lock_message(&label, lock), lock_note(lock, check == Check::Changed).map(ui::Note::Error)),
+            Some(lock) => (
+                lock_message(&label, lock) + if teardown { " Its teardown runs first." } else { "" },
+                lock_note(lock, check == Check::Changed).map(ui::Note::Error),
+            ),
             None => (
-                format!("Remove the workspace {label} and delete its worktree folder {path}? The branch is kept."),
+                format!(
+                    "Remove the workspace {label} and delete its worktree folder {path}? {}The branch is kept.",
+                    if teardown { "Its teardown runs first. " } else { "" }
+                ),
                 match check {
                     Check::Confirmed => Some(ui::Note::Busy("checking…")),
                     Check::Changed => Some(ui::Note::Error(UNCOMMITTED.into())),

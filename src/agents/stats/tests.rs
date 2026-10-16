@@ -261,6 +261,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
                 Counts::default(),
                 Counts::default(),
                 Counts::default(),
+                Counts::default(),
             ]
             .to_vec(),
             busy_ms: a[3] * 1000,
@@ -282,6 +283,7 @@ pub(crate) fn example(now: SystemTime) -> Stats {
             Bucket {
                 by_agent: [
                     Counts { agent_ms: n.as_u64().expect("seconds") * 1000, ..Counts::default() },
+                    Counts::default(),
                     Counts::default(),
                     Counts::default(),
                     Counts::default(),
@@ -356,5 +358,97 @@ mod agent_counts {
         assert_eq!(saved.hours[0].1.len(), Known::ALL.len());
         assert_eq!(saved.total.by_agent.len(), Known::ALL.len());
         assert_eq!(saved.since, 3_600_000);
+    }
+}
+
+mod merged_pull_requests {
+    use super::*;
+
+    fn row(day: u64, week: u64, total: u64, complete: bool) -> MergedRow {
+        MergedRow { day, week, total, complete, accounts: Vec::new() }
+    }
+
+    fn view(merged: Option<MergedRow>) -> View {
+        let now = at(10_000);
+        let mut view = example(now).view(now);
+        view.merged = merged;
+        view
+    }
+
+    #[rstest]
+    #[case::the_current_hour(10_000, [1, 1, 1])]
+    #[case::the_oldest_hour_of_24(9_977, [1, 1, 1])]
+    #[case::just_over_24h(9_976, [0, 1, 1])]
+    #[case::the_oldest_hour_of_7d(9_833, [0, 1, 1])]
+    #[case::just_over_7d(9_832, [0, 0, 1])]
+    #[case::before_counting_began(799, [0, 0, 0])]
+    #[case::in_the_future(10_001, [0, 0, 1])]
+    fn windows_follow_the_hour_aligned_rule_and_start_at_counting(#[case] hour: u64, #[case] expected: [u64; 3]) {
+        assert_eq!(windows([at(hour)].into_iter(), at(800), at(10_000)), expected);
+    }
+
+    #[test]
+    fn the_row_is_the_last_one_and_complete_counts_have_no_plus() {
+        let rows = view(Some(row(2, 9, 61, true))).rows();
+
+        assert_eq!(rows.len(), 10);
+        assert_eq!(rows[9], ("merged PRs", ["2".into(), "9".into(), "61".into()]));
+    }
+
+    #[test]
+    fn a_partial_count_shows_a_plus() {
+        let rows = view(Some(row(2, 9, 61, false))).rows();
+
+        assert_eq!(rows[9].1, ["2+", "9+", "61+"]);
+        assert!(view(Some(row(2, 9, 61, false))).text().contains("merged PRs"));
+    }
+
+    #[test]
+    fn without_it_nothing_changes() {
+        let view = view(None);
+
+        assert_eq!(view.rows().len(), 9);
+        assert!(!view.text().contains("merged PRs"));
+    }
+
+    #[test]
+    fn json_has_the_key_even_when_empty() {
+        let none = serde_json::to_value(view(None)).expect("json");
+        let some = serde_json::to_value(view(Some(row(2, 9, 61, true)))).expect("json");
+
+        assert_eq!(none["merged_pull_requests"], serde_json::Value::Null);
+        assert_eq!(
+            some["merged_pull_requests"],
+            serde_json::json!({"24h": 2, "7d": 9, "total": 61, "complete": true, "accounts": []})
+        );
+    }
+
+    #[test]
+    fn an_older_answer_without_the_key_reads_as_none() {
+        let mut json = serde_json::to_value(view(None)).expect("json");
+        json.as_object_mut().expect("object").remove("merged_pull_requests");
+
+        let back: View = serde_json::from_value(json).expect("view");
+
+        assert_eq!(back.merged, None);
+    }
+
+    #[test]
+    fn sharing_matches_the_site_contract_with_the_row() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(crate::test_util::fixture!("stats/share-v3.txt")).expect("fixture");
+
+        let link = view(Some(row(2, 9, 61, true))).share_link();
+
+        assert_eq!(link, fixture["link"].as_str().expect("link"));
+    }
+
+    #[test]
+    fn a_partial_or_missing_count_never_goes_on_the_card() {
+        let v2 = crate::test_util::fixture!("stats/share-v2.txt");
+        let expected = serde_json::from_str::<serde_json::Value>(v2).expect("fixture")["link"].clone();
+
+        assert_eq!(view(Some(row(2, 9, 61, false))).share_link(), expected.as_str().expect("link"));
+        assert_eq!(view(None).share_link(), expected.as_str().expect("link"));
     }
 }

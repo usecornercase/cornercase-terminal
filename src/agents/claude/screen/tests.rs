@@ -107,3 +107,16 @@ mod survey {
         assert!(!Known::Codex.survey(&screen(&[QUESTION, OPTIONS, ""])));
     }
 }
+
+mod bypass_consent {
+    const CONSENT: &str = "  WARNING: Claude Code running in Bypass Permissions mode\n\n  In Bypass Permissions mode, Claude \
+        Code will not ask for your approval before running potentially dangerous commands.\n\n  ❯ 1. No, exit\n    2. \
+        Yes, I accept\n\n  Enter to confirm · Esc to cancel";
+
+    #[test]
+    fn is_the_screen_that_asks_to_accept_the_mode() {
+        assert!(super::super::bypass_consent(CONSENT));
+        assert!(super::super::bypass_consent(&CONSENT.replace("Permissions mode", "Permis\nsions\n mode")));
+        assert!(!super::super::bypass_consent("⏵⏵ bypass permissions on (shift+tab to cycle)"));
+    }
+}

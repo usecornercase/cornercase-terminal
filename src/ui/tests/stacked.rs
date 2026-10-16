@@ -82,12 +82,23 @@ fn with_lists(sidebar: Sidebar) -> View<'static> {
         sidebar,
         workspaces: vec![
             WorkspaceEntry {
+                collapsed: false,
                 name: "login".into(),
                 tabs: vec!["claude".into(), "nvim".into()],
                 behind: 0,
+                pull: None,
                 removing: false,
+                setting_up: false,
             },
-            WorkspaceEntry { name: "main".into(), tabs: vec!["zsh".into()], behind: 0, removing: false },
+            WorkspaceEntry {
+                collapsed: false,
+                name: "main".into(),
+                tabs: vec!["zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
         ],
         ..view(&["tmp", "api", "cornercase"])
     };

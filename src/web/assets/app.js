@@ -149,7 +149,7 @@
         type: 'hello',
         cols: term.cols,
         rows: term.rows,
-        theme: { foreground: colours.foreground, background: colours.background, palette: colours.palette }
+        theme: { zone: Intl.DateTimeFormat().resolvedOptions().timeZone, foreground: colours.foreground, background: colours.background, palette: colours.palette }
       });
       term.focus();
     };

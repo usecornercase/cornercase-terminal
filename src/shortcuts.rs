@@ -126,6 +126,7 @@ pub(crate) enum Action {
     Agent,
     Mark,
     Search,
+    FindSaid,
     NewTab,
     Split(Dir),
     ClosePane,
@@ -135,7 +136,10 @@ pub(crate) enum Action {
     Files,
     Changes,
     Base,
+    PullRequest,
+    Flow,
     NewWorkspace,
+    StartFlow,
     RenameWorkspace,
     CloseWorkspace,
     Issues,
@@ -216,22 +220,29 @@ const ROOT: [Item; 25] = [
     run("t", "todo", Action::Todo),
     run(",", "settings", Action::Settings),
     run("u", "usage", Action::Usage),
-    run("o", "away on Telegram", Action::Away),
+    run("o", "away on chat apps", Action::Away),
     run("q", "quit", Action::Quit),
 ];
 
-const FIND: [Item; 4] = [
+const FIND: [Item; 5] = [
     run("f", "files by name", Action::FindNames),
     run("w", "text in files", Action::FindText),
     run("e", "file tree", Action::Files),
     run("p", "projects, workspaces, tabs", Action::Search),
+    run("s", "said in sessions", Action::FindSaid),
 ];
 
-const GIT: [Item; 2] = [run("d", "changes", Action::Changes), run("b", "compare against a branch", Action::Base)];
+const GIT: [Item; 3] = [
+    run("d", "changes", Action::Changes),
+    run("b", "compare against a branch", Action::Base),
+    run("p", "pull request and its checks", Action::PullRequest),
+];
 
-const WORKSPACE: [Item; 3] = [
+const WORKSPACE: [Item; 5] = [
     run("n", "new workspace", Action::NewWorkspace),
+    run("s", "start a flow", Action::StartFlow),
     run("r", "rename workspace", Action::RenameWorkspace),
+    run("f", "flow of this workspace", Action::Flow),
     run("x", "close workspace", Action::CloseWorkspace),
 ];
 

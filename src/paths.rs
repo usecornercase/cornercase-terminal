@@ -44,6 +44,10 @@ pub(crate) fn secrets(config_path: &Path) -> PathBuf {
     config_path.with_file_name(SECRETS_FILE)
 }
 
+pub(crate) fn flows(config: &Path) -> PathBuf {
+    config.with_file_name("flows")
+}
+
 pub(crate) fn browsers(config: &Path) -> PathBuf {
     config.with_file_name("browsers.json")
 }
@@ -64,6 +68,10 @@ pub(crate) fn plugin_state(session: &Path, id: &str) -> PathBuf {
     session.with_file_name("plugins").join("state").join(id)
 }
 
+pub(crate) fn discord(config: &Path) -> PathBuf {
+    config.with_file_name("discord.json")
+}
+
 pub(crate) fn plugin_installs(session: &Path) -> PathBuf {
     session.with_file_name("plugins").join("installed")
 }
@@ -79,8 +87,20 @@ pub(crate) fn todos(state: &Path) -> PathBuf {
     state.with_file_name(TODOS_FILE)
 }
 
+pub(crate) fn queue(session: &Path) -> PathBuf {
+    if session.file_name().is_some_and(|name| name == "session.json") {
+        session.with_file_name("queue.json")
+    } else {
+        session.with_extension("queue.json")
+    }
+}
+
 pub(crate) fn stats(session: &Path) -> PathBuf {
     session.with_file_name("stats.json")
+}
+
+pub(crate) fn star(session: &Path) -> PathBuf {
+    session.with_file_name("star.json")
 }
 
 pub(crate) fn log() -> PathBuf {

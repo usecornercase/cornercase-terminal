@@ -8,5 +8,24 @@ case "${1:-} ${2:-}" in
     ;;
   "issue view") cat "$CC_DATA/gh/view-$3.json" ;;
   "api repos/{owner}/{repo}/assignees") printf 'ana\nluis\nmarta\n' ;;
+  "pr view")
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    pull="$CC_DATA/gh/pr-$(printf '%s' "$branch" | tr / -).json"
+    if [ -f "$CC_DATA/gh/pulls" ] && [ -f "$pull" ]; then cat "$pull"; else echo "no pull requests found for branch \"$branch\"" >&2; exit 1; fi
+    ;;
+  "auth status")
+    if [ -f "$CC_DATA/gh/merged" ]; then
+      echo '{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ana","tokenSource":"keyring","scopes":"repo","gitProtocol":"ssh"}]}}'
+    else
+      echo "You are not logged into any GitHub hosts. To log in, run: gh auth login" >&2; exit 1
+    fi
+    ;;
+  "api graphql")
+    [ -f "$CC_DATA/gh/merged" ] || { echo "gh stand-in: not logged in" >&2; exit 1; }
+    stamp() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ; }
+    now=$(date +%s)
+    node_of() { printf '{"number":%s,"mergedAt":"%s","repository":{"nameWithOwner":"acme/web-shop"}}' "$1" "$(stamp $(( now - $2 )))"; }
+    printf '{"data":{"search":{"issueCount":3,"nodes":[%s,%s,%s]}}}\n' "$(node_of 482 3600)" "$(node_of 471 259200)" "$(node_of 455 3456000)"
+    ;;
   *) echo "gh stand-in: $*" >&2; exit 1 ;;
 esac

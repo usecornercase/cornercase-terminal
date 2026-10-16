@@ -8,6 +8,15 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "gemini";
 pub(in crate::agents) const TITLE: &str = "Gemini CLI";
+pub(in crate::agents) const COMMAND: &str = "gemini";
+pub(in crate::agents) const MODEL_FLAG: &str = "--model";
+pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = None;
+pub(in crate::agents) const UNATTENDED: &[&str] = &["--yolo", "--skip-trust"];
+pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
+pub(in crate::agents) const RECORD_BY_FOLDER: bool = true;
+pub(in crate::agents) const MODELS: &[&str] = &[];
+pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("auto edit", &["--approval-mode", "auto_edit"]),
     ("plan", &["--approval-mode", "plan"]),

@@ -51,11 +51,11 @@ export const sidebarLayout = (list: Rect, pitch: number, rows: SidebarRow[], scr
 
 export type WorkspaceRow = { kind: 'gap' } | { kind: 'ws'; w: number } | { kind: 'tab'; w: number; t: number } | { kind: 'new'; w: number } | { kind: 'landing' };
 
-export function workspaceRows(tabs: number[][], listed = true): WorkspaceRow[] {
+export function workspaceRows(tabs: number[][], listed = true, folded: boolean[] = []): WorkspaceRow[] {
   return tabs.flatMap((lines, w) => [
     ...(w > 0 ? [{ kind: 'gap' } as WorkspaceRow] : []),
     { kind: 'ws', w } as WorkspaceRow,
-    ...(listed ? [...lines.map((_, t) => ({ kind: 'tab', w, t }) as WorkspaceRow), { kind: 'new', w } as WorkspaceRow] : []),
+    ...(listed && !folded[w] ? [...lines.map((_, t) => ({ kind: 'tab', w, t }) as WorkspaceRow), { kind: 'new', w } as WorkspaceRow] : []),
   ]);
 }
 
@@ -701,8 +701,8 @@ export function sidebarDrop(list: Rect, pitch: number, rows: SidebarRow[], scrol
   return at === null ? null : { at, spot: projectSpot(rows, [d, d + 1], at) };
 }
 
-export function workspaceDrop(list: Rect, pitch: number, tabs: number[][], scroll: number, dragged: WorkspaceRow, x: number, y: number, listed = true): Landing | null {
-  const rows = workspaceRows(tabs, listed);
+export function workspaceDrop(list: Rect, pitch: number, tabs: number[][], scroll: number, dragged: WorkspaceRow, x: number, y: number, listed = true, folded: boolean[] = []): Landing | null {
+  const rows = workspaceRows(tabs, listed, folded);
   const layout = workspaceLayout(list, pitch, rows, tabs, scroll);
   if (dragged.kind === 'ws') {
     const d = rows.findIndex((r) => sameRow(r, dragged));

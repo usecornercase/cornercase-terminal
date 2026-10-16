@@ -1,9 +1,11 @@
+import { drawQueueForm, queueBounds } from './queue';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
-import type { AgentRow, App } from './app';
+import { type AgentRow, type App, crop } from './app';
 import { changesLabel, drawChanges, hasChanges } from './changes';
 import { drawFiles } from './files';
+import { drawFlow } from './flow';
 import { drawTodo } from './todo';
 import { type KeysGroup, keyWidth, keysArea, keysFrame, keysItem, keysItems } from './keys';
 import {
@@ -67,7 +69,7 @@ import {
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -108,6 +110,7 @@ const STATUS_ICONS: Record<Exclude<Status, 'working'>, Seg> = {
   idle: seg('○', { fg: 8 }),
   done: seg('✓', { fg: 2, add: BOLD }),
   pending: seg('●', { fg: 99, add: BOLD }),
+  failed: seg('!', { fg: 1, add: BOLD }),
   waiting: seg('!', { fg: 208, add: BOLD }),
 };
 const MOON = '◐';
@@ -130,6 +133,10 @@ const SEVERITY: Record<UsageWindow['severity'], number> = { normal: 2, warning: 
 const severityOf = (percent: number): UsageWindow['severity'] => (percent >= 90 ? 'critical' : percent >= 75 ? 'warning' : 'normal');
 const USAGE_BAR = '━';
 const SEARCH_PLACEHOLDER = 'search projects, workspaces, tabs';
+const NAMES_PLACEHOLDER = 'projects, workspaces, tabs';
+const SESSIONS_PLACEHOLDER = 'what was said in agents and panes';
+const SESSIONS_PITCH = 2;
+const MODE_WIDTH = 3;
 const NO_TAB = 'no tab open';
 const AGENTS_TITLE = 'Agents';
 const NO_AGENTS = 'no agents running';
@@ -178,11 +185,20 @@ const wordmark = (): Line => [seg('c', { fg: BRAND, add: BOLD }), seg('ornercase
 type Guide = 'top' | 'tee' | 'end' | 'bar';
 const arrow = (folded: boolean): Seg => seg(folded ? '▸ ' : '▾ ', DARK);
 
+export function fitIssueButtons(buttons: string[], width: number): string[] {
+  let fitted = buttons;
+  for (const optional of ['schedule', 'start a flow']) {
+    const needed = fitted.reduce((sum, label) => sum + [...label].length + 3, 0);
+    if (needed > width + 1) fitted = fitted.filter((label) => label !== optional);
+  }
+  return fitted;
+}
+
 export class Painter {
   readonly regions: Region[] = [];
   cursor: Cursor | null = null;
-  private surface: number;
-  private hoverSurface: number;
+  readonly surface: number;
+  readonly hoverSurface: number;
   readonly lineColour: number;
 
   constructor(
@@ -207,6 +223,10 @@ export class Painter {
     if (indent === null || isEmpty(r)) return;
     this.g.clear(rect(r.x, r.y, r.w, 1));
     this.span(r.x + indent, r.y, '─'.repeat(Math.max(0, r.w - indent - 1)), CYAN, Math.max(0, r.w - indent));
+  }
+
+  statusSeg(status: Status): Seg {
+    return statusIcon(status, spinAt(this.app));
   }
 
   region(region: Region): void {
@@ -314,6 +334,10 @@ export class Painter {
     if (app.changesShown() && !isEmpty(areas.changes)) drawChanges(this, areas);
     else if (app.todo.open && !isEmpty(areas.changes)) drawTodo(this, areas);
     else if (app.filesShown() && !isEmpty(areas.changes)) drawFiles(this, areas);
+    else if (app.flowShown() && !isEmpty(areas.changes)) {
+      const view = app.flowView();
+      if (view) drawFlow(this, areas, view);
+    }
     this.overlay(areas);
     if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
@@ -510,11 +534,15 @@ export class Painter {
     const search = app.overlay?.kind === 'search' ? app.overlay : null;
     this.g.fill(r, { bg: this.surface });
     if (search) {
-      const max = Math.max(0, r.w - 4);
+      const button = rect(right(r) - Math.min(MODE_WIDTH, r.w), r.y, Math.min(MODE_WIDTH, r.w), 1);
+      const max = Math.max(0, r.w - button.w - 4);
       const query = truncateLeft(search.query, max);
       const x = this.span(r.x, r.y, ' ⌕ ', { fg: 6, bg: this.surface });
-      this.span(x, r.y, query, { add: BOLD, bg: this.surface });
+      if (search.query) this.span(x, r.y, query, { add: BOLD, bg: this.surface });
+      else this.span(x, r.y, truncateRight(search.mode === 'sessions' ? SESSIONS_PLACEHOLDER : NAMES_PLACEHOLDER, max), { fg: 8, bg: this.surface });
       if (x + [...query].length < right(r)) this.cursor = { x: x + [...query].length, y: r.y, shape: 'block' };
+      this.span(button.x, button.y, centered('❯', button.w), search.mode === 'sessions' ? PRESSED : { fg: 8, bg: this.surface });
+      this.region({ r: button, click: () => app.toggleSearchMode(), cursor: 'pointer' });
       return;
     }
     const icon = this.sidebarHovered(r) ? CYAN : DARK;
@@ -664,14 +692,15 @@ export class Painter {
     this.rowButtons(b.r, b.pitch, b.bg, () => app.askCloseProject(project.id), menu);
   }
 
-  private workspaceRow(b: Band, p: number, w: number, badge: boolean, click: (x: number, y: number) => void): void {
+  private workspaceRow(b: Band, p: number, w: number, badge: 'off' | 'attention' | 'highest', click: (x: number, y: number) => void): void {
     const app = this.app;
     const project = app.projects[p];
     const ws = project.workspaces[w];
     const active = p === app.active && w === project.active;
     const style: Style = ws.removing ? { fg: 8, add: BOLD } : active ? { fg: 15, add: BOLD } : { fg: 7, add: BOLD };
     const room = this.room(b);
-    const status = badge ? attention(ws.tabs.map(tabStatus)) : null;
+    const statuses = ws.tabs.map(tabStatus);
+    const status = badge === 'highest' ? highest(statuses) : badge === 'attention' ? attention(statuses) : null;
     const behind = app.config.fetchMinutes && ws.behind ? [seg(`↓${ws.behind}`, { fg: 3 })] : [];
     const tags = ws.removing ? [seg('removing…', DARK)] : [...(status ? [statusIcon(status, spinAt(app))] : []), ...behind];
     const marks = fitTags(tags, room);
@@ -716,8 +745,8 @@ export class Painter {
   }
 
   private newWorkspace(r: Rect, indent: string, p: number): void {
-    this.button(r, indent, '+ New workspace', this.buttonStyle(r, CYAN, 6));
-    this.region({ r, click: () => this.app.openNewWorkspace(p), cursor: 'pointer' });
+    this.button(r, indent, NEW_BUTTON, this.buttonStyle(r, CYAN, 6));
+    this.region({ r, click: (x, y) => this.app.openNewWorkspaceMenu({ x, y }, p), cursor: 'pointer' });
   }
 
   private newProject(b: Rect): void {
@@ -796,7 +825,7 @@ export class Painter {
       else if (row.kind === 'project') {
         this.projectRow({ r, pitch, lead, bg }, row.p, folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p) : app.selectProject(row.p)));
       } else if (row.kind === 'ws') {
-        this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, !!shape.tabBar || folded(row), (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
+        this.workspaceRow({ r, pitch, lead, bg }, row.p, row.w, shape.tabBar ? 'attention' : folded(row) ? 'highest' : 'off', (x, y) => (contains(fold, x, y) ? app.toggleFold(row.p, row.w) : app.selectWorkspace(row.p, row.w)));
       } else if (row.kind === 'tab') {
         this.tabRow({ r, pitch, lead: [marker(mark), spaces], bg }, row.p, row.w, row.t, mark);
         this.guide(guide, r, 'tee');
@@ -885,7 +914,9 @@ export class Painter {
     if (!p) return;
     const list = areas.workspacesList;
     const tabs = app.tabLines();
-    const all = workspaceRows(tabs, app.tabsListed());
+    const listed = app.tabsListed();
+    const folds = app.workspacesFolded();
+    const all = workspaceRows(tabs, listed, folds);
     const base = workspaceLayout(list, areas.pitch, all, tabs, app.workspacesScroll);
     const drag = app.rowDragView();
     const landing = drag?.list === 'workspaces' ? drag.landing : null;
@@ -905,8 +936,14 @@ export class Painter {
         return;
       }
       if (spec.kind === 'ws') {
-        this.workspaceRow({ r, pitch, lead: [seg('  ')], bg: this.rowBackground(r, dragged(spec)) }, app.active, spec.w, true, () => app.selectWorkspace(app.active, spec.w));
-        this.guide(guide, r, 'top');
+        const folded = listed && !!folds[spec.w];
+        const marked = folded && spec.w === p.active;
+        const lead = [marker(marked), listed ? arrow(folded) : seg('  ')];
+        const fold = rect(r.x, r.y, 4, r.h);
+        const click = (x: number, y: number) => (listed && contains(fold, x, y) ? app.toggleFold(app.active, spec.w) : app.selectWorkspace(app.active, spec.w));
+        this.workspaceRow({ r, pitch, lead, bg: this.rowBackground(r, marked || dragged(spec)) }, app.active, spec.w, folded ? 'highest' : 'attention', click);
+        if (!folded) this.guide(guide, r, 'top');
+        if (marked) this.rail(r);
       } else if (spec.kind === 'tab') {
         const active = spec.w === p.active && spec.t === p.workspaces[spec.w].active;
         this.tabRow({ r, pitch, lead: [marker(active), seg('  ')], bg: this.rowBackground(r, active || dragged(spec)) }, app.active, spec.w, spec.t, active);
@@ -972,11 +1009,13 @@ export class Painter {
     if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') return this.form();
     if (o.kind === 'groupStyle') return this.groupStyle(o.group);
     if (o.kind === 'restart') return this.restart(o.scroll);
+    if (o.kind === 'flowMessage') return this.flowMessage(o.scroll);
     const confirm = this.app.confirmView();
     if (confirm) return this.confirm(confirm);
     if (o.kind === 'picker') return this.picker();
     if (o.kind === 'settings') return this.settings(o);
     if (o.kind === 'usage') return this.usage();
+    if (o.kind === 'queue') { this.dialogBackdrop(queueBounds(this.app.cols, this.app.rows, o)); return drawQueueForm(this, o); }
     if (o.kind === 'issues') return this.issues(o);
     if (o.kind === 'search') return this.results(areas);
   }
@@ -1019,11 +1058,11 @@ export class Painter {
     if (menu.h >= 4) this.span(menu.x + 2, menu.y + menu.h - 2, truncateRight(hint, Math.max(0, menu.w - 4)), DARK);
   }
 
-  private dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void): void {
-    const cancel = intersect(rect(right(row) - buttonWidth('cancel'), row.y, buttonWidth('cancel'), 1), row);
+  dialogButtons(row: Rect, submit: string, onSubmit: () => void, onCancel: () => void, label = 'cancel'): void {
+    const cancel = intersect(rect(right(row) - buttonWidth(label), row.y, buttonWidth(label), 1), row);
     const ok = intersect(rect(cancel.x - buttonWidth(submit) - 1, row.y, buttonWidth(submit), 1), row);
     this.submitButton(ok, submit, onSubmit);
-    this.span(cancel.x, cancel.y, ' cancel ', this.pill(cancel, false));
+    this.span(cancel.x, cancel.y, ` ${label} `, this.pill(cancel, false));
     this.region({ r: cancel, click: onCancel, cursor: 'pointer' });
   }
 
@@ -1201,6 +1240,24 @@ export class Painter {
     this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), RESTART_SUBMIT, () => app.restartNow(), () => app.closeOverlay());
   }
 
+  private flowMessage(scroll: number): void {
+    const app = this.app;
+    const o = app.overlay;
+    const message = o?.kind === 'flowMessage' ? app.flowMessage(o) : null;
+    if (!message) return;
+    const r = pickerArea(app.cols, app.rows);
+    this.dialogBackdrop(r);
+    this.box(r, 'Message');
+    const c = rect(r.x + 2, r.y + 1, Math.max(0, r.w - 4), Math.max(0, r.h - 2));
+    this.span(c.x, c.y, truncateRight(`${message.from} → ${message.to} · sent`, c.w), {});
+    const notes = updateNotes(app.cols, app.rows);
+    const lines = app.flowMessageLines(notes.w);
+    const first = Math.min(scroll, Math.max(0, lines.length - notes.h));
+    lines.slice(first, first + notes.h).forEach((line, i) => drawLine(this.g, notes.x, notes.y + i, line, notes.w));
+    this.region({ r: notes, wheel: (dy) => app.scrollFlowMessage(dy) });
+    this.dialogButtons(rect(c.x, bottom(c) - 1, c.w, 1), 'copy', () => app.copyFlowMessage(), () => app.closeOverlay(), 'done');
+  }
+
   private picker(): void {
     const app = this.app;
     const o = app.overlay;
@@ -1360,7 +1417,7 @@ export class Painter {
           this.line(rect(row.x, row.y, 1, 1), [rail(chosen, bg)]);
           let x = this.span(row.x + 1, row.y, `${item.key.padEnd(keyWidth)}  `, { ...style, fg: item.danger ? 1 : 6 });
           x = this.span(x, row.y, title, style);
-          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: 8 });
+          this.span(right(row) - meta.length - 1, row.y, meta, { ...bg, fg: item.colour ?? 8 });
           this.region({ r: row, click: () => app.issuesClick(i), cursor: 'pointer' });
         });
         this.region({ r: list, wheel: (dy) => app.issuesScroll(dy) });
@@ -1370,7 +1427,7 @@ export class Painter {
     const note = busy ?? o.notice ?? view.hint;
     this.span(noteRow.x, noteRow.y, truncateRight(note, noteRow.w), view.error && !busy ? { fg: 1 } : DARK);
     if (busy) this.cursor = null;
-    const labels = view.buttons;
+    const labels = fitIssueButtons(view.buttons, buttonsRow.w);
     rightAligned(buttonsRow, labels, buttonWidth, 1).forEach((br, i) => {
       this.span(br.x, br.y, ` ${labels[i]} `, this.pill(br, i === 0));
       this.region({ r: br, click: () => app.issuesButton(labels[i]), cursor: 'pointer' });
@@ -1382,18 +1439,24 @@ export class Painter {
     const o = app.overlay;
     if (!o || o.kind !== 'search') return;
     this.backdrop(true);
+    const bar = areas.compact ? middle(areas.bar) : areas.search;
     this.region({ r: areas.compact ? areas.bar : areas.search, click: () => {} });
+    const button = rect(right(bar) - Math.min(MODE_WIDTH, bar.w), bar.y, Math.min(MODE_WIDTH, bar.w), 1);
+    this.region({ r: button, click: () => app.toggleSearchMode(), cursor: 'pointer' });
     if (!o.query) return;
     const r = areas.results;
     this.g.clear(r);
     const list = rect(r.x, r.y, r.w, Math.max(0, r.h - 2));
     const hint = rect(r.x, bottom(r) - 1, r.w, 1);
-    const results = app.searchResults(o.query);
+    const sessions = o.mode === 'sessions';
+    const pitch = sessions ? SESSIONS_PITCH : 1;
+    const results = app.searchResults(o.query, o.mode);
     if (!results.length) this.span(list.x, list.y, '  no matches', DARK);
-    const first = Math.min(o.scroll, Math.max(0, results.length - list.h));
-    results.slice(first, first + list.h).forEach((res, k) => {
+    const visible = Math.max(1, Math.floor(list.h / pitch));
+    const first = Math.min(o.scroll, Math.max(0, results.length - visible));
+    results.slice(first, first + visible).forEach((res, k) => {
       const i = first + k;
-      const row = rect(list.x, list.y + k, list.w, 1);
+      const row = rect(list.x, list.y + k * pitch, list.w, pitch);
       const selected = o.selected === i;
       const bg = this.pickBackground(selected, row);
       const base: Style = selected ? { ...bg, add: BOLD } : bg;
@@ -1401,20 +1464,35 @@ export class Painter {
       const ctxStyle: Style = { ...bg, fg: 8 };
       this.g.fill(row, bg);
       const context = truncateLeft(res.context, Math.floor(row.w / 2));
-      const name = truncateRight(res.name, row.w - context.length - 5);
-      this.line(rect(row.x, row.y, 1, 1), [rail(selected, bg)]);
-      let x = row.x + 2;
-      const at = name.toLowerCase().indexOf(o.query.toLowerCase());
-      if (at >= 0) {
-        x = this.span(x, row.y, name.slice(0, at), base);
-        x = this.span(x, row.y, name.slice(at, at + o.query.length), matched);
-        x = this.span(x, row.y, name.slice(at + o.query.length), base);
-      } else x = this.span(x, row.y, name, base);
-      this.span(right(row) - context.length - 1, row.y, context, ctxStyle);
+      this.line(rect(row.x, row.y, 1, pitch), [rail(selected, bg)]);
+      if (sessions) {
+        const [text, [from, to]] = crop(res.name, res.hit ?? [0, 0], Math.max(0, row.w - 3));
+        const chars = [...text];
+        let x = this.span(row.x + 2, row.y, chars.slice(0, from).join(''), base);
+        x = this.span(x, row.y, chars.slice(from, to).join(''), matched);
+        this.span(x, row.y, chars.slice(to).join(''), base);
+        const detail = truncateRight(res.detail ?? '', Math.max(0, row.w - 4));
+        const room = Math.max(0, row.w - [...detail].length - 4);
+        const shown = truncateLeft(res.context, room);
+        this.span(row.x + 1, row.y + 1, ` ${detail}`, ctxStyle);
+        this.span(right(row) - [...shown].length - 1, row.y + 1, shown, ctxStyle);
+      } else {
+        const name = truncateRight(res.name, row.w - context.length - 5);
+        let x = row.x + 2;
+        const at = name.toLowerCase().indexOf(o.query.toLowerCase());
+        if (at >= 0) {
+          x = this.span(x, row.y, name.slice(0, at), base);
+          x = this.span(x, row.y, name.slice(at, at + o.query.length), matched);
+          x = this.span(x, row.y, name.slice(at + o.query.length), base);
+        } else x = this.span(x, row.y, name, base);
+        this.span(right(row) - context.length - 1, row.y, context, ctxStyle);
+      }
       this.region({ r: row, click: () => app.searchGo(i), cursor: 'pointer' });
     });
     const selected = results[Math.min(o.selected, results.length - 1)];
-    if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
+    if (sessions && app.saidCapped(o.query)) this.span(hint.x, hint.y, `  the first ${results.length} matches`, DARK);
+    else if (sessions && selected) this.span(hint.x, hint.y, `  enter goes to ${truncateLeft(selected.context, hint.w - 16)}`, DARK);
+    else if (selected) this.span(hint.x, hint.y, `  ${truncateLeft(`enter goes to ${selected.name}`, hint.w - 2)}`, DARK);
   }
 
   private toast(message: string, status?: Status, undo?: () => void, bug?: boolean): void {

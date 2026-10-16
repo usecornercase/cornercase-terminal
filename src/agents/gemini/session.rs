@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::agents::context::counting::{self, Record, Usage};
 use crate::agents::context::discovery::{folder, home, named};
 use crate::agents::context::jsonl::{Tail, head};
-use crate::agents::context::message::{self, Backwards, Said};
+use crate::agents::context::message::{self, Backwards, Each, Role, Said, Spoken};
 use crate::agents::context::{Context, percent};
 use crate::error::{Error, Result};
 use crate::process;
@@ -272,10 +272,19 @@ fn prompt(entry: &Value) -> bool {
 }
 
 pub(in crate::agents) fn last_message(path: &Path) -> Result<Option<Said>> {
+    let mut found = None;
+    said_all(path, &mut |spoken| {
+        found = (spoken.role == Role::Reply).then_some(spoken.said);
+        found.is_none()
+    })?;
+    Ok(found)
+}
+
+pub(in crate::agents) fn said_all(path: &Path, each: Each) -> Result<()> {
     let failed = |e: std::io::Error| Error::Record { path: path.to_path_buf(), cause: e.to_string() };
     let lines = match Backwards::open(path) {
         Ok(lines) => lines,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(failed(e)),
     };
     let mut seen = HashSet::new();
@@ -284,17 +293,32 @@ pub(in crate::agents) fn last_message(path: &Path) -> Result<Option<Said>> {
         let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
         if let Some(messages) = entry["$set"].get("messages") {
             for entry in messages.as_array().into_iter().flatten().rev() {
-                if let Some(said) = said(entry, &mut seen) {
-                    return Ok(Some(said));
+                if !spoken(entry, &mut seen, each) {
+                    return Ok(());
                 }
             }
-            return Ok(None);
+            return Ok(());
         }
-        if let Some(said) = said(&entry, &mut seen) {
-            return Ok(Some(said));
+        if !spoken(&entry, &mut seen, each) {
+            return Ok(());
         }
     }
-    Ok(None)
+    Ok(())
+}
+
+fn spoken(entry: &Value, seen: &mut HashSet<String>, each: Each) -> bool {
+    if entry["type"] == "user" {
+        if prompt(entry)
+            && let Some(text) = text(&entry["content"])
+            && let Some(id) = entry["id"].as_str()
+            && seen.insert(id.to_string())
+        {
+            let said = Said { text, written: entry["timestamp"].as_str().map(str::to_string) };
+            return each(Spoken { role: Role::Prompt, said });
+        }
+        return true;
+    }
+    said(entry, seen).is_none_or(|said| each(Spoken { role: Role::Reply, said }))
 }
 
 fn said(entry: &Value, seen: &mut HashSet<String>) -> Option<Said> {

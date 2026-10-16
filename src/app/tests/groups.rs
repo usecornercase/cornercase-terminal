@@ -196,7 +196,7 @@ fn past_the_presets_the_styles_start_over() {
 
 #[test]
 fn the_project_menu_offers_moving_only_once_there_are_groups() {
-    let (mut app, _rx) = app();
+    let (mut app, _rx, _dirs) = app_with(1);
     right_click_sidebar(&mut app, SidebarRow::Project(0));
     let before = menu_labels(&app);
     send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);

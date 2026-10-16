@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser};
 use rstest::rstest;
 
-use super::args::{RestartArgs, UpdateArgs};
+use super::args::{KillServerArgs, RestartArgs, UpdateArgs};
 use super::status::cell;
 use super::*;
-use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, TabInfo, WorkspaceInfo};
+use crate::control::{GroupInfo, Ids, PaneInfo, PaneRows, ProjectInfo, PullRequestInfo, TabInfo, WorkspaceInfo};
 
 fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
@@ -48,8 +48,18 @@ mod parsing {
         let restart = parse(&["restart", "--yes"]).expect("parse");
 
         assert!(matches!(update.command, Some(Command::Update(UpdateArgs { check: true, yes: true, .. }))));
-        assert!(matches!(kill.command, Some(Command::KillServer)));
+        assert!(matches!(kill.command, Some(Command::KillServer(KillServerArgs { yes: false }))));
         assert!(matches!(restart.command, Some(Command::Restart(RestartArgs { yes: true, .. }))));
+    }
+
+    #[rstest]
+    #[case::plain(&["kill-server"], false)]
+    #[case::short(&["kill-server", "-y"], true)]
+    #[case::long(&["kill-server", "--yes"], true)]
+    fn kill_server_takes_yes(#[case] args: &[&str], #[case] expected: bool) {
+        let cli = parse(args).expect("parse");
+
+        assert!(matches!(cli.command, Some(Command::KillServer(KillServerArgs { yes })) if yes == expected));
     }
 
     #[rstest]
@@ -95,6 +105,11 @@ mod parsing {
     #[case::a_branch_and_a_project_to_rename(&["rename", "--worktree", "x", "--project", "1", "y"])]
     #[case::a_blank_branch(&["close", "--worktree", " "])]
     #[case::an_unknown_command(&["frobnicate"])]
+    #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
+    #[case::an_import_without_a_file(&["flow", "import"])]
+    #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
+    #[case::an_export_without_a_name(&["flow", "export"])]
+    #[case::a_flow_with_two_tasks(&["flow", "run", "Quick", "--prompt", "x", "--prompt-file", "y"])]
     fn wrong_usage_exits_with_2(#[case] args: &[&str]) {
         assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
     }
@@ -168,6 +183,52 @@ mod parsing {
     }
 
     #[test]
+    fn a_flow_runs_by_name_with_its_task_and_branch() {
+        let cli = parse(&["flow", "run", "Full issue", "--prompt", "Fix it", "--worktree", "fix", "--focus", "--json"]);
+
+        let Some(Command::Control(Control::Flow(flow))) = cli.expect("parse").command else { panic!("not flow") };
+        let args::FlowAction::Run(run) = flow.action else { panic!("not run") };
+        assert_eq!(
+            (run.name.as_str(), run.prompt.as_deref(), run.worktree.as_deref()),
+            ("Full issue", Some("Fix it"), Some("fix"))
+        );
+        assert!(run.create.focus && run.create.print.json);
+    }
+
+    #[test]
+    fn a_flow_is_exported_and_imported_with_its_options() {
+        let cli = parse(&["flow", "export", "Quick", "--json"]).expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Export(export) = flow.action else { panic!("not export") };
+        assert_eq!((export.name.as_str(), export.print.json), ("Quick", true));
+
+        let cli =
+            parse(&["flow", "import", "f.toml", "--to", "project", "--name", "X", "--replace", "--yes", "--json"])
+                .expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
+        assert_eq!(
+            (import.file, import.to, import.name.as_deref()),
+            ("f.toml".into(), args::ImportTo::Project, Some("X"))
+        );
+        assert!(import.replace && import.yes && import.print.json);
+
+        let cli = parse(&["flow", "import", "-"]).expect("parse");
+        let Some(Command::Control(Control::Flow(flow))) = cli.command else { panic!("not flow") };
+        let args::FlowAction::Import(import) = flow.action else { panic!("not import") };
+        assert_eq!((import.file, import.to, import.yes), ("-".into(), args::ImportTo::Yours, false));
+    }
+
+    #[test]
+    fn start_takes_a_model_and_a_mode() {
+        let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus", "--effort", "high"]).expect("parse");
+
+        let Some(Command::Control(Control::Start(start))) = cli.command else { panic!("not start") };
+        let chosen = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
+        assert_eq!(chosen, (Some("plan"), Some("opus"), Some("high")));
+    }
+
+    #[test]
     fn the_server_stays_out_of_the_help() {
         let help = Cli::command().render_help().to_string();
 
@@ -208,6 +269,8 @@ mod output {
             branch: Some("fix/login".into()),
             worktree: true,
             behind: 2,
+            pull_request: None,
+            setup: None,
             active: true,
             tabs: vec![tab],
         };
@@ -220,6 +283,7 @@ mod output {
         };
         Report {
             version: "0.9.0".into(),
+            boot: String::new(),
             caller: Some(5),
             shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
             groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true }],
@@ -245,6 +309,24 @@ mod output {
                  group 8  work  collapsed\n\
                  \x20 project 9  api  ~/api\n"
         );
+    }
+
+    #[test]
+    fn a_workspace_with_a_pull_request_names_it_and_its_checks() {
+        let mut report = report();
+        let pull = |checks: Option<&str>| PullRequestInfo {
+            number: 482,
+            state: "open".into(),
+            checks: checks.map(String::from),
+            ..PullRequestInfo::default()
+        };
+        report.projects[0].workspaces[0].pull_request = Some(pull(Some("failing")));
+        let failing = render(&report, Some(Path::new("/home/ana")));
+        report.projects[0].workspaces[0].pull_request = Some(pull(None));
+        let unchecked = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(failing.contains("worktree  2 behind  pull request #482 open, checks failing  (shown)\n"), "{failing}");
+        assert!(unchecked.contains("worktree  2 behind  pull request #482 open  (shown)\n"), "{unchecked}");
     }
 
     #[test]
@@ -416,6 +498,94 @@ mod output {
         };
 
         assert_eq!(endings(&done), ["4 idle", "9 ok", "7 closed"]);
+    }
+}
+
+mod flows {
+    use super::args::ImportTo;
+    use super::flow::{confirmation, imported_line, listing, started};
+    use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
+
+    #[test]
+    fn an_import_is_confirmed_with_what_it_sets_and_reported_with_where_it_went() {
+        let question = confirmation("it sets A for `coder`; they run without asking, so check them", ImportTo::Yours);
+        assert_eq!(
+            question,
+            "it sets A for `coder`; they run without asking, so check them\nImport it into your flows? [y/N] "
+        );
+        assert!(confirmation("x", ImportTo::Project).ends_with("into the project's flows? [y/N] "));
+        let done = Imported {
+            name: "Pair".into(),
+            origin: "user".into(),
+            path: Some("/c/flows/pair.toml".into()),
+            replaced: true,
+            note: None,
+        };
+        assert_eq!(imported_line(&done), "imported Pair into yours (replaced): /c/flows/pair.toml\n");
+    }
+
+    fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
+        RoleInfo { role: role.into(), agent: agent.into(), model: model.map(str::to_string), effort: None, edits }
+    }
+
+    #[test]
+    fn the_list_names_each_flow_its_origin_its_roles_and_its_problems() {
+        let flows = Flows {
+            flows: vec![
+                FlowInfo {
+                    name: "Quick".into(),
+                    origin: "built-in".into(),
+                    description: "A coder and a reviewer.".into(),
+                    roles: vec![
+                        role("orchestrator", "claude", None, false),
+                        role("coder", "codex", Some("gpt-5.5"), true),
+                    ],
+                    ..FlowInfo::default()
+                },
+                FlowInfo {
+                    name: "Mine".into(),
+                    origin: "project".into(),
+                    path: Some("/r/.cornercase/flows/mine.toml".into()),
+                    roles: vec![role("orchestrator", "vim", None, false)],
+                    problems: vec!["the flow has no stages".into()],
+                    ..FlowInfo::default()
+                },
+            ],
+            broken: vec![BrokenFlow { path: "/c/flows/x.toml".into(), error: "expected `=`".into() }],
+        };
+
+        assert_eq!(
+            listing(&flows),
+            "Quick (built in)\n  A coder and a reviewer.\n  orchestrator: claude, coder: codex · gpt-5.5 (edits)\n\
+             Mine (this project, /r/.cornercase/flows/mine.toml)\n  orchestrator: vim\n  cannot run: the flow has no \
+             stages\ncannot read /c/flows/x.toml: expected `=`\n"
+        );
+    }
+
+    #[test]
+    fn a_run_prints_its_workspace_then_a_pane_and_a_role_per_line() {
+        let member = |role: &str, pane| MemberInfo { role: role.into(), agent: "claude".into(), tab: 0, pane };
+        let run = RunInfo {
+            workspace: 9,
+            members: vec![member("orchestrator", 12), member("second reviewer", 14)],
+            ..RunInfo::default()
+        };
+
+        assert_eq!(started(&run), "9\n12\torchestrator\n14\tsecond reviewer\n");
+    }
+}
+
+mod away {
+    use super::*;
+
+    #[rstest]
+    #[case::one_platform(serde_json::json!({"away": true, "platforms": ["Telegram"]}), "away: agents message you on Telegram until you turn it off\n")]
+    #[case::both(serde_json::json!({"away": true, "platforms": ["Telegram", "Discord"]}), "away: agents message you on Telegram and Discord until you turn it off\n")]
+    #[case::back(serde_json::json!({"away": false, "platforms": ["Discord"]}), "back: agents no longer message you on Discord\n")]
+    #[case::an_older_server(serde_json::json!({"away": true}), "away: agents message you on Telegram until you turn it off\n")]
+    #[case::nothing_was_away(serde_json::json!({"away": false, "platforms": []}), "back: nothing was away\n")]
+    fn away_names_the_platforms_it_changed(#[case] value: Value, #[case] expected: &str) {
+        assert_eq!(away_line(&value), expected);
     }
 }
 

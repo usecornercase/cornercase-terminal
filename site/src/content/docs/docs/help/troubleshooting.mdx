@@ -119,7 +119,7 @@ If some tabs were missing and a message said `could not restore … see server.l
 
 ### An agent didn't resume its conversation
 
-Only Claude Code and Codex [resume](../../guides/sessions/#agents-resume-their-conversations), and only a conversation that had something in it when the server stopped. cornercase remembers it while the agent runs, so one started a second or two before the server stopped may be missed. If the pane shows the resume command and then an error such as `No conversation found`, the conversation was deleted or lives under another account or config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) than the shell's; run `claude --resume` or `codex resume` there to pick one. If no pane resumes, check that **settings → Agents → resume conversations** is on.
+Claude Code, Codex, Gemini CLI, Grok Build and Cursor CLI [resume](../../guides/sessions/#agents-resume-their-conversations), and only a conversation that had something in it when the server stopped. cornercase remembers it while the agent runs, so one started a second or two before the server stopped may be missed. If the pane shows the resume command and then an error such as `No conversation found`, the conversation was deleted or lives under another account or config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) than the shell's; run `claude --resume` or `codex resume` there to pick one. If no pane resumes, check that **settings → Agents → resume conversations** is on.
 
 ## Using cornercase
 
@@ -176,6 +176,10 @@ cornercase asks your terminal to report these keys unambiguously, using the kitt
 
 The server reads your terminal's colours once, from the first client that attaches to it. Restart it with `cornercase restart` (or **settings → restart**) to pick up a new theme.
 
+### The merged PRs row is missing from Stats
+
+The row shows only after `gh` (GitHub) or `glab` (GitLab) answered, and counts only repositories that an open project has as a remote. Check that `gh auth status` or `glab auth status` lists an account, that the project has a remote (`git remote -v`), and read **Settings → Worktrees → merged PRs in stats**: its note names the accounts read or says why none were. A `+` after a number means one account failed or a search was too large; `server.log` has a `pr` line with the reason. `cornercase stats` reads the row only from a running server.
+
 ## Issues and agents
 
 ### The GitHub tab is empty or shows an error
@@ -183,13 +187,22 @@ The server reads your terminal's colours once, from the first client that attach
 - *this project is not in a git repository*: open the repository's folder as the project.
 - An error mentioning `gh`: install the [GitHub CLI](https://cli.github.com) and run `gh auth login`. If `gh` isn't on the server's `PATH`, set its path with the `gh` key in [`config.json`](../../reference/configuration/).
 
-### Shortcut, Linear, Jira or Plane rejects my token
+### GitLab, Shortcut, Linear, Jira or Plane rejects my token
 
-Create a new one (Shortcut: **Settings → Your account → API Tokens**; Linear: **Settings → Security & access → Personal API keys**; Jira: **Security → Create and manage API tokens** at id.atlassian.com; Plane: **Profile settings → Personal access tokens**) and paste it in the tracker's tab of the issue browser. If `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `PLANE_API_KEY` is set, it is used instead of what you paste: fix or unset the variable, then restart the server.
+Create a new one (GitLab: **Edit profile → Access tokens**, with the `read_api` scope; Shortcut: **Settings → Your account → API Tokens**; Linear: **Settings → Security & access → Personal API keys**; Jira: **Security → Create and manage API tokens** at id.atlassian.com; Plane: **Profile settings → Personal access tokens**) and paste it in the tracker's tab of the issue browser. If `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` or `PLANE_API_KEY` is set, it is used instead of what you paste: fix or unset the variable, then restart the server.
 
 For Jira, the token is sent with your site and email: check them in **settings → Issues → Jira**. Use a classic API token; tokens with scopes only work through Atlassian's gateway, which cornercase doesn't use. *no Jira site at …* means the site is misspelled.
 
 For Plane, the key is checked together with your workspace: *no Plane workspace named …* means the workspace is misspelled (it is the part after the server's name in Plane's address), and a self-hosted server needs its address in **settings → Issues → Plane → Plane URL**.
+
+For GitLab, the token is checked against the server in **settings → Issues → GitLab → GitLab URL** (gitlab.com when empty): a token made on your company's server is rejected by gitlab.com.
+
+### The GitLab tab finds no project
+
+The GitLab tab lists the issues of the project the repository's remote points to, on the server in **settings → Issues → GitLab → GitLab URL**.
+
+- *no remote of this repository is on …*: the remotes it names are on other servers. For a self-hosted GitLab, set its address as the GitLab URL. A remote that uses a host alias from `~/.ssh/config` isn't recognised: add a remote with the server's real name, such as `git remote add gitlab git@gitlab.acme.dev:team/shop.git`.
+- *no GitLab project … or the token cannot see it*: GitLab hides private projects from tokens without access to them. Check that the token's user is a member of the project.
 
 ### The agent doesn't start
 
@@ -248,4 +261,4 @@ CORNERCASE_LOG=debug cornercase
 
 ## Still stuck?
 
-[Open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with what you did, what you expected and what happened, plus the relevant lines from `cornercase logs`. Security problems go through [private vulnerability reporting](https://github.com/usecornercase/cornercase-terminal/security/advisories/new) instead.
+[Open an issue](https://github.com/usecornercase/cornercase-terminal/issues) with what you did, what you expected and what happened, plus the relevant lines from `cornercase logs`. Not sure it is a bug? Ask on [Discord](https://discord.gg/aYqCa4xC4R) first. Security problems go through [private vulnerability reporting](https://github.com/usecornercase/cornercase-terminal/security/advisories/new) instead.

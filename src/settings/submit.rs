@@ -1,6 +1,6 @@
 use crate::agents;
 use crate::config::{self, Config};
-use crate::issues::{Secret, Source, jira, plane};
+use crate::issues::{Secret, Source, gitlab, jira, plane};
 
 use super::{Action, EXTRA_ARGS, PickItem, Row, Settings};
 
@@ -141,6 +141,7 @@ impl Settings {
                 self.checking.push(source);
                 Action::CheckToken(source, Secret(token))
             }
+            Row::GitlabUrl => self.submit_checked(gitlab::check_url, gitlab_url),
             Row::JiraSite => self.submit_checked(jira::check_site, |config, value| {
                 let notice =
                     if value.is_empty() { "the Jira site was cleared".into() } else { format!("Jira site: {value}") };
@@ -172,15 +173,15 @@ impl Settings {
             Row::JiraJql => {
                 self.submit_filter("Jira", "issue", |config, jira_jql| Config { jira_jql, ..config.clone() })
             }
-            Row::TelegramBot => {
+            Row::Bot(via) => {
                 let token = edit.input.trim().to_string();
                 if token.is_empty() {
                     edit.error = Some("paste the bot's token first".into());
                     return Action::None;
                 }
                 edit.error = None;
-                self.telegram.checking = true;
-                Action::CheckTelegram(Secret(token))
+                self.messenger_mut(via).checking = true;
+                Action::CheckBot(via, Secret(token))
             }
             Row::Kind(kind) => {
                 let extra = agents::split_args(&edit.input);
@@ -193,6 +194,15 @@ impl Settings {
             _ => Action::None,
         }
     }
+}
+
+fn gitlab_url(config: &Config, value: String) -> (Config, String) {
+    let notice = match value.as_str() {
+        "" => "GitLab is gitlab.com".into(),
+        url if gitlab::unencrypted(url) => format!("GitLab server: {url}; {}", gitlab::UNENCRYPTED),
+        url => format!("GitLab server: {url}"),
+    };
+    (Config { gitlab_url: value, ..config.clone() }, notice)
 }
 
 fn starts_with(kind: &str, args: &[String]) -> String {

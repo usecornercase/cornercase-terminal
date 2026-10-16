@@ -1,6 +1,6 @@
 ---
 title: Git worktrees
-description: Give each workspace its own checkout and branch, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
+description: Give each workspace its own checkout and branch, see its pull request and checks, carry your ignored files along with .worktreeinclude, and remove worktrees safely.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -16,7 +16,7 @@ Worktrees are offered when the **project folder is the root of a git repository*
 
 <Steps>
 
-1. Click **`+ New workspace`** under the workspaces.
+1. Click **`+ New`** under the workspaces, then **new workspace**.
 
 2. Type the branch name. The dialog shows where the checkout will go.
 
@@ -35,7 +35,7 @@ cornercase then, in the background:
 - checks out the branch if it already exists, or creates it from the project's current `HEAD` if it doesn't;
 - runs `git worktree add` into `<worktrees folder>/<repository>/<branch>`;
 - copies the files listed in [`.worktreeinclude`](#bring-your-ignored-files-along);
-- opens the new workspace with a shell in the checkout.
+- opens the new workspace with a shell in the checkout, which first runs the project's [setup](#set-up-each-new-worktree) if it has one.
 
 If something goes wrong, the reason appears in red in the dialog and no workspace is added: for example when the checkout folder already exists, when git doesn't accept the branch name, or when the branch is already checked out in another worktree.
 
@@ -53,8 +53,8 @@ To keep them somewhere else, change **settings → Worktrees → worktrees folde
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n"
-  crop={[2, 4, 106, 6]}
+  alt="The Worktrees tab of the settings: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown; merged PRs in stats shown"
+  crop={[2, 4, 106, 7]}
 />
 
 ## Commits to pull
@@ -66,6 +66,44 @@ When a workspace's branch is behind its upstream, the workspace row ends with th
 - The fetch never asks for a password or passphrase: if it needs one, or the network is down, it fails silently and the number stays as it was. Use an SSH agent or a credential helper so it can run unattended.
 
 To fetch more or less often, change **settings → Worktrees → fetch branches every**, in minutes. `0` turns it off: nothing is fetched and no numbers are shown.
+
+## Pull requests and their checks
+
+When a workspace's branch has a pull request on GitHub, its row ends with the pull request's number, coloured by its checks, so you see from the sidebar which line of work is green, still running or broken, without opening a browser:
+
+<Screen
+  name="pull-requests"
+  alt="The workspaces of web-shop: main with ↓2, feat/dark-mode with #483• in yellow, its checks still running, and feat/gift-cards with #485✗ in red, a check failed"
+  crop={[0, 14, 31, 18]}
+/>
+
+| Mark | Means |
+| --- | --- |
+| `#485✗` in red | a check failed |
+| `#483•` in yellow | checks are still running |
+| `#482✓` in green | every check passed |
+| `#482` in grey | the pull request has no checks |
+| `#482` in purple | merged |
+| `#482` crossed out | closed without merging |
+
+Click the number on the row, or click the row's ` ⋯ ` (or right-click it) and pick **pull request #485**, to see each check, failed ones first, with the workflow it belongs to:
+
+<Screen
+  name="pull-request-checks"
+  alt="The Pull request dialog: #485 Pay with a gift card at checkout; open, 1 failed, 3 passed, 1 skipped; test (ubuntu-latest) failed, lint, test (macos-latest) and preview passed, deploy skipped; then ask agent, copy link and done"
+  crop={[19, 7, 72, 24]}
+/>
+
+- **copy link** copies the pull request's address, to open it in your browser.
+- **ask agent**, shown when a check failed, pastes into the workspace's agent which checks failed and the links to their logs, so it can read them (with `gh run view`, for example) and fix them. It is not sent: add what you want and press `Enter`. Without an agent in the workspace, the text is copied instead.
+
+With a [prefix key](../../reference/keyboard-and-mouse/#keyboard-shortcuts), `g` `p` opens the dialog for the workspace on screen.
+
+How it works:
+
+- cornercase runs [`gh`](https://cli.github.com/), GitHub's CLI, in each workspace's folder: `gh pr view` finds the pull request of the branch checked out there, also one an agent opened with `gh pr create`. `gh` must be installed and logged in (`gh auth login`); without it nothing shows, and **settings → Worktrees → pull requests** says why.
+- Only workspaces on a branch of a repository with a remote are asked, and not the default branch (`origin`'s `HEAD`). A workspace is asked again every 20 seconds while its checks run and every minute otherwise; a merged or closed pull request, and a project where `gh` failed, every 5 minutes. Opening the dialog asks at once.
+- Turn it off in **settings → Worktrees → pull requests**; nothing is asked then. Scripts and agents find the same in `cornercase status --json`, under each workspace's `pull_request`.
 
 ## Worktrees you made elsewhere
 
@@ -99,9 +137,28 @@ secret.txt
 
 Files keep their place in the tree. If a file can't be copied, the worktree is still created and the reason is written to the server log.
 
+## Set up each new worktree
+
+A fresh checkout has no `node_modules`, no build and no local configuration. Give a project the commands that fix that and they run in every worktree cornercase creates: click `⋯` (or right-click) on the project and choose **project settings**. It is offered for projects whose folder is a repository root.
+
+The dialog has two fields, **setup** and **teardown**; `Enter` adds a line, `Tab` moves between them, and **save** stores them in [`config.json`](../../reference/configuration/#projects) under `projects`.
+
+```sh title="setup"
+npm ci
+cp "$CORNERCASE_ROOT/.env.local" .env.local
+```
+
+The order in a new worktree is: `git worktree add`, the [`.worktreeinclude`](#bring-your-ignored-files-along) files, the **setup** in the workspace's first tab, then the agent. The setup runs visibly in that tab, so progress bars, colours and prompts work and the output stays in the scrollback; when it ends, the same tab becomes your shell. Commands run with `/bin/sh -e` (the first failing command stops the script) in the worktree, with three variables set: `CORNERCASE_ROOT` (the project folder), `CORNERCASE_WORKTREE` (the new worktree) and `CORNERCASE_BRANCH`. To use your own shell's functions, call it: `zsh -lic 'nvm use && npm ci'`.
+
+An agent that starts there (from an issue, `cornercase start --worktree`, the queue, a chat app or a flow) **waits for the setup** and starts only if it succeeded. If it fails, the tab shows a red `!`, a message says `setup failed in project › workspace`, nothing else starts and the output is there to read. Fix the cause and choose **run setup** in the workspace's menu to run it again in a new tab. The setup runs only for worktrees cornercase just created, not for ones made elsewhere, workspaces reused on an existing branch, or after a restart. There is no time limit: press `Ctrl+C` in the tab to stop it. While it runs the workspace row shows `setting up…`.
+
+**teardown** runs before a worktree is removed, once its programs have stopped and before git deletes the folder, in the background with the same variables and a limit of five minutes. If it fails, the worktree is removed anyway and the message says `removed <workspace>, but its teardown failed` with the reason; `cornercase close --remove-worktree` prints it as a warning on stderr.
+
+The commands are stored on your computer, not in the repository, so a cloned project cannot run anything until you have written it yourself; to share a setup with your team, commit a script and put one line, `./scripts/setup.sh`, in the field. Cornercase's log records sizes, exit statuses and timings, never the commands or their output; the only exception is a failed teardown, whose last output line (at most 160 characters) is logged at debug level.
+
 ## Remove a worktree
 
-Hover the workspace and click its `×`. Because removing the workspace also deletes its checkout, cornercase asks first:
+Hover the workspace and click its `×`. Because removing the workspace also deletes its checkout, cornercase asks first (the message adds `Its teardown runs first.` when the project has a [teardown](#set-up-each-new-worktree)):
 
 <Screen
   name="remove-workspace"

@@ -6,12 +6,14 @@ use self::split::{Dir, Node, Place};
 use crate::agents::activity::Status;
 use crate::agents::context::Context;
 use crate::config::Config;
+use crate::git::worktree::setup;
 use crate::term::Term;
 
 pub mod group;
 mod hierarchy;
 pub(crate) mod picker;
 pub(crate) mod search;
+pub(crate) mod settings;
 pub mod split;
 pub(crate) mod vscode;
 
@@ -88,7 +90,10 @@ impl Tab {
     }
 
     pub(crate) fn status(&self) -> Option<Status> {
-        self.panes.iter().filter_map(|t| t.agent.status()).max()
+        self.panes
+            .iter()
+            .filter_map(|t| t.agent.status().or_else(|| t.setup.as_ref().and_then(setup::Pane::status)))
+            .max()
     }
 
     pub(crate) fn context(&self) -> Option<&Context> {
@@ -210,6 +215,31 @@ impl Workspace {
             base: None,
             collapsed: false,
         }
+    }
+
+    pub(crate) fn setup(&self) -> Option<(u64, &setup::Pane)> {
+        let panes = || self.tabs.iter().flat_map(|t| &t.panes).filter_map(|t| t.setup.as_ref().map(|s| (t.id, s)));
+        panes().find(|(_, s)| s.running()).or_else(|| panes().next())
+    }
+
+    pub(crate) fn stop_blaming_setup(&mut self) {
+        for term in self.tabs.iter_mut().flat_map(|t| &mut t.panes) {
+            if let Some(setup::Pane::Failed { blame, .. }) = &mut term.setup {
+                *blame = false;
+            }
+        }
+    }
+
+    pub(crate) fn clear_failed_setups(&mut self) {
+        for term in self.tabs.iter_mut().flat_map(|t| &mut t.panes) {
+            if matches!(term.setup, Some(setup::Pane::Failed { .. })) {
+                term.setup = None;
+            }
+        }
+    }
+
+    pub(crate) fn setting_up(&self) -> bool {
+        self.setup().is_some_and(|(_, s)| s.running())
     }
 
     pub(crate) fn open(&self) -> bool {

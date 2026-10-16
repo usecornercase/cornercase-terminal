@@ -51,6 +51,8 @@ enum FromPage {
 
 #[derive(Debug, Default, Deserialize)]
 struct Theme {
+    #[serde(default)]
+    zone: String,
     foreground: Option<String>,
     background: Option<String>,
     #[serde(default)]
@@ -96,6 +98,7 @@ fn hello(cols: u16, rows: u16, theme: &Theme) -> Hello {
         pointer: None,
         graphics: Support { missing: Some(Missing::Cannot { name: "this browser".into() }), ..Support::default() },
         probe: "web".into(),
+        zone: if theme.zone.is_empty() { "UTC".into() } else { theme.zone.clone() },
     }
 }
 

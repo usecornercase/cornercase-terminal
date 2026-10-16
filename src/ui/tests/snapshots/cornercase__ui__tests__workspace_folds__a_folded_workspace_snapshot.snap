@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/workspace_folds.rs
+expression: "render(&folded(&[Some(Status::Working), Some(Status::Waiting)])).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"                                                         │                                          "
+" Projects                      │ Workspaces              │                                          "
+"                               │                         │                                          "
+"▌ shop (1)                     │  ▸ login         !      │                                          "
+"                               │                         │                                          "
+"  + New                        │  ▾ main                 │                                          "
+"                               │▌ ├ › claude             │                                          "
+"                               │  ├ › claude             │                no tab open               "
+"                               │  └ + Tab                │         + Tab opens a shell here         "
+"                               │                         │                                          "
+"                               │  + New                  │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+" ───────────────────────────── │                         │                                          "
+"  Settings                     │                         │                                          "
+"  Usage                        │  Files            TODO  │                                          "
+"  Quit                         │                         │                                          "

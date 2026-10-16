@@ -1,14 +1,18 @@
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
+  "pull_requests": true,
+  "merged_pull_requests": true,
   "issue_tabs": [
     "all",
     "github",
+    "gitlab",
     "shortcut",
     "linear",
     "jira",
     "plane"
   ],
+  "gitlab_url": "",
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",
@@ -26,6 +30,7 @@
   "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
+  "glab": "glab",
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "icon_bar": false,
@@ -40,6 +45,8 @@
   "memory": false,
   "desktop_notifications": "auto",
   "check_updates": true,
+  "star_prompt": true,
   "remote": false,
-  "remote_port": 47681
+  "remote_port": 47681,
+  "projects": {}
 }

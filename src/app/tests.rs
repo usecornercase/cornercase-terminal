@@ -53,10 +53,10 @@ use crate::host::clipboard;
 use crate::host::notify::{self};
 use crate::issues::browser::{Browser, Screen};
 use crate::issues::{self, Secret};
-use crate::list::Search;
 use crate::paths;
 use crate::process;
 use crate::project::picker::Picker;
+use crate::project::search::Finder;
 use crate::project::search::{Goto, Kind};
 use crate::project::split::{self};
 use crate::project::{Phase, Workspace};
@@ -150,6 +150,10 @@ fn new_app(config_path: PathBuf) -> (App, Receiver<AppEvent>) {
     let (tx, rx) = mpsc::channel();
     let mut app = App::new("/bin/sh".into(), HostTheme::default(), config_path, tx);
     app.config.sidebar = config::Sidebar::SideBySide.id().into();
+    if app.config.gh == config::DEFAULT_GH {
+        app.config.gh = "/nonexistent/gh".into();
+        app.config.glab = "/nonexistent/glab".into();
+    }
     (app, rx)
 }
 
@@ -188,6 +192,15 @@ fn tab_term(app: &App, w: usize, t: usize) -> &Term {
 
 fn canonical(dir: &TempDir) -> PathBuf {
     dir.path().canonicalize().expect("canonicalize")
+}
+
+fn click_button(app: &mut App, area: Rect, labels: &[&str], rects: &[Rect], label: &str) {
+    let i = labels.iter().position(|b| *b == label).unwrap_or_else(|| panic!("no {label} button"));
+    click_in(app, rects[i].as_position(), area);
+}
+
+fn overlay_shown(app: &App, area: Rect) -> ui::Overlay {
+    app.overlay.as_ref().and_then(|o| app.overlay_view(o, area)).expect("a dialog is shown")
 }
 
 fn toast(app: &App) -> Option<&str> {
@@ -307,7 +320,7 @@ fn row_rect(app: &App, row: WorkspaceRow) -> Rect {
 
 fn row_pos(app: &App, row: WorkspaceRow) -> Position {
     let r = row_rect(app, row);
-    Position::new(r.x + 3, r.y)
+    Position::new(r.x + 6, r.y)
 }
 
 fn row_close(app: &App, row: WorkspaceRow) -> Position {
@@ -331,6 +344,12 @@ fn right_click_row(app: &mut App, row: WorkspaceRow) {
 
 fn new_workspace_pos(app: &App) -> Position {
     ui::new_workspace_button(areas().workspaces_list, areas().pitch, &app.tab_lines()).as_position()
+}
+
+fn click_new_workspace(app: &mut App) {
+    let new = new_workspace_pos(app);
+    click(app, new);
+    pick(app, "new workspace");
 }
 
 fn form_value(app: &App) -> Option<&str> {
@@ -414,9 +433,11 @@ mod groups;
 mod icon_bar;
 mod keys;
 mod lock_text;
+mod merged_pull_requests;
 mod muted_text;
 mod picker;
 mod plugins;
+mod project_settings;
 mod projects;
 mod remove_worktree;
 mod rename;
@@ -425,6 +446,7 @@ mod resize_columns;
 mod restore;
 mod scrollback;
 mod search;
+mod search_sessions;
 mod select_text;
 mod settings;
 mod shortcuts;
@@ -433,9 +455,12 @@ mod sidebar_clicks;
 mod sidebar_scroll;
 mod splits;
 mod stacked_sidebar;
+mod star_prompt;
+mod start_flow_dialog;
 mod tab_bar;
 mod tabs;
 mod tree_sidebar;
+mod workspace_folds;
 mod workspaces;
 
 #[test]
@@ -453,8 +478,13 @@ mod changes_panel;
 mod control_requests;
 mod esc_closes_the_side_panel;
 mod files_panel;
+mod flow_panel;
+mod flow_runs;
+mod flows_dialog;
 mod issue_list;
 mod path_links;
+mod pull_requests;
+mod queue;
 mod remote_access;
 mod restarting;
 mod todo_panel;

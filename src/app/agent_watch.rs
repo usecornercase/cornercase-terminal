@@ -57,12 +57,14 @@ impl App {
         let active = self.project().map(|p| p.id);
         let open = self.tree_open();
         let (config, dir, tree) = (&self.config, self.agents.claude_dir.as_deref(), self.drawn.tree);
+        let folds = tree || self.drawn.tab_bar.is_empty();
         let jobs = self.following();
         let mut notices = Vec::new();
+        let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
         for (project, open) in self.projects.iter_mut().zip(open) {
             let shown = if tree { open } else { active == Some(project.id) };
             for workspace in &mut project.workspaces {
-                let measure = config.memory && shown && !(tree && workspace.collapsed);
+                let measure = config.memory && shown && !(folds && workspace.collapsed);
                 for tab in &mut workspace.tabs {
                     let seen = visible == Some(tab.id);
                     for term in &mut tab.panes {
@@ -71,11 +73,14 @@ impl App {
                             let found = agent_in(config, dir, term, now);
                             let activity = found.as_ref().map(|(_, activity)| *activity);
                             let before = term.agent.state();
-                            term.agent.follow(found.as_ref().map(|(agent, _)| *agent));
+                            term.agent.follow(found.as_ref().map(|(agent, _)| agent.as_str()));
                             if term.resuming.is_some_and(|until| now >= until) {
                                 term.agent.give_up();
                             }
                             let notice = term.agent.update(activity, seen, now);
+                            if members.contains(&term.id) && term.agent.status() == Some(activity::Status::Done) {
+                                term.agent.see();
+                            }
                             let state = term.agent.state();
                             if let Some(kind) = term.context.kind()
                                 && let Some((pid, _)) = term.context.agent()
@@ -95,11 +100,18 @@ impl App {
                                     "activity",
                                     "status",
                                     pane = term.id,
-                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.name()),
+                                    agent = found.as_ref().map_or("none", |(agent, _)| agent.as_str()),
                                     from = before.unwrap_or("none"),
                                     to = state.unwrap_or("none"),
                                 );
                             }
+                            let routine = members.contains(&term.id) && notice == Some(activity::Status::Done);
+                            let ended = orchestrators.contains(&term.id)
+                                && !seen
+                                && matches!(before, Some("working" | "shell"))
+                                && state == Some("pending");
+                            let notice =
+                                notice.filter(|_| !routine).or_else(|| ended.then_some(activity::Status::Done));
                             if let Some(status) = notice
                                 && let Some((agent, _)) = found
                             {
@@ -124,7 +136,7 @@ impl App {
             self.agents.stats.prune(clock);
         }
         for (agent, status, project, workspace) in notices {
-            self.notify(agent.name(), status, project, workspace);
+            self.notify(&agent, status, project, workspace);
         }
     }
 
@@ -140,7 +152,11 @@ impl App {
 
     fn notify(&mut self, agent: &str, status: activity::Status, project: u64, workspace: u64) {
         let Some((p, w)) = self.projects.workspace_in(project, workspace) else { return };
-        let what = if status == activity::Status::Waiting { "needs you" } else { "finished" };
+        let what = match status {
+            activity::Status::Waiting => "needs you",
+            activity::Status::Failed => "failed",
+            _ => "finished",
+        };
         let project = &self.projects[p];
         let place = format!("{} › {}", self.project_label(project), project.workspaces[w].label());
         let message = notify::clean(&format!("{agent} {what} in {place}"));
@@ -209,10 +225,15 @@ fn agent_in(
     dir: Option<&Path>,
     term: &mut Term,
     now: Instant,
-) -> Option<(agents::Known, activity::Activity)> {
+) -> Option<(String, activity::Activity)> {
     let pid = term.foreground_pid();
+    term.emulator.status_process(pid);
     let args = pid.map(process::args).unwrap_or_default();
-    let agent = agents::detect(config, &args).as_deref().and_then(agents::Known::of);
+    let name = agents::detect(config, &args);
+    if let Some((pid, name)) = pid.zip(name.as_ref()) {
+        term.status_agent = Some((pid, name.clone()));
+    }
+    let agent = name.as_deref().and_then(agents::Known::of);
     let (args, title) = {
         let screen = || term.emulator.screen_text().unwrap_or_default();
         let look =
@@ -221,12 +242,21 @@ fn agent_in(
         (look.args, look.title)
     };
     remember(config, term, agent.map(|agent| (agent.name(), args.as_slice())), now);
-    let (pid, agent) = pid.zip(agent)?;
-    if term.input_seen != Some(pid) && agent.input_box(|| term.emulator.screen_text().unwrap_or_default()) == Some(true)
+    if let Some((pid, agent)) = pid.zip(agent)
+        && term.input_seen != Some(pid)
+        && agent.input_box(|| term.emulator.screen_text().unwrap_or_default()) == Some(true)
     {
         term.input_seen = Some(pid);
     }
-    term.context.activity(&title).map(|state| (agent, state))
+    if let Some(name) = name {
+        let activity = term.emulator.program_activity().or_else(|| term.context.activity(&title))?;
+        return Some((name, activity));
+    }
+    let (pid, name) = term.status_agent.as_ref().filter(|_| term.shell_in_foreground())?;
+    if term.agent.finished_seen() {
+        term.emulator.acknowledge_status(*pid);
+    }
+    term.emulator.finished_activity(*pid).map(|activity| (name.clone(), activity))
 }
 
 fn remember(config: &Config, term: &mut Term, agent: Option<(&str, &[String])>, now: Instant) {

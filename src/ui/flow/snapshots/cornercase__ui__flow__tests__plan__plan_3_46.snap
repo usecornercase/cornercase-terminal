@@ -1,0 +1,23 @@
+---
+source: src/ui/flow/tests.rs
+expression: "render(&d, 46).backend()"
+---
+"            ╭─ orchestrator ───╮              "
+"            │ claude           │              "
+"            ╰──────────────────╯              "
+"                                              "
+"            ╭─ reproducer ─────╮              "
+"            │ codex            │              "
+"            ╰─────────┬────────╯              "
+"                      │                       "
+"                      ▼                       "
+"            ╭─ coder ──────────╮              "
+"            │ claude           │◀────────────╮"
+"            ╰─────────┬────────╯             │"
+"                      │ failures · at most 2 │"
+"                      ▼                      │"
+"            ╭─ tester ─────────╮             │"
+"            │ claude           │─────────────╯"
+"            ╰─────────┬────────╯              "
+"                      ▼                       "
+"                      ◆ open a pull request   "

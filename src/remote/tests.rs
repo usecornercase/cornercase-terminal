@@ -211,6 +211,7 @@ mod proxy {
     #[test]
     fn hands_the_server_its_own_build() {
         let hello = Hello {
+            zone: "UTC".into(),
             version: protocol::VERSION,
             build: "the laptop's".into(),
             cols: 80,

@@ -98,6 +98,33 @@ done
         daemon
     }
 
+    pub(crate) fn served_command_line(&self, signals: &Path) -> String {
+        let script = self.dir.path().join("tui/codex");
+        std::fs::create_dir_all(script.parent().expect("tui folder")).expect("create tui folder");
+        let body = r#"#!/bin/sh
+watch_titles() {
+  while [ -d "$2" ] && [ ! -e "$2/quit" ]; do
+    $TITLE
+    sleep 0.02
+  done
+}
+watch_titles "$@" & watcher=$!
+trap 'kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null' EXIT
+printf '\033]0;project\007'
+while IFS= read -r line; do
+  printf '\033]0;⠴ fix the login | project\007'
+done
+"#
+        .replace("$TITLE", TITLE_SIGNAL);
+        write_executable(&script, &body);
+        let args = [script.as_path(), Path::new("tui"), signals].map(|p| p.to_string_lossy().into_owned());
+        format!(
+            "env CODEX_HOME={} {}",
+            crate::agents::quote(&self.home.to_string_lossy()),
+            crate::agents::join_args(&args)
+        )
+    }
+
     pub(crate) fn agent(&self, cwd: &Path) -> Sleeper {
         Sleeper::named(&self.dir.path().join("agent/codex"), cwd, &[("CODEX_HOME", &self.home.to_string_lossy())])
     }

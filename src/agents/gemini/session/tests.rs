@@ -292,3 +292,47 @@ mod counting_records {
         assert_eq!(sum(ledger.take()).1.out, 0);
     }
 }
+
+mod conversation {
+    use super::*;
+
+    fn heard(session: &Session) -> Vec<(Role, String)> {
+        let mut heard = Vec::new();
+        said_all(&session.path, &mut |spoken| {
+            heard.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("read the session");
+        heard
+    }
+
+    #[test]
+    fn gives_the_prompt_and_its_reply_newest_first() {
+        let (_dir, session) = written(&format!("{PROMPT}{REPLY}"));
+
+        assert_eq!(heard(&session), [(Role::Reply, "OK".into()), (Role::Prompt, "Reply only OK.".into())]);
+    }
+
+    #[test]
+    fn the_latest_update_of_a_message_wins_and_a_set_of_messages_ends_the_history() {
+        let (_dir, mut session) = written(&format!("{PROMPT}{REPLY}"));
+        let mut changed: Value = serde_json::from_str(REPLY).expect("reply");
+        changed["content"] = Value::from("Updated answer");
+        append(&mut session, &format!("{changed}\n"));
+        assert_eq!(heard(&session)[0], (Role::Reply, "Updated answer".into()));
+        assert_eq!(heard(&session).len(), 2);
+
+        let keep = serde_json::json!({ "$set": { "messages": [changed] } });
+        append(&mut session, &format!("{keep}\n"));
+        assert_eq!(heard(&session), [(Role::Reply, "Updated answer".into())]);
+    }
+
+    #[test]
+    fn local_input_and_setup_text_are_not_prompts() {
+        let slash = serde_json::json!({ "id": "a", "type": "user", "content": [{ "text": "/clear" }] });
+        let setup = serde_json::json!({ "id": "b", "type": "user", "content": [{ "text": "<session_context>x" }] });
+        let (_dir, session) = written(&format!("{slash}\n{setup}\n"));
+
+        assert_eq!(heard(&session), []);
+    }
+}

@@ -20,8 +20,7 @@ fn opened() -> Setup {
     let repo = git_repo(&[("README", "hi")]);
     let (worktrees, config, config_path) = with_worktrees_config();
     let (mut app, rx) = app_in(repo.path(), config_path);
-    let pos = new_workspace_pos(&app);
-    click(&mut app, pos);
+    click_new_workspace(&mut app);
     submit_text(&mut app, "wt");
     pump_until(&mut app, &rx, "the workspace opens", |a| a.projects[0].workspaces.len() == 2);
     let path = app.projects[0].workspaces[1].path.clone();

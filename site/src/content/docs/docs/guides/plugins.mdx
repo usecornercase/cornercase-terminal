@@ -56,7 +56,7 @@ cornercase plugin disable my-plugin        # stops its service and window proces
 cornercase plugin unlink my-plugin         # forgets it; the folder stays
 ```
 
-A plugin starts **off**, installed or linked: nothing in it runs until you turn it on. `plugin list` and Settings show what it asks for before you do. You can also turn plugins on and off in **Settings › Plugins**: each row shows the plugin's name and version, whether it is on, and what it asks for. `Enter` switches it.
+A plugin starts **off**, installed or linked: none of its actions, hooks, services or window processes run until you turn it on. An installed plugin's build steps, if it has any, run once you confirm the install. `plugin list` and Settings show what it asks for before you do. You can also turn plugins on and off in **Settings › Plugins**: each row shows the plugin's name and version, whether it is on, and what it asks for. `Enter` switches it.
 
 A running server notices changes within a second: turning a plugin on starts its service, turning it off stops it, and editing the manifest of a linked plugin reloads it. No restart is needed.
 

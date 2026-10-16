@@ -166,7 +166,7 @@ fn an_overlay_brings_back_the_default_pointer() {
     let at = border(&app, ui::Border::Projects);
     hover(&mut app, at);
 
-    app.overlay = Some(Overlay::Search(Search::default()));
+    app.overlay = Some(Overlay::Search(Finder::default()));
 
     assert_eq!(app.pointer(AREA), pointer::Shape::Default);
 }
@@ -247,6 +247,7 @@ fn restore_brings_back_the_widths() {
         changes: None,
         todo: false,
         files: false,
+        flow: false,
     };
 
     app.restore(&saved, AREA);

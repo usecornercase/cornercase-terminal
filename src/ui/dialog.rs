@@ -1,10 +1,14 @@
+pub(super) mod flows;
 pub(super) mod form;
 pub(super) mod group_style;
 pub(super) mod issues;
 pub(super) mod menu;
 pub(super) mod picker;
+pub(super) mod project_settings;
+pub(crate) mod queue;
 pub(super) mod search;
 pub(super) mod settings;
+pub(super) mod start_flow;
 pub(super) mod update;
 pub(super) mod usage;
 
@@ -16,11 +20,13 @@ use ratatui::widgets::{Block, Paragraph, Wrap};
 
 use super::RemoteAccess;
 use super::View;
+use super::dialog::flows::{Flows, flows_area};
 use super::dialog::form::{Confirm, Form, form_area};
 use super::dialog::issues::{Issues, issues_area};
 use super::dialog::picker::{Picker, picker_area};
 use super::dialog::search::Search;
 use super::dialog::settings::{Settings, settings_area};
+use super::dialog::start_flow::StartFlow;
 use super::dialog::update::Update;
 use super::dialog::usage::{Usage, usage_area};
 use super::keys;
@@ -49,16 +55,30 @@ fn buttons_in(row: Rect, submit: &str, cancel: &str) -> [Rect; 2] {
     [submit, cancel]
 }
 
+fn left_of(row: Rect, submit: Rect, extra: &str) -> Rect {
+    let right = submit.x.saturating_sub(1).max(row.x);
+    let x = right.saturating_sub(button_width(extra)).max(row.x);
+    Rect { x, width: right - x, ..row }
+}
+
 fn first_visible(list: Rect, items: usize, scroll: usize) -> usize {
-    scroll.min(items.saturating_sub(usize::from(list.height)))
+    first_visible_by(list, items, scroll, 1)
+}
+
+pub(super) fn first_visible_by(list: Rect, items: usize, scroll: usize, pitch: u16) -> usize {
+    scroll.min(items.saturating_sub(usize::from(list.height / pitch.max(1))))
 }
 
 pub(super) fn list_item(list: Rect, items: usize, scroll: usize, i: usize) -> Rect {
-    let Some(row) = i.checked_sub(first_visible(list, items, scroll)).filter(|_| i < items) else {
+    list_item_by(list, items, scroll, i, 1)
+}
+
+pub(super) fn list_item_by(list: Rect, items: usize, scroll: usize, i: usize, pitch: u16) -> Rect {
+    let Some(row) = i.checked_sub(first_visible_by(list, items, scroll, pitch)).filter(|_| i < items) else {
         return Rect::default();
     };
-    let y = list.y.saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
-    Rect::new(list.x, y, list.width, 1).intersection(list)
+    let y = list.y.saturating_add(u16::try_from(row).unwrap_or(u16::MAX).saturating_mul(pitch));
+    Rect::new(list.x, y, list.width, pitch).intersection(list)
 }
 
 fn row_of(row: Rect, x: u16, width: u16) -> Rect {
@@ -77,7 +97,7 @@ pub(super) fn tabs_in(row: Rect, names: &[&str]) -> Vec<Rect> {
         .collect()
 }
 
-fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -> Vec<Rect> {
+pub(super) fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -> Vec<Rect> {
     let mut x = row.right();
     let mut rects: Vec<Rect> = labels
         .iter()
@@ -97,11 +117,13 @@ fn right_aligned(row: Rect, labels: &[&str], width: fn(&str) -> u16, gap: u16) -
 pub(crate) enum Note {
     Error(String),
     Busy(&'static str),
+    Info(String),
 }
 
 pub(crate) enum Overlay {
     Menu { at: Position, items: Vec<String> },
     Form(Form),
+    Queue(Box<crate::queue::form::Form>),
     GroupStyle(GroupEntry),
     Confirm(Confirm),
     Update(Update),
@@ -110,6 +132,9 @@ pub(crate) enum Overlay {
     Picker(Picker),
     Issues(Issues),
     Settings(Settings),
+    Flows(Box<Flows>),
+    StartFlow(Box<StartFlow>),
+    ProjectSettings(Box<project_settings::ProjectSettings>),
     Search(Search),
     Keys(keys::Keys),
 }
@@ -121,12 +146,15 @@ impl Overlay {
 
     pub(crate) fn area(&self, area: Rect) -> Option<Rect> {
         match self {
+            Self::Queue(form) => Some(queue::area_with_list(area, form)),
             Self::Form(_) | Self::GroupStyle(_) | Self::Confirm(_) => Some(form_area(area)),
             Self::Update(_) | Self::Picker(_) => Some(picker_area(area)),
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Issues(_) => Some(issues_area(area)),
             Self::Settings(_) => Some(settings_area(area)),
+            Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
+            Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Menu { .. } | Self::Search(_) | Self::Keys(_) => None,
         }
     }
@@ -151,11 +179,14 @@ fn draw_note(f: &mut Frame, muted: Color, note: Option<&Note>, r: Rect) {
         Some(Note::Busy(text)) => {
             f.render_widget(Paragraph::new(Span::styled(*text, Style::default().fg(muted))), r);
         }
+        Some(Note::Info(text)) => {
+            f.render_widget(Paragraph::new(Span::styled(text.as_str(), Style::default().fg(muted))), r);
+        }
         None => {}
     }
 }
 
-fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style {
+pub(super) fn dialog_button_style(view: &View, r: Rect, primary: bool) -> Style {
     match (primary, hovered(view, r)) {
         (true, true) => Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
         (true, false) => Style::default().fg(Color::Cyan).bg(view.surface()).add_modifier(Modifier::BOLD),

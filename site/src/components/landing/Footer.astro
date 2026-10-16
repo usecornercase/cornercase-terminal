@@ -4,6 +4,7 @@ import InstallBox from './InstallBox.astro';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
+const discord = 'https://discord.gg/aYqCa4xC4R';
 const locale = localeOf(Astro.url);
 const t = words(Astro.url);
 const docsLang = locale === 'en' ? undefined : 'en';
@@ -31,6 +32,7 @@ const columns: [string, [string, string, string?][]][] = [
     t.footer.project,
     [
       ['GitHub', repo],
+      ['Discord', discord],
       [t.footer.issues, `${repo}/issues`],
       [t.footer.contributing, `${repo}/blob/main/CONTRIBUTING.md`],
       [t.footer.security, `${repo}/security/advisories/new`],
@@ -49,6 +51,7 @@ const columns: [string, [string, string, string?][]][] = [
       <div class="actions">
         <a class="btn btn-ghost" href={`${base}/docs/first-steps/`} hreflang={docsLang}>{t.footer.first}</a>
         <a class="btn btn-ghost" href={repo}>{t.footer.star}</a>
+        <a class="btn btn-ghost" href={discord}>{t.footer.discord}</a>
       </div>
     </div>
     <div class="grid">

@@ -48,10 +48,13 @@ fn shown(sidebar: Sidebar, entries: Vec<AgentEntry>) -> View<'static> {
         active_tab: Some(0),
         sidebar,
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "default".into(),
             tabs: vec!["codex".into()],
             behind: 0,
+            pull: None,
             removing: false,
+            setting_up: false,
         }],
         tree: (sidebar == Sidebar::Tree).then_some(tree),
         agents: Some(AgentsView { entries, scroll: 0 }),

@@ -131,14 +131,14 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 | `config.rs` | User settings in `config.json`, with the `Sidebar` and `Tabs` choices. |
 | `files/` | The files panel: its state per workspace, the tree's git marks and the marks beside each line (`mod.rs`), reading folders and files on threads (`disk.rs`), the list of files and the name and text searches (`search.rs`), and the paths printed in panes (`link.rs`); `ui/files.rs` draws the panel, `app/files_panel.rs` wires it into `App`, and `app/links.rs` wires the paths printed in panes. |
 | `git.rs` | Branch from `.git/HEAD`, repository roots, linked worktrees, without running git. |
-| `git/worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`. |
+| `git/worktree.rs` | `git worktree add` and `remove`, checkout paths, `.worktreeinclude`; `git/worktree/setup.rs` the setup wrapper and the teardown. |
 | `git/upstream.rs` | `git fetch` and the commits each workspace can pull (`↓n`). |
 | `graphics/` | Images in the files panel: which protocol each window's terminal understands (`detect.rs`), decoding an image and fitting it to the panel (`decode.rs`, `encode.rs`), the bytes for kitty graphics, iTerm2 inline images and sixel (`kitty.rs`, `iterm.rs`, `sixel.rs`), and wrapping them for tmux (`tmux.rs`). |
 | `highlight.rs` | Syntax highlighting of Markdown code blocks with palette colours. |
 | `highlight/syntax.rs` | The files panel's highlighting: tree-sitter grammars through arborium, the language of a file, palette colours. |
 | `highlight/markdown.rs` | Markdown to wrapped lines. |
 | `host/` | The outer terminal: asking for its colours and its name (`host/theme.rs`), desktop notifications and which escape sequence each terminal understands (`host/notify.rs`), the resize pointer (`host/pointer.rs`) and OSC 52 (`host/clipboard.rs`). |
-| `issues/` | The issue model and clients for GitHub (`gh`), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane (REST, with an HTML to Markdown converter), the browser state, the on-disk cache, and the trackers' tokens in `secrets.json` (`issues/secrets.rs`). `browser.rs` and `browser/` (buttons, connect form, people filter, picker, keys and mouse, detail text) take sizes and hits; `app/issues_dialog.rs` builds and hit-tests its UI view. |
+| `issues/` | The issue model and clients for GitHub (`gh`), GitLab (REST, for the project of the repository's remote), Shortcut (REST), Linear (GraphQL), Jira Cloud (REST, with an Atlassian Document Format to Markdown converter) and Plane (REST, with an HTML to Markdown converter), the browser state, the on-disk cache, and the trackers' tokens in `secrets.json` (`issues/secrets.rs`). `browser.rs` and `browser/` (buttons, connect form, people filter, picker, keys and mouse, detail text) take sizes and hits; `app/issues_dialog.rs` builds and hit-tests its UI view. |
 | `project.rs`, `project/group.rs`, `project/hierarchy.rs` | Project › workspace › tab › panes, labels, removal; groups, icons, colours and presets. `Hierarchy` on `[Project]` owns lookups by id and walks across levels; `group_indices` and `sidebar_order` share the project order across the app. Each level owns `index_of`, and tabs also resolve panes and map layouts to pane positions. |
 | `project/split.rs` | A tab's split tree: rects, dividers, splitting, removing, ratios. |
 | `project/search.rs`, `project/picker.rs` | Global search, whose candidates `project::search::candidates` builds from the hierarchy; the folder picker. |
@@ -171,7 +171,7 @@ Each holds a model and its own I/O jobs, and never uses `app` or `ui`.
 
 | Module | Responsibility |
 | --- | --- |
-| `cli.rs` | Running every command: the commands for scripts send a request and print its answer. `cli/args.rs` holds the `clap` definitions and `cli/help.rs` their help texts, `cli/status.rs` the output of `status`, `cli/update.rs` `update` and `restart`. |
+| `cli.rs` | Running every command: the commands for scripts send a request and print its answer. `cli/args.rs` holds the `clap` definitions and `cli/help.rs` their help texts, `cli/status.rs` the output of `status`, `cli/update.rs` `update`, `restart` and `kill-server`. |
 | `client.rs` | Terminal setup and teardown. `client/window.rs` forwards events, writes frames and reconnects a remote window, `client/probe.rs` asks the outer terminal for its colours and what it can show, `client/requests.rs` sends a command's request, `client/server_process.rs` starts and stops the server (`kill-server`). |
 | `control.rs` | The JSON of requests and answers, shared by the commands and the server. |
 | `protocol.rs` | Messages and framing. |

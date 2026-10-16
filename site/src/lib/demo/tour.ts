@@ -24,6 +24,7 @@ export interface Hooks {
   say?: (text: string) => void;
   spot?: (spot: Spot | null) => void;
   lapse?: (speed: number, label: string | null) => void;
+  missed?: (text: string) => void;
   instant?: boolean;
 }
 
@@ -117,6 +118,7 @@ export function play(m: Mounted, pointer: HTMLElement | null, steps: Step[], hoo
       else {
         const p = find(app, step.click, step.nth, step.dx) ?? (step.alt ? find(app, step.alt, step.nth) : null);
         if (!p) {
+          hooks.missed?.(step.click);
           if (step.orKey) {
             app.key({ key: step.orKey });
             await wait(260);

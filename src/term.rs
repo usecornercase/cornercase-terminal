@@ -2,6 +2,7 @@ pub(crate) mod emulator;
 pub(crate) mod keys;
 pub(crate) mod memory;
 pub(crate) mod mouse;
+mod status;
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -19,6 +20,7 @@ use crate::agents::context;
 use crate::agents::{self, AgentState, Known};
 use crate::config::Config;
 use crate::error::{Error, Result};
+use crate::git::worktree::setup;
 use crate::host::theme::HostTheme;
 use crate::process;
 
@@ -26,6 +28,7 @@ const SCROLLBACK_BYTES: usize = 10_000_000;
 const READ_BUFFER: usize = 16 * 1024;
 const INTERPRETERS: [&str; 6] = ["node", "bun", "deno", "python", "python3", "ruby"];
 const NODE_MAIN_THREAD: &str = "node-MainThread";
+const MAIN_THREAD: &str = "MainThread";
 const SCRIPT_EXTENSIONS: [&str; 9] = ["js", "mjs", "cjs", "ts", "mts", "cts", "py", "rb", "sh"];
 const NOT_A_SCRIPT: [&str; 6] = ["-e", "--eval", "-p", "--print", "-c", "-m"];
 const PASTE_START: &str = "\x1b[200~";
@@ -43,6 +46,7 @@ pub(crate) struct Term {
     pub(crate) id: u64,
     pub(crate) emulator: Emulator,
     pub(crate) agent: activity::Pane,
+    pub(crate) status_agent: Option<(i32, String)>,
     pub(crate) context: context::Pane,
     pub(crate) memory: memory::Pane,
     pub(crate) resume: Option<AgentState>,
@@ -52,6 +56,7 @@ pub(crate) struct Term {
     pub(crate) submitted: Option<Instant>,
     pub(crate) input_seen: Option<i32>,
     pub(crate) job: Option<Job>,
+    pub(crate) setup: Option<setup::Pane>,
     master: Box<dyn MasterPty + Send>,
     writer: Writer,
     child: Box<dyn Child + Send + Sync>,
@@ -124,6 +129,7 @@ impl Term {
             id,
             emulator,
             agent: activity::Pane::default(),
+            status_agent: None,
             context: context::Pane::default(),
             memory: memory::Pane::default(),
             resume: None,
@@ -133,6 +139,7 @@ impl Term {
             submitted: None,
             input_seen: None,
             job: None,
+            setup: None,
             master: pair.master,
             writer,
             child,
@@ -143,6 +150,13 @@ impl Term {
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
         self.output_at = Instant::now();
+        let pid = self.foreground_pid();
+        let reporting = if self.interactive && pid == self.shell_pid() {
+            self.status_agent.as_ref().filter(|(pid, _)| process::alive(*pid)).map(|(pid, _)| *pid).or(pid)
+        } else {
+            pid
+        };
+        self.emulator.status_process(reporting);
         self.emulator.feed(bytes);
     }
 
@@ -200,6 +214,10 @@ impl Term {
         self.interactive && shell.is_some() && self.foreground_pid() == shell
     }
 
+    pub(crate) fn became_shell(&mut self) {
+        self.interactive = true;
+    }
+
     pub(crate) fn dialog(&self) -> bool {
         self.seen_agent_screen().is_some_and(|(agent, screen)| agent.input_box(|| screen) == Some(false))
     }
@@ -209,7 +227,7 @@ impl Term {
     }
 
     fn seen_agent_screen(&self) -> Option<(Known, String)> {
-        let (Some(agent), Some(seen)) = (self.agent.agent(), self.input_seen) else { return None };
+        let (Some(agent), Some(seen)) = (self.agent.agent().and_then(Known::of), self.input_seen) else { return None };
         (self.foreground_pid() == Some(seen)).then(|| (agent, self.emulator.screen_text().unwrap_or_default()))
     }
 
@@ -250,7 +268,12 @@ pub(crate) fn bracketed(text: &str) -> String {
 }
 
 pub(crate) fn program(config: &Config, name: &str, argv: &[String]) -> String {
-    let name = if name == NODE_MAIN_THREAD { "node" } else { name };
+    let node = name == NODE_MAIN_THREAD
+        || (name == MAIN_THREAD
+            && (argv.first().is_some_and(|a| Path::new(a).file_name().is_some_and(|n| n == "node"))
+                || agents::detect(config, argv).is_some()
+                || script(argv).is_some()));
+    let name = if node { "node" } else { name };
     let interpreter = INTERPRETERS.contains(&name);
     let considered = if interpreter { argv } else { argv.get(..1).unwrap_or_default() };
     agents::detect(config, considered)

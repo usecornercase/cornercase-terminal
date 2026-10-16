@@ -1,12 +1,16 @@
 mod arrange;
 mod close;
+mod contract;
 mod create;
+mod flow;
 mod idle_restart;
+mod queue;
+mod search;
 mod status;
 mod talk;
 mod wait;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant, SystemTime};
 
 use ratatui::layout::Rect;
@@ -16,15 +20,16 @@ use serde_json::Value;
 use crate::agents;
 use crate::agents::launch::Launch;
 use crate::app::App;
-use crate::app::telegram::CLIENTS as TELEGRAM_CLIENTS;
-use crate::control::{self, Command, Done, Ids, Item, Request, Response};
+use crate::app::flow_runs::Starting;
+use crate::app::messenger::CLIENTS as MESSENGER_CLIENTS;
+use crate::control::contract::{Code, Refusal};
+use crate::control::{self, Command, Done, Ids, Item, Request};
 use crate::error;
 use crate::git;
 use crate::log::{self, Level};
 use crate::project::search::Goto;
 use crate::project::{Hierarchy, Phase, Tab, Workspace};
 use crate::term::Term;
-use crate::version;
 use create::Then;
 use wait::{Condition, Confirm, Watch};
 
@@ -41,13 +46,14 @@ const NO_PANE: &str = "no pane is open here; pass --pane or --tab (`cornercase s
 
 type Reply = Result<Value, String>;
 
-type Handled = Result<Option<Value>, String>;
+type Handled = Result<Option<Value>, Refusal>;
 
 #[derive(Default)]
 pub(super) struct Requests {
     pending: Vec<Pending>,
     open: Vec<u64>,
     asked: HashMap<u64, (Instant, &'static str)>,
+    structured: HashSet<u64>,
     answers: Vec<(u64, String)>,
     launched: Vec<(u64, bool)>,
     next: u64,
@@ -79,12 +85,14 @@ struct Pending {
 
 enum Stage {
     Worktree(Then),
+    Run(u64, Box<Starting>),
     Removing { force: bool },
     Launch { confirm: Option<SystemTime>, wait: Option<Condition> },
     Confirm(Confirm),
     Watch(Watch),
     Several { all: bool, parts: Vec<Pending> },
     Reading,
+    Setup(u64),
     Restart { caller: Option<u64> },
 }
 
@@ -110,8 +118,19 @@ fn sized(area: Option<Rect>) -> Result<Rect, String> {
     area.ok_or_else(|| NO_SIZE.to_string())
 }
 
-fn none(kind: &str, id: u64) -> String {
-    format!("there is no {kind} {id}; `cornercase status` lists them")
+fn none(kind: &str, id: u64) -> Refusal {
+    Refusal::new(Code::NotFound, format!("there is no {kind} {id}; `cornercase status` lists them"))
+}
+
+fn stale_boot(boot: &str) -> Refusal {
+    let current = control::server_token();
+    Refusal::new(
+        Code::StaleBoot,
+        format!(
+            "this request is for the cornercase server started as {boot}, but this one started as {current}; \
+            its ids may name other items now, so read `cornercase status` again"
+        ),
+    )
 }
 
 fn duration(seconds: f64, what: &str) -> Result<Duration, String> {
@@ -146,26 +165,19 @@ fn pane_ids(pane: u64) -> Done {
     Done { ids: Ids { pane: Some(pane), ..Ids::default() }, ..Done::default() }
 }
 
-fn parse(text: &str) -> Result<Request, String> {
-    let value: Value = serde_json::from_str(text).map_err(|e| format!("the request is not JSON: {e}"))?;
-    let name = control::command_name(&value).unwrap_or_default().to_string();
-    let server = version::CURRENT;
-    if !Command::NAMES.contains(&name.as_str()) {
-        return Err(control::unknown_command(&name));
-    }
-    serde_json::from_value(value)
-        .map_err(|e| format!("the running cornercase server ({server}) cannot read this `{name}` request: {e}"))
-}
-
 impl App {
     pub(crate) fn request(&mut self, client: u64, text: &str, area: Option<Rect>, now: Instant) {
-        self.run_request(client, parse(text), text.len(), area, now);
+        let parsed = contract::parse(text);
+        if parsed.structured {
+            self.requests.structured.insert(client);
+        }
+        self.run_request(client, parsed.request, text.len(), area, now);
     }
 
     pub(in crate::app) fn run_request(
         &mut self,
         client: u64,
-        request: Result<Request, String>,
+        request: Result<Request, Refusal>,
         bytes: usize,
         area: Option<Rect>,
         now: Instant,
@@ -183,9 +195,9 @@ impl App {
             Err(_) => log::warning!("control", "unreadable request", client = client, bytes = bytes),
         }
         match request.and_then(|request| self.handle_request(client, request, area, now)) {
-            Ok(Some(value)) => self.answer(Some(client), Ok(value)),
+            Ok(Some(value)) => self.refuse_or_answer(Some(client), Ok(value)),
             Ok(None) => {}
-            Err(message) => self.answer(Some(client), Err(message)),
+            Err(refusal) => self.refuse_or_answer(Some(client), Err(refusal)),
         }
     }
 
@@ -204,6 +216,7 @@ impl App {
 
     pub(crate) fn forget(&mut self, client: u64) {
         self.requests.open.retain(|open| *open != client);
+        self.requests.structured.remove(&client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             log::info!(
                 "control",
@@ -214,6 +227,7 @@ impl App {
             );
         }
         self.events.forget(client);
+        self.forget_flow_reads(Some(client));
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
             pending.client = None;
         }
@@ -231,7 +245,17 @@ impl App {
     }
 
     fn answer(&mut self, client: Option<u64>, reply: Reply) {
+        self.refuse_or_answer(client, reply.map_err(Refusal::from));
+    }
+
+    fn refuse_or_answer(&mut self, client: Option<u64>, reply: Result<Value, Refusal>) {
         let Some(client) = client else { return };
+        let structured = self.requests.structured.remove(&client);
+        let (code, reply) = match reply {
+            Ok(value) => (Code::Failed, Ok(value)),
+            Err(refusal) => (refusal.code, Err(refusal.message)),
+        };
+        self.flow_answered(client, &reply);
         self.requests.open.retain(|open| *open != client);
         if let Some((at, command)) = self.requests.asked.remove(&client) {
             let ms = at.elapsed().as_millis();
@@ -245,29 +269,34 @@ impl App {
                 }
             }
         }
-        if client >= TELEGRAM_CLIENTS {
-            self.telegram_answered(client, reply);
+        if self.queue_answered(client, &reply) {
             return;
         }
-        let response = match reply {
-            Ok(value) => Response::Ok(value),
-            Err(message) => Response::Error(message),
-        };
-        if let Ok(text) = serde_json::to_string(&response) {
+        if client >= MESSENGER_CLIENTS {
+            self.chat_answered(client, reply);
+            return;
+        }
+        let reply = reply.map_err(|message| Refusal::new(code, message));
+        if let Some(text) = control::contract::render(reply, structured) {
             self.requests.answers.push((client, text));
         }
     }
 
     fn handle_request(&mut self, client: u64, request: Request, area: Option<Rect>, now: Instant) -> Handled {
+        if let Some(boot) = request.boot.as_deref().filter(|boot| *boot != control::server_token()) {
+            return Err(stale_boot(boot));
+        }
         let caller = request.caller.filter(|_| request.server.as_deref() == Some(control::server_token()));
-        match request.command {
+        let noted = self.flow_steps(caller, &request.command, now);
+        let handled = match request.command {
             Command::Status(_) => Ok(Some(json(&self.report(caller)))),
             Command::Stats(_) => Ok(Some(json(&self.stats_view(SystemTime::now())))),
+            Command::Contract(_) => Ok(Some(json(&contract::descriptor()))),
             Command::Open(open) => self.open_request(&open, area),
             Command::NewWorkspace(new) => self.new_workspace_request(client, caller, new, area),
             Command::NewTab(new) => self.new_tab_request(client, caller, new, area, now),
             Command::Split(split) => self.split_request(client, caller, split, area, now),
-            Command::Start(start) => self.start_request(client, caller, start, area, now),
+            Command::Start(start) | Command::StartWith(start) => self.start_request(client, caller, start, area, now),
             Command::Send(send) => self.send_request(client, caller, send, now),
             Command::Keys(keys) => self.keys_request(caller, &keys, now),
             Command::Read(read) => self.read_request(caller, &read),
@@ -278,12 +307,20 @@ impl App {
             Command::Focus(focus) => self.show(focus.item).map(|()| Some(json(&Done::default()))),
             Command::Notify(notify) => self.notify_request(&notify.text),
             Command::Todo(todo) => self.todo_request(todo),
+            Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
-            Command::Away(away) => self.away_request(away.off),
+            Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),
             Command::Mark(mark) => self.mark_request(caller, &mark),
-        }
+            Command::FlowList(list) => self.flow_list_request(caller, &list),
+            Command::FlowRun(run) => self.flow_run_request(client, caller, run, area),
+            Command::FlowExport(export) => self.flow_export_request(caller, &export),
+            Command::FlowImport(import) => self.flow_import_request(caller, &import),
+            Command::Search(search) => self.search_request(client, &search.query),
+        };
+        self.flow_requested(client, noted, handled.is_ok());
+        handled
     }
 
     fn launch_within(
@@ -297,6 +334,7 @@ impl App {
         let Some(mut launch) = launch else { return Some(json(&done)) };
         let key = self.requests.key();
         launch.key = Some(key);
+        launch.trust = self.queued.running.contains_key(&client).then_some(agents::launch::Trust::Accepted);
         self.agents.launches.push(launch);
         self.requests.pending.push(Pending { client: Some(client), key, timeout, done, stage });
         None
@@ -357,7 +395,12 @@ impl App {
         Ok((p, here.workspace.unwrap_or_else(|| self.ensure_workspace(p))))
     }
 
-    fn target(&self, caller: Option<u64>, pane: Option<u64>, tab: Option<u64>) -> Result<u64, String> {
+    pub(in crate::app) fn target(
+        &self,
+        caller: Option<u64>,
+        pane: Option<u64>,
+        tab: Option<u64>,
+    ) -> Result<u64, Refusal> {
         if let Some(id) = pane {
             return self.projects.tab_of_pane(id).map(|_| id).ok_or_else(|| none("pane", id));
         }
@@ -368,12 +411,12 @@ impl App {
                 .chain(0..tab.panes.len())
                 .filter_map(|i| tab.panes.get(i))
                 .find(|term| self.runs_agent(term));
-            return agent.or_else(|| tab.pane()).map(|t| t.id).ok_or_else(|| format!("tab {id} has no pane"));
+            return agent.or_else(|| tab.pane()).map(|t| t.id).ok_or_else(|| format!("tab {id} has no pane").into());
         }
-        self.here(caller).pane.ok_or_else(|| NO_PANE.to_string())
+        self.here(caller).pane.ok_or_else(|| NO_PANE.to_string().into())
     }
 
-    fn show(&mut self, item: Item) -> Result<(), String> {
+    fn show(&mut self, item: Item) -> Result<(), Refusal> {
         let place = |app: &Self, p: usize, w: Option<usize>, t: Option<usize>| {
             let Ids { project, workspace, tab, .. } = app.ids(p, w, t);
             Goto::Place { project: project.unwrap_or_default(), workspace, tab }
@@ -405,12 +448,12 @@ impl App {
         Ok(())
     }
 
-    fn usable_workspace(&self, id: u64) -> Result<(usize, usize), String> {
+    fn usable_workspace(&self, id: u64) -> Result<(usize, usize), Refusal> {
         let (p, w) = self.projects.workspace_index(id).ok_or_else(|| none("workspace", id))?;
         match self.projects[p].workspaces[w].phase {
             Phase::Open => Ok((p, w)),
-            Phase::Removing(_) => Err(format!("workspace {id} is being removed")),
-            Phase::Closing => Err(format!("workspace {id} is closing")),
+            Phase::Removing(_) => Err(format!("workspace {id} is being removed").into()),
+            Phase::Closing => Err(format!("workspace {id} is closing").into()),
         }
     }
 

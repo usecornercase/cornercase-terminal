@@ -1,11 +1,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{Action, Browser, Choice, Pick, Picker, Room, Screen};
+use super::{Action, After, Browser, Choice, Pick, Picker, Room, Screen};
 use crate::issues::{Source, Who};
 use crate::list::Search;
 
 impl Browser {
-    pub(super) fn open_picker(&mut self, pick: Pick, then_start: bool) {
+    pub(super) fn open_picker(&mut self, pick: Pick, after: After) {
         let mut search = Search::default();
         let current = match pick {
             Pick::Agent => self.agents.pick().and_then(|k| self.agents.kinds.iter().position(|kind| *kind == k)),
@@ -16,7 +16,7 @@ impl Browser {
             }
         };
         search.select(current.unwrap_or(0));
-        self.picker = Some(Picker { pick, search, then_start });
+        self.picker = Some(Picker { pick, search, after });
     }
 
     pub(crate) fn choices(&self) -> Vec<Choice> {
@@ -70,7 +70,7 @@ impl Browser {
 
     pub(super) fn choose(&mut self, index: Option<usize>) -> Action {
         let Some(picker) = &self.picker else { return Action::None };
-        let (pick, then_start) = (picker.pick, picker.then_start);
+        let (pick, after) = (picker.pick, picker.after);
         let choices = self.choices();
         let i = index.unwrap_or_else(|| picker.search.selected()).min(choices.len().saturating_sub(1));
         let Some((key, who)) = choices.get(i).map(|c| (c.key.clone(), c.who.clone())) else { return Action::None };
@@ -84,12 +84,12 @@ impl Browser {
                 }
             }
         }
-        match (&self.screen, then_start) {
-            (Screen::Detail { issue, .. }, true) => {
-                let issue = (**issue).clone();
-                self.start(issue)
-            }
-            _ => Action::None,
+        let Screen::Detail { issue, .. } = &self.screen else { return Action::None };
+        let issue = (**issue).clone();
+        match after {
+            After::Start => self.start(issue),
+            After::Flow => self.start_flow(issue),
+            After::Nothing => Action::None,
         }
     }
 

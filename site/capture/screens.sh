@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search sidebar-tree tab-bar sidebar-agents compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -85,6 +85,13 @@ screen_sidebar_stacked() {
   cc_shot sidebar-stacked
 }
 
+screen_workspace_folded() {
+  cc_s1
+  cc_click '▾ feat/dark-mode'
+  cc_wait '▸ feat/dark-mode'
+  cc_shot workspace-folded
+}
+
 screen_groups() {
   cc_s1
   cc_click '◆ personal'
@@ -132,6 +139,16 @@ screen_search() {
   cc_shot search
 }
 
+screen_search_sessions() {
+  cc_s1
+  cc_click 'search projects'
+  cc_keys Tab
+  cc_type checkout
+  cc_wait '⌕ checkout'
+  cc_wait 'enter goes to pane'
+  cc_shot search-sessions
+}
+
 screen_sidebar_tree() {
   CC_CONFIG='{"sidebar":"tree"}'
   CC_SESSION=tree
@@ -164,6 +181,15 @@ screen_sidebar_agents() {
   cc_wheel 'feat/dark-mode' down 1
   cc_wait '│   gpt-5.4 · 20%'
   cc_shot sidebar-agents
+}
+
+screen_agent_failed() {
+  agents_knobs
+  CC_BLOG_COMMAND='CC_AGENT_STATE=failed CC_AGENT_PERCENT=2 CC_AGENT_MODEL=claude-sonnet-5-5 claude'
+  cc_s1_at 110 44
+  cc_wait_status 'claude  failed  Sonnet 5.5'
+  cc_hover 'Workspaces'
+  cc_shot agent-failed
 }
 
 screen_compact_bar() {
@@ -216,10 +242,16 @@ screen_picker_filter() {
   cc_shot picker-filter
 }
 
+new_workspace_form() {
+  cc_click '+ New' 0 -1
+  cc_wait 'start a flow…'
+  cc_click 'new workspace'
+  cc_wait 'with its own worktree'
+}
+
 screen_new_workspace() {
   cc_s1
-  cc_click '+ New workspace'
-  cc_wait 'with its own worktree'
+  new_workspace_form
   cc_type 'feat/login'
   cc_wait 'in ~/.cornercase/worktrees/web-shop/feat-login'
   cc_shot new-workspace
@@ -227,8 +259,7 @@ screen_new_workspace() {
 
 screen_new_workspace_plain() {
   cc_s1
-  cc_click '+ New workspace'
-  cc_wait 'with its own worktree'
+  new_workspace_form
   cc_click 'its own worktree'
   cc_wait '[ ] with its own worktree'
   cc_hover 'Workspaces'
@@ -275,6 +306,25 @@ screen_remove_workspace() {
   cc_click '×'
   cc_wait 'remove anyway'
   cc_shot remove-workspace
+}
+
+pulls_shown() {
+  touch "$CC_DATA/gh/pulls"
+  cc_s1
+  cc_wait '#485✗'
+  cc_wait '#483•'
+}
+
+screen_pull_requests() {
+  pulls_shown
+  cc_shot pull-requests
+}
+
+screen_pull_request_checks() {
+  pulls_shown
+  cc_click '#485✗'
+  cc_wait 'copy link'
+  cc_shot pull-request-checks
 }
 
 open_issues() {
@@ -353,7 +403,7 @@ screen_issue_agent_picker() {
 
 screen_issue_started() {
   open_issue_482
-  cc_click 'start   agent…'
+  cc_click 'start   schedule   start a flow'
   cc_wait 'aider'
   cc_click 'claude    claude'
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
@@ -361,7 +411,7 @@ screen_issue_started() {
   cc_wheel 'feat/dark-mode' down 3
   cc_hover 'Workspaces'
   cc_wait '▌ │   Opus 5.5 · 7%'
-  cc_wait '  feat/dark-mode               │'
+  cc_wait '  ▾ feat/dark-mode             │'
   cc_wait '    blog (1)                   │'
   cc_shot issue-started
 }
@@ -371,7 +421,7 @@ issue_pane() {
 }
 
 issue_listed() {
-  cc_wheel '+ New workspace' down 3
+  cc_wheel '+ New' down 3 -1
   cc_hover 'Workspaces'
   cc_wait "$1"
 }
@@ -701,8 +751,164 @@ const hours = Array.from({ length: 182 }, (_, i) => [hour - i*24, [[i === 0 ? 4 
 const file = path.join(process.env.CC_RUN, 'stats.json');
 fs.writeFileSync(file, JSON.stringify({ version: 1, since: now - 182 * 86400, total, hours }), { mode: 0o600 });
 JS
+  touch "$CC_DATA/gh/merged"
+  git -C "$CC_HOME/code/web-shop" remote set-url origin git@github.com:acme/web-shop.git
   cc_s1
   cc_click 'Usage'
   cc_wait 'in parallel'
+  cc_wait 'merged PRs'
   cc_shot usage-stats
+}
+
+flow_482() {
+  cc_s1_at 140 38
+  cc flow run 'Full issue' --prompt 'Fix https://github.com/acme/web-shop/issues/482: the returns page crashes on an empty address.' --worktree issue-482-returns-page-crashes-on-empty-address --focus >/dev/null
+  cc_wait 'Sending issue #482 to coder' 60
+}
+
+screen_flow_run() {
+  flow_482
+  cc_wait 'findings · 1/3' 60
+  cc_wait 'waiting for reviewer…' 30
+  cc_wheel 'feat/dark-mode' down 3
+  cc_hover 'Workspaces'
+  cc_wait '├ ○ tester'
+  i=0
+  while cc_text | grep -qF 'finished in'; do
+    i=$((i + 1))
+    [ "$i" -lt 100 ] || { echo "capture: the toast never went"; cc_text; exit 1; }
+    sleep 0.1
+  done
+  cc_shot flow-run
+}
+
+flows_open() {
+  cc_config '{}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Settings'
+  cc_click 'Agents'
+  cc_click 'flows'
+  cc_wait 'teams of agents that work through a plan'
+}
+
+flows_edit_full_issue() {
+  flows_open
+  cc_click 'Full issue'
+  cc_click 'edit   duplicate'
+  cc_wait 'not saved yet'
+}
+
+screen_flows_list() {
+  flows_edit_full_issue
+  cc_click 'save   done'
+  cc_wait 'full-issue.toml'
+  cc_click 'save   done' 7
+  cc_wait 'open a pull request'
+  cc_hover '╭─ Flows'
+  cc_shot flows-list
+}
+
+screen_flows_import() {
+  flows_open
+  cc_click 'import'
+  cc_wait 'paste a flow'
+  local file="$CC_CAPTURE/quick-review.toml"
+  cat > "$file" <<'TOML'
+# A cornercase flow: import it with `cornercase flow import <file>` or Settings → Agents → flows → import
+name = "Quick review"
+end = "commits"
+
+[orchestrator]
+agent = "claude"
+model = "opus"
+prompt = "Keep every message to an agent self-contained."
+
+[[role]]
+name = "coder"
+agent = "codex"
+edits = true
+prompt = "Implement what the orchestrator asks, run the checks and commit locally."
+
+[[role]]
+name = "reviewer"
+agent = "claude"
+prompt = "Review the changes on this branch. Do not edit files."
+
+[[stage]]
+roles = ["coder"]
+
+[[stage]]
+roles = ["reviewer"]
+TOML
+  tmux -L "$CC_TMUX" load-buffer "$file"
+  tmux -L "$CC_TMUX" paste-buffer -p -t 0
+  cc_wait 'name = "Quick review"'
+  cc_hover '╭─ Flows'
+  cc_shot flows-import
+}
+
+screen_flows_edit() {
+  flows_edit_full_issue
+  cc_click '▸ 2'
+  cc_wait 'goes back'
+  cc_hover '╭─ Flows'
+  cc_shot flows-edit
+}
+
+screen_flow_start() {
+  CC_SESSION=s1
+  cc_config '{}'
+  cc_session "$CC_CAPTURE/sessions/$CC_SESSION.json"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click '#482'
+  cc_wait 'opened by @ana'
+  cc_click 'start a flow'
+  cc_wait 'Flow templates'
+  cc_wait 'Full issue in web-shop'
+  cc_wait '◆ open a pull request'
+  cc_hover '╭─ Start a flow'
+  cc_shot flow-start
+}
+
+screen_queue() {
+  cc_config '{"sidebar":"projects_on_top"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  node -e '
+    const fs = require("fs");
+    const path = process.argv[1];
+    const project = process.argv[2] + "/code/web-shop";
+    const labels = ["#482 Fix the login form", "Update the docs", "Fix logout", "Review the tests"];
+    const states = [{state:"pending"}, {state:"started",pane:7,server:"previous-server"}, {state:"failed",reason:"codex is not installed"}, {state:"missed"}];
+    const entries = labels.map((label, i) => ({id:i+1,at:Math.floor(Date.now()/3600000)*3600+3600+i*60,zone:"UTC",label,agent:"claude",command:"claude",program:"claude",mode:null,prompt:label,submit:true,place:{project,workspace:null,workspace_name:null,branch:"fix-login"},...states[i]}));
+    fs.writeFileSync(path, JSON.stringify({version:1,next_id:4,entries}));
+  ' "$CC_RUN/server.queue.json" "$CC_HOME"
+  cc_start 140 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'clear started'
+  cc_hover 'Issues · web-shop'
+  cc_shot queue
+}
+
+screen_queue_form() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  cc_start 110 38
+  cc_wait 'web-shop'
+  cc_click 'Issues'
+  cc_wait '#482'
+  cc_click 'Queue'
+  cc_wait 'nothing queued'
+  cc_click 'new   cancel'
+  cc_wait 'Schedule an agent'
+  cc_type 'Fix the login form'
+  cc_hover 'Workspaces'
+  cc_shot queue-form
 }

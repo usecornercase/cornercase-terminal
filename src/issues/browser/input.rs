@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 
-use super::{Action, Browser, IssuesHit, Pick, Room, Screen};
+use super::{Action, After, Browser, IssuesHit, Pick, Room, Screen, Tab};
 
 const WHEEL_ROWS: isize = 3;
 
@@ -22,6 +22,7 @@ impl Browser {
                 KeyCode::Esc | KeyCode::Left => self.screen = Screen::List,
                 KeyCode::Enter => {
                     let issue = (**issue).clone();
+                    self.scheduling = false;
                     return self.start(issue);
                 }
                 KeyCode::Up => self.scroll_detail(-1, room),
@@ -58,8 +59,11 @@ impl Browser {
             return Action::None;
         }
         let rows = room.list_rows;
-        let shown = self.shown().len();
+        let shown = self.list_len();
         match key.code {
+            KeyCode::Enter if self.current() == Tab::Queue => {
+                return self.selected_queued().map_or(Action::None, |queued| Action::QueueOpen(queued.id));
+            }
             KeyCode::Enter => return self.selected().map_or(Action::None, |issue| self.read(issue)),
             KeyCode::Up => self.search.move_selection(-1, shown, rows),
             KeyCode::Down => self.search.move_selection(1, shown, rows),
@@ -114,10 +118,10 @@ impl Browser {
                     Some(IssuesHit::Item(i)) => {
                         self.filtering = Some(i);
                         if let Some((source, field)) = self.people_rows().get(i).copied() {
-                            self.open_picker(Pick::Person(source, field), false);
+                            self.open_picker(Pick::Person(source, field), After::Nothing);
                         }
                     }
-                    Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                    Some(IssuesHit::Button(i)) => return self.press(self.buttons(room.buttons)[i]),
                     _ => {}
                 },
                 _ => {}
@@ -130,7 +134,7 @@ impl Browser {
                 MouseEventKind::ScrollDown => self.scroll_detail(WHEEL_ROWS, room),
                 MouseEventKind::Down(MouseButton::Left) => {
                     if let Some(IssuesHit::Button(i)) = hit {
-                        return self.press(self.buttons()[i]);
+                        return self.press(self.buttons(room.buttons)[i]);
                     }
                 }
                 _ => {}
@@ -138,7 +142,7 @@ impl Browser {
             return Action::None;
         }
         let rows = room.list_rows;
-        let shown = if self.token_form().is_some() { 0 } else { self.shown().len() };
+        let shown = if self.token_form().is_some() { 0 } else { self.list_len() };
         match kind {
             MouseEventKind::ScrollUp => self.search.scroll_by(-WHEEL_ROWS, shown, rows),
             MouseEventKind::ScrollDown => self.search.scroll_by(WHEEL_ROWS, shown, rows),
@@ -149,12 +153,18 @@ impl Browser {
                     return self.needs_load();
                 }
                 Some(IssuesHit::Toggle(i)) => return self.toggle(i),
+                Some(IssuesHit::Item(i)) if self.current() == Tab::Queue => {
+                    if let Some(id) = self.shown_queue().get(i).map(|queued| queued.id) {
+                        self.search.select(i);
+                        return Action::QueueOpen(id);
+                    }
+                }
                 Some(IssuesHit::Item(i)) => {
                     if let Some(issue) = self.shown().get(i).map(|issue| (*issue).clone()) {
                         return self.read(issue);
                     }
                 }
-                Some(IssuesHit::Button(i)) => return self.press(self.buttons()[i]),
+                Some(IssuesHit::Button(i)) => return self.press(self.buttons(room.buttons)[i]),
                 None => {}
             },
             _ => {}

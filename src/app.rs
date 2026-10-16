@@ -30,6 +30,7 @@ use crate::issues::cache::Cache as IssueCache;
 #[cfg(test)]
 use crate::issues::{Account, Source};
 use crate::paths;
+use crate::project::search::said;
 use crate::project::split::Dir;
 use crate::project::{Group, Hierarchy, Project, Tab, group};
 use crate::settings::Page;
@@ -51,10 +52,15 @@ use launches::LAUNCH_EVERY;
 #[cfg(test)]
 use layout::Focus;
 use layout::{Scrolls, Side};
+use merged_pull_requests::MergedPulls;
+use messenger::{Messenger, MessengerEvent};
 use overlay::Overlay;
 use plugins::{PluginEvent, Plugins};
+use pull_requests::PullRequests;
+use queue_panel::{QueueEvent, QueueRuntime};
+use search_dialog::SearchEvent;
 use session::not_restored;
-use telegram::{Telegram, TelegramEvent};
+use star_prompt::StarPrompt;
 use toast::Toast;
 use update_dialog::{UpdateEvent, UpdateState};
 use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
@@ -67,6 +73,9 @@ mod dialogs;
 mod event;
 mod events;
 mod files_panel;
+mod flow_panel;
+mod flow_runs;
+mod flows_dialog;
 mod hierarchy;
 mod images;
 mod input;
@@ -77,25 +86,33 @@ mod launches;
 mod layout;
 mod links;
 mod menus;
+mod merged_pull_requests;
+mod messenger;
 mod overlay;
 mod panes;
 mod picker_dialog;
 mod plugins;
+mod project_settings_dialog;
+mod pull_requests;
+mod queue_dialog;
+mod queue_panel;
 mod remote_access;
 mod search_dialog;
 mod session;
 mod settings_dialog;
 mod shortcuts;
 mod sidebar;
+mod star_prompt;
+mod start_flow_dialog;
 mod tab_bar;
 mod tabs;
-mod telegram;
 mod toast;
 mod todo_panel;
 mod trace;
 mod update_dialog;
 mod usage_dialog;
 mod view;
+mod worktree_setup;
 mod worktrees;
 
 pub(crate) use event::AppEvent;
@@ -112,6 +129,8 @@ struct Outbox {
 
 pub(crate) struct App {
     upstream: Upstream,
+    pulls: PullRequests,
+    merged: MergedPulls,
     scroll: Scrolls,
     outbox: Outbox,
     agents: AgentRuntime,
@@ -131,9 +150,12 @@ pub(crate) struct App {
     border_click: Option<(ui::Border, Instant)>,
     divider_click: Option<(u64, Vec<bool>, Instant)>,
     toast: Option<Toast>,
+    star: StarPrompt,
     overlay: Option<Overlay>,
     config: Config,
     config_path: PathBuf,
+    setup_dir: PathBuf,
+    setups: std::collections::HashMap<u64, (u64, PathBuf)>,
     shell: String,
     home: Option<PathBuf>,
     theme: HostTheme,
@@ -144,14 +166,18 @@ pub(crate) struct App {
     changes: changes::Panel,
     editor_env: Vec<(String, String)>,
     remote: remote_access::Remote,
-    telegram: Telegram,
+    messengers: Vec<Messenger>,
     usage: usage::State,
     usage_page: usage::Page,
     usage_timeout: Duration,
     confirm_within: Duration,
+    queued: QueueRuntime,
     todos: Todos,
+    runs: Vec<crate::flows::run::Run>,
+    flow: flow_panel::FlowPanel,
     todo: todo::Panel,
     files: files::Panel,
+    sessions: said::Sessions,
     images: images::Payloads,
     requests: control::Requests,
     events: events::Events,
@@ -164,10 +190,12 @@ impl App {
         let secrets_path = paths::secrets(&config_path);
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
-        let telegram = Telegram::new(&config_path, secrets_path.clone());
+        let messengers = messenger::messengers(&config_path, &secrets_path);
         let plugins = Plugins::new(crate::plugins::Places::new(&config_path, &config_path));
         Self {
             upstream: Upstream::default(),
+            pulls: PullRequests::default(),
+            merged: MergedPulls::default(),
             scroll: Scrolls::default(),
             outbox: Outbox::default(),
             agents: AgentRuntime::new(home.as_deref()),
@@ -188,8 +216,11 @@ impl App {
             border_click: None,
             divider_click: None,
             toast: None,
+            star: StarPrompt::default(),
             overlay: None,
             config: config::load(&config_path),
+            setups: std::collections::HashMap::new(),
+            setup_dir: config_path.parent().map(std::path::Path::to_path_buf).unwrap_or_default(),
             config_path,
             shell,
             theme,
@@ -200,14 +231,18 @@ impl App {
             changes: changes::Panel::default(),
             editor_env: Vec::new(),
             remote: remote_access::Remote::new(web),
-            telegram,
+            messengers,
             usage: usage::State::default(),
             usage_page: usage::Page::default(),
             usage_timeout: usage::TIMEOUT,
             confirm_within: control::CONFIRM_WITHIN,
+            queued: QueueRuntime::default(),
             todos: Todos::default(),
+            runs: Vec::new(),
+            flow: flow_panel::FlowPanel::default(),
             todo: todo::Panel::default(),
             files: files::Panel::default(),
+            sessions: said::Sessions::default(),
             images: images::Payloads::default(),
             requests: control::Requests::default(),
             events: events::Events::default(),
@@ -315,11 +350,28 @@ impl App {
     }
 
     pub(crate) fn tick(&self, now: Instant) -> Option<Duration> {
+        self.tick_at(now, crate::time::now())
+    }
+
+    pub(super) fn tick_at(&self, now: Instant, clock: i64) -> Option<Duration> {
         let drag = self.row_drag().filter(|d| d.moved).map(|_| AUTO_SCROLL_EVERY);
-        let launch = self.agents.launches.iter().any(|l| !l.waits_for_you()).then_some(LAUNCH_EVERY);
+        let held = self.held_launch_panes();
+        let launch =
+            self.agents.launches.iter().any(|l| !l.waits_for_you() && !held.contains(&l.term)).then_some(LAUNCH_EVERY);
         let spin = (self.config.spinner() && self.agent_working())
             .then(|| activity::spin_wait(now.saturating_duration_since(self.booted)));
-        [drag, launch, spin, self.next_request(now)].into_iter().flatten().min()
+        [
+            drag,
+            launch,
+            spin,
+            self.flow_frame(now),
+            self.next_request(now),
+            self.next_pairing(now),
+            self.queued.area.and_then(|_| self.queued.queue.next(clock)),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn agent_working(&self) -> bool {
@@ -327,7 +379,14 @@ impl App {
     }
 
     pub(crate) fn refresh(&mut self, now: Instant) {
+        self.refresh_at(now, crate::time::now());
+    }
+
+    pub(super) fn refresh_at(&mut self, now: Instant, clock: i64) {
         self.reap();
+        self.watch_setups(now);
+        self.drive_queue(clock, now);
+        self.sync_queued();
         if self.overlay.as_ref().is_some_and(Overlay::lists_running)
             && self.update.listed.is_none_or(|at| now.saturating_duration_since(at) >= WATCH_AGENTS_EVERY)
         {
@@ -336,13 +395,17 @@ impl App {
         self.drive_launches(now);
         self.watch_agents(now);
         self.keep_awake(now);
-        self.watch_telegram(now);
+        self.offer_star(now, clock);
+        self.watch_messengers(now);
         self.sync_remote();
-        self.sync_telegram();
+        self.sync_messengers();
+        self.pair_by_owner(now);
         self.watch_plugins(now);
         self.check_requests(now);
+        self.close_gone_flow_message();
         self.check_updates(now);
         self.refresh_files(now);
+        self.ask_sessions(now);
         self.refresh_changes(now);
         self.auto_scroll(now);
         if self.synced.is_some_and(|at| now.duration_since(at) < SYNC_EVERY) {
@@ -350,8 +413,11 @@ impl App {
         }
         self.synced = Some(now);
         self.sync_worktrees();
+        self.forget_runs();
         self.forget_files();
         self.count_behind(now);
+        self.ask_pull_requests(now);
+        self.ask_merged(now);
     }
 
     pub(crate) fn shows(&self, pane: u64) -> bool {
@@ -363,7 +429,7 @@ impl App {
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ProjectState::of(p, group))
+            .map(|(p, group)| ProjectState::of(p, group, &self.runs))
             .collect();
         let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {
@@ -390,6 +456,7 @@ impl App {
             changes,
             todo: self.side == Some(Side::Todo),
             files: self.side == Some(Side::Files),
+            flow: self.side == Some(Side::Flow),
         }
     }
 
@@ -446,6 +513,9 @@ impl App {
             self.projects.push(project);
         }
         self.sync_worktrees();
+        if saved.flow {
+            self.show_flow();
+        }
         if !missed.is_empty() {
             self.toast = Some(Toast::new(not_restored(&missed), ui::ToastIcon::Bug));
         }
@@ -462,12 +532,16 @@ impl App {
             AppEvent::Changes(event) => self.changes_answered(event),
             AppEvent::Files(event) => self.files_answered(event),
             AppEvent::Update(event) => self.update_answered(event),
+            AppEvent::Search(event) => self.search_answered(event),
+            AppEvent::Queue(event) => self.queue_prepared(*event),
             AppEvent::Usage(agent, result) => self.usage.answered(agent, result, Instant::now()),
+            AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
             AppEvent::Web(event) => self.web_event(event),
             AppEvent::Tailscale(answer) => self.tailscale_answered(answer),
-            AppEvent::Telegram(event) => self.telegram_event(event, area),
+            AppEvent::Messenger(event) => self.messenger_event(event, area),
+            AppEvent::Merged(answer) => self.merged_answered(answer),
             AppEvent::Plugin(event) => self.plugin_answered(event),
         }
         Ok(())
@@ -477,7 +551,7 @@ impl App {
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_key(key, area)?,
             Event::Mouse(ev) => self.handle_mouse(ev, area)?,
-            Event::Paste(text) => self.handle_paste(&text),
+            Event::Paste(text) => self.handle_paste(&text, area),
             _ => {}
         }
         Ok(())
@@ -519,15 +593,26 @@ impl App {
         self.agents.stats = stats;
     }
 
+    pub(crate) fn set_star(&mut self, path: PathBuf) {
+        self.star.saved = crate::star::load(&path);
+        self.star.path = Some(path);
+    }
+
     pub(crate) fn stats(&self) -> &agents::stats::Stats {
         &self.agents.stats
     }
 
-    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
-        self.follow(f.area());
+    fn begin_draw(&mut self, area: Rect, now: Instant) {
+        self.star.window = Some(now);
+        self.star_seen();
+        self.follow(area);
         if !self.drawn.compact() {
             self.nav = None;
         }
+    }
+
+    pub(crate) fn draw(&mut self, f: &mut Frame, sight: &Sight, now: Instant) -> Option<Placed> {
+        self.begin_draw(f.area(), now);
         let projects = self.project_entries();
         let groups = self.groups.iter().map(|g| g.entry.clone()).collect();
         let (has_project, workspaces, active_workspace, active_tab) = match self.project() {
@@ -602,6 +687,7 @@ impl App {
             tab,
             overlay,
             toast: self.toast.as_ref().map(Toast::view),
+            star: self.star.card,
             nav: self.nav,
             update: self.update_label(),
             remote: self.remote_button(),
@@ -612,6 +698,8 @@ impl App {
                 open: changes_open,
             }),
             todo: (self.side == Some(Side::Todo)).then(|| self.todo_view(self.layout(area).shown(self.nav).changes)),
+            flow: (self.side == Some(Side::Flow)).then(|| self.flow_view(now, spin)).flatten(),
+            flow_run: self.has_run(),
             todo_dot: self.config.todo_dot,
             todo_pending: self.todos.pending() > 0,
             files,

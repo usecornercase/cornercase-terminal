@@ -1,5 +1,5 @@
 use std::io::{self, Read as _, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use clap::CommandFactory;
@@ -14,12 +14,16 @@ use crate::client::{self, answer, ask};
 use crate::control::{self, Done, Event, Item, Report, TodoList, Until, What};
 use crate::error::{Error, Result};
 use crate::remote::{self, Remote};
-use crate::{log, server, update::restart};
+use crate::{log, server};
 
 mod args;
+mod contract;
+mod flow;
 mod help;
 mod plugin;
+mod queue;
 mod read;
+mod search;
 mod status;
 mod update;
 
@@ -59,14 +63,7 @@ pub fn run(cli: Cli) -> Result<bool> {
         Command::Skill => print!("{SKILL}"),
         Command::Update(update) => return update::update(update.check, update.yes, update.when.when()),
         Command::Restart(restart) => update::restart(restart.yes, restart.when.when())?,
-        Command::KillServer => {
-            let running = client::running_now();
-            if !client::kill_server()? {
-                eprintln!("no cornercase server is running");
-            } else if let Some(line) = running.as_deref().and_then(restart::stopped) {
-                println!("{line}");
-            }
-        }
+        Command::KillServer(kill) => return update::kill(kill.yes),
         Command::Logs(args) => return print_logs(&args),
         Command::Stats(args) => return print_stats(&args),
         Command::Plugin(args) => return plugin::run(args.action),
@@ -148,6 +145,7 @@ fn run_control(command: Control) -> Result<bool> {
             say(ask("split", control::Command::Split(request))?, split.create.print.json, |done| id(done.ids.pane))
         }
         Control::Start(start) => run_start(start),
+        Control::Queue(queue) => queue::run(queue.action),
         Control::Send(send) => {
             let text = send.text.map(|text| if text == "-" { stdin() } else { Ok(text) }).transpose()?;
             let Target { pane, tab } = send.target;
@@ -177,7 +175,11 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Close(close) => {
             let item = close.which.item("close")?.ok_or_else(|| Error::Control("say what to close".into()))?;
             let request = control::Close { item, remove_worktree: close.remove_worktree, force: close.force };
-            ask("close", control::Command::Close(request)).map(drop)
+            let value = ask("close", control::Command::Close(request))?;
+            if let Some(warning) = value.get("warning").and_then(Value::as_str) {
+                eprintln!("warning: {warning}");
+            }
+            Ok(())
         }
         Control::Rename(rename) => {
             let Renamed { tab, workspace: id, worktree, project, group } = rename.renamed;
@@ -197,20 +199,34 @@ fn run_control(command: Control) -> Result<bool> {
             let text = notify.text.join(" ");
             ask("notify", control::Command::Notify(control::Notify { text })).map(drop)
         }
+        Control::Search(search) => search::run(&search),
         Control::Away(away) => {
             let value = ask("away", control::Command::Away(control::Away { off: away.off }))?;
-            let on = value.get("away").and_then(Value::as_bool) == Some(true);
-            let line = if on {
-                "away: agents message you on Telegram until you type in a window\n"
-            } else {
-                "back: agents no longer message you on Telegram\n"
-            };
-            print_out(line)
+            print_out(&away_line(&value))
         }
         Control::Todo(todo) => run_todo(todo.action),
         Control::Events(events) => follow_events(events),
+        Control::Flow(flow) => flow::run(flow.action),
+        Control::Contract(contract) => contract::run(contract.print.json),
     }?;
     Ok(true)
+}
+
+fn away_line(value: &Value) -> String {
+    let on = value.get("away").and_then(Value::as_bool) == Some(true);
+    let platforms: Option<Vec<&str>> =
+        value.get("platforms").and_then(Value::as_array).map(|list| list.iter().filter_map(Value::as_str).collect());
+    let names = match platforms {
+        None => "Telegram".to_string(),
+        Some(list) if list.is_empty() && !on => return "back: nothing was away\n".into(),
+        Some(list) if list.is_empty() => "Telegram or Discord".to_string(),
+        Some(list) => list.join(" and "),
+    };
+    if on {
+        format!("away: agents message you on {names} until you turn it off\n")
+    } else {
+        format!("back: agents no longer message you on {names}\n")
+    }
 }
 
 fn follow_events(args: EventsArgs) -> Result<()> {
@@ -251,8 +267,8 @@ fn workspace(command: &'static str, id: Option<u64>, branch: Option<&str>) -> Re
     report.workspace_on(branch).map(Some).map_err(Error::WrongUsage)
 }
 
-fn run_start(start: StartArgs) -> Result<()> {
-    let prompt = match (start.prompt, start.prompt_file) {
+fn read_prompt(prompt: Option<String>, file: Option<PathBuf>) -> Result<Option<String>> {
+    Ok(match (prompt, file) {
         (Some(prompt), _) => Some(prompt),
         (None, Some(file)) if file == Path::new("-") => Some(stdin()?),
         (None, Some(file)) => Some(trimmed(
@@ -260,9 +276,18 @@ fn run_start(start: StartArgs) -> Result<()> {
                 .map_err(|e| Error::Control(format!("cannot read the prompt from `{}`: {e}", file.display())))?,
         )),
         (None, None) => None,
-    };
+    })
+}
+
+fn run_start(start: StartArgs) -> Result<()> {
+    let prompt = read_prompt(start.prompt, start.prompt_file)?;
+    let chosen = start.model.is_some() || start.mode.is_some() || start.effort.is_some();
+    let name = if chosen { "start-with" } else { "start" };
     let request = control::Start {
         agent: start.agent,
+        model: start.model,
+        mode: start.mode,
+        effort: start.effort,
         project: None,
         worktree: start.worktree,
         workspace: start.workspace,
@@ -273,7 +298,8 @@ fn run_start(start: StartArgs) -> Result<()> {
         timeout: start.timeout,
         focus: start.create.focus,
     };
-    say(ask("start", control::Command::Start(request))?, start.create.print.json, |done| {
+    let command = if name == "start" { control::Command::Start(request) } else { control::Command::StartWith(request) };
+    say(ask(name, command)?, start.create.print.json, |done| {
         id(done.ids.pane).into_iter().chain(ending(done)).collect()
     })
 }

@@ -24,6 +24,7 @@ fn saved(projects: Vec<ProjectState>, active: usize) -> State {
         changes: None,
         todo: false,
         files: false,
+        flow: false,
     }
 }
 
@@ -119,6 +120,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
                             active: 1,
                             base: Some("release".into()),
                             collapsed: true,
+                            run: None,
                         },
                     ],
                 )
@@ -140,6 +142,7 @@ fn restoring_preserves_the_saved_state(#[case] changes: bool, #[case] todo: bool
         changes: Some(ChangesState { open: changes, mode: changes::Mode::Commits, scope: Some(changes::Scope::Every) }),
         todo,
         files,
+        flow: false,
     };
     let (mut app, _rx) = empty_app();
 
@@ -255,7 +258,7 @@ fn a_split_tab_with_one_pane_that_cannot_start_is_left_out_whole() {
 fn a_tab_that_cannot_start_names_the_folder_and_why() {
     let (dir, locked, mut app, _rx, ws) = locked_restore();
 
-    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA) else {
+    let Err(e) = app.restore_tab(&ws.tabs[0], dir.path(), AREA, |_| None) else {
         panic!("the second pane cannot start");
     };
 

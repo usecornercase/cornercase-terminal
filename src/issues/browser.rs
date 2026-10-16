@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, sort_by_updated};
 use crate::list::Search;
+use crate::queue::State;
 
 mod buttons;
 mod input;
@@ -23,12 +24,14 @@ pub(crate) struct Room {
     pub(crate) list_rows: usize,
     pub(crate) detail_rows: usize,
     pub(crate) detail_width: usize,
+    pub(crate) buttons: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
     All,
     One(Source),
+    Queue,
 }
 
 impl Tab {
@@ -36,6 +39,7 @@ impl Tab {
         match self {
             Self::All => "All",
             Self::One(source) => source.name(),
+            Self::Queue => "Queue",
         }
     }
 
@@ -43,11 +47,12 @@ impl Tab {
         match self {
             Self::All => "all",
             Self::One(source) => source.id(),
+            Self::Queue => "queue",
         }
     }
 
     pub(crate) fn from_id(id: &str) -> Option<Self> {
-        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).find(|t| t.id() == id)
+        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).chain([Self::Queue]).find(|t| t.id() == id)
     }
 }
 
@@ -61,7 +66,31 @@ pub(crate) fn tabs(names: &[String]) -> Vec<Tab> {
             tabs.push(tab);
         }
     }
-    if tabs.is_empty() { all.collect() } else { tabs }
+    if tabs.is_empty() {
+        tabs = all.collect();
+    }
+    tabs.push(Tab::Queue);
+    tabs
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Queued {
+    pub(crate) id: u64,
+    pub(crate) when: String,
+    pub(crate) label: String,
+    pub(crate) meta: String,
+    pub(crate) state: State,
+}
+
+impl Queued {
+    pub(crate) fn runnable(&self) -> bool {
+        matches!(self.state, State::Pending | State::Failed { .. } | State::Missed)
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.to_lowercase();
+        [&self.when, &self.label, &self.meta].iter().any(|text| text.to_lowercase().contains(&query))
+    }
 }
 
 #[derive(Debug, Default)]
@@ -82,6 +111,7 @@ pub(crate) enum Step {
     Site,
     Email,
     Workspace,
+    Server,
     #[default]
     Token,
 }
@@ -142,11 +172,18 @@ pub(crate) enum Pick {
     Person(Source, usize),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum After {
+    Nothing,
+    Start,
+    Flow,
+}
+
 #[derive(Debug)]
 pub(crate) struct Picker {
     pub(crate) pick: Pick,
     pub(crate) search: Search,
-    pub(super) then_start: bool,
+    pub(super) after: After,
 }
 
 pub(crate) struct Choice {
@@ -169,9 +206,17 @@ pub(crate) enum Action {
     Load(Vec<Source>),
     Read(Issue),
     Start(Issue, String, Option<Place>),
+    StartFlow(Issue, Option<Place>),
+    Schedule(Issue, String, Option<Place>),
+    QueueNew,
+    QueueOpen(u64),
+    QueueRun(u64),
+    QueueRemove(u64),
+    QueueClear,
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
     SavePlane { workspace: String },
+    SaveGitlab { url: String },
     Disconnect(Source),
     Copy(String),
     SetDefaultAgent(String),
@@ -199,8 +244,10 @@ pub(crate) struct Browser {
     pub(crate) jira_site: String,
     pub(crate) jira_email: String,
     pub(crate) plane_workspace: String,
+    pub(crate) gitlab_url: String,
     pub(crate) screen: Screen,
     pub(crate) starting: bool,
+    pub(crate) scheduling: bool,
     pub(crate) error: Option<String>,
     pub(crate) notice: Option<String>,
     pub(crate) secrets_path: String,
@@ -211,6 +258,7 @@ pub(crate) struct Browser {
     pub(crate) place: Option<usize>,
     pub(crate) filtering: Option<usize>,
     pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
+    pub(crate) queued: Vec<Queued>,
 }
 
 impl Browser {
@@ -225,13 +273,15 @@ impl Browser {
     }
 
     fn can_list(&self, source: Source) -> bool {
-        if source == Source::Github { self.github } else { self.connections.contains_key(&source) }
+        let connected = source == Source::Github || self.connections.contains_key(&source);
+        connected && (self.github || !source.in_repository())
     }
 
     pub(crate) fn sources(&self) -> Vec<Source> {
         let wanted: Vec<Source> = match self.current() {
             Tab::All => Source::ALL.to_vec(),
             Tab::One(source) => vec![source],
+            Tab::Queue => Vec::new(),
         };
         wanted.into_iter().filter(|s| self.can_list(*s)).collect()
     }
@@ -286,6 +336,20 @@ impl Browser {
             sort_by_updated(&mut issues);
         }
         crate::issues::filter(issues, self.search.query())
+    }
+
+    pub(crate) fn shown_queue(&self) -> Vec<&Queued> {
+        self.queued.iter().filter(|queued| queued.matches(self.search.query())).collect()
+    }
+
+    pub(crate) fn selected_queued(&self) -> Option<&Queued> {
+        let shown = self.shown_queue();
+        let last = shown.len().checked_sub(1)?;
+        shown.get(self.search.selected().min(last)).copied()
+    }
+
+    pub(super) fn list_len(&self) -> usize {
+        if self.current() == Tab::Queue { self.shown_queue().len() } else { self.shown().len() }
     }
 
     pub(super) fn selected(&self) -> Option<Issue> {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::pull_request::Outcome;
 
 fn new_workspace_form(on: bool) -> Form {
     Form {
@@ -131,6 +132,28 @@ fn stats_usage(empty: bool) -> Usage {
     Usage { page: crate::agents::usage::Page::Stats, stats: stats.view(now), sections: Vec::new() }
 }
 
+fn merged_usage(complete: bool) -> Usage {
+    let mut usage = stats_usage(false);
+    usage.stats.merged =
+        Some(crate::agents::stats::MergedRow { day: 2, week: 12, total: 61, complete, accounts: Vec::new() });
+    usage
+}
+
+#[test]
+fn renders_merged_pull_requests_in_the_stats() {
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(merged_usage(true))), W, 38).backend());
+}
+#[test]
+fn renders_the_merged_row_before_any_agent_work_was_counted() {
+    let mut usage = stats_usage(true);
+    usage.stats.merged =
+        Some(crate::agents::stats::MergedRow { day: 1, week: 2, total: 3, complete: true, accounts: Vec::new() });
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(usage)), W, 38).backend());
+}
+#[test]
+fn renders_a_partial_merged_count_with_a_plus() {
+    insta::assert_snapshot!(render_sized(&with(Overlay::Usage(merged_usage(false))), 46, 38).backend());
+}
 #[test]
 fn renders_work_stats_in_the_wide_dialog() {
     insta::assert_snapshot!(render_sized(&with(Overlay::Usage(stats_usage(false))), W, 38).backend());
@@ -277,6 +300,31 @@ fn renders_a_confirmation_with_a_second_choice() {
 }
 
 #[test]
+fn renders_a_second_button_left_of_the_first() {
+    let notes = vec![
+        Line::from("open · 1 failed, 1 passed"),
+        Line::default(),
+        Line::from(vec![outcome_icon(Color::DarkGray, Outcome::Failed), Span::raw(" tests")]),
+        Line::from(vec![outcome_icon(Color::DarkGray, Outcome::Passed), Span::raw(" lint")]),
+    ];
+    let update = Update {
+        title: "Pull request",
+        message: "#482 Returns page crashes on an empty address".into(),
+        notes,
+        scroll: 0,
+        note: None,
+        submit: "copy link",
+        extra: Some("ask agent"),
+        cancel: "done",
+    };
+    let v = with(Overlay::Update(update));
+    let extra = update_extra(AREA, "copy link", "done", "ask agent");
+    let [submit, _] = update_buttons(AREA, "copy link", "done");
+    assert_eq!(extra.right() + 1, submit.x);
+    insta::assert_snapshot!(render(&v).backend());
+}
+
+#[test]
 fn renders_an_update_with_its_notes() {
     let notes = (1..=40).map(|i| Line::from(format!("• change {i}"))).collect();
     let update = Update {
@@ -288,6 +336,7 @@ fn renders_an_update_with_its_notes() {
         scroll: 30,
         note: Some(Note::Busy("downloading…")),
         submit: "update",
+        extra: None,
         cancel: CANCEL_LABEL,
     };
     insta::assert_snapshot!(render(&with(Overlay::Update(update))).backend());

@@ -13,7 +13,7 @@ impl App {
             return Err(none("pane", pane));
         }
         if self.mark(Marked::Pane(pane), !mark.reviewed) == 0 {
-            return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark"));
+            return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark").into());
         }
         Ok(Some(json(&pane_ids(pane))))
     }

@@ -25,8 +25,14 @@ fn a_pane_of_another_server_is_not_the_caller() {
     let (mut app, _rx, _dirs) = app_with(1);
     let caller = Some(term(&app, 0).id);
     let status = Command::Status(wire::Status {});
-    let text = serde_json::to_string(&wire::Request { caller, server: Some("another".into()), command: status })
-        .expect("json");
+    let text = serde_json::to_string(&wire::Request {
+        caller,
+        server: Some("another".into()),
+        contract: None,
+        boot: None,
+        command: status,
+    })
+    .expect("json");
 
     app.request(CLIENT, &text, Some(AREA), Instant::now());
 
@@ -129,4 +135,51 @@ fn an_unknown_command_names_the_version_of_the_server() {
 
     let message = error(answers(&mut app).remove(0));
     assert!(message.contains("has no `teleport` command") && message.contains(version::CURRENT), "{message}");
+}
+
+fn logging_claude(dir: &Path, args: &[&str]) -> (App, Receiver<AppEvent>, PathBuf) {
+    let (fake, log) = (dir.join("claude"), dir.join("args"));
+    write_executable(
+        &fake,
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" > '{}'\nprintf 'ready> '\nread line\n", log.display()),
+    );
+    let settings = Config {
+        agent_commands: [("claude".to_string(), fake.display().to_string())].into(),
+        agent_args: [("claude".to_string(), args.iter().map(|a| (*a).to_string()).collect())].into(),
+        ..Config::default()
+    };
+    let (app, rx) = app_in(dir, write_config(dir, &settings));
+    (app, rx, log)
+}
+
+#[test]
+fn start_with_a_mode_and_a_model_types_them_in_place_of_the_settings() {
+    let dir = TempDir::new();
+    let (mut app, rx, log) = logging_claude(dir.path(), &["--permission-mode", "auto", "--model", "haiku"]);
+    let start = wire::Start {
+        agent: Some("claude".into()),
+        mode: Some("plan".into()),
+        model: Some("opus".into()),
+        effort: Some("high".into()),
+        ..wire::Start::default()
+    };
+
+    ask(&mut app, None, Command::StartWith(start));
+
+    refreshing(&mut app, &rx, "the agent starts", |_| log.exists());
+    let typed = std::fs::read_to_string(&log).expect("the arguments");
+    assert_eq!(typed.trim(), "--permission-mode plan --model opus --effort high");
+}
+
+#[test]
+fn start_with_a_mode_the_agent_lacks_opens_nothing() {
+    let dir = TempDir::new();
+    let (mut app, _rx, _log) = logging_claude(dir.path(), &[]);
+    let tabs = app.projects[0].workspaces[0].tabs.len();
+    let start = wire::Start { agent: Some("claude".into()), mode: Some("yolo".into()), ..wire::Start::default() };
+
+    let refused = error(now(&mut app, None, Command::StartWith(start)));
+
+    assert!(refused.starts_with("claude has no mode `yolo`; its modes are `accept edits`"), "{refused}");
+    assert_eq!(app.projects[0].workspaces[0].tabs.len(), tabs);
 }

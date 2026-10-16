@@ -17,7 +17,7 @@ use crate::term;
 use crate::term::keys;
 
 const CANNOT_READ: &str =
-    "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode and Grok Build";
+    "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI";
 
 fn not_reading(pane: u64) -> String {
     format!(
@@ -54,27 +54,31 @@ impl App {
             return Err(format!(
                 "the agent in pane {pane} is waiting for an answer to a question or a permission prompt, and what \
                  you send would answer it; ask the user, then answer with `cornercase keys`"
-            ));
+            )
+            .into());
         }
         if !send.force && term.dialog() {
             return Err(format!(
                 "the agent in pane {pane} shows a dialog, a panel or its shell mode instead of its input box, and \
                  what you send would go there; `cornercase read --pane {pane}` shows it: send again once it is \
                  closed, or with --force"
-            ));
+            )
+            .into());
         }
         if !send.force && term.survey() {
             return Err(format!(
                 "the agent in pane {pane} shows Claude Code's feedback survey above its input box (`1: Bad  2: Fine  \
                  3: Good  0: Dismiss`), and a digit sent alone would answer it; dismiss it with `cornercase keys \
                  --pane {pane} 0` and send again, or send with --force"
-            ));
+            )
+            .into());
         }
         let local = agents::detect(&self.config, &term.foreground_args())
             .as_deref()
             .and_then(agents::Known::of)
             .is_some_and(|agent| send.text.as_deref().is_some_and(|text| agent.local_command(text)));
-        let confirm = (send.enter && !local && self.watched_agent(term).is_ok()).then(SystemTime::now);
+        let confirm = (send.enter && !local && self.watched_agent(term).is_ok() && !self.record_hidden(term))
+            .then(SystemTime::now);
         let wait = send.wait.then(|| Condition::of(send.until)).transpose()?;
         if let Some(until) = &wait {
             self.can_wait(caller, pane, until)?;
@@ -87,13 +91,26 @@ impl App {
             && let Some(term) = self.projects.pane_by_mut(pane)
             && !term.paste(text)
         {
-            return Err(not_reading(pane));
+            return Err(not_reading(pane).into());
         }
         if !send.enter {
             return Ok(Some(json(&pane_ids(pane))));
         }
         let stage = Stage::Launch { confirm, wait };
         Ok(self.launch_within(client, pane_ids(pane), Some(Launch::enter(pane, now)), stage, timeout))
+    }
+
+    fn record_hidden(&self, term: &term::Term) -> bool {
+        let Some(kind) = term.agent.agent().and_then(agents::Known::of) else { return false };
+        if !kind.record_by_folder() || term.context.record_for(kind).is_some() {
+            return false;
+        }
+        let folder = term.cwd();
+        self.projects
+            .iter()
+            .flat_map(|project| &project.workspaces)
+            .flat_map(crate::project::Workspace::terms)
+            .any(|other| other.id != term.id && other.agent.agent() == Some(kind.name()) && other.cwd() == folder)
     }
 
     pub(super) fn keys_request(&mut self, caller: Option<u64>, keys: &control::Keys, now: Instant) -> Handled {
@@ -110,7 +127,7 @@ impl App {
         let enter = events.iter().any(|key| key.code == KeyCode::Enter);
         let bytes: Vec<u8> = events.into_iter().flat_map(|key| term.emulator.encode_key(key)).collect();
         if !term.write(&bytes) {
-            return Err(not_reading(pane));
+            return Err(not_reading(pane).into());
         }
         if enter {
             term.submitted = Some(now);
@@ -137,13 +154,14 @@ impl App {
     ) -> Handled {
         let pane = self.target(caller, last.pane, last.tab)?;
         let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
-        let running = term.agent.agent().map(|agent| agent.name().to_string());
+        let running = term.agent.agent().map(str::to_string);
         let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
         let Some(agent) = running.as_deref().and_then(agents::Known::of) else {
             let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
             return Err(format!(
                 "pane {pane} {runs}, and {CANNOT_READ}; `cornercase read --pane {pane}` prints its screen"
-            ));
+            )
+            .into());
         };
         let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
         let key = self.requests.key();

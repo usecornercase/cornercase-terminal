@@ -1,11 +1,14 @@
+pub(crate) mod queue;
+
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
-    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, EVENTS_HELP, FOCUS_HELP, HERE_PANE,
-    HERE_WORKSPACE, KEY_NAMES, KEYS_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP,
-    NOTIFY_HELP, OPEN_HELP, PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEND_HELP,
+    ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONTRACT_HELP, EVENTS_HELP, FLOW_EXPORT_HELP,
+    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP,
+    KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
+    PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP,
     SKILL_HELP, SPLIT_HELP, START_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP, WAIT_PANE,
     WAIT_TAB, WHEN_IDLE,
 };
@@ -37,13 +40,13 @@ pub(crate) enum Command {
         after_help = RESTART_HELP
     )]
     Restart(RestartArgs),
-    #[command(about = "Stop the server and every shell in it")]
-    KillServer,
+    #[command(about = "Stop the server and every shell in it", after_help = KILL_SERVER_HELP)]
+    KillServer(KillServerArgs),
     #[command(about = "Print the server's log: what it did, step by step", after_help = LOGS_HELP)]
     Logs(LogsArgs),
     #[command(
         about = "Show work by agents running in cornercase",
-        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json.
+        after_help = "Counts only agents in cornercase, from when counting started. With no server, reads stats.json. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
@@ -106,17 +109,25 @@ pub(crate) enum Control {
     Focus(FocusArgs),
     #[command(about = "Show a message in the window, with a desktop notification", after_help = NOTIFY_HELP)]
     Notify(NotifyArgs),
-    #[command(
-        about = "Have agents message you on Telegram when they need you or finish, until you type in a window",
-        after_help = AWAY_HELP
-    )]
+    #[command(about = "Have agents message you on Telegram or Discord until you turn it off", after_help = AWAY_HELP)]
     Away(AwayArgs),
     #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
     Mark(MarkArgs),
+    #[command(about = "Find the panes where some text was said: agent transcripts and every pane's history", after_help = SEARCH_HELP)]
+    Search(SearchArgs),
     #[command(about = "Add, list, check off and remove items of the TODO list", after_help = TODO_HELP)]
     Todo(TodoArgs),
+    #[command(about = "Schedule issues or prompts for later; queued agents accept folder trust prompts")]
+    Queue(queue::QueueArgs),
     #[command(about = "Follow agents, programs, panes and tabs as they change, one line per event", after_help = EVENTS_HELP)]
     Events(EventsArgs),
+    #[command(about = "List, start, export or import flows: teams of agents in a worktree, run by an orchestrator agent", after_help = FLOW_HELP)]
+    Flow(FlowArgs),
+    #[command(
+        about = "Print what this server offers to scripts: its version, contract, boot, commands and streams",
+        after_help = CONTRACT_HELP
+    )]
+    Contract(ContractArgs),
 }
 
 #[derive(Debug, Args)]
@@ -203,6 +214,20 @@ pub(crate) struct StartArgs {
                 running here]"
     )]
     pub(crate) agent: Option<String>,
+    #[arg(long, value_name = "MODEL", help = "The model, such as opus or gpt-5.5 [default: the agent's own]")]
+    pub(crate) model: Option<String>,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]"
+    )]
+    pub(crate) mode: Option<String>,
+    #[arg(
+        long,
+        value_name = "LEVEL",
+        help = "The agent's effort, such as high: Claude Code, Codex and Grok Build take one [default: the agent's own]"
+    )]
+    pub(crate) effort: Option<String>,
     #[arg(
         long,
         value_name = "BRANCH",
@@ -423,8 +448,22 @@ pub(crate) struct MarkArgs {
 }
 
 #[derive(Debug, Args)]
+pub(crate) struct ContractArgs {
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SearchArgs {
+    #[arg(required = true, value_name = "TEXT", help = "The text to look for, ignoring case")]
+    pub(crate) query: Vec<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
 pub(crate) struct AwayArgs {
-    #[arg(long, help = "Stop: agents no longer message you on Telegram")]
+    #[arg(long, help = "Stop: agents no longer message you on Telegram or Discord")]
     pub(crate) off: bool,
 }
 
@@ -459,6 +498,117 @@ pub(crate) enum TodoAction {
         #[arg(value_name = "ID", help = "The item")]
         id: u64,
     },
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowArgs {
+    #[command(subcommand)]
+    pub(crate) action: FlowAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum FlowAction {
+    #[command(about = "List the flows, built in, yours and the project's, with their agents and their problems")]
+    List(FlowListArgs),
+    #[command(
+        about = "Start a flow in a worktree, and print its workspace's id and each role's pane id",
+        after_help = FLOW_RUN_HELP
+    )]
+    Run(FlowRunArgs),
+    #[command(
+        about = "Print a flow as text to share it: a file to send to a teammate, or to commit",
+        after_help = FLOW_EXPORT_HELP
+    )]
+    Export(FlowExportArgs),
+    #[command(
+        about = "Add a flow someone shared, from a file or from standard input with -",
+        after_help = FLOW_IMPORT_HELP
+    )]
+    Import(FlowImportArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowExportArgs {
+    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
+    pub(crate) name: String,
+    #[arg(long, value_name = "ID", help = "The project whose flows to look in [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ImportTo {
+    #[value(help = "Your flows, in flows/ next to config.json")]
+    Yours,
+    #[value(help = "The project's, in .cornercase/flows/ in its repository")]
+    Project,
+}
+
+impl ImportTo {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Yours => "yours",
+            Self::Project => "project",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowImportArgs {
+    #[arg(value_name = "FILE", help = "The file `flow export` made, or - for standard input")]
+    pub(crate) file: PathBuf,
+    #[arg(long, value_enum, default_value = "yours", help = "Where the flow goes")]
+    pub(crate) to: ImportTo,
+    #[arg(long, value_name = "ID", help = "The project, for --to project [default: the one this runs in]")]
+    pub(crate) project: Option<u64>,
+    #[arg(long, value_name = "NAME", help = "Import it under another name")]
+    pub(crate) name: Option<String>,
+    #[arg(long, help = "Overwrite the flow that has its name")]
+    pub(crate) replace: bool,
+    #[arg(short = 'y', long, help = "Import without asking, though the flow sets variables or arguments")]
+    pub(crate) yes: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowListArgs {
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "The project whose flows to list too [default: the one this runs in, else the shown one]"
+    )]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowRunArgs {
+    #[arg(value_name = "NAME", help = "The flow, as `cornercase flow list` names it")]
+    pub(crate) name: String,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        conflicts_with = "prompt_file",
+        required_unless_present = "prompt_file",
+        help = "The task: what the team should do"
+    )]
+    pub(crate) prompt: Option<String>,
+    #[arg(long, value_name = "FILE", help = "Read the task from a file, or from standard input with -")]
+    pub(crate) prompt_file: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        value_parser = branch,
+        help = "The worktree's branch, made when missing [default: from the task's first words, made unique]"
+    )]
+    pub(crate) worktree: Option<String>,
+    #[arg(long, value_name = "ID", help = "The project [default: the one this runs in, else the shown one]")]
+    pub(crate) project: Option<u64>,
+    #[command(flatten)]
+    pub(crate) create: Create,
 }
 
 #[derive(Debug, Args)]
@@ -559,6 +709,12 @@ pub(crate) enum PluginAction {
         #[command(flatten)]
         logs: LogsArgs,
     },
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct KillServerArgs {
+    #[arg(short, long, help = "Stop the server without asking, even if this terminal is one of its own")]
+    pub(crate) yes: bool,
 }
 
 #[derive(Debug, Args)]

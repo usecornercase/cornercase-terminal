@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.91
+## 0.12.110
 
 - Plugins: a folder with a `cornercase-plugin.toml` can add entries to the ` ⋯ ` and right-click menus of projects, workspaces, tabs and panes, run a command on every event `cornercase events` prints, keep a service running in the server (restarted if it stops), and keep a process running next to each window on this computer. Plugins talk back through the cornercase commands, so they can be written in any language.
 - `cornercase plugin link <folder>` adds a plugin, turned off; `enable`, `disable`, `list`, `logs` and `unlink` do the rest, and Settings has a new Plugins tab to turn them on and off.
@@ -11,6 +11,108 @@ Every pull request that changes the app adds a section here for its new version.
 - A plugin whose command is a link leading out of its folder can no longer be linked or turned on, and `plugin list` and Settings say why.
 - A plugin runs as you and can do anything you can, including typing into every terminal. What it asks for is shown before you turn it on, but not enforced: only turn on plugins you trust.
 - Find plugins at usecornercase.dev/plugins: every public GitHub repository with the `cornercase-plugin` topic shows there, with each plugin it holds and the command that installs it; search it and sort by stars, recent activity or newest. Nobody reviews them, so read a plugin or trust its author before turning it on. To publish yours, add that topic to its repository.
+
+## 0.12.109
+
+- **`cornercase contract`** says what the running server supports, for scripts and other programs that drive cornercase: its version, the version of its contract, the boot that its ids belong to, its commands and the version of each stream it sends (`--json` for the full description). `cornercase status --json` now names the boot too.
+- Programs talking to the socket can opt into a strict mode by sending `contract` or `boot` with a request: errors then carry a code (`unsupported`, `malformed`, `stale-boot`, `not-found`, `unknown-field`, `unavailable`, `failed`), a field the server does not know is refused instead of ignored, a `contract` newer than the server's is refused as `unsupported`, and a request from an earlier boot is refused before it acts on an id that may name something else now. Requests without them are answered exactly as before. See Scripts and agents → Contract and compatibility.
+
+## 0.12.108
+
+- **Set up each new worktree.** A project's ⋯ → **project settings** takes the commands to run in every new worktree (`npm ci`, copying a `.env`…). They run in the worktree's first tab before its agent starts; the agent starts only if they succeed, and a failure shows a red `!` with the output right there. **teardown** runs before a worktree is removed (a failing teardown is reported but does not stop the removal). **run setup** in a workspace's menu runs the setup again. Saved in `config.json` under `projects`.
+
+## 0.12.107
+
+- `cornercase kill-server` no longer stops the server it runs in without asking. Typed in a terminal inside cornercase, it says what would stop, including that terminal, and asks `Stop it now? [y/N]`; without a terminal, such as from an agent's tool, it refuses unless you pass `--yes`. To stop another server from inside cornercase, set `CORNERCASE_SOCKET` to its socket. Outside cornercase nothing changes.
+
+## 0.12.106
+
+- **Merged pull requests in Stats.** Usage → Stats has a new row, `merged PRs`, with the pull requests and merge requests you opened that were merged, for the last 24 h, 7 days and in total since counting began. It reads them with your own `gh` (every GitHub account you are logged in to, including the ones that are not active, without switching) and `glab`, and counts only repositories that one of your open projects has as a remote, once each however many accounts or projects see them. A `+` after a number means some account could not be read, so the real number may be higher. The row is hidden when `gh` and `glab` are missing, logged out or too old, or when no project has a remote.
+- It also shows in `cornercase stats` and its `--json` (`merged_pull_requests`), and goes on the shared card (link version 3) only when every account was read. Turn it off in **Settings → Worktrees → merged PRs in stats** (`merged_pull_requests`); `glab` in `config.json` names the GitLab CLI to run.
+
+## 0.12.105
+
+- **Collapse a workspace.** Click `▾` beside a workspace in the workspaces list to hide its tabs, and `▸` to show them again. Shells and agents keep running; clicking the rest of the row opens the workspace and expands it. Folds are saved with your session and shared with the tree.
+- A collapsed workspace shows one icon for its agents, the most urgent first: orange `!`, red `!`, `●`, `✓`, `◐` (or the spinner) and `○`. In the tree, a collapsed workspace now shows working and idle agents too.
+
+## 0.12.104
+
+- Click a workspace's pull request number (`#485✗`) to see its pull request and checks, the same dialog as **pull request #485** in its menu. It works in the lists, the tree and the compact menu, and the number is underlined under the pointer.
+
+## 0.12.103
+
+- The Flows dialog draws the selected flow's diagram beside the list, so you see a flow's plan before opening it. A click selects a flow and a second click edits it, as before; the wheel over the diagram scrolls a tall one. In a narrow dialog, **diagram** shows it in place of the list and **list** brings the list back. A file that cannot be read says why instead of drawing a diagram.
+
+## 0.12.102
+
+- **Cursor CLI is now a full agent.** Tabs running `cursor-agent` show their model and how full the context is, whether the agent is working or finished, and its conversation comes back after a restart (`cursor-agent --resume <chat id>`, in the mode it ran in). `cornercase send --enter` confirms the prompt was taken, `read --last-message` and the search in sessions read its answers, and Stats counts its prompts, turns and time. Settings → Agents lists `cursor` with its modes (plan, ask, auto review, run everything).
+- Cursor shows `!` when it needs you only with `/status-indicators` turned on in Cursor; without it a permission prompt shows as working. Cursor keeps no token counts on disk, so Stats has none for it.
+- This was built from Cursor CLI's code and has not been checked against a live session: if its chat store looks different from what cornercase expects, the tab shows no model or context rather than a wrong one.
+- A tab running a Node 24 program started through a launcher is named after the program instead of `MainThread`.
+
+## 0.12.101
+
+- **Search what was said.** The search has a second mode, **in sessions**, that looks in what your agents were told and answered (Claude Code, Codex, Gemini CLI, opencode and Grok Build) and in everything every pane printed, shells included, in every open project. Click the `❯` button at the right end of the search bar, or press `Tab`, to switch; with a prefix key, `f` `s` opens the search already there. Each result shows the matching line, who said it and `project › workspace › tab`. Choosing one goes to that pane and scrolls to the match, selected.
+- It ignores case, runs in the background so typing stays responsive with long scrollbacks, leaves out panes being closed or removed, and lists at most 20 matches per pane and 300 in all.
+- `cornercase search TEXT` finds the same matches from a shell, a script or an agent: one line per match with the pane's id, or JSON with `--json`. No match prints a header and exits 0.
+
+## 0.12.100
+
+- The Issues list offers ` start a flow ` beside ` start ` and ` schedule `, so a flow starts on the selected issue without opening it first. It reads the issue and asks where to run it when the tracker needs a project, then opens the same dialog as the issue's own button. A narrow window drops ` schedule ` first, then ` start a flow `, which the issue's page keeps.
+
+## 0.12.99
+
+- After about two weeks of use (days on which a window was open and an agent ran), a small card at the bottom right asks for a star on GitHub. **star on GitHub** copies the link and never asks again, **later** asks again in about three months, and **don't show again** stops it for good. It never appears while an agent is working or waiting for you, never takes the keys from your pane, and is skipped below 90 columns. Turn it off in **Settings → UI → star prompt**, or with `"star_prompt": false` in `config.json`. Nothing is sent anywhere.
+
+## 0.12.98
+
+- **Share a flow with a teammate.** In **Settings → Agents → flows**, **export** copies the selected flow's text to your clipboard, and **import** (or just pasting on the list) opens a flow your teammate sent you in the editor, unsaved, so you can read it before you save it. What the flow sets for its agents (variables and arguments, which run without asking) is shown in red, and agents you do not have installed are named.
+- `cornercase flow export NAME > file.toml` and `cornercase flow import FILE` do the same from a shell, into yours or, with `--to project`, the project's flows. A flow that sets variables or arguments asks first (or needs `--yes` without a terminal). A name that is already taken is refused unless you pass `--replace` or `--name`.
+- A flow file that cannot be read now says which line is wrong.
+
+## 0.12.97
+
+- **Flows** start a whole team of agents on an issue or a prompt. A flow is a saved team and the plan it follows: an orchestrator agent, and roles such as coder, reviewer, security and tester, each with its own agent, model and effort. The plan is a list of stages, which can work in parallel and go back when there are findings. Choose ` start a flow ` next to ` start ` in an issue, **start a flow…** in the workspaces' `+ New`, or `w s` with a prefix key. cornercase makes a worktree, opens a tab per role and starts every agent there, and the orchestrator runs the plan with cornercase's own commands, from the first message to the pull request.
+- Four flows come built in (**Full issue**, **Cross review**, **Quick**, **Bug, test first**), with the agents you have installed. Change them to your liking, or make your own, in **Settings → Agents → flows**: stages, roles, agents, models, efforts and prompts, with the plan drawn beside them. **restore default** brings a built-in flow back. Yours are saved in `flows/` next to `config.json`, and a project's in its `.cornercase/flows/`.
+- The new **Flow** panel draws the plan as boxes and arrows and lights it up as the work moves: the box of an agent at work, the arrow the work went along, the rounds of each loop. Click a box to go to that agent, or an arrow to read the last message sent along it. It opens when a flow starts, and from the workspace's menu (**show flow**), the icon bar or `w f`.
+- Every agent of a flow runs without asking for permission, so nothing stops the team halfway. A project's flow that sets environment variables or arguments on its agents says so in red before it starts, and Claude Code's one-time consent to that mode is still yours to give.
+- `cornercase flow list` and `cornercase flow run` start flows from scripts and agents, and `cornercase start` takes `--model`, `--mode` and `--effort`.
+- opencode has two modes in **Settings → Agents**: plan, and auto (which skips its permission prompts).
+- The workspaces' `+ New workspace` button is now `+ New`, with **new workspace** and **start a flow…**.
+- Text fields with long prompts take line breaks, and wide characters (Chinese, Japanese, emoji) no longer put the cursor in the wrong place, in the TODO panel too.
+
+## 0.12.96
+
+- Schedule issues or prompts for later from the **schedule** button in Issues, the new **Queue** tab at the end of the Issues dialog, or `cornercase queue add`. Choose a clock time, a date, a delay such as `in 2h`, or the next Claude/Codex five-hour plan reset, and pick the agent, mode and destination: a project root, a workspace tab or a worktree. Clock times use your client's time zone, including remote terminals and browsers.
+- Every due entry starts together, without moving your active pane. Queued starts submit the stored prompt automatically and always accept the agent's folder trust question, so they can run unattended; immediate starts keep your existing trust setting.
+- The queue survives server restarts and keeps started entries so you can see what ran. On the **Queue** tab, edit, remove or start entries now, and clear the started history; a removal can be undone from its notice for a few seconds. Work more than ten minutes late is marked **missed** and waits for you. A closed destination or failed start shows its reason; interrupted starts ask you to check the workspace before retrying.
+- `cornercase queue add --issue` takes an issue URL or key. A URL must point to the project's own repository, or to the Jira site or the Plane or Linear workspace you are connected to; a bare key such as `482` that more than one tracker could read asks for `--source`.
+
+## 0.12.95
+
+- cornercase can message you on Discord, as it does on Telegram: while you are away, an agent that needs you or finishes its turn sends you a direct message with its question and buttons to answer it, or what it wrote, and what you reply goes to that agent. `/status`, `/new`, `/away` and `/back` work there too, as slash commands: type `/` in the chat with the bot to pick one.
+- To set it up, make an application in the Discord Developer Portal with **User Install** on, **Install Link** set to **None** and **Public Bot** off (so the app stays yours alone; cornercase tells you in Settings when it is not), paste its bot token in **Settings › Remote › Discord › bot**, then select **phone** and scan the code to add the app to your account. No code to type and no server to share: the bot writes to the app's owner. The guide is at usecornercase.dev, **On Discord**.
+- Telegram and Discord can both be set up and away at the same time. `o` in the keys menu (now **away on chat apps**) and `cornercase away` turn away on or off on every one that is set up, and the **Remote** menu has an entry for each.
+
+## 0.12.94
+
+- No changes in the app. The Telegram bot's shared parts (the notices, replies, away, `/status` and `/new`) no longer depend on Telegram, so a second chat app can use them.
+
+## 0.12.93
+
+- GitLab is an issue source. The new **GitLab** tab of the issue browser lists the issues of the project your repository's remote points to, on gitlab.com or on your own GitLab server, and **start** works on one in its own worktree, on a branch named after its number (`482-returns-page-crashes`), so GitLab links the merge request from it to the issue and, with its automatic issue closing on, closes the issue when the merge request reaches the default branch. Connect it from the tab with your server's address (leave it empty for gitlab.com) and a personal access token with the `read_api` scope; both can be changed later in **Settings → Issues → GitLab**. A token in `GITLAB_TOKEN` takes precedence instead, and is changed outside cornercase, then `cornercase kill-server`.
+- Shortcut and Plane no longer follow a redirect with your token: a server that answers with one is reported in the list, so the token is never sent to another address.
+
+## 0.12.92
+
+- A workspace whose branch has a pull request on GitHub shows its number at the end of its row, coloured by its checks: `#485✗` in red when one failed, `#483•` in yellow while they run, `#482✓` in green when they all passed. It turns purple once merged and is crossed out once closed. cornercase asks `gh` in the background, every 20 seconds while checks run and every minute otherwise.
+- The workspace's menu (` ⋯ ` or right-click) has **pull request #485**, which lists every check. **copy link** copies the pull request's address, and **ask agent** hands the failed checks, with links to their logs, to the workspace's agent, for you to add a note. With a prefix key, `g p` opens it.
+- It needs `gh` installed and logged in: **Settings → Worktrees → pull requests** says why when none show, and turns it off. `cornercase status` lists each workspace's pull request too.
+
+## 0.12.91
+
+- Agents that report their state with OSC 7501 now drive the status icons, spinner and notifications directly. Other recognised agents, including custom commands, get status indicators when they emit the protocol. Agents without it keep their existing status detection.
+- A failed agent shows a red `!`, reports `failed` to scripts and sends a failure notification, including on Telegram while away.
 
 ## 0.12.90
 

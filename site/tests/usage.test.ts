@@ -21,7 +21,7 @@ for (const columns of [110, 46]) test(`Usage opens on Stats and keeps its border
   assert.deepEqual(usageArea(columns, 38, height), stats);
   app.advance(1500); app.render(); assert.ok(app.textAt('resets in'));
   app.closeOverlay(); app.openUsage(); assert.equal(app.usage.page, 0);
-  app.usagePage(1); app.render(); assert.ok(app.textAt('prompts'));
+  app.usagePage(1); app.render(); assert.ok(app.textAt('prompts')); assert.ok(app.textAt('merged PRs'));
   app.destroy();
 });
 

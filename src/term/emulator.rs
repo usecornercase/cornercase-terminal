@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
 use crossterm::event::KeyEvent;
@@ -14,10 +15,14 @@ use libghostty_vt::terminal::{
 };
 use ratatui::layout::Position;
 use ratatui::style::{Color, Modifier, Style};
+use unicode_width::UnicodeWidthChar;
 
+use crate::agents::activity::Activity;
 use crate::host::theme::HostTheme;
 use crate::term::keys;
 use crate::term::mouse::{MouseEncoding, MouseMode};
+use crate::term::status;
+use crate::text::Needle;
 
 pub(crate) type Result<T> = libghostty_vt::error::Result<T>;
 pub(crate) type ReplyFn = Box<dyn FnMut(&[u8])>;
@@ -53,12 +58,16 @@ pub(crate) struct Emulator {
     keys: Encoder<'static>,
     anchor: Option<TrackedGridRef>,
     copied: Rc<RefCell<Vec<String>>>,
+    status: status::Status,
+    reply: Rc<RefCell<ReplyFn>>,
 }
 
 impl Emulator {
-    pub(crate) fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, mut reply: ReplyFn) -> Result<Self> {
+    pub(crate) fn new(rows: u16, cols: u16, scrollback: usize, theme: &HostTheme, reply: ReplyFn) -> Result<Self> {
         let mut vt = Terminal::new(Options { cols, rows, max_scrollback: scrollback })?;
-        vt.on_pty_write(move |_, bytes| reply(bytes))?;
+        let reply = Rc::new(RefCell::new(reply));
+        let sink = Rc::clone(&reply);
+        vt.on_pty_write(move |_, bytes| sink.borrow_mut()(bytes))?;
         let copied = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&copied);
         vt.on_clipboard_write(move |_, write| {
@@ -76,6 +85,8 @@ impl Emulator {
             keys: Encoder::new()?,
             anchor: None,
             copied,
+            status: status::Status::default(),
+            reply,
         })
     }
 
@@ -91,7 +102,31 @@ impl Emulator {
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) {
-        self.vt.vt_write(bytes);
+        let mut start = 0;
+        for (at, &byte) in bytes.iter().enumerate() {
+            if self.status.advance(byte) {
+                self.vt.vt_write(&bytes[start..=at]);
+                self.reply.borrow_mut()(status::REPLY);
+                start = at + 1;
+            }
+        }
+        self.vt.vt_write(&bytes[start..]);
+    }
+
+    pub(crate) fn status_process(&mut self, pid: Option<i32>) {
+        self.status.process(pid);
+    }
+
+    pub(crate) fn program_activity(&self) -> Option<Activity> {
+        self.status.activity()
+    }
+
+    pub(crate) fn finished_activity(&self, pid: i32) -> Option<Activity> {
+        self.status.finished(pid)
+    }
+
+    pub(crate) fn acknowledge_status(&mut self, pid: i32) {
+        self.status.acknowledge(pid);
     }
 
     pub(crate) fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
@@ -204,10 +239,57 @@ impl Emulator {
         Ok(tail(&text.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default(), None))
     }
 
-    pub(crate) fn last_lines(&self, lines: usize) -> Result<String> {
+    pub(crate) fn text(&self) -> Result<String> {
         let options = FormatterOptions::new().with_format(Format::Plain).with_unwrap(true).with_trim(true);
         let text = Formatter::new(&self.vt, options)?.format_alloc(None)?;
-        Ok(tail(&String::from_utf8_lossy(&text), Some(lines)))
+        Ok(String::from_utf8_lossy(&text).into_owned())
+    }
+
+    pub(crate) fn last_lines(&self, lines: usize) -> Result<String> {
+        Ok(tail(&self.text()?, Some(lines)))
+    }
+
+    pub(crate) fn reveal(&mut self, needle: &Needle, near: Option<usize>) -> Result<bool> {
+        let text = self.text()?;
+        let hits = text.lines().enumerate().filter_map(|(i, line)| Some((i, line, needle.find(line)?)));
+        let pick = |(i, ..): &(usize, &str, Range<usize>)| near.map_or(usize::MAX - i, |near| i.abs_diff(near));
+        let Some((line, text, found)) = hits.min_by_key(pick) else { return Ok(false) };
+        let (_, cols) = self.size()?;
+        let Some(first) = self.line_row(line)? else { return Ok(false) };
+        let last = text[found.clone()].chars().next_back().map_or(found.start, |c| found.end - c.len_utf8());
+        let (from, to) = (locate(text, found.start, cols), locate(text, last, cols));
+        let point = |(row, x): (usize, u16)| {
+            Point::Screen(PointCoordinate { x, y: u32::try_from(first + row).unwrap_or(u32::MAX) })
+        };
+        let selection = Selection::new(self.vt.grid_ref(point(from))?, self.vt.grid_ref(point(to))?, false);
+        self.anchor = None;
+        self.vt.set_selection(Some(&selection))?;
+        let selected = self.vt.format_selection_alloc(None, plain())?.map(|b| String::from_utf8_lossy(&b).into_owned());
+        if selected.is_none_or(|selected| needle.find(&selected).is_none()) {
+            self.vt.set_selection(None)?;
+            return Ok(false);
+        }
+        let (rows, _) = self.size()?;
+        self.vt.scroll_viewport(ScrollViewport::Row(first.saturating_sub(usize::from(rows) / 3)));
+        Ok(true)
+    }
+
+    pub(crate) fn line_row(&self, line: usize) -> Result<Option<usize>> {
+        let (mut number, mut first) = (0usize, None);
+        for y in 0..self.vt.total_rows()? {
+            let at = Point::Screen(PointCoordinate { x: 0, y: u32::try_from(y).unwrap_or(u32::MAX) });
+            if self.vt.grid_ref(at)?.row()?.is_wrap_continuation()? {
+                continue;
+            }
+            if first.is_some() {
+                break;
+            }
+            if number == line {
+                first = Some(y);
+            }
+            number += 1;
+        }
+        Ok(first)
     }
 
     pub(crate) fn snapshot(&mut self) -> Result<Snapshot> {
@@ -242,6 +324,24 @@ impl Emulator {
 
 fn plain<'t, 's>() -> FormatOptions<'t, 's> {
     FormatOptions::new().with_emit_format(Format::Plain).with_unwrap(true).with_trim(true)
+}
+
+fn locate(text: &str, byte: usize, cols: u16) -> (usize, u16) {
+    let cols = usize::from(cols.max(1));
+    let (mut row, mut x) = (0usize, 0usize);
+    let mut chars = text.char_indices();
+    for (at, c) in chars.by_ref() {
+        let width = c.width().unwrap_or(0);
+        if x + width > cols {
+            row += 1;
+            x = 0;
+        }
+        if at >= byte {
+            return (row, u16::try_from(x).unwrap_or(u16::MAX));
+        }
+        x += width;
+    }
+    (row, u16::try_from(x).unwrap_or(u16::MAX))
 }
 
 fn tail(text: &str, lines: Option<usize>) -> String {

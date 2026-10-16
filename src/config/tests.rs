@@ -25,7 +25,10 @@ mod file {
         let expected = Config {
             worktrees_dir: "worktrees".into(),
             fetch_minutes: 12,
-            issue_tabs: vec!["shortcut".into(), "github".into()],
+            pull_requests: false,
+            merged_pull_requests: false,
+            issue_tabs: vec!["shortcut".into(), "github".into(), "gitlab".into()],
+            gitlab_url: "https://gitlab.acme.dev".into(),
             jira_site: "acme.atlassian.net".into(),
             jira_email: "ana@acme.dev".into(),
             jira_jql: "project = SHOP".into(),
@@ -44,6 +47,7 @@ mod file {
             keep_awake: true,
             trust_prompt_pattern: "Allow this folder".into(),
             gh: "fake-gh".into(),
+            glab: "fake-glab".into(),
             sidebar: "tree".into(),
             tabs: "top".into(),
             icon_bar: true,
@@ -58,10 +62,60 @@ mod file {
             memory: true,
             desktop_notifications: "off".into(),
             check_updates: false,
+            star_prompt: false,
             remote: true,
             remote_port: 47682,
+            projects: [(
+                "~/code/web-shop".into(),
+                ProjectSettings { setup: "npm ci\ncp ../.env .env".into(), teardown: "docker compose down".into() },
+            )]
+            .into(),
         };
         matches_fixture(crate::test_util::fixture!("config/config.json"), &expected);
+    }
+
+    #[test]
+    fn a_home_relative_key_names_the_absolute_folder() {
+        let home = Path::new("/home/ana");
+        let mut config = Config::default();
+        let settings = ProjectSettings { setup: "npm ci".into(), teardown: String::new() };
+        config.set_project(Path::new("/home/ana/code/shop"), Some(home), settings.clone());
+
+        assert_eq!(config.projects.keys().collect::<Vec<_>>(), ["~/code/shop"]);
+        assert_eq!(config.project(Path::new("/home/ana/code/shop"), Some(home)), settings);
+        assert_eq!(config.project(Path::new("/home/ana/code/other"), Some(home)), ProjectSettings::default());
+    }
+
+    #[test]
+    fn a_key_through_a_symlink_names_the_same_folder() {
+        let dir = TempDir::new();
+        let real = dir.path().join("real");
+        std::fs::create_dir(&real).expect("dir");
+        std::os::unix::fs::symlink(&real, dir.path().join("link")).expect("symlink");
+        let mut config = Config::default();
+        let settings = ProjectSettings { setup: "make".into(), teardown: String::new() };
+        config.projects.insert(format!("{}/link/", dir.path().display()), settings.clone());
+
+        assert_eq!(config.project(&real, None), settings);
+        config.set_project(&real, None, ProjectSettings::default());
+        assert!(config.projects.is_empty());
+    }
+
+    #[test]
+    fn saving_a_project_replaces_its_key_and_empty_settings_remove_it() {
+        let home = Path::new("/home/ana");
+        let folder = Path::new("/home/ana/code/shop");
+        let mut config = Config::default();
+        config
+            .projects
+            .insert("/home/ana/code/shop".into(), ProjectSettings { setup: "old".into(), ..Default::default() });
+        config.set_project(folder, Some(home), ProjectSettings { setup: "new\r\n\n".into(), teardown: String::new() });
+
+        assert_eq!(config.projects.len(), 1);
+        assert_eq!(config.project(folder, Some(home)).setup, "new");
+
+        config.set_project(folder, Some(home), ProjectSettings::default());
+        assert!(config.projects.is_empty());
     }
 
     #[test]
@@ -155,18 +209,29 @@ mod added_tabs {
     }
 
     #[rstest]
-    #[case::a_list_from_before_jira(r#"{"issue_tabs": ["linear", "all"]}"#, &["linear", "all", "jira", "plane"])]
+    #[case::a_list_from_before_jira(
+        r#"{"issue_tabs": ["linear", "all"]}"#,
+        &["linear", "all", "jira", "plane", "gitlab"]
+    )]
     #[case::a_list_from_before_plane(
         r#"{"issue_tabs": ["linear", "all"], "jira_site": ""}"#,
-        &["linear", "all", "plane"]
+        &["linear", "all", "plane", "gitlab"]
     )]
-    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane"])]
+    #[case::jira_already_there(r#"{"issue_tabs": ["Jira", "all"]}"#, &["Jira", "all", "plane", "gitlab"])]
     #[case::plane_already_there(
         r#"{"issue_tabs": ["Plane", "all"], "jira_site": ""}"#,
-        &["Plane", "all"]
+        &["Plane", "all", "gitlab"]
+    )]
+    #[case::gitlab_goes_after_github(
+        r#"{"issue_tabs": ["all", "GitHub", "linear"], "jira_site": "", "plane_workspace": ""}"#,
+        &["all", "GitHub", "gitlab", "linear"]
+    )]
+    #[case::gitlab_already_there(
+        r#"{"issue_tabs": ["gitlab", "all"], "jira_site": "", "plane_workspace": ""}"#,
+        &["gitlab", "all"]
     )]
     #[case::hidden_since(
-        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": ""}"#,
+        r#"{"issue_tabs": ["all"], "jira_site": "", "plane_workspace": "", "gitlab_url": ""}"#,
         &["all"]
     )]
     #[case::no_list("{}", &DEFAULT_ISSUE_TABS)]

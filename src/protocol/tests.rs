@@ -54,6 +54,7 @@ mod framing {
 
 mod compatibility {
     use super::*;
+    use crate::test_util::fixture;
 
     #[test]
     fn kill_server_is_the_first_client_variant() {
@@ -145,6 +146,26 @@ mod compatibility {
     #[test]
     fn a_client_without_responses_reads_one_as_invalid_data() {
         assert_eq!(read_as::<BeforeResponse>(&ServerMessage::Response("{}".into())), io::ErrorKind::InvalidData);
+    }
+
+    fn framed(msg: &impl Serialize) -> String {
+        let mut buf = Vec::new();
+        send(&mut buf, msg).expect("send");
+        crate::text::hex(&buf)
+    }
+
+    #[test]
+    fn a_request_is_framed_as_its_fixture() {
+        let request = ClientMessage::Request(r#"{"contract":1,"boot":"1-2","command":"status","args":{}}"#.into());
+
+        assert_eq!(framed(&request), fixture!("control/postcard/request.hex").trim_end());
+    }
+
+    #[test]
+    fn a_response_is_framed_as_its_fixture() {
+        let response = ServerMessage::Response(r#"{"ok":{"pane":4,"tab":3}}"#.into());
+
+        assert_eq!(framed(&response), fixture!("control/postcard/response.hex").trim_end());
     }
 }
 

@@ -13,6 +13,7 @@ export const page = {
     docs: 'Docs',
     github: 'cornercase on GitHub',
     stars: 'cornercase on GitHub, {n} stars',
+    discord: 'cornercase on Discord',
     install: 'Install',
     language: 'Language',
   },
@@ -96,7 +97,7 @@ export const page = {
       {
         num: '1 · Start',
         title: 'From an issue to an agent at work, in one click.',
-        text: 'Pick an issue from GitHub, Linear, Jira, Plane or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
+        text: 'Pick an issue from GitHub, GitLab, Linear, Jira, Plane or Shortcut and press start. cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to your agent as its first prompt. No branch to name, no folder to make, nothing to paste.',
         more: 'Issues to agents →',
         label:
           'The issues dialog of web-shop with #482, Returns page crashes on empty address, selected: start opens it in its own worktree.',
@@ -105,7 +106,7 @@ export const page = {
         num: '2 · In parallel',
         title: 'Ten agents, one glance.',
         text: 'Each agent gets its own branch, folder and tab, so two of them never touch the same file. The sidebar tells you who is working {working}, who is waiting for you {waiting} and who is done {done}, with the model and how full its context is. When one needs you, your terminal taps you on the shoulder. Even through SSH.',
-        more: 'Works with Claude Code, Codex, Gemini, Grok and 11 more →',
+        more: 'Works with Claude Code, Codex, Gemini, Grok, Cursor and 10 more →',
         label:
           "A narrow cornercase window: the seven projects on top, where orders-api needs you and blog's agent is done; the three worktrees of web-shop below, each with a Claude working; and the conversation on dark mode in the pane, with the path it names underlined.",
       },
@@ -148,19 +149,22 @@ export const page = {
         name: 'For your agents',
         items: [
           ['Status, model and context', 'Working, needs you or done, under every tab. Plus the model and how full its context is.'],
+          ['Flows, a team per task', 'One agent codes, others review and test, and an orchestrator runs them, from a template. The Flow panel shows the work move.'],
           ['Notifications', 'Claude needs you? Your terminal taps you on the shoulder. Even over SSH.'],
           ['Usage and stats', 'Your plan limits and the work your agents did in parallel.'],
-          ['On Telegram', 'Away from the desk? Your agents message you there. Reply, and it reaches them.'],
+          ['On Telegram or Discord', 'Away from the desk? Your agents message you there. Reply, and it reaches them.'],
           ['Worktrees, sorted', 'Every line of work gets its own branch and folder. Ones made elsewhere show up too.'],
+          ['Agents, scheduled', 'Queue an issue or prompt for later, or for the next plan reset.'],
         ],
       },
       {
         name: 'For your code',
         items: [
           ["Files, with git's marks", 'Browse and search the code, images included. Changed lines are marked. Click a path an agent prints to open it.'],
-          ['Search', 'Any project, branch or tab, found as you type.'],
+          ['Search', 'Any project, branch or tab, found as you type, or what was said: in agents’ answers and in every pane.'],
           ['Splits', "Right-click, split. Drag to resize. That's it."],
           ['TODO, at hand', 'Your list, next to the shells it is about.'],
+          ['Pull requests, checked', 'Each worktree shows its pull request and whether its checks pass. One fails? Hand it to the agent.'],
         ],
       },
       {
@@ -181,6 +185,7 @@ export const page = {
     cta: ['Give every case', 'its own ', 'corner', '.'],
     first: 'First steps',
     star: 'Star on GitHub',
+    discord: 'Join the Discord',
     tagline: 'Every agent in its own corner. In your terminal, a click away.',
     product: 'Product',
     docs: 'Docs',
@@ -233,12 +238,12 @@ export const demo = {
     folder: 'A new workspace in the project folder.',
     picker: 'Pick a folder. Type to filter, Enter to go in, open to add it.',
     opened: (folder: string) => `Opened ${folder}. Each project keeps its own workspaces and tabs.`,
-    search: 'Type anything: projects, branches, tabs. Enter takes you there.',
+    search: 'Type anything: projects, branches, tabs. Enter takes you there. Tab searches what was said instead.',
     usage: 'Your agents’ work in parallel, plus your Claude and Codex plan limits. All in Usage.',
     settings: 'Change anything, it’s saved at once. Try Agents → default agent.',
     restart: (resume: boolean) =>
       `For real, the server starts again and every tab comes back with a new shell${resume ? ', agents back in their conversations' : ''}. The demo keeps yours running.`,
-    issues: 'Your issues from GitHub, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.',
+    issues: 'Your issues from GitHub, GitLab, Shortcut, Linear, Jira and Plane. Click one to read it, then press start.',
     issue: (key: string) => `${key}. Press start and an agent takes it, on its own branch.`,
     branch: (branch: string) => `A fresh branch for it: ${branch}.`,
     agentTab: 'A new tab for the agent.',
@@ -249,6 +254,8 @@ export const demo = {
     prompt: 'The issue is in the prompt. Click the pane and press Enter to send it.',
     detached: (shells: number) => `Gone, but not stopped: your ${shells} shells keep running, agents included.`,
     attached: 'And we’re back. Same projects, same tabs, everything still running.',
+    flowHint: 'This worktree runs a flow, a team of agents. Right-click it and pick show flow to watch the plan.',
+    flow: 'The Full issue flow: an orchestrator agent sends the work from role to role. Boxes light up as they work. Click one to see its tab, an arrow to read what went along it.',
   },
 };
 

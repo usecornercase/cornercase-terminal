@@ -1,8 +1,9 @@
 use super::{Handled, json, none};
-use crate::agents::Known;
 use crate::agents::awake;
 use crate::app::App;
-use crate::control::{self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, Report, TabInfo, WorkspaceInfo};
+use crate::control::{
+    self, Done, GroupInfo, KeepAwake, PaneInfo, ProjectInfo, PullRequestInfo, Report, TabInfo, WorkspaceInfo,
+};
 use crate::git;
 use crate::log::{self, Level};
 use crate::project::{Hierarchy, Tab, Workspace};
@@ -31,6 +32,15 @@ impl App {
             branch: git::branch(&ws.path),
             worktree: ws.worktree,
             behind: ws.behind,
+            pull_request: self.pull_request(ws.id).map(|pull| PullRequestInfo {
+                number: pull.number,
+                title: pull.title.clone(),
+                url: pull.url.clone(),
+                state: pull.state.name().into(),
+                checks: pull.ci().map(|ci| ci.name().into()),
+                failed: pull.failed().map(|check| check.name.clone()).collect(),
+            }),
+            setup: ws.setup().map(|(_, state)| if state.running() { "running" } else { "failed" }.to_string()),
             active: w == active,
             tabs: ws.tabs.iter().enumerate().map(|(t, tab)| tab_info(t, tab, ws.active)).collect(),
         };
@@ -55,6 +65,7 @@ impl App {
         });
         Report {
             version: version::CURRENT.to_string(),
+            boot: control::server_token().to_string(),
             caller,
             shown: self.project().map(|_| self.shown_ids(self.active)).unwrap_or_default(),
             groups: groups.collect(),
@@ -69,7 +80,7 @@ impl App {
             id: term.id,
             path: term.cwd(),
             program: term.program(&self.config),
-            agent: term.agent.agent().map(Known::name).map(str::to_string),
+            agent: term.agent.agent().map(str::to_string),
             status: term.agent.status().map(|s| s.name().to_string()),
             background_shell: term.agent.background_shell(),
             dialog: term.dialog(),

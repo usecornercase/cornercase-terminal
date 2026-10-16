@@ -71,6 +71,19 @@ mod modes {
     }
 
     #[test]
+    fn opencode_plans_with_its_plan_agent_and_approves_with_auto() {
+        let kind = Known::Opencode.name();
+        let modes = modes(&config(), kind);
+        let names: Vec<&str> = modes.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["plan", "auto (dangerous)"]);
+        assert_eq!(mode_of(kind, &strings(&["opencode", "--agent", "plan"]), &modes).as_deref(), Some("plan"));
+        assert_eq!(
+            with_mode(kind, &strings(&["--auto", "-c"]), &modes, Some("plan")),
+            strings(&["--agent", "plan", "-c"])
+        );
+    }
+
+    #[test]
     fn grok_modes_follow_its_permission_flags() {
         let modes = modes(&config(), Known::Grok.name());
         let kind = Known::Grok.name();
@@ -170,6 +183,18 @@ mod arguments {
     }
 
     #[test]
+    fn cursor_modes_follow_its_flags() {
+        let modes = modes(&config(), Known::Cursor.name());
+        let kind = Known::Cursor.name();
+        let mode = |argv: &[&str]| mode_of(kind, &strings(argv), &modes);
+        assert_eq!(mode(&["cursor-agent", "--plan"]).as_deref(), Some("plan"));
+        assert_eq!(mode(&["cursor-agent", "--mode=ask"]).as_deref(), Some("ask"));
+        assert_eq!(mode(&["cursor-agent", "--yolo"]).as_deref(), Some("run everything (dangerous)"));
+        assert_eq!(mode(&["cursor-agent", "-f", "--trust"]).as_deref(), Some("run everything (dangerous)"));
+        assert_eq!(mode(&["cursor-agent", "--mode", "debug"]), None);
+    }
+
+    #[test]
     fn join_quotes_what_a_shell_would_split() {
         assert_eq!(join_args(&strings(&["--add-dir", "../my dir", "it's"])), r"--add-dir '../my dir' 'it'\''s'");
     }
@@ -179,6 +204,92 @@ mod arguments {
         let mut c = config();
         c.agent_args.insert("cursor".into(), strings(&["--model", "a b"]));
         assert_eq!(command_line(&c, "cursor"), "cursor-agent --model 'a b'");
+    }
+
+    #[rstest]
+    #[case::added("claude", &["-v"], &["-v", "--model", "opus"])]
+    #[case::replaced("claude", &["--model", "haiku", "-v"], &["-v", "--model", "opus"])]
+    #[case::replaced_with_equals("claude", &["--model=haiku", "-v"], &["-v", "--model", "opus"])]
+    #[case::claude_has_no_short_flag("claude", &["-m", "x"], &["-m", "x", "--model", "opus"])]
+    #[case::short("codex", &["-m", "o3", "--search"], &["--search", "--model", "opus"])]
+    #[case::short_with_equals("gemini", &["-m=pro", "-y"], &["-y", "--model", "opus"])]
+    #[case::every_spelling("grok", &["-m", "a", "--model", "b", "--model=c", "-m=d", "-v"], &["-v", "--model", "opus"])]
+    fn a_model_replaces_every_spelling_of_the_one_in_the_arguments(
+        #[case] kind: &str,
+        #[case] args: &[&str],
+        #[case] expected: &[&str],
+    ) {
+        assert_eq!(with_model(kind, strings(args), Some("opus")), strings(expected));
+        assert_eq!(with_model(kind, strings(args), Some(" ")), strings(args));
+        assert_eq!(with_model("aider", strings(args), Some("opus")), strings(args));
+    }
+
+    #[rstest]
+    #[case::claude("claude", &["--effort", "low", "-v", "--effort=max"], &["-v", "--effort", "high"])]
+    #[case::grok_and_its_alias("grok", &["--reasoning-effort", "low", "--effort=max", "-v"], &["-v", "--reasoning-effort", "high"])]
+    #[case::codex_config(
+        "codex",
+        &["-c", "model_reasoning_effort=low", "-c", "model=o3", "--config=model_reasoning_effort=low", "-cmodel_reasoning_effort=x"],
+        &["-c", "model=o3", "-c", "model_reasoning_effort=high"]
+    )]
+    #[case::codex_long_config("codex", &["--config", "model_reasoning_effort=low"], &["-c", "model_reasoning_effort=high"])]
+    #[case::gemini_has_none("gemini", &["--effort", "low"], &["--effort", "low"])]
+    fn an_effort_replaces_every_spelling_of_the_one_in_the_arguments(
+        #[case] kind: &str,
+        #[case] args: &[&str],
+        #[case] expected: &[&str],
+    ) {
+        assert_eq!(with_effort(kind, strings(args), Some("high")), strings(expected));
+        assert_eq!(with_effort(kind, strings(args), None), strings(args));
+    }
+
+    #[test]
+    fn a_start_takes_an_effort_the_agent_knows() {
+        let c = config();
+        assert_eq!(start_line(&c, "claude", None, None, Some("high")).as_deref(), Ok("claude --effort high"));
+        assert_eq!(
+            start_line(&c, "codex", None, None, Some("high")).as_deref(),
+            Ok("codex -c model_reasoning_effort=high")
+        );
+        assert_eq!(
+            start_line(&c, "claude", None, None, Some("huge")),
+            Err("claude has no effort `huge`; its levels are `low`, `medium`, `high`, `xhigh`, `max`".into())
+        );
+        assert_eq!(start_line(&c, "gemini", None, None, Some("high")), Err("gemini has no effort switch".into()));
+    }
+
+    #[test]
+    fn a_start_picks_a_mode_and_a_model_over_the_settings() {
+        let mut c = config();
+        c.agent_args.insert("claude".into(), strings(&["--permission-mode", "auto", "--model", "haiku", "-v"]));
+        assert_eq!(
+            start_line(&c, "claude", None, None, None).as_deref(),
+            Ok("claude --permission-mode auto --model haiku -v")
+        );
+        assert_eq!(
+            start_line(&c, "claude", Some("plan"), Some("opus"), None).as_deref(),
+            Ok("claude --permission-mode plan -v --model opus")
+        );
+    }
+
+    #[test]
+    fn a_start_with_a_mode_or_model_it_does_not_know_names_what_it_knows() {
+        let c = config();
+        assert_eq!(
+            start_line(&c, "codex", Some("yolo"), None, None),
+            Err("codex has no mode `yolo`; its modes are `read only`, `workspace write`, `no sandbox, no approvals \
+                 (dangerous)`"
+                .into())
+        );
+        assert_eq!(
+            start_line(&c, "aider", Some("plan"), None, None),
+            Err("aider has no modes in cornercase; add some with agent_modes in config.json".into())
+        );
+        let refused = start_line(&c, "aider", None, Some("gpt"), None).expect_err("aider takes no model");
+        assert_eq!(
+            refused,
+            "cornercase passes a model to claude, codex, gemini, opencode, grok, cursor only; give aider its model in agent_args"
+        );
     }
 
     #[test]
@@ -204,6 +315,12 @@ mod resuming {
     #[case::grok(Known::Grok.name(), Some("accept edits"), "grok --permission-mode acceptEdits --resume 4f2c-91")]
     #[case::grok_always(Known::Grok.name(), Some("always approve (dangerous)"), "grok --always-approve --resume 4f2c-91")]
     #[case::codex_in_its_mode("codex", Some("read only"), "codex resume --sandbox read-only 4f2c-91")]
+    #[case::cursor_in_plan(Known::Cursor.name(), Some("plan"), "cursor-agent --mode plan --resume 4f2c-91")]
+    #[case::cursor_running_everything(
+        Known::Cursor.name(),
+        Some("run everything (dangerous)"),
+        "cursor-agent --force --resume 4f2c-91"
+    )]
     fn the_conversation_comes_back_in_the_mode_it_ran_in(
         #[case] kind: &str,
         #[case] mode: Option<&str>,
@@ -253,6 +370,17 @@ mod choosing {
     #[case::codex_npm(&["node", "/usr/lib/node_modules/@openai/codex/bin/codex.js"], Some("codex"))]
     #[case::codex_native(&["/usr/local/bin/codex"], Some("codex"))]
     #[case::renamed_binary(&["cursor-agent"], Some("cursor"))]
+    #[case::cursor_through_its_launcher(
+        &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js"],
+        Some("cursor")
+    )]
+    #[case::cursor_through_its_shim(
+        &["/home/a/.local/bin/agent", "--use-system-ca", "/home/a/.local/share/cursor-agent/versions/2026.10.14-941492e/index.js", "agent"],
+        Some("cursor")
+    )]
+    #[case::cursor_by_name(&["/home/a/.local/bin/cursor-agent", "--use-system-ca", "/x/index.js"], Some("cursor"))]
+    #[case::grok_binary_named_agent(&["/home/a/.grok/bin/agent"], None)]
+    #[case::a_worker_server_of_another_app(&["node", "/home/a/app/versions/1/index.js", "worker-server"], None)]
     #[case::a_shell(&["-zsh"], None)]
     fn detects_the_agent_in_a_tab(#[case] argv: &[&str], #[case] expected: Option<&str>) {
         assert_eq!(detect(&config(), &strings(argv)).as_deref(), expected);

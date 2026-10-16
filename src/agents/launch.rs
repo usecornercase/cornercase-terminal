@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use super::claude;
 use crate::term::bracketed;
 use crate::text::one_line;
 
@@ -19,6 +20,13 @@ pub(crate) struct Spec {
     pub(crate) command: String,
     pub(crate) prompt: Option<String>,
     pub(crate) submit: bool,
+    pub(crate) trusted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Parked {
+    Trust,
+    Consent,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +40,9 @@ enum Stage {
 pub(crate) struct Launch {
     pub(crate) term: u64,
     pub(crate) key: Option<u64>,
+    pub(crate) after: Vec<u64>,
+    pub(crate) told: bool,
+    pub(crate) trust: Option<Trust>,
     spec: Spec,
     agent: bool,
     stage: Stage,
@@ -41,7 +52,7 @@ pub(crate) struct Launch {
     trusted_screen: Option<String>,
     echo: String,
     undrawn: bool,
-    asked: bool,
+    parked: Option<Parked>,
 }
 
 pub(crate) struct Seen<'a> {
@@ -72,6 +83,9 @@ impl Launch {
         Self {
             term,
             key: None,
+            after: Vec::new(),
+            told: false,
+            trust: None,
             spec,
             agent: true,
             stage: Stage::Shell,
@@ -81,12 +95,17 @@ impl Launch {
             trusted_screen: None,
             echo: String::new(),
             undrawn: false,
-            asked: false,
+            parked: None,
         }
     }
 
+    pub(crate) fn wait_from(&mut self, now: Instant) {
+        self.since = now;
+        self.output = Some(now);
+    }
+
     pub(crate) fn command(term: u64, command: String, now: Instant) -> Self {
-        Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false }, now) }
+        Self { agent: false, ..Self::new(term, Spec { command, prompt: None, submit: false, trusted: false }, now) }
     }
 
     pub(crate) fn enter(term: u64, now: Instant) -> Self {
@@ -94,19 +113,22 @@ impl Launch {
     }
 
     pub(crate) fn output(&mut self, now: Instant) {
-        if self.asked {
+        if self.parked.is_some() {
             self.since = now;
         }
         self.output = Some(now);
         self.undrawn = false;
-        self.asked = false;
+        self.parked = None;
     }
 
     pub(crate) fn stage(&self) -> &'static str {
         match self.stage {
             Stage::Shell => "shell",
-            Stage::Agent if self.asked => "trust prompt",
-            Stage::Agent => "agent",
+            Stage::Agent => match self.parked {
+                Some(Parked::Consent) => "consent",
+                Some(Parked::Trust) => "trust prompt",
+                None => "agent",
+            },
             Stage::Submit => "submit",
         }
     }
@@ -120,7 +142,7 @@ impl Launch {
     }
 
     pub(crate) fn waits_for_you(&self) -> bool {
-        self.asked
+        self.parked.is_some()
     }
 
     pub(crate) fn submits(&self) -> bool {
@@ -161,7 +183,7 @@ impl Launch {
                     Step::Wait
                 }
             }
-            Stage::Agent if self.asked => Step::Wait,
+            Stage::Agent if self.parked.is_some() => Step::Wait,
             Stage::Agent => {
                 let latest = now.duration_since(self.since) >= AGENT_LATEST;
                 if (self.quiet(now) < AGENT_QUIET || self.undrawn) && !latest {
@@ -172,10 +194,15 @@ impl Launch {
                     self.undrawn = true;
                     return Step::Wait;
                 }
+                if claude::screen::bypass_consent(&screen) {
+                    self.next(Stage::Agent, now);
+                    self.parked = Some(Parked::Consent);
+                    return Step::Wait;
+                }
                 if (seen.trust_prompt)(&screen) {
-                    if seen.trust == Trust::LeftToYou {
+                    if seen.trust == Trust::LeftToYou && !self.spec.trusted {
                         self.next(Stage::Agent, now);
-                        self.asked = true;
+                        self.parked = Some(Parked::Trust);
                         return Step::Wait;
                     }
                     if self.trusts < MAX_TRUSTS && self.trusted_screen.as_ref() != Some(&screen) {

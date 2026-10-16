@@ -8,6 +8,8 @@ use crate::error::{Error, Result};
 use crate::log;
 use crate::process;
 
+pub(crate) mod setup;
+
 pub(crate) const INCLUDE_FILE: &str = ".worktreeinclude";
 const DEFAULT_SLUG: &str = "worktree";
 

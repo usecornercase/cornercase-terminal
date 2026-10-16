@@ -81,6 +81,11 @@ impl App {
         if let Some((_, tab)) = self.projects.tab_with_pane_mut(pane) {
             tab.split(pane, dir, term, focus);
         }
+        for workspace in self.projects.iter_mut().flat_map(|p| &mut p.workspaces) {
+            if workspace.tabs.iter().any(|t| t.index_of(pane).is_some()) {
+                workspace.stop_blaming_setup();
+            }
+        }
         self.resize(area);
         Ok(Some(id))
     }
@@ -95,6 +100,7 @@ impl App {
     }
 
     pub(super) fn push_tab(&mut self, p: usize, w: usize, area: Rect, name: Option<String>) -> Result<usize> {
+        self.projects[p].workspaces[w].stop_blaming_setup();
         let path = self.projects[p].workspaces[w].path.clone();
         let tab = self.new_tab(area, path, name)?;
         let workspace = &mut self.projects[p].workspaces[w];

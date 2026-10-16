@@ -27,7 +27,7 @@ impl App {
     pub(super) fn open_request(&mut self, open: &control::Open, area: Option<Rect>) -> Handled {
         let path = open.path.canonicalize().map_err(|e| format!("cannot open `{}`: {e}", open.path.display()))?;
         if !path.is_dir() {
-            return Err(format!("`{}` is not a folder", path.display()));
+            return Err(format!("`{}` is not a folder", path.display()).into());
         }
         let p = match self.projects.iter().position(|p| p.path == path && !p.closing) {
             Some(p) => p,
@@ -55,10 +55,11 @@ impl App {
         };
         if new.worktree {
             if let Some(open) = self.workspace_on(p, &name) {
-                return Err(format!("branch {name} is already open in workspace {open}"));
+                return Err(format!("branch {name} is already open in workspace {open}").into());
             }
             let then = Then { start: None, wait: None, focus: new.focus };
-            return self.create_worktree(client, p, &name, then, None).map(|()| None);
+            self.create_worktree(client, p, &name, then, None)?;
+            return Ok(None);
         }
         let path = self.projects[p].path.clone();
         let workspace = self.new_workspace(area, path, Some(name), false).map_err(|e| e.to_string())?;
@@ -107,7 +108,7 @@ impl App {
         let (p, w, t) = self.projects.tab_of_pane(pane).ok_or_else(|| none("pane", pane))?;
         let (dir, way) = if split.down { (Dir::Down, "down") } else { (Dir::Right, "right") };
         if !self.projects[p].workspaces[w].tabs[t].can_split(self.layout(area).pane, pane, dir) {
-            return Err(format!("pane {pane} is too small to split {way}"));
+            return Err(format!("pane {pane} is too small to split {way}").into());
         }
         let new =
             self.split_pane(pane, dir, area, false).map_err(|e| e.to_string())?.ok_or_else(|| none("pane", pane))?;
@@ -130,9 +131,17 @@ impl App {
         let area = sized(area)?;
         let timeout = deadline(start.timeout, now)?;
         let wait = start.wait.then(|| Condition::of(start.until)).transpose()?;
-        let kind = self.agent_kind(caller, start.agent)?;
+        let queued = self.queued_spec(client);
+        let kind =
+            if queued.is_some() { start.agent.unwrap_or_default() } else { self.agent_kind(caller, start.agent)? };
         let prompt = start.prompt.filter(|p| !p.trim().is_empty());
-        let spec = launch::Spec { command: agents::command_line(&self.config, &kind), prompt, submit: true };
+        let spec = if let Some(spec) = queued {
+            spec
+        } else {
+            let (mode, model, effort) = (start.mode.as_deref(), start.model.as_deref(), start.effort.as_deref());
+            let command = agents::start_line(&self.config, &kind, mode, model, effort)?;
+            launch::Spec { command, prompt, submit: true, trusted: false }
+        };
         let name = name_of(start.name);
         let (p, w) = if let Some(id) = start.workspace {
             self.usable_workspace(id)?
@@ -144,9 +153,23 @@ impl App {
             let open = self.workspace_on(p, branch).and_then(|id| self.projects.workspace_index(id));
             let Some(found) = open else {
                 let then = Then { start: Some((spec, name)), wait, focus: start.focus };
-                return self.create_worktree(client, p, branch, then, timeout).map(|()| None);
+                self.create_worktree(client, p, branch, then, timeout)?;
+                return Ok(None);
             };
             found
+        } else if let Some(project) = start.project {
+            let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
+            let w = self.projects[p]
+                .workspaces
+                .iter()
+                .position(|workspace| workspace.open() && workspace.path == self.projects[p].path)
+                .unwrap_or_else(|| {
+                    let id = self.take_id();
+                    let path = self.projects[p].path.clone();
+                    self.projects[p].workspaces.push(crate::project::Workspace::new(id, path, None, false));
+                    self.projects[p].workspaces.len() - 1
+                });
+            (p, w)
         } else {
             self.here_workspace(caller)?
         };
@@ -160,7 +183,7 @@ impl App {
         Ok(self.launch_within(client, Done { ids, ..Done::default() }, launch, Stage::launch(wait), timeout))
     }
 
-    fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
+    pub(in crate::app) fn agent_kind(&self, caller: Option<u64>, agent: Option<String>) -> Result<String, String> {
         let kinds = agents::kinds(&self.config);
         if let Some(agent) = agent {
             return if kinds.contains(&agent) {
@@ -204,10 +227,20 @@ impl App {
         result: error::Result<PathBuf>,
         area: Rect,
     ) {
-        let found = self.requests.pending.iter().position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_)));
+        let found = self
+            .requests
+            .pending
+            .iter()
+            .position(|p| p.key == key && matches!(p.stage, Stage::Worktree(_) | Stage::Run(..)));
         let Some(i) = found else { return };
         let mut pending = self.requests.pending.remove(i);
-        let Stage::Worktree(then) = std::mem::replace(&mut pending.stage, Stage::launch(None)) else { return };
+        let then = match std::mem::replace(&mut pending.stage, Stage::launch(None)) {
+            Stage::Worktree(then) => then,
+            Stage::Run(_, starting) => {
+                return self.flow_worktree_ready(pending.client, project, result, *starting, area);
+            }
+            _ => return,
+        };
         match self.open_worktree(project, result, then, area, &mut pending) {
             Ok(true) => self.requests.pending.push(pending),
             Ok(false) => self.answer(pending.client, Ok(json(&pending.done))),
@@ -229,11 +262,11 @@ impl App {
         let w = self.worktree_workspace(p, path);
         let launch = match then.start {
             Some((spec, name)) => {
-                let t = self.push_tab(p, w, area, name).map_err(|e| e.to_string())?;
+                let t = self.push_setup_tab(p, w, area, name).map_err(|e| e.to_string())?;
                 Some((spec, t))
             }
             None if self.projects[p].workspaces[w].tabs.is_empty() => {
-                self.push_tab(p, w, area, None).map_err(|e| e.to_string())?;
+                self.push_setup_tab(p, w, area, None).map_err(|e| e.to_string())?;
                 None
             }
             None => None,
@@ -244,9 +277,20 @@ impl App {
         if then.focus {
             self.show(Item::Pane(pane))?;
         }
-        let Some((spec, _)) = launch else { return Ok(false) };
+        let Some((spec, _)) = launch else {
+            let workspace = self.projects[p].workspaces[w].id;
+            if self.projects[p].workspaces[w].setting_up() {
+                pending.stage = Stage::Setup(workspace);
+                return Ok(true);
+            }
+            return Ok(false);
+        };
         let mut launch = Launch::new(pane, spec, Instant::now());
         launch.key = Some(pending.key);
+        launch.trust = pending
+            .client
+            .is_some_and(|client| self.queued.running.contains_key(&client))
+            .then_some(launch::Trust::Accepted);
         self.agents.launches.push(launch);
         pending.stage = Stage::launch(then.wait);
         Ok(true)

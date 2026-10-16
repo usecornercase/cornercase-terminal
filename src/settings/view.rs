@@ -1,10 +1,12 @@
 use crate::agents;
 use crate::config::{Config, Sidebar, Tabs, WorkingIcon};
+use crate::issues::Source;
+use crate::messenger::Via;
 use crate::shortcuts::Prefix;
 
 use super::{NO_PLUGINS, Page, Row, RowText, Settings, Status};
 
-const RESUME_NOTE: &str = "Claude Code, Codex, Gemini and Grok, in their tabs";
+const RESUME_NOTE: &str = "Claude, Codex, Gemini, Grok, Cursor, in their tabs";
 
 const ICON_BAR_NOTE: &str = "the buttons under the lists, as icons; needs a Nerd Font";
 
@@ -29,21 +31,9 @@ impl Settings {
         (plugin.label.clone(), value.into(), plugin.note.clone(), plugin.broken)
     }
 
-    fn telegram_row(&self, row: &Row) -> (String, String, String, bool) {
-        if *row == Row::TelegramBot {
-            let note = if self.telegram.checking { "checking…".into() } else { self.telegram.note.clone() };
-            return ("bot".into(), self.telegram.bot.clone().unwrap_or_else(|| "not set".into()), note, false);
-        }
-        let (value, note) = match &self.telegram.chat {
-            Some(chat) => (chat.clone(), "agents message it while you are away · enter pairs another"),
-            None => ("not paired".into(), "enter shows a code to scan with your phone"),
-        };
-        ("phone".into(), value, note.into(), false)
-    }
-
-    pub(crate) fn row_text(&self, row: &Row) -> RowText {
+    fn worktrees_row(&self, row: &Row) -> (String, String, String, bool) {
         let config = &self.config;
-        let (label, value, note, dangerous) = match row {
+        match row {
             Row::Folder => (
                 "worktrees folder".to_string(),
                 config.worktrees_dir.clone(),
@@ -55,20 +45,43 @@ impl Settings {
                     if config.fetch_minutes == 0 { "off".into() } else { format!("{} min", config.fetch_minutes) };
                 ("fetch branches every".into(), value, "commits to pull show as ↓n".into(), false)
             }
-            Row::Token(source) => {
-                let label = format!("{} {}", source.name(), source.token_name());
-                let (value, note) = match self.status(*source) {
-                    Some(Status::Saved(Some(account))) => (account.describe(), "saved".to_string()),
-                    Some(Status::Saved(None)) => ("connected".into(), "saved".into()),
-                    Some(Status::Env) => {
-                        ("connected".into(), format!("from {}", source.token_env().unwrap_or_default()))
-                    }
-                    _ => ("not connected".into(), "enter pastes one".into()),
-                };
-                (label, value, note, false)
+            Row::MergedPullRequests => {
+                let value = if config.merged_pull_requests { "[x] shown" } else { "[ ] hidden" };
+                ("merged PRs in stats".into(), value.into(), self.merged.clone(), false)
             }
-            Row::JiraSite | Row::JiraEmail | Row::JiraJql => jira_row(config, row),
-            Row::PlaneWorkspace | Row::PlaneUrl | Row::PlaneFilter => plane_row(config, row),
+            _ => {
+                let value = if config.pull_requests { "[x] shown" } else { "[ ] hidden" };
+                ("pull requests".into(), value.into(), self.pulls.clone(), false)
+            }
+        }
+    }
+
+    fn messenger_row(&self, row: &Row, via: Via) -> (String, String, String, bool) {
+        let messenger = self.messenger(via);
+        if *row == Row::Bot(via) {
+            let note = if messenger.checking { "checking…".into() } else { messenger.note.clone() };
+            return ("bot".into(), messenger.bot.clone().unwrap_or_else(|| "not set".into()), note, false);
+        }
+        let (value, note) = match &messenger.chat {
+            Some(chat) => (chat.clone(), "agents message it while you are away · enter pairs another"),
+            None if via.pairs_by_owner() => ("not paired".into(), "enter shows a link to add the app to your account"),
+            None => ("not paired".into(), "enter shows a code to scan with your phone"),
+        };
+        ("phone".into(), value, note.into(), false)
+    }
+
+    pub(crate) fn row_text(&self, row: &Row) -> RowText {
+        let config = &self.config;
+        let (label, value, note, dangerous) = match row {
+            Row::Folder | Row::Fetch | Row::PullRequests | Row::MergedPullRequests => self.worktrees_row(row),
+            Row::Token(source) => self.token_row(*source),
+            Row::GitlabUrl
+            | Row::JiraSite
+            | Row::JiraEmail
+            | Row::JiraJql
+            | Row::PlaneWorkspace
+            | Row::PlaneUrl
+            | Row::PlaneFilter => tracker_row(config, row),
             Row::Tab(id) => self.tab_row(id),
             Row::DefaultAgent => {
                 let note = if config.agent == agents::AUTO {
@@ -119,6 +132,10 @@ impl Settings {
                 let value = if config.check_updates { "[x] every hour" } else { "[ ] never" };
                 ("check for updates".into(), value.into(), "asks GitHub for the latest release".into(), false)
             }
+            Row::StarPrompt => {
+                let value = if config.star_prompt { "[x] now and then" } else { "[ ] never" };
+                ("star prompt".into(), value.into(), "asks for a GitHub star after two weeks of use".into(), false)
+            }
             Row::Trust => {
                 let value = if config.accept_trust_prompts { "[x] accepted for you" } else { "[ ] left to you" };
                 ("trust prompts".into(), value.into(), "saying yes runs the repo's agent config".into(), false)
@@ -138,10 +155,24 @@ impl Settings {
             }
             Row::Kind(kind) => kind_row(config, kind),
             Row::AddAgent => ("+ another agent…".into(), String::new(), String::new(), false),
-            Row::TelegramBot | Row::TelegramChat => self.telegram_row(row),
+            Row::Flows => {
+                ("flows".into(), self.flows.clone(), "teams of agents that work through a plan".into(), false)
+            }
+            Row::Bot(via) | Row::Chat(via) => self.messenger_row(row, *via),
             Row::Plugin(_) | Row::NoPlugins => self.plugin_row(row),
         };
         RowText { label, value, note, dangerous }
+    }
+
+    fn token_row(&self, source: Source) -> (String, String, String, bool) {
+        let label = format!("{} {}", source.name(), source.token_name());
+        let (value, note) = match self.status(source) {
+            Some(Status::Saved(Some(account))) => (account.describe(), "saved".to_string()),
+            Some(Status::Saved(None)) => ("connected".into(), "saved".into()),
+            Some(Status::Env) => ("connected".into(), format!("from {}", source.token_env().unwrap_or_default())),
+            _ => ("not connected".into(), "enter pastes one".into()),
+        };
+        (label, value, note, false)
     }
 
     fn tab_row(&self, id: &str) -> (String, String, String, bool) {
@@ -149,6 +180,7 @@ impl Settings {
         let name = match id {
             "all" => "All",
             "github" => "GitHub",
+            "gitlab" => "GitLab",
             "shortcut" => "Shortcut",
             "linear" => "Linear",
             "jira" => "Jira",
@@ -172,11 +204,12 @@ impl Settings {
 
     pub(crate) fn edit_field(&self) -> Option<(String, String)> {
         self.edit.as_ref().map(|edit| {
-            let token = matches!(edit.row, Row::Token(_) | Row::TelegramBot);
+            let token = matches!(edit.row, Row::Token(_) | Row::Bot(_));
             let label = match &edit.row {
                 Row::Folder => "worktrees folder".to_string(),
                 Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
                 Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
+                Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
                 Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
                 Row::JiraEmail => "Jira email".to_string(),
                 Row::JiraJql => "Jira filter (JQL, such as project = SHOP; empty lists everything)".to_string(),
@@ -184,7 +217,7 @@ impl Settings {
                 Row::PlaneUrl => "Plane URL for a self-hosted server (empty is Plane Cloud)".to_string(),
                 Row::PlaneFilter => "Plane filter (query parameters, such as priority=high)".to_string(),
                 Row::Kind(kind) => format!("{kind} extra arguments"),
-                Row::TelegramBot => "Telegram bot token, from @BotFather".to_string(),
+                Row::Bot(via) => via.token_field().to_string(),
                 _ => String::new(),
             };
             let value = if token { "•".repeat(edit.input.chars().count()) } else { edit.input.clone() };
@@ -242,18 +275,12 @@ fn layout_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     (label.into(), value.into(), note.into(), false)
 }
 
-fn jira_row(config: &Config, row: &Row) -> (String, String, String, bool) {
+fn tracker_row(config: &Config, row: &Row) -> (String, String, String, bool) {
     let (label, value, empty, note) = match row {
+        Row::GitlabUrl => ("GitLab URL", &config.gitlab_url, "gitlab.com", "for a self-hosted server"),
         Row::JiraSite => ("Jira site", &config.jira_site, "not set", "such as acme.atlassian.net"),
         Row::JiraEmail => ("Jira email", &config.jira_email, "not set", "the one you sign in with"),
-        _ => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
-    };
-    let value = if value.is_empty() { empty.to_string() } else { value.clone() };
-    (label.into(), value, note.into(), false)
-}
-
-fn plane_row(config: &Config, row: &Row) -> (String, String, String, bool) {
-    let (label, value, empty, note) = match row {
+        Row::JiraJql => ("Jira filter", &config.jira_jql, "none", "JQL, such as project = SHOP"),
         Row::PlaneWorkspace => ("Plane workspace", &config.plane_workspace, "not set", "the part after app.plane.so/"),
         Row::PlaneUrl => ("Plane URL", &config.plane_url, "Plane Cloud", "for a self-hosted server"),
         _ => ("Plane filter", &config.plane_filter, "none", "query parameters, such as priority=high"),

@@ -4,7 +4,7 @@ use crate::ui::activity::{Item, Shown, WIDTH, items};
 const TALL: Rect = Rect { x: 0, y: 0, width: W, height: 24 };
 
 fn everything() -> Shown {
-    Shown { issues: true, changes: true, files: true, update: true, remote: true }
+    Shown { issues: true, changes: true, files: true, flow: false, update: true, remote: true }
 }
 
 fn with_bar(hover: Option<Position>) -> View<'static> {
@@ -148,7 +148,15 @@ mod drawing {
 
     #[test]
     fn nothing_is_named_while_a_dialog_is_open() {
-        let search = Search { query: String::new(), results: Vec::new(), selected: 0, scroll: 0, hint: String::new() };
+        let search = Search {
+            query: String::new(),
+            results: Vec::new(),
+            selected: 0,
+            scroll: 0,
+            hint: String::new(),
+            sessions: false,
+            searching: false,
+        };
         let v = View { overlay: Some(Overlay::Search(search)), ..with_bar(Some(Position::new(1, 20))) };
         let t = render_sized(&v, W, 24);
         assert!(!row_text(&t, Rect::new(WIDTH, 20, 12, 1)).contains("Settings"));

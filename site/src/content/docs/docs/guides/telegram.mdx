@@ -7,7 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 When you leave the computer, cornercase can carry on in a Telegram chat. While you are **away**, every agent that needs you or finishes its turn sends you a message: its question with buttons to answer it, or what it wrote. You reply to that message, and your reply goes to that agent. From the same chat you can list your agents, look at their screens, stop one or start a new one.
 
-It works on mobile data and needs nothing on the phone but Telegram. To see the whole window instead, use [From your phone](../phone/).
+It works on mobile data and needs nothing on the phone but Telegram. To see the whole window instead, use [From your phone](../phone/); to be messaged on Discord, [On Discord](../discord/), which can be on at the same time.
 
 ## What you need
 
@@ -31,7 +31,7 @@ When you leave, turn on **away** in any of these ways:
 
 - click **`Remote`**, at the right of **`Usage`** at the bottom of the sidebar, then **continue on Telegram**;
 - press `o` in the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts);
-- run [`cornercase away`](../scripts-and-agents/#away-on-telegram);
+- run [`cornercase away`](../scripts-and-agents/#away-on-telegram-or-discord);
 - send `/away` to the bot, if you left without it.
 
 The bot then sends the list of your agents, and **`Remote`** shows a green **`●`**. It stays on until you turn it off, whatever you do in cornercase meanwhile: **Remote › stop messaging on Telegram**, `o` again in the keys menu, `/back` in the chat or `cornercase away --off`. The bot tells you either way.
@@ -41,7 +41,11 @@ The bot then sends the list of your agents, and **`Remote`** shows a green **`�
 - **An agent needs you** (a permission prompt, a question): `! claude needs you · web-shop › dark-mode`, the last lines of its screen, and a button for each option it shows (`1 · Yes`, `2 · Yes, and don't ask again`…), plus **esc** and **screen**. A tap presses that key in its pane, as if you had typed it, and the option buttons go away. When the agent asks again right after (the next part of a question in several parts, another permission prompt), that next question comes as a new message with its own buttons.
 - **An agent finishes its turn**: `✓ claude finished · web-shop › dark-mode` and the last thing it wrote, read from its own conversation (not its screen), with its bold, lists, code and links. A long message comes in several, at most four; the rest stays in cornercase. When a Claude Code turn ends with a command still running in the background (a dev server), it says `ended its turn · a background shell still runs`.
 
-A message is sent once per change, after the agent held it for a second, and only while you are away. This works with the agents whose state cornercase reads: Claude Code, Codex, Gemini CLI, opencode and Grok Build (opencode never says that it waits for you, see [Agents](../../reference/agents/)).
+- **An agent reports a failure** through [OSC 7501](../../reference/agents/#program-status-protocol): `! claude failed · web-shop › dark-mode`, with its last message or its screen when no message reader exists.
+
+An OSC 7501 `idle` report cancels work without a finished message; `done` reports completion even if the tab is visible or no working state was observed.
+
+A message is sent once per change, after the agent held it for a second, and only while you are away. This works with every recognised agent that reports OSC 7501, and otherwise with Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI (without reports, opencode never says that it waits for you, see [Agents](../../reference/agents/)).
 
 ## Answer
 

@@ -7,10 +7,9 @@ use super::{App, Overlay, Toast};
 use crate::agents::activity::Status;
 use crate::error::Result;
 use crate::files::Mode;
-use crate::list::Search;
 use crate::log;
 use crate::project::Project;
-use crate::project::search::Goto;
+use crate::project::search::{Finder, Goto};
 use crate::project::split::{self, Place};
 use crate::shortcuts::{self, Action, Group, Step};
 use crate::todo::Field;
@@ -83,7 +82,7 @@ impl App {
             Action::Mark => self.mark_focused(),
             Action::Search => {
                 self.nav = None;
-                self.overlay = Some(Overlay::Search(Search::default()));
+                self.overlay = Some(Overlay::Search(Finder::default()));
             }
             Action::NewTab => {
                 if let Some((p, w)) = self.open_workspace_index() {
@@ -107,17 +106,24 @@ impl App {
                 });
                 self.ask_rename(self.tab_target(found));
             }
+            Action::FindSaid => {
+                self.nav = None;
+                self.overlay = Some(Overlay::Search(Finder::sessions()));
+            }
             Action::FindNames => self.find_files(Mode::Name),
             Action::FindText => self.find_files(Mode::Text),
             Action::Files => self.toggle_files(),
             Action::Changes => self.changes_by_key(),
             Action::Base => self.compare_base(),
+            Action::PullRequest => self.pull_request_by_key(),
+            Action::Flow => self.flow_by_key(),
             Action::NewWorkspace => {
                 if self.project().is_some() {
                     self.nav = None;
                     self.ask_new_workspace(self.active);
                 }
             }
+            Action::StartFlow => self.open_start_flow(self.start_flow_here()),
             Action::RenameWorkspace => {
                 let target = self.open_workspace_index().map(|(p, w)| {
                     let project = &self.projects[p];
@@ -147,7 +153,7 @@ impl App {
                 self.nav = None;
                 self.open_usage();
             }
-            Action::Away => self.toggle_away(),
+            Action::Away => self.toggle_away_everywhere(),
             Action::Quit => self.outbox.detach = true,
         }
         Ok(())

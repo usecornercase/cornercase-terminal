@@ -41,3 +41,42 @@ mod codex {
         assert_eq!(last_codex(&format!("{CONTEXT}{user}\n")), None);
     }
 }
+
+mod conversation {
+    use super::*;
+
+    const REPLY: &str = crate::test_util::fixture!("codex/0.160.0/reply.jsonl");
+    const USER: &str = crate::test_util::fixture!("codex/0.160.0/user-message.jsonl");
+
+    fn heard(text: &str) -> Vec<(Role, String)> {
+        let file = Written::new(text);
+        let mut heard = Vec::new();
+        said(&file.path, &mut |spoken| {
+            heard.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("read the rollout");
+        heard
+    }
+
+    #[test]
+    fn a_prompt_is_one_item_not_the_response_item_that_repeats_it() {
+        let heard = heard(USER);
+
+        assert_eq!(heard, [(Role::Prompt, "Add tests for the login form".into())]);
+    }
+
+    #[test]
+    fn replies_and_notes_come_newest_first_and_injected_instructions_stay_out() {
+        let heard = heard(&format!("{USER}{REPLY}"));
+
+        assert_eq!(
+            heard,
+            [
+                (Role::Reply, "The login form now checks the password.\n\nTests pass.".into()),
+                (Role::Reply, "Checking the form first.".into()),
+                (Role::Prompt, "Add tests for the login form".into()),
+            ]
+        );
+    }
+}

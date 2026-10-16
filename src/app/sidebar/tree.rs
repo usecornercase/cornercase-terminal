@@ -87,7 +87,14 @@ impl App {
     pub(in crate::app) fn click_tree(&mut self, list: Rect, pos: Position, area: Rect) -> Result<()> {
         let shape = self.tree_shape();
         let scroll = self.scroll.projects;
-        match self.tree_hit(list, &shape, pos) {
+        let hit = self.tree_hit(list, &shape, pos);
+        if let Some(ui::TreeHit::Select(ui::TreeRow::Workspace(p, w))) = hit
+            && let Some(id) = self.pull_in_tree(list, &shape, (p, w), pos)
+        {
+            self.open_pull_request(id);
+            return Ok(());
+        }
+        match hit {
             Some(hit @ (ui::TreeHit::Select(row) | ui::TreeHit::Fold(row))) => {
                 if let Some(target) = self.tree_target(row) {
                     let rect = ui::tree_row(list, &shape, scroll, row);
@@ -97,7 +104,7 @@ impl App {
             Some(ui::TreeHit::Close(row)) => self.close_row(row),
             Some(ui::TreeHit::Menu(_)) => self.open_tree_menu(list, pos),
             Some(ui::TreeHit::NewTab(p, w)) => self.add_tab(p, w, area)?,
-            Some(ui::TreeHit::NewWorkspace(p)) => self.ask_new_workspace(p),
+            Some(ui::TreeHit::NewWorkspace(p)) => self.new_workspace_menu(p, pos),
             Some(ui::TreeHit::NewProject) => self.new_project_menu(pos),
             None => {}
         }

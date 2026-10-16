@@ -14,12 +14,21 @@ impl Settings {
         self.save(config, notice.into())
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per row")]
     pub(crate) fn activate(&mut self) -> Action {
         let Some(row) = self.row() else { return Action::None };
         self.notice = None;
         match row {
             Row::Folder => self.start_edit(row, self.config.worktrees_dir.clone()),
             Row::Fetch => self.start_edit(row, self.config.fetch_minutes.to_string()),
+            Row::PullRequests => self.flip(
+                |c| &mut c.pull_requests,
+                ["workspaces show their pull request and its checks", "workspaces no longer show pull requests"],
+            ),
+            Row::MergedPullRequests => self.flip(
+                |c| &mut c.merged_pull_requests,
+                ["Stats counts your merged pull requests", "Stats no longer counts merged pull requests"],
+            ),
             Row::Token(source) => {
                 if self.status(source) == Some(&Status::Env) {
                     let env = source.token_env().unwrap_or_default();
@@ -28,6 +37,7 @@ impl Settings {
                 }
                 self.start_edit(row, String::new())
             }
+            Row::GitlabUrl => self.start_edit(row, self.config.gitlab_url.clone()),
             Row::JiraSite => self.start_edit(row, self.config.jira_site.clone()),
             Row::JiraEmail => self.start_edit(row, self.config.jira_email.clone()),
             Row::JiraJql => self.start_edit(row, self.config.jira_jql.clone()),
@@ -69,6 +79,10 @@ impl Settings {
                 |c| &mut c.check_updates,
                 ["cornercase looks for new versions", "cornercase no longer looks for new versions"],
             ),
+            Row::StarPrompt => self.flip(
+                |c| &mut c.star_prompt,
+                ["cornercase may ask for a star on GitHub", "cornercase never asks for a star"],
+            ),
             Row::Trust => self.flip(
                 |c| &mut c.accept_trust_prompts,
                 ["trust prompts are accepted for you", "trust prompts are left to you"],
@@ -88,8 +102,9 @@ impl Settings {
                 ["the computer stays awake while an agent works", "the computer sleeps as usual"],
             ),
             Row::Kind(kind) => self.pick_mode(kind),
-            Row::TelegramBot => self.start_edit(row, String::new()),
-            Row::TelegramChat => Action::PairTelegram,
+            Row::Bot(_) => self.start_edit(row, String::new()),
+            Row::Chat(via) => Action::Pair(via),
+            Row::Flows => Action::OpenFlows,
             Row::Plugin(_) | Row::NoPlugins => self.switch_plugin(row),
             Row::AddAgent => {
                 let listed = self.listed_kinds();

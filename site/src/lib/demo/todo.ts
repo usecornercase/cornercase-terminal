@@ -18,10 +18,13 @@ export interface TodoItem {
   done: boolean;
 }
 
-interface Field {
-  item: number | null;
+export interface Editable {
   chars: string[];
   cursor: number;
+}
+
+interface Field extends Editable {
+  item: number | null;
 }
 
 type Span = [number, number];
@@ -47,14 +50,14 @@ export function wrap(chars: string[], width: number): Span[] {
   return lines;
 }
 
-function fieldLines(f: Field, width: number): Span[] {
+export function fieldLines(f: Pick<Editable, 'chars'>, width: number): Span[] {
   const lines = wrap(f.chars, width);
   const last = lines[lines.length - 1];
   if (last[1] > last[0] && last[1] - last[0] >= Math.max(1, width)) lines.push([f.chars.length, f.chars.length]);
   return lines;
 }
 
-function fieldPosition(f: Field, width: number): [number, number] {
+export function fieldPosition(f: Editable, width: number): [number, number] {
   const lines = fieldLines(f, width);
   let line = 0;
   lines.forEach(([start], i) => {
@@ -63,12 +66,31 @@ function fieldPosition(f: Field, width: number): [number, number] {
   return [line, f.cursor - lines[line][0]];
 }
 
-function placeIn(f: Field, width: number, line: number, col: number): void {
+export function placeIn(f: Editable, width: number, line: number, col: number): void {
   const lines = fieldLines(f, width);
   const span = lines[line];
   if (!span) return;
   const room = line + 1 === lines.length ? span[1] - span[0] : Math.max(0, span[1] - span[0] - 1);
   f.cursor = span[0] + Math.min(col, room);
+}
+
+export function insertText(f: Editable, text: string): void {
+  const chars = [...text.replace(/[\r\n\t]/g, ' ')];
+  f.chars.splice(f.cursor, 0, ...chars);
+  f.cursor += chars.length;
+}
+
+export function editKey(f: Editable, k: Key, width: number): void {
+  const [line, col] = fieldPosition(f, width);
+  if (k.key === 'Backspace' && f.cursor > 0) f.chars.splice(--f.cursor, 1);
+  else if (k.key === 'Delete') f.chars.splice(f.cursor, 1);
+  else if (k.key === 'ArrowLeft') f.cursor = Math.max(0, f.cursor - 1);
+  else if (k.key === 'ArrowRight') f.cursor = Math.min(f.chars.length, f.cursor + 1);
+  else if (k.key === 'Home') f.cursor = 0;
+  else if (k.key === 'End') f.cursor = f.chars.length;
+  else if (k.key === 'ArrowUp' && line > 0) placeIn(f, width, line - 1, col);
+  else if (k.key === 'ArrowDown') placeIn(f, width, line + 1, col);
+  else if (k.key.length === 1 && !k.ctrl && !k.alt) insertText(f, k.key);
 }
 
 const clean = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -152,18 +174,9 @@ export class TodoPanel {
   key(k: Key, width: number): void {
     const f = this.field;
     if (!f) return;
-    const [line, col] = fieldPosition(f, width);
     if (k.key === 'Escape') this.field = null;
     else if (k.key === 'Enter') this.submit();
-    else if (k.key === 'Backspace' && f.cursor > 0) f.chars.splice(--f.cursor, 1);
-    else if (k.key === 'Delete') f.chars.splice(f.cursor, 1);
-    else if (k.key === 'ArrowLeft') f.cursor = Math.max(0, f.cursor - 1);
-    else if (k.key === 'ArrowRight') f.cursor = Math.min(f.chars.length, f.cursor + 1);
-    else if (k.key === 'Home') f.cursor = 0;
-    else if (k.key === 'End') f.cursor = f.chars.length;
-    else if (k.key === 'ArrowUp' && line > 0) placeIn(f, width, line - 1, col);
-    else if (k.key === 'ArrowDown') placeIn(f, width, line + 1, col);
-    else if (k.key.length === 1 && !k.ctrl && !k.alt) this.type(k.key);
+    else editKey(f, k, width);
   }
 
   place(width: number, line: number, col: number): void {
@@ -171,11 +184,7 @@ export class TodoPanel {
   }
 
   type(text: string): void {
-    const f = this.field;
-    if (!f) return;
-    const chars = [...text.replace(/[\r\n\t]/g, ' ')];
-    f.chars.splice(f.cursor, 0, ...chars);
-    f.cursor += chars.length;
+    if (this.field) insertText(this.field, text);
   }
 }
 

@@ -1,10 +1,14 @@
 {
   "worktrees_dir": "worktrees",
   "fetch_minutes": 12,
+  "pull_requests": false,
+  "merged_pull_requests": false,
   "issue_tabs": [
     "shortcut",
-    "github"
+    "github",
+    "gitlab"
   ],
+  "gitlab_url": "https://gitlab.acme.dev",
   "jira_site": "acme.atlassian.net",
   "jira_email": "ana@acme.dev",
   "jira_jql": "project = SHOP",
@@ -36,6 +40,7 @@
   "keep_awake": true,
   "trust_prompt_pattern": "Allow this folder",
   "gh": "fake-gh",
+  "glab": "fake-glab",
   "sidebar": "tree",
   "tabs": "top",
   "icon_bar": true,
@@ -50,6 +55,13 @@
   "memory": true,
   "desktop_notifications": "off",
   "check_updates": false,
+  "star_prompt": false,
   "remote": true,
-  "remote_port": 47682
+  "remote_port": 47682,
+  "projects": {
+    "~/code/web-shop": {
+      "setup": "npm ci\ncp ../.env .env",
+      "teardown": "docker compose down"
+    }
+  }
 }

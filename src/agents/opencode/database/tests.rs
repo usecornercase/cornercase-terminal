@@ -3,8 +3,8 @@ use rstest::rstest;
 use super::*;
 use crate::agents::Known;
 use crate::agents::activity::Activity;
-use crate::agents::context::Pane;
 use crate::agents::context::tests::pane_look;
+use crate::agents::context::{Pane, Role};
 use crate::agents::opencode::fake::FakeOpencode;
 use crate::test_util::{Sleeper, TempDir, wait_until};
 
@@ -83,6 +83,18 @@ fn a_model_missing_from_models_dev_shows_its_id_alone() {
     assert_eq!(models.read(&[&reply]).context, Some(shown("my-local-model", None)));
     std::fs::remove_file(models.dir.path().join("models.json")).expect("remove models.json");
     assert_eq!(models.read(&[REPLY]).context, Some(shown("deepseek-v4-pro", None)));
+}
+
+#[test]
+fn the_catalogue_lists_every_model_as_provider_and_id() {
+    let models = Models::new();
+    let ids = ids_in(&models.dir.path().join("models.json"));
+    assert_eq!(ids, ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"]);
+}
+
+#[test]
+fn a_missing_catalogue_lists_nothing() {
+    assert_eq!(ids_in(Path::new("/nonexistent/models.json")), Vec::<String>::new());
 }
 
 #[test]
@@ -282,6 +294,43 @@ mod last_message {
         said.parts("msg_000000", r#"{"type":"text","text":"Fix the login form"}"#);
 
         assert_eq!(said.last().expect("read the database"), None);
+    }
+
+    fn heard(said: &Chat) -> Vec<(Role, String)> {
+        let mut heard = Vec::new();
+        said_all(&said.fake.database, FakeOpencode::SESSION, &mut |spoken| {
+            heard.push((spoken.role, spoken.said.text));
+            true
+        })
+        .expect("read the database");
+        heard
+    }
+
+    #[test]
+    fn every_message_comes_newest_first_with_its_role() {
+        let said = Chat::new();
+        said.messages(REPLY);
+        said.parts("msg_000000", r#"{"type":"text","text":"Fix the login form"}"#);
+        said.parts("msg_000001", REPLY_PARTS);
+
+        assert_eq!(
+            heard(&said),
+            [
+                (Role::Reply, "The login form now checks the password.\n\nTests pass.".into()),
+                (Role::Prompt, "Fix the login form".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn leaves_out_synthetic_parts_and_compaction_summaries() {
+        let said = Chat::new();
+        said.messages(REPLY);
+        said.parts("msg_000001", r#"{"type":"text","text":"Continue if you have next steps.","synthetic":true}"#);
+        said.messages(COMPACTION);
+        said.parts("msg_000003", r#"{"type":"text","text":"Goal: fix the login form."}"#);
+
+        assert_eq!(heard(&said), []);
     }
 
     #[test]

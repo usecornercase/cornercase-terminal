@@ -11,9 +11,9 @@ use super::rows::row_close_button;
 use super::rows::{
     Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_rect,
 };
-use super::sidebar::{SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
+use super::sidebar::{NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, sidebar_rows};
 use super::widgets::{button_style, draw_button, draw_title};
-use super::workspaces::{Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band};
+use super::workspaces::{Badge, Guide, WorkspaceEntry, draw_guide, draw_tab_band, draw_workspace_band, pull_badge};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TreeShape {
@@ -130,6 +130,14 @@ fn tree_indent(shape: &TreeShape, row: TreeRow) -> u16 {
     2 + 2 * tree_depth(shape, row)
 }
 
+fn badge_of(shape: &TreeShape, row: TreeRow) -> Badge {
+    match (shape.tab_bar, folded(shape, row)) {
+        (true, _) => Badge::Attention,
+        (false, true) => Badge::Highest,
+        (false, false) => Badge::Off,
+    }
+}
+
 fn arrow_in(r: Rect, shape: &TreeShape, row: TreeRow) -> Rect {
     match row {
         TreeRow::Workspace(..) if shape.tab_bar => Rect::default(),
@@ -194,6 +202,18 @@ pub(crate) fn tree_hit(list: Rect, shape: &TreeShape, scroll: usize, pos: Positi
         _ if arrow_in(r, shape, row).contains(pos) => TreeHit::Fold(row),
         _ => TreeHit::Select(row),
     })
+}
+
+pub(crate) fn tree_pull(
+    list: Rect,
+    shape: &TreeShape,
+    scroll: usize,
+    (p, w): (usize, usize),
+    entry: &WorkspaceEntry,
+) -> Option<Rect> {
+    let row = TreeRow::Workspace(p, w);
+    let lead = usize::from(tree_indent(shape, row)) + 2;
+    pull_badge(tree_row(list, shape, scroll, row), 1, lead, entry, badge_of(shape, row))
 }
 
 pub(crate) struct TreeView {
@@ -270,7 +290,7 @@ pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
                 let fold = if shape.tab_bar { Span::raw("  ") } else { arrow(view.muted, folded(shape, row)) };
                 let band = band(vec![marker(mark), Span::raw(lead), fold]);
                 let active = p == view.active && w == view.active_workspace;
-                draw_workspace_band(f, view, band, entry, active, shape.tab_bar || folded(shape, row));
+                draw_workspace_band(f, view, band, entry, active, badge_of(shape, row));
             }
             TreeRow::Tab(p, w, tab) => {
                 let Some(entry) = workspace(p, w).and_then(|w| w.tabs.get(tab)) else { continue };
@@ -286,7 +306,7 @@ pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
             }
             TreeRow::NewWorkspace(_) => {
                 let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
-                draw_button(f, r, &format!("{lead} "), "+ New workspace", style);
+                draw_button(f, r, &format!("{lead} "), NEW_BUTTON, style);
             }
         }
         if mark {

@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 
 use crate::agents;
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_ISSUE_TABS};
 use crate::issues::{Account, Secret, Source};
 use crate::list::Search;
+use crate::messenger::Via;
 
 pub(crate) const DONE: &str = "done";
 pub(crate) const RESTART: &str = "restart";
-const TAB_IDS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
+const TAB_IDS: [&str; 7] = DEFAULT_ISSUE_TABS;
 const EXTRA_ARGS: &str = "extra arguments…";
 const NO_PLUGINS: &str = "`cornercase plugin install <owner/repo>` adds one, then enter turns it on here";
 
@@ -22,6 +23,8 @@ pub(crate) enum Status {
 pub(crate) enum Row {
     Folder,
     Fetch,
+    PullRequests,
+    MergedPullRequests,
     Sidebar,
     Tabs,
     IconBar,
@@ -33,8 +36,10 @@ pub(crate) enum Row {
     Detail(Detail),
     Notifications,
     Updates,
+    StarPrompt,
     Prefix,
     Token(Source),
+    GitlabUrl,
     JiraSite,
     JiraEmail,
     JiraJql,
@@ -47,12 +52,13 @@ pub(crate) enum Row {
     Trust,
     Resume,
     KeepAwake,
+    Flows,
     Remote,
     Browsers,
     Kind(String),
     AddAgent,
-    TelegramBot,
-    TelegramChat,
+    Bot(Via),
+    Chat(Via),
     Plugin(String),
     NoPlugins,
 }
@@ -66,6 +72,8 @@ impl Row {
         match self {
             Self::Folder
             | Self::Fetch
+            | Self::PullRequests
+            | Self::MergedPullRequests
             | Self::Sidebar
             | Self::Tabs
             | Self::IconBar
@@ -77,30 +85,35 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates
+            | Self::StarPrompt
             | Self::Prefix => "",
             Self::Remote | Self::Browsers => "Browser",
-            Self::TelegramBot | Self::TelegramChat => "Telegram",
+            Self::Bot(via) | Self::Chat(via) => via.name(),
             Self::Plugin(_) | Self::NoPlugins => "Installed",
             Self::Token(Source::Jira) | Self::JiraSite | Self::JiraEmail | Self::JiraJql => "Jira",
             Self::Token(Source::Plane) | Self::PlaneWorkspace | Self::PlaneUrl | Self::PlaneFilter => "Plane",
+            Self::Token(Source::Gitlab) | Self::GitlabUrl => "GitLab",
             Self::Token(_) => "Accounts",
             Self::Tab(_) => "Sources shown",
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
+            Self::Flows => "Flows",
         }
     }
 
     pub(crate) fn page(&self) -> Page {
         match self {
-            Self::Folder | Self::Fetch => Page::Worktrees,
+            Self::Folder | Self::Fetch | Self::PullRequests | Self::MergedPullRequests => Page::Worktrees,
             Self::DefaultAgent
             | Self::Submit
             | Self::Trust
             | Self::Resume
             | Self::KeepAwake
             | Self::Kind(_)
-            | Self::AddAgent => Page::Agents,
+            | Self::AddAgent
+            | Self::Flows => Page::Agents,
             Self::Token(_)
+            | Self::GitlabUrl
             | Self::JiraSite
             | Self::JiraEmail
             | Self::JiraJql
@@ -119,8 +132,9 @@ impl Row {
             | Self::Detail(_)
             | Self::Notifications
             | Self::Updates
+            | Self::StarPrompt
             | Self::Prefix => Page::Ui,
-            Self::Remote | Self::Browsers | Self::TelegramBot | Self::TelegramChat => Page::Remote,
+            Self::Remote | Self::Browsers | Self::Bot(_) | Self::Chat(_) => Page::Remote,
             Self::Plugin(_) | Self::NoPlugins => Page::Plugins,
         }
     }
@@ -224,15 +238,16 @@ pub(crate) enum Action {
     CheckToken(Source, Secret),
     RemoveToken(Source),
     ForgetBrowsers,
-    CheckTelegram(Secret),
-    RemoveTelegram,
-    PairTelegram,
-    ForgetTelegram,
+    CheckBot(Via, Secret),
+    RemoveBot(Via),
+    Pair(Via),
+    ForgetChat(Via),
+    OpenFlows,
     Plugin(String, bool),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Telegram {
+pub(crate) struct Messenger {
     pub(crate) bot: Option<String>,
     pub(crate) chat: Option<String>,
     pub(crate) note: String,
@@ -291,9 +306,12 @@ pub(crate) struct Settings {
     pub(crate) notice: Option<String>,
     pub(crate) capturing: bool,
     pub(crate) awake: String,
+    pub(crate) pulls: String,
+    pub(crate) merged: String,
+    pub(crate) flows: String,
     pub(crate) remote: String,
     pub(crate) browsers: usize,
-    pub(crate) telegram: Telegram,
+    pub(crate) messengers: [Messenger; Via::ALL.len()],
     pub(crate) plugins: Vec<PluginRow>,
 }
 
@@ -312,15 +330,26 @@ impl Settings {
             notice: None,
             capturing: false,
             awake: String::new(),
+            pulls: String::new(),
+            merged: String::new(),
+            flows: String::new(),
             remote: String::new(),
             browsers: 0,
-            telegram: Telegram::default(),
+            messengers: Default::default(),
             plugins: Vec::new(),
         }
     }
 
     pub(crate) fn busy(&self) -> bool {
-        !self.checking.is_empty() || self.telegram.checking
+        !self.checking.is_empty() || self.messengers.iter().any(|m| m.checking)
+    }
+
+    pub(crate) fn messenger(&self, via: Via) -> &Messenger {
+        &self.messengers[via.index()]
+    }
+
+    pub(crate) fn messenger_mut(&mut self, via: Via) -> &mut Messenger {
+        &mut self.messengers[via.index()]
     }
 
     fn shown_tabs(&self) -> Vec<&'static str> {
@@ -353,13 +382,14 @@ impl Settings {
     pub(crate) fn rows(&self) -> Vec<Row> {
         let shown = self.shown_tabs();
         let hidden = TAB_IDS.iter().filter(|id| !shown.contains(id)).copied();
-        let mut rows = vec![Row::Folder, Row::Fetch];
+        let mut rows = vec![Row::Folder, Row::Fetch, Row::PullRequests, Row::MergedPullRequests];
         for (source, _) in &self.tokens {
             match source {
                 Source::Jira => rows.extend([Row::JiraSite, Row::JiraEmail, Row::Token(Source::Jira), Row::JiraJql]),
                 Source::Plane => {
                     rows.extend([Row::PlaneWorkspace, Row::PlaneUrl, Row::Token(Source::Plane), Row::PlaneFilter]);
                 }
+                Source::Gitlab => rows.extend([Row::GitlabUrl, Row::Token(Source::Gitlab)]),
                 _ => rows.push(Row::Token(*source)),
             }
         }
@@ -368,6 +398,7 @@ impl Settings {
         rows.extend(self.listed_kinds().into_iter().map(Row::Kind));
         rows.extend([
             Row::AddAgent,
+            Row::Flows,
             Row::Sidebar,
             Row::Tabs,
             Row::IconBar,
@@ -381,15 +412,18 @@ impl Settings {
             Row::Detail(Detail::Memory),
             Row::Notifications,
             Row::Updates,
+            Row::StarPrompt,
             Row::Prefix,
             Row::Remote,
         ]);
         if self.browsers > 0 {
             rows.push(Row::Browsers);
         }
-        rows.push(Row::TelegramBot);
-        if self.telegram.bot.is_some() {
-            rows.push(Row::TelegramChat);
+        for via in Via::ALL {
+            rows.push(Row::Bot(via));
+            if self.messenger(via).bot.is_some() {
+                rows.push(Row::Chat(via));
+            }
         }
         rows.extend(self.plugins.iter().map(|plugin| Row::Plugin(plugin.id.clone())));
         if self.plugins.is_empty() {

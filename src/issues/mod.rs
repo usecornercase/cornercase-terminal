@@ -1,6 +1,7 @@
 pub(crate) mod browser;
 pub(crate) mod cache;
 pub(crate) mod github;
+pub(crate) mod gitlab;
 pub(crate) mod jira;
 pub(crate) mod linear;
 pub(crate) mod md;
@@ -24,6 +25,7 @@ const NAME_MAX: usize = 40;
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Source {
     Github,
+    Gitlab,
     Shortcut,
     Linear,
     Jira,
@@ -31,12 +33,18 @@ pub(crate) enum Source {
 }
 
 impl Source {
-    pub(crate) const ALL: [Self; 5] = [Self::Github, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
-    pub(crate) const REMOTE: [Self; 4] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
+    pub(crate) const ALL: [Self; 6] =
+        [Self::Github, Self::Gitlab, Self::Shortcut, Self::Linear, Self::Jira, Self::Plane];
+    pub(crate) const REMOTE: [Self; 5] = [Self::Shortcut, Self::Linear, Self::Jira, Self::Plane, Self::Gitlab];
+
+    pub(crate) fn in_repository(self) -> bool {
+        matches!(self, Self::Github | Self::Gitlab)
+    }
 
     pub(crate) fn id(self) -> &'static str {
         match self {
             Self::Github => "github",
+            Self::Gitlab => "gitlab",
             Self::Shortcut => "shortcut",
             Self::Linear => "linear",
             Self::Jira => "jira",
@@ -47,6 +55,7 @@ impl Source {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Github => "GitHub",
+            Self::Gitlab => "GitLab",
             Self::Shortcut => "Shortcut",
             Self::Linear => "Linear",
             Self::Jira => "Jira",
@@ -57,6 +66,7 @@ impl Source {
     pub(crate) fn token_name(self) -> &'static str {
         match self {
             Self::Github | Self::Shortcut | Self::Jira => "API token",
+            Self::Gitlab => "access token",
             Self::Linear | Self::Plane => "API key",
         }
     }
@@ -64,6 +74,7 @@ impl Source {
     pub(crate) fn token_env(self) -> Option<&'static str> {
         match self {
             Self::Github => None,
+            Self::Gitlab => Some(gitlab::TOKEN_ENV),
             Self::Shortcut => Some(shortcut::TOKEN_ENV),
             Self::Linear => Some(linear::TOKEN_ENV),
             Self::Jira => Some(jira::TOKEN_ENV),
@@ -74,6 +85,7 @@ impl Source {
     pub(crate) fn secret_key(self) -> Option<&'static str> {
         match self {
             Self::Github => None,
+            Self::Gitlab => Some("gitlab_token"),
             Self::Shortcut => Some("shortcut_token"),
             Self::Linear => Some("linear_api_key"),
             Self::Jira => Some("jira_api_token"),
@@ -83,7 +95,7 @@ impl Source {
 
     pub(crate) fn people_fields(self) -> [&'static str; 2] {
         match self {
-            Self::Github => ["assignee", "author"],
+            Self::Github | Self::Gitlab => ["assignee", "author"],
             Self::Shortcut => ["owner", "requester"],
             Self::Linear | Self::Plane => ["assignee", "creator"],
             Self::Jira => ["assignee", "reporter"],
@@ -93,6 +105,9 @@ impl Source {
     pub(crate) fn token_help(self) -> &'static str {
         match self {
             Self::Github => "",
+            Self::Gitlab => {
+                "Create a personal access token with the read_api scope in GitLab under Edit profile → Access tokens, paste it here and press Enter."
+            }
             Self::Shortcut => {
                 "Create a token in Shortcut under Settings → Your account → API Tokens, paste it here and press Enter."
             }
@@ -152,6 +167,7 @@ pub(crate) struct Query {
 #[serde(default)]
 pub(crate) struct People {
     pub(crate) github: [Who; 2],
+    pub(crate) gitlab: [Who; 2],
     pub(crate) shortcut: [Who; 2],
     pub(crate) linear: [Who; 2],
     pub(crate) jira: [Who; 2],
@@ -162,6 +178,7 @@ impl People {
     pub(crate) fn of(&self, source: Source) -> &[Who; 2] {
         match source {
             Source::Github => &self.github,
+            Source::Gitlab => &self.gitlab,
             Source::Shortcut => &self.shortcut,
             Source::Linear => &self.linear,
             Source::Jira => &self.jira,
@@ -172,6 +189,7 @@ impl People {
     pub(crate) fn of_mut(&mut self, source: Source) -> &mut [Who; 2] {
         match source {
             Source::Github => &mut self.github,
+            Source::Gitlab => &mut self.gitlab,
             Source::Shortcut => &mut self.shortcut,
             Source::Linear => &mut self.linear,
             Source::Jira => &mut self.jira,
@@ -260,6 +278,7 @@ pub(crate) struct Listed {
 
 pub(crate) enum Client {
     Github { gh: PathBuf, dir: PathBuf },
+    Gitlab(gitlab::Api),
     Shortcut { base: String, token: String },
     Linear { url: String, token: String },
     Jira(jira::Api),
@@ -270,6 +289,7 @@ impl Client {
     pub(crate) fn people(&self) -> Result<Vec<Person>> {
         match self {
             Self::Github { gh, dir } => github::people(gh, dir),
+            Self::Gitlab(api) => api.people(),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.people(),
             Self::Linear { url, token } => linear::Api { url, token }.people(),
             Self::Jira(api) => api.people(),
@@ -280,6 +300,7 @@ impl Client {
     pub(crate) fn list(&self, query: &Query) -> Result<Listed> {
         match self {
             Self::Github { gh, dir } => Ok(Listed { account: None, issues: github::list(gh, dir, query)? }),
+            Self::Gitlab(api) => api.list(query),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.list(query),
             Self::Linear { url, token } => linear::Api { url, token }.list(query),
             Self::Jira(api) => api.list(query),
@@ -290,6 +311,7 @@ impl Client {
     pub(crate) fn read(&self, issue: &Issue) -> Result<Detail> {
         match self {
             Self::Github { gh, dir } => github::view(gh, dir, issue.number),
+            Self::Gitlab(api) => api.view(issue.number),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.view(issue.number),
             Self::Linear { url, token } => linear::Api { url, token }.view(&issue.key),
             Self::Jira(api) => api.view(&issue.key),
@@ -300,6 +322,7 @@ impl Client {
     pub(crate) fn whoami(&self) -> Result<Account> {
         match self {
             Self::Github { .. } => Err(Error::Api("GitHub goes through gh and its own login".into())),
+            Self::Gitlab(api) => api.whoami(),
             Self::Shortcut { base, token } => shortcut::Api { base, token }.whoami(),
             Self::Linear { url, token } => linear::Api { url, token }.whoami(),
             Self::Jira(api) => api.whoami(),
@@ -329,6 +352,7 @@ pub(crate) fn sort_by_updated(issues: &mut [&Issue]) {
 pub(crate) fn branch(issue: &Issue) -> String {
     let prefix = match issue.source {
         Source::Github => format!("issue-{}", issue.number),
+        Source::Gitlab => issue.number.to_string(),
         Source::Shortcut => format!("sc-{}", issue.number),
         Source::Linear | Source::Jira | Source::Plane => issue.key.clone(),
     };
@@ -353,7 +377,7 @@ fn fold(c: char) -> char {
     }
 }
 
-fn slug(text: &str, max: usize) -> String {
+pub(crate) fn slug(text: &str, max: usize) -> String {
     let mut slug = String::new();
     for c in text.chars().flat_map(char::to_lowercase).map(fold) {
         if c.is_ascii_alphanumeric() {
@@ -404,7 +428,7 @@ pub(crate) fn prompt(template: &str, issue: &Issue, branch: &str) -> String {
 }
 
 pub(crate) fn meta(issue: &Issue, now: i64) -> String {
-    let state = if issue.source == Source::Github && !issue.closed { "" } else { issue.state.as_str() };
+    let state = if issue.source.in_repository() && !issue.closed { "" } else { issue.state.as_str() };
     let labels = issue.labels.join(", ");
     [state, labels.as_str(), issue.author.as_str(), age_of(&issue.updated_at, now).as_str()]
         .into_iter()
@@ -430,6 +454,16 @@ pub(crate) fn checklist(title: &str, items: &[(bool, String)]) -> String {
     format!("**{title}**\n\n{}", lines.join("\n"))
 }
 
+pub(crate) fn check_url(input: &str, wrong: &'static str) -> std::result::Result<String, &'static str> {
+    let url = input.trim().trim_end_matches('/');
+    let host = url.split_once("://").map(|(scheme, rest)| (scheme, rest.split('/').next().unwrap_or_default()));
+    match host {
+        _ if url.is_empty() => Ok(String::new()),
+        Some(("http" | "https", host)) if !host.is_empty() && !url.contains(char::is_whitespace) => Ok(url.to_string()),
+        _ => Err(wrong),
+    }
+}
+
 pub(crate) fn join_body(parts: &[&str]) -> String {
     parts.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n\n")
 }
@@ -437,7 +471,7 @@ pub(crate) fn join_body(parts: &[&str]) -> String {
 #[cfg(test)]
 pub(crate) fn issue(source: Source, number: u64, title: &str) -> Issue {
     let key = match source {
-        Source::Github => format!("#{number}"),
+        Source::Github | Source::Gitlab => format!("#{number}"),
         Source::Shortcut => format!("sc-{number}"),
         Source::Linear => format!("ENG-{number}"),
         Source::Jira => format!("PROJ-{number}"),

@@ -51,7 +51,7 @@ impl Condition {
         let holds = match self {
             Self::TurnOver if agent.background_shell() => return Some(activity::SHELL),
             Self::Stops | Self::TurnOver => status != Status::Working,
-            Self::Idle => matches!(status, Status::Idle | Status::Done | Status::Pending),
+            Self::Idle => matches!(status, Status::Idle | Status::Done | Status::Pending | Status::Failed),
             Self::Working => status == Status::Working,
             Self::Waiting => status == Status::Waiting,
             Self::Shell | Self::Text(_) | Self::Quiet(_) => false,
@@ -93,8 +93,7 @@ enum Verdict {
     Failed(String),
 }
 
-const CANNOT_WATCH: &str =
-    "cornercase only knows what Claude Code, Codex, Gemini CLI, opencode and Grok Build are doing";
+const CANNOT_WATCH: &str = "cornercase needs OSC 7501 reports or a reader for Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI";
 
 const SHELL_SETTLES: Duration = Duration::from_millis(300);
 
@@ -156,6 +155,11 @@ impl App {
                 _ => return Some(Ok(json(&pending.done))),
             }
         }
+        if let Stage::Setup(workspace) = pending.stage
+            && !self.workspace_setting_up(workspace)
+        {
+            return Some(self.setup_failure(pane).map_or_else(|| Ok(json(&pending.done)), Err));
+        }
         if let Stage::Confirm(confirm) = &mut pending.stage {
             match self.confirmation(confirm, now) {
                 None => {}
@@ -208,6 +212,8 @@ impl App {
     fn not_started(&self, pane: u64) -> String {
         if self.projects.pane_by(pane).is_none() {
             format!("pane {pane} closed before it was ready")
+        } else if let Some(failure) = self.setup_failure(pane) {
+            failure
         } else {
             format!(
                 "pane {pane} did not take what was typed: the agent did not start, or its program is not reading; \
@@ -218,9 +224,12 @@ impl App {
 
     fn waiting_on(&self, stage: &Stage, pane: u64) -> String {
         let watch = match stage {
-            Stage::Worktree(_) => return "git is still creating the worktree".into(),
+            Stage::Worktree(_) | Stage::Run(..) => return "git is still creating the worktree".into(),
             Stage::Removing { .. } => return "git is still removing the worktree".into(),
             Stage::Launch { .. } => return format!("pane {pane} is still starting"),
+            Stage::Setup(workspace) => {
+                return format!("workspace {workspace} is still running its setup in pane {pane}");
+            }
             Stage::Confirm(confirm) => return self.unrecorded(confirm.pane),
             Stage::Reading => return format!("the record of pane {pane} is still being read"),
             Stage::Restart { caller } => return held(&self.holding(*caller, Instant::now())),
@@ -248,8 +257,10 @@ impl App {
     }
 
     fn unrecorded(&self, pane: u64) -> String {
-        let holding =
-            self.projects.pane_by(pane).is_some_and(|term| holds_prompts(term.agent.agent(), term.agent.status()));
+        let holding = self
+            .projects
+            .pane_by(pane)
+            .is_some_and(|term| holds_prompts(term.agent.agent().and_then(agents::Known::of), term.agent.status()));
         let why = if holding { ": this agent queues a prompt sent while it works until its next step" } else { "" };
         format!("the agent in pane {pane} has not recorded the prompt yet{why}")
     }
@@ -260,7 +271,7 @@ impl App {
         if term.context.prompted().is_some_and(|at| at >= confirm.since) {
             return Some(Ok(()));
         }
-        if holds_prompts(term.agent.agent(), term.agent.status()) {
+        if holds_prompts(term.agent.agent().and_then(agents::Known::of), term.agent.status()) {
             confirm.by = confirm.by.max(now + self.confirm_within);
         }
         (now >= confirm.by).then(|| Err(not_confirmed(pane)))

@@ -1,16 +1,13 @@
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 
 use super::{Comment, Detail, Issue, LIMIT, Person, Query, Source, Who};
-use crate::error::{Error, Result};
+use crate::error::Result;
+use crate::gh::{run, run_raw};
 
 const LIST_FIELDS: &str = "number,title,state,labels,assignees,author,updatedAt,url";
 const VIEW_FIELDS: &str = "number,title,state,labels,assignees,author,updatedAt,url,body,comments";
-const GH_ENV: [(&str, &str); 4] =
-    [("GH_PROMPT_DISABLED", "1"), ("GH_NO_UPDATE_NOTIFIER", "1"), ("NO_COLOR", "1"), ("GH_PAGER", "cat")];
 
 #[derive(Deserialize)]
 struct RawIssue {
@@ -111,6 +108,11 @@ pub(crate) fn people(gh: &Path, dir: &Path) -> Result<Vec<Person>> {
     Ok(people)
 }
 
+pub(crate) fn find(gh: &Path, dir: &Path, key: &str) -> Result<Issue> {
+    let raw: RawIssue = run(gh, dir, &["issue", "view", key, "--json", LIST_FIELDS])?;
+    Ok(raw.into())
+}
+
 pub(crate) fn view(gh: &Path, dir: &Path, number: u64) -> Result<Detail> {
     let number = number.to_string();
     let raw: RawView = run(gh, dir, &["issue", "view", &number, "--json", VIEW_FIELDS])?;
@@ -133,31 +135,6 @@ pub(crate) fn view(gh: &Path, dir: &Path, number: u64) -> Result<Detail> {
         })
         .collect();
     Ok(Detail { info, body: raw.body, comments })
-}
-
-fn run<T: DeserializeOwned>(gh: &Path, dir: &Path, args: &[&str]) -> Result<T> {
-    serde_json::from_slice(&run_raw(gh, dir, args)?).map_err(Error::GhOutput)
-}
-
-fn run_raw(gh: &Path, dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new(gh)
-        .current_dir(dir)
-        .args(args)
-        .envs(GH_ENV)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(Error::RunGh)?;
-    if !out.status.success() {
-        let text = [&out.stderr, &out.stdout].map(|bytes| String::from_utf8_lossy(bytes).into_owned());
-        let message = text
-            .iter()
-            .flat_map(|t| t.lines())
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .map_or_else(|| format!("gh failed with {}", out.status), str::to_string);
-        return Err(Error::Gh(message));
-    }
-    Ok(out.stdout)
 }
 
 #[cfg(test)]

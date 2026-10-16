@@ -41,7 +41,7 @@ pub(crate) fn endpoints(url: &str, api: Option<&str>) -> (String, String) {
 impl Api {
     fn get(&self, path: &str, query: &[(&str, &str)], missing: &str) -> Result<Value> {
         let url = format!("{}{path}", self.base.trim_end_matches('/'));
-        let answer = http::get(&SERVICE, &url, query, &[("X-API-Key", &self.token)])?;
+        let answer = http::get_without_redirects(&SERVICE, &url, query, &[("X-API-Key", &self.token)])?;
         into_json(answer, missing, failure)
     }
 
@@ -118,9 +118,22 @@ impl Api {
         Ok(Listed { account: Some(account), issues })
     }
 
-    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+    pub(crate) fn find(&self, key: &str) -> Result<Issue> {
+        let mut node = self.node(key)?;
+        if node["identifier"].as_str().is_none_or(str::is_empty) {
+            node["identifier"] = Value::String(key.to_string());
+        }
+        self.issue(&node, &names(&self.members()?))
+            .ok_or_else(|| Error::Api(format!("work item {key} has no readable key")))
+    }
+
+    fn node(&self, key: &str) -> Result<Value> {
         let path = self.workspace_path(&format!("/work-items/{}/", path_segment(key)));
-        let node = self.get(&path, &[("expand", EXPAND)], &format!("work item {key} not found"))?;
+        self.get(&path, &[("expand", EXPAND)], &format!("work item {key} not found"))
+    }
+
+    pub(crate) fn view(&self, key: &str) -> Result<Detail> {
+        let node = self.node(key)?;
         let names = names(&self.members().unwrap_or_default());
         let comments = self.comments(&node, &names)?;
         Ok(detail(&node, &names, comments))
@@ -253,13 +266,7 @@ pub(crate) fn check_workspace(input: &str) -> std::result::Result<String, &'stat
 }
 
 pub(crate) fn check_url(input: &str) -> std::result::Result<String, &'static str> {
-    let url = input.trim().trim_end_matches('/');
-    let host = url.split_once("://").map(|(scheme, rest)| (scheme, rest.split('/').next().unwrap_or_default()));
-    match host {
-        _ if url.is_empty() => Ok(String::new()),
-        Some(("http" | "https", host)) if !host.is_empty() && !url.contains(char::is_whitespace) => Ok(url.to_string()),
-        _ => Err("a URL starts with https://, such as https://plane.acme.dev"),
-    }
+    super::check_url(input, "a URL starts with https://, such as https://plane.acme.dev")
 }
 
 pub(crate) fn extra_params(filter: &str) -> Vec<(String, String)> {

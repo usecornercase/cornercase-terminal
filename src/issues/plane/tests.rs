@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{FakeHttp, decoded};
+use crate::test_util::{FakeHttp, decoded, redirected};
 
 const ME: &str = r#"{"id":"me-1","display_name":"Ana Pérez","email":"ana@acme.dev"}"#;
 const MEMBERS: &str = r#"[{"id":"me-1","display_name":"Ana Pérez","email":"ana@acme.dev","is_active":true},
@@ -81,6 +81,14 @@ fn whoami_failures_say_why(#[case] status: u16, #[case] body: &'static str, #[ca
     let server = FakeHttp::start(vec![("GET /api/v1/users/me/", status, body)]);
     let err = api(&server, "").whoami().err().map(|e| e.to_string());
     assert_eq!(err.as_deref(), Some(message));
+}
+
+#[test]
+fn a_redirect_is_not_followed_so_the_key_stays_on_the_server() {
+    let (server, elsewhere) = redirected("GET /api/v1/users/me/");
+    let err = api(&server, "").whoami().err().map(|e| e.to_string());
+    assert!(err.as_deref().is_some_and(|e| e.starts_with("Plane answered 302 with a redirect")), "{err:?}");
+    assert_eq!(elsewhere.requests(), Vec::<String>::new());
 }
 
 #[test]
@@ -309,6 +317,8 @@ fn view_reads_the_description_and_the_comments() {
     ]);
 
     let detail = api(&server, "").view("ENG-42").expect("view");
+    let found = api(&server, "").find("ENG-42").expect("find for queue");
+    assert_eq!((found.key.as_str(), found.title.as_str()), ("ENG-42", "Login redirect loops"));
 
     assert_eq!(
         detail.info,

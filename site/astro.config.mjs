@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 const repo = 'https://github.com/usecornercase/cornercase-terminal';
+const discord = 'https://discord.gg/aYqCa4xC4R';
 const site = process.env.SITE_ORIGIN || 'https://usecornercase.dev';
 const base = process.env.SITE_BASE ?? '';
 
@@ -18,7 +19,10 @@ export default defineConfig({
         'A terminal multiplexer for projects, git worktrees and coding agents, driven by the mouse.',
       logo: { src: './src/assets/logo.svg', alt: '' },
       favicon: '/favicon.svg',
-      social: [{ icon: 'github', label: 'GitHub', href: repo }],
+      social: [
+        { icon: 'github', label: 'GitHub', href: repo },
+        { icon: 'discord', label: 'Discord', href: discord },
+      ],
       editLink: { baseUrl: `${repo}/edit/main/site/` },
       expressiveCode: {
         themes: ['catppuccin-mocha', 'catppuccin-latte'],
@@ -64,12 +68,15 @@ export default defineConfig({
             { label: 'Files panel', slug: 'docs/guides/files' },
             { label: 'TODO list', slug: 'docs/guides/todo' },
             { label: 'Issues and agents', slug: 'docs/guides/issues-and-agents' },
+            { label: 'Flows', slug: 'docs/guides/flows' },
+            { label: 'Queue agents', slug: 'docs/guides/queue' },
             { label: 'Scripts and agents', slug: 'docs/guides/scripts-and-agents' },
             { label: 'Search', slug: 'docs/guides/search' },
             { label: 'Sessions and the server', slug: 'docs/guides/sessions' },
             { label: 'Remote machines', slug: 'docs/guides/remote' },
             { label: 'From your phone', slug: 'docs/guides/phone' },
             { label: 'On Telegram', slug: 'docs/guides/telegram' },
+            { label: 'On Discord', slug: 'docs/guides/discord' },
             { label: 'Small terminals', slug: 'docs/guides/small-terminals' },
             { label: 'Plugins', slug: 'docs/guides/plugins' },
           ],

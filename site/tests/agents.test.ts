@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { AGENTS, MODES } from '../src/lib/demo/data';
-import { followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
+import { attention, followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
 import { AGENT_KINDS } from '../src/lib/demo/programs';
 import { world } from '../src/lib/demo/world';
+import { Painter } from '../src/lib/demo/ui';
 
 test('Grok is in the agent catalogue, its modes and the program list', () => {
   assert.deepEqual(AGENTS.find(([kind]) => kind === 'grok'), ['grok', 'grok']);
@@ -14,6 +15,35 @@ test('Grok is in the agent catalogue, its modes and the program list', () => {
     ['always approve (dangerous)', '--always-approve'],
   ]);
   assert.equal(AGENT_KINDS.grok, 'grok');
+});
+
+test('Cursor is in the agent catalogue, its modes and the program list', () => {
+  assert.deepEqual(AGENTS.find(([kind]) => kind === 'cursor'), ['cursor', 'cursor-agent']);
+  assert.deepEqual(MODES.cursor, [
+    ['plan', '--mode plan'],
+    ['ask', '--mode ask'],
+    ['auto review', '--auto-review'],
+    ['run everything (dangerous)', '--force'],
+  ]);
+  assert.equal(AGENT_KINDS['cursor-agent'], 'cursor');
+});
+
+test('Settings lists Cursor with its modes', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(110, 40);
+  world(app, { scripted: true });
+  app.openSettings();
+  app.settingsPage(1);
+  const cursor = app.settingsRows(1).findIndex((row) => row.id === 'kind:cursor');
+  assert.ok(cursor >= 0);
+  app.settingsClick(cursor);
+  const modes = app.overlay?.kind === 'settings' ? app.overlay.pick : undefined;
+  assert.deepEqual(
+    modes?.items.map((item) => item.value),
+    ['default', 'plan', 'ask', 'auto review', 'run everything (dangerous)', 'extra arguments…'],
+  );
+  app.destroy();
 });
 
 test('Settings lists Grok with its modes and the agent picker offers it', () => {
@@ -112,5 +142,42 @@ test('An agent row in the agents section offers marking its pane', () => {
   assert.deepEqual(labels, ['mark as pending review']);
   app.chooseMenu(0);
   assert.equal(tabStatus(app.projects[0].workspaces[0].tabs[0]), 'pending');
+  app.destroy();
+});
+
+test('Reported idle does not guess a finish, and explicit done stays acknowledged', () => {
+  const app = new App();
+  app.virtual = true;
+  world(app, { scripted: true });
+  const tab = app.projects[0].workspaces[0].tabs[0];
+  const pane = tab.panes[0];
+  followAgent(pane, 'claude');
+  watchPane(pane, 'working', false, 0);
+  watchPane(pane, 'ready', false, 1);
+  assert.equal(tabStatus(tab), 'idle');
+  watchPane(pane, 'done', false, 2);
+  assert.equal(tabStatus(tab), 'done');
+  watchPane(pane, 'done', true, 3);
+  watchPane(pane, 'done', false, 4);
+  assert.equal(tabStatus(tab), 'idle');
+  app.destroy();
+});
+
+test('A failed agent has a red mark and reaches the attention rollup', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(140, 40);
+  world(app, { scripted: true });
+  const pane = app.projects[0].workspaces[0].tabs[0].panes[0];
+  followAgent(pane, 'claude');
+  const { grid } = app.render();
+  followAgent(pane, 'claude');
+  watchPane(pane, 'failed', false, 0);
+  grid.reset();
+  new Painter(app, grid).draw();
+  assert.equal(attention(['done', 'pending', 'failed']), 'failed');
+  assert.equal(attention(['failed', 'waiting']), 'waiting');
+  assert.ok(grid.cells.some((cell) => cell.ch === '!' && cell.fg === 1));
+  assert.equal(watchPane(pane, 'failed', false, 1000), 'failed');
   app.destroy();
 });

@@ -10,7 +10,6 @@ use super::menus::MenuAction;
 use super::menus::Target;
 use super::overlay::Overlay;
 use super::plugins::Spot;
-use crate::agents::Known;
 use crate::error::Result;
 use crate::git;
 use crate::project::Workspace;
@@ -50,6 +49,12 @@ impl App {
 
     pub(super) fn new_project_menu(&mut self, pos: Position) {
         self.overlay = Some(Overlay::Menu { at: pos, actions: vec![MenuAction::OpenProject, MenuAction::NewGroup] });
+    }
+
+    pub(super) fn new_workspace_menu(&mut self, p: usize, pos: Position) {
+        let project = self.projects[p].id;
+        let actions = vec![MenuAction::NewWorkspace(project), MenuAction::StartFlow(project)];
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     pub(super) fn sidebar_layout(&self, areas: &ui::Areas) -> ui::Rows {
@@ -92,7 +97,7 @@ impl App {
             let context = term.context.context();
             ui::AgentEntry {
                 status: term.agent.status(),
-                agent: term.agent.agent().map(Known::name).unwrap_or_default().to_string(),
+                agent: term.agent.agent().unwrap_or_default().to_string(),
                 project: self.project_label(project),
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
                 details: self.details(context, None),
@@ -147,7 +152,8 @@ impl App {
     pub(super) fn tab_lines(&self) -> ui::TabLines {
         let lines = |w: &Workspace| -> Vec<u16> { w.tabs.iter().map(|t| self.tab_details(t).lines()).collect() };
         let lines = self.project().map(|p| p.workspaces.iter().map(lines).collect()).unwrap_or_default();
-        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty())
+        let folded = self.project().map(|p| p.workspaces.iter().map(|w| w.collapsed).collect()).unwrap_or_default();
+        ui::TabLines::new(lines, self.drawn.tab_bar.is_empty()).folded(folded)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {
@@ -156,17 +162,29 @@ impl App {
         }
         let tabs = self.tab_lines();
         let hit = self.workspace_hit(list, pitch, &tabs, pos);
-        if matches!(hit, Some(WorkspaceHit::NewTab(_) | WorkspaceHit::NewWorkspace)) {
+        if matches!(hit, Some(WorkspaceHit::NewTab(_))) {
             self.nav = None;
         }
         let p = self.active;
         let ask = pitch > 1;
         let rect = |row: WorkspaceRow| ui::workspace_row(list, pitch, &tabs, self.scroll.workspaces, row);
+        let pull = match hit {
+            Some(WorkspaceHit::Workspace(w)) => self.pull_in_list(list, pitch, &tabs, w, pos),
+            _ => None,
+        };
+        if let Some(id) = pull {
+            self.open_pull_request(id);
+            return Ok(());
+        }
         let project = &self.projects[p];
         match hit {
             Some(WorkspaceHit::Workspace(w)) => {
                 let target = Target::Workspace(project.id, project.workspaces[w].id);
                 self.grab(target, rect(WorkspaceRow::Workspace(w)), area, false);
+            }
+            Some(WorkspaceHit::Fold(w)) => {
+                let target = Target::Workspace(project.id, project.workspaces[w].id);
+                self.grab(target, rect(WorkspaceRow::Workspace(w)), area, true);
             }
             Some(WorkspaceHit::CloseWorkspace(w)) if ask && !project.workspaces[w].worktree => {
                 self.overlay =
@@ -185,7 +203,7 @@ impl App {
             }
             Some(WorkspaceHit::CloseTab(w, t)) => self.close_tab(p, w, t),
             Some(WorkspaceHit::NewTab(w)) => self.add_tab(p, w, area)?,
-            Some(WorkspaceHit::NewWorkspace) => self.ask_new_workspace(p),
+            Some(WorkspaceHit::NewWorkspace) => self.new_workspace_menu(p, pos),
             Some(WorkspaceHit::WorkspaceMenu(_) | WorkspaceHit::TabMenu(..)) => {
                 self.open_workspace_menu(list, pitch, pos);
             }
@@ -208,6 +226,9 @@ impl App {
         let mut actions = vec![MenuAction::Rename(Target::Project(id))];
         if !self.groups.is_empty() {
             actions.push(MenuAction::MoveToGroup(id));
+        }
+        if git::is_repo_root(&self.projects[p].path) {
+            actions.push(MenuAction::ProjectSettings(id));
         }
         actions.extend(self.plugin_menu(Spot::Project(id)));
         actions
@@ -241,9 +262,12 @@ impl App {
     pub(super) fn open_workspace_menu(&mut self, list: Rect, pitch: u16, pos: Position) {
         let Some(project) = self.project() else { return };
         let target = match self.workspace_hit(list, pitch, &self.tab_lines(), pos) {
-            Some(WorkspaceHit::Workspace(w) | WorkspaceHit::CloseWorkspace(w) | WorkspaceHit::WorkspaceMenu(w)) => {
-                Target::Workspace(project.id, project.workspaces[w].id)
-            }
+            Some(
+                WorkspaceHit::Workspace(w)
+                | WorkspaceHit::Fold(w)
+                | WorkspaceHit::CloseWorkspace(w)
+                | WorkspaceHit::WorkspaceMenu(w),
+            ) => Target::Workspace(project.id, project.workspaces[w].id),
             Some(WorkspaceHit::Tab(w, t) | WorkspaceHit::CloseTab(w, t) | WorkspaceHit::TabMenu(w, t)) => {
                 let workspace = &project.workspaces[w];
                 Target::Tab(project.id, workspace.id, workspace.tabs[t].id)

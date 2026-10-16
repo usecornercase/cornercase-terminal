@@ -29,8 +29,24 @@ fn with_tree() -> View<'static> {
     let workspaces = vec![
         Vec::new(),
         vec![
-            WorkspaceEntry { name: "main".into(), tabs: vec![claude, "zsh".into()], behind: 0, removing: false },
-            WorkspaceEntry { name: "issue-50-reorder".into(), tabs: vec![finished], behind: 2, removing: false },
+            WorkspaceEntry {
+                collapsed: false,
+                name: "main".into(),
+                tabs: vec![claude, "zsh".into()],
+                behind: 0,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
+            WorkspaceEntry {
+                collapsed: false,
+                name: "issue-50-reorder".into(),
+                tabs: vec![finished],
+                behind: 2,
+                pull: None,
+                removing: false,
+                setting_up: false,
+            },
         ],
         Vec::new(),
     ];
@@ -108,6 +124,15 @@ fn a_folded_project_holds_the_mark_of_its_active_tab() {
 fn only_folded_rows_show_what_needs_you(#[case] row: TreeRow, #[case] end: &str) {
     let text = line(&with_tree(), row);
     assert!(text.ends_with(end), "{text}");
+}
+
+#[test]
+fn a_folded_workspace_shows_agents_that_only_work() {
+    let mut v = with_tree();
+    v.tree.as_mut().expect("a tree").workspaces[1][1].tabs =
+        vec![TabEntry { status: Some(Status::Working), .."".into() }];
+    let text = line(&v, TreeRow::Workspace(1, 1));
+    assert!(text.contains('◐'), "{text}");
 }
 
 #[rstest]

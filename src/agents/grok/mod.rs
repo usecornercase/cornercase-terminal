@@ -8,6 +8,19 @@ use crate::agents::context::{Context, Look, Record};
 
 pub(in crate::agents) const NAME: &str = "grok";
 pub(in crate::agents) const TITLE: &str = "Grok Build";
+pub(in crate::agents) const COMMAND: &str = "grok";
+pub(in crate::agents) const MODEL_FLAG: &str = "--model";
+pub(in crate::agents) const MODEL_ALIAS: Option<&str> = Some("-m");
+pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::agents::Effort {
+    levels: &["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+    flags: &["--reasoning-effort", "--effort"],
+    config: None,
+});
+pub(in crate::agents) const UNATTENDED: &[&str] = &["--always-approve"];
+pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
+pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;
+pub(in crate::agents) const MODELS: &[&str] = &[];
+pub(in crate::agents) const CATALOGUE: Option<fn() -> Vec<String>> = None;
 pub(in crate::agents) const MODES: crate::agents::ModeTable = &[
     ("accept edits", &["--permission-mode", "acceptEdits"]),
     ("auto", &["--permission-mode", "auto"]),

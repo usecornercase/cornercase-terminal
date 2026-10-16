@@ -4,18 +4,19 @@
 [![Release](https://img.shields.io/github/v/release/usecornercase/cornercase-terminal)](https://github.com/usecornercase/cornercase-terminal/releases/latest)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![Docs](https://img.shields.io/badge/docs-usecornercase.dev-875fff)](https://usecornercase.dev/docs/)
+[![Discord](https://img.shields.io/badge/chat-Discord-5865f2?logo=discord&logoColor=white)](https://discord.gg/aYqCa4xC4R)
 
 A terminal multiplexer built for running coding agents in parallel. Every agent gets its own git worktree and tab, the sidebar shows which ones are working, waiting or done, the diff sits next to the agent, and a background server keeps everything running when you close the window. Everything is a click: your keyboard stays with the program in the pane.
 
 ![cornercase: the fastest way to run agents in parallel. Every agent in its own corner, everything a click away, and when you close the terminal they keep working. A cornercase window shows seven projects in two groups, the three worktrees of web-shop with a Claude Code agent working in each, and a Claude Code conversation about dark mode.](site/public/readme.png)
 
-**[usecornercase.dev](https://usecornercase.dev)** · [First steps](https://usecornercase.dev/docs/first-steps/) · [Try the live simulation](https://usecornercase.dev/#demo)
+**[usecornercase.dev](https://usecornercase.dev)** · [First steps](https://usecornercase.dev/docs/first-steps/) · [Try the live simulation](https://usecornercase.dev/#demo) · [Discord](https://discord.gg/aYqCa4xC4R)
 
 ## Why
 
 Starting ten agents is easy. Keeping up with them is the hard part. cornercase does four things about it:
 
-1. **From an issue to an agent at work, in one click.** Open an issue from GitHub, Linear, Jira, Plane or Shortcut and press `start`: cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to the agent as its first prompt. Claude Code, Codex, Gemini, Grok and [eleven more](https://usecornercase.dev/docs/reference/agents/). [Issues to agents](https://usecornercase.dev/docs/guides/issues-and-agents/)
+1. **From an issue to an agent at work, in one click.** Open an issue from GitHub, GitLab, Linear, Jira, Plane or Shortcut and press `start`: cornercase creates a worktree on a branch named after the issue, opens a tab in it and hands the issue to the agent as its first prompt. Claude Code, Codex, Gemini, Grok, Cursor and [ten more](https://usecornercase.dev/docs/reference/agents/). [Issues to agents](https://usecornercase.dev/docs/guides/issues-and-agents/)
 2. **Every agent in its own corner, all of them in one view.** Each agent has its own branch, folder and tab, so two of them never touch the same file. Tabs show who is working `◐` (or a spinner, if you pick it), who needs you `!` and who finished while you were away `✓`, with the model and how full its context is. `!` and `✓` climb to the workspace and project rows, and your terminal notifies you, also over SSH. [Projects, workspaces and tabs](https://usecornercase.dev/docs/guides/projects-workspaces-tabs/)
 3. **The review next to the work.** The changes panel shows the workspace's diff as the agent writes it: uncommitted, its commits, or everything since a base branch, or what is uncommitted in every project at once. Hover a hunk to open it in your editor, copy it or hand it back to the agent. The files panel browses, reads and searches the workspace, images included, and a path an agent prints is a link. [Changes](https://usecornercase.dev/docs/guides/changes/) · [Files](https://usecornercase.dev/docs/guides/files/)
 4. **Close the window. Nothing stops.** A background server owns the shells. `Quit` detaches, `cornercase` reattaches, from any terminal or from your phone over SSH, and several windows can show the same session. [Sessions](https://usecornercase.dev/docs/guides/sessions/)
@@ -86,7 +87,7 @@ cornercase read --pane "$pane" --last-message   # what it said, from its own tra
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas are welcome on [Discord](https://discord.gg/aYqCa4xC4R). The rules for contributors and coding agents are in [AGENTS.md](AGENTS.md), and the design decisions with their reasons in [DESIGN.md](DESIGN.md). The website and its documentation live in [`site/`](site).
 
 ## License
 

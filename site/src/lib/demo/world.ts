@@ -1,6 +1,7 @@
 import { App } from './app';
 import { FOLDERS } from './data';
 import { type Project, type Workspace, activePane, projectLabel, workspaceLabel } from './model';
+import { startRun } from './flowrun';
 import { Agent } from './programs';
 
 export const STORY_PACE = 9000;
@@ -72,6 +73,8 @@ export function world(app: App, opts: { scripted?: boolean } = {}): App {
   if (!opts.scripted) app.after(9000, () => pagination.ask('src/orders.ts'));
   const mobile = shellIn(app, 'mobile-app', 'git status');
   const payments = shellIn(app, 'payments', 'git log --oneline');
+  startRun(app, payments);
+  payments.active = 0;
 
   const blog = shellIn(app, 'blog', 'git status');
   agentTab(app, blog, blog.workspaces[0], 'Fix the typos in the post on worktrees', pace, { shown: 3 });

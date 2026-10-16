@@ -5,7 +5,7 @@ use crate::issues::browser::tests::{buttons::reading, people::filtering, press};
 use crate::issues::browser::{Browser, Room};
 use crate::ui;
 
-const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106 };
+const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106, buttons: 110 };
 
 mod buttons {
     use super::*;

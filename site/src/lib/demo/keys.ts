@@ -22,10 +22,14 @@ export type KeysAction =
   | { kind: 'renameTab' }
   | { kind: 'findNames' }
   | { kind: 'findText' }
+  | { kind: 'findSaid' }
   | { kind: 'files' }
   | { kind: 'changes' }
   | { kind: 'base' }
+  | { kind: 'pullRequest' }
   | { kind: 'newWorkspace' }
+  | { kind: 'startFlow' }
+  | { kind: 'flow' }
   | { kind: 'renameWorkspace' }
   | { kind: 'closeWorkspace' }
   | { kind: 'issues' }
@@ -70,7 +74,7 @@ const ROOT: KeysItem[] = [
   run('t', 'todo', { kind: 'todo' }),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
-  run('o', 'away on Telegram', { kind: 'away' }),
+  run('o', 'away on chat apps', { kind: 'away' }),
   run('q', 'quit', { kind: 'quit' }),
 ];
 
@@ -80,11 +84,18 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('w', 'text in files', { kind: 'findText' }),
     run('e', 'file tree', { kind: 'files' }),
     run('p', 'projects, workspaces, tabs', { kind: 'search' }),
+    run('s', 'said in sessions', { kind: 'findSaid' }),
   ],
-  git: [run('d', 'changes', { kind: 'changes' }), run('b', 'compare against a branch', { kind: 'base' })],
+  git: [
+    run('d', 'changes', { kind: 'changes' }),
+    run('b', 'compare against a branch', { kind: 'base' }),
+    run('p', 'pull request and its checks', { kind: 'pullRequest' }),
+  ],
   workspace: [
     run('n', 'new workspace', { kind: 'newWorkspace' }),
+    run('s', 'start a flow', { kind: 'startFlow' }),
     run('r', 'rename workspace', { kind: 'renameWorkspace' }),
+    run('f', 'flow of this workspace', { kind: 'flow' }),
     run('x', 'close workspace', { kind: 'closeWorkspace' }),
   ],
 };

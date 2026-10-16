@@ -6,6 +6,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) mod contract;
+mod flow;
+mod search;
+
+pub(crate) use contract::Contract;
+pub(crate) use flow::{
+    BrokenFlow, Exported, FlowExport, FlowImport, FlowInfo, FlowList, FlowRun, Flows, Imported, MemberInfo, RoleInfo,
+    RunInfo,
+};
+pub(crate) use search::{Hit, Matches, Search};
+
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
 pub(crate) const SERVER_ENV: &str = "CORNERCASE_SERVER";
 
@@ -15,6 +26,10 @@ pub(crate) struct Request {
     pub(crate) caller: Option<u64>,
     #[serde(default)]
     pub(crate) server: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) contract: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) boot: Option<String>,
     #[serde(flatten)]
     pub(crate) command: Command,
 }
@@ -48,6 +63,7 @@ pub(crate) enum Command {
     NewTab(NewTab),
     Split(Split),
     Start(Start),
+    StartWith(Start),
     Send(SendText),
     Keys(Keys),
     Read(Read),
@@ -64,6 +80,13 @@ pub(crate) enum Command {
     Stats(Stats),
     Away(Away),
     Mark(Mark),
+    Queue(Queue),
+    FlowList(FlowList),
+    FlowRun(FlowRun),
+    FlowExport(FlowExport),
+    FlowImport(FlowImport),
+    Search(Search),
+    Contract(Contract),
 }
 
 impl Command {
@@ -91,13 +114,24 @@ impl Command {
             Self::Stats(_) => 19,
             Self::Away(_) => 20,
             Self::Mark(_) => 21,
+            Self::Queue(_) => 22,
+            Self::StartWith(_) => 23,
+            Self::FlowList(_) => 24,
+            Self::FlowRun(_) => 25,
+            Self::FlowExport(_) => 26,
+            Self::FlowImport(_) => 27,
+            Self::Search(_) => 28,
+            Self::Contract(_) => 29,
         }]
     }
 
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
-            Self::Status(_) | Self::Stats(_) => {}
+            Self::Queue(_) => {
+                fields.add("queue", true);
+            }
+            Self::Status(_) | Self::Stats(_) | Self::Contract(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
             }
@@ -113,8 +147,10 @@ impl Command {
                 fields.maybe("pane", split.pane).add("down", split.down).add("command", split.command.is_some());
                 fields.add("focus", split.focus);
             }
-            Self::Start(start) => {
-                fields.maybe("agent", start.agent.as_ref()).maybe("worktree", start.worktree.as_ref());
+            Self::Start(start) | Self::StartWith(start) => {
+                fields.maybe("agent", start.agent.as_ref()).maybe("model", start.model.as_ref());
+                fields.maybe("mode", start.mode.as_ref()).maybe("effort", start.effort.as_ref());
+                fields.maybe("worktree", start.worktree.as_ref());
                 fields.maybe("project", start.project);
                 fields.maybe("workspace", start.workspace).add("prompt", start.prompt.is_some());
                 fields.add("wait", start.wait).maybe("until", start.wait.then(|| start.until.name()));
@@ -176,11 +212,18 @@ impl Command {
             Self::Mark(mark) => {
                 fields.maybe("pane", mark.pane).maybe("tab", mark.tab).add("reviewed", mark.reviewed);
             }
+            Self::FlowList(list) => list.fields(&mut fields),
+            Self::FlowRun(run) => run.fields(&mut fields),
+            Self::FlowExport(export) => export.fields(&mut fields),
+            Self::FlowImport(import) => import.fields(&mut fields),
+            Self::Search(search) => {
+                fields.add("bytes", search.query.len());
+            }
         }
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 22] = [
+    pub(crate) const NAMES: [&str; 30] = [
         "status",
         "open",
         "new-workspace",
@@ -203,6 +246,14 @@ impl Command {
         "stats",
         "away",
         "mark",
+        "queue",
+        "start-with",
+        "flow-list",
+        "flow-run",
+        "flow-export",
+        "flow-import",
+        "search",
+        "contract",
     ];
 }
 
@@ -279,6 +330,9 @@ pub(crate) struct Split {
 #[serde(default)]
 pub(crate) struct Start {
     pub(crate) agent: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) mode: Option<String>,
+    pub(crate) effort: Option<String>,
     pub(crate) project: Option<u64>,
     pub(crate) worktree: Option<String>,
     pub(crate) workspace: Option<u64>,
@@ -528,6 +582,8 @@ pub(crate) struct Done {
     #[serde(flatten)]
     pub(crate) ids: Ids,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ended: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) line: Option<String>,
@@ -549,6 +605,7 @@ pub(crate) struct Done {
 #[serde(default)]
 pub struct Report {
     pub(crate) version: String,
+    pub(crate) boot: String,
     pub caller: Option<u64>,
     pub shown: Ids,
     pub(crate) groups: Vec<GroupInfo>,
@@ -746,8 +803,21 @@ pub struct WorkspaceInfo {
     pub(crate) branch: Option<String>,
     pub(crate) worktree: bool,
     pub(crate) behind: u32,
+    pub(crate) pull_request: Option<PullRequestInfo>,
+    pub(crate) setup: Option<String>,
     pub(crate) active: bool,
     pub tabs: Vec<TabInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PullRequestInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
+    pub(crate) state: String,
+    pub(crate) checks: Option<String>,
+    pub(crate) failed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -810,3 +880,30 @@ pub(crate) struct Stats {}
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "action", content = "entry", rename_all = "kebab-case")]
+pub(crate) enum Queue {
+    Add(QueueAdd),
+    Edit { id: u64, add: QueueAdd },
+    List,
+    Remove(u64),
+    Run(u64),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct QueueAdd {
+    pub(crate) at: String,
+    pub(crate) zone: String,
+    pub(crate) agent: Option<String>,
+    pub(crate) mode: Option<String>,
+    pub(crate) project: Option<u64>,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) worktree: Option<String>,
+    pub(crate) prompt: Option<String>,
+    pub(crate) issue: Option<String>,
+    pub(crate) source: Option<String>,
+    pub(crate) label: Option<String>,
+    pub(crate) submit: Option<bool>,
+}

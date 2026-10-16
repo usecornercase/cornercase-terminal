@@ -104,7 +104,7 @@ impl Settings {
 
     pub(crate) fn paste(&mut self, text: &str) {
         if let Some(edit) = &mut self.edit {
-            let token = matches!(edit.row, Row::Token(_) | Row::TelegramBot);
+            let token = matches!(edit.row, Row::Token(_) | Row::Bot(_));
             edit.input.extend(text.chars().filter(|c| !c.is_control() && (!token || !c.is_whitespace())));
             edit.error = None;
         } else if let Some(pick) = &mut self.pick {

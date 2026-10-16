@@ -6,7 +6,7 @@ use super::view::detail_lines;
 use super::*;
 use crate::issues::{Comment, issue};
 
-const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106 };
+const ROOM: Room = Room { list_rows: 22, detail_rows: 26, detail_width: 106, buttons: 110 };
 
 fn browser() -> Browser {
     Browser {
@@ -25,8 +25,10 @@ fn browser() -> Browser {
         jira_site: String::new(),
         jira_email: String::new(),
         plane_workspace: String::new(),
+        gitlab_url: String::new(),
         screen: Screen::List,
         starting: false,
+        scheduling: false,
         error: None,
         notice: None,
         secrets_path: "~/.config/cornercase/secrets.json".into(),
@@ -37,6 +39,7 @@ fn browser() -> Browser {
         place: None,
         filtering: None,
         members: HashMap::new(),
+        queued: Vec::new(),
     }
 }
 
@@ -105,7 +108,7 @@ fn click(b: &mut Browser, hit: IssuesHit) -> Action {
 }
 
 fn button(b: &Browser, label: &str) -> IssuesHit {
-    let labels = b.labels();
+    let labels = b.labels(ROOM.buttons);
     let i = labels.iter().position(|l| *l == label).expect("the button is there");
     IssuesHit::Button(i)
 }
@@ -114,16 +117,18 @@ mod tabs {
     use super::*;
 
     #[test]
-    fn are_all_six_by_default() {
+    fn are_all_seven_and_the_queue_by_default() {
         assert_eq!(
             tabs(&[]),
             [
                 Tab::All,
                 Tab::One(Source::Github),
+                Tab::One(Source::Gitlab),
                 Tab::One(Source::Shortcut),
                 Tab::One(Source::Linear),
                 Tab::One(Source::Jira),
-                Tab::One(Source::Plane)
+                Tab::One(Source::Plane),
+                Tab::Queue
             ]
         );
     }
@@ -131,7 +136,7 @@ mod tabs {
     #[test]
     fn follow_the_config_and_skip_unknown_names() {
         let names = ["linear", "nope", "GitHub", "linear"].map(String::from);
-        assert_eq!(tabs(&names), [Tab::One(Source::Linear), Tab::One(Source::Github)]);
+        assert_eq!(tabs(&names), [Tab::One(Source::Linear), Tab::One(Source::Github), Tab::Queue]);
     }
 
     #[test]
@@ -171,8 +176,23 @@ mod tabs {
     #[test]
     fn a_click_on_a_tab_switches_to_it() {
         let mut b = browser();
-        click(&mut b, IssuesHit::Tab(2));
+        click(&mut b, IssuesHit::Tab(3));
         assert_eq!(b.current(), Tab::One(Source::Shortcut));
+    }
+
+    #[test]
+    fn gitlab_is_asked_once_connected() {
+        let mut b = browser();
+        b.connected(Source::Gitlab, Connection { from_env: true, account: None });
+        assert_eq!(b.needs_load(), Action::Load(vec![Source::Github, Source::Gitlab]));
+    }
+
+    #[test]
+    fn outside_git_gitlab_is_not_asked_either() {
+        let mut b = Browser { github: false, ..browser() };
+        b.connected(Source::Gitlab, Connection { from_env: true, account: None });
+        b.connected(Source::Linear, Connection { from_env: true, account: None });
+        assert_eq!(b.needs_load(), Action::Load(vec![Source::Linear]));
     }
 }
 
@@ -303,7 +323,7 @@ mod tokens {
     #[test]
     fn a_tracker_without_a_token_asks_for_one() {
         let b = on_shortcut();
-        assert_eq!((b.token_form(), b.labels()), (Some(Source::Shortcut), vec!["connect", "cancel"]));
+        assert_eq!((b.token_form(), b.labels(ROOM.buttons)), (Some(Source::Shortcut), vec!["connect", "cancel"]));
     }
 
     #[test]
@@ -331,8 +351,11 @@ mod tokens {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: false, account: None });
         assert_eq!(
-            (b.needs_load(), b.labels()),
-            (Action::Load(vec![Source::Shortcut]), vec!["start", "refresh", "disconnect", "cancel"])
+            (b.needs_load(), b.labels(ROOM.buttons)),
+            (
+                Action::Load(vec![Source::Shortcut]),
+                vec!["start", "schedule", "start a flow", "refresh", "disconnect", "cancel"]
+            )
         );
     }
 
@@ -340,7 +363,7 @@ mod tokens {
     fn a_token_from_the_environment_cannot_be_disconnected() {
         let mut b = on_shortcut();
         b.connected(Source::Shortcut, Connection { from_env: true, account: None });
-        assert_eq!(b.labels(), ["start", "refresh", "cancel"]);
+        assert_eq!(b.labels(ROOM.buttons), ["start", "schedule", "start a flow", "refresh", "cancel"]);
     }
 
     fn field(b: &Browser) -> (&'static str, String) {
@@ -366,14 +389,20 @@ mod tokens {
         #[test]
         fn asks_the_site_first_with_the_saved_one_typed() {
             let b = on_jira();
-            assert_eq!((field(&b), b.labels()), (("site", "acme.atlassian.net".into()), vec!["next", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("site", "acme.atlassian.net".into()), vec!["next", "cancel"])
+            );
         }
 
         #[test]
         fn then_the_email_and_saves_both() {
             let mut b = on_jira();
             press(&mut b, KeyCode::Enter);
-            assert_eq!((field(&b), b.labels()), (("email", "ana@acme.dev".into()), vec!["next", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("email", "ana@acme.dev".into()), vec!["next", "back", "cancel"])
+            );
             let saved = press(&mut b, KeyCode::Enter);
             assert_eq!(saved, Action::SaveJira { site: "acme.atlassian.net".into(), email: "ana@acme.dev".into() });
         }
@@ -404,7 +433,10 @@ mod tokens {
             let mut b = on_jira();
             to_the_token(&mut b);
             type_text(&mut b, "t0k");
-            assert_eq!((field(&b), b.labels()), (("API token", "•••".into()), vec!["connect", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("API token", "•••".into()), vec!["connect", "back", "cancel"])
+            );
             assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Jira, Secret("t0k".into())));
         }
 
@@ -431,14 +463,17 @@ mod tokens {
         #[test]
         fn asks_the_workspace_first_with_the_saved_one_typed() {
             let b = on_plane();
-            assert_eq!((field(&b), b.labels()), (("workspace", "acme".into()), vec!["next", "cancel"]));
+            assert_eq!((field(&b), b.labels(ROOM.buttons)), (("workspace", "acme".into()), vec!["next", "cancel"]));
         }
 
         #[test]
         fn saves_the_workspace_and_then_asks_for_the_key() {
             let mut b = on_plane();
             assert_eq!(press(&mut b, KeyCode::Enter), Action::SavePlane { workspace: "acme".into() });
-            assert_eq!((field(&b), b.labels()), (("API key", String::new()), vec!["connect", "back", "cancel"]));
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("API key", String::new()), vec!["connect", "back", "cancel"])
+            );
         }
 
         #[test]
@@ -479,6 +514,73 @@ mod tokens {
         }
     }
 
+    mod gitlab {
+        use super::*;
+
+        fn on_gitlab() -> Browser {
+            let mut b = browser();
+            b.tab_to(Tab::One(Source::Gitlab));
+            b
+        }
+
+        #[test]
+        fn asks_the_server_first_with_the_saved_one_typed() {
+            let mut b = on_gitlab();
+            b.gitlab_url = "https://gitlab.acme.dev".into();
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("server", "https://gitlab.acme.dev".into()), vec!["next", "cancel"])
+            );
+        }
+
+        #[test]
+        fn an_empty_server_is_saved_and_then_the_token_is_asked() {
+            let mut b = on_gitlab();
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::SaveGitlab { url: String::new() });
+            assert_eq!(
+                (field(&b), b.labels(ROOM.buttons)),
+                (("access token", String::new()), vec!["connect", "back", "cancel"])
+            );
+        }
+
+        #[test]
+        fn a_typed_server_is_saved_without_its_last_slash() {
+            let mut b = on_gitlab();
+            type_text(&mut b, "https://gitlab.acme.dev/");
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::SaveGitlab { url: "https://gitlab.acme.dev".into() });
+            assert_eq!(b.gitlab_url, "https://gitlab.acme.dev");
+        }
+
+        #[test]
+        fn a_bad_server_stays_with_its_error() {
+            let mut b = on_gitlab();
+            type_text(&mut b, "gitlab.acme.dev");
+            let action = press(&mut b, KeyCode::Enter);
+            let error = b.forms.get(&Source::Gitlab).and_then(|f| f.error.clone());
+            let expected = "a URL starts with https://, such as https://gitlab.acme.dev";
+            assert_eq!((action, field(&b).0, error.as_deref()), (Action::None, "server", Some(expected)));
+        }
+
+        #[test]
+        fn the_token_is_hidden_and_checked() {
+            let mut b = on_gitlab();
+            press(&mut b, KeyCode::Enter);
+            type_text(&mut b, "glpat");
+            assert_eq!(field(&b), ("access token", "•••••".into()));
+            assert_eq!(press(&mut b, KeyCode::Enter), Action::CheckToken(Source::Gitlab, Secret("glpat".into())));
+        }
+
+        #[test]
+        fn back_returns_to_the_server() {
+            let mut b = on_gitlab();
+            b.gitlab_url = "https://gitlab.acme.dev".into();
+            press(&mut b, KeyCode::Enter);
+            let pos = button(&b, "back");
+            click(&mut b, pos);
+            assert_eq!(field(&b), ("server", "https://gitlab.acme.dev".into()));
+        }
+    }
+
     #[test]
     fn disconnect_asks_to_forget_the_token() {
         let mut b = on_shortcut();
@@ -508,12 +610,35 @@ pub(crate) mod buttons {
 
     #[test]
     fn the_issue_offers_raw_copy_and_back_after_the_agent() {
-        assert_eq!(reading().labels(), ["start", "agent…", "raw", "copy url", "back"]);
+        assert_eq!(
+            reading().labels(ROOM.buttons),
+            ["start", "schedule", "start a flow", "agent…", "raw", "copy url", "back"]
+        );
     }
 
     #[test]
-    fn the_list_offers_refresh() {
-        assert_eq!(with_lists().labels(), ["start", "refresh", "cancel"]);
+    fn a_narrow_row_drops_schedule_so_start_stays() {
+        let b = reading();
+        let all = ["start", "schedule", "start a flow", "agent…", "raw", "copy url", "back"];
+        let width = all.iter().map(|label| label.chars().count() + 3).sum::<usize>() - 1;
+        assert_eq!(b.labels(width), all);
+        assert_eq!(b.labels(width - 1), ["start", "start a flow", "agent…", "raw", "copy url", "back"]);
+    }
+
+    #[test]
+    fn enter_starts_the_issue_after_schedule_was_pressed() {
+        let mut b = reading();
+        let schedule = button(&b, "schedule");
+        click(&mut b, schedule);
+        if b.picker.is_some() {
+            press(&mut b, KeyCode::Esc);
+        }
+        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(..)));
+    }
+
+    #[test]
+    fn the_list_offers_a_flow_beside_start_and_refresh() {
+        assert_eq!(with_lists().labels(ROOM.buttons), ["start", "schedule", "start a flow", "refresh", "cancel"]);
     }
 
     #[test]
@@ -529,7 +654,7 @@ pub(crate) mod buttons {
         let pos = button(&b, "raw");
         click(&mut b, pos);
         assert_eq!(
-            (b.labels().contains(&"rendered"), body_text(&b)),
+            (b.labels(ROOM.buttons).contains(&"rendered"), body_text(&b)),
             (true, vec!["# Title".to_string(), String::new(), "    indented **bold**".into()])
         );
     }
@@ -553,7 +678,7 @@ pub(crate) mod buttons {
 
     #[test]
     fn tabs_round_trip_through_their_id() {
-        let tabs = [Tab::All, Tab::One(Source::Linear)];
+        let tabs = [Tab::All, Tab::One(Source::Linear), Tab::Queue];
         assert_eq!(tabs.map(|t| Tab::from_id(t.id())), tabs.map(Some));
     }
 }
@@ -637,65 +762,8 @@ mod agent {
     }
 }
 
-mod place {
-    use super::*;
-
-    fn two_places() -> Browser {
-        let mut b = Browser { places: vec![shop(), notes()], ..with_lists() };
-        press(&mut b, KeyCode::Enter);
-        b
-    }
-
-    #[test]
-    fn a_story_asks_where_first_with_the_current_project_preselected() {
-        let mut b = two_places();
-        let first = press(&mut b, KeyCode::Enter);
-        let started = press(&mut b, KeyCode::Enter);
-        assert_eq!(first, Action::None);
-        assert!(matches!(&started, Action::Start(_, _, Some(place)) if *place == shop()), "{started:?}");
-    }
-
-    #[test]
-    fn another_place_can_be_picked() {
-        let mut b = two_places();
-        press(&mut b, KeyCode::Enter);
-        type_text(&mut b, "notes");
-        let started = press(&mut b, KeyCode::Enter);
-        assert!(matches!(&started, Action::Start(_, _, Some(place)) if *place == notes()), "{started:?}");
-    }
-
-    #[test]
-    fn the_issue_shows_where_it_starts() {
-        let mut b = two_places();
-        b.place = Some(1);
-        let start: String = b
-            .detail_lines(ROOM)
-            .into_iter()
-            .find(|l| l.spans.first().is_some_and(|s| s.content.trim() == "start"))
-            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
-            .expect("the start row");
-        assert_eq!(start, "start   in a new tab in notes › default");
-    }
-
-    #[test]
-    fn where_is_offered_for_stories_only() {
-        let mut b = two_places();
-        let story = b.labels();
-        press(&mut b, KeyCode::Esc);
-        press(&mut b, KeyCode::Down);
-        press(&mut b, KeyCode::Enter);
-        assert_eq!((story.contains(&"where…"), b.labels().contains(&"where…")), (true, false));
-    }
-
-    #[test]
-    fn a_github_issue_starts_in_its_repository() {
-        let mut b = two_places();
-        press(&mut b, KeyCode::Esc);
-        press(&mut b, KeyCode::Down);
-        press(&mut b, KeyCode::Enter);
-        assert!(matches!(press(&mut b, KeyCode::Enter), Action::Start(i, _, None) if i.key == "#1"));
-    }
-}
+mod list_flow;
+mod place;
 
 pub(crate) mod people {
     use super::*;
@@ -794,4 +862,69 @@ fn the_start_button_starts_the_selected_issue() {
     let mut b = with_lists();
     let pos = button(&b, "start");
     assert!(matches!(click(&mut b, pos), Action::Start(i, _, _) if i.key == "sc-2"));
+}
+
+mod queue_tab {
+    use super::*;
+    use crate::issues::browser::{Queued, Tab};
+    use crate::queue::State;
+
+    fn queued(id: u64, label: &str, state: State) -> Queued {
+        Queued { id, when: "2026-10-15 09:00".into(), label: label.into(), meta: "claude · shop".into(), state }
+    }
+
+    fn on_queue() -> Browser {
+        let mut b = browser();
+        b.tabs = tabs(&[]);
+        b.tab_to(Tab::Queue);
+        b.queued = vec![
+            queued(1, "Fix the login", State::Pending),
+            queued(2, "Update the docs", State::Started { pane: 7, server: "s".into() }),
+            queued(3, "Fix logout", State::Starting),
+        ];
+        b
+    }
+
+    #[test]
+    fn the_queue_is_the_last_tab_and_loads_nothing() {
+        let b = on_queue();
+        assert_eq!(b.tab_names().last(), Some(&"Queue"));
+        assert_eq!((b.needs_load(), b.toggles()), (Action::None, (Vec::new(), Vec::new())));
+    }
+
+    #[test]
+    fn the_buttons_follow_the_selected_entry() {
+        let mut b = on_queue();
+        assert_eq!(b.labels(ROOM.buttons), ["new", "start now", "remove", "clear started", "cancel"]);
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "remove", "clear started", "cancel"]);
+        press(&mut b, KeyCode::Down);
+        assert_eq!(b.labels(ROOM.buttons), ["new", "clear started", "cancel"]);
+    }
+
+    #[test]
+    fn enter_and_a_click_open_the_entry_and_the_buttons_say_what_to_do() {
+        let mut b = on_queue();
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::QueueOpen(1));
+        assert_eq!(click(&mut b, IssuesHit::Item(1)), Action::QueueOpen(2));
+        for (label, action) in
+            [("remove", Action::QueueRemove(2)), ("new", Action::QueueNew), ("clear started", Action::QueueClear)]
+        {
+            let hit = button(&b, label);
+            assert_eq!(click(&mut b, hit), action);
+        }
+        press(&mut b, KeyCode::Up);
+        let hit = button(&b, "start now");
+        assert_eq!(click(&mut b, hit), Action::QueueRun(1));
+    }
+
+    #[test]
+    fn typing_filters_the_entries() {
+        let mut b = on_queue();
+        for c in "logout".chars() {
+            press(&mut b, KeyCode::Char(c));
+        }
+        assert_eq!(b.shown_queue().iter().map(|q| q.id).collect::<Vec<_>>(), [3]);
+        assert_eq!(press(&mut b, KeyCode::Enter), Action::QueueOpen(3));
+    }
 }

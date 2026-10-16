@@ -249,10 +249,18 @@ impl Drop for Running {
     }
 }
 
-pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
-    let path = dir.join("gh");
+pub(crate) fn fake_tool(dir: &Path, name: &str, script: &str) -> PathBuf {
+    let path = dir.join(name);
     write_executable(&path, &format!("#!/bin/sh\n{script}\n"));
     path
+}
+
+pub(crate) fn fake_gh(dir: &Path, script: &str) -> PathBuf {
+    fake_tool(dir, "gh", script)
+}
+
+pub(crate) fn fake_glab(dir: &Path, script: &str) -> PathBuf {
+    fake_tool(dir, "glab", script)
 }
 
 pub(crate) fn git(dir: &Path, args: &[&str]) {
@@ -322,8 +330,13 @@ impl FakeHttp {
                     (routes[i].1, routes[i].2.as_slice())
                 });
                 log.lock().push(request);
+                let (location, body) = if (300..400).contains(&status) {
+                    (format!("Location: {}\r\n", String::from_utf8_lossy(body)), b"".as_slice())
+                } else {
+                    (String::new(), body)
+                };
                 let head = format!(
-                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    "HTTP/1.1 {status} X\r\n{location}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
                 );
                 let _ = std::io::Write::write_all(&mut stream, &[head.as_bytes(), body].concat());
@@ -343,6 +356,13 @@ impl FakeHttp {
     pub(crate) fn requests(&self) -> Vec<String> {
         self.requests.lock().clone()
     }
+}
+
+pub(crate) fn redirected(route: &'static str) -> (FakeHttp, FakeHttp) {
+    let elsewhere = FakeHttp::start(vec![(route, 200, "{}".to_string())]);
+    let path = route.split_once(' ').map_or(route, |(_, path)| path);
+    let server = FakeHttp::start(vec![(route, 302, format!("{}{path}", elsewhere.url()))]);
+    (server, elsewhere)
 }
 
 impl Drop for FakeHttp {

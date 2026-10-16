@@ -26,6 +26,7 @@ pub(super) enum Side {
     Changes,
     Todo,
     Files,
+    Flow,
 }
 
 impl App {
@@ -44,6 +45,7 @@ impl App {
             Some(Side::Changes) => self.changes_shown(),
             Some(Side::Todo) => true,
             Some(Side::Files) => self.files_shown(),
+            Some(Side::Flow) => self.has_run(),
             None => false,
         }
     }
@@ -56,7 +58,7 @@ impl App {
             Some(Side::Changes) => self.changes.close(),
             Some(Side::Todo) => self.close_todo(),
             Some(Side::Files) => self.files.close(),
-            None => {}
+            Some(Side::Flow) | None => {}
         }
         self.side = side;
     }
@@ -86,6 +88,7 @@ impl App {
     }
 
     pub(super) fn follow(&mut self, area: Rect) {
+        self.queued.area = Some(area);
         let areas = self.layout(area);
         let relayout = areas.tree != self.drawn.tree || areas.tab_bar.is_empty() != self.drawn.tab_bar.is_empty();
         self.drawn = areas;

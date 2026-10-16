@@ -118,8 +118,29 @@ pub(crate) const DEFAULT_WORKTREES_DIR: &str = "~/.cornercase/worktrees";
 pub(crate) const DEFAULT_PORT: u16 = 47681;
 pub(crate) const DEFAULT_PROMPT: &str = "{url}";
 pub(crate) const DEFAULT_GH: &str = "gh";
-pub(crate) const DEFAULT_ISSUE_TABS: [&str; 6] = ["all", "github", "shortcut", "linear", "jira", "plane"];
+pub(crate) const DEFAULT_GLAB: &str = "glab";
+pub(crate) const DEFAULT_ISSUE_TABS: [&str; 7] = ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct ProjectSettings {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) setup: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) teardown: String,
+}
+
+impl ProjectSettings {
+    fn normalised(self) -> Self {
+        let clean = |text: String| text.replace("\r\n", "\n").trim_end().to_string();
+        Self { setup: clean(self.setup), teardown: clean(self.teardown) }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.setup.is_empty() && self.teardown.is_empty()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -127,7 +148,10 @@ pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
 pub(crate) struct Config {
     pub(crate) worktrees_dir: String,
     pub(crate) fetch_minutes: u64,
+    pub(crate) pull_requests: bool,
+    pub(crate) merged_pull_requests: bool,
     pub(crate) issue_tabs: Vec<String>,
+    pub(crate) gitlab_url: String,
     pub(crate) jira_site: String,
     pub(crate) jira_email: String,
     pub(crate) jira_jql: String,
@@ -145,6 +169,7 @@ pub(crate) struct Config {
     pub(crate) keep_awake: bool,
     pub(crate) trust_prompt_pattern: String,
     pub(crate) gh: String,
+    pub(crate) glab: String,
     pub(crate) sidebar: String,
     pub(crate) tabs: String,
     pub(crate) icon_bar: bool,
@@ -159,8 +184,10 @@ pub(crate) struct Config {
     pub(crate) memory: bool,
     pub(crate) desktop_notifications: String,
     pub(crate) check_updates: bool,
+    pub(crate) star_prompt: bool,
     pub(crate) remote: bool,
     pub(crate) remote_port: u16,
+    pub(crate) projects: BTreeMap<String, ProjectSettings>,
 }
 
 impl Default for Config {
@@ -168,7 +195,10 @@ impl Default for Config {
         Self {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
+            pull_requests: true,
+            merged_pull_requests: true,
             issue_tabs: DEFAULT_ISSUE_TABS.map(String::from).to_vec(),
+            gitlab_url: String::new(),
             jira_site: String::new(),
             jira_email: String::new(),
             jira_jql: String::new(),
@@ -186,6 +216,7 @@ impl Default for Config {
             keep_awake: false,
             trust_prompt_pattern: agents::DEFAULT_TRUST_PROMPT.into(),
             gh: DEFAULT_GH.into(),
+            glab: DEFAULT_GLAB.into(),
             sidebar: Sidebar::default().id().into(),
             tabs: Tabs::default().id().into(),
             icon_bar: false,
@@ -200,8 +231,10 @@ impl Default for Config {
             memory: false,
             desktop_notifications: notify::AUTO.into(),
             check_updates: true,
+            star_prompt: true,
             remote: false,
             remote_port: DEFAULT_PORT,
+            projects: BTreeMap::new(),
         }
     }
 }
@@ -215,12 +248,32 @@ impl Config {
         expand_home(&self.gh, home)
     }
 
+    pub(crate) fn glab(&self, home: Option<&Path>) -> PathBuf {
+        expand_home(&self.glab, home)
+    }
+
     pub(crate) fn prefix(&self) -> Option<Prefix> {
         Prefix::parse(&self.prefix_key)
     }
 
     pub(crate) fn spinner(&self) -> bool {
         WorkingIcon::from_setting(&self.working_icon) == WorkingIcon::Spinner
+    }
+
+    pub(crate) fn project(&self, folder: &Path, home: Option<&Path>) -> ProjectSettings {
+        self.projects
+            .iter()
+            .find(|(key, _)| names_folder(key, folder, home))
+            .map(|(_, s)| s.clone())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn set_project(&mut self, folder: &Path, home: Option<&Path>, settings: ProjectSettings) {
+        self.projects.retain(|key, _| !names_folder(key, folder, home));
+        let settings = settings.normalised();
+        if !settings.is_empty() {
+            self.projects.insert(crate::text::display_path(folder, home), settings);
+        }
     }
 
     pub(crate) fn fetch_every(&self) -> Option<Duration> {
@@ -245,22 +298,31 @@ fn migrate(keys: &mut Map<String, Value>) {
     if let Some(context) = keys.get("context").cloned() {
         keys.entry("model").or_insert(context);
     }
-    if !keys.contains_key("jira_site")
-        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
-        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("jira")))
-    {
-        tabs.push(Value::String("jira".into()));
+    add_tab(keys, "jira_site", "jira", None);
+    add_tab(keys, "plane_workspace", "plane", None);
+    add_tab(keys, "gitlab_url", "gitlab", Some("github"));
+}
+
+fn add_tab(keys: &mut Map<String, Value>, written_since: &str, tab: &str, after: Option<&str>) {
+    if keys.contains_key(written_since) {
+        return;
     }
-    if !keys.contains_key("plane_workspace")
-        && let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs")
-        && !tabs.iter().any(|t| t.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case("plane")))
-    {
-        tabs.push(Value::String("plane".into()));
+    let Some(Value::Array(tabs)) = keys.get_mut("issue_tabs") else { return };
+    let named = |value: &Value, name: &str| value.as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case(name));
+    if tabs.iter().any(|t| named(t, tab)) {
+        return;
     }
+    let at = after.and_then(|after| tabs.iter().position(|t| named(t, after))).map_or(tabs.len(), |i| i + 1);
+    tabs.insert(at, Value::String(tab.into()));
 }
 
 pub(crate) fn save(path: &Path, config: &Config) -> io::Result<()> {
     persist::save(path, config)
+}
+
+fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
+    let key = expand_home(key, home);
+    key == folder || key.canonicalize().is_ok_and(|key| key == folder)
 }
 
 pub(crate) fn expand_home(path: &str, home: Option<&Path>) -> PathBuf {

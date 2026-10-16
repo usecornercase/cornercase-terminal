@@ -21,7 +21,8 @@ use crate::issues::browser::{
 use crate::issues::cache::{Cache as IssueCache, Key as CacheKey};
 use crate::issues::secrets;
 use crate::issues::{
-    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, jira, linear, plane, shortcut,
+    self, Account, Client, Detail, Issue, Listed, People, Person, Query, Secret, Source, gitlab, jira, linear, plane,
+    shortcut,
 };
 use crate::list::Search;
 use crate::log::{self, Job, Level};
@@ -164,6 +165,11 @@ impl App {
         Some(plane::Api { base, app, slug: config.plane_workspace.clone(), token, filter: config.plane_filter.clone() })
     }
 
+    fn gitlab(&self, token: String, project: Option<u64>) -> gitlab::Api {
+        let dir = project.and_then(|id| self.projects.project_index(id)).map(|p| self.projects[p].path.clone());
+        gitlab::Api { base: gitlab::server(&self.config.gitlab_url), token, dir: dir.unwrap_or_default() }
+    }
+
     fn connected(&self, source: Source) -> Option<bool> {
         let (token, from_env) = self.token(source)?;
         let configured = match source {
@@ -174,7 +180,7 @@ impl App {
         configured.then_some(from_env)
     }
 
-    fn client(&self, source: Source, project: u64) -> Option<Client> {
+    pub(super) fn client(&self, source: Source, project: u64) -> Option<Client> {
         match source {
             Source::Github => {
                 let dir = self.projects.get(self.projects.project_index(project)?)?.path.clone();
@@ -188,6 +194,7 @@ impl App {
             }
             Source::Jira => self.jira(self.token(source)?.0).map(Client::Jira),
             Source::Plane => self.plane(self.token(source)?.0).map(Client::Plane),
+            Source::Gitlab => Some(Client::Gitlab(self.gitlab(self.token(source)?.0, Some(project)))),
         }
     }
 
@@ -240,8 +247,10 @@ impl App {
             jira_site: self.config.jira_site.clone(),
             jira_email: self.config.jira_email.clone(),
             plane_workspace: self.config.plane_workspace.clone(),
+            gitlab_url: self.config.gitlab_url.clone(),
             screen: Screen::List,
             starting: false,
+            scheduling: false,
             error: None,
             notice: None,
             secrets_path: crate::text::display_path(&self.issues.secrets_path, self.home.as_deref()),
@@ -251,6 +260,7 @@ impl App {
             here,
             place: None,
             filtering: None,
+            queued: self.queued_rows(),
             members: self
                 .issues
                 .people_cache
@@ -304,7 +314,14 @@ impl App {
                 }
             }
             Action::Read(issue) => self.read_issue(issue),
+            Action::Schedule(issue, agent, place) => self.schedule_issue(&issue, &agent, place),
+            Action::QueueNew => self.new_queue_form(None),
+            Action::QueueOpen(id) => self.open_queued(id, area),
+            Action::QueueRun(id) => self.run_queued_now(id),
+            Action::QueueRemove(id) => self.remove_queued(id),
+            Action::QueueClear => self.clear_queued(),
             Action::Start(issue, agent, place) => return self.start_issue(&issue, &agent, place, area),
+            Action::StartFlow(issue, place) => self.start_issue_flow(&issue, place),
             Action::LoadPeople(sources) => {
                 for source in sources {
                     self.load_people(source);
@@ -331,6 +348,10 @@ impl App {
                 let config = Config { plane_workspace: workspace, ..self.config.clone() };
                 return self.save_connection(Source::Plane, config, area);
             }
+            Action::SaveGitlab { url } => {
+                let config = Config { gitlab_url: url, ..self.config.clone() };
+                return self.save_connection(Source::Gitlab, config, area);
+            }
             Action::Disconnect(source) => self.disconnect(source),
             Action::Copy(url) => {
                 self.outbox.host_writes.push(clipboard::osc52(&url));
@@ -343,7 +364,8 @@ impl App {
     }
 
     pub(super) fn cache_key(&self, source: Source, project: u64, query: &Query) -> CacheKey {
-        let project = (source == Source::Github)
+        let project = source
+            .in_repository()
             .then(|| self.projects.project_index(project).map(|p| self.projects[p].path.clone()))
             .flatten();
         CacheKey { source, project, query: query.clone() }
@@ -370,7 +392,7 @@ impl App {
 
     pub(super) fn people_loaded(&mut self, project: u64, source: Source, result: Result<Vec<Person>>) {
         if let Ok(people) = &result {
-            self.issues.people_cache.insert((source, (source == Source::Github).then_some(project)), people.clone());
+            self.issues.people_cache.insert((source, source.in_repository().then_some(project)), people.clone());
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay
             && b.project == project
@@ -483,6 +505,7 @@ impl App {
             Source::Linear => Ok(Client::Linear { url: self.issues.apis.linear.clone(), token: token.0.clone() }),
             Source::Jira => self.jira(token.0.clone()).map(Client::Jira).ok_or("set the Jira site and email first"),
             Source::Plane => self.plane(token.0.clone()).map(Client::Plane).ok_or("set the Plane workspace first"),
+            Source::Gitlab => Ok(Client::Gitlab(self.gitlab(token.0.clone(), None))),
         };
         let client = match client {
             Ok(client) => client,
@@ -556,12 +579,14 @@ impl App {
     }
 
     pub(super) fn issues_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
+        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let action = b.key(key, room(area));
         self.act(action, area)
     }
 
     pub(super) fn issues_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
+        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let room = room(area);
         let ui::Overlay::Issues(view) = view(b, room, time::now()) else { return Ok(()) };
@@ -580,6 +605,20 @@ impl App {
         self.act(action, area)
     }
 
+    fn issue_task(&self, issue: &Issue) -> (String, String) {
+        let branch = issues::branch(issue);
+        let prompt = issues::prompt(&self.config.prompt, issue, &branch);
+        (branch, prompt)
+    }
+
+    fn start_issue_flow(&mut self, issue: &Issue, place: Option<Place>) {
+        let Some(browsing) = self.browser_project() else { return };
+        let project = place.map_or(browsing, |place| place.project);
+        let (branch, prompt) = self.issue_task(issue);
+        let start = self.start_flow_in(project).map(|s| s.for_issue(issues::workspace_name(issue), &prompt, branch));
+        self.open_start_flow(start);
+    }
+
     fn start_issue(&mut self, issue: &Issue, agent: &str, place: Option<Place>, area: Rect) -> Result<()> {
         let Some(browsing) = self.browser_project() else { return Ok(()) };
         let project = place.as_ref().map_or(browsing, |place| place.project);
@@ -587,13 +626,14 @@ impl App {
             self.overlay = None;
             return Ok(());
         };
-        let branch = issues::branch(issue);
+        let (branch, prompt) = self.issue_task(issue);
         let start = Start {
             name: issues::workspace_name(issue),
             spec: launch::Spec {
                 command: agents::command_line(&self.config, agent),
-                prompt: Some(issues::prompt(&self.config.prompt, issue, &branch)),
+                prompt: Some(prompt),
                 submit: self.config.submit,
+                trusted: false,
             },
         };
         let in_a_tab = match &place {
@@ -619,7 +659,7 @@ impl App {
         let open = self.projects[p].workspaces.iter().position(|w| git::branch(&w.path).as_deref() == Some(&branch));
         if let Some(w) = open {
             self.overlay = None;
-            return self.open_workspace(p, w, Some(start), area);
+            return self.open_workspace(p, w, Some(start), area, false);
         }
         self.spawn_worktree(p, branch, Some(start), None);
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
@@ -638,6 +678,7 @@ pub(super) fn room(area: Rect) -> Room {
         list_rows: usize::from(list.height),
         detail_rows: usize::from(detail.height),
         detail_width: usize::from(detail.width),
+        buttons: usize::from(ui::issue_buttons_width(issues)),
     }
 }
 
@@ -656,7 +697,8 @@ fn picker_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
     let picker = browser.picker.as_ref();
     let choices = browser.choices();
     let selected = choices.len().checked_sub(1).map(|last| picker.map_or(0, |p| p.search.selected()).min(last));
-    let items = choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta }).collect();
+    let items =
+        choices.into_iter().map(|c| ui::IssueRow { key: c.key, title: c.title, meta: c.meta, colour: None }).collect();
     let body = ui::IssuesBody::List {
         filter: picker.map(|p| p.search.query().to_string()).unwrap_or_default(),
         items,
@@ -696,6 +738,7 @@ fn people_view(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) 
             key: format!("{} {}", source.name(), source.people_fields()[*field]),
             title: browser.people.of(*source)[*field].describe(),
             meta: String::new(),
+            colour: None,
         })
         .collect();
     let body = ui::IssuesBody::List {
@@ -729,6 +772,7 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
             let hint = format!("enter starts it{more}");
             (ui::IssuesBody::Detail { lines, scroll }, note, hint)
         }
+        Screen::List if browser.current() == Tab::Queue => super::queue_panel::queue_tab(browser),
         Screen::List => match browser.token_form() {
             Some(source) => token_view(browser, source),
             None => list_view(browser, now),
@@ -752,7 +796,7 @@ pub(super) fn view(browser: &Browser, room: Room, now: i64) -> ui::Overlay {
         body,
         note,
         hint,
-        buttons: browser.labels(),
+        buttons: browser.labels(room.buttons),
     })
 }
 
@@ -772,6 +816,10 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
             help.push("Type your Plane workspace, the part after the server's name, such as acme.".into());
             help.push("Then press Enter.".into());
         }
+        Step::Server => {
+            help.push("Type the URL of your GitLab server, such as https://gitlab.acme.dev, and press Enter.".into());
+            help.push("Leave it empty for gitlab.com.".into());
+        }
         Step::Token => {
             match source {
                 Source::Jira => help
@@ -779,6 +827,13 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
                 Source::Plane => {
                     let line = format!("Connecting to the Plane workspace {}.", browser.plane_workspace);
                     help.extend([line, String::new()]);
+                }
+                Source::Gitlab => {
+                    help.push(format!("Connecting to {}.", gitlab::server(&browser.gitlab_url)));
+                    if gitlab::unencrypted(&browser.gitlab_url) {
+                        help.push(format!("Careful: {}.", gitlab::UNENCRYPTED));
+                    }
+                    help.push(String::new());
                 }
                 _ => {}
             }
@@ -796,6 +851,9 @@ fn token_view(browser: &Browser, source: Source) -> (ui::IssuesBody, Option<ui::
         }
         _ if source == Source::Plane => {
             help.extend([String::new(), "The workspace is saved in your settings.".into()]);
+        }
+        _ if source == Source::Gitlab => {
+            help.extend([String::new(), "The server is saved in your settings.".into()]);
         }
         _ => help.extend([String::new(), "The site and the email are saved in your settings.".into()]),
     }
@@ -820,10 +878,10 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
         "no matches".to_string()
     } else if loading || error.is_some() {
         String::new()
-    } else if browser.current() == Tab::One(Source::Github) && !browser.github {
+    } else if matches!(browser.current(), Tab::One(source) if source.in_repository()) && !browser.github {
         "this project is not in a git repository".into()
     } else if browser.sources().is_empty() {
-        "nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs".into()
+        "nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs".into()
     } else if browser.closed {
         "no issues".into()
     } else {
@@ -836,7 +894,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
     };
     let account = match browser.current() {
         Tab::One(source) => browser.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
-        Tab::All => None,
+        Tab::All | Tab::Queue => None,
     };
     let action =
         selected.map(|i| format!("enter reads {} · start works on it {}", shown[i].key, browser.start_hint(shown[i])));
@@ -848,6 +906,7 @@ fn list_view(browser: &Browser, now: i64) -> (ui::IssuesBody, Option<ui::Note>, 
             key: issue.key.clone(),
             title: issue.title.clone(),
             meta: issues::meta(issue, now),
+            colour: None,
         })
         .collect();
     let body = ui::IssuesBody::List {

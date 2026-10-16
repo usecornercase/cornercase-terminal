@@ -9,10 +9,13 @@ fn with_details(details: Details) -> View<'static> {
     View {
         has_project: true,
         workspaces: vec![WorkspaceEntry {
+            collapsed: false,
             name: "login".into(),
             tabs: vec![claude, "nvim".into()],
             behind: 0,
+            pull: None,
             removing: false,
+            setting_up: false,
         }],
         active_tab: Some(0),
         ..view(&["shop"])

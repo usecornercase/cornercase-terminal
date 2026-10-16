@@ -79,6 +79,7 @@ mod a_bug {
             active: 0,
             base: None,
             collapsed: false,
+            run: None,
         };
         let project =
             ProjectState { path, name: None, group: None, workspaces: vec![workspace], active: 0, collapsed: false };
@@ -112,8 +113,19 @@ mod a_bug {
         let _ = server.handle(ServerEvent::Accepted(ours));
         let (version, build, theme) = (protocol::VERSION, version::build_id(), HostTheme::default());
         let (notify, probe) = (Channel::Bell, String::new());
-        let hello =
-            Hello { version, build, cols: COLS, rows: ROWS, theme, notify, terminal: None, pointer, graphics, probe };
+        let hello = Hello {
+            version,
+            build,
+            cols: COLS,
+            rows: ROWS,
+            theme,
+            notify,
+            terminal: None,
+            pointer,
+            graphics,
+            probe,
+            zone: "UTC".into(),
+        };
         let _ = server.handle(ServerEvent::Message(id, ClientMessage::Hello(Box::new(hello))));
         let (frames_tx, frames) = mpsc::channel();
         thread::spawn(move || {
@@ -318,6 +330,7 @@ mod streaming {
         let graphics = Graphics::default();
         (
             Client {
+                zone: "UTC".into(),
                 id: 1,
                 size: None,
                 used: 0,
@@ -685,5 +698,57 @@ mod drawing {
         attached.server.save(t0 + persist::SETTLE + SAVE_EVERY);
 
         assert!(session.exists(), "the session settles and is written");
+    }
+}
+
+mod queue_persistence {
+    use super::*;
+
+    fn restored(dir: &TempDir) -> Server {
+        let session = dir.path().join("session.json");
+        let (tx, _) = mpsc::channel();
+        let (app_tx, _) = mpsc::channel();
+        let mut app = App::new("/bin/sh".into(), HostTheme::default(), dir.path().join("config.json"), app_tx);
+        app.set_queue(queue::load(&paths::queue(&session), crate::time::now()));
+        Server::new(app, session, Saver::new(dir.path().join("todos.json"), None), tx)
+    }
+
+    #[rstest::rstest]
+    #[case::corrupt("invalid JSON")]
+    #[case::unsupported("{\"version\":2,\"next_id\":5,\"entries\":[]}")]
+    fn an_unreadable_queue_is_preserved_until_the_queue_changes(#[case] contents: &str) {
+        let dir = TempDir::new();
+        let path = paths::queue(&dir.path().join("session.json"));
+        std::fs::write(&path, contents).expect("write an unreadable queue");
+        let mut server = restored(&dir);
+        let now = Instant::now();
+        assert!(!server.queue_saver.observe(server.app.queue_saved(), now).expect("observe"));
+        assert!(!server.queue_saver.observe(server.app.queue_saved(), now + persist::SETTLE).expect("settle"));
+        server.queue_saver.flush().expect("flush");
+        assert_eq!(std::fs::read_to_string(&path).expect("original queue"), contents);
+        let mut queued = queue::Queue::default();
+        queued.add(queue::Task::default()).expect("a new entry");
+        server.app.set_queue(queued);
+        assert!(!server.queue_saver.observe(server.app.queue_saved(), now).expect("changed"));
+        assert!(server.queue_saver.observe(server.app.queue_saved(), now + persist::SETTLE).expect("save changes"));
+        assert_eq!(queue::read_saved(&path).expect("new queue").entries.len(), 1);
+    }
+
+    #[test]
+    fn restored_interrupted_starts_are_saved_as_failed() {
+        let dir = TempDir::new();
+        let path = paths::queue(&dir.path().join("session.json"));
+        let mut queued = queue::Queue::default();
+        let id = queued.add(queue::Task::default()).expect("entry");
+        queued.entry_mut(id).expect("entry").state = queue::State::Starting;
+        persist::save(&path, &queued.saved()).expect("interrupted start");
+        let mut server = restored(&dir);
+        let now = Instant::now();
+        assert!(!server.queue_saver.observe(server.app.queue_saved(), now).expect("observe"));
+        assert!(server.queue_saver.observe(server.app.queue_saved(), now + persist::SETTLE).expect("save failure"));
+        assert!(matches!(
+            queue::read_saved(&path).expect("saved failure").entries[0].state,
+            queue::State::Failed { .. }
+        ));
     }
 }

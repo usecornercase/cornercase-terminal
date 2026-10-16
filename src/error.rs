@@ -46,6 +46,10 @@ pub enum Error {
     RunGh(std::io::Error),
     #[error("{0}")]
     Gh(String),
+    #[error("failed to run glab: {0}")]
+    RunGlab(std::io::Error),
+    #[error("{0}")]
+    Glab(String),
     #[error("gh printed something unexpected: {0}")]
     GhOutput(serde_json::Error),
     #[error("{0}")]
@@ -58,6 +62,8 @@ pub enum Error {
     CodeWorkspace { path: PathBuf, reason: String },
     #[error("cannot read `{}`: {cause}", path.display())]
     Record { path: PathBuf, cause: String },
+    #[error("cannot use the flow `{}`: {reason}", path.display())]
+    FlowFile { path: PathBuf, reason: String },
     #[error("`{0}` already exists")]
     PathExists(PathBuf),
     #[error("no cornercase server is running")]

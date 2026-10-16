@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::agents::AgentState;
 use crate::changes::{Mode, Scope};
+use crate::flows::Flow;
+use crate::flows::run::Run;
 use crate::issues::People;
 use crate::project::group::GroupEntry;
 use crate::project::split::Node;
@@ -41,6 +43,8 @@ pub(crate) struct State {
     pub(crate) todo: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) flow: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +95,52 @@ pub(crate) struct WorkspaceState {
     pub(crate) base: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) collapsed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) run: Option<RunState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RunState {
+    pub(crate) flow: Flow,
+    pub(crate) task: String,
+    #[serde(default)]
+    pub(crate) members: Vec<SeatState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) stage: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) rounds: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SeatState {
+    pub(crate) role: String,
+    pub(crate) tab: usize,
+    #[serde(default)]
+    pub(crate) pane: usize,
+}
+
+impl RunState {
+    pub(crate) fn of(run: &Run, workspace: &Workspace) -> Self {
+        let place =
+            |id: u64| workspace.tabs.iter().enumerate().find_map(|(t, tab)| tab.index_of(id).map(|pane| (t, pane)));
+        let members = run
+            .members
+            .iter()
+            .filter_map(|m| place(m.pane).map(|(tab, pane)| SeatState { role: m.role.clone(), tab, pane }))
+            .collect();
+        Self {
+            flow: run.flow.clone(),
+            task: run.task.clone(),
+            members,
+            stage: run.progress.active,
+            rounds: run.progress.all_rounds().to_vec(),
+        }
+    }
+
+    pub(crate) fn role_at(&self, tab: usize, pane: usize) -> Option<&crate::flows::Role> {
+        let seat = self.members.iter().find(|seat| (seat.tab, seat.pane) == (tab, pane))?;
+        self.flow.role(&seat.role)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -125,17 +175,27 @@ impl WorkspaceState {
             active: 0,
             layout: None,
         });
-        Self { path, name: None, worktree: false, tabs: tabs.collect(), active, base: None, collapsed: false }
+        Self {
+            path,
+            name: None,
+            worktree: false,
+            tabs: tabs.collect(),
+            active,
+            base: None,
+            collapsed: false,
+            run: None,
+        }
     }
 }
 
 impl ProjectState {
-    pub(crate) fn of(project: &Project, group: Option<usize>) -> Self {
+    pub(crate) fn of(project: &Project, group: Option<usize>, runs: &[Run]) -> Self {
+        let run = |id: u64| runs.iter().find(|run| run.workspace == id);
         Self {
             path: project.path.clone(),
             name: project.name.clone(),
             group,
-            workspaces: project.workspaces.iter().map(WorkspaceState::of).collect(),
+            workspaces: project.workspaces.iter().map(|w| WorkspaceState::of(w, run(w.id))).collect(),
             active: project.active,
             collapsed: project.collapsed,
         }
@@ -175,7 +235,7 @@ impl TabState {
 }
 
 impl WorkspaceState {
-    pub(crate) fn of(workspace: &Workspace) -> Self {
+    pub(crate) fn of(workspace: &Workspace, run: Option<&Run>) -> Self {
         Self {
             path: workspace.path.clone(),
             name: workspace.name.clone(),
@@ -184,6 +244,7 @@ impl WorkspaceState {
             tabs: workspace.tabs.iter().map(TabState::of).collect(),
             active: workspace.active,
             collapsed: workspace.collapsed,
+            run: run.map(|run| RunState::of(run, workspace)),
         }
     }
 }
@@ -266,6 +327,7 @@ impl From<V2State> for State {
             changes: None,
             todo: false,
             files: false,
+            flow: false,
         }
     }
 }

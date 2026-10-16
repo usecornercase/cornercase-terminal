@@ -18,21 +18,23 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 
 <Screen
   name="settings-worktrees"
-  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n"
-  crop={[2, 4, 106, 6]}
+  alt="The Worktrees tab: worktrees folder ~/.cornercase/worktrees, new worktrees go in folder/repo/branch; fetch branches every 5 min, commits to pull show as ↓n; pull requests shown, each workspace's pull request and its checks, from gh"
+  crop={[2, 4, 106, 7]}
 />
 
 | Row | What it sets |
 | --- | --- |
 | **worktrees folder** | Where new [worktrees](../../guides/worktrees/) are checked out: `<folder>/<repository>/<branch>`. Must be an absolute path or start with `~/`. |
 | **fetch branches every** | How often, in minutes, the remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) as `↓n` on each workspace. `0` turns it off. |
+| **merged PRs in stats** | On (the default): Usage → Stats counts your merged pull requests and merge requests, read with `gh` and `glab`. Off: nothing is asked. The note names the accounts read, or why none were. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats). |
+| **pull requests** | On (the default): each workspace whose branch has a pull request on GitHub shows its number and the state of its checks, read with `gh`. Off: nothing is asked. The note says why none show when `gh` is missing, logged out or failing. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks). |
 
 ### Agents
 
 <Screen
   name="settings-agents"
-  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; and how each agent starts: claude, codex and gemini in their default mode, plus another agent"
-  crop={[2, 4, 106, 15]}
+  alt="The Agents tab: default agent auto, the agent in your tab, otherwise ask; send the prompt unticked; trust prompts left to you; conversations resumed after a restart; keep awake off; how each agent starts: claude, codex, gemini, opencode and grok in their default mode, plus another agent; and under Flows, the flows row with 4 built in"
+  crop={[2, 4, 106, 20]}
 />
 
 | Row | What it sets |
@@ -40,10 +42,11 @@ The ` restart ` button next to ` done ` restarts cornercase. It first lists what
 | **default agent** | The agent that takes an issue when you don't pick one: a specific agent, or `auto`, which uses the agent running in your current tab and otherwise asks. |
 | **send the prompt** | Off: the prompt is typed on one line and you press `Enter`. On: it is pasted as written and sent for you. |
 | **trust prompts** | Off (the default): when an agent cornercase starts asks "do you trust this folder?", you answer, and the prompt waits. On: cornercase answers yes for you, which lets the repository's agent configuration run. |
-| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
+| **resume conversations** | On (the default): after a server restart, `kill-server` or a reboot, each pane that ran Claude Code, Codex, Gemini CLI, Grok Build or Cursor CLI comes back in the same conversation. Off: it comes back as a plain shell. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations). |
 | **keep awake** | Off (the default): the computer sleeps when idle, as it always does. On: while an agent is working, the computer does not go to sleep on its own. The note says whether it is being kept awake now, or why it can't be on this machine. See [Keep the computer awake](../agents/#keep-the-computer-awake). |
-| **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex` and `gemini` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
+| **How each agent starts** | One row per agent: the default agent, the agents with start modes (`claude`, `codex`, `gemini`, `opencode` and `grok` out of the box) and any you set up. Click one to choose its mode and extra arguments. |
 | **+ another agent…** | Adds one of the other [known agents](../agents/) to the list so you can set it up. |
+| **flows** | Opens the Flows dialog, to list, create, edit, duplicate, export, import and delete [flows](../../guides/flows/#edit-flows), teams of agents that work through a plan, and to restore a built-in flow you edited. Its note counts them, such as `4 built in, 1 yours` (a built-in flow you edited counts as yours). |
 
 Choosing how an agent starts opens a list of its modes, each with the arguments it adds, plus **extra arguments…** for anything else you want on its command line:
 
@@ -60,7 +63,7 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 <Screen
   name="settings-issues"
   crop={[2, 4, 106, 26]}
-  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; and the sources shown: All, GitHub, Shortcut, Linear, Jira and Plane, with move arrows on the hovered row"
+  alt="The Issues tab: Shortcut API token and Linear API key not connected; the Jira section with its site, email, API token and filter not set; the Plane section with its workspace not set, its URL on Plane Cloud, its API key not connected and its filter not set; the GitLab section with its URL on gitlab.com and its access token not connected; and the first sources shown, All and GitHub, with move arrows on the hovered row"
 />
 
 | Row | What it sets |
@@ -72,14 +75,16 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **Plane workspace**, **Plane URL** | Your Plane workspace, the part of the address after the server's name (`acme` in `app.plane.so/acme`), and the address of a self-hosted server, such as `https://plane.acme.dev`. Empty means Plane Cloud. The Plane tab of the issue browser asks for the workspace when it is missing. |
 | **Plane API key** | Like the tokens above; the workspace must be set first, since the key is checked against it. |
 | **Plane filter** | Query parameters the Plane tab always adds to its list, such as `priority=high` or `project_id=…&label_id=…`. Empty adds nothing; finished work items still need **closed**. |
+| **GitLab URL** | The address of a self-hosted GitLab server, such as `https://gitlab.acme.dev`. Empty means gitlab.com. The GitLab tab of the issue browser asks for it before the token. |
+| **GitLab access token** | Like the tokens above; it is checked against the server set in **GitLab URL**. |
 | **Sources shown** | Which tabs the [issue browser](../../guides/issues-and-agents/) shows. Click to show or hide one (at least one stays); hover a row and use its `↑` `↓` buttons, or press `Shift+↑` `Shift+↓`, to change the order. |
 
 ### UI
 
 <Screen
   name="settings-ui"
-  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; and prefix key off"
-  crop={[2, 4, 106, 18]}
+  alt="The UI tab: sidebar projects_on_top, how projects, workspaces and tabs are laid out; tabs sidebar, where a workspace's tabs are listed; icon bar off; agents section hidden; working icon moon; counts shown; inactive panes dimmed; model and context shown under an agent's tab; memory hidden; desktop notifications auto; check for updates every hour; star prompt now and then; and prefix key off"
+  crop={[2, 4, 106, 19]}
 />
 
 | Row | What it sets |
@@ -87,34 +92,35 @@ Modes whose name says *dangerous* are shown in red. Extra arguments are split li
 | **sidebar** | How projects, workspaces and tabs are laid out: *projects_on_top* (the default) and *workspaces_on_top* stack both lists in one column, *side_by_side* gives each its own column, and *tree* shows one list with every project, its workspaces and their tabs. See [Arrange the columns](../../guides/projects-workspaces-tabs/#arrange-the-columns). |
 | **tabs** | Where a workspace's tabs are listed: *sidebar* (the default) under their workspace, or *top* in a bar above the pane with only the active workspace's tabs. See [Tabs above the pane](../../guides/projects-workspaces-tabs/#tabs-above-the-pane). |
 | **icon bar** | Move the buttons at the bottom of the sidebar into a column of icons on the left edge, named when you hover them. They need a Nerd Font, which Ghostty, kitty and WezTerm include. Off by default. See [The icon bar](../../guides/projects-workspaces-tabs/#the-icon-bar). |
-| **agents section** | List every Claude Code, Codex, Gemini CLI, opencode and Grok Build, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
+| **agents section** | List every Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI, in every project, at the bottom of the sidebar; a click jumps to one. Off by default. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section). |
 | **working icon** | What a working agent's tab shows: *moon* (the default), a still yellow `◐`, or *spinner*, `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` turning about ten times a second. Also in the tab bar and the agents section. See [What your agents are doing](../../guides/projects-workspaces-tabs/#what-your-agents-are-doing). |
 | **counts** | Show how many workspaces a project has, such as `(3)`, after its name, and how many projects a collapsed group holds. On by default. |
 | **TODO dot** | Show a grey `●` next to the [TODO](../../guides/todo/) button while items are left to do. On by default. |
 | **inactive panes** | Dim the panes you aren't typing in, in a split tab. |
-| **model** | Show the model of a Claude Code, Codex, Gemini CLI, opencode or Grok Build tab on a second line under its name, such as `Opus 5.5`. |
+| **model** | Show the model of a Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI tab on a second line under its name, such as `Opus 5.5`. |
 | **context** | Show how full its context is on that line, such as `23%`. With the model off too, and the memory off, every tab takes one row. See [How full the context is](../../guides/projects-workspaces-tabs/#how-full-the-context-is). |
 | **memory** | Show how much memory every tab uses, at the end of an agent's line or on a second line in a shell tab, such as `1.2 GB`. Off by default. See [How much memory a tab uses](../../guides/projects-workspaces-tabs/#how-much-memory-a-tab-uses). |
 | **desktop notifications** | How your terminal tells you that an agent in another tab needs you or finished: *auto* picks what your terminal understands, *osc777*, *osc9*, *osc99* or *bell* force one, *off* sends none. The toast in cornercase shows either way; see [Notifications](../../guides/projects-workspaces-tabs/#notifications). |
 | **check for updates** | *Every hour*: ask GitHub for the latest release when the server starts and then hourly, and offer to [update](../../installation/#update) when there is a newer one. *Never*: don't ask. |
+| **star prompt** | *Now and then*: after about two weeks of use, a small card at the bottom right asks for a star on GitHub. *Never*: it never asks. See [`star_prompt`](#star_prompt). |
 | **prefix key** | The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keyboard-shortcuts). Select the row, then press the combination you want; `Backspace` turns it off, `Esc` keeps the current one. Off by default. |
 
 ### Remote
 
-Using cornercase away from the computer: in your phone's browser, or through Telegram. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with both, and shows a green `●` while a browser is attached or you are away on Telegram.
+Using cornercase away from the computer: in your phone's browser, or through Telegram or Discord. Once one of them is set up, a **`Remote`** button shows at the right of the `Usage` row, at the bottom of the sidebar; it opens a menu with each, and shows a green `●` while a browser is attached or you are away on a chat app.
 
 <Screen
   name="settings-remote"
-  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token"
-  crop={[2, 4, 106, 9]}
+  alt="The Remote tab: under Browser, remote access off, with a note to open this computer's cornercase from your phone over Tailscale; under Telegram, the bot not set, with a note to make one with @BotFather and paste its token; under Discord, the bot not set, with a note to make an app in the Discord Developer Portal"
+  crop={[2, 4, 106, 11]}
 />
 
 | Row | What it sets |
 | --- | --- |
 | **remote access** | Open this cornercase in your phone's browser over Tailscale: on, **Remote › open in your phone's browser** shows a QR code to scan. The note says when it is ready, at which address, or what is missing. Off by default. See [From your phone](../../guides/phone/). |
 | **paired browsers** | How many browsers are paired, shown once there is one. `Enter` forgets them all and disconnects them. |
-| **bot** | The [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. The note says whether cornercase reaches it. `Backspace` removes it. |
-| **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone; `Backspace` forgets the chat. |
+| **bot** | Under **Telegram**, the [Telegram](../../guides/telegram/) bot that messages you while you are away: paste the token @BotFather gave you. Under **Discord**, the [Discord](../../guides/discord/) app's bot token, from the Developer Portal. The note says whether cornercase reaches it. `Backspace` removes it. |
+| **phone** | The chat paired with the bot, shown once a bot is set. `Enter` shows a code to scan with your phone (for Discord, the link that adds the app to your account); `Backspace` forgets the chat. |
 
 ### Plugins
 
@@ -130,7 +136,7 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced.
 | `↑` `↓` | Select a row. The mouse wheel does the same. |
 | `Tab`, `→` / `Shift+Tab`, `←` | Next / previous tab. |
 | `Shift+↑` `Shift+↓` | Move the selected source up or down. |
-| `Delete`, `Backspace` | Remove the selected saved token or Telegram bot, or forget the paired phone. |
+| `Delete`, `Backspace` | Remove the selected saved token or chat bot, or forget the paired phone. |
 | `Esc` | Close the modal, or leave a list or a text field. |
 
 In a list, type to filter it and press `Enter` to pick. In a text field, `Enter` saves and `Esc` cancels.
@@ -149,7 +155,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
-  "issue_tabs": ["all", "github", "shortcut", "linear", "jira", "plane"],
+  "pull_requests": true,
+  "merged_pull_requests": true,
+  "issue_tabs": ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"],
+  "gitlab_url": "",
   "jira_site": "",
   "jira_email": "",
   "jira_jql": "",
@@ -169,6 +178,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "keep_awake": false,
   "trust_prompt_pattern": "trust the files|trust this (folder|directory|workspace|repository)|do you trust|yes, proceed",
   "gh": "gh",
+  "glab": "glab",
   "sidebar": "projects_on_top",
   "tabs": "sidebar",
   "icon_bar": false,
@@ -183,8 +193,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
   "memory": false,
   "desktop_notifications": "auto",
   "check_updates": true,
+  "star_prompt": true,
   "remote": false,
-  "remote_port": 47681
+  "remote_port": 47681,
+  "projects": {}
 }
 ```
 
@@ -194,7 +206,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | --- | --- | --- |
 | [`worktrees_dir`](#worktrees_dir) | string | `"~/.cornercase/worktrees"` |
 | [`fetch_minutes`](#fetch_minutes) | number | `5` |
-| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "shortcut", "linear", "jira", "plane"]` |
+| [`pull_requests`](#pull_requests) | boolean | `true` |
+| [`merged_pull_requests`](#merged_pull_requests) | boolean | `true` |
+| [`issue_tabs`](#issue_tabs) | array of strings | `["all", "github", "gitlab", "shortcut", "linear", "jira", "plane"]` |
+| [`gitlab_url`](#gitlab_url) | string | `""` |
 | [`jira_site`](#jira_site) | string | `""` |
 | [`jira_email`](#jira_email) | string | `""` |
 | [`jira_jql`](#jira_jql) | string | `""` |
@@ -212,6 +227,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`keep_awake`](#keep_awake) | boolean | `false` |
 | [`trust_prompt_pattern`](#trust_prompt_pattern) | string | see below |
 | [`gh`](#gh) | string | `"gh"` |
+| [`glab`](#glab) | string | `"glab"` |
 | [`sidebar`](#sidebar) | string | `"projects_on_top"` |
 | [`tabs`](#tabs) | string | `"sidebar"` |
 | [`icon_bar`](#icon_bar) | boolean | `false` |
@@ -226,8 +242,10 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`memory`](#memory) | boolean | `false` |
 | [`desktop_notifications`](#desktop_notifications) | string | `"auto"` |
 | [`check_updates`](#check_updates) | boolean | `true` |
+| [`star_prompt`](#star_prompt) | boolean | `true` |
 | [`remote`](#remote) | boolean | `false` |
 | [`remote_port`](#remote_port) | number | `47681` |
+| [`projects`](#projects) | object | `{}` |
 
 #### `worktrees_dir`
 
@@ -237,9 +255,21 @@ The folder for new worktrees, checked out in `<worktrees_dir>/<repository>/<bran
 
 How often, in minutes, each project's remotes are fetched to show the [commits to pull](../../guides/worktrees/#commits-to-pull) on its workspaces. A whole number; `0` turns fetching and the counts off.
 
+#### `pull_requests`
+
+Whether each workspace shows the pull request of its branch and the state of its checks, asked of GitHub with [`gh`](#gh). On by default. See [Pull requests and their checks](../../guides/worktrees/#pull-requests-and-their-checks).
+
+#### `merged_pull_requests`
+
+Whether Usage → Stats counts the pull requests and merge requests you opened that were merged, read with [`gh`](#gh) and [`glab`](#glab). On by default; off asks nothing. See [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats).
+
 #### `issue_tabs`
 
-The tabs of the issue browser, in order. Accepts `all`, `github`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all six. A list saved before Jira existed gets `jira` added at the end once, and one saved before Plane existed gets `plane`.
+The tabs of the issue browser, in order. Accepts `all`, `github`, `gitlab`, `shortcut`, `linear`, `jira` and `plane`, in any case; unknown names and repeats are ignored, and a list with no valid name shows all seven. A list saved before Jira existed gets `jira` added at the end once, one saved before Plane existed gets `plane`, and one saved before GitLab existed gets `gitlab` right after `github` (at the end without it).
+
+#### `gitlab_url`
+
+The address of your GitLab server, such as `"https://gitlab.acme.dev"`, or one under a path such as `"https://acme.dev/gitlab"`; a trailing `/` is dropped. Empty is gitlab.com. Requests carry your token, so they don't follow redirects: enter the address the server ends up at. An `http://` address works too; one that isn't loopback (`localhost`, `127.x.x.x` or `[::1]`) gets a warning, since the token then travels unencrypted. The GitLab tab lists the issues of the project whose remote is on this server. Set from the issue browser or the settings modal. The token is never stored here: it goes in `secrets.json` or comes from `GITLAB_TOKEN` (see [Files and environment](../files-and-environment/)).
 
 #### `jira_site`
 
@@ -255,7 +285,7 @@ A [JQL](https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-
 
 #### `plane_url`
 
-The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Set from the settings modal.
+The address of a self-hosted Plane server, such as `"https://plane.acme.dev"`; a trailing `/` is dropped. Empty is Plane Cloud (`https://app.plane.so`). Requests carry your API key, so they don't follow redirects: enter the address the server ends up at. Set from the settings modal.
 
 #### `plane_workspace`
 
@@ -295,7 +325,7 @@ Whether cornercase answers yes to the agent's "do you trust this folder?" questi
 
 #### `resume_agents`
 
-Whether a pane that ran Claude Code, Codex or Gemini CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>` or `gemini --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
+Whether a pane that ran Claude Code, Codex, Gemini CLI, Grok Build or Cursor CLI comes back in the same conversation when a new server restores your session: cornercase types `claude --resume <id>`, `codex resume <id>`, `gemini --resume <id>`, `grok --resume <id>` or `cursor-agent --resume <id>` into its new shell, with the agent's command and arguments and the mode it was running in. On by default. See [Agents resume their conversations](../../guides/sessions/#agents-resume-their-conversations).
 
 #### `keep_awake`
 
@@ -311,7 +341,11 @@ trust the files|trust this (folder|directory|workspace|repository)|do you trust|
 
 #### `gh`
 
-The GitHub CLI to run for GitHub issues: a name looked up in your `PATH`, or a path, which may start with `~/`.
+The GitHub CLI to run for GitHub issues and for the [pull requests](../../guides/worktrees/#pull-requests-and-their-checks) of workspaces: a name looked up in your `PATH`, or a path, which may start with `~/`.
+
+#### `glab`
+
+The GitLab CLI to run for the [merged merge requests](../../guides/projects-workspaces-tabs/#usage-and-stats) of Stats: a name looked up in your `PATH`, or a path, which may start with `~/`.
 
 #### `sidebar`
 
@@ -327,7 +361,7 @@ Whether the buttons at the bottom of the sidebar become a column of icons on the
 
 #### `agents_section`
 
-Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI, opencode and Grok Build running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
+Whether the sidebar ends with a list of every Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI running in any project, with what each is doing, its model and context; a click on one jumps to it. In every layout; below 90 columns it is a third menu. See [The agents section](../../guides/projects-workspaces-tabs/#the-agents-section).
 
 #### `working_icon`
 
@@ -351,7 +385,7 @@ The key that opens the menu of [keyboard shortcuts](../keyboard-and-mouse/#keybo
 
 #### `model`
 
-Whether a Claude Code, Codex, Gemini CLI, opencode or Grok Build tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
+Whether a Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI tab shows its model on a second line under its name, such as `Opus 5.5`. When the file has no `model`, it takes the value of [`context`](#context), so a line turned off in 0.6 stays off.
 
 #### `context`
 
@@ -369,6 +403,10 @@ How cornercase asks your terminal for a desktop notification when an agent in an
 
 Whether cornercase asks GitHub for the latest release, when the server starts and then every hour, to offer an [update](../../installation/#update). Only a request for the latest release is sent, and, once a newer one is out, a download of its changelog for the update dialog; nothing about you. Builds made with `cargo run` never check.
 
+#### `star_prompt`
+
+Whether cornercase may ask for a star on GitHub. After about 14 days on which a window was open and an agent ran (not calendar days since you installed it), a small card appears at the bottom right of the window: **star on GitHub** copies the repository's link to your clipboard and never asks again, **later** asks again in about 90 days, and **don't show again** never asks again. If you don't answer, it counts as **later**. It never appears while an agent is working or waiting for you, while a dialog, the search or a panel's field has the keys, or in the compact layout (below 90 columns), and it never takes the keys from the pane. Nothing is sent anywhere and cornercase doesn't check whether you starred; what it remembers (the days counted, when it last asked and your answer) is in `star.json` next to `session.json`. Set it to `false` to turn it off for good.
+
 [Agents](../agents/) explains `agent`, `agent_args`, `agent_modes`, `agent_commands` and the trust prompt in depth.
 
 #### `remote`
@@ -378,6 +416,14 @@ Whether this cornercase can be opened in a browser over Tailscale, from a phone 
 #### `remote_port`
 
 The port cornercase listens on for browsers, on your computer only (`127.0.0.1`); `tailscale serve` passes Tailscale's port 8443 to it. Change it when something else uses 47681.
+
+#### `projects`
+
+Per-project commands, keyed by the project's folder (`~/` is expanded): `setup` runs in the first tab of each new [worktree](../../guides/worktrees/#set-up-each-new-worktree) before its agent starts, `teardown` runs before a worktree is removed. Edit them in the project's `⋯` menu, **project settings**; an entry with both empty is removed.
+
+```json
+"projects": { "~/code/web-shop": { "setup": "npm ci\ncp ../.env .env", "teardown": "docker compose down" } }
+```
 
 ### A customised example
 

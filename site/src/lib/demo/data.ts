@@ -261,7 +261,7 @@ export const COMMITS: Record<string, [string, string, string][]> = {
   ],
 };
 
-export type SourceId = 'github' | 'shortcut' | 'linear' | 'jira' | 'plane';
+export type SourceId = 'github' | 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
 
 export interface Issue {
   source: SourceId;
@@ -321,6 +321,32 @@ export const ISSUES: Issue[] = [
   gh(471, 'Add Apple Pay to the checkout', ['feature'], 'ana', '15d', 'Behind a feature flag first.', true),
   gh(468, 'Flaky test: returns::label_is_printed', ['ci'], 'luis', '22d', 'Fails about once in twenty runs on CI.'),
   gh(455, 'Rate-limit the public returns endpoint', ['security'], 'marta', '1mo', 'Ten requests per minute per IP is plenty.'),
+  {
+    source: 'gitlab',
+    number: 36,
+    key: '#36',
+    title: 'Cache the product images at the edge',
+    labels: ['performance'],
+    state: 'open',
+    author: 'marta',
+    age: '2d',
+    url: 'https://gitlab.com/acme/web-shop/-/issues/36',
+    body: 'Product pages spend most of their time loading images.\n\n- [ ] Serve them with a long `Cache-Control`\n- [ ] Purge on upload',
+    mine: true,
+  },
+  {
+    source: 'gitlab',
+    number: 41,
+    key: '#41',
+    title: 'Track abandoned carts',
+    labels: ['analytics'],
+    state: 'open',
+    author: 'luis',
+    age: '6d',
+    url: 'https://gitlab.com/acme/web-shop/-/issues/41',
+    body: 'Send an event when a cart with items is left for an hour.',
+    mine: false,
+  },
   {
     source: 'shortcut',
     number: 48,
@@ -427,6 +453,42 @@ export const ISSUES: Issue[] = [
   },
 ];
 
+export interface PullCheck {
+  name: string;
+  workflow: string;
+  outcome: 'passed' | 'failed' | 'running' | 'skipped';
+}
+
+export interface Pull {
+  branch: string;
+  number: number;
+  title: string;
+  checks: PullCheck[];
+}
+
+const job = (name: string, outcome: PullCheck['outcome'], workflow = 'CI'): PullCheck => ({ name, workflow, outcome });
+
+export const PULLS: Pull[] = [
+  {
+    branch: 'feat/dark-mode',
+    number: 483,
+    title: 'Dark mode for the checkout',
+    checks: [job('test (ubuntu-latest)', 'running'), job('test (macos-latest)', 'running'), job('lint', 'passed')],
+  },
+  {
+    branch: 'feat/gift-cards',
+    number: 485,
+    title: 'Pay with a gift card at checkout',
+    checks: [
+      job('test (ubuntu-latest)', 'failed'),
+      job('test (macos-latest)', 'passed'),
+      job('lint', 'passed'),
+      job('preview', 'passed', ''),
+      job('deploy', 'skipped', 'Pages'),
+    ],
+  },
+];
+
 export const AGENTS: [string, string][] = [
   ['claude', 'claude'],
   ['codex', 'codex'],
@@ -462,10 +524,20 @@ export const MODES: Record<string, [string, string][]> = {
     ['plan', '--approval-mode plan'],
     ['yolo (dangerous)', '--yolo'],
   ],
+  opencode: [
+    ['plan', '--agent plan'],
+    ['auto (dangerous)', '--auto'],
+  ],
   grok: [
     ['accept edits', '--permission-mode acceptEdits'],
     ['auto', '--permission-mode auto'],
     ['always approve (dangerous)', '--always-approve'],
+  ],
+  cursor: [
+    ['plan', '--mode plan'],
+    ['ask', '--mode ask'],
+    ['auto review', '--auto-review'],
+    ['run everything (dangerous)', '--force'],
   ],
 };
 

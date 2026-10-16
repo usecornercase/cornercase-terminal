@@ -1,14 +1,16 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use ureq::Agent;
 use ureq::http::Response;
+use ureq::typestate::WithBody;
+use ureq::{Agent, RequestBuilder};
 
 use crate::error::{Error, Result};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 const DOWNLOAD_LIMIT: u64 = 256 * 1024 * 1024;
+const REDIRECTS: u32 = 10;
 
 pub(crate) struct Service {
     pub(crate) name: &'static str,
@@ -27,11 +29,47 @@ impl Answer {
 }
 
 fn agent(timeout: Duration) -> Agent {
-    Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(false).build().into()
+    following(timeout, REDIRECTS)
+}
+
+fn following(timeout: Duration, redirects: u32) -> Agent {
+    Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .max_redirects(redirects)
+        .build()
+        .into()
 }
 
 pub(crate) fn get(service: &Service, url: &str, query: &[(&str, &str)], headers: &[(&str, &str)]) -> Result<Answer> {
-    let mut request = agent(TIMEOUT).get(url).header("Accept", "application/json");
+    get_with(&agent(TIMEOUT), service, url, query, headers)
+}
+
+pub(crate) fn get_without_redirects(
+    service: &Service,
+    url: &str,
+    query: &[(&str, &str)],
+    headers: &[(&str, &str)],
+) -> Result<Answer> {
+    let answer = get_with(&following(TIMEOUT, 0), service, url, query, headers)?;
+    if (300..400).contains(&answer.status) {
+        return Err(Error::Api(format!(
+            "{} answered {} with a redirect, which is not followed so the token is not sent elsewhere: use the \
+             address it leads to",
+            service.name, answer.status
+        )));
+    }
+    Ok(answer)
+}
+
+fn get_with(
+    agent: &Agent,
+    service: &Service,
+    url: &str,
+    query: &[(&str, &str)],
+    headers: &[(&str, &str)],
+) -> Result<Answer> {
+    let mut request = agent.get(url).header("Accept", "application/json");
     for (key, value) in headers {
         request = request.header(*key, *value);
     }
@@ -50,6 +88,53 @@ pub(crate) fn post_within(service: &Service, url: &str, body: &Value, timeout: D
     let request = agent(timeout).post(url).header("Accept", "application/json").content_type("application/json");
     let mut response = reached(service, request.send(body.to_string()), timeout)?;
     read(service, &mut response)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Method {
+    Get,
+    Post,
+    Patch,
+    Put,
+    Delete,
+}
+
+pub(crate) fn call_within(
+    service: &Service,
+    method: Method,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: Option<&Value>,
+    timeout: Duration,
+) -> Result<Answer> {
+    let agent = agent(timeout);
+    let result = match method {
+        Method::Get => headed(agent.get(url), headers).call(),
+        Method::Post => carrying(headed(agent.post(url), headers), body),
+        Method::Patch => carrying(headed(agent.patch(url), headers), body),
+        Method::Put => carrying(headed(agent.put(url), headers), body),
+        Method::Delete => headed(agent.delete(url), headers).call(),
+    };
+    let mut response = reached(service, result, timeout)?;
+    read(service, &mut response)
+}
+
+fn headed<B>(mut request: RequestBuilder<B>, headers: &[(&str, &str)]) -> RequestBuilder<B> {
+    request = request.header("Accept", "application/json");
+    for (key, value) in headers {
+        request = request.header(*key, *value);
+    }
+    request
+}
+
+fn carrying(
+    request: RequestBuilder<WithBody>,
+    body: Option<&Value>,
+) -> std::result::Result<Response<ureq::Body>, ureq::Error> {
+    match body {
+        Some(body) => request.content_type("application/json").send(body.to_string()),
+        None => request.send_empty(),
+    }
 }
 
 pub(crate) fn download(service: &Service, url: &str) -> Result<Vec<u8>> {

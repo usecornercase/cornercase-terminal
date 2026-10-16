@@ -73,11 +73,11 @@ No. Programs live in the server, and the server doesn't survive a reboot, `corne
 
 ### Which coding agents does it support?
 
-Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor's agent, GitHub Copilot CLI, Amp, Droid, pi, Qwen Code, Kimi, Cline, Goose and Aider out of the box, and any other command-line agent you add with [`agent_commands`](../../reference/agents/#your-own-agents).
+Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, GitHub Copilot CLI, Amp, Droid, pi, Qwen Code, Kimi, Cline, Goose and Aider out of the box, and any other command-line agent you add with [`agent_commands`](../../reference/agents/#your-own-agents).
 
 ### Which issue trackers?
 
-GitHub (through the `gh` CLI), Shortcut, Linear, Jira Cloud and Plane (Cloud or self-hosted).
+GitHub (through the `gh` CLI), GitLab (gitlab.com or self-hosted), Shortcut, Linear, Jira Cloud and Plane (Cloud or self-hosted).
 
 ### Will it delete my branches?
 
@@ -85,7 +85,7 @@ Never. Removing a worktree workspace deletes the worktree's folder, after asking
 
 ### Where are my tokens stored?
 
-In `secrets.json` next to your `config.json`, readable only by you, or in the `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` and `PLANE_API_KEY` environment variables if you prefer. They are never written to logs, to the issue cache or to the screen.
+In `secrets.json` next to your `config.json`, readable only by you, or in the `GITLAB_TOKEN`, `SHORTCUT_API_TOKEN`, `LINEAR_API_KEY`, `JIRA_API_TOKEN` and `PLANE_API_KEY` environment variables if you prefer. They are never written to logs, to the issue cache or to the screen.
 
 ### Does it respect my terminal's colour theme?
 
@@ -109,7 +109,9 @@ From the app: when a new version is out, a button with its number appears next t
 
 It asks GitHub for the latest release when the server starts and then every hour. Nothing about you or your projects is sent. Turn it off in **settings → UI → check for updates**, or with `"check_updates": false` in [`config.json`](../../reference/configuration/#check_updates).
 
-With a [Telegram bot](../../guides/telegram/) set up, it also talks to Telegram, as that bot, and while you are away sends your chat the agents' messages. `check_updates` doesn't change that: remove the bot in **Settings › Remote**, under **Telegram**, to stop it.
+The [star prompt](../../reference/configuration/#star_prompt) that now and then asks for a star on GitHub sends nothing and doesn't check whether you starred; it only copies the link when you answer yes.
+
+With a [Telegram](../../guides/telegram/) or [Discord](../../guides/discord/) bot set up, it also talks to that service, as that bot, and while you are away sends your chat the agents' messages. `check_updates` doesn't change that: remove the bot in **Settings › Remote**, under **Telegram** or **Discord**, to stop it.
 
 ### Can I run two independent sessions?
 

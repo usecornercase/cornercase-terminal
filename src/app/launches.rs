@@ -17,11 +17,17 @@ impl App {
         if self.agents.launches.is_empty() {
             return;
         }
+        let held = self.held_launch_panes();
         let regex = self.agents.trust_prompt.regex(&self.config.trust_prompt_pattern);
         let asks = |screen: &str| regex.is_some_and(|re| agents::asks_trust(re, screen));
         let trust = if self.config.accept_trust_prompts { Trust::Accepted } else { Trust::LeftToYou };
+        let mut parked = Vec::new();
         let mut finished = Vec::new();
+        let starting: Vec<u64> = self.agents.launches.iter().map(|launch| launch.term).collect();
         for (i, launch) in self.agents.launches.iter_mut().enumerate() {
+            if held.contains(&launch.term) || launch.after.iter().any(|pane| starting.contains(pane)) {
+                continue;
+            }
             let Some(term) = self.projects.pane_by_mut(launch.term) else {
                 finished.push((i, false));
                 continue;
@@ -37,11 +43,15 @@ impl App {
                 application_cursor,
                 screen: &mut screen,
                 trust_prompt: &asks,
-                trust,
+                trust: launch.trust.unwrap_or(trust),
             };
             let before = launch.stage();
             let step = launch.step(now, &mut seen);
             let (pane, kind, stage) = (launch.term, launch.kind(), launch.stage());
+            if stage == "consent" && before != stage && !launch.told {
+                launch.told = true;
+                parked.push(pane);
+            }
             match &step {
                 Step::Wait if before != stage => log::info!("launch", "waits", pane = pane, kind = kind, stage = stage),
                 Step::Wait => {}
@@ -78,6 +88,9 @@ impl App {
             if let Some(key) = self.agents.launches.remove(i).key {
                 self.requests.launched(key, started);
             }
+        }
+        for pane in parked {
+            self.member_waits(pane);
         }
     }
 

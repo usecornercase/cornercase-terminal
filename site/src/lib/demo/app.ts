@@ -1,12 +1,16 @@
+import { type QueueChoice, type QueueEntry, type QueueForm, type QueueList, isList, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueTextRect, queueTime, queueWhen, queueWorktree, whenCombo } from './queue';
+import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
 import { type Demo, demo as english } from '../../i18n/en';
 import type { Cursor } from '../term/canvas';
-import { BOLD, Grid, type Rect, contains } from '../term/grid';
+import { BOLD, Grid, type Rect, contains, rect } from '../term/grid';
 import { type Theme, theme as defaultTheme } from '../term/palette';
 import { AGENTS, FOLDERS, ISSUES, type Issue, MODES, type Tree, picture } from './data';
 import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, workspaceDiff } from './changes';
 import { TodoPanel, todoWidth } from './todo';
+import { type DiagramHit, type PanelView, live, plan, scrolled as flowScrolled } from './flow';
+import type { Run } from './flowrun';
 import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
@@ -89,9 +93,19 @@ import { type Line, folderSlug, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
 const NO_PLUGINS = '`cornercase plugin install <owner/repo>` adds one, then enter turns it on here';
-const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor Telegram';
+const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 
 const ICON_BAR_NEEDS = 'this needs cornercase in your terminal: the demo has no Nerd Font';
+
+const MERGED_NEED = 'this needs cornercase on your computer: the demo has no GitHub or GitLab';
+
+const PULL_REQUESTS_NEED = 'this needs cornercase on your computer: the demo has no GitHub';
+
+const SETUP_NEEDS = 'this needs cornercase on your computer: the demo runs no setup scripts';
+
+const FLOWS_NEED = 'this needs cornercase on your computer: the demo only plays the flow in payments';
+
+const NO_RUN = 'this workspace runs no flow';
 
 export interface SettingsRow {
   id: string;
@@ -105,7 +119,7 @@ export interface SettingsRow {
 export interface IssuesView {
   tabs: string[];
   toggles: { label: string; on: boolean }[];
-  items: { key: string; title: string; meta: string; danger?: boolean }[];
+  items: { key: string; title: string; meta: string; danger?: boolean; colour?: number }[];
   selected: number;
   scroll: number;
   empty: string;
@@ -123,14 +137,28 @@ export interface SearchResult {
   context: string;
   keys: string[];
   go: () => void;
+  detail?: string;
+  hit?: [number, number];
 }
+
+const SAID_PER_PANE = 20;
+const SAID_MATCHES = 300;
 
 type Listener = (event: string, detail?: string) => void;
 
-const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
+const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane' };
+const QUEUE = 'queue';
+const QUEUE_EVERY = "every project's scheduled agents";
+const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2 };
 
-type Remote = 'shortcut' | 'linear' | 'jira' | 'plane';
+type Remote = 'gitlab' | 'shortcut' | 'linear' | 'jira' | 'plane';
 const REMOTES: Record<Remote, { name: string; token: string; env: string; help: string }> = {
+  gitlab: {
+    name: 'GitLab',
+    token: 'access token',
+    env: 'GITLAB_TOKEN',
+    help: 'Create a personal access token with the read_api scope in GitLab under Edit profile → Access tokens, paste it here and press Enter.',
+  },
   shortcut: {
     name: 'Shortcut',
     token: 'API token',
@@ -166,11 +194,23 @@ function checkWorkspace(input: string): [string, string?] {
   return [slug];
 }
 
-function checkUrl(input: string): [string, string?] {
+function checkUrl(input: string, example = 'https://plane.acme.dev'): [string, string?] {
   const url = input.trim().replace(/\/+$/, '');
   if (!url) return [''];
   const m = url.match(/^https?:\/\/([^/\s]+)/);
-  return m && !/\s/.test(url) ? [url] : ['', 'a URL starts with https://, such as https://plane.acme.dev'];
+  return m && !/\s/.test(url) ? [url] : ['', `a URL starts with https://, such as ${example}`];
+}
+
+const GITLAB_EXAMPLE = 'https://gitlab.acme.dev';
+const gitlabServer = (url: string) => url || 'https://gitlab.com';
+const UNENCRYPTED = 'the address starts with http://, so the token travels unencrypted';
+
+function unencrypted(url: string): boolean {
+  const m = url.trim().match(/^http:\/\/(?:[^/@]*@)?([^/]*)/i);
+  if (!m) return false;
+  const host = m[1].toLowerCase();
+  const name = host.split(':')[0];
+  return !(name === 'localhost' || /^127(\.\d{1,3}){3}$/.test(name) || host.startsWith('[::1]'));
 }
 
 function checkSite(input: string): [string, string?] {
@@ -229,7 +269,7 @@ const RENAME: Record<Target['kind'], { label: string; hint: string }> = {
   tab: { label: 'rename tab', hint: 'leave it empty to use the program name' },
 };
 
-const WATCHED = ['claude', 'codex', 'gemini', 'grok'];
+const WATCHED = ['claude', 'codex', 'gemini', 'grok', 'cursor'];
 const DETAILS = [
   ['model', "under an agent's tab, such as Opus 5.5"],
   ['context', 'how full its context is, such as 23%'],
@@ -325,6 +365,14 @@ export class App {
     ['Connect Linear for the team', true],
   ]);
   files = new FilesPanel();
+  runs: Run[] = [];
+  flowOpen = false;
+  flowScroll = 0;
+  private flowHinted = false;
+  queued: QueueEntry[] = [];
+  private queueTimers = new Map<QueueEntry, () => void>();
+  private queueBack: IssuesOverlay | null = null;
+  private nextQueueId = 1;
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
   private viewed = new Set<string>();
@@ -438,6 +486,12 @@ export class App {
 
   render(): { grid: Grid; cursor: Cursor | null } {
     if (this.toast && this.toast.until < this.now()) this.toast = null;
+    const shown = this.overlay;
+    if (shown?.kind === 'flowMessage' && !this.flowMessage(shown)) this.overlay = null;
+    if (!this.flowHinted && !this.flowOpen && this.shownRun()) {
+      this.flowHinted = true;
+      this.emit('narrate', this.narration.flowHint);
+    }
     this.watchAgents();
     this.keepAwake();
     this.grid.reset();
@@ -494,7 +548,7 @@ export class App {
     const now = this.now();
     for (const p of this.projects) {
       for (const w of p.workspaces) {
-        const measured = this.config.memory && shown(p) && !(tree && w.collapsed);
+        const measured = this.config.memory && shown(p) && !((tree || this.tabsListed()) && w.collapsed);
         for (const t of w.tabs) {
           for (const pane of t.panes) {
             const agent = agentIn(pane);
@@ -503,7 +557,9 @@ export class App {
             if (measured) pane.memory = agent ? agent.memory : pane.shell.memory;
             followAgent(pane, agent?.name ?? null);
             const status = watchPane(pane, agentActivity(agent), t === visible, now);
-            if (status && agent) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
+            const member = this.runs.some((r) => r.members.slice(1).some((m) => m.pane === pane.id));
+            if (member && pane.unseen && !pane.pending) pane.unseen = false;
+            if (status && agent && !(member && status === 'done')) this.notify(`${agent.name} ${status === 'waiting' ? 'needs you' : status === 'failed' ? 'failed' : 'finished'} in ${projectLabel(p)} › ${workspaceLabel(w)}`, status);
             else if (pane.since === now && !pane.notified) this.after(NOTIFY_AFTER, () => this.dirty());
           }
         }
@@ -609,6 +665,10 @@ export class App {
       this.projects.map((p) => this.groupIndex(p.group)),
       this.groups.map((g) => g.collapsed),
     );
+  }
+
+  workspacesFolded(): boolean[] {
+    return this.project()?.workspaces.map((w) => !!w.collapsed) ?? [];
   }
 
   tabLines(): number[][] {
@@ -758,7 +818,7 @@ export class App {
     }
     if ((row.kind !== 'ws' && row.kind !== 'tab') || row.p !== this.active) return null;
     const listed: WorkspaceRow = row.kind === 'ws' ? { kind: 'ws', w: row.w } : { kind: 'tab', w: row.w, t: row.t };
-    const landing = workspaceDrop(areas.workspacesList, areas.pitch, this.tabLines(), this.workspacesScroll, listed, h.x, h.y, this.tabsListed());
+    const landing = workspaceDrop(areas.workspacesList, areas.pitch, this.tabLines(), this.workspacesScroll, listed, h.x, h.y, this.tabsListed(), this.workspacesFolded());
     return { list: 'workspaces', row: listed, landing };
   }
 
@@ -812,7 +872,7 @@ export class App {
       ? treeLayout(areas.list, shape, treeRows(shape), this.projectsScroll)
       : sidebar
         ? sidebarLayout(areas.list, areas.pitch, this.sidebarRows(), this.projectsScroll)
-        : workspaceLayout(areas.workspacesList, areas.pitch, workspaceRows(this.tabLines(), this.tabsListed()), this.tabLines(), this.workspacesScroll);
+        : workspaceLayout(areas.workspacesList, areas.pitch, workspaceRows(this.tabLines(), this.tabsListed(), this.workspacesFolded()), this.tabLines(), this.workspacesScroll);
     const delta = rows.edge(h.x, h.y);
     if (!delta) return;
     if (sidebar) this.projectsScroll = rows.scrolled(delta);
@@ -1024,6 +1084,14 @@ export class App {
     this.dirty();
   }
 
+  openNewWorkspaceMenu(at: Pos, p: number): void {
+    const project = this.projects[p];
+    if (!project) return;
+    const actions: MenuAction[] = [{ kind: 'newWorkspace', project: project.id }, { kind: 'startFlow', project: project.id }];
+    this.overlay = { kind: 'menu', at, actions };
+    this.dirty();
+  }
+
   openGroupMenu(at: Pos, g: number): void {
     const id = this.groups[g]?.id;
     if (id === undefined) return;
@@ -1200,7 +1268,106 @@ export class App {
   }
 
   panelShown(): boolean {
-    return this.changesShown() || this.todo.open || this.filesShown();
+    return this.changesShown() || this.todo.open || this.filesShown() || this.flowShown();
+  }
+
+  runOf(workspace: number): Run | undefined {
+    return this.runs.find((r) => r.workspace === workspace);
+  }
+
+  shownRun(): Run | undefined {
+    const w = this.workspace();
+    return w ? this.runOf(w.id) : undefined;
+  }
+
+  flowShown(): boolean {
+    return this.flowOpen && !!this.shownRun();
+  }
+
+  flowPlaying(run: Run): boolean {
+    return this.flowShown() && this.shownRun() === run;
+  }
+
+  toggleFlow(): void {
+    if (this.flowOpen) this.flowOpen = false;
+    else if (this.shownRun()) {
+      this.changesOpen = false;
+      this.closeTodo();
+      this.files.close();
+      this.flowOpen = true;
+      this.flowScroll = 0;
+      this.flowHinted = true;
+      this.emit('narrate', this.narration.flow);
+    } else this.bug(NO_RUN);
+    this.nav = null;
+    this.dirty();
+  }
+
+  showFlowOf(workspace: number): void {
+    for (const [p, project] of this.projects.entries()) {
+      const w = project.workspaces.findIndex((x) => x.id === workspace);
+      if (w < 0) continue;
+      this.selectProject(p);
+      this.selectWorkspace(p, w);
+      if (!this.flowOpen) this.toggleFlow();
+      return;
+    }
+  }
+
+  flowView(): PanelView | null {
+    const run = this.shownRun();
+    if (!run) return null;
+    const state = (role: string) => {
+      const id = run.members.find((m) => m.role === role)?.pane;
+      const found = id === undefined ? null : this.findPane(id);
+      if (!found) return id === undefined ? 'none' : 'closed';
+      return paneStatus(found.pane) ?? 'none';
+    };
+    const diagram = live(plan(run.flow), run.progress, state, this.now());
+    return { name: run.flow.name, task: run.task, diagram, scroll: this.flowScroll };
+  }
+
+  scrollFlow(delta: number): boolean {
+    const view = this.flowView();
+    if (!view) return false;
+    this.flowScroll = flowScrolled(this.areas().changes, view, delta);
+    this.dirty();
+    return true;
+  }
+
+  flowClick(hit: DiagramHit): void {
+    const run = this.shownRun();
+    if (!run) return;
+    if (hit.role) {
+      const pane = run.members.find((m) => m.role === hit.role)?.pane;
+      if (pane === undefined || !this.findPane(pane)) return;
+      if (this.areas().compact) this.flowOpen = false;
+      this.jumpToPane(pane);
+    } else if (hit.edge) this.overlay = { kind: 'flowMessage', workspace: run.workspace, edge: hit.edge, to: hit.to ?? null, scroll: 0 };
+    this.dirty();
+  }
+
+  flowMessage(o: { workspace: number; edge: string; to: string | null }): { from: string; to: string; text: string } | null {
+    const run = this.runOf(o.workspace);
+    if (!run) return null;
+    const progress = run.progress;
+    const [kind, a, b] = o.edge.split(':');
+    const edge =
+      kind === 'outside'
+        ? { kind: 'outside' as const, from: a === 'null' ? null : Number(a), to: Number(b) }
+        : { kind: kind as 'forward' | 'loop', stage: Number(a) };
+    return progress.message(edge, o.to) ?? null;
+  }
+
+  copyFlowMessage(): void {
+    const o = this.overlay;
+    const message = o?.kind === 'flowMessage' ? this.flowMessage(o) : null;
+    this.overlay = null;
+    if (message) {
+      this.emit('copy', message.text);
+      this.notify('copied to clipboard');
+    }
+    this.dirty();
   }
 
   changesShown(): boolean {
@@ -1259,6 +1426,7 @@ export class App {
     if (this.changesOpen) {
       this.closeTodo();
       this.files.close();
+      this.flowOpen = false;
     }
     if (this.changesFilter) this.changesFilter.focused = false;
     this.nav = null;
@@ -1271,6 +1439,7 @@ export class App {
     else {
       this.changesOpen = false;
       this.files.close();
+      this.flowOpen = false;
       this.todo.open = true;
       this.emit('narrate', this.narration.todo);
     }
@@ -1287,6 +1456,7 @@ export class App {
     this.todo.field = null;
     this.closeTodo();
     this.changesOpen = false;
+    this.flowOpen = false;
     if (this.changesFilter) this.changesFilter.focused = false;
     this.files.close();
     this.dirty();
@@ -1335,8 +1505,36 @@ export class App {
     else this.dirty();
   }
 
-  private undoToast(text: string): void {
-    this.toast = { text, until: this.now() + 6000, undo: () => this.undoTodo() };
+  removeQueued(match: (entry: QueueEntry) => boolean, text: string): void {
+    const removed = this.queued.filter(match);
+    if (!removed.length) return;
+    this.queued = this.queued.filter((entry) => !match(entry));
+    removed.forEach((entry) => this.disarmQueued(entry));
+    this.undoToast(text.replace('{n}', String(removed.length)), () => {
+      this.queued = [...this.queued, ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
+      removed.filter((entry) => entry.state === 'pending').forEach((entry) => this.armQueued(entry));
+      this.toast = null;
+      this.dirty();
+    });
+  }
+
+  private armQueued(entry: QueueEntry): void {
+    this.disarmQueued(entry);
+    this.queueTimers.set(entry, this.after(Math.max(0, entry.at - this.now()), () => {
+      this.queueTimers.delete(entry);
+      if (!this.queued.includes(entry) || entry.state !== 'pending') return;
+      if (this.now() - entry.at > 600000) { entry.state = 'missed'; this.dirty(); }
+      else this.runQueue(entry);
+    }));
+  }
+
+  private disarmQueued(entry: QueueEntry): void {
+    this.queueTimers.get(entry)?.();
+    this.queueTimers.delete(entry);
+  }
+
+  private undoToast(text: string, undo: () => void = () => this.undoTodo()): void {
+    this.toast = { text, until: this.now() + 6000, undo };
     this.after(6050, () => this.dirty());
     this.dirty();
   }
@@ -1400,6 +1598,7 @@ export class App {
   private openFiles(): void {
     if (this.files.open) return;
     this.changesOpen = false;
+    this.flowOpen = false;
     this.closeTodo();
     this.files.open = true;
   }
@@ -1715,6 +1914,7 @@ export class App {
   dismissDialog(): void {
     const o = this.overlay;
     if (!o || (o.kind === 'newWorkspace' && o.creating) || ('busy' in o && o.busy)) return;
+    if (o.kind === 'queue') return this.closeQueueForm(false);
     this.closeOverlay();
   }
 
@@ -1742,9 +1942,11 @@ export class App {
   openMenu(at: Pos, target: Target): void {
     const actions: MenuAction[] = [{ kind: 'rename', target }];
     if (target.kind === 'project' && this.groups.length) actions.push({ kind: 'moveToGroup', project: target.project });
+    if (target.kind === 'project' && this.projects.find((x) => x.id === target.project)?.repo) actions.push({ kind: 'projectSettings', project: target.project });
     const tab = target.kind === 'tab' ? this.resolveTarget(target).tab : undefined;
     const mark = tab && this.markAction(tab.panes);
     if (mark) actions.push(mark);
+    if (target.kind === 'workspace' && this.runOf(target.workspace)) actions.push({ kind: 'showFlow', workspace: target.workspace });
     this.overlay = { kind: 'menu', at, actions };
     this.dirty();
   }
@@ -1776,6 +1978,10 @@ export class App {
     if (a.kind === 'newGroup') return 'new group';
     if (a.kind === 'base') return a.branch;
     if (a.kind === 'mark') return a.pending ? 'mark as pending review' : 'mark as reviewed';
+    if (a.kind === 'showFlow') return 'show flow';
+    if (a.kind === 'newWorkspace') return 'new workspace';
+    if (a.kind === 'startFlow') return 'start a flow…';
+    if (a.kind === 'projectSettings') return 'project settings';
     return a.action;
   }
 
@@ -1833,6 +2039,12 @@ export class App {
       this.overlay = { kind: 'newGroup', input: '' };
       this.emit('narrate', this.narration.group);
     } else if (a.kind === 'mark') this.mark(a);
+    else if (a.kind === 'showFlow') return this.showFlowOf(a.workspace);
+    else if (a.kind === 'newWorkspace') {
+      this.nav = null;
+      this.openNewWorkspace(this.projects.findIndex((x) => x.id === a.project));
+    } else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
+    else if (a.kind === 'projectSettings') this.bug(SETUP_NEEDS);
     else this.paneAction(a.pane, a.action);
     this.dirty();
   }
@@ -2028,13 +2240,69 @@ export class App {
     this.dirty();
   }
 
-  openSearch(): void {
-    this.overlay = { kind: 'search', query: '', selected: 0, scroll: 0 };
+  openSearch(mode: 'names' | 'sessions' = 'names'): void {
+    this.overlay = { kind: 'search', query: '', selected: 0, scroll: 0, mode };
     this.emit('narrate', this.narration.search);
     this.dirty();
   }
 
-  searchResults(query: string): SearchResult[] {
+  toggleSearchMode(): void {
+    const o = this.overlay;
+    if (o?.kind !== 'search') return;
+    o.mode = o.mode === 'names' ? 'sessions' : 'names';
+    o.selected = 0;
+    o.scroll = 0;
+    this.dirty();
+  }
+
+  saidCapped(query: string): boolean {
+    return this.saidIn(query).capped;
+  }
+
+  private saidIn(query: string): { results: SearchResult[]; capped: boolean } {
+    const q = query.trim().toLowerCase();
+    const results: SearchResult[] = [];
+    let capped = false;
+    if (!q) return { results, capped };
+    for (const [pi, p] of this.projects.entries()) {
+      for (const [wi, w] of p.workspaces.entries()) {
+        if (w.removing) continue;
+        for (const [ti, t] of w.tabs.entries()) {
+          for (const pane of t.panes) {
+            const lines = pane.shell.screen().split('\n');
+            let found = 0;
+            scan: for (let i = lines.length - 1; i >= 0; i--) {
+              const lower = lines[i].toLowerCase();
+              for (let at = lower.indexOf(q); at >= 0; at = lower.indexOf(q, at + q.length)) {
+                if (found === SAID_PER_PANE || results.length === SAID_MATCHES) {
+                  capped = true;
+                  break scan;
+                }
+                found++;
+                const [name, hit] = snippet(lines[i], at, [...q].length);
+                results.push({
+                  kind: 3,
+                  name,
+                  hit,
+                  context: `${projectLabel(p)} › ${workspaceLabel(w)} › ${tabLabel(t)}`,
+                  detail: `${pane.agent ?? pane.shell.fg?.name ?? 'shell'} · screen`,
+                  keys: [],
+                  go: () => {
+                    this.goto(pi, wi, ti);
+                    t.active = pane.id;
+                  },
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    return { results, capped };
+  }
+
+  searchResults(query: string, mode: 'names' | 'sessions' = 'names'): SearchResult[] {
+    if (mode === 'sessions') return this.saidIn(query).results;
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const all: (SearchResult & { order: number })[] = [];
@@ -2097,7 +2365,7 @@ export class App {
   searchGo(i: number): void {
     const o = this.overlay;
     if (o?.kind !== 'search') return;
-    const r = this.searchResults(o.query)[i];
+    const r = this.searchResults(o.query, o.mode)[i];
     this.overlay = null;
     this.nav = null;
     r?.go();
@@ -2228,6 +2496,7 @@ export class App {
       if (mark.pending) this.notify('marked as pending review', 'pending');
       else this.notify('marked as reviewed');
     } else if (a.kind === 'search') this.openSearch();
+    else if (a.kind === 'findSaid') this.openSearch('sessions');
     else if (a.kind === 'newTab') this.addTab(p, w);
     else if (a.kind === 'split') {
       const area = t && this.panesOf(t, this.areas().pane).find(([id]) => id === t.active)?.[1];
@@ -2270,6 +2539,9 @@ export class App {
     } else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'away') this.openSettingsOn(4, 'telegram');
+    else if (a.kind === 'pullRequest') this.bug(PULL_REQUESTS_NEED);
+    else if (a.kind === 'flow') this.toggleFlow();
+    else if (a.kind === 'startFlow') this.bug(FLOWS_NEED);
     else if (a.kind === 'quit') this.quit();
   }
 
@@ -2314,6 +2586,8 @@ export class App {
       return [
         { id: 'folder', section: '', label: 'worktrees folder', value: c.worktreesDir, note: 'new worktrees go in <folder>/<repo>/<branch>' },
         { id: 'fetch', section: '', label: 'fetch branches every', value: c.fetchMinutes ? `${c.fetchMinutes} min` : 'off', note: 'commits to pull show as ↓n' },
+        { id: 'pulls', section: '', label: 'pull requests', value: '[ ] hidden', note: "each workspace's pull request and its checks, from gh" },
+        { id: 'merged', section: '', label: 'merged PRs in stats', value: '[ ] hidden', note: 'your merged pull requests, from gh and glab' },
       ];
     }
     if (page === 1) {
@@ -2321,7 +2595,7 @@ export class App {
         { id: 'agent', section: 'Agent', label: 'default agent', value: c.agent, note: c.agent === 'auto' ? 'the agent in your tab, otherwise ask' : '' },
         { id: 'submit', section: 'Agent', label: 'send the prompt', value: c.submit ? '[x] sent for you' : '[ ] typed, you press Enter', note: '' },
         { id: 'trust', section: 'Agent', label: 'trust prompts', value: c.trust ? '[x] accepted for you' : '[ ] left to you', note: "saying yes runs the repo's agent config" },
-        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude Code, Codex, Gemini and Grok, in their tabs' },
+        { id: 'resume', section: 'Agent', label: 'resume conversations', value: c.resume ? '[x] after a restart' : '[ ] never', note: 'Claude, Codex, Gemini, Grok, Cursor, in their tabs' },
         { id: 'awake', section: 'Agent', label: 'keep awake', value: c.awake ? '[x] while an agent works' : '[ ] never', note: this.awakeNote() },
       ];
       for (const kind of this.listedKinds()) {
@@ -2336,6 +2610,7 @@ export class App {
         });
       }
       rows.push({ id: 'add', section: 'How each agent starts', label: '+ another agent…', value: '', note: '' });
+      rows.push({ id: 'flows', section: 'Flows', label: 'flows', value: '4 built in', note: 'teams of agents that work through a plan' });
       return rows;
     }
     if (page === 5) {
@@ -2345,6 +2620,7 @@ export class App {
       return [
         { id: 'remote', section: 'Browser', label: 'remote access', value: '[ ] off', note: "open this computer's cornercase from your phone over Tailscale" },
         { id: 'telegram', section: 'Telegram', label: 'bot', value: 'not set', note: 'make a bot with @BotFather and paste its token here' },
+        { id: 'discord', section: 'Discord', label: 'bot', value: 'not set', note: 'make a Discord app with User Install and paste its bot token' },
       ];
     }
     if (page === 2) {
@@ -2363,8 +2639,10 @@ export class App {
         { id: 'plane-url', section: 'Plane', label: 'Plane URL', value: c.planeUrl || 'Plane Cloud', note: 'for a self-hosted server' },
         token('plane', 'Plane'),
         { id: 'plane-filter', section: 'Plane', label: 'Plane filter', value: c.planeFilter || 'none', note: 'query parameters, such as priority=high' },
+        { id: 'gitlab-url', section: 'GitLab', label: 'GitLab URL', value: c.gitlabUrl || 'gitlab.com', note: 'for a self-hosted server' },
+        token('gitlab', 'GitLab'),
       ];
-      const hidden = ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
+      const hidden = ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'].filter((s) => !c.sources.includes(s));
       for (const s of [...c.sources, ...hidden]) {
         rows.push({ id: `src:${s}`, section: 'Sources shown', label: `${c.sources.includes(s) ? '[x]' : '[ ]'} ${SOURCE_NAMES[s]}`, value: '', note: s === 'all' ? 'every source together' : '' });
       }
@@ -2382,6 +2660,7 @@ export class App {
       ...DETAILS.map(([id, note]) => ({ id, section: '', label: id, value: c[id] ? '[x] shown' : '[ ] hidden', note })),
       { id: 'notify', section: '', label: 'desktop notifications', value: c.notify, note: 'when an agent in another tab needs you or finishes' },
       { id: 'updates', section: '', label: 'check for updates', value: c.updates ? '[x] every hour' : '[ ] never', note: 'asks GitHub for the latest release' },
+      { id: 'starPrompt', section: '', label: 'star prompt', value: c.starPrompt ? '[x] now and then' : '[ ] never', note: 'asks for a GitHub star after two weeks of use' },
       this.prefixRow(),
     ];
   }
@@ -2446,6 +2725,9 @@ export class App {
       o.notice = c.dim ? 'inactive panes are dimmed' : 'every pane looks the same';
     } else if (row.id === 'prefix') {
       o.capturing = true;
+    } else if (row.id === 'starPrompt') {
+      c.starPrompt = !c.starPrompt;
+      o.notice = c.starPrompt ? 'cornercase may ask for a star on GitHub' : 'cornercase never asks for a star';
     } else if (row.id === 'updates') {
       c.updates = !c.updates;
       o.notice = c.updates ? 'cornercase looks for new versions' : 'cornercase no longer looks for new versions';
@@ -2480,10 +2762,16 @@ export class App {
       const listed = this.listedKinds();
       const items = AGENTS.filter(([k]) => !listed.includes(k)).map(([k, bin]) => ({ value: k, note: bin }));
       o.pick = { row: row.id, title: 'Which agent do you want to set up?', items, selected: 0, filter: '' };
-    } else if (row.id === 'remote' || row.id === 'telegram') {
+    } else if (row.id === 'remote' || row.id === 'telegram' || row.id === 'discord') {
       o.notice = REMOTE_NEEDS;
     } else if (row.id === 'iconBar') {
       o.notice = ICON_BAR_NEEDS;
+    } else if (row.id === 'pulls') {
+      o.notice = PULL_REQUESTS_NEED;
+    } else if (row.id === 'merged') {
+      o.notice = MERGED_NEED;
+    } else if (row.id === 'flows') {
+      o.notice = FLOWS_NEED;
     } else if (row.id === 'plugins') {
       o.notice = NO_PLUGINS;
     } else if (row.id.startsWith('token:')) {
@@ -2500,6 +2788,8 @@ export class App {
       o.edit = { row: row.id, label: 'Plane workspace, the part after app.plane.so/, such as acme', input: c.planeWorkspace, token: false };
     } else if (row.id === 'plane-url') {
       o.edit = { row: row.id, label: 'Plane URL for a self-hosted server (empty is Plane Cloud)', input: c.planeUrl, token: false };
+    } else if (row.id === 'gitlab-url') {
+      o.edit = { row: row.id, label: 'GitLab URL for a self-hosted server (empty is gitlab.com)', input: c.gitlabUrl, token: false };
     } else if (row.id === 'plane-filter') {
       o.edit = { row: row.id, label: 'Plane filter (query parameters, such as priority=high)', input: c.planeFilter, token: false };
     } else if (row.id.startsWith('src:')) {
@@ -2537,6 +2827,22 @@ export class App {
       ),
     );
     return markdown(restartText(running), width);
+  }
+
+  flowMessageLines(width: number): Line[] {
+    const o = this.overlay;
+    const m = o?.kind === 'flowMessage' ? this.flowMessage(o) : null;
+    return m ? markdown(m.text, width) : [];
+  }
+
+  scrollFlowMessage(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'flowMessage') return false;
+    const notes = updateNotes(this.cols, this.rows);
+    const max = Math.max(0, this.flowMessageLines(notes.w).length - notes.h);
+    o.scroll = Math.max(0, Math.min(max, o.scroll + dy));
+    this.dirty();
+    return true;
   }
 
   scrollRestart(dy: number): boolean {
@@ -2666,6 +2972,14 @@ export class App {
           ? value ? `Plane workspace: ${value}` : 'the Plane workspace was cleared'
           : value ? `Plane server: ${value}` : 'Plane is the cloud at app.plane.so';
       }
+    } else if (edit.row === 'gitlab-url') {
+      const [value, error] = checkUrl(edit.input, GITLAB_EXAMPLE);
+      if (error) edit.error = error;
+      else {
+        this.config.gitlabUrl = value;
+        o.edit = undefined;
+        o.notice = !value ? 'GitLab is gitlab.com' : unencrypted(value) ? `GitLab server: ${value}; ${UNENCRYPTED}` : `GitLab server: ${value}`;
+      }
     } else if (edit.row === 'plane-filter') {
       this.config.planeFilter = edit.input.trim();
       o.edit = undefined;
@@ -2725,16 +3039,73 @@ export class App {
   }
 
   private issuesSource(o: IssuesOverlay): string {
-    return this.config.sources[o.tab] ?? 'all';
+    return o.tab === this.config.sources.length ? QUEUE : this.config.sources[o.tab] ?? 'all';
+  }
+
+  private issuesTabCount(): number {
+    return this.config.sources.length + 1;
+  }
+
+  private queuePlace(entry: QueueEntry): string {
+    const project = this.projects.find((p) => p.id === entry.project);
+    const name = project ? projectLabel(project) : entry.folder;
+    const inside = entry.branch || entry.workspaceName;
+    return inside ? `${name} › ${inside}` : name;
+  }
+
+  private queueRow(entry: QueueEntry): IssuesView['items'][number] {
+    const pane = entry.pane === undefined ? null : this.findPane(entry.pane);
+    const status = entry.state === 'started' ? `started · ${pane ? `pane ${entry.pane}` : 'pane closed'}` : entry.state === 'failed' ? `failed · ${entry.error ?? 'unknown'}` : entry.state;
+    return { key: queueWhen(entry.at), title: entry.label, meta: `${status} · ${entry.agent} · ${this.queuePlace(entry)}`, colour: QUEUE_COLOURS[entry.state] };
+  }
+
+  private queueShown(o: IssuesOverlay): QueueEntry[] {
+    const query = o.filter.toLowerCase();
+    return this.queued.filter((entry) => {
+      const row = this.queueRow(entry);
+      return [row.key, row.title, row.meta].some((text) => text.toLowerCase().includes(query));
+    });
+  }
+
+  private queueSelected(o: IssuesOverlay): QueueEntry | undefined {
+    const shown = this.queueShown(o);
+    return shown[Math.min(o.selected, shown.length - 1)];
+  }
+
+  private queueView(o: IssuesOverlay, tabs: string[]): IssuesView {
+    const shown = this.queueShown(o);
+    const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
+    const sel = shown[selected];
+    const hint = !sel ? QUEUE_EVERY : sel.state === 'started' ? `enter opens its pane · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
+    const buttons = [
+      'new',
+      ...(sel && sel.state !== 'started' ? ['start now'] : []),
+      ...(sel ? ['remove'] : []),
+      ...(this.queued.some((entry) => entry.state === 'started') ? ['clear started'] : []),
+      'cancel',
+    ];
+    return {
+      tabs,
+      toggles: [],
+      items: shown.map((entry) => this.queueRow(entry)),
+      selected,
+      scroll: o.scroll,
+      empty: this.queued.length ? 'nothing matches' : 'nothing queued: new schedules a prompt, and schedule on an issue queues it',
+      hint,
+      buttons,
+      picking: false,
+    };
   }
 
   private accountOf(source: Remote): string {
+    if (source === 'gitlab') return `@you in ${gitlabServer(this.config.gitlabUrl).replace(/^https?:\/\//, '')}`;
     return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
 
   private freshToken(source: string): IssuesOverlay['token'] {
     if (source === 'jira') return { input: this.config.jiraSite, checking: false, step: 'site' };
     if (source === 'plane') return { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+    if (source === 'gitlab') return { input: this.config.gitlabUrl, checking: false, step: 'server' };
     return { input: '', checking: false };
   }
 
@@ -2742,7 +3113,7 @@ export class App {
     const source = this.issuesSource(o);
     const p = this.projects.find((x) => x.id === o.project);
     const github = !!p?.repo;
-    const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s]);
+    const allowed = (s: string) => (s === 'github' ? github : isRemote(s) && this.config.accounts[s] && (s !== 'gitlab' || github));
     const f = o.filter.trim().toLowerCase();
     const project = this.config.jiraJql.trim().match(/^project\s*=\s*"?([a-z][a-z0-9_]*)"?$/i)?.[1].toUpperCase();
     return ISSUES.filter((i) => (source === 'all' ? allowed(i.source) : i.source === source && allowed(i.source)))
@@ -2752,7 +3123,7 @@ export class App {
   }
 
   branchFor(i: Issue): string {
-    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.key;
+    const prefix = i.source === 'github' ? `issue-${i.number}` : i.source === 'gitlab' ? `${i.number}` : i.source === 'shortcut' ? `sc-${i.number}` : i.key;
     const s = slug(i.title, 40);
     return s ? `${prefix}-${s}` : prefix;
   }
@@ -2808,7 +3179,7 @@ export class App {
   }
 
   issuesView(o: IssuesOverlay): IssuesView {
-    const tabs = this.config.sources.map((s) => SOURCE_NAMES[s]);
+    const tabs = [...this.config.sources.map((s) => SOURCE_NAMES[s]), 'Queue'];
     const toggles = [
       { label: 'closed', on: o.closed },
       { label: o.mine ? 'people: assignee me' : 'people', on: o.mine },
@@ -2829,7 +3200,7 @@ export class App {
           scroll: 0,
           empty: '',
           hint: `enter starts it${more}`,
-          buttons: ['start', 'agent…', o.raw ? 'rendered' : 'raw', 'copy url', 'back'],
+          buttons: ['start', 'schedule', 'start a flow', 'agent…', o.raw ? 'rendered' : 'raw', 'copy url', 'back'],
           detail: lines,
           picking: false,
         };
@@ -2850,6 +3221,7 @@ export class App {
         picking: true,
       };
     }
+    if (source === QUEUE) return this.queueView(o, tabs);
     if (isRemote(source) && !this.config.accounts[source]) {
       const remote = REMOTES[source];
       const step = o.token.step ?? 'token';
@@ -2859,6 +3231,9 @@ export class App {
       if (step === 'workspace') {
         help.push("Type your Plane workspace, the part after the server's name, such as acme.", 'Then press Enter.');
         [label, input] = ['workspace', o.token.input];
+      } else if (step === 'server') {
+        help.push(`Type the URL of your GitLab server, such as ${GITLAB_EXAMPLE}, and press Enter.`, 'Leave it empty for gitlab.com.');
+        [label, input] = ['server', o.token.input];
       } else if (step === 'site') {
         help.push('Type your Jira Cloud site, such as acme.atlassian.net, and press Enter.');
         [label, input] = ['site', o.token.input];
@@ -2868,6 +3243,11 @@ export class App {
       } else {
         if (source === 'jira') help.push(`Signing in to ${this.config.jiraSite} as ${this.config.jiraEmail}.`, '');
         if (source === 'plane') help.push(`Connecting to the Plane workspace ${this.config.planeWorkspace}.`, '');
+        if (source === 'gitlab') {
+          help.push(`Connecting to ${gitlabServer(this.config.gitlabUrl)}.`);
+          if (unencrypted(this.config.gitlabUrl)) help.push(`Careful: ${UNENCRYPTED}.`);
+          help.push('');
+        }
         help.push(remote.help);
       }
       help.push(
@@ -2876,9 +3256,11 @@ export class App {
           ? `It is saved in secrets.json (only you can read it); you can also paste it in settings. ${remote.env}, when set, takes precedence.`
           : source === 'plane'
             ? 'The workspace is saved in your settings.'
-            : 'The site and the email are saved in your settings.',
+            : source === 'gitlab'
+              ? 'The server is saved in your settings.'
+              : 'The site and the email are saved in your settings.',
       );
-      const back = (step !== 'site' && source === 'jira') || (step === 'token' && source === 'plane') ? ['back'] : [];
+      const back = (step !== 'site' && source === 'jira') || (step === 'token' && (source === 'plane' || source === 'gitlab')) ? ['back'] : [];
       return {
         tabs,
         toggles,
@@ -2902,21 +3284,21 @@ export class App {
       ? ''
       : o.filter
         ? 'no matches'
-        : source === 'github' && !p?.repo
+        : (source === 'github' || source === 'gitlab') && !p?.repo
           ? 'this project is not in a git repository'
           : nothing
-            ? 'nothing to list here: connect Shortcut, Linear, Jira or Plane in their tabs'
+            ? 'nothing to list here: connect GitLab, Shortcut, Linear, Jira or Plane in their tabs'
             : 'no open issues';
     const account = isRemote(source) ? this.accountOf(source) : '';
     const hint = o.loading ? 'loading…' : [account, sel ? `enter reads ${sel.key} · start works on it ${this.startHint(sel, o)}` : ''].filter(Boolean).join(' · ');
-    const buttons = ['start', 'refresh', ...(isRemote(source) ? ['disconnect'] : []), 'cancel'];
+    const buttons = ['start', 'schedule', 'start a flow', 'refresh', ...(isRemote(source) ? ['disconnect'] : []), 'cancel'];
     return {
       tabs,
       toggles,
       items: list.map((i) => ({
         key: i.key,
         title: i.title,
-        meta: [i.source === 'github' ? '' : i.state, i.labels.join(', '), i.author, i.age].filter(Boolean).join(' · '),
+        meta: [i.source === 'github' || i.source === 'gitlab' ? '' : i.state, i.labels.join(', '), i.author, i.age].filter(Boolean).join(' · '),
       })),
       selected,
       scroll: o.scroll,
@@ -2959,6 +3341,12 @@ export class App {
       o.agentPick.selected = i;
       return this.issuesButton('choose');
     }
+    if (this.issuesSource(o) === QUEUE) {
+      const entry = this.queueShown(o)[i];
+      if (!entry) return;
+      o.selected = i;
+      return this.openQueued(entry);
+    }
     const issue = this.issuesList(o)[i];
     if (!issue) return;
     o.selected = i;
@@ -2971,7 +3359,7 @@ export class App {
   issuesScroll(dy: number): boolean {
     const o = this.overlay;
     if (o?.kind !== 'issues') return false;
-    const n = this.issuesList(o).length;
+    const n = this.issuesSource(o) === QUEUE ? this.queueShown(o).length : this.issuesList(o).length;
     o.scroll = Math.max(0, Math.min(Math.max(0, n - 1), o.scroll + dy));
     this.dirty();
     return true;
@@ -2989,8 +3377,20 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
+    if (this.issuesSource(o) === QUEUE && !o.detail && !o.agentPick) {
+      const entry = this.queueSelected(o);
+      if (label === 'new') this.openQueueForm();
+      else if (label === 'start now' && entry && entry.state !== 'started') this.runQueue(entry);
+      else if (label === 'remove' && entry) this.removeQueued((item) => item.id === entry.id, `removed queue entry ${entry.id}`);
+      else if (label === 'clear started') this.removeQueued((item) => item.state === 'started', 'cleared {n} started');
+      return;
+    }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'plane') {
       o.token = { input: this.config.planeWorkspace, checking: false, step: 'workspace' };
+      return this.dirty();
+    }
+    if (label === 'back' && !o.agentPick && !o.detail && o.token.step === 'token' && this.issuesSource(o) === 'gitlab') {
+      o.token = { input: this.config.gitlabUrl, checking: false, step: 'server' };
       return this.dirty();
     }
     if (label === 'back' && !o.agentPick && !o.detail && o.token.step && o.token.step !== 'site' && o.token.step !== 'workspace') {
@@ -3034,6 +3434,10 @@ export class App {
       }
       return this.dirty();
     }
+    if (label === 'start a flow') {
+      o.notice = FLOWS_NEED;
+      return this.dirty();
+    }
     if (label === 'agent…') {
       o.agentPick = { selected: Math.max(0, AGENTS.findIndex(([k]) => k === this.pickedAgent(o))), filter: '' };
       return this.dirty();
@@ -3046,10 +3450,25 @@ export class App {
       if (o.chosen && o.chosen !== this.config.agent) o.notice = `${o.chosen} takes this one`;
       return this.dirty();
     }
-    if (label === 'start') {
+    if (label === 'start' || label === 'schedule') {
       const list = this.issuesList(o);
       const issue = o.detail ? ISSUES.find((i) => i.key === o.detail) : list[Math.min(o.selected, list.length - 1)];
-      if (issue) this.startIssue(issue, o);
+      if (issue && label === 'schedule') {
+        this.openQueueForm();
+        const form = this.overlay;
+        if (form?.kind === 'queue') {
+          form.prompt = issue.url;
+          form.label = `${issue.key} ${issue.title}`;
+          form.branch = this.branchFor(issue);
+          form.focus = 'when';
+          const picked = this.pickedAgent(o);
+          const agent = picked ? form.agent.options.indexOf(picked) : -1;
+          if (agent >= 0) chooseCombo(form.agent, agent);
+          form.place = combo(form.place.options, form.places.findIndex((choice) => choice.project === o.project && choice.workspace === null));
+          chooseCombo(form.openIn, this.projects.find((p) => p.id === o.project)?.repo ? 1 : 0);
+          this.queueModes(form);
+        }
+      } else if (issue) this.startIssue(issue, o);
     }
   }
 
@@ -3058,6 +3477,15 @@ export class App {
     if (o?.kind !== 'issues') return;
     const source = this.issuesSource(o) as Remote;
     const input = o.token.input.trim();
+    if (o.token.step === 'server') {
+      const [value, error] = checkUrl(input, GITLAB_EXAMPLE);
+      if (error) o.token.error = error;
+      else {
+        this.config.gitlabUrl = value;
+        o.token = { input: '', checking: false, step: 'token' };
+      }
+      return this.dirty();
+    }
     if (o.token.step === 'workspace') {
       const [value, error] = checkWorkspace(input);
       if (error) o.token.error = error;
@@ -3131,8 +3559,155 @@ export class App {
     });
   }
 
-  launch(pane: Pane, kind: string, prompt: string): void {
-    const command = this.agentCommand(kind);
+  openQueued(entry: QueueEntry): void {
+    if (entry.state !== 'started') return this.openQueueForm(entry);
+    this.closeOverlay();
+    for (let p = 0; p < this.projects.length; p++) for (let w = 0; w < this.projects[p].workspaces.length; w++) {
+      const t = this.projects[p].workspaces[w].tabs.findIndex((tab) => tab.panes.some((pane) => pane.id === entry.pane));
+      if (t >= 0) return this.selectTab(p, w, t);
+    }
+  }
+
+  closeQueueForm(scheduled: boolean): void {
+    const back = this.queueBack;
+    this.queueBack = null;
+    if (back && scheduled) {
+      back.tab = this.config.sources.length;
+      back.detail = null;
+      back.agentPick = null;
+      back.filter = '';
+      back.selected = 0;
+      back.scroll = 0;
+    }
+    this.overlay = back;
+    this.dirty();
+  }
+
+  openQueueForm(entry?: QueueEntry): void {
+    const places = this.queuePlaces();
+    const matching = entry ? places.flatMap((choice, i) => (choice.project === entry.project && choice.workspace === entry.workspace ? [i] : [])) : [];
+    const project = this.project();
+    const workspace = this.workspace();
+    const current = places.findIndex((choice) => choice.project === project?.id && choice.workspace === (workspace?.id ?? null));
+    const place = matching[0] ?? Math.max(0, current);
+    const confirmed = entry ? matching.length === 1 : places.length > 0;
+    const kinds = ['auto', ...AGENTS.map(([kind]) => kind)];
+    if (entry && !kinds.includes(entry.agent)) kinds.push(entry.agent);
+    const agent = entry ? Math.max(0, kinds.indexOf(entry.agent)) : 0;
+    const [date, clock] = queueWhen(entry?.at ?? this.now()).split(' ');
+    const o = queueForm(places, confirmed ? place : null, kinds, agent, Intl.DateTimeFormat().resolvedOptions().timeZone, date);
+    if (entry) {
+      o.id = entry.id;
+      o.label = entry.label !== entry.prompt ? entry.label : undefined;
+      o.prompt = entry.prompt;
+      o.when = whenCombo('on');
+      o.clock = clock;
+      chooseCombo(o.openIn, entry.branch ? 1 : 0);
+      o.branch = entry.branch;
+    }
+    o.cursor = [...o.prompt].length;
+    this.queueBack = this.overlay?.kind === 'issues' ? this.overlay : null;
+    this.overlay = o;
+    this.queueModes(o);
+    if (entry?.mode) {
+      const modes = [...o.mode.options];
+      if (!modes.includes(entry.mode)) modes.push(entry.mode);
+      o.mode = combo(modes, modes.indexOf(entry.mode));
+    }
+    this.dirty();
+  }
+
+  private queuePlaces(): QueueChoice[] {
+    return this.projects.flatMap((project) => {
+      const open = project.workspaces.filter((workspace) => !workspace.removing);
+      const named = (workspace: Workspace) => (open.filter((other) => workspaceLabel(other) === workspaceLabel(workspace)).length > 1 ? ` (workspace ${workspace.id})` : '');
+      return [
+        { label: `${projectLabel(project)} · root`, project: project.id, workspace: null, worktree: project.repo },
+        ...open.map((workspace) => ({ label: `${projectLabel(project)} › ${workspaceLabel(workspace)}${named(workspace)}`, project: project.id, workspace: workspace.id, worktree: false })),
+      ];
+    });
+  }
+
+  private queueModes(o: QueueForm): void {
+    const picked = comboLabel(o.agent);
+    const kind = picked && picked !== 'auto' ? picked : this.config.agent === 'auto' ? 'claude' : this.config.agent;
+    o.mode = combo(['default', ...(MODES[kind] ?? []).map(([name]) => name)], 0);
+  }
+
+  queueChoose(o: QueueForm, control: QueueList, i: number): void {
+    const changed = o[control].chosen !== i;
+    chooseCombo(o[control], i);
+    if (changed) {
+      queueChose(o, control);
+      if (control === 'agent') this.queueModes(o);
+    }
+    this.dirty();
+  }
+
+  submitQueue(): void {
+    const o = this.overlay;
+    if (o?.kind !== 'queue') return;
+    const place = queueChoice(o);
+    const at = queueTime(queueAt(o), this.now());
+    const worktree = queueWorktree(o);
+    const error = !place
+      ? o.places.length ? 'choose an open place before scheduling' : 'open a project before scheduling an agent'
+      : !o.prompt.trim() ? 'the prompt is empty' : !at ? 'choose a time in the future' : worktree && !o.branch.trim() ? 'the worktree branch needs a name' : null;
+    if (error || !place || !at) {
+      o.error = error ?? undefined;
+      this.dirty();
+      return;
+    }
+    const picked = comboLabel(o.agent) ?? 'auto';
+    const chosenMode = comboLabel(o.mode) ?? 'default';
+    const project = this.projects.find((p) => p.id === place.project);
+    const ws = project?.workspaces.find((w) => w.id === place.workspace);
+    const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
+    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? o.prompt, project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending' };
+    const old = this.queued.find((item) => item.id === entry.id);
+    const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
+    entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : this.agentCommand(entry.agent);
+    this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);
+    if (old) this.disarmQueued(old);
+    this.armQueued(entry);
+    this.closeQueueForm(true);
+    this.notify(`scheduled queue entry ${entry.id}`);
+    this.dirty();
+  }
+
+  runQueue(entry: QueueEntry): void {
+    if (entry.state === 'started') return;
+    const project = this.projects.find((project) => project.id === entry.project);
+    if (!project) { entry.state = 'failed'; entry.error = 'project closed'; this.dirty(); return; }
+    let workspace = project.workspaces.find((workspace) => entry.branch ? workspace.branch === entry.branch : entry.workspace ? workspace.id === entry.workspace : workspace.root === project.root);
+    if (!workspace && (entry.branch || entry.workspace === null)) workspace = this.addWorkspace(project, entry.branch || 'main', !!entry.branch);
+    if (!workspace) { entry.state = 'failed'; entry.error = 'workspace closed'; this.dirty(); return; }
+    const pane = this.newPane(project, workspace);
+    const tab = this.newTab([pane]);
+    tab.name = entry.label;
+    workspace.tabs.push(tab);
+    entry.state = 'started';
+    entry.error = undefined;
+    entry.pane = pane.id;
+    this.launch(pane, entry.agent, entry.prompt, true, entry.command, true);
+    this.notify(`started queued agent ${entry.id}`);
+    this.dirty();
+  }
+
+  private queueKey(o: QueueForm, k: Key): boolean {
+    const screen = rect(0, 0, this.cols, this.rows);
+    const width = Math.max(1, queueTextRect(screen, o, o.focus).w);
+    const step = queueFormKey(o, k, width, queueListRows(screen, o));
+    if (step === 'cancel') this.closeQueueForm(false);
+    else if (step === 'submit') this.submitQueue();
+    else if (step === 'agent') this.queueModes(o);
+    this.dirty();
+    return true;
+  }
+
+
+  launch(pane: Pane, kind: string, prompt: string, trust = this.config.trust, captured?: string, submit?: boolean): void {
+    const command = captured ?? this.agentCommand(kind);
     this.after(300, () => {
       this.emit('narrate', this.narration.starting(command));
       pane.shell.type(command);
@@ -3143,7 +3718,7 @@ export class App {
       const agent = pane.shell.fg instanceof Agent ? pane.shell.fg : null;
       if (!(stage === 'asked' && agent?.trusting)) waited += 150;
       if (stage === 'agent' && agent?.trusting) {
-        if (this.config.trust) {
+        if (trust) {
           stage = 'trusted';
           this.emit('narrate', this.narration.trusted);
           this.after(650, () => agent.key({ key: 'Enter' }));
@@ -3155,7 +3730,7 @@ export class App {
         stage = 'pasted';
         this.after(450, () => {
           agent.paste(prompt);
-          if (this.config.submit) {
+          if (submit ?? this.config.submit) {
             this.emit('narrate', this.narration.sent);
             this.after(350, () => agent.key({ key: 'Enter' }));
           } else this.emit('narrate', this.narration.prompt);
@@ -3421,7 +3996,17 @@ export class App {
     if (this.overlay?.kind === 'keys') this.overlay = null;
     const o = this.overlay;
     if (o) {
-      if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
+      if (o.kind === 'queue') {
+        const focus = o.focus;
+        if (!isList(focus) && !queueOpened(o)) {
+          const chars = [...o[focus]];
+          const typed = [...text.replace(/\s+/g, ' ')];
+          chars.splice(o.cursor, 0, ...typed);
+          o[focus] = chars.join('');
+          o.cursor += typed.length;
+        }
+      }
+      else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') o.input += text.replace(/\s+/g, ' ');
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
       else if (o.kind === 'settings' && o.edit) o.edit.input += o.edit.token ? text.replace(/\s/g, '') : text;
@@ -3491,6 +4076,7 @@ export class App {
   }
 
   private overlayKey(o: Overlay, k: Key): boolean {
+    if (o.kind === 'queue') return this.queueKey(o, k);
     const ch = this.typed(k);
     if (o.kind === 'menu') {
       if (k.key === 'Escape') this.closeOverlay();
@@ -3499,6 +4085,12 @@ export class App {
     if (o.kind === 'usage' && ['Tab', 'ArrowLeft', 'ArrowRight'].includes(k.key)) { this.usagePage(1 - this.usage.page); return true; }
     if (o.kind === 'groupStyle' || o.kind === 'usage') {
       if (k.key === 'Escape' || k.key === 'Enter') this.closeOverlay();
+      return true;
+    }
+    if (o.kind === 'flowMessage') {
+      if (k.key === 'Escape') this.closeOverlay();
+      else if (k.key === 'Enter') this.copyFlowMessage();
+      else if (k.key === 'ArrowDown' || k.key === 'ArrowUp') this.scrollFlowMessage(k.key === 'ArrowDown' ? 1 : -1);
       return true;
     }
     if (o.kind === 'restart') {
@@ -3524,18 +4116,24 @@ export class App {
       return true;
     }
     if (o.kind === 'search') {
-      const results = this.searchResults(o.query);
+      const results = this.searchResults(o.query, o.mode);
       if (k.key === 'Escape') this.closeOverlay();
+      else if (k.key === 'Tab') this.toggleSearchMode();
       else if (k.key === 'Enter') this.searchGo(Math.min(o.selected, results.length - 1));
       else if (k.key === 'ArrowDown') o.selected = Math.min(o.selected + 1, Math.max(0, results.length - 1));
       else if (k.key === 'ArrowUp') o.selected = Math.max(0, o.selected - 1);
       else if (k.key === 'Backspace') {
         o.query = o.query.slice(0, -1);
         o.selected = 0;
+        o.scroll = 0;
       } else if (ch) {
         o.query += ch;
         o.selected = 0;
+        o.scroll = 0;
       }
+      const visible = Math.max(1, Math.floor(Math.max(0, this.areas().results.h - 2) / (o.mode === 'sessions' ? 2 : 1)));
+      if (o.selected < o.scroll) o.scroll = o.selected;
+      else if (o.selected >= o.scroll + visible) o.scroll = o.selected - visible + 1;
       this.dirty();
       return true;
     }
@@ -3636,8 +4234,8 @@ export class App {
     }
     if (view.token) {
       if (k.key === 'Enter') this.issuesConnect();
-      else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.config.sources.length);
-      else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.config.sources.length - 1) % this.config.sources.length);
+      else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.issuesTabCount());
+      else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.issuesTabCount() - 1) % this.issuesTabCount());
       else if (k.key === 'Backspace' || ch) {
         o.token.input = k.key === 'Backspace' ? o.token.input.slice(0, -1) : o.token.input + ch;
         o.token.error = undefined;
@@ -3666,8 +4264,8 @@ export class App {
     if (k.key === 'Enter') this.issuesClick(view.selected);
     else if (k.key === 'ArrowDown') o.selected = Math.min(o.selected + 1, Math.max(0, view.items.length - 1));
     else if (k.key === 'ArrowUp') o.selected = Math.max(0, o.selected - 1);
-    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.config.sources.length);
-    else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.config.sources.length - 1) % this.config.sources.length);
+    else if (k.key === 'Tab' || k.key === 'ArrowRight') this.issuesTab((o.tab + 1) % this.issuesTabCount());
+    else if (k.key === 'ArrowLeft') this.issuesTab((o.tab + this.issuesTabCount() - 1) % this.issuesTabCount());
     else if (k.key === 'Backspace') o.filter = o.filter.slice(0, -1);
     else if (ch) {
       o.filter += ch;
@@ -3702,4 +4300,25 @@ export class App {
   panesOf(t: Tab, area: Rect): [number, Rect][] {
     return visible(t.layout, area, t.active);
   }
+}
+
+function snippet(line: string, at: number, length: number): [string, [number, number]] {
+  const chars = [...line.replace(/[\u0000-\u001f\u007f]/g, ' ')];
+  const before = [...line.slice(0, at)].length;
+  const lead = Math.max(0, Math.min(chars.findIndex((c) => c.trim() !== ''), before));
+  const start = before - lead;
+  return [chars.slice(lead).join('').trimEnd(), [start, start + length]];
+}
+
+export function crop(text: string, hit: [number, number], width: number): [string, [number, number]] {
+  const chars = [...text];
+  if (chars.length <= width) return [text, hit];
+  const from = Math.min(Math.max(0, hit[0] - Math.floor(width / 4)), chars.length - width);
+  const to = from + width;
+  const lead = from > 0 ? 1 : 0;
+  let shown = chars.slice(from + lead, to - (to < chars.length ? 1 : 0)).join('');
+  if (lead) shown = `…${shown}`;
+  if (to < chars.length) shown += '…';
+  const end = Math.min(hit[1], to - (to < chars.length ? 1 : 0));
+  return [shown, [Math.max(hit[0], from + lead) - from, Math.max(end - from, Math.max(hit[0], from + lead) - from)]];
 }

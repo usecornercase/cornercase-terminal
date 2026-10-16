@@ -19,6 +19,8 @@ impl App {
         self.overlay = Some(Overlay::Usage);
         if self.usage_page == usage::Page::Limits {
             self.probe_usage();
+        } else {
+            self.ask_merged_stale(Instant::now());
         }
     }
 
@@ -58,6 +60,8 @@ impl App {
         self.usage_page = page;
         if page == usage::Page::Limits {
             self.probe_usage();
+        } else {
+            self.ask_merged_stale(Instant::now());
         }
     }
 
@@ -81,15 +85,17 @@ impl App {
         } else if let Some(i) = ui::usage_tabs(area, &view).iter().position(|r| r.contains(pos)) {
             self.switch_usage(if i == 0 { usage::Page::Limits } else { usage::Page::Stats });
         } else if view.page == usage::Page::Stats && !view.stats.empty && ui::usage_share(area, &view).contains(pos) {
-            self.outbox
-                .host_writes
-                .push(clipboard::osc52(&agents::stats::share_link(&self.agents.stats, SystemTime::now())));
+            self.outbox.host_writes.push(clipboard::osc52(&view.stats.share_link()));
             self.toast = Some(Toast::new("copied a link to your stats", ui::ToastIcon::Check));
         }
     }
 
     pub(crate) fn stats_view(&self, now: SystemTime) -> agents::stats::View {
-        self.agents.stats.view(now)
+        let mut view = self.agents.stats.view(now);
+        if self.config.merged_pull_requests {
+            view.merged = self.merged.row(self.agents.stats.since(), now);
+        }
+        view
     }
 }
 

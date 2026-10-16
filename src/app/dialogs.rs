@@ -52,7 +52,11 @@ impl App {
             value: input.into(),
             hint: format!("in {}", crate::text::display_path(&path, home)),
             toggle: worktree.map(|on| ui::Toggle { label: WORKTREE_TOGGLE, on }),
-            note: if creating { Some(ui::Note::Busy("creating…")) } else { error.map(|e| ui::Note::Error(e.into())) },
+            note: if creating {
+                Some(ui::Note::Busy("creating…"))
+            } else {
+                error.map(|e| ui::Note::Error(e.into())).or_else(|| self.setup_note(project, worktree))
+            },
             submit: CREATE_SUBMIT,
         })
     }
@@ -143,8 +147,8 @@ impl App {
             KeyCode::Esc => self.cancel_form(),
             KeyCode::Enter => self.submit_form(area)?,
             KeyCode::Tab => self.toggle_worktree(),
-            KeyCode::Up => self.scroll_update(-1, area),
-            KeyCode::Down => self.scroll_update(1, area),
+            KeyCode::Up => self.scroll_dialog(-1, area),
+            KeyCode::Down => self.scroll_dialog(1, area),
             KeyCode::Backspace => {
                 if let Some(input) = self.overlay.as_mut().and_then(Overlay::input) {
                     input.pop();
@@ -176,9 +180,22 @@ impl App {
         Ok(())
     }
 
+    fn scroll_dialog(&mut self, delta: isize, area: Rect) {
+        if matches!(self.overlay, Some(Overlay::PullRequest { .. })) {
+            self.scroll_pull_request(delta, area);
+        } else if matches!(self.overlay, Some(Overlay::FlowMessage { .. })) {
+            self.scroll_flow_message(delta, area);
+        } else {
+            self.scroll_update(delta, area);
+        }
+    }
+
     pub(super) fn cancel_form(&mut self) {
-        if !self.overlay.as_ref().is_some_and(Overlay::busy) {
-            self.overlay = None;
+        match &self.overlay {
+            Some(overlay) if overlay.busy() => {}
+            Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::Flows { .. }) => self.close_flows(),
+            _ => self.overlay = None,
         }
     }
 
@@ -191,7 +208,7 @@ impl App {
             Overlay::Rename { target, input } => self.submit_rename(target, &input),
             Overlay::NewGroup { input } if input.trim().is_empty() => Some(Overlay::NewGroup { input }),
             Overlay::NewGroup { input } => self.submit_new_group(&input),
-            Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote | Overlay::Telegram => None,
+            Overlay::GroupStyle { .. } | Overlay::Usage | Overlay::Remote | Overlay::Pairing(_) => None,
             Overlay::RemoveWorkspace { project, workspace, check, lock } => {
                 self.confirm_removal(project, workspace, check, lock.is_some())
             }
@@ -202,6 +219,10 @@ impl App {
             Overlay::ClosePane { pane } => self.submit_close_pane(pane, area)?,
             Overlay::Update(step) => self.submit_update(step),
             Overlay::Restart => self.submit_restart(),
+            Overlay::PullRequest { workspace, .. } => self.submit_pull_request(workspace),
+            Overlay::FlowMessage { workspace, edge, to, .. } => {
+                self.submit_flow_message(workspace, edge, to.as_deref())
+            }
             busy => Some(busy),
         };
         Ok(())
@@ -292,7 +313,7 @@ impl App {
     }
 }
 
-fn confirm_view(
+pub(super) fn confirm_view(
     title: &'static str,
     message: String,
     submit: &'static str,

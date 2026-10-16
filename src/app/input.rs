@@ -10,7 +10,8 @@ use super::overlay::Overlay;
 use super::toast::NOT_READING;
 use super::toast::Toast;
 use crate::error::Result;
-use crate::list::Search;
+use crate::messenger::Via;
+use crate::project::search::Finder;
 use crate::ui::{self};
 
 pub(super) const WHEEL_ROWS: isize = 3;
@@ -37,8 +38,12 @@ impl App {
             None if self.nav.is_some() && key.code == KeyCode::Esc => self.nav = None,
             Some(Overlay::Picker { .. }) => return self.picker_key(key, area),
             Some(Overlay::Branches(_)) => self.branches_key(key, area),
+            Some(Overlay::Queue(_)) => self.queue_key(key, area),
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Settings(_)) => self.settings_key(key, area),
+            Some(Overlay::Flows { .. }) => self.flows_key(key, area),
+            Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
+            Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::Usage) => {
                 self.usage_key(key);
             }
@@ -70,6 +75,9 @@ impl App {
         if self.continue_drag(ev, &areas, area) {
             return Ok(());
         }
+        if self.star_mouse(ev, pos, area) {
+            return Ok(());
+        }
         if self.toast_mouse(ev, pos, area) {
             return Ok(());
         }
@@ -84,16 +92,8 @@ impl App {
             self.commit_todo();
             self.files.unfocus();
         }
-        if in_panel {
-            match self.side {
-                Some(Side::Todo) => {
-                    self.todo_mouse(ev, pos, areas.changes, area);
-                    return Ok(());
-                }
-                Some(Side::Files) => return self.files_mouse(ev, pos, areas.changes, area),
-                Some(Side::Changes) => return self.changes_mouse(ev, pos, areas.changes, area),
-                None => {}
-            }
+        if in_panel && let Some(side) = self.side {
+            return self.panel_mouse(side, ev, pos, areas.changes, area);
         }
         if let Some(delta) = wheel(ev.kind)
             && self.scroll_column(&areas, pos, delta)
@@ -111,7 +111,7 @@ impl App {
         }
         if areas.search_button.contains(pos) {
             if left {
-                self.overlay = Some(Overlay::Search(Search::default()));
+                self.overlay = Some(Overlay::Search(Finder::default()));
             }
             return Ok(());
         }
@@ -163,6 +163,16 @@ impl App {
             return Ok(());
         }
         self.main_mouse(ev, pos, &areas, area)
+    }
+
+    fn panel_mouse(&mut self, side: Side, ev: MouseEvent, pos: Position, panel: Rect, area: Rect) -> Result<()> {
+        match side {
+            Side::Todo => self.todo_mouse(ev, pos, panel, area),
+            Side::Files => return self.files_mouse(ev, pos, panel, area),
+            Side::Changes => return self.changes_mouse(ev, pos, panel, area),
+            Side::Flow => self.flow_mouse(ev, pos, panel),
+        }
+        Ok(())
     }
 
     fn main_mouse(&mut self, ev: MouseEvent, pos: Position, areas: &ui::Areas, area: Rect) -> Result<()> {
@@ -263,6 +273,7 @@ impl App {
             issues: self.issues_available(),
             changes: self.changes_label().is_some(),
             files: self.project().is_some(),
+            flow: self.has_run(),
             update: self.update_label().is_some(),
             remote: self.remote_button().is_some(),
         }
@@ -283,6 +294,7 @@ impl App {
             ui::ActivityItem::Changes => self.toggle_changes(),
             ui::ActivityItem::Files => self.toggle_files(),
             ui::ActivityItem::Todo => self.toggle_todo(),
+            ui::ActivityItem::Flow => self.toggle_flow(),
             ui::ActivityItem::Update => self.open_update(),
             ui::ActivityItem::Remote => self.open_remote_menu(pos),
             ui::ActivityItem::Usage => self.open_usage(),
@@ -293,7 +305,8 @@ impl App {
     }
 
     fn open_remote_menu(&mut self, at: Position) {
-        let actions = vec![super::menus::MenuAction::Browser, super::menus::MenuAction::Away];
+        let away = Via::ALL.into_iter().map(super::menus::MenuAction::Away);
+        let actions = std::iter::once(super::menus::MenuAction::Browser).chain(away).collect();
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
@@ -318,7 +331,7 @@ impl App {
         hit
     }
 
-    pub(super) fn handle_paste(&mut self, text: &str) {
+    pub(super) fn handle_paste(&mut self, text: &str, area: Rect) {
         if matches!(self.overlay, Some(Overlay::Keys(_))) {
             self.overlay = None;
         }
@@ -327,11 +340,19 @@ impl App {
             return;
         }
         if let Some(Overlay::Search(search)) = &mut self.overlay {
-            text.chars().filter(|c| !c.is_control()).for_each(|c| search.push(c));
+            text.chars().filter(|c| !c.is_control()).for_each(|c| search.field.push(c));
+            self.ask_sessions(Instant::now());
             return;
         }
         if let Some(Overlay::Branches(picker)) = &mut self.overlay {
             text.chars().filter(|c| !c.is_control()).for_each(|c| picker.push(c));
+            return;
+        }
+        if let Some(Overlay::Queue(form)) = &mut self.overlay {
+            let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
+            if let Some(editor) = form.editor(focus).filter(|_| idle) {
+                editor.insert(text);
+            }
             return;
         }
         if let Some(Overlay::Issues(b)) = &mut self.overlay {
@@ -340,6 +361,18 @@ impl App {
         }
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.paste(text);
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::Flows { .. })) {
+            self.flows_paste(text, area);
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::StartFlow { .. })) {
+            self.start_flow_paste(text, area);
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::ProjectSettings(_))) {
+            self.project_settings_paste(text, area);
             return;
         }
         if let Some(overlay) = &mut self.overlay {

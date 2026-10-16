@@ -58,6 +58,10 @@ pub(crate) fn issue_toggles(issues: Rect, labels: &[&str]) -> Vec<Rect> {
     right_aligned(issues_rows(issues)[0], labels, toggle_width, 2)
 }
 
+pub(crate) fn issue_buttons_width(issues: Rect) -> u16 {
+    issues_rows(issues)[4].width
+}
+
 pub fn issue_buttons(issues: Rect, labels: &[&str]) -> Vec<Rect> {
     issue_buttons_in(issues_rows(issues)[4], labels)
 }
@@ -101,6 +105,7 @@ pub(crate) struct IssueRow {
     pub(crate) key: String,
     pub(crate) title: String,
     pub(crate) meta: String,
+    pub(crate) colour: Option<Color>,
 }
 
 pub(crate) enum IssuesBody {
@@ -156,6 +161,7 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
     let (text, style) = match &issues.note {
         Some(Note::Error(text)) => (text.as_str(), Style::default().fg(Color::Red)),
         Some(Note::Busy(text)) => (*text, dim),
+        Some(Note::Info(text)) => (text.as_str(), dim),
         None => (issues.hint.as_str(), dim),
     };
     f.render_widget(Paragraph::new(Span::styled(truncate_right(text, usize::from(note.width)), style)), note);
@@ -201,7 +207,7 @@ fn draw_issue_rows(f: &mut Frame, view: &View, list: Rect, items: &[IssueRow], s
                 rail(chosen, bg),
                 Span::styled(format!("{:<key_width$}  ", item.key), style.fg(Color::Cyan)),
                 Span::styled(format!("{title}{}", " ".repeat(gap)), style),
-                Span::styled(format!("{meta} "), bg.fg(view.muted)),
+                Span::styled(format!("{meta} "), bg.fg(item.colour.unwrap_or(view.muted))),
             ]))
             .style(bg),
             row,

@@ -55,12 +55,15 @@ fn view(names: &[&str]) -> View<'static> {
         tab: None,
         overlay: None,
         toast: None,
+        star: false,
         nav: None,
         update: None,
         remote: None,
         changes: None,
         changes_button: None,
         todo: None,
+        flow: None,
+        flow_run: false,
         todo_dot: true,
         todo_pending: false,
         files: None,
@@ -147,6 +150,7 @@ mod agents_section;
 mod borders;
 mod buttons;
 mod changes_layout;
+mod combobox;
 mod compact;
 mod dialogs;
 mod draw;
@@ -157,6 +161,7 @@ mod layout;
 mod muted;
 mod overlay;
 mod picker;
+mod queue;
 mod reorder;
 mod row_hover;
 mod scrollback;
@@ -166,6 +171,7 @@ mod sidebar_hit;
 mod sidebar_scroll;
 mod splits;
 mod stacked;
+mod star;
 mod tab_bar_drawing;
 mod tab_context;
 mod tall_rows;
@@ -175,4 +181,5 @@ mod tree_drop;
 mod tree_layout;
 mod tree_rows;
 mod widths;
+mod workspace_folds;
 mod workspaces_column;

@@ -1,10 +1,25 @@
 use rstest::rstest;
 
 use super::*;
+use crate::agents::Known;
 use crate::agents::claude::tests::session;
 
 mod pane {
     use super::*;
+
+    #[test]
+    fn a_resumed_result_keeps_its_mark_through_reported_idle_until_seen() {
+        let mut pane = Pane::default();
+        pane.restore(true, false);
+        let now = Instant::now();
+        for step in 0..3 {
+            assert_eq!(pane.update(Some(Activity::Ready), false, now + Duration::from_secs(step)), None);
+        }
+        assert_eq!(pane.status(), Some(Status::Done));
+        pane.see();
+        pane.update(Some(Activity::Ready), true, now + Duration::from_secs(3));
+        assert_eq!(pane.status(), Some(Status::Idle));
+    }
 
     fn after(steps: &[(Option<Activity>, bool)]) -> Option<Status> {
         let mut pane = Pane::default();
@@ -148,11 +163,11 @@ mod notice {
     fn another_agent_taking_over_the_pane_tells_you_again() {
         let mut pane = Pane::default();
         let start = Instant::now();
-        pane.follow(Some(Known::Claude));
+        pane.follow(Some(Known::Claude.name()));
         pane.update(Some(Activity::Waiting), false, start);
         let first = pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
 
-        pane.follow(Some(Known::Codex));
+        pane.follow(Some(Known::Codex.name()));
         pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
         let second = pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER * 2);
 
@@ -163,11 +178,11 @@ mod notice {
     fn the_same_agent_keeps_its_state() {
         let mut pane = Pane::default();
         let start = Instant::now();
-        pane.follow(Some(Known::Codex));
+        pane.follow(Some(Known::Codex.name()));
         pane.update(Some(Activity::Waiting), false, start);
         pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER);
 
-        pane.follow(Some(Known::Codex));
+        pane.follow(Some(Known::Codex.name()));
 
         assert_eq!(pane.update(Some(Activity::Waiting), false, start + NOTIFY_AFTER * 2), None);
     }
@@ -221,6 +236,19 @@ mod rollup {
     fn keeps_what_needs_you(#[case] statuses: &[Option<Status>], #[case] expected: Option<Status>) {
         assert_eq!(attention(statuses.iter().copied()), expected);
     }
+
+    #[rstest]
+    #[case::nothing(&[], None)]
+    #[case::shells(&[None, None], None)]
+    #[case::idle(&[Some(Status::Idle), None], Some(Status::Idle))]
+    #[case::working(&[Some(Status::Idle), Some(Status::Working)], Some(Status::Working))]
+    #[case::done_over_working(&[Some(Status::Working), Some(Status::Done)], Some(Status::Done))]
+    #[case::pending_over_done(&[Some(Status::Done), Some(Status::Pending)], Some(Status::Pending))]
+    #[case::failed_over_pending(&[Some(Status::Failed), Some(Status::Pending)], Some(Status::Failed))]
+    #[case::waiting_over_all(&[Some(Status::Failed), Some(Status::Waiting), Some(Status::Working)], Some(Status::Waiting))]
+    fn highest_follows_the_order_of_urgency(#[case] statuses: &[Option<Status>], #[case] expected: Option<Status>) {
+        assert_eq!(highest(statuses.iter().copied()), expected);
+    }
 }
 
 mod marks {
@@ -231,7 +259,7 @@ mod marks {
     fn claude(activity: Activity) -> (Pane, Instant) {
         let mut pane = Pane::default();
         let now = Instant::now();
-        pane.follow(Some(Known::Claude));
+        pane.follow(Some(Known::Claude.name()));
         pane.update(Some(activity), false, now);
         (pane, now)
     }
@@ -313,7 +341,7 @@ mod marks {
 
         pane.follow(None);
         pane.update(None, false, now + TICK);
-        pane.follow(Some(Known::Claude));
+        pane.follow(Some(Known::Claude.name()));
         pane.update(Some(Activity::Idle), false, now + TICK * 2);
 
         assert_eq!(pane.status(), Some(Status::Idle));
@@ -333,7 +361,7 @@ mod marks {
         pane.update(None, false, now);
         pane.update(None, false, now + TICK);
 
-        pane.follow(Some(Known::Claude));
+        pane.follow(Some(Known::Claude.name()));
         let notices: Vec<_> = (2..8).filter_map(|i| pane.update(Some(Activity::Idle), false, now + TICK * i)).collect();
 
         assert_eq!((pane.status(), notices), (Some(expected), vec![]));
@@ -345,7 +373,7 @@ mod marks {
         pane.restore(true, true);
 
         pane.give_up();
-        pane.follow(Some(Known::Claude));
+        pane.follow(Some(Known::Claude.name()));
         pane.update(Some(Activity::Idle), false, Instant::now());
 
         assert_eq!(pane.status(), Some(Status::Idle));

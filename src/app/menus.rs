@@ -6,6 +6,7 @@ use super::overlay::Overlay;
 use super::plugins::Spot;
 use crate::error::Result;
 use crate::log::{self};
+use crate::messenger::Via;
 use crate::project::Hierarchy;
 use crate::project::group;
 use crate::project::split::Dir;
@@ -87,8 +88,14 @@ pub(super) enum MenuAction {
     NewGroup,
     Pane(u64, PaneAction),
     Mark(Marked, bool),
+    PullRequest(u64),
+    ShowFlow(u64),
     Browser,
-    Away,
+    Away(Via),
+    NewWorkspace(u64),
+    StartFlow(u64),
+    ProjectSettings(u64),
+    RunSetup(u64),
     Plugin { spot: Spot, index: u16, revision: u32 },
 }
 
@@ -125,21 +132,34 @@ impl App {
             MenuAction::AddProject(_) => "add project".into(),
             MenuAction::OpenProject => "open project".into(),
             MenuAction::NewGroup => "new group".into(),
+            MenuAction::NewWorkspace(_) => "new workspace".into(),
+            MenuAction::StartFlow(_) => "start a flow…".into(),
+            MenuAction::ProjectSettings(_) => "project settings".into(),
+            MenuAction::RunSetup(_) => "run setup".into(),
             MenuAction::Pane(_, action) => action.label().into(),
             MenuAction::Mark(_, true) => "mark as pending review".into(),
             MenuAction::Mark(_, false) => "mark as reviewed".into(),
+            MenuAction::PullRequest(workspace) => {
+                self.pull_request(workspace).map(|p| format!("pull request #{}", p.number)).unwrap_or_default()
+            }
+            MenuAction::ShowFlow(_) => "show flow".into(),
             MenuAction::Browser if self.config.remote => "open in your phone's browser".into(),
             MenuAction::Browser => "set up your phone's browser…".into(),
-            MenuAction::Away if !self.telegram.ready() => "set up Telegram…".into(),
-            MenuAction::Away if self.telegram.away => "stop messaging on Telegram".into(),
-            MenuAction::Away => "continue on Telegram".into(),
+            MenuAction::Away(via) if !self.messenger(via).ready() => format!("set up {}…", via.name()),
+            MenuAction::Away(via) if self.messenger(via).away => format!("stop messaging on {}", via.name()),
+            MenuAction::Away(via) => format!("continue on {}", via.name()),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
         }
     }
 
     pub(super) fn target_menu(&self, target: Target) -> Vec<MenuAction> {
-        let mark = match target {
+        let more = match target {
             Target::Tab(_, _, tab) => self.mark_action(Marked::Tab(tab)),
+            Target::Workspace(_, workspace) => self.pull_request(workspace).map(|_| MenuAction::PullRequest(workspace)),
+            Target::Group(_) | Target::Project(_) => None,
+        };
+        let flow = match target {
+            Target::Workspace(_, workspace) => self.run_of(workspace).map(|_| MenuAction::ShowFlow(workspace)),
             _ => None,
         };
         let spot = match target {
@@ -148,9 +168,16 @@ impl App {
             Target::Workspace(project, workspace) => Some(Spot::Workspace(project, workspace)),
             Target::Tab(project, workspace, tab) => Some(Spot::Tab(project, workspace, tab)),
         };
-        let mut actions: Vec<MenuAction> = std::iter::once(MenuAction::Rename(target)).chain(mark).collect();
-        actions.extend(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default());
-        actions
+        let setup = match target {
+            Target::Workspace(project, workspace) => self.setup_action(project, workspace),
+            _ => None,
+        };
+        std::iter::once(MenuAction::Rename(target))
+            .chain(more)
+            .chain(flow)
+            .chain(setup)
+            .chain(spot.map(|spot| self.plugin_menu(spot)).unwrap_or_default())
+            .collect()
     }
 
     pub(super) fn menu_action(&mut self, action: MenuAction, at: Position, area: Rect) -> Result<()> {
@@ -193,13 +220,24 @@ impl App {
                 self.nav = None;
                 self.overlay = Some(Overlay::NewGroup { input: String::new() });
             }
+            MenuAction::NewWorkspace(project) => {
+                if let Some(p) = self.projects.project_index(project) {
+                    self.nav = None;
+                    self.ask_new_workspace(p);
+                }
+            }
+            MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
+            MenuAction::ProjectSettings(project) => self.open_project_settings(project),
+            MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::Pane(pane, action) => return self.pane_action(pane, action, area),
             MenuAction::Mark(marked, pending) => {
                 self.mark(marked, pending);
             }
+            MenuAction::PullRequest(workspace) => self.open_pull_request(workspace),
+            MenuAction::ShowFlow(workspace) => self.show_flow_of(workspace),
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
-            MenuAction::Away => self.toggle_away(),
+            MenuAction::Away(via) => self.toggle_away(via),
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
         }
         Ok(())

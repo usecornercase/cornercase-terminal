@@ -6,7 +6,7 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use super::chrome::{ISSUES_LABEL, TODO_LABEL, USAGE_LABEL, draw_column_border};
 use super::widgets::{put, sidebar_hovered};
-use super::{Overlay, View, files, icons, remote_access};
+use super::{Overlay, View, files, flow, icons, remote_access};
 
 pub(crate) const WIDTH: u16 = 4;
 
@@ -20,6 +20,7 @@ pub(crate) enum Item {
     Changes,
     Files,
     Todo,
+    Flow,
     Update,
     Remote,
     Usage,
@@ -33,6 +34,7 @@ pub(crate) struct Shown {
     pub(crate) issues: bool,
     pub(crate) changes: bool,
     pub(crate) files: bool,
+    pub(crate) flow: bool,
     pub(crate) update: bool,
     pub(crate) remote: bool,
 }
@@ -43,6 +45,7 @@ impl Shown {
             issues: view.issues && view.has_project,
             changes: view.changes_button.is_some(),
             files: view.has_project,
+            flow: view.flow_run,
             update: view.update.is_some(),
             remote: view.remote.is_some(),
         }
@@ -56,6 +59,7 @@ impl Item {
             Self::Changes => icons::NERD.changes,
             Self::Files => icons::NERD.files,
             Self::Todo => icons::NERD.todo,
+            Self::Flow => icons::FLOW,
             Self::Update => icons::UPDATE,
             Self::Remote => icons::REMOTE,
             Self::Usage => icons::USAGE,
@@ -70,6 +74,7 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().map_or_else(String::new, |b| b.label.clone()),
             Self::Files => files::LABEL.into(),
             Self::Todo => TODO_LABEL.into(),
+            Self::Flow => flow::LABEL.into(),
             Self::Update => view.update.clone().unwrap_or_default(),
             Self::Remote => remote_access::LABEL.into(),
             Self::Usage => USAGE_LABEL.into(),
@@ -84,6 +89,7 @@ impl Item {
             Self::Changes => view.changes_button.as_ref().is_some_and(|b| b.open),
             Self::Files => view.files.is_some(),
             Self::Todo => view.todo.is_some(),
+            Self::Flow => view.flow.is_some(),
             Self::Remote => matches!(view.overlay, Some(Overlay::Remote(_))),
             Self::Usage => matches!(view.overlay, Some(Overlay::Usage(_))),
             Self::Settings => matches!(view.overlay, Some(Overlay::Settings(_))),
@@ -127,8 +133,13 @@ pub(crate) fn items(bar: Rect, shown: Shown) -> Vec<(Item, Rect)> {
         floor = y;
         placed.push((item, slot(y)));
     }
-    let top =
-        [(Item::Issues, shown.issues), (Item::Changes, shown.changes), (Item::Files, shown.files), (Item::Todo, true)];
+    let top = [
+        (Item::Issues, shown.issues),
+        (Item::Changes, shown.changes),
+        (Item::Files, shown.files),
+        (Item::Todo, true),
+        (Item::Flow, shown.flow),
+    ];
     let mut y = bar.y + 1;
     for (item, _) in top.into_iter().filter(|(_, on)| *on) {
         if y + PITCH > floor {

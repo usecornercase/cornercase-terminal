@@ -21,7 +21,7 @@ Examples:
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
 pub(super) const STATUS_HELP: &str = "Each pane shows its program and folder, and for a coding agent what it is doing (working,
-waiting for an answer, done out of sight, idle), its model and how full its context is. `(you)`
+waiting for an answer, done out of sight, failed, idle), its model and how full its context is. `(you)`
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
 it wakes up when that shell ends (`background_shell` in the JSON, where the status stays working).
@@ -50,7 +50,9 @@ pub(super) const OPEN_HELP: &str = "Examples:
   cornercase open . --focus";
 pub(super) const NEW_WORKSPACE_HELP: &str =
     "The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
-branch from HEAD when the branch does not exist yet; the command returns once git made it.
+branch from HEAD when the branch does not exist yet; the command returns once git made it. The
+project's setup (settings → project settings) then runs in the new tab, which `start --worktree`
+waits for before it types the agent.
 
 Examples:
   cornercase new-workspace experiments
@@ -66,7 +68,10 @@ pub(super) const SPLIT_HELP: &str = "Examples:
   cornercase split -- htop
   cornercase split --pane 7 --down -- tail -f server.log";
 pub(super) const START_HELP: &str =
-    "The agent starts with its command and arguments from settings → agents. If it asks whether
+    "The agent starts with its command and arguments from settings → agents. --mode replaces the mode
+chosen there by another of the agent's modes, --model adds the agent's own model flag and --effort its
+effort (Claude Code, Codex and Grok Build take one; an older server refuses all three rather than
+start the agent without them). If it asks whether
 you trust the folder, the question waits for your answer unless settings → agents accept it for
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
@@ -75,7 +80,8 @@ submitted, and the command prints the pane's id; it fails if the agent never sho
 
 Examples:
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
-  cornercase start codex --prompt-file task.md --wait --timeout 1800";
+  cornercase start codex --prompt-file task.md --wait --timeout 1800
+  cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'";
 pub(super) const SEND_HELP: &str =
     "The text goes in as one paste, bracketed when the program asked for it. A pane whose agent
 waits for an answer to a question or a permission prompt is refused, since the text would answer
@@ -85,12 +91,12 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force.
 
-With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode or Grok Build has
+With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI has
 recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have
 been submitted` when it records none: read the pane before sending it again. A working Codex,
-Gemini or Grok Build holds a prompt until it takes it, so the command returns then. Grok Build
-queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
-slash commands, ? help and ! shell input, and Grok Build's / and ! commands, return after Enter
+Gemini, Grok Build or Cursor CLI holds a prompt until it takes it, so the command returns then.
+Grok Build queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
+slash commands, ? help and ! shell input, and the / and ! commands of Grok Build and Cursor CLI, return after Enter
 without confirming a prompt record. In other programs it returns once Enter is pressed.
 
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
@@ -114,10 +120,10 @@ pub(super) const READ_HELP: &str =
 
 With --last-message it prints the last message the agent in the pane wrote, as plain text, from
 its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
-database, Grok Build's session) instead of the screen, so it comes whole even once it scrolled
+database, Grok Build's session, Cursor CLI's chat store) instead of the screen, so it comes whole even once it scrolled
 off, without the input box or status lines. While the agent works it is the newest one so far.
 --json adds when it was written and whether the agent's turn is over. It fails on a pane without
-Claude Code, Codex, Gemini CLI, opencode or Grok Build, and before the agent wrote anything.
+Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI, and before the agent wrote anything.
 
 With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
 header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
@@ -136,13 +142,14 @@ Examples:
   cornercase read --tab 4 --last-message --json
   cornercase read --last-message --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
-    "By default it waits until the agent stops working: idle, done, pending (marked for review) or
+    "By default it waits until the agent stops working: idle, done, failed, pending (marked for review) or
 waiting. A Claude Code agent whose turn is over while a background shell it started still runs
 counts as working, since it wakes up when the shell ends; --until turn-over also ends there, and
-prints shell. It then prints how it ended (idle, done, pending, waiting, working, shell or quiet),
+prints shell. It then prints how it ended (idle, done, failed, pending, waiting, working, shell or quiet),
 or the line that matched.
-Waiting for an agent needs Claude Code, Codex, Gemini CLI, opencode or Grok Build in the pane.
-Gemini status needs its dynamic window title. A timeout exits with 1 and does not prove that the
+Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
+opencode, Grok Build or Cursor CLI in the pane. Without reports, Gemini status needs its dynamic window title,
+and Cursor CLI's waiting needs /status-indicators. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
@@ -159,6 +166,8 @@ Examples:
 pub(super) const CLOSE_HELP: &str =
     "Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
 workspace stays listed while its worktree exists, and its branch is never deleted.
+--remove-worktree runs the project's teardown first; a teardown that fails is a warning on
+stderr, and the worktree is removed anyway.
 
 Examples:
   cornercase close --tab 9
@@ -176,14 +185,28 @@ agent that needs you.
 Examples:
   cornercase notify the release build is ready";
 pub(super) const AWAY_HELP: &str =
-    "It needs a Telegram bot paired with your phone (Settings › Remote). While you are away, an
-agent that waits for you or ends its turn sends its question or its last message to that chat, and
-what you reply goes to the agent, until you turn it off: here with --off, from the chat with /back, or
-from Remote in the window.
+    "It needs a Telegram or Discord bot paired with your phone (Settings › Remote), and turns away on
+for each one paired. While you are away, an agent that waits for you or ends its turn sends its
+question or its last message to that chat, and what you reply goes to the agent, until you turn it
+off: here with --off, from the chat with /back, or from Remote in the window.
 
 Examples:
   cornercase away
   cornercase away --off";
+pub(super) const SEARCH_HELP: &str =
+    "Looks in what the coding agents in the panes were told and answered (Claude Code, Codex, Gemini CLI,
+opencode and Grok Build, the same records as `read --last-message`) and in the history of every
+pane, shells included, ignoring case. Panes of projects being closed and workspaces being removed
+are left out. It prints one line per match, newest first within a pane, its columns separated by
+tabs under a header: the pane, the agent or program, where the text was found (prompt, reply or
+screen), `project › workspace › tab`, the line on the pane's screen (screen matches only), and the
+text. A missing value is -. No match prints the header alone and exits 0. With --json each match
+also has its tab, workspace and project ids and, for an agent's message, when it was written.
+
+Examples:
+  cornercase search 'migration failed'
+  pane=$(cornercase search --json checkout | jq -r '.matches[0].pane')
+  cornercase focus --pane \"$pane\"";
 pub(super) const MARK_HELP: &str =
     "A pane marked as pending review shows a purple ● on its tab, and on its workspace, project and
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
@@ -194,6 +217,58 @@ Examples:
   cornercase mark
   cornercase mark --pane 12
   cornercase mark --pane 12 --reviewed";
+pub(super) const FLOW_HELP: &str =
+    "A flow is a team of coding agents and the plan they follow: one tab per role in a new
+worktree, every agent started without permission prompts, and an orchestrator agent that sends the
+work from role to role with these commands. The built-in flows come with cornercase; yours live in
+flows/ next to config.json, and a project's in .cornercase/flows/ in its repository.
+
+Examples:
+  cornercase flow list
+  cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
+  cornercase flow export Quick > quick.toml
+  cornercase flow import quick.toml";
+pub(super) const FLOW_RUN_HELP: &str =
+    "It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
+tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
+answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
+its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
+pass --focus.
+
+Without --worktree, the branch comes from the task's first words, with a short suffix when that
+says nothing, is a default branch or is already taken. A chosen branch that is main, master, the
+project's default or the one its own folder is on is refused: a flow works on a branch of its own.
+
+It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
+by a tab. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
+a built-in flow of its name, and a project's flow never stands in for another of the same name; the
+command says so on stderr when it happens.
+
+Examples:
+  cornercase flow run Quick --prompt 'Fix the login form'
+  cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json";
+pub(super) const FLOW_EXPORT_HELP: &str =
+    "It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
+and arguments before importing it. A name is looked up as `flow run` does. Variables a flow sets are
+named on stderr: check no secret goes with them.
+
+Examples:
+  cornercase flow export Quick > quick.toml
+  cornercase flow export 'Full issue' --json";
+pub(super) const FLOW_IMPORT_HELP: &str =
+    "It reads a flow at most 256 KiB long, lists its roles, and saves it in yours (or the project's, with
+--to project). Every agent of a flow runs without permission prompts, so when it sets variables or
+arguments it asks first, and refuses without a terminal unless you pass --yes.
+
+A name that is already taken is refused: pass --replace to overwrite that flow, or --name to import
+this one under another name. A built-in flow's name is yours to take, with --replace, and it then
+stands in its place. A project's flow never takes the place of one of yours or a built-in.
+
+Examples:
+  cornercase flow import quick.toml
+  cornercase flow import quick.toml --to project --name 'Quick mine'
+  ssh host cornercase flow export Quick | cornercase flow import - --yes";
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
   cornercase todo list
@@ -244,6 +319,14 @@ Examples:
   cornercase logs -n 50
   cornercase logs --follow
   cornercase kill-server && CORNERCASE_LOG=debug cornercase";
+pub(super) const KILL_SERVER_HELP: &str =
+    "Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
+it, so it asks first; without a terminal it refuses unless --yes is given. To stop another server from
+inside cornercase, say which with CORNERCASE_SOCKET=/absolute/path/server.sock.
+
+Examples:
+  cornercase kill-server
+  CORNERCASE_SOCKET=/tmp/cc-dev/server.sock cornercase kill-server";
 pub(super) const RESTART_HELP: &str =
     "It lists what runs in the terminals and asks first, since every program in them stops; agents
 resume their conversations afterwards. Every attached window reopens on the new server.
@@ -276,6 +359,18 @@ pub(super) const WAIT_TAB: &str = "A tab: its agent's pane, else its active one;
 pub(super) const HERE_WORKSPACE: &str = "The workspace [default: the one this runs in, else the shown one]";
 pub(super) const BY_BRANCH: &str =
     "The workspace on this branch, looked up in the project this runs in, else the shown one";
+
+pub(super) const CONTRACT_HELP: &str =
+    "Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
+the server for it before anything else. `contract` is the version of the requests and answers: it
+goes up only when one changes in a way an older client would misread, while new commands, fields
+and events are added without it. `boot` names this run of the server and changes on every restart,
+since ids last only one run. Each command is listed with whether it is available, and each stream
+with its version. A server without this command is older than the contract.
+
+Examples:
+  cornercase contract
+  cornercase contract --json";
 
 #[cfg(test)]
 mod tests;

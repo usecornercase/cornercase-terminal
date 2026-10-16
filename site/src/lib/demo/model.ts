@@ -22,9 +22,9 @@ export interface Pane {
   notified?: boolean;
 }
 
-export type Activity = 'working' | 'waiting' | 'idle';
-export type Status = 'idle' | 'working' | 'done' | 'pending' | 'waiting';
-const URGENCY: Status[] = ['idle', 'working', 'done', 'pending', 'waiting'];
+export type Activity = 'working' | 'waiting' | 'idle' | 'ready' | 'done' | 'failed';
+export type Status = 'idle' | 'working' | 'done' | 'pending' | 'failed' | 'waiting';
+const URGENCY: Status[] = ['idle', 'working', 'done', 'pending', 'failed', 'waiting'];
 
 export interface Tab {
   id: number;
@@ -88,7 +88,11 @@ export type MenuAction =
   | { kind: 'newGroup' }
   | { kind: 'mark'; panes: number[]; pending: boolean }
   | { kind: 'pane'; pane: number; action: PaneAction }
-  | { kind: 'base'; branch: string };
+  | { kind: 'base'; branch: string }
+  | { kind: 'showFlow'; workspace: number }
+  | { kind: 'newWorkspace'; project: number }
+  | { kind: 'startFlow'; project: number }
+  | { kind: 'projectSettings'; project: number };
 
 export interface PickItem {
   value: string;
@@ -122,7 +126,7 @@ export interface IssuesOverlay {
   loading: boolean;
   busy?: string;
   notice?: string;
-  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'token' };
+  token: { input: string; checking: boolean; error?: string; step?: 'site' | 'email' | 'workspace' | 'server' | 'token' };
   agentPick: { selected: number; filter: string } | null;
   chosen: string | null;
 }
@@ -147,11 +151,13 @@ export type Overlay =
   | { kind: 'closeWorkspace'; project: number; workspace: number }
   | { kind: 'closeTab'; project: number; workspace: number; tab: number }
   | { kind: 'picker'; dir: string[]; filter: string; selected: number | null; scroll: number; group?: number }
-  | { kind: 'search'; query: string; selected: number; scroll: number }
+  | { kind: 'search'; query: string; selected: number; scroll: number; mode: 'names' | 'sessions' }
   | { kind: 'usage' }
   | { kind: 'restart'; scroll: number }
   | { kind: 'keys'; group: KeysGroup | null }
   | { kind: 'closePane'; pane: number }
+  | { kind: 'flowMessage'; workspace: number; edge: string; to: string | null; scroll: number }
+  | import('./queue').QueueForm
   | SettingsOverlay
   | IssuesOverlay;
 
@@ -177,10 +183,12 @@ export interface Config {
   memory: boolean;
   notify: string;
   updates: boolean;
+  starPrompt: boolean;
   prefix: string;
   agentArgs: Record<string, string[]>;
   sources: string[];
-  accounts: { shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
+  accounts: { gitlab: boolean; shortcut: boolean; linear: boolean; jira: boolean; plane: boolean };
+  gitlabUrl: string;
   jiraSite: string;
   jiraEmail: string;
   jiraJql: string;
@@ -209,10 +217,12 @@ export const defaultConfig = (): Config => ({
   memory: false,
   notify: 'auto',
   updates: true,
+  starPrompt: true,
   prefix: '',
   agentArgs: { claude: ['--permission-mode', 'plan'] },
-  sources: ['all', 'github', 'shortcut', 'linear', 'jira', 'plane'],
-  accounts: { shortcut: false, linear: false, jira: false, plane: false },
+  sources: ['all', 'github', 'gitlab', 'shortcut', 'linear', 'jira', 'plane'],
+  accounts: { gitlab: false, shortcut: false, linear: false, jira: false, plane: false },
+  gitlabUrl: '',
   jiraSite: '',
   jiraEmail: '',
   jiraJql: '',
@@ -263,8 +273,8 @@ export function followAgent(pane: Pane, agent: string | null): void {
 export function watchPane(pane: Pane, activity: Activity | null, seen: boolean, now: number): Status | null {
   const before = paneStatus(pane);
   const finished = pane.activity === 'working' || pane.activity === 'waiting';
-  if (activity === 'working' && (pane.activity === 'idle' || pane.activity === 'waiting')) pane.pending = false;
-  pane.unseen = activity === 'idle' && !seen && (!!pane.unseen || finished);
+  if (activity === 'working' && (pane.activity === 'idle' || pane.activity === 'ready' || pane.activity === 'done' || pane.activity === 'failed' || pane.activity === 'waiting')) pane.pending = false;
+  pane.unseen = !seen && (activity === 'idle' ? !!pane.unseen || finished : activity === 'done' && (!!pane.unseen || pane.activity !== activity));
   pane.activity = activity;
   const status = paneStatus(pane);
   if (status !== before) {
@@ -273,14 +283,14 @@ export function watchPane(pane: Pane, activity: Activity | null, seen: boolean, 
   }
   if (seen) pane.notified = true;
   const settled = pane.since !== undefined && now - pane.since >= NOTIFY_AFTER;
-  if (!settled || pane.notified || (status !== 'done' && status !== 'waiting')) return null;
+  if (!settled || pane.notified || (status !== 'done' && status !== 'failed' && status !== 'waiting')) return null;
   pane.notified = true;
   return status;
 }
 
 export function paneStatus(pane: Pane): Status | null {
   if (!pane.activity) return null;
-  if (pane.activity === 'idle') return pane.pending ? 'pending' : pane.unseen ? 'done' : 'idle';
+  if (pane.activity === 'idle' || pane.activity === 'ready' || pane.activity === 'done') return pane.pending ? 'pending' : pane.unseen ? 'done' : 'idle';
   return pane.activity;
 }
 
@@ -290,7 +300,8 @@ function mostUrgent(statuses: (Status | null)[]): Status | null {
   return best;
 }
 
-export const needsYou = (s: Status | null): boolean => s === 'done' || s === 'pending' || s === 'waiting';
+export const needsYou = (s: Status | null): boolean => s === 'done' || s === 'pending' || s === 'failed' || s === 'waiting';
+export const highest = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses);
 export const attention = (statuses: (Status | null)[]): Status | null => mostUrgent(statuses.filter(needsYou));
 
 export function markPane(pane: Pane, pending: boolean): void {
