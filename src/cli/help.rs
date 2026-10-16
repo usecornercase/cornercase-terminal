@@ -285,7 +285,8 @@ pub(super) const PLUGIN_HELP: &str =
 row menus, hooks on events, services the server keeps running and processes each local window keeps running. Its \
 commands talk back through these same commands.
 
-Install one from GitHub, any https:// git address or a git folder, pinned to a commit: you see where it comes \
+Install one from GitHub, any https:// git address or a git folder, pinned to a commit; a repository can hold \
+several plugins, each in its own folder (owner/repo/folder on GitHub, address//folder elsewhere): you see where it comes \
 from, what it asks for and every command it runs before anything runs, and it is installed turned off. Link a \
 folder of yours instead while you write one.
 
@@ -295,6 +296,8 @@ before you turn it on, not enforced. A running server picks up changes within a 
 Examples:
   cornercase plugin install acme/notes
   cornercase plugin install acme/notes@v1.2.0
+  cornercase plugin install acme/tools/plugins/notes
+  cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes
   cornercase plugin link ~/code/my-plugin
   cornercase plugin enable my-plugin
   cornercase plugin list

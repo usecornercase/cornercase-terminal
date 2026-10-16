@@ -102,14 +102,17 @@ fn folder_spec(spec: &str) -> String {
         return spec.to_string();
     }
     let (place, at) = match spec.split_once('@') {
-        Some((place, at)) => (place, Some(at)),
-        None => (spec, None),
+        Some((place, at)) => (place, format!("@{at}")),
+        None => (spec, String::new()),
+    };
+    let (folder, subdir) = match place.split_once("//") {
+        Some((folder, subdir)) => (folder, format!("//{subdir}")),
+        None => (place, String::new()),
     };
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let path = config::expand_home(place, home.as_deref());
+    let path = config::expand_home(folder, home.as_deref());
     let path = path.canonicalize().unwrap_or(path);
-    let path = Path::new(&path).to_string_lossy().into_owned();
-    at.map_or_else(|| path.clone(), |at| format!("{path}@{at}"))
+    format!("{}{subdir}{at}", Path::new(&path).display())
 }
 
 fn update(places: &Places, registry: &Registry, id: Option<String>, yes: bool) -> Result<()> {

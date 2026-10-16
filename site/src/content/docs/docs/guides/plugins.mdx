@@ -19,9 +19,11 @@ A plugin's commands run with your user's rights. They can read and write your fi
 cornercase plugin install acme/notes          # the newest commit of its default branch
 cornercase plugin install acme/notes@v1.2.0   # a tag, a branch or a commit
 cornercase plugin install https://git.example.com/acme/notes.git
+cornercase plugin install acme/tools/plugins/notes   # a plugin in a folder of the repository
+cornercase plugin install https://git.example.com/acme/tools.git//plugins/notes@v2
 ```
 
-`install` takes `owner/repo` on GitHub, any `https://` git address, or a git folder on your machine. It fetches the plugin at one commit and, before anything in it runs, shows where it comes from, that commit, what it asks for, how it is built or downloaded, and every command it will run once on. Then it asks; with no terminal to ask in, pass `--yes` once you have read the preview. The plugin is installed **turned off**.
+`install` takes `owner/repo` on GitHub, any `https://` git address, or a git folder on your machine. A repository can hold several plugins, each in its own folder with its own `cornercase-plugin.toml`: on GitHub, add the folder after the repository (`owner/repo/plugins/notes`); for any other address or a folder on your machine, put it after `//` (`https://host/acme/tools.git//plugins/notes`, `~/code/tools//plugins/notes`). The folder is the plugin's: only it is installed, and its commands must stay inside it. Folder parts are letters, digits, `.`, `_` and `-`, never `.`, `..` or starting with `-`. It fetches the plugin at one commit and, before anything in it runs, shows where it comes from, that commit, what it asks for, how it is built or downloaded, and every command it will run once on. Then it asks; with no terminal to ask in, pass `--yes` once you have read the preview. The plugin is installed **turned off**.
 
 A plugin can ship ready-made archives, one per platform, each with its sha256. cornercase downloads the one for your machine, checks it against that sha256 before anything is unpacked, and unpacks only files and folders into the plugin's folder. Without an archive for your machine, the plugin's build steps run instead, once you have confirmed, in its folder; their output goes to the plugin's log.
 
@@ -31,7 +33,7 @@ cornercase plugin update acme.notes   # one
 cornercase plugin remove acme.notes   # stops it and deletes its installed copy
 ```
 
-`update` fetches the same address and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.
+`update` fetches the same address, folder and tag or branch again. If the commit did not change, it says the plugin is up to date and changes nothing; otherwise it shows the whole preview again and asks. An update keeps the plugin on or off as it was. A plugin pinned to a commit stays on it: install it again at another one. `remove` keeps the plugin's settings and data folders.
 
 ## Find and publish plugins
 

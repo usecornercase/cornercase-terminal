@@ -73,6 +73,11 @@ impl Fetched {
         self.staging.0.join(CHECKOUT)
     }
 
+    fn root(&self) -> PathBuf {
+        let checkout = self.checkout();
+        self.origin.subdir.as_ref().map_or_else(|| checkout.clone(), |subdir| checkout.join(subdir))
+    }
+
     pub(crate) fn preview(&self) -> Vec<String> {
         let m = &self.manifest;
         let mut lines = vec![format!("{} {} ({})", m.name, m.version, m.id)];
@@ -80,7 +85,7 @@ impl Fetched {
             lines.push(m.description.trim().to_string());
         }
         let at = self.origin.reference.as_ref().map_or_else(String::new, |r| format!(" (`{r}`)"));
-        lines.push(format!("From {} at commit {}{at}.", self.origin.repo, self.commit));
+        lines.push(format!("From {} at commit {}{at}.", self.origin.place(), self.commit));
         lines.push(format!("It {}; that is shown, not enforced.", m.asks()));
         match m.download_here() {
             Some(download) => {
@@ -172,11 +177,29 @@ pub(crate) fn fetch(origin: &Origin, places: &Places) -> Result<Fetched, String>
         return Err(format!("the checkout of {} is not at {commit}; nothing was installed", origin.repo));
     }
     fs::remove_dir_all(checkout.join(".git")).map_err(|e| format!("cannot drop the history: {e}"))?;
-    let manifest = Manifest::read(&checkout)?;
+    let root = match &origin.subdir {
+        Some(subdir) => {
+            inside(&checkout, subdir).map_err(|e| format!("{} has no folder `{subdir}`: {e}", origin.repo))?
+        }
+        None => checkout,
+    };
+    let manifest = Manifest::read(&root)?;
     let registry = Registry::load(&places.registry);
     conflict(&registry, &manifest.id, origin)?;
     let replacing = registry.entry(&manifest.id).ok().map(|entry| entry.enabled);
     Ok(Fetched { origin: origin.clone(), commit, manifest, replacing, staging })
+}
+
+fn inside(checkout: &Path, subdir: &str) -> std::io::Result<PathBuf> {
+    let mut path = checkout.to_path_buf();
+    for part in subdir.split('/') {
+        path.push(part);
+        let meta = fs::symlink_metadata(&path)?;
+        if !meta.is_dir() {
+            return Err(std::io::Error::other("it is a file or a link, not a folder"));
+        }
+    }
+    Ok(path)
 }
 
 fn is_commit(reference: &str) -> bool {
@@ -230,7 +253,7 @@ fn git<I: IntoIterator<Item = S>, S: AsRef<OsStr>>(
 
 fn conflict(registry: &Registry, id: &str, origin: &Origin) -> Result<(), String> {
     match registry.entries.iter().find(|entry| entry.id == id).map(|entry| &entry.source) {
-        Some(Source::Git { url, .. }) if *url == origin.url => Ok(()),
+        Some(Source::Git { url, subdir, .. }) if *url == origin.url && *subdir == origin.subdir => Ok(()),
         Some(source @ Source::Link { .. }) => Err(format!(
             "a plugin called `{id}` is already {}; `cornercase plugin unlink {id}` first",
             source.describe()
@@ -246,13 +269,13 @@ fn conflict(registry: &Registry, id: &str, origin: &Origin) -> Result<(), String
 pub(crate) fn check_update(places: &Places, id: &str) -> Result<Update, String> {
     let registry = Registry::load(&places.registry);
     let entry = registry.entry(id)?;
-    let Source::Git { repo, url, reference, commit, .. } = &entry.source else {
+    let Source::Git { repo, url, reference, subdir, commit, .. } = &entry.source else {
         return Err(format!(
             "`{id}` is {}; a linked plugin is read from its folder, not updated",
             entry.source.describe()
         ));
     };
-    let origin = Origin { repo: repo.clone(), url: url.clone(), reference: reference.clone() };
+    let origin = Origin { repo: repo.clone(), url: url.clone(), reference: reference.clone(), subdir: subdir.clone() };
     let fetched = fetch(&origin, places)?;
     if fetched.manifest.id != id {
         return Err(format!("{repo} now holds `{}`, not `{id}`; nothing was changed", fetched.manifest.id));
@@ -265,20 +288,20 @@ pub(crate) fn check_update(places: &Places, id: &str) -> Result<Update, String> 
 
 #[expect(clippy::needless_pass_by_value, reason = "installing uses up the fetched copy; its folder goes with it")]
 pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, String> {
-    let checkout = fetched.checkout();
+    let root = fetched.root();
     let id = fetched.manifest.id.clone();
     if let Some(download) = fetched.manifest.download_here() {
         let bytes = http::download(&SERVICE, &download.url).map_err(|e| e.to_string())?;
         archive::verify(&bytes, &download.sha256)?;
-        let count = archive::unpack(&bytes, &checkout)?;
+        let count = archive::unpack(&bytes, &root)?;
         places.note(&id, "download unpacked", &[("files", &count)]);
     } else {
         build(&fetched, places)?;
     }
-    if Manifest::read(&checkout)? != fetched.manifest {
+    if Manifest::read(&root)? != fetched.manifest {
         return Err(format!("installing changed {}; nothing was installed", manifest::FILE));
     }
-    Manifest::load(&checkout)?;
+    Manifest::load(&root)?;
     let folder = places.installs.join(&id);
     let dest = folder.join(short(&fetched.commit));
     private_dir(&folder).map_err(|e| format!("cannot make {}: {e}", folder.display()))?;
@@ -289,11 +312,12 @@ pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, St
         return Err(format!("{} is already installed at {}", id, short(&fetched.commit)));
     }
     let _ = fs::remove_dir_all(&dest);
-    fs::rename(&checkout, &dest).map_err(|e| format!("cannot move it into {}: {e}", dest.display()))?;
+    fs::rename(&root, &dest).map_err(|e| format!("cannot move it into {}: {e}", dest.display()))?;
     let source = Source::Git {
         repo: fetched.origin.repo.clone(),
         url: fetched.origin.url.clone(),
         reference: fetched.origin.reference.clone(),
+        subdir: fetched.origin.subdir.clone(),
         commit: fetched.commit.clone(),
         path: dest.clone(),
     };
@@ -322,7 +346,7 @@ pub(crate) fn install(fetched: Fetched, places: &Places) -> Result<Installed, St
 
 fn build(fetched: &Fetched, places: &Places) -> Result<(), String> {
     let manifest = &fetched.manifest;
-    let entry = Entry { id: manifest.id.clone(), source: Source::Link { path: fetched.checkout() }, enabled: false };
+    let entry = Entry { id: manifest.id.clone(), source: Source::Link { path: fetched.root() }, enabled: false };
     let plugin = Plugin { entry, manifest: Ok(manifest.clone()) };
     for step in &manifest.build {
         let shown = shown(&step.command);

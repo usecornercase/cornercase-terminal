@@ -40,7 +40,7 @@ impl Remote {
     }
 
     fn origin(&self, reference: Option<&str>) -> Origin {
-        Origin { repo: self.url(), url: self.url(), reference: reference.map(str::to_string) }
+        Origin { repo: self.url(), url: self.url(), reference: reference.map(str::to_string), subdir: None }
     }
 
     fn commit(&self, files: &[(&str, &str)]) {
@@ -327,5 +327,68 @@ mod removing {
         linked(&places, &folder);
         assert_eq!(remove(&places, "acme.notes"), Ok(Removed::Unlinked));
         assert!(folder.path().join(manifest::FILE).exists());
+    }
+}
+
+mod subfolders {
+    use super::*;
+
+    fn named(id: &str) -> String {
+        manifest("1.0", "").replace("acme.notes", id)
+    }
+
+    fn shelf() -> Remote {
+        let remote = Remote::new(&manifest("1.0", ""));
+        for (folder, id) in [("plugins/one", "acme.one"), ("plugins/two", "acme.two")] {
+            let dir = remote.work.path().join(folder);
+            fs::create_dir_all(dir.join("bin")).expect("folder");
+            fs::write(dir.join(manifest::FILE), named(id)).expect("manifest");
+            write_executable(&dir.join("bin/run"), SCRIPT);
+        }
+        git(remote.work.path(), &["add", "--all"]);
+        remote.commit(&[]);
+        remote
+    }
+
+    fn from(remote: &Remote, subdir: &str) -> Origin {
+        Origin { subdir: Some(subdir.into()), ..remote.origin(None) }
+    }
+
+    #[test]
+    fn each_plugin_of_a_repository_installs_from_its_folder() {
+        let (remote, home) = (shelf(), TempDir::new());
+        let places = places(&home);
+        let fetched = fetch(&from(&remote, "plugins/two"), &places).expect("fetch");
+        assert!(fetched.preview().join("\n").contains("(folder plugins/two) at commit"));
+        assert_eq!(install(fetched, &places).expect("install").manifest.id, "acme.two");
+        install(fetch(&from(&remote, "plugins/one"), &places).expect("fetch"), &places).expect("install");
+        let registry = Registry::load(&places.registry);
+        let two = registry.entry("acme.two").expect("two").source.root().to_path_buf();
+        assert_eq!((two.join("bin/run").exists(), two.join("plugins").exists()), (true, false));
+        assert!(matches!(check_update(&places, "acme.two"), Ok(Update::UpToDate(_))));
+        let Source::Git { subdir, .. } = &registry.entry("acme.one").expect("one").source else { panic!("git") };
+        assert_eq!(subdir.as_deref(), Some("plugins/one"));
+    }
+
+    #[test]
+    fn a_program_cannot_reach_out_of_its_folder_into_the_repository() {
+        let remote = shelf();
+        let run = remote.work.path().join("plugins/two/bin/run");
+        fs::remove_file(&run).expect("remove");
+        std::os::unix::fs::symlink("../../../bin/run", &run).expect("symlink");
+        git(remote.work.path(), &["add", "--all"]);
+        remote.commit(&[]);
+        let home = TempDir::new();
+        let places = places(&home);
+        let fetched = fetch(&from(&remote, "plugins/two"), &places).expect("fetch");
+        let error = install(fetched, &places).expect_err("refused");
+        assert!(error.contains("outside the plugin's folder"), "{error}");
+    }
+
+    #[test]
+    fn a_missing_folder_is_refused() {
+        let (remote, home) = (shelf(), TempDir::new());
+        let error = fetch(&from(&remote, "plugins/three"), &places(&home)).expect_err("refused");
+        assert!(error.contains("has no folder `plugins/three`"), "{error}");
     }
 }

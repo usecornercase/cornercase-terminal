@@ -85,30 +85,33 @@ fn a_plugin_installs_from_a_repository_after_its_preview_updates_and_goes() {
     let work = base.join("work");
     std::fs::create_dir_all(&work).expect("work");
     git(&work, &["init", "--quiet", "--initial-branch=main"]);
+    let folder = work.join("plugins/e2e");
+    std::fs::create_dir_all(&folder).expect("plugin folder");
     let write = |version: &str| {
         let manifest = MANIFEST.replace("0.1.0", version);
-        std::fs::write(work.join("cornercase-plugin.toml"), manifest).expect("manifest");
+        std::fs::write(folder.join("cornercase-plugin.toml"), manifest).expect("manifest");
     };
     write("0.1.0");
-    std::fs::write(work.join("run"), "#!/bin/sh\nexec sleep 60\n").expect("script");
-    std::fs::set_permissions(work.join("run"), std::fs::Permissions::from_mode(0o755)).expect("executable");
+    std::fs::write(folder.join("run"), "#!/bin/sh\nexec sleep 60\n").expect("script");
+    std::fs::set_permissions(folder.join("run"), std::fs::Permissions::from_mode(0o755)).expect("executable");
     git(&work, &["add", "--all"]);
     git(&work, &["commit", "--quiet", "-m", "one"]);
     git(&base, &["clone", "--quiet", "--bare", "work", "repo.git"]);
     let repo = base.join("repo.git").display().to_string();
+    let plugin = format!("{repo}//plugins/e2e");
 
-    let asked = app.session.cli(&["plugin", "install", &repo]);
+    let asked = app.session.cli(&["plugin", "install", &plugin]);
     let (out, err) = (String::from_utf8_lossy(&asked.stdout), String::from_utf8_lossy(&asked.stderr));
     assert!(!asked.status.success(), "{out}{err}");
     assert!(out.contains("service serve: ./run service"), "{out}");
     assert!(err.contains("pass --yes"), "{err}");
     assert!(app.session.says(&["plugin", "list"]).starts_with("no plugins"));
 
-    let installed = app.session.says(&["plugin", "install", &repo, "--yes"]);
+    let installed = app.session.says(&["plugin", "install", &plugin, "--yes"]);
     assert!(installed.contains("installed E2E 0.1.0 (acme.e2e), turned off"), "{installed}");
     let listed = app.session.says(&["plugin", "list"]);
     assert!(listed.starts_with("acme.e2e  0.1.0  off  E2E"), "{listed}");
-    assert!(listed.contains(&format!("installed from {repo} at")), "{listed}");
+    assert!(listed.contains(&format!("installed from {repo}, folder plugins/e2e, at")), "{listed}");
     assert!(app.session.says(&["plugin", "update", "acme.e2e"]).contains("acme.e2e is up to date"));
 
     write("0.2.0");

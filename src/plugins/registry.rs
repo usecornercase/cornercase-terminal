@@ -29,6 +29,8 @@ pub(crate) enum Source {
         url: String,
         #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
         reference: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        subdir: Option<String>,
         commit: String,
         path: PathBuf,
     },
@@ -44,9 +46,10 @@ impl Source {
     pub(crate) fn describe(&self) -> String {
         match self {
             Self::Link { path } => format!("linked from {}", path.display()),
-            Self::Git { repo, reference, commit, .. } => {
+            Self::Git { repo, reference, subdir, commit, .. } => {
                 let at = reference.as_ref().map_or_else(String::new, |r| format!("@{r}"));
-                format!("installed from {repo}{at} at {}", short(commit))
+                let inside = subdir.as_ref().map_or_else(String::new, |s| format!(", folder {s},"));
+                format!("installed from {repo}{at}{inside} at {}", short(commit))
             }
         }
     }

@@ -516,7 +516,8 @@ pub(crate) enum PluginAction {
     Install {
         #[arg(
             value_name = "SOURCE",
-            help = "owner/repo, an https:// git address or a git folder, with @branch, @tag or @commit to pin one"
+            help = "owner/repo[/folder], an https:// git address or a git folder (with //folder for a plugin in a \
+                    folder of it), then @branch, @tag or @commit to pin one"
         )]
         source: String,
         #[arg(short, long, help = "Install without asking; needed when there is no terminal to ask in")]
