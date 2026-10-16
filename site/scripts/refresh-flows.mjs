@@ -11,7 +11,7 @@ const TOPIC = 'cornercase-flow';
 const FILES = ['flow.toml', 'cornercase-flow.toml'];
 const MAX_BYTES = 256 * 1024;
 const MAX_REPOS = 300;
-const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'flows.json');
+const out = process.env.CORNERCASE_FLOWS_OUT ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'flows.json');
 
 const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'cornercase-flows' };
 if (process.env.GITHUB_TOKEN && API === DEFAULT_API) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
@@ -23,6 +23,7 @@ async function repositories() {
     const response = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
     if (!response.ok) throw new Error(`GitHub answered ${response.status} for the search: ${(await response.text()).slice(0, 200)}`);
     const body = await response.json();
+    if (body.incomplete_results === true || !Array.isArray(body.items)) throw new Error('GitHub answered the search with incomplete results');
     found.push(...body.items);
     if (body.items.length < 100) break;
   }
