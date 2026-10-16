@@ -24,7 +24,7 @@ async function mount(): Promise<void> {
   const stale = () => current !== mounts;
   if (!card || !error) return;
   const state = fromFragment(location.hash);
-  if (!state) { card.hidden = true; error.hidden = false; error.textContent = ERROR; return; }
+  if (!state) { tilt?.stop(); tilt = null; card.hidden = true; error.hidden = false; error.textContent = ERROR; return; }
   card.hidden = false; error.hidden = true;
   const { stats, example } = state;
   const note = document.querySelector<HTMLElement>('[data-example]'); if (note) note.hidden = !example;
