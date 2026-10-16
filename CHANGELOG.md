@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.119
+
+- **`cornercase status --follow`** keeps running and prints the whole session as one JSON line each time something in it changes, for other programs that show or drive cornercase: the first line is the state now, and later lines replace it completely. Each line carries the server's `boot` and a `revision` that goes up by one with every change, so a program can tell what it already has. It covers what `cornercase events` does not, such as renaming, reordering, moving a project to another group, splitting a pane, dragging a divider, folding, and changes to branches and pull requests. A reader that falls behind skips to the latest state instead of piling up old ones; reconnecting gives the state as it is now.
+- `cornercase status --json` now also gives each group its icon and colour, each project, workspace and tab the name you gave it (`custom_name`) and whether it is collapsed, and each tab its split layout (`layout`), with the direction and ratio of every split and the pane ids at its leaves.
+
 ## 0.12.118
 
 - The TODO button's dot for pending items now sits inside the button, after its name (` TODO ● `), like Remote's (` Remote ● `), and a click on it opens the list.
