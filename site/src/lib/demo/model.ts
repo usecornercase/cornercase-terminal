@@ -196,6 +196,7 @@ export interface Config {
   planeUrl: string;
   planeFilter: string;
   asanaWorkspace: string;
+  asanaWorkspaceName: string;
   asanaProjects: string;
 }
 
@@ -232,6 +233,7 @@ export const defaultConfig = (): Config => ({
   planeUrl: '',
   planeFilter: '',
   asanaWorkspace: '',
+  asanaWorkspaceName: '',
   asanaProjects: '',
 });
 

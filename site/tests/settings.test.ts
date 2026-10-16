@@ -61,3 +61,22 @@ test('the star prompt is a switch on the UI tab', () => {
   assert.ok(app.textAt('cornercase never asks for a star'));
   app.destroy();
 });
+
+test('the Asana workspace row names the workspace with its saved ID in the note, and forgets the name on an edit', () => {
+  const app = new App(); app.virtual = true; app.resize(110, 38); world(app, { scripted: true });
+  app.config.asanaWorkspace = '1200000000000001';
+  app.openSettings();
+  app.settingsPage(2);
+  const row = () => app.settingsRows(2).find((r) => r.id === 'asana-workspace');
+  const token = () => app.settingsRows(2).find((r) => r.id === 'token:asana');
+  assert.deepEqual([row()?.value, row()?.note], ['1200000000000001', 'name or ID']);
+  app.config.accounts.asana = true;
+  app.config.asanaWorkspaceName = 'Acme';
+  assert.deepEqual([row()?.value, row()?.note, token()?.value], ['Acme', 'ID 1200000000000001', '@you in Acme']);
+  app.settingsClick(app.settingsRows(2).findIndex((r) => r.id === 'asana-workspace'));
+  for (let i = 0; i < 16; i++) inputKey(app, key('Backspace'));
+  for (const ch of '1200000000000002') inputKey(app, key(ch));
+  inputKey(app, key('Enter'));
+  assert.deepEqual([row()?.value, row()?.note, token()?.value], ['1200000000000002', 'name or ID', 'connected']);
+  app.destroy();
+});

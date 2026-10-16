@@ -2646,7 +2646,7 @@ export class App {
     if (page === 2) {
       const token = (s: Remote, section: string): SettingsRow => {
         const on = c.accounts[s];
-        return { id: `token:${s}`, section, label: tokenName(s), value: on ? this.accountOf(s) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
+        return { id: `token:${s}`, section, label: tokenName(s), value: on ? (s === 'asana' && !c.asanaWorkspaceName ? 'connected' : this.accountOf(s)) : 'not connected', note: on ? 'saved' : 'enter pastes one' };
       };
       const rows: SettingsRow[] = [
         token('shortcut', 'Accounts'),
@@ -2964,7 +2964,7 @@ export class App {
         this.after(900, () => {
           o.busy = undefined;
           o.edit = undefined;
-          this.config.accounts[source] = true;
+          this.setAccount(source, true);
           o.notice = `${REMOTES[source].name} connected as ${this.accountOf(source)}`;
           this.dirty();
         });
@@ -3006,6 +3006,7 @@ export class App {
       }
     } else if (edit.row === 'asana-workspace') {
       this.config.asanaWorkspace = edit.input.trim();
+      this.config.asanaWorkspaceName = '';
       o.edit = undefined;
       o.notice = this.config.asanaWorkspace ? `Asana workspace: ${this.config.asanaWorkspace}` : 'the Asana workspace was cleared';
     } else if (edit.row === 'asana-projects') {
@@ -3133,16 +3134,22 @@ export class App {
     };
   }
 
+  private setAccount(source: Remote, on: boolean): void {
+    this.config.accounts[source] = on;
+    if (source === 'asana') this.config.asanaWorkspaceName = on ? 'Acme' : '';
+  }
+
   private asanaWorkspaceRow(): SettingsRow {
     const saved = this.config.asanaWorkspace;
-    const name = this.config.accounts.asana ? saved || 'Acme' : '';
+    const name = this.config.asanaWorkspaceName;
     const note = name && saved && saved.toLowerCase() !== name.toLowerCase() ? `ID ${saved}` : 'name or ID';
     return { id: 'asana-workspace', section: 'Asana', label: 'Asana workspace', value: name || saved || 'your only one', note };
   }
 
   private accountOf(source: Remote): string {
+    if (source === 'asana') return this.config.asanaWorkspaceName ? `@you in ${this.config.asanaWorkspaceName}` : '@you';
     if (source === 'gitlab') return `@you in ${gitlabServer(this.config.gitlabUrl).replace(/^https?:\/\//, '')}`;
-    return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : source === 'asana' ? this.config.asanaWorkspace || 'Acme' : 'acme'}`;
+    return `@you in ${source === 'jira' ? this.config.jiraSite : source === 'plane' ? this.config.planeWorkspace : 'acme'}`;
   }
 
   private freshToken(source: string): IssuesOverlay['token'] {
@@ -3460,7 +3467,7 @@ export class App {
     }
     if (label === 'disconnect') {
       const source = this.issuesSource(o) as Remote;
-      this.config.accounts[source] = false;
+      this.setAccount(source, false);
       o.token = this.freshToken(source);
       return this.dirty();
     }
@@ -3558,7 +3565,7 @@ export class App {
     o.busy = 'checking…';
     this.after(900, () => {
       o.busy = undefined;
-      this.config.accounts[source] = true;
+      this.setAccount(source, true);
       o.token = this.freshToken(source);
       o.loading = true;
       this.after(400, () => {
@@ -4257,7 +4264,7 @@ export class App {
     else if ((k.key === 'Delete' || k.key === 'Backspace') && rows[o.cursor]?.id.startsWith('token:')) {
       const source = rows[o.cursor].id.slice(6) as Remote;
       if (this.config.accounts[source]) {
-        this.config.accounts[source] = false;
+        this.setAccount(source, false);
         o.notice = `the ${tokenName(source)} was removed`;
       }
     }

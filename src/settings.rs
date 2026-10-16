@@ -441,6 +441,13 @@ impl Settings {
     }
 
     fn save(&mut self, config: Config, notice: String) -> Action {
+        if config.asana_workspace != self.config.asana_workspace {
+            for (source, status) in &mut self.tokens {
+                if *source == Source::Asana && matches!(status, Status::Saved(_)) {
+                    *status = Status::Saved(None);
+                }
+            }
+        }
         self.config = config.clone();
         self.notice = Some(notice);
         Action::Save(Box::new(config))

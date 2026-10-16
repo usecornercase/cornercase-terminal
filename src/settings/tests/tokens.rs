@@ -308,6 +308,27 @@ mod asana {
     }
 
     #[rstest::rstest]
+    #[case::another("1200000000000002", "1200000000000002")]
+    #[case::none("", "your only one")]
+    fn changing_the_workspace_forgets_the_old_ones_name(#[case] typed: &str, #[case] value: &str) {
+        let mut s = known("Acme", "1200000000000001");
+
+        assert_eq!(saved(edit(&mut s, &Row::AsanaWorkspace, typed)).asana_workspace, typed);
+
+        let row = s.row_text(&Row::AsanaWorkspace);
+        assert_eq!((row.value.as_str(), row.note.as_str()), (value, "name or ID"));
+        assert_eq!(s.status(Source::Asana), Some(&Status::Saved(None)));
+        assert_eq!(s.row_text(&Row::Token(Source::Asana)).value, "connected");
+    }
+
+    #[test]
+    fn the_projects_leave_the_workspace_name_alone() {
+        let mut s = known("Acme", "1200000000000001");
+        saved(edit(&mut s, &Row::AsanaProjects, "123"));
+        assert_eq!(s.row_text(&Row::AsanaWorkspace).value, "Acme");
+    }
+
+    #[rstest::rstest]
     #[case::no_account_yet("1200000000000001", "1200000000000001")]
     #[case::nothing_set("", "your only one")]
     fn the_workspace_row_shows_the_plain_value_without_a_name(#[case] saved: &str, #[case] value: &str) {
