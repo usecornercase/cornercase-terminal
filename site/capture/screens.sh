@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run sidebar-stacked groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-import flows-edit flow-start"
+CC_SCREENS="first-run sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu group-style rename-menu rename-form remove-workspace pull-requests pull-request-checks issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every files files-file files-search files-names files-link todo todo-add settings-worktrees settings-agents settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui usage usage-stats keys-menu remote-reconnecting queue queue-form flow-run flows-list flows-import flows-edit flow-start"
 
 pane_in() {
   cc status --json | node -e '
@@ -83,6 +83,13 @@ screen_first_run() {
 screen_sidebar_stacked() {
   cc_s1
   cc_shot sidebar-stacked
+}
+
+screen_workspace_folded() {
+  cc_s1
+  cc_click '▾ feat/dark-mode'
+  cc_wait '▸ feat/dark-mode'
+  cc_shot workspace-folded
 }
 
 screen_groups() {
@@ -404,7 +411,7 @@ screen_issue_started() {
   cc_wheel 'feat/dark-mode' down 3
   cc_hover 'Workspaces'
   cc_wait '▌ │   Opus 5.5 · 7%'
-  cc_wait '  feat/dark-mode               │'
+  cc_wait '  ▾ feat/dark-mode             │'
   cc_wait '    blog (1)                   │'
   cc_shot issue-started
 }
