@@ -316,6 +316,10 @@ export function layout(cols: number, rows: number, widths: Widths, nav: Nav, cha
   return nav === 'agents' ? workspaces : { ...workspaces, agents: EMPTY, agentsTitle: EMPTY, agentsList: EMPTY };
 }
 
+export function withFullScreen(areas: Areas, cols: number, rows: number): Areas {
+  return isEmpty(areas.changes) ? areas : { ...areas, changes: rect(0, 0, cols, rows), changesBorder: EMPTY };
+}
+
 export const TAB_BAR_HEIGHT = 2;
 
 function withTabBar(areas: Areas): Areas {

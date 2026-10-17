@@ -2,9 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.117
+## 0.12.118
 
 - The TODO button's dot for pending items now sits inside the button, after its name (` TODO ● `), like Remote's (` Remote ● `), and a click on it opens the list.
+
+## 0.12.117
+
+- **Read a file full screen.** An open file in the files panel has a **▢** button next to its **×**: it gives the file the whole window, keeping where you were, the selected lines and the highlights. **❐** or `Esc` puts it back in the panel at the width you gave it, and your programs keep their size. Going back to the tree, **open**, **ask agent** (when it finds an agent) and switching tabs put it back too.
 
 ## 0.12.116
 

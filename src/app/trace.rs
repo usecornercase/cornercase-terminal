@@ -148,6 +148,7 @@ pub(super) struct Seen {
     focus: Focus,
     overlay: Option<&'static str>,
     panel: Option<&'static str>,
+    full: bool,
     menu: bool,
     toast: Option<Toast>,
 }
@@ -390,6 +391,12 @@ impl App {
             let note = Note::new(Level::Info, "ui", "panel").with("shown", panel.unwrap_or("none"));
             notes.push(note);
             self.seen.panel = panel;
+        }
+        let full = self.file_full_screen();
+        if full != self.seen.full {
+            let text = if full { "file shown full screen" } else { "file back in its panel" };
+            notes.push(Note::new(Level::Info, "ui", text));
+            self.seen.full = full;
         }
         let menu = self.nav.is_some();
         if menu != self.seen.menu {

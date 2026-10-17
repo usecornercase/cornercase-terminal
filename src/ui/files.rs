@@ -110,6 +110,7 @@ pub(crate) struct FileView {
     pub(crate) selection: Option<(u32, u32)>,
     pub(crate) find: Option<String>,
     pub(crate) image: Option<Image>,
+    pub(crate) full_screen: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +119,12 @@ pub(crate) enum Image {
     Markers(Rect),
     Message(Vec<String>),
     Blank,
+}
+
+impl View {
+    pub(crate) fn full_screen(&self) -> bool {
+        matches!(&self.screen, Screen::File(f) if f.full_screen)
+    }
 }
 
 impl FileView {
@@ -154,6 +161,7 @@ pub(crate) enum Hit {
     Clear,
     Found(usize),
     Back,
+    FullScreen,
     Action(Action),
     Row(usize),
     Line(u32),
@@ -206,6 +214,12 @@ pub(crate) fn mode_button(area: Rect) -> Rect {
 pub(crate) fn clear(area: Rect) -> Rect {
     let mode = mode_button(area);
     Rect::new(mode.x.saturating_sub(BACK_WIDTH), mode.y, BACK_WIDTH, 1).intersection(field(area))
+}
+
+pub(crate) fn full_screen_button(area: Rect) -> Rect {
+    let x = close(area);
+    let button = Rect::new(x.x.saturating_sub(BACK_WIDTH), x.y, BACK_WIDTH, 1).intersection(parts(area).title);
+    if button.x < back(area).right() { Rect::default() } else { button }
 }
 
 pub(crate) fn back(area: Rect) -> Rect {
@@ -262,6 +276,9 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         Screen::Tree(tree) => row_at(area, view, pos.y).filter(|&i| i < tree.rows.len()).map(Hit::Row),
         Screen::Search(search) => row_at(area, view, pos.y).filter(|&i| i < search.rows.len()).map(Hit::Found),
         Screen::File(file) => {
+            if full_screen_button(area).contains(pos) {
+                return Some(Hit::FullScreen);
+            }
             if back(area).contains(pos) {
                 return Some(Hit::Back);
             }
@@ -522,12 +539,17 @@ fn draw_header(buf: &mut Buffer, area: Rect, view: &View, file: &FileView, hover
     let style = if hovered(hover, b) { action_style(true) } else { Style::default().fg(Color::Cyan) };
     put(buf, b.x, b.y, " ‹ ", style, b.right());
     let start = b.right() + 1;
-    let end = close(area).x.saturating_sub(1);
+    let full = full_screen_button(area);
+    let end = full.x.saturating_sub(1);
     let shown = truncate_left(&file.path, usize::from(end.saturating_sub(start)));
     let split = shown.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = shown.split_at(split);
     let x = put(buf, start, b.y, folder, dim(view.muted), end);
     put(buf, x, b.y, name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD), end);
+    let glyph = if file.full_screen { view.glyphs.restore } else { view.glyphs.full_screen };
+    let style =
+        if file.full_screen || hovered(hover, full) { Style::default().fg(Color::Cyan) } else { dim(view.muted) };
+    put(buf, full.x + 1, full.y, glyph, style, full.right());
     let buttons = file.actions(p.info);
     let end = buttons.first().map_or(p.info.right(), |(_, r)| r.x.saturating_sub(1));
     let (texts, style) = match file.selection {

@@ -175,3 +175,25 @@ fn the_bar_has_a_changes_button_in_compact_mode() {
     let r = layout(Rect::new(0, 0, 80, 16), Widths::default()).changes_button;
     assert_eq!(row_text(&t, Rect { y: r.y + 1, height: 1, ..r }).trim(), "±");
 }
+
+#[test]
+fn a_full_screen_file_takes_the_window_and_keeps_the_pane() {
+    let normal = layout_with(BIG, Widths::default(), true, Sidebar::SideBySide);
+    let a = normal.with_full_screen(true, BIG);
+    assert_eq!((a.changes, a.pane), (BIG, normal.pane));
+    assert!(a.changes_border.is_empty());
+    assert_eq!(a.border_hit(normal.changes_border.as_position()), None);
+}
+
+#[test]
+fn full_screen_needs_a_panel() {
+    let a = layout_with(BIG, Widths::default(), false, Sidebar::SideBySide);
+    assert_eq!(a.with_full_screen(true, BIG), a);
+}
+
+#[test]
+fn a_compact_full_screen_also_covers_the_bar() {
+    let area = Rect::new(0, 0, 80, 20);
+    let a = layout_with(area, Widths::default(), true, Sidebar::SideBySide).with_full_screen(true, area);
+    assert_eq!(a.changes, area);
+}

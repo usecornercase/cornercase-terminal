@@ -169,3 +169,17 @@ fn a_menu_takes_esc_first() {
     esc(&mut app);
     assert!(!app.panel_shown());
 }
+
+#[test]
+fn a_full_screen_file_goes_back_to_its_panel_first() {
+    let (mut app, rx, _repo) = with_cat();
+    open(&mut app, Side::Files);
+    let ws = app.projects[0].workspaces[0].id;
+    app.files.open_file(ws, "a.txt");
+    app.files.set_full_screen(true);
+    esc(&mut app);
+    assert!(app.panel_shown() && !app.file_full_screen());
+    esc(&mut app);
+    assert!(!app.panel_shown());
+    only_the_next_esc_reaches_the_pane(&mut app, &rx);
+}

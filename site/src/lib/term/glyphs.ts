@@ -55,7 +55,7 @@ const BLOCKS: Record<string, Box[]> = {
 
 const ROUND = new Set(['╭', '╮', '╯', '╰']);
 
-const SYMBOLS = new Set(['❯', '⌕', '✓', '●', '■', '≡', '→', '←']);
+const SYMBOLS = new Set(['❯', '⌕', '✓', '●', '■', '≡', '→', '←', '▢', '❐']);
 
 const BRAILLE_DOTS: [number, number, number][] = [
   [0x01, 0, 0], [0x02, 0, 1], [0x04, 0, 2], [0x08, 1, 0],
@@ -152,6 +152,9 @@ function symbol(ch: string, x: number, y: number, cw: number, h: number, lw: num
       { k: 'path', d: `M${f(cx + r * 0.7)} ${f(cy + r * 0.7)}L${px(0.9)} ${py(0.66)}`, lw: stroke },
     ];
   }
+  const box = (x0: number, y0: number, x1: number, y1: number) => `M${px(x0)} ${py(y0)}L${px(x1)} ${py(y0)}L${px(x1)} ${py(y1)}L${px(x0)} ${py(y1)}Z`;
+  if (ch === '▢') return [{ k: 'path', d: box(0.17, 0.3, 0.83, 0.7), lw: stroke * 0.8 }];
+  if (ch === '❐') return [{ k: 'path', d: `${box(0.17, 0.4, 0.66, 0.74)}M${px(0.34)} ${py(0.4)}L${px(0.34)} ${py(0.26)}L${px(0.83)} ${py(0.26)}L${px(0.83)} ${py(0.6)}L${px(0.66)} ${py(0.6)}`, lw: stroke * 0.8 }];
   const left = ch === '←';
   const [a, b] = left ? [0.85, 0.15] : [0.15, 0.85];
   const head = left ? 0.42 : 0.58;

@@ -305,6 +305,7 @@ impl App {
         self.drag = None;
         self.todo.field = None;
         self.files.unfocus();
+        self.files.set_full_screen(false);
         if let Some(filter) = &mut self.changes.filter {
             filter.focused = false;
         }
@@ -448,7 +449,7 @@ impl App {
     }
 
     pub(crate) fn shows(&self, pane: u64) -> bool {
-        self.nav.is_none() && self.tab().is_some_and(|t| t.index_of(pane).is_some())
+        self.nav.is_none() && !self.file_full_screen() && self.tab().is_some_and(|t| t.index_of(pane).is_some())
     }
 
     pub(crate) fn state(&self) -> State {
