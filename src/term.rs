@@ -166,11 +166,16 @@ impl Term {
     }
 
     pub(crate) fn paste(&mut self, text: &str) -> bool {
-        if self.emulator.bracketed_paste() {
-            self.write(bracketed(text).as_bytes())
-        } else {
-            self.write(text.as_bytes())
-        }
+        let bytes = self.pasted(text);
+        self.write(&bytes)
+    }
+
+    pub(crate) fn pasted(&self, text: &str) -> Vec<u8> {
+        if self.emulator.bracketed_paste() { bracketed(text).into_bytes() } else { text.as_bytes().to_vec() }
+    }
+
+    pub(crate) fn queue_full(&self) -> bool {
+        self.writer.queued.load(Ordering::Relaxed) >= MAX_QUEUED
     }
 
     pub(crate) fn set_theme(&mut self, theme: &HostTheme) {

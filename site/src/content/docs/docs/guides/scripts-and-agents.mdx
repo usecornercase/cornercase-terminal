@@ -64,6 +64,8 @@ group 9  personal  collapsed
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
 | `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
+| `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, for [a program that draws it](#drive-a-tabs-terminals). |
+| `scroll`, `selection`, `ratio`, `resize` | Scroll a pane's view, select or copy text in it, move a divider of a tab's split, or lay a `surface` stream out at another size, all [for a program that draws the terminals](#drive-a-tabs-terminals). |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -159,7 +161,7 @@ The first line is the tab as it is now, the next ones come when something it sho
 
 A line has these keys:
 
-- `boot`, `session` and `revision`: the server's start (see [Contract and compatibility](#contract-and-compatibility)), the `revision` of the latest [`status --follow`](#follow-the-whole-state) line sent before this one was drawn (0 if none was sent since the server started), and this stream's own counter, from 1, up by one per line. A line from another `boot` is stale. To get a complete baseline again, run the command again: its first line is always complete.
+- `boot`, `session`, `surface` and `revision`: the server's start (see [Contract and compatibility](#contract-and-compatibility)), the `revision` of the latest [`status --follow`](#follow-the-whole-state) line sent before this one was drawn (0 if none was sent since the server started), this stream's id (the one [`resize`](#drive-a-tabs-terminals) takes) and its own counter, from 1, up by one per line. A line from another `boot` is stale. To get a complete baseline again, run the command again: its first line is always complete.
 - `tab`, `cols` and `rows`: what you asked for.
 - `layout`: the tab's whole split tree, as in `status --json`, hidden panes included. `dividers`: each divider with its `dir`, its `path` through `layout` (`false` for the first side, `true` for the second), the region it divides (`area`) and its cells (`line`).
 - `panes`: the panes the surface shows, each with `pane` (its id), `active`, `rect` (`x`, `y`, `cols`, `rows`: where to draw it in the surface), `size` (its terminal's own columns and rows), `cursor` (`x`, `y`, `shape` as `block`, `bar`, `underline` or `block_hollow`, and `blinking`, or `null` when hidden or scrolled out of view), `modes`, `scroll` and `lines`.
@@ -170,11 +172,34 @@ A line has these keys:
 
 Things to know:
 
-- The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size the window gives them, though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming doesn't resize anything.
-- `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab at one size: to change either, start another.
+- The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size the window gives them, though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming doesn't resize any terminal.
+- `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab; `cornercase resize --surface ID` changes its size in place, and another tab needs another connection.
 - It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, or an out-of-range size is an error, with status 1; a missing `--tab`, `--cols` or `--rows` is wrong usage, with status 2.
 - A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
-- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes, input and a terminal size you choose.
+- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes and a terminal size you choose (the terminals keep the window's).
+
+#### Drive a tab's terminals
+
+A program that draws a tab with `surface` also has to type into it and handle its own mouse. A window's keys and clicks go through the window, where a dialog or a field can take them and a click is a cell of the window's layout. These commands act on a pane or tab you name, whatever the window shows:
+
+```sh
+cornercase input --pane 12 '{"text": "ls"}' '{"key": {"code": "enter"}}'
+cornercase input --pane 12 '{"key": {"code": "c", "mods": ["ctrl"]}}'
+cornercase input --pane 12 '{"mouse": {"kind": "scroll-up", "x": 10, "y": 5}}'
+cornercase scroll --pane 12 --up 10
+cornercase selection --pane 12 --from 0,3 --to 79,5 --copy
+cornercase ratio --tab 3 --path second 0.3
+cornercase resize --surface 4 --cols 100 --rows 30
+```
+
+- `input` takes one JSON event per argument, sent in order (`-` reads one per line from standard input): `{"key": {"code": "c", "mods": ["ctrl"], "kind": "press"}}` (`code` as for [`keys`](#talk-to-a-pane); `mods` any of `ctrl`, `alt`, `shift`, `super`; `kind` `press`, `repeat` or `release`), `{"text": "héllo"}` (committed text, no control characters), `{"paste": "two\nlines"}` (bracketed when the program asked for it) and `{"mouse": {"kind": "down", "button": "left", "x": 3, "y": 1, "mods": []}}` (`kind` `down`, `up`, `drag`, `moved`, `scroll-up`, `scroll-down`, `scroll-left` or `scroll-right`; `x` and `y` are cells of the pane's terminal, from 0, as in the `lines` of a frame).
+- Events are encoded the way the program in the pane asked for, the way the window encodes what you type: its keyboard protocol, application cursor keys, bracketed paste and mouse mode and encoding, all in the `modes` of a frame. Keys, text and pastes bring the pane's view back to the bottom. They don't set the shared window size and don't answer for the agent: unlike `send` and `keys`, `input` types into an agent's dialogs and answers its permission prompts, because it is a person typing through another UI. Scripts and agents should keep using `send` and `keys`, which check first.
+- A mouse event the program doesn't take in its current mode, or a key release when it didn't ask for event types, is not sent and is listed in the answer's `skipped` (`{"event": 0, "why": "mouse"}`; the command prints a warning). Everything else is encoded first and written in one go: when one event is wrong, or the program isn't reading its input, nothing is sent. Add `"size": {"cols": 80, "rows": 24}` to the request to say which terminal size your coordinates are for: if the pane has another size now, nothing is sent (`conflict`).
+- `scroll` moves the pane's view through its history by `--up` or `--down` rows, or to `--top` or `--bottom`, and answers with its `scroll` as a frame has it. The view is the pane's, so the window shows the same one. On the alternate screen, or when the program reads the mouse, the program scrolls itself: send it keys, or the wheel with `input`; `scroll` refuses with `conflict`.
+- `selection` with `--from X,Y --to X,Y` selects between two cells of the pane's view (columns and rows from 0, as in `lines`; `--rectangle` for a block) and prints the text. Without them it prints what is selected, `--clear` removes the selection, and `--copy` also copies it through the window, as selecting there does. The selection is shared with the window, which shows it as `inverse`, and with every client; the last one to change it wins.
+- `ratio RATIO` sets the share of the first side of a tab's divider, between 0 and 1. `--path` names the divider as the `path` of a frame's `dividers` does (`first` or `second` at each level down; without it, the outermost). The terminals follow at once, with the window's geometry. To open or close splits use `split` and `close`.
+- `resize` lays a running `surface` out at another size without starting it again; `ID` is the `surface` of its lines. Its next line comes at the new size, with the next `revision`. It resizes no terminal: they keep the size the window gives them.
+- Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, or put several events in one request. Unlike the other commands, these five log at debug level, since a program sends them as fast as someone types or drags.
 
 #### Find where something was said
 
@@ -295,6 +320,7 @@ cornercase read --last-message --pane 12 --pane 15 --json
 - `send` also refuses a Claude Code agent that shows its feedback survey above its input box (`How is Claude doing this session? (optional)`, then `1: Bad  2: Fine  3: Good  0: Dismiss`): one digit sent alone answers the survey instead of reaching the agent, so `send --enter 2`, the answer to a numbered question, would be lost. `cornercase keys --pane 12 0` dismisses the survey without answering it; then send again. `--force` sends anyway: a longer text hides the survey and goes to the input box, as when you type over it.
 - `send` also refuses a pane whose agent is resuming its conversation after a restart (`resuming` in `status`): before the agent is back, text would land in front of the resume command or in the agent's start-up. Wait until `status` no longer shows it, or pass `--force`. `keys` is not refused.
 - `keys` presses keys, encoded the way the program in the pane asked for: `enter`, `esc`, `tab`, `backspace`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `delete`, `insert`, `f1` to `f12`, or one character, each after any of `ctrl+`, `alt+` and `shift+` (`shift+tab`, `ctrl+c`, `alt+x`).
+- A program that draws the terminals itself should type with [`input`](#drive-a-tabs-terminals) instead: it sends keys, text, pastes and mouse events to the pane you name without checking what the agent shows, which is right for a person typing and wrong for a script. Scripts and agents keep `send` and `keys`.
 - `read` prints the screen as text. `--lines N` prints the last `N` lines instead, scrollback included (a pane keeps its last 10 MB of output, about 14,000 lines at 80 columns). Lines the terminal wrapped come back as one, and empty lines at the end are left out.
 - A Claude Code screen may end with its feedback survey right above the input box, `● How is Claude doing this session? (optional)` and `1: Bad  2: Fine  3: Good  0: Dismiss`: that is Claude Code asking you, not something the agent wrote. `status` marks it `(survey open)`, and `keys --pane 12 0` dismisses it.
 - `read --last-message` prints the last message the agent in the pane wrote, as plain text. It comes from the agent's own record, not the screen: Claude Code's transcript, Codex's rollout, Gemini's session file or opencode's database, the ones cornercase already reads for the [context line](../projects-workspaces-tabs/#how-full-the-context-is). So the message comes whole even once it scrolled off, without the input box, the status lines or a suggestion Claude Code shows in grey, and nobody has to ask an agent to write its report to a file. While the agent works it is the newest message so far, such as a note on what it is about to do; once its turn is over it is its answer. `--json` adds `written`, when the agent wrote it, and `turn_over`.
@@ -461,7 +487,12 @@ cornercase stats --share
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
-| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`. |
+| `input` | `pane`, `bytes` (what was written) and `skipped`: `event` (its position from 0) and `why` (`mouse`, `release`, or `key` for a press cornercase has no encoding for) of each event that was not sent. |
+| `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
+| `selection` | `pane` and `text` (absent when nothing is selected). |
+| `resize` | `surface`, `tab`, `cols` and `rows`. |
+| `ratio` | `tab` and `layout`, the tab's split tree as `status --json` gives it. |
+| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 | `contract` | `version`, `contract`, `boot`, `operations` (`name`, `available`, and `reason` when it is not), `features` and `streams` (`name`, `version`). See [Contract and compatibility](#contract-and-compatibility). |
 
@@ -488,6 +519,8 @@ Some messages you may meet:
 | `not confirmed: the prompt may not have been submitted …` | `send --enter` pressed Enter, but the agent recorded no new prompt. Read the pane before sending it again. |
 | `the … agent in pane … has not written a message yet` | `read --last-message` found the agent's record, with no message in it. |
 | `the program in pane … is not reading its input …` | Over 16 MiB sent to the pane are still waiting for its program to read them, so `send` and `keys` stop adding more. |
+| `the program in pane … is not reading its input … so nothing was sent` | `input` found over 16 MiB waiting for the program. With a code it is `busy`. |
+| `pane … is … now; read its latest frame and try again` and other `conflict` messages | The terminal's size changed since your frame, a cell is outside it, the pane's program scrolls itself, or nothing is selected to copy. Nothing was done. |
 | `timed out after …` | The `--timeout` passed; the rest of the message says what the pane was doing. |
 | `the restart was cancelled in the window …` | Someone pressed **cancel** on the window's notice while `restart --when-idle` waited; the server keeps running. |
 | `cornercase hit a bug, see server.log` | cornercase hit a bug while it handled the command or waited for it. Your shells keep running; see [this message in troubleshooting](../../help/troubleshooting/#cornercase-hit-a-bug-see-serverlog). |
@@ -504,10 +537,10 @@ cornercase contract --json
 ```
 
 ```text
-cornercase 0.12.122
+cornercase 0.12.125
 contract 1
 boot 4242-1700000000
-commands 33 (33 available)
+commands 38 (38 available)
 stream events 1
 stream watch 1
 stream surface 1
@@ -545,9 +578,11 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | `unsupported` | The server has no such request, or the request's `contract` is newer than the server's. Nothing was done. |
 | `malformed` | The request is not one: its arguments don't have the expected types. |
 | `stale-boot` | The request's `boot` is not this server's: it restarted since, and the ids you hold may name other panes now. Nothing was done. |
-| `not-found` | No group, project, workspace, tab or pane has that id. |
+| `not-found` | No group, project, workspace, tab, pane or surface has that id, or the tab has no divider at that path. |
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
 | `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
+| `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. |
+| `conflict` | The request no longer fits the pane's state: its terminal has another size, a cell is outside it, the program scrolls itself, or nothing is selected to copy. Read the latest frame and try again. Nothing was done. |
 | `failed` | Anything else. |
 
 The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.

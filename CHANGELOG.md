@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.125
+
+- **Drive a tab's terminals from another program.** For a program that draws cornercase's terminals itself with `surface`:
+  - `cornercase input --pane ID EVENT…` types keys with their modifiers, text and pastes into that pane, and sends it mouse events. They are encoded for what the program asked for (its keyboard protocol, application cursor keys, bracketed paste, its mouse mode), whatever the window shows, even with a dialog open there.
+  - `scroll` moves a pane's view through its history. `selection` selects text, prints or copies the selection, and clears it. `ratio` moves a divider. `resize --surface ID` lays a `surface` stream out at another size without starting it again: each of its lines now names its stream with `surface`.
+  - Input that cannot be sent is refused with a reason and nothing is sent: a program that stopped reading answers `busy`, a pane that changed size since answers `conflict`. Mouse events and key releases the program does not take are said, not dropped silently.
+  - `send` and `keys` work as before, with their checks.
+  - See Scripts and agents → Drive a tab's terminals.
+
 ## 0.12.124
 
 - **A pane takes no input while its agent comes back.** After a restart or an update, a pane where Claude Code, Codex, Gemini CLI, Grok Build or Cursor CLI was running shows **resuming claude…** until the agent is back in its conversation. Keys and pastes typed meanwhile are dropped, with a note saying why, instead of landing in front of the resume command or in the agent's start-up, where an Enter could answer a question you never saw. **cancel** gives you the pane back at once, as a plain shell if the command was not typed yet. A trust question still takes your answer.

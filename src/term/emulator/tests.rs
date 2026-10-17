@@ -745,3 +745,57 @@ mod reveal {
         assert_eq!(selected(&mut emu), None);
     }
 }
+
+mod driven_selection {
+    use super::*;
+
+    fn written() -> Emulator {
+        let (mut emu, _) = emulator();
+        emu.feed(b"\x1b[2J\x1b[Hhello world\r\nsecond line");
+        emu
+    }
+
+    #[test]
+    fn selects_between_two_cells_and_marks_them() {
+        let mut emu = written();
+
+        let text = emu.select(Position::new(0, 0), Position::new(4, 0), false).expect("select");
+
+        assert_eq!(text.as_deref(), Some("hello"));
+        let row = &emu.snapshot().expect("snapshot").rows[0];
+        assert!(
+            row[0].style.add_modifier.contains(Modifier::REVERSED)
+                && !row[6].style.add_modifier.contains(Modifier::REVERSED)
+        );
+    }
+
+    #[test]
+    fn a_rectangle_selects_a_block() {
+        let mut emu = written();
+
+        let text = emu.select(Position::new(0, 0), Position::new(1, 1), true).expect("select");
+
+        assert_eq!(text.as_deref(), Some("he\nse"));
+    }
+
+    #[test]
+    fn nothing_is_selected_once_cleared() {
+        let mut emu = written();
+        emu.select(Position::new(0, 0), Position::new(4, 0), false).expect("select");
+
+        emu.clear_selection().expect("clear");
+
+        assert_eq!(emu.selection_text().expect("text"), None);
+    }
+
+    #[test]
+    fn the_top_of_the_history_is_offset_zero() {
+        let mut emu = Emulator::new(24, 80, 100_000, &HostTheme::default(), Box::new(|_| {})).expect("emulator");
+        emu.feed("x\r\n".repeat(200).as_bytes());
+        assert!(emu.scrollbar().offset > 0);
+
+        emu.scroll_to_top();
+
+        assert_eq!(emu.scrollbar().offset, 0);
+    }
+}

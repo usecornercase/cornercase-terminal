@@ -70,6 +70,11 @@ fn every_command_is_listed_by_name() {
         Command::StartServer(StartServer::default()),
         Command::Watch(Watch::default()),
         Command::Surface(Surface::default()),
+        Command::Input(Input::default()),
+        Command::Scroll(Scroll::default()),
+        Command::Selection(Selection::default()),
+        Command::Resize(Resize::default()),
+        Command::Ratio(Ratio::default()),
     ];
 
     let names: Vec<String> = commands
@@ -100,6 +105,10 @@ fn the_fields_to_log_leave_out_what_is_typed() {
         Command::Search(Search { query: secret.into() }),
         Command::Todo(Todo::Add(secret.into())),
         Command::FlowRun(FlowRun { name: "Quick".into(), prompt: secret.into(), ..FlowRun::default() }),
+        Command::Input(Input {
+            events: vec![terminal::InputEvent::Text(secret.into()), terminal::InputEvent::Paste(secret.into())],
+            ..Input::default()
+        }),
     ];
 
     for command in commands {

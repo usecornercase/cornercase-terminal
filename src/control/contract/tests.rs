@@ -105,13 +105,25 @@ mod refusing {
             Code::UnknownField,
             Code::Unavailable,
             Code::Failed,
+            Code::Busy,
+            Code::Conflict,
         ];
 
         let written: Vec<Value> = codes.iter().map(|code| serde_json::to_value(code).expect("json")).collect();
 
         assert_eq!(
             written,
-            ["unsupported", "malformed", "stale-boot", "not-found", "unknown-field", "unavailable", "failed"]
+            [
+                "unsupported",
+                "malformed",
+                "stale-boot",
+                "not-found",
+                "unknown-field",
+                "unavailable",
+                "failed",
+                "busy",
+                "conflict"
+            ]
         );
     }
 }
