@@ -40,9 +40,9 @@ impl Channel {
 
     fn note(self) -> &'static str {
         match self {
-            Self::Osc777 => "Ghostty, WezTerm, Warp, Rio, older foot and Konsole",
+            Self::Osc777 => "Ghostty, WezTerm, Warp, Rio, foot before 1.18, Konsole before 24.12",
             Self::Osc9 => "iTerm2",
-            Self::Osc99 => "kitty, Contour, VS Code, foot, Konsole",
+            Self::Osc99 => "kitty, Contour, VS Code, foot 1.18+, Konsole 24.12+",
             Self::Bell => "a beep or a mark on the window, in any terminal",
         }
     }

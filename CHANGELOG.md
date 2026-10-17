@@ -6,7 +6,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **A click on a notification takes you to the agent.** In kitty, VS Code, Contour, foot 1.18 or later and Konsole 24.12 or later, clicking the desktop notification of an agent that needs you or finished shows its project, workspace and tab, with its pane focused. foot and Konsole now get kitty's kind of notification, so Konsole, like foot, no longer shows one while its window is in front.
 - The toast that comes with it has a **go** button that does the same in any terminal, and stays 6 seconds. In Ghostty, iTerm2 and WezTerm, where a click only brings the window forward, the toast comes back with its **go** when you return to the window, if the agent still needs you.
-- When you quit, restart or stop the server, cornercase closes the notifications it sent (where the terminal can), so clicking one later types nothing into your shell.
+- When you quit, restart or stop the server, cornercase closes the last 64 notifications it sent (where the terminal can), so clicking one later types nothing into your shell.
 
 ## 0.12.113
 
