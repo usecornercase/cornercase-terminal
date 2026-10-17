@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.131
+
+- **Programs see the colours of the app that drives cornercase.** `cornercase start-server --theme FILE` (or `-` for standard input) gives the server the foreground, background and 16 ANSI colours that programs in its terminals get when they ask, with no window attached. Claude Code, Neovim and delta pick their light or dark look from them.
+  - `cornercase theme FILE` changes them while the server runs, for an app that follows the system's appearance. Programs that turned on colour-scheme reports are told when light and dark switch.
+  - `cornercase theme --clear` gives the terminals back the window's colours, and `cornercase theme` says where they come from (also `theme` in `status --json`).
+  - A window that attaches later keeps its own look and leaves those colours alone. Without `--theme` nothing changes.
+  - See Scripts and agents → Colours for programs.
+
 ## 0.12.130
 
 - **Send a TODO to an agent.** In the TODO panel, each item left to do has a **`▸`** next to its `×` (on hover; always shown in the compact layout). It opens a menu of every agent running, by project and workspace, and picking one types the item into that agent and sends it, as `cornercase send --enter` would. Once the agent has taken it, the item is checked off and a message says where it went; what `send` refuses (an agent waiting for your answer, resuming, showing a dialog or its survey) the button refuses too, with the reason, and the item stays to do.
