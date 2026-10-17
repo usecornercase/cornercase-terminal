@@ -1,0 +1,62 @@
+{
+  "boot": "48211-1760695200123456789",
+  "session": 7,
+  "revision": 3,
+  "tab": 12,
+  "cols": 120,
+  "rows": 40,
+  "layout": {"split": {"dir": "right", "ratio": 0.5, "first": {"leaf": 13}, "second": {"leaf": 14}}},
+  "dividers": [
+    {
+      "dir": "right",
+      "path": [],
+      "area": {"x": 0, "y": 0, "cols": 120, "rows": 40},
+      "line": {"x": 59, "y": 0, "cols": 1, "rows": 40}
+    }
+  ],
+  "styles": [{}, {"fg": {"index": 2}, "bold": true}, {"bg": {"rgb": [40, 44, 52]}, "inverse": true}],
+  "panes": [
+    {
+      "pane": 13,
+      "active": true,
+      "rect": {"x": 0, "y": 0, "cols": 59, "rows": 40},
+      "size": {"cols": 51, "rows": 3},
+      "cursor": {"x": 2, "y": 1, "shape": "bar", "blinking": true},
+      "modes": {
+        "mouse": "press_release",
+        "mouse_encoding": "sgr",
+        "alternate_screen": true,
+        "alternate_scroll": true,
+        "bracketed_paste": true,
+        "application_cursor": false,
+        "focus_events": true,
+        "kitty_keyboard": 1
+      },
+      "scroll": {"total": 1200, "offset": 1197, "rows": 3},
+      "lines": [
+        [{"style": 0, "cells": ["$", " ", "l", "s"]}],
+        [{"style": 1, "cells": ["o", "k"]}, {"style": 0, "cells": [" ", "中", "", "x"]}],
+        []
+      ]
+    },
+    {
+      "pane": 14,
+      "active": false,
+      "rect": {"x": 61, "y": 0, "cols": 59, "rows": 40},
+      "size": {"cols": 59, "rows": 1},
+      "cursor": null,
+      "modes": {
+        "mouse": "none",
+        "mouse_encoding": "default",
+        "alternate_screen": false,
+        "alternate_scroll": true,
+        "bracketed_paste": false,
+        "application_cursor": false,
+        "focus_events": false,
+        "kitty_keyboard": 0
+      },
+      "scroll": {"total": 1, "offset": 0, "rows": 1},
+      "lines": [[{"style": 2, "cells": ["x"]}]]
+    }
+  ]
+}

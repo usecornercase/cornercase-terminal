@@ -308,6 +308,22 @@ A reader that falls far behind loses events, and a line says how many.
 Examples:
   cornercase events
   cornercase events --pane 12 --pane 14 --json";
+pub(super) const SURFACE_HELP: &str =
+    "For programs that draw cornercase's terminals themselves, such as an editor extension or a
+GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
+each time something it shows changes, at most about 60 times a second. Each line is complete and
+replaces the one before. It holds the panes laid out at the given size, each with its place (rect),
+its terminal's own size (size), its cells, cursor, modes and scroll position, plus the split tree,
+the dividers, and boot, session and revision.
+
+Terminals keep the size the window gives them, so size can differ from rect. The window keeps
+showing what it showed, also when the tab is not the one on screen. It ends when the tab closes or
+the server stops (status 0); stopping it leaves the shells running. A reader that falls behind gets
+fewer lines, each complete.
+
+Examples:
+  cornercase surface --tab 3 --cols 120 --rows 40
+  cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'";
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";

@@ -1,12 +1,11 @@
 use std::fmt::Write as _;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use super::args::StatusArgs;
-use super::{print_json, print_out, quietly};
-use crate::client::{self, answer, ask};
+use super::{print_json, print_out};
+use crate::client::{answer, ask};
 use crate::control::{self, PaneRow, PaneRows, ProjectInfo, Report};
 use crate::error::{Error, Result};
 
@@ -24,10 +23,7 @@ pub(super) fn run_status(status: &StatusArgs) -> Result<()> {
 }
 
 fn follow() -> Result<()> {
-    let mut out = std::io::stdout().lock();
-    client::follow_all("watch", control::Command::Watch(control::Watch {}), |value| {
-        quietly(writeln!(out, "{value}").and_then(|()| out.flush()))
-    })
+    super::stream_json("watch", control::Command::Watch(control::Watch {}))
 }
 
 fn home() -> Option<PathBuf> {

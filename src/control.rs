@@ -10,6 +10,7 @@ pub(crate) mod contract;
 mod flow;
 mod search;
 pub(crate) mod start_server;
+pub(crate) mod surface;
 mod watch;
 
 pub(crate) use contract::Contract;
@@ -19,6 +20,7 @@ pub(crate) use flow::{
 };
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
+pub(crate) use surface::Surface;
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -93,6 +95,7 @@ pub(crate) enum Command {
     Contract(Contract),
     StartServer(StartServer),
     Watch(Watch),
+    Surface(Surface),
 }
 
 impl Command {
@@ -130,6 +133,7 @@ impl Command {
             Self::Contract(_) => 29,
             Self::StartServer(_) => 30,
             Self::Watch(_) => 31,
+            Self::Surface(_) => 32,
         }]
     }
 
@@ -227,6 +231,7 @@ impl Command {
             Self::Search(search) => {
                 fields.add("bytes", search.query.len());
             }
+            Self::Surface(surface) => surface.fields(&mut fields),
             Self::StartServer(start) => {
                 fields.maybe("cols", start.cols).maybe("rows", start.rows);
             }
@@ -234,7 +239,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 32] = [
+    pub(crate) const NAMES: [&str; 33] = [
         "status",
         "open",
         "new-workspace",
@@ -267,6 +272,7 @@ impl Command {
         "contract",
         "start-server",
         "watch",
+        "surface",
     ];
 }
 

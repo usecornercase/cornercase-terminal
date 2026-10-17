@@ -118,6 +118,8 @@ mod parsing {
     #[case::a_branch_and_a_project_to_rename(&["rename", "--worktree", "x", "--project", "1", "y"])]
     #[case::a_blank_branch(&["close", "--worktree", " "])]
     #[case::an_unknown_command(&["frobnicate"])]
+    #[case::a_surface_without_a_tab(&["surface", "--cols", "80", "--rows", "24"])]
+    #[case::a_surface_without_a_size(&["surface", "--tab", "3"])]
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
@@ -243,6 +245,14 @@ mod parsing {
 
         let refused = parse(&["status", "--follow", "--panes"]).expect_err("conflict");
         assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn surface_takes_a_tab_and_a_size() {
+        let cli = parse(&["surface", "--tab", "3", "--cols", "120", "--rows", "40"]).expect("parse");
+
+        let Some(Command::Control(Control::Surface(surface))) = cli.command else { panic!("not surface") };
+        assert_eq!((surface.tab, surface.cols, surface.rows), (3, 120, 40));
     }
 
     #[test]

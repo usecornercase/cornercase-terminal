@@ -47,7 +47,7 @@ const NO_PANE: &str = "no pane is open here; pass --pane or --tab (`cornercase s
 
 type Reply = Result<Value, String>;
 
-type Handled = Result<Option<Value>, Refusal>;
+pub(in crate::app) type Handled = Result<Option<Value>, Refusal>;
 
 #[derive(Default)]
 pub(super) struct Requests {
@@ -111,7 +111,7 @@ struct Here {
     pane: Option<u64>,
 }
 
-fn json(value: &impl Serialize) -> Value {
+pub(in crate::app) fn json(value: &impl Serialize) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
@@ -119,7 +119,7 @@ fn sized(area: Option<Rect>) -> Result<Rect, String> {
     area.ok_or_else(|| NO_SIZE.to_string())
 }
 
-fn none(kind: &str, id: u64) -> Refusal {
+pub(in crate::app) fn none(kind: &str, id: u64) -> Refusal {
     Refusal::new(Code::NotFound, format!("there is no {kind} {id}; `cornercase status` lists them"))
 }
 
@@ -228,6 +228,7 @@ impl App {
             );
         }
         self.events.forget(client);
+        self.forget_surfaces(client);
         self.notices.forget(client);
         self.forget_flow_reads(Some(client));
         for pending in self.requests.pending.iter_mut().filter(|p| p.client == Some(client)) {
@@ -322,6 +323,7 @@ impl App {
             Command::Todo(todo) => self.todo_request(todo),
             Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
+            Command::Surface(surface) => self.surface_request(client, &surface, now),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),

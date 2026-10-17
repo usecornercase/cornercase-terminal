@@ -9,8 +9,8 @@ use super::help::{
     FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP,
     KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
     PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP,
-    SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, TODO_HELP, UNTIL_AFTER, UPDATE_HELP, WAIT_HELP,
-    WAIT_PANE, WAIT_TAB, WHEN_IDLE,
+    SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, TODO_HELP, UNTIL_AFTER,
+    UPDATE_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
 use crate::control::Until;
 use crate::term::keys;
@@ -133,6 +133,11 @@ pub(crate) enum Control {
         after_help = CONTRACT_HELP
     )]
     Contract(ContractArgs),
+    #[command(
+        about = "Stream a tab's terminals as cells, with their panes and dividers, for programs that draw them",
+        after_help = SURFACE_HELP
+    )]
+    Surface(SurfaceArgs),
 }
 
 #[derive(Debug, Args)]
@@ -456,6 +461,16 @@ pub(crate) struct MarkArgs {
     pub(crate) target: Target,
     #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
     pub(crate) reviewed: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SurfaceArgs {
+    #[arg(long, value_name = "ID", help = "The tab to stream; `cornercase status` lists them")]
+    pub(crate) tab: u64,
+    #[arg(long, value_name = "N", help = "Columns of the surface the tab is laid out in (1 to 1000)")]
+    pub(crate) cols: u16,
+    #[arg(long, value_name = "N", help = "Rows of the surface the tab is laid out in (1 to 500)")]
+    pub(crate) rows: u16,
 }
 
 #[derive(Debug, Args)]

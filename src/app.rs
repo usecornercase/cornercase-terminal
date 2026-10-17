@@ -107,6 +107,7 @@ mod shortcuts;
 mod sidebar;
 mod star_prompt;
 mod start_flow_dialog;
+mod surfaces;
 mod tab_bar;
 mod tabs;
 mod toast;
@@ -121,6 +122,7 @@ mod worktrees;
 pub(crate) use event::AppEvent;
 pub(crate) use events::Streamed;
 pub(crate) use images::{Placed, Sight};
+pub(crate) use surfaces::Surfaced;
 
 #[derive(Default)]
 struct Outbox {
@@ -188,6 +190,7 @@ pub(crate) struct App {
     images: images::Payloads,
     requests: control::Requests,
     events: events::Events,
+    surfaces: surfaces::Surfaces,
     seen: trace::Seen,
     plugins: Plugins,
 }
@@ -256,6 +259,7 @@ impl App {
             images: images::Payloads::default(),
             requests: control::Requests::default(),
             events: events::Events::default(),
+            surfaces: surfaces::Surfaces::default(),
             seen: trace::Seen::default(),
             plugins,
         }
@@ -397,6 +401,7 @@ impl App {
             self.next_request(now),
             self.next_pairing(now),
             self.events.snapshots.wake(now),
+            self.surface_wake(now),
             self.queued.area.and_then(|_| self.queued.queue.next(clock)),
         ]
         .into_iter()
@@ -602,6 +607,7 @@ impl App {
                 self.copy(&text);
             }
         }
+        self.surface_printed(id);
     }
 
     pub(crate) fn set_issue_cache(&mut self, path: PathBuf) {

@@ -95,8 +95,8 @@ pub(super) mod a_bug {
         saved
     }
 
-    pub(super) struct Attached {
-        pub(super) server: Server,
+    pub(in crate::server) struct Attached {
+        pub(in crate::server) server: Server,
         rx: Receiver<ServerEvent>,
         client: Client,
         dir: TempDir,
@@ -150,7 +150,7 @@ pub(super) mod a_bug {
     }
 
     impl Attached {
-        pub(super) fn new() -> Self {
+        pub(in crate::server) fn new() -> Self {
             Self::seeing(Support::default())
         }
 
@@ -192,6 +192,12 @@ pub(super) mod a_bug {
 
         pub(super) fn shows_frame(&self, bytes: &[u8]) {
             self.received(|msg| matches!(msg, ServerMessage::Frame(frame) if frame == bytes));
+        }
+
+        pub(in crate::server) fn messages(&self) -> Vec<ServerMessage> {
+            std::iter::from_fn(|| self.client.frames.try_recv().ok())
+                .filter(|message| !matches!(message, ServerMessage::Frame(_)))
+                .collect()
         }
 
         pub(super) fn received(&self, last: impl Fn(&ServerMessage) -> bool) -> Vec<ServerMessage> {

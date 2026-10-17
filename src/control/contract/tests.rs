@@ -35,10 +35,14 @@ mod describing {
     }
 
     #[test]
-    fn the_events_and_watch_streams_are_version_one() {
+    fn the_events_watch_and_surface_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 
-        let streams = vec![Stream { name: "events".into(), version: 1 }, Stream { name: "watch".into(), version: 1 }];
+        let streams = vec![
+            Stream { name: "events".into(), version: 1 },
+            Stream { name: "watch".into(), version: 1 },
+            Stream { name: "surface".into(), version: 1 },
+        ];
         assert_eq!(descriptor.streams, streams);
     }
 
@@ -62,7 +66,10 @@ mod describing {
 
         let keys: Vec<&str> = sent.as_object().expect("an object").keys().map(String::as_str).collect();
         assert_eq!(keys, ["boot", "contract", "features", "operations", "streams", "version"]);
-        assert_eq!(sent["streams"], json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}]));
+        assert_eq!(
+            sent["streams"],
+            json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}, {"name": "surface", "version": 1}])
+        );
         assert_eq!(sent["operations"][0], json!({"name": "status", "available": true}));
         let search = sent["operations"].as_array().expect("a list").iter().find(|o| o["name"] == "search").cloned();
         assert_eq!(search, Some(json!({"name": "search", "available": false, "reason": "off"})));

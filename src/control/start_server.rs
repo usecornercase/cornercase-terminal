@@ -22,7 +22,7 @@ impl StartServer {
     }
 }
 
-fn within(name: &str, value: u16, range: &RangeInclusive<u16>) -> Result<u16, String> {
+pub(super) fn within(name: &str, value: u16, range: &RangeInclusive<u16>) -> Result<u16, String> {
     if range.contains(&value) {
         Ok(value)
     } else {

@@ -69,6 +69,7 @@ fn every_command_is_listed_by_name() {
         Command::Contract(Contract::default()),
         Command::StartServer(StartServer::default()),
         Command::Watch(Watch::default()),
+        Command::Surface(Surface::default()),
     ];
 
     let names: Vec<String> = commands

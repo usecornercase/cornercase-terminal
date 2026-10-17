@@ -37,6 +37,7 @@ use crate::version;
 
 mod images;
 mod startup;
+mod surfaces;
 
 use images::Graphics;
 use startup::Startup;
@@ -66,6 +67,7 @@ enum Step {
     Answer,
     Flush,
     Draw,
+    Surfaces,
     Save,
     Event(ServerEvent),
 }
@@ -77,6 +79,7 @@ impl Step {
             Self::Answer => "answer",
             Self::Flush => "flush",
             Self::Draw => "draw",
+            Self::Surfaces => "surfaces",
             Self::Save => "save",
             Self::Event(ServerEvent::App(AppEvent::Output(..))) => "output",
             Self::Event(ServerEvent::App(_)) => "job answer",
@@ -92,7 +95,12 @@ impl Step {
     fn traced(&self) -> bool {
         !matches!(
             self,
-            Self::Answer | Self::Flush | Self::Draw | Self::Save | Self::Event(ServerEvent::App(AppEvent::Output(..)))
+            Self::Answer
+                | Self::Flush
+                | Self::Draw
+                | Self::Surfaces
+                | Self::Save
+                | Self::Event(ServerEvent::App(AppEvent::Output(..)))
         )
     }
 }
@@ -487,6 +495,7 @@ impl Server {
             if self.due(Instant::now()) {
                 self.contain(Step::Draw, &run);
             }
+            self.contain(Step::Surfaces, &run);
             self.contain(Step::Save, &run);
             let now = Instant::now();
             let tick = [self.app.tick(now), self.next_frame(now)].into_iter().flatten().fold(TICK, Duration::min);
@@ -529,6 +538,7 @@ impl Server {
             Step::Answer => self.answer(),
             Step::Flush => self.flush(),
             Step::Draw => self.draw(),
+            Step::Surfaces => self.surfaces(),
             Step::Save => self.save(Instant::now()),
             Step::Event(ev) => return self.handle(ev),
         }
@@ -680,9 +690,11 @@ impl Server {
         if log::enabled(Level::Debug) {
             describe(&ev);
         }
-        match &ev {
-            ServerEvent::App(AppEvent::Output(id, _)) => self.printed = self.printed || self.app.shows(*id),
-            _ => self.changed = true,
+        if let ServerEvent::App(AppEvent::Output(id, _)) = &ev {
+            self.printed = self.printed || self.app.shows(*id);
+        } else {
+            self.changed = true;
+            self.app.touch_surfaces();
         }
         match ev {
             ServerEvent::Message(id, ClientMessage::KillServer) => {

@@ -1,5 +1,7 @@
 use super::*;
-use crate::control::contract::{CONTRACT, Code, Descriptor, EVENTS_VERSION, Refusal, Stream, Structured};
+use crate::control::contract::{
+    CONTRACT, Code, Descriptor, EVENTS_VERSION, Refusal, SURFACE_VERSION, Stream, Structured,
+};
 
 fn raw(app: &mut App, text: &str) -> String {
     app.request(CLIENT, text, Some(AREA), Instant::now());
@@ -295,6 +297,7 @@ mod discovery {
             (CONTRACT, wire::server_token(), version::CURRENT)
         );
         assert!(descriptor.streams.contains(&Stream { name: "events".into(), version: EVENTS_VERSION }));
+        assert!(descriptor.streams.contains(&Stream { name: "surface".into(), version: SURFACE_VERSION }));
         assert!(descriptor.operations.iter().any(|op| op.name == "contract" && op.available));
     }
 

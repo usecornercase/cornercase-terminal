@@ -49,6 +49,10 @@ impl Default for Snapshots {
 }
 
 impl Snapshots {
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+
     fn take(&mut self, report: Report, now: Instant) -> Option<Snapshot> {
         self.built = Some(now);
         self.due = false;

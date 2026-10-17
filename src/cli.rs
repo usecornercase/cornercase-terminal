@@ -6,8 +6,8 @@ use clap::CommandFactory;
 use serde_json::Value;
 
 use self::args::{
-    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, Target, TodoAction, WaitArgs, WhenArgs,
-    Which,
+    Command, Control, EventsArgs, LogsArgs, Renamed, StartArgs, StatsArgs, SurfaceArgs, Target, TodoAction, WaitArgs,
+    WhenArgs, Which,
 };
 use self::status::run_status;
 use crate::client::{self, answer, ask};
@@ -105,6 +105,17 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
         }
         std::thread::sleep(FOLLOW_EVERY);
     }
+}
+
+fn stream_surface(args: &SurfaceArgs) -> Result<()> {
+    let surface = control::Surface { tab: Some(args.tab), cols: args.cols, rows: args.rows };
+    surface.area().map_err(Error::Control)?;
+    stream_json("surface", control::Command::Surface(surface))
+}
+
+pub(super) fn stream_json(name: &'static str, command: control::Command) -> Result<()> {
+    let mut out = io::stdout().lock();
+    client::follow_all(name, command, |value| quietly(writeln!(out, "{value}").and_then(|()| out.flush())))
 }
 
 pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
@@ -210,6 +221,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Events(events) => follow_events(events),
         Control::Flow(flow) => flow::run(flow.action),
         Control::Contract(contract) => contract::run(contract.print.json),
+        Control::Surface(args) => stream_surface(&args),
     }?;
     Ok(true)
 }
