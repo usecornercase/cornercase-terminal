@@ -45,7 +45,7 @@ pub(crate) enum Hit {
     Field { item: Option<u64>, line: usize, col: usize },
     Check(u64),
     Delete(u64),
-    Send(u64, Rect),
+    Send(u64),
     Item { id: u64, row: Rect, line: usize, col: usize },
 }
 
@@ -136,7 +136,7 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
     } else if delete(row).contains(pos) {
         Hit::Delete(item.id)
     } else if !item.done && item.editing.is_none() && send(row).contains(pos) {
-        Hit::Send(item.id, row)
+        Hit::Send(item.id)
     } else if item.editing.is_some() {
         Hit::Field { item: Some(item.id), line, col }
     } else {

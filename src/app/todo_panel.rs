@@ -159,7 +159,7 @@ impl App {
                     self.removed_todos(DELETED.into(), removed);
                 }
             }
-            Some(Hit::Send(id, _)) => self.ask_todo_agent(id, pos),
+            Some(Hit::Send(id)) => self.ask_todo_agent(id, pos),
             Some(Hit::Item { id, row, .. }) => {
                 self.drag = Some(Drag::Row(RowDrag {
                     target: Grab::Todo(id),

@@ -64,7 +64,7 @@ mod hits {
     fn a_pending_item_has_a_send_button_and_a_done_one_has_none() {
         let v = list();
         let (pending, done) = (row(&v, 1), row(&v, 2));
-        assert_eq!(hit(AREA, &v, send(pending).as_position()), Some(Hit::Send(2, pending)));
+        assert_eq!(hit(AREA, &v, send(pending).as_position()), Some(Hit::Send(2)));
         assert!(!matches!(hit(AREA, &v, send(done).as_position()), Some(Hit::Send(..))));
     }
 

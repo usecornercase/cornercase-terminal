@@ -373,9 +373,9 @@ pub(crate) fn draw(f: &mut Frame, view: &View) {
     }
 }
 
-#[cfg(test)]
-mod tests;
-
 pub(crate) fn status_text(status: Status) -> String {
     theme::status_icon(Color::Reset, status, None).content.into_owned()
 }
+
+#[cfg(test)]
+mod tests;

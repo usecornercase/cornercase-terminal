@@ -66,6 +66,30 @@ mod sending_a_todo_to_an_agent {
     }
 
     #[test]
+    fn refuses_a_pane_that_runs_no_agent_and_stays_pending() {
+        let (mut app, _rx) = app();
+        let shell = first(&app);
+        let todo = add(&mut app, "fix the login");
+
+        let refused = error(now(&mut app, None, todo_send(todo, Some(shell))));
+
+        assert!(refused.contains(&format!("pane {shell} runs no agent")), "{refused}");
+        assert!(!is_done(&app, todo));
+    }
+
+    #[test]
+    fn refuses_an_item_whose_send_is_in_flight() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        let todo = add(&mut agent.app, "fix the login");
+        ask(&mut agent.app, None, todo_send(todo, Some(id)));
+
+        let refused = error(now(&mut agent.app, None, todo_send(todo, Some(id))));
+
+        assert!(refused.contains("already being sent"), "{refused}");
+    }
+
+    #[test]
     fn refuses_an_item_that_is_already_done() {
         let (mut app, _rx) = app();
         let todo = add(&mut app, "fix the login");
