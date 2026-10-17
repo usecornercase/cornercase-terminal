@@ -26,6 +26,12 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.133
 
+- **Scripts and other apps can arrange the session.** `cornercase group new`, `group style` and `group delete` create a group (with the next icon and colour), change its icon and colour, or delete it, keeping or closing its projects. `cornercase move` puts a group, project, workspace or tab before another or at the end, or moves a project into or out of a group; `cornercase collapse` and `expand` fold groups, projects and workspaces; and `cornercase move-pane` swaps two panes or moves one to an edge of another, as the right-button drag does.
+  - Programs keep running, and `status --follow` shows each change.
+  - See Scripts and agents → Arrange.
+- **Check a worktree before removing it.** `cornercase close --remove-worktree --check` says what the Remove workspace dialog shows (changes that are not committed, a lock with its reason and whether its process still runs, the worktrees of a flow's roles that go with it, and whether the project's teardown runs first), and stops nothing.
+  - `cornercase close --remove-worktree --unlock` removes a locked worktree, as the dialog's **unlock and remove** does. Changes still need `--force`.
+
 - **A program that draws cornercase counts as looking at what it shows.** The tab a view shows (`cornercase view`, while it is active and has a size) now counts as seen, like the tab on screen in the window: an agent that finishes there gets no `✓`, one already marked loses it, and one that needs you there sends no toast or desktop notification.
   - While that program's window is hidden or minimised, `cornercase view-set --view ID --hidden` says so and agents there notify again; `--visible` says it is back, and `cornercase view --hidden` opens a view hidden.
   - While a view is open, the tab the window shows counts as seen only while a window is attached, so a program running cornercase without a window hears about agents in every tab. With no view open, windows work as before.
