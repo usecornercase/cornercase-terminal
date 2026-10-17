@@ -302,7 +302,9 @@ impl App {
         let structured = self.requests.structured.remove(&client);
         let reply = match (self.requests.todo_sends.remove(&client), reply) {
             (Some(sending), Ok(mut value)) => {
-                let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text);
+                let editing = self.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
+                let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
+                    && editing.is_none_or(|field| field.editor.text() == sending.text);
                 if sending.confirmed && same {
                     self.todos.toggle(sending.todo);
                 }

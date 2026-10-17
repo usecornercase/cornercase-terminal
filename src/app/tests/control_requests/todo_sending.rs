@@ -56,6 +56,20 @@ mod sending_a_todo_to_an_agent {
     }
 
     #[test]
+    fn an_item_whose_open_field_was_changed_stays_pending() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        let todo = add(&mut agent.app, "fix the login");
+        ask(&mut agent.app, None, todo_send(todo, Some(id)));
+        let editor = todo::editor::Editor::new("fix the logout");
+        agent.app.todo.field = Some(todo::Field { item: Some(todo), editor });
+
+        done(agent.answered("the agent records the prompt"));
+
+        assert!(!is_done(&agent.app, todo));
+    }
+
+    #[test]
     fn works_for_an_internal_client_through_the_app() {
         let mut agent = Agent::new();
         let id = agent.start(None);
