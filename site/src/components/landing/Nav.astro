@@ -25,6 +25,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
       <a href={anchor('speed')}>{t.nav.speed}</a>
       <a href={anchor('why')}>{t.nav.why}</a>
       <a href={anchor('more')}>{t.nav.more}</a>
+      <a href={`${base}/plugins/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.plugins}</a>
       <a href={`${base}/docs/`} hreflang={locale === 'en' ? undefined : 'en'}>{t.nav.docs}</a>
     </nav>
     <div class="actions">
@@ -240,7 +241,7 @@ const anchor = (id: string) => (standalone ? `${home(locale)}#${id}` : `#${id}`)
     border-radius: 9px;
   }
 
-  @media (max-width: 1040px) {
+  @media (max-width: 1160px) {
     .links a:not(:last-child) {
       display: none;
     }

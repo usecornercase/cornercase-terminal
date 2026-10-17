@@ -10,6 +10,7 @@ export const page = {
     speed: 'Speed',
     why: 'Why cornercase',
     more: 'Features',
+    plugins: 'Plugins',
     docs: 'Docs',
     github: 'cornercase on GitHub',
     stars: 'cornercase on GitHub, {n} stars',

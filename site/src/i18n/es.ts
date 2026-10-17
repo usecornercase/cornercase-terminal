@@ -12,6 +12,7 @@ export const page: Page = {
     speed: 'Velocidad',
     why: 'Por qué',
     more: 'Funciones',
+    plugins: 'Plugins (EN)',
     docs: 'Docs (EN)',
     github: 'cornercase en GitHub',
     stars: 'cornercase en GitHub, {n} estrellas',
