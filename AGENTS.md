@@ -75,7 +75,7 @@ src/version.rs    the binary version, version comparison and build id
 src/agents.rs     launch catalogue, shared modes and arguments, which agent takes an issue, detection, trust prompt, AgentState for resuming a pane
                   agents/known.rs Known, the supported identities and exhaustive dispatch to each agent folder
                   agents/activity.rs shared activity and status, done-but-unseen, pending marks, notifications, rollups; agents/launch.rs starting an agent in a new tab (pure state machine)
-                  agents/awake.rs keeps the machine awake; agents/stats.rs counts, heatmap, share links
+                  agents/awake.rs keeps the machine awake; agents/stats.rs counts, heatmap, share links; agents/tree.rs the agents section's tree
                   agents/context.rs pane state, Look, Reader, Record dispatch; agents/context/ shared discovery, JSONL reads, counting, last-message reads; agents/usage/ plan probes and modal state
                   agents/claude/ reader, status, title (mod.rs), transcript (transcript.rs), last message (message.rs), input box and survey (screen.rs), plan usage (usage.rs), fake
                   agents/codex/ reader, title (mod.rs), rollout (rollout.rs), last message (message.rs), plan usage (usage.rs), fake; agents/gemini/ reader, title (mod.rs), session (session.rs), fake

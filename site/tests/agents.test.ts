@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { AGENTS, MODES } from '../src/lib/demo/data';
-import { attention, followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
+import { agentTree, attention, shapeTree, followAgent, tabStatus, watchPane } from '../src/lib/demo/model';
 import { AGENT_KINDS } from '../src/lib/demo/programs';
 import { world } from '../src/lib/demo/world';
 import { Painter } from '../src/lib/demo/ui';
@@ -232,4 +232,92 @@ test('An agent toast has a go that shows its tab, and lasts six seconds', () => 
   assert.equal(app.toast, null);
   assert.notEqual(app.tab(), before);
   app.destroy();
+});
+
+test('The agents section hangs a flow team under its orchestrator', () => {
+  const app = new App();
+  app.virtual = true;
+  app.resize(177, 60);
+  world(app, { scripted: true });
+  app.config.agentsSection = true;
+  app.widths = { ...app.widths, agents: 40 };
+  const payments = () => app.agentRows().filter((row) => row.project === 'payments');
+  for (let t = 0; t < 60000 && payments().length < 5; t += 250) {
+    app.advance(250);
+    app.render();
+  }
+  const team = payments();
+  assert.equal(team.length, 5);
+  const ids = app.agentRows().map((row) => row.pane);
+  const lead = ids.indexOf(team[0].pane);
+  assert.deepEqual(ids.slice(lead, lead + 5), team.map((row) => row.pane));
+  assert.deepEqual(team.map((row) => row.depth), [0, 1, 1, 1, 1]);
+  assert.deepEqual(team.slice(1).map((row) => row.last), [false, false, false, true]);
+  assert.ok(team.slice(1).every((row) => row.parent === team[0].pane));
+
+  const { grid } = app.render();
+  const list = app.areas().agentsList;
+  const lines = Array.from({ length: list.h }, (_, i) => grid.line(list.y + i).slice(list.x, list.x + list.w));
+  const drawn = lines.filter((line) => line.includes('payments'));
+  assert.equal(drawn.length, 5, lines.join('\n'));
+  assert.match(drawn[0], /^[▌ ] \S payments/);
+  assert.deepEqual(
+    drawn.slice(1).map((line) => line.slice(2, 3)),
+    ['├', '├', '├', '└'],
+  );
+  assert.ok(drawn.slice(1).every((line) => /^[▌ ] [├└] \S payments/.test(line)), drawn.join('\n'));
+  const second = lines[lines.indexOf(drawn[1]) + 1];
+  assert.equal(second.slice(2, 3), '│');
+  app.destroy();
+});
+
+test('An agent tree keeps sidebar order, nests children and roots orphans', () => {
+  const rows = [
+    { id: 1, parent: null },
+    { id: 2, parent: 9 },
+    { id: 3, parent: 1 },
+    { id: 4, parent: 3 },
+    { id: 5, parent: 1 },
+  ];
+  const tree = agentTree(rows, (r) => r.id, (r) => r.parent);
+  assert.deepEqual(
+    tree.map((r) => [r.id, r.depth, r.last, r.bars]),
+    [
+      [1, 0, false, []],
+      [3, 1, false, []],
+      [4, 2, true, [1]],
+      [5, 1, true, []],
+      [2, 0, true, []],
+    ],
+  );
+});
+
+test('A capped agent tree draws the depth it shows', () => {
+  const rows = [
+    { id: 1, parent: null },
+    { id: 2, parent: 1 },
+    { id: 3, parent: 2 },
+    { id: 4, parent: 3 },
+    { id: 5, parent: 4 },
+  ];
+  const wide = agentTree(rows, (r) => r.id, (r) => r.parent);
+  assert.deepEqual(
+    wide.map((r) => [r.id, r.depth, r.last, r.bars]),
+    [
+      [1, 0, true, []],
+      [2, 1, true, []],
+      [3, 2, true, []],
+      [4, 3, false, []],
+      [5, 3, true, []],
+    ],
+  );
+  const narrow = shapeTree(agentTree([{ id: 1, parent: null }, { id: 2, parent: 1 }, { id: 3, parent: 2 }], (r) => r.id, (r) => r.parent), 1);
+  assert.deepEqual(
+    narrow.map((r) => [r.id, r.depth, r.last]),
+    [
+      [1, 0, true],
+      [2, 1, false],
+      [3, 1, true],
+    ],
+  );
 });

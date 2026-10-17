@@ -20,6 +20,65 @@ export interface Pane {
   pending?: boolean;
   since?: number;
   notified?: boolean;
+  parent?: number | null;
+}
+
+export interface TreeSpot {
+  depth: number;
+  last: boolean;
+  bars: number[];
+}
+
+export const MAX_AGENT_DEPTH = 3;
+export const NARROW_AGENT_DEPTH = 1;
+
+export function agentTree<T>(
+  rows: T[],
+  id: (row: T) => number,
+  parent: (row: T) => number | null | undefined,
+  cap = MAX_AGENT_DEPTH,
+): (T & TreeSpot)[] {
+  const listed = new Set(rows.map(id));
+  const children = new Map<number | null, T[]>();
+  for (const row of rows) {
+    const up = parent(row);
+    const key = up !== null && up !== undefined && up !== id(row) && listed.has(up) ? up : null;
+    children.set(key, [...(children.get(key) ?? []), row]);
+  }
+  const out: (T & TreeSpot)[] = [];
+  const seen = new Set<number>();
+  const walk = (key: number | null, depth: number): void => {
+    const kids = (children.get(key) ?? []).filter((row) => !seen.has(id(row)));
+    for (const row of kids) {
+      seen.add(id(row));
+      out.push({ ...row, depth: Math.min(depth, cap), last: true, bars: [] });
+      walk(id(row), depth + 1);
+    }
+  };
+  walk(null, 0);
+  for (const row of rows) {
+    if (seen.has(id(row))) continue;
+    seen.add(id(row));
+    out.push({ ...row, depth: 0, last: true, bars: [] });
+    walk(id(row), 1);
+  }
+  return shapeTree(out);
+}
+
+export function shapeTree<T extends TreeSpot>(rows: T[], cap = MAX_AGENT_DEPTH): T[] {
+  const capped = rows.map((row) => ({ ...row, depth: Math.min(row.depth, cap) }));
+  let later: boolean[] = [];
+  for (let i = capped.length - 1; i >= 0; i--) {
+    const row = capped[i];
+    const depth = row.depth;
+    while (later.length <= depth) later.push(false);
+    row.last = !later[depth];
+    row.bars = [];
+    for (let level = 1; level < depth; level++) if (later[level]) row.bars.push(level);
+    later[depth] = true;
+    later = later.slice(0, depth + 1);
+  }
+  return capped;
 }
 
 export type Activity = 'working' | 'waiting' | 'idle' | 'ready' | 'done' | 'failed';

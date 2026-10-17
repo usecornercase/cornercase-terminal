@@ -77,6 +77,7 @@ export function startRun(app: App, p: Project): Run {
   const run: Run = { workspace: w.id, flow: FULL_ISSUE, task: RUN_TASK, members: [], progress: new Progress(), messages: [], files: [] };
   for (const role of [FULL_ISSUE.orchestrator, ...FULL_ISSUE.roles]) {
     const pane = app.newPane(p, w);
+    if (run.members.length) pane.parent = run.members[0].pane;
     const args = [...(ARGS[role.agent] ?? []), ...(role.model ? ['--model', role.model] : [])];
     pane.shell.start(new Agent(app.host(p, w, () => pane.id), () => pane.shell.finish(), role.agent, args, { trusted: true }));
     const tab = app.newTab([pane]);
