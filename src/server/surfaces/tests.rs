@@ -104,6 +104,37 @@ fn a_reader_with_frames_queued_gets_none_until_it_has_room() {
 }
 
 #[test]
+fn a_reader_with_frames_queued_gets_a_complete_frame_once_it_has_room() {
+    let mut attached = Attached::new();
+    let (tab, pane) = tab_and_pane(&mut attached);
+    let request = format!(r#"{{"command":"surface","args":{{"tab":{tab},"cols":80,"rows":24,"patches":true}}}}"#);
+    json(&ask(&mut attached, &request)[0]);
+    attached.server.clients[0].out.queued.store(SURFACES_QUEUED, std::sync::atomic::Ordering::Relaxed);
+
+    attached
+        .server
+        .app
+        .handle_event(crate::app::AppEvent::Output(pane, b"held".to_vec()), ratatui::layout::Rect::new(0, 0, 80, 24))
+        .expect("output");
+    attached.server.surfaces();
+    attached.server.with_room();
+    attached.server.clients[0].out.queued.store(0, std::sync::atomic::Ordering::Relaxed);
+    let got = until_frame(&mut attached, 2);
+
+    let frame = got
+        .iter()
+        .find_map(|m| match m {
+            ServerMessage::Response(text) => {
+                serde_json::from_str::<Value>(text).ok().filter(|v| v["ok"]["revision"] == 2)
+            }
+            _ => None,
+        })
+        .expect("the frame");
+    assert!(frame["ok"].get("base").is_none(), "{frame}");
+    assert!(frame["ok"]["panes"][0].get("rect").is_some());
+}
+
+#[test]
 fn output_only_a_surface_shows_sends_a_frame_and_draws_no_window() {
     let mut attached = Attached::new();
     let (tab, pane) = hidden_tab(&mut attached);

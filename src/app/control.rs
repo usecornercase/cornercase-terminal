@@ -410,6 +410,7 @@ impl App {
             Command::Scroll(scroll) => self.scroll_request(&scroll),
             Command::Selection(selection) => self.selection_request(&selection),
             Command::Resize(resize) => self.resize_surface_request(&resize, now),
+            Command::Redraw(redraw) => self.redraw_surface_request(&redraw, now),
             Command::Ratio(ratio) => self.ratio_request(&ratio, area),
             Command::Link(at) => self.link_request(&at),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),

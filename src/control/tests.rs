@@ -91,6 +91,7 @@ fn every_command_is_listed_by_name() {
         Command::TodoSend(TodoSend::default()),
         Command::Theme(Theme::default()),
         Command::Go(Go::default()),
+        Command::Redraw(Redraw::default()),
     ];
 
     let names: Vec<String> = commands

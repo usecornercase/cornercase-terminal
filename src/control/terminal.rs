@@ -230,6 +230,24 @@ impl Resize {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Redraw {
+    pub(crate) surface: Option<u64>,
+}
+
+impl Redraw {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("surface", self.surface);
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Redrawn {
+    pub(crate) surface: u64,
+    pub(crate) tab: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Resized {
     pub(crate) surface: u64,
     pub(crate) tab: u64,

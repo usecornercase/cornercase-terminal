@@ -166,6 +166,7 @@ mod parsing {
     #[case::a_ratio_over_one(&["ratio", "--tab", "1", "1.5"])]
     #[case::a_divider_in_the_middle(&["ratio", "--tab", "1", "--path", "middle", "0.5"])]
     #[case::resizing_nothing(&["resize", "--cols", "80", "--rows", "24"])]
+    #[case::redrawing_nothing(&["redraw"])]
     #[case::a_flow_without_a_task(&["flow", "run", "Quick"])]
     #[case::an_import_without_a_file(&["flow", "import"])]
     #[case::an_import_to_nowhere(&["flow", "import", "f.toml", "--to", "other"])]
@@ -366,6 +367,24 @@ mod parsing {
 
         let Some(Command::Control(Control::Surface(surface))) = cli.command else { panic!("not surface") };
         assert_eq!((surface.tab, surface.cols, surface.rows), (Some(3), Some(120), Some(40)));
+    }
+
+    #[rstest]
+    #[case::a_tab(&["surface", "--tab", "3", "--cols", "120", "--rows", "40", "--patches"])]
+    #[case::a_view(&["surface", "--view", "4", "--patches"])]
+    fn surface_can_ask_for_patches(#[case] args: &[&str]) {
+        let cli = parse(args).expect("parse");
+
+        let Some(Command::Control(Control::Surface(surface))) = cli.command else { panic!("not surface") };
+        assert!(surface.patches);
+    }
+
+    #[test]
+    fn redraw_names_its_surface() {
+        let cli = parse(&["redraw", "--surface", "4"]).expect("parse");
+
+        let Some(Command::Control(Control::Redraw(redraw))) = cli.command else { panic!("not redraw") };
+        assert_eq!(redraw.surface, 4);
     }
 
     #[test]

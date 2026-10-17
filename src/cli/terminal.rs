@@ -1,6 +1,6 @@
 use std::io::{self, BufRead as _};
 
-use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
+use super::args::terminal::{InputArgs, LinkArgs, RatioArgs, RedrawArgs, ResizeArgs, ScrollArgs, SelectionArgs, Side};
 use super::{print_json, print_out};
 use crate::client::{answer, ask};
 use crate::control::terminal::{End, InputEvent, Linked, Scrolled, Selection, Sent, Why};
@@ -85,10 +85,16 @@ pub(super) fn selection(args: &SelectionArgs) -> Result<()> {
 }
 
 pub(super) fn resize(args: &ResizeArgs) -> Result<()> {
-    let probe = control::Surface { tab: None, cols: args.cols, rows: args.rows };
+    let probe = control::Surface { cols: args.cols, rows: args.rows, ..control::Surface::default() };
     probe.area().map_err(Error::Control)?;
     let request = control::Resize { surface: Some(args.surface), cols: args.cols, rows: args.rows };
     let value = ask("resize", control::Command::Resize(request))?;
+    if args.print.json { print_json(&value) } else { Ok(()) }
+}
+
+pub(super) fn redraw(args: &RedrawArgs) -> Result<()> {
+    let request = control::Redraw { surface: Some(args.surface) };
+    let value = ask("redraw", control::Command::Redraw(request))?;
     if args.print.json { print_json(&value) } else { Ok(()) }
 }
 

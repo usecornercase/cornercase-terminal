@@ -24,6 +24,16 @@ fn every_event_shape_reads_and_is_written_back() {
 }
 
 #[test]
+fn a_redraw_request_names_its_surface_and_logs_it() {
+    let parsed: Request =
+        serde_json::from_value(json!({"command": "redraw", "args": {"surface": 4}})).expect("a request");
+
+    assert_eq!(parsed.command.fields(), [("surface", "4".to_string())]);
+    assert_eq!(serde_json::to_value(&parsed).expect("json")["args"], json!({"surface": 4}));
+    assert_eq!(parsed.command.name(), "redraw");
+}
+
+#[test]
 fn a_key_or_mouse_event_takes_its_defaults() {
     let parsed = request(&json!({"pane": 1, "events": [{"key": {"code": "enter"}}, {"mouse": {"x": 1}}]}));
 

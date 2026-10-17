@@ -27,6 +27,10 @@ pub(crate) fn use_notices() -> Result<()> {
     require("notices", "cannot send agent notices or tell a hidden view apart")
 }
 
+pub(crate) fn use_surface_patches() -> Result<()> {
+    require("surface-patches", "cannot send surface patches")
+}
+
 fn require(feature: &str, lacks: &str) -> Result<()> {
     let lacking = || {
         Error::Control(format!(

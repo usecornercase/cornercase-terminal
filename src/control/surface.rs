@@ -21,11 +21,12 @@ pub(crate) struct Surface {
     pub(crate) tab: Option<u64>,
     pub(crate) cols: u16,
     pub(crate) rows: u16,
+    pub(crate) patches: bool,
 }
 
 impl Surface {
     pub(super) fn fields(&self, fields: &mut Fields) {
-        fields.maybe("tab", self.tab).add("cols", self.cols).add("rows", self.rows);
+        fields.maybe("tab", self.tab).add("cols", self.cols).add("rows", self.rows).add("patches", self.patches);
     }
 
     pub(crate) fn area(&self) -> Result<Rect, String> {
@@ -37,10 +38,12 @@ impl Surface {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct Frame {
+pub(crate) struct Frame<B = Content> {
     pub(crate) boot: String,
     pub(crate) session: u64,
     pub(crate) revision: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) base: Option<u64>,
     pub(crate) surface: u64,
     pub(crate) tab: u64,
     pub(crate) cols: u16,
@@ -50,7 +53,7 @@ pub(crate) struct Frame {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) projection: Option<u64>,
     #[serde(flatten)]
-    pub(crate) content: Content,
+    pub(crate) content: B,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -436,15 +439,19 @@ fn runs(row: Vec<Cell>, known: &[usize], tables: &mut Tables) -> Vec<Run> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
-enum Line<'a> {
-    Ok(&'a Frame),
+enum Line<'a, B> {
+    Ok(&'a Frame<B>),
 }
 
-impl Frame {
+impl<B: Serialize> Frame<B> {
     pub(crate) fn streamed(&self) -> Option<String> {
         serde_json::to_string(&Line::Ok(self)).ok()
     }
 }
 
+pub(crate) mod patch;
+
+#[cfg(test)]
+pub(crate) mod mirror;
 #[cfg(test)]
 mod tests;

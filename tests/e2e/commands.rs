@@ -765,6 +765,34 @@ fn a_surface_resizes_in_place_and_a_divider_moves() {
 }
 
 #[test]
+fn a_surface_with_patches_sends_what_changed_and_redraw_a_complete_line() {
+    let app = Harness::start();
+    let pane = app.session.says(&["new-tab"]);
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
+    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    let mut streaming = app.session.spawn(&["surface", "--tab", &tab, "--cols", "80", "--rows", "24", "--patches"]);
+    let mut followed = Followed::of(&mut streaming);
+    followed.until("the first frame", |frame| frame["revision"] == 1);
+    let surface = followed.seen[0]["surface"].as_u64().expect("a surface id").to_string();
+    assert!(followed.seen[0].get("base").is_none());
+
+    app.session.says(&["send", "--pane", &pane, "--enter", "echo patch-\"\"ok"]);
+    followed.until("a patch with the word", |frame| {
+        frame.get("base").is_some()
+            && frame["panes"][0]["lines"]
+                .as_object()
+                .is_some_and(|rows| rows.values().any(|row| row.to_string().contains(r#""o","k""#)))
+    });
+    let seen = followed.seen.len();
+    app.session.says(&["redraw", "--surface", &surface]);
+    followed.until("a complete line", |frame| frame.get("base").is_none() && frame["revision"].as_u64() > Some(1));
+    app.session.says(&["close", "--tab", &tab]);
+
+    assert!(followed.seen.len() > seen);
+    assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
+}
+
+#[test]
 fn link_says_which_file_a_click_on_a_printed_path_opens() {
     let app = Harness::start();
     let pane = app.session.says(&["new-tab"]);

@@ -375,9 +375,16 @@ The window keeps showing what it showed, also when the tab is not the one on scr
 the server stops (status 0); stopping it leaves the shells running. A reader that falls behind gets
 fewer lines, each complete.
 
+With --patches, each line after the first carries only what changed since the line before: `base` is the
+revision it applies to, and each changed pane has its cursor and what changed of the rest (`lines` by
+row number, `copy` for rows that moved). A complete line, without `base`, comes again whenever the layout,
+a size, the panes or the view change, after the reader fell behind, and when `cornercase redraw --surface
+ID` asks for one.
+
 Examples:
   cornercase surface --tab 3 --cols 120 --rows 40
   cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
+  cornercase surface --tab 3 --cols 120 --rows 40 --patches
   cornercase surface --view 41";
 pub(super) const INPUT_HELP: &str = "For programs that draw cornercase's terminals themselves (see `cornercase surface`). Each
 EVENT is one JSON object, sent in order:
@@ -425,6 +432,13 @@ them.
 
 Example:
   cornercase resize --surface 4 --cols 100 --rows 30";
+pub(super) const REDRAW_HELP: &str =
+    "Sends a running `cornercase surface` a complete line now, like its first one, even when nothing
+changed. ID is the `surface` of its lines. A program that applies patches asks for one when it lost
+track of the lines it applied.
+
+Example:
+  cornercase redraw --surface 4";
 pub(super) const RATIO_HELP: &str =
     "RATIO is the share of the divider's first side, between 0 and 1. --path names the divider as a
 surface line's `path` does, first or second at each level down; without it, the outermost one. The

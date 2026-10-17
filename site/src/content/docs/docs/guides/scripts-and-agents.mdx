@@ -67,11 +67,12 @@ group 9  personal  collapsed
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing, with `--host` programs' clipboard writes and bells, and with `--notices` the notices about agents. |
-| `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
+| `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals), optionally [as patches](#patches). |
 | `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
 | `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
 | `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, for [a program that draws it](#drive-a-tabs-terminals). |
 | `scroll`, `selection`, `ratio`, `resize`, `link` | Scroll a pane's view, select or copy text in it, move a divider of a tab's split, lay a `surface` stream out at another size, or say which file a click on a cell opens, all [for a program that draws the terminals](#drive-a-tabs-terminals). |
+| `redraw` | Sends a `surface` stream a complete line now, for a program that applies [patches](#patches). |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -165,7 +166,7 @@ cornercase surface --tab 3 --cols 120 --rows 40
 cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
 ```
 
-The first line is the tab as it is now, the next ones come when something it shows changes, at most about 60 a second and never twice the same. Each line is complete and replaces the one before. Find the tab's id with `cornercase status`. The tab doesn't have to be the one the window shows, and streaming it doesn't switch to it or change anything the window shows. It works on a server started with `start-server`, with no window.
+The first line is the tab as it is now, the next ones come when something it shows changes, at most about 60 a second and never twice the same. Each line is complete and replaces the one before, unless you ask for [patches](#patches). Find the tab's id with `cornercase status`. The tab doesn't have to be the one the window shows, and streaming it doesn't switch to it or change anything the window shows. It works on a server started with `start-server`, with no window.
 
 A line has these keys:
 
@@ -180,14 +181,38 @@ A line has these keys:
 - `lines`: one entry per row of the pane's terminal (`size.rows`), each a list of runs, `{"style": 1, "hyperlink": 0, "cells": ["o", "k"]}`: consecutive cells of one style and one hyperlink (`hyperlink` is left out when the run has none). A blank that is part of a link is kept at the end of a line. A cell is a string, the character with any combining marks. The right half of a wide character is `""`: don't draw it, the cell before covers it. The cells after the last one that isn't a blank in the default style are left out, so an empty line is `[]` and the rest of a line is blank.
 - `styles`: the table the runs' `style` numbers index, shared by all the panes. Entry 0 is `{}`, the terminal's default colours. Others have `fg` and `bg` (absent for the default colour, `{"index": 0-255}` for a palette colour, which your theme decides, or `{"rgb": [r, g, b]}`) and the attributes that are on: `bold`, `dim`, `italic`, `underline`, `blink`, `inverse`, `invisible`, `strikethrough`, `overline`, and for underlined cells `underline_style` (`double`, `curly`, `dotted` or `dashed`; a plain underline has none) and `underline_colour` (like `fg`). A client that knows only `underline` draws every style as a plain one. A selection made in a window shows as `inverse`.
 
+##### Patches
+
+A long-lived program that parses every line pays for the whole tab each time, and so does a link that carries it. With `--patches` the first line is complete and the next ones carry only what changed:
+
+```sh
+cornercase surface --tab 3 --cols 120 --rows 40 --patches
+```
+
+A server from before patches ignores the option and sends complete lines, which you apply the same way, and `cornercase contract` lists the feature `surface-patches` to check for it. A line with no `base` is complete, as above. A line with `base` is a patch, and has `boot`, `session`, `surface`, `revision`, `tab`, `cols` and `rows` as before (and `view` and `projection` for `--view`), then:
+
+- `base`: the `revision` it applies to, always the one before it. Apply a patch only when `base` is the `revision` of the last line you applied; otherwise ask for a complete line with `cornercase redraw --surface ID`, or connect again.
+- `styles` and `hyperlinks`: tables for this patch's runs only. A run's `style` and `hyperlink` in a patch index these, not the tables of the line you hold, so resolve them as you apply a row and keep what you resolved.
+- `panes`: only the panes that changed, each with `pane` and `cursor` (always: `null` is a hidden cursor), and only what changed of `active`, `modes`, `scroll`, `colours` (`{}` once the program resets them), `copy` and `lines`. A pane that is not listed did not change.
+- `copy`: `from`, `to` and `count`. Before you apply `lines`, take rows `from` to `from + count - 1` of the pane as you held them and write them at `to`. It is how output that scrolls arrives: the rows that moved, not their content. Rows it doesn't cover keep what they had.
+- `lines`: row number (`"3"` is row 3) to that row's whole line of runs, as in a complete line; `[]` is a blank row. Replace those rows after `copy`.
+
+The layout, dividers, the set of panes, their `rect` and `size`, and the tab and size of the surface never change in a patch: when any of them does, the next line is complete. It is also complete when the view's `projection` changes, after the server held back a line because you were slow to read, and when you ask:
+
+```sh
+cornercase redraw --surface 4
+```
+
+`redraw` takes the `surface` of the lines. The surface's next line is complete and comes at once, even if nothing changed. It works with or without `--patches`. An unknown or ended surface is `not-found`, and no `--surface` is wrong usage.
+
 Things to know:
 
 - The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size of whoever sizes the tab (the window, or [a view](#a-view-of-your-own)), though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming a `--tab` doesn't resize anything.
 - `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab; `cornercase resize --surface ID` changes the size of one given with `--tab` in place, and another tab needs another connection.
 - It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, or an out-of-range size is an error, with status 1; a missing `--tab`, `--cols` or `--rows` is wrong usage, with status 2.
-- A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
+- A reader that falls behind gets fewer lines, each complete (with `--patches`, the line after falling behind is complete), so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
 - Keys added later, such as `hyperlinks`, `colours`, `underline_style`, `underline_colour` and `overline`, are left out when empty, so a reader that doesn't know them keeps working and a terminal that uses none of them sends exactly what it did.
-- Not sent yet: patches (every line is complete), images, OSC 8 link ids, pixel sizes and a terminal size set pane by pane. A pane's title is in `status --json`, and its bells and clipboard writes in [`events --host`](#follow-events).
+- Not sent yet: images, OSC 8 link ids, pixel sizes and a terminal size set pane by pane. A pane's title is in `status --json`, and its bells and clipboard writes in [`events --host`](#follow-events).
 
 #### A view of your own
 
@@ -195,7 +220,7 @@ Two programs that draw cornercase, or a program and the window, shouldn't have t
 
 ```sh
 cornercase view --cols 120 --rows 40 > view.jsonl &
-id=$(head -n 1 view.jsonl | jq .ok.view.id)
+id=$(head -n 1 view.jsonl | jq .view.id)
 cornercase new-tab --view "$id" --focus --name logs
 cornercase surface --view "$id"
 ```
@@ -568,7 +593,7 @@ cornercase stats --share
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind`, `parent` (for an `opened` pane started from another pane), `token`, `status`, `place`, `message`, `panes` (for `notice`), `text` (for `clipboard`) or `count` (for `bell` and `dropped`) depending on the event. |
-| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles`, `hyperlinks` and `panes`; for `--view`, also `view` and `projection`. |
+| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles`, `hyperlinks` and `panes`; for `--view`, also `view` and `projection`. With `--patches`, later lines carry `base` and only the changed panes. |
 | `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`) and each tab's `controller`. |
 | `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`, `visible`. |
 | `go` | The ids it went to (`project`, `workspace`, `tab`, `pane`), and `projection` with `--view`. |
@@ -576,6 +601,7 @@ cornercase stats --share
 | `scroll` | `pane` and `scroll`: `total`, `offset` and `rows`, as in a frame. |
 | `selection` | `pane` and `text` (absent when nothing is selected). |
 | `resize` | `surface`, `tab`, `cols` and `rows`. |
+| `redraw` | `surface` and `tab`. |
 | `link` | `pane` and `link`: `null` when the cell holds no file, else `path` (canonical), `inside` (in the pane's workspace), `workspace`, `relative` (inside only), `lines` (`first` and `last`, absent without lines), and `row`, `start` and `end`, the cells the path takes (`end` excluded). |
 | `ratio` | `tab` and `layout`, the tab's split tree as `status --json` gives it. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
@@ -626,11 +652,11 @@ cornercase contract --json
 cornercase 0.12.133
 contract 1
 boot 4242-1700000000
-commands 44 (44 available)
+commands 45 (45 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields, views, host-events, theme, notices
+features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches
 ```
 
 `--json` prints an object with:
@@ -639,7 +665,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours) and `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them) and `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.

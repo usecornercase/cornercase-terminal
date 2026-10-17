@@ -1,0 +1,41 @@
+{
+  "boot": "48211-1760695200123456789",
+  "session": 7,
+  "revision": 4,
+  "base": 3,
+  "surface": 2,
+  "tab": 12,
+  "cols": 120,
+  "rows": 40,
+  "styles": [{}, {"fg": {"index": 2}, "bold": true}, {"underline": true, "underline_style": "curly"}],
+  "hyperlinks": [{"uri": "https://example.com/docs/a-long-page"}],
+  "panes": [
+    {
+      "pane": 13,
+      "cursor": {"x": 6, "y": 4, "shape": "bar", "blinking": true},
+      "active": false,
+      "scroll": {"total": 1201, "offset": 1196, "rows": 5},
+      "copy": {"from": 1, "to": 0, "count": 3},
+      "lines": {
+        "3": [{"style": 1, "cells": ["o", "k"]}, {"style": 0, "hyperlink": 0, "cells": [" ", "s", "e", "e"]}],
+        "4": [{"style": 2, "cells": ["$", " "]}]
+      }
+    },
+    {
+      "pane": 14,
+      "cursor": null,
+      "active": true,
+      "modes": {
+        "mouse": "none",
+        "mouse_encoding": "default",
+        "alternate_screen": false,
+        "alternate_scroll": true,
+        "bracketed_paste": true,
+        "application_cursor": false,
+        "focus_events": false,
+        "kitty_keyboard": 0
+      },
+      "colours": {}
+    }
+  ]
+}

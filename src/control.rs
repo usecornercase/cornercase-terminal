@@ -31,7 +31,7 @@ pub(crate) use start_server::StartServer;
 pub(crate) use status::{GroupInfo, KeepAwake, PullRequestInfo};
 pub use status::{PaneInfo, PaneRow, PaneRows, ProjectInfo, Report, TabInfo, WorkspaceInfo};
 pub(crate) use surface::Surface;
-pub(crate) use terminal::{Input, Link, Ratio, Resize, Scroll, Selection};
+pub(crate) use terminal::{Input, Link, Ratio, Redraw, Resize, Scroll, Selection};
 pub(crate) use theme::{Theme, ThemeInfo};
 pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
@@ -122,6 +122,7 @@ pub(crate) enum Command {
     Link(Link),
     Theme(Theme),
     Go(Go),
+    Redraw(Redraw),
 }
 
 impl Command {
@@ -171,15 +172,14 @@ impl Command {
             Self::TodoSend(_) => 41,
             Self::Theme(_) => 42,
             Self::Go(_) => 43,
+            Self::Redraw(_) => 44,
         }]
     }
 
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
-            Self::Queue(_) => {
-                fields.add("queue", true);
-            }
+            Self::Queue(_) => drop(fields.add("queue", true)),
             Self::Status(_) | Self::Stats(_) | Self::Contract(_) | Self::Watch(_) | Self::Go(_) => {}
             Self::Open(open) => {
                 fields.add("path", open.path.display()).add("focus", open.focus);
@@ -266,6 +266,7 @@ impl Command {
             Self::Scroll(scroll) => scroll.fields(&mut fields),
             Self::Selection(selection) => selection.fields(&mut fields),
             Self::Resize(resize) => resize.fields(&mut fields),
+            Self::Redraw(redraw) => redraw.fields(&mut fields),
             Self::Ratio(ratio) => ratio.fields(&mut fields),
             Self::Link(link) => link.fields(&mut fields),
             Self::StartServer(start) => start.fields(&mut fields),
@@ -274,7 +275,7 @@ impl Command {
         fields.0
     }
 
-    pub(crate) const NAMES: [&str; 44] = [
+    pub(crate) const NAMES: [&str; 45] = [
         "status",
         "open",
         "new-workspace",
@@ -319,6 +320,7 @@ impl Command {
         "todo-send",
         "theme",
         "go",
+        "redraw",
     ];
 
     pub(crate) fn chatty(name: &str) -> bool {

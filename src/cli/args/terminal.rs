@@ -79,14 +79,19 @@ pub(crate) struct LinkArgs {
     pub(crate) print: Print,
 }
 
+const SURFACE_ID: &str = "The surface: the `surface` of the lines `cornercase surface` prints";
+
+#[derive(Debug, Args)]
+pub(crate) struct RedrawArgs {
+    #[arg(long, value_name = "ID", required = true, help = SURFACE_ID)]
+    pub(crate) surface: u64,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
 #[derive(Debug, Args)]
 pub(crate) struct ResizeArgs {
-    #[arg(
-        long,
-        value_name = "ID",
-        required = true,
-        help = "The surface: the `surface` of the lines `cornercase surface` prints"
-    )]
+    #[arg(long, value_name = "ID", required = true, help = SURFACE_ID)]
     pub(crate) surface: u64,
     #[arg(long, value_name = "N", required = true, help = "Columns to lay the tab out in (1 to 1000)")]
     pub(crate) cols: u16,

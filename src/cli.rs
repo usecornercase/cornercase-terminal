@@ -113,10 +113,17 @@ fn print_log(path: &Path, args: &LogsArgs) -> Result<bool> {
 fn stream_surface(args: &SurfaceArgs) -> Result<()> {
     let surface = match args.view {
         Some(_) => control::Surface::default(),
-        None => {
-            control::Surface { tab: args.tab, cols: args.cols.unwrap_or_default(), rows: args.rows.unwrap_or_default() }
-        }
+        None => control::Surface {
+            tab: args.tab,
+            cols: args.cols.unwrap_or_default(),
+            rows: args.rows.unwrap_or_default(),
+            patches: false,
+        },
     };
+    let surface = control::Surface { patches: args.patches, ..surface };
+    if args.patches {
+        client::use_surface_patches()?;
+    }
     if args.view.is_none() {
         surface.area().map_err(Error::Control)?;
     }
@@ -237,6 +244,7 @@ fn run_control(command: Control) -> Result<bool> {
         Control::Scroll(args) => terminal::scroll(&args),
         Control::Selection(args) => terminal::selection(&args),
         Control::Resize(args) => terminal::resize(&args),
+        Control::Redraw(args) => terminal::redraw(&args),
         Control::Ratio(args) => terminal::ratio(&args),
         Control::Link(args) => terminal::link(&args),
         Control::Theme(args) => theme::run(&args),
