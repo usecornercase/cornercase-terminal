@@ -54,7 +54,7 @@ The search always opens in names; it doesn't remember the mode, and the query is
 
 | Source | What it finds |
 | --- | --- |
-| A coding agent's record | What you asked it (`prompt`) and what it answered (`reply`), whole, even once it scrolled off the screen. Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI, the same records [`cornercase read --last-message`](../scripts-and-agents/#talk-to-a-pane) reads. Tool output is not searched. |
+| A coding agent's record | What you asked it (`prompt`) and what it answered (`reply`), whole, even once it scrolled off the screen. Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI and GitHub Copilot CLI, the same records [`cornercase read --last-message`](../scripts-and-agents/#talk-to-a-pane) reads. Tool output is not searched. |
 | The pane itself (`screen`) | Everything the pane printed, as far back as its scrollback goes, whatever runs in it: a shell, a build, a test run, an agent. |
 
 Matching ignores case, and a text a long line wrapped in two still matches. A line of the screen that an agent's message already holds is listed once, as the message. Panes of projects being closed and workspaces being removed are left out.

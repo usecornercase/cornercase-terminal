@@ -109,7 +109,7 @@ export const page: Page = {
         num: '2 · Em paralelo',
         title: 'Dez agentes, uma olhada.',
         text: 'Cada agente ganha seu próprio branch, pasta e aba, então dois deles nunca mexem no mesmo arquivo. A barra lateral mostra quem está trabalhando {working}, quem está esperando por você {waiting} e quem terminou {done}, com o modelo e quanto do contexto já foi usado. Quando um precisa de você, seu terminal te cutuca no ombro. Até por SSH.',
-        more: 'Funciona com Claude Code, Codex, Gemini, Grok, Cursor e mais 10 →',
+        more: 'Funciona com Claude Code, Codex, Gemini, Grok, Cursor, Copilot e mais 9 →',
         label:
           'Uma janela estreita do cornercase: em cima, os sete projetos, onde orders-api precisa de você e o agente de blog terminou; embaixo, os três worktrees de web-shop, cada um com um Claude trabalhando; e no painel, a conversa sobre o modo escuro, com o caminho que ela cita sublinhado.',
       },
