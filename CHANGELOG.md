@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.122
+
+- **Stream a tab's terminals to another program.** `cornercase surface --tab ID --cols N --rows N` keeps running and prints the tab as one JSON line each time it changes. Each line holds every pane's cells with their characters, colours and attributes, its cursor, the modes its program turned on (mouse, bracketed paste, alternate screen…) and how far it is scrolled, together with the panes' places and the dividers between them, laid out at the size you give. It works on a tab the window isn't showing, without switching to it. It stops when the tab closes or the server stops, and leaves the shells running when you stop it. Each line is complete and carries the server's `boot`, its own `revision` and the `session` revision of `status --follow`, so a program that falls behind just gets the latest state. Terminals keep the size the window gives them for now. See Scripts and agents → Stream a tab's terminals.
+
 ## 0.12.121
 
 - **Select a whole file in the files panel.** While you drag over the lines of a file, holding the pointer on the first or last line shown (or past it) scrolls the file and the selection follows; the wheel scrolls it too while you keep the button pressed.
