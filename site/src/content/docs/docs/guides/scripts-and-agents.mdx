@@ -73,7 +73,8 @@ group 9  personal  collapsed
 | `input --pane ID EVENT…` | Types keys with modifiers, text, pastes and mouse events into a pane, for [a program that draws it](#drive-a-tabs-terminals). |
 | `scroll`, `selection`, `ratio`, `resize`, `link` | Scroll a pane's view, select or copy text in it, move a divider of a tab's split, lay a `surface` stream out at another size, or say which file a click on a cell opens, all [for a program that draws the terminals](#drive-a-tabs-terminals). |
 | `redraw` | Sends a `surface` stream a complete line now, for a program that applies [patches](#patches). |
-| `close` | Closes a pane, tab, workspace or project. |
+| `close` | Closes a pane, tab, workspace or project; `--remove-worktree --check` says first what removing a worktree would lose. |
+| `group`, `move`, `collapse`, `expand`, `move-pane` | [Arrange](#arrange) the sidebar and the panes: create, style and delete groups, move rows, fold them, swap or move panes of a tab. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
 | `go TOKEN` | Goes to the agent a notice is about, as a click on its desktop notification does, in the window or with `--view` in a view. |
@@ -515,6 +516,17 @@ workspace 2  notice  claude needs you in web-shop › main  cc-3f2a9c-4
 ```sh
 cornercase close --tab 9
 cornercase close --worktree fix/login --remove-worktree
+cornercase close --worktree fix/login --remove-worktree --check
+cornercase close --worktree fix/login --remove-worktree --unlock
+cornercase group new work
+cornercase group style 12 --icon '★' --colour 99
+cornercase group delete 12 --close-projects
+cornercase move --project 5 --into 12
+cornercase move --tab 9 --before 7
+cornercase move --worktree fix/login --last
+cornercase collapse --group 12
+cornercase expand --worktree fix/login
+cornercase move-pane --pane 4 --target 7 --place below
 cornercase rename 'review #42'
 cornercase rename --workspace 5 ''
 cornercase focus --pane 12
@@ -522,7 +534,12 @@ cornercase mark --pane 12
 cornercase mark --pane 12 --reviewed
 ```
 
-- `close` takes exactly one of `--pane`, `--tab`, `--workspace`, `--worktree` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run. The branch is never deleted.
+- `close` takes exactly one of `--pane`, `--tab`, `--workspace`, `--worktree` or `--project` and stops its shells, as its `×` would, but never asks first, not even for a project. A worktree's workspace stays listed while its worktree is on disk; `--remove-worktree` removes the worktree too and answers once it is gone. Without `--force`, a worktree with uncommitted or untracked changes is refused before anything stops; `--force` throws those changes away. A locked worktree (`git worktree lock`) is refused before anything stops, even with `--force`; the error gives the reason and the `git worktree unlock` command to run, and `--unlock` does what the dialog's **unlock and remove** does. It does not imply `--force`: changes still need it. The branch is never deleted.
+- `close --remove-worktree --check` only says what removing the worktree would lose, as the Remove workspace dialog does, and stops nothing: whether it has changes that are not committed, its lock with the reason and whether the process the reason names still runs, the worktrees of a flow's roles that go with it, and whether the project's teardown runs first. `--json` prints `workspace`, `path`, `branch`, `changed`, `lock` (`reason`, `path`, `role`, `pid`, `running`, or `null`), `roles` (`role`, `path`, `branch`) and `teardown`. Run it before removing a worktree you did not just make.
+- `group new NAME` creates a group with the next icon and colour, as **new group** does, and prints its id. `group style ID` sets `--icon` (one of `● ◉ ◐ ◆ ■ ▲ ▼ ★ ✦ ♥ ♣ ♠`) and `--colour` (a palette index: `1 9 208 214 3 11 2 10 6 14 4 12 99 5 13 205`); with neither it prints the group's style, and `--json` also lists both sets. `group delete ID` keeps the group's projects, outside any group; with `--close-projects` it closes them and deletes the group once their shells have stopped.
+- `move` puts a group, project, workspace or tab (`--group`, `--project`, `--workspace`, `--worktree`, `--tab`) `--before` another of the same kind, or `--last` at the end of its list. A project moved before another joins that project's group; `--into GROUP` puts it after the projects of that group and `--ungroup` after the ones that have none. A workspace stays in its project and a tab in its workspace. Programs keep running, and the window keeps showing what it showed.
+- `collapse` and `expand` fold or unfold a group, project or workspace (`--group`, `--project`, `--workspace`, `--worktree`), whatever it was.
+- `move-pane --pane ID --target ID --place swap|left|right|above|below` swaps two panes of a tab or moves one to that side of the other, as dragging a pane with the right button does. It is refused (`conflict`) when the tab would have no room for every pane at the size it has, or when the panes are in different tabs; the moved pane becomes the tab's active one. `--json` prints the tab's new `layout`. Over the socket the requests are `group-new`, `group-style`, `group-delete`, `move`, `collapse`, `expand`, `move-pane` and `removal-check`, and `close` takes `unlock`; each change shows in the next `status --follow` snapshot.
 - `rename` renames the tab it runs in, or the `--tab`, `--workspace`, `--worktree`, `--project` or `--group` you name. An empty name goes back to the default one (a group always keeps a name).
 - `focus` shows a pane, tab, workspace or project, as picking it in the [search](../search/) does.
 - `mark` marks the agent in the pane it runs in, or in the `--pane` or `--tab` you name, as [pending review](../projects-workspaces-tabs/#pending-review): its tab shows a purple `●` until it is marked `--reviewed` or the agent starts working again on a new prompt or an answer, and `status` and `events` give it as `pending`. A pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI is refused. An agent that ends its turn with work for you to check can run it on its own pane.
@@ -643,7 +660,10 @@ A refusal has a code: `not-found` for a key that names no setting or connection,
 | `resize` | `surface`, `tab`, `cols` and `rows`. |
 | `redraw` | `surface` and `tab`. |
 | `link` | `pane` and `link`: `null` when the cell holds no file, else `path` (canonical), `inside` (in the pane's workspace), `workspace`, `relative` (inside only), `lines` (`first` and `last`, absent without lines), and `row`, `start` and `end`, the cells the path takes (`end` excluded). |
-| `ratio` | `tab` and `layout`, the tab's split tree as `status --json` gives it. |
+| `ratio`, `move-pane` | `tab` and `layout`, the tab's split tree as `status --json` gives it. |
+| `group-new` | `group`, the new group's id. |
+| `group-style` | `group`, `icon`, `colour`, and `icons` and `colours`, the sets to choose from. |
+| `removal-check` | `workspace`, `path`, `branch`, `changed`, `lock`, `roles` and `teardown`, as `close --check --json` prints them. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 | `todo send` | `pane`, as `send` gives it, `todo`, the item checked off, and `checked` (whether the item was checked off) and `unconfirmed` (`true` when it was sent but stays pending). |
 | `config` | `revision`, `path`, `problem`, `settings`, `connections`, `projects` and `notices`: see [Settings](#settings). |
@@ -693,11 +713,11 @@ cornercase contract --json
 cornercase 0.12.133
 contract 1
 boot 4242-1700000000
-commands 46 (46 available)
+commands 54 (54 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config
+features boot, structured-errors, strict-fields, views, host-events, theme, notices, surface-patches, config, close-unlock
 ```
 
 `--json` prints an object with:
@@ -706,7 +726,7 @@ features boot, structured-errors, strict-fields, views, host-events, theme, noti
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) and `config` (the `config` request and `config.revision`).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it) `theme` (the `theme` request and `start-server`'s `theme`; check it before sending colours), `notices` (a view's `visible`, the `notices` field of `events` and the `go` request; check it before sending them), `surface-patches` (the `patches` field of `surface`; an older server ignores it and sends complete lines, so check it before asking) `config` (the `config` request and `config.revision`) and `close-unlock` (the `unlock` field of `close`, which an older server ignores and then refuses with the lock's message; check it before sending it).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
@@ -735,7 +755,7 @@ A request through the socket is JSON: `{"command": "status", "args": {}}`, its `
 | `unknown-field` | A field this server doesn't know, named by its path, such as `args.bogus`. Nothing was done. |
 | `unavailable` | The request is listed in `operations` with `available: false`, with the `reason` as its message. No request is turned off today, so no server sends this code yet. |
 | `busy` | The pane's program isn't reading its input: 16 MiB are waiting for it. Only `input` answers this; `send` and `keys` keep answering `failed`. Nothing was sent. |
-| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read. Read the latest state and try again. Nothing was done. |
+| `conflict` | The request doesn't fit the current state: the pane's terminal has another size, a cell is outside it, the program scrolls itself, nothing is selected to copy, or, for `config`, a token set by an environment variable, a project folder that isn't a repository or a `config.json` that cannot be read; or a row moved before one of another workspace or project, a pane moved to another tab, or where its tab has no room. Read the latest state and try again. Nothing was done. |
 | `failed` | Anything else. |
 
 The `message` is the text the command would print. Text that is not JSON at all gets the plain form, `{"error": "…"}`, since the server can't tell what the request asked for. Without `contract` or `boot`, a field the server doesn't know is ignored, as it always was; with them it is refused, so a newer option never passes for done on an older server. Either one set to `null` counts as not sent. A `contract` newer than the server's is refused with `unsupported`, so a client written for later rules learns it at once instead of being read under older ones. The `cornercase` commands themselves send neither, so what they print doesn't change.
