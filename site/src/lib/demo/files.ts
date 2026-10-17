@@ -591,10 +591,13 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   p.span(back.x, back.y, ' ‹ ', p.hovered(back) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
   p.region({ r: back, click: () => app.closeFile(), cursor: 'pointer' });
   const full = rect(close.x - 3, inner.y, 3, 1);
-  const on = app.fileFullScreen();
-  p.span(full.x + 1, full.y, on ? '❐' : '▢', on || p.hovered(full) ? { fg: 6 } : DARK);
-  p.region({ r: full, click: () => app.toggleFullFile(), cursor: 'pointer' });
-  const end = full.x - 1;
+  const fits = full.x >= right(back);
+  if (fits) {
+    const on = app.fileFullScreen();
+    p.span(full.x + 1, full.y, on ? '❐' : '▢', on || p.hovered(full) ? { fg: 6 } : DARK);
+    p.region({ r: full, click: () => app.toggleFullFile(), cursor: 'pointer' });
+  }
+  const end = fits ? full.x - 1 : 0;
   const start = right(back) + 1;
   const shown = truncateLeft(viewer.path, Math.max(0, end - start));
   const cut = shown.lastIndexOf('/') + 1;

@@ -76,3 +76,16 @@ for (const columns of [140, 80]) {
     app.destroy();
   });
 }
+
+test('a panel too narrow for both leaves the back button alone', () => {
+  const app = demo(9);
+  assert.equal(app.textAt('▢'), null);
+  const back = app.textAt('‹');
+  assert.ok(back);
+  assert.equal(app.textAt('Fil'), null);
+  app.pointerDown(back.x, back.y, 0);
+  app.pointerUp();
+  app.render();
+  assert.ok(app.textAt('Fil'));
+  app.destroy();
+});

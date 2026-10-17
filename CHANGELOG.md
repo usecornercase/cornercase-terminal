@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.12.117
 
-- **Read a file full screen.** An open file in the files panel has a **▢** button next to its **×**: it gives the file the whole window, keeping where you were, the selected lines and the highlights. **❐** or `Esc` puts it back in the panel at the width you gave it, and your programs keep their size. Going back to the tree, **open**, **ask agent** and switching tabs put it back too.
+- **Read a file full screen.** An open file in the files panel has a **▢** button next to its **×**: it gives the file the whole window, keeping where you were, the selected lines and the highlights. **❐** or `Esc` puts it back in the panel at the width you gave it, and your programs keep their size. Going back to the tree, **open**, **ask agent** (when it finds an agent) and switching tabs put it back too.
 
 ## 0.12.116
 
