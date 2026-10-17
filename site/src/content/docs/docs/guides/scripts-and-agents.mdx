@@ -63,6 +63,7 @@ group 9  personal  collapsed
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
 | `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
+| `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
 | `close` | Closes a pane, tab, workspace or project. |
 | `rename NAME` | Renames a tab, workspace, project or group. |
 | `focus` | Shows a pane, tab, workspace or project in the window. |
@@ -143,6 +144,36 @@ cornercase status --follow | while read -r state; do echo "$state" > /tmp/corner
 - `revision` only compares within one `boot`, the start of the server it came from. It ends, with status 0, when the server stops or restarts; to go on, run it again: its first line is the state at that moment, so nothing is missed. The same goes for a connection that ended (status 1).
 - A line comes shortly after a change, not for every change: several changes close together give one line with all of them. Output alone (a program printing in a pane) gives none, but what `status --json` shows moves too, such as an agent's status, its context or a pane's folder, and each of those gives a line, so a working agent can bring one every few seconds.
 - A reader that falls behind isn't disconnected for it: the server keeps up to four lines waiting for it, which it still reads, older ones first; past those it keeps only the latest, so once it has read them it reads the state as it is now, with a jump in `revision`. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
+
+#### Stream a tab's terminals
+
+A program that draws cornercase's terminals itself, such as an editor extension or a GUI, needs more than `read`'s plain text: the cells with their colours, where the cursor is, which modes the program turned on, and how the tab is split. `surface` streams all of it for one tab, laid out at the size you give, as one JSON line:
+
+```sh
+cornercase surface --tab 3 --cols 120 --rows 40
+cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
+```
+
+The first line is the tab as it is now, the next ones come when something it shows changes, at most about 60 a second and never twice the same. Each line is complete and replaces the one before. Find the tab's id with `cornercase status`. The tab doesn't have to be the one the window shows, and streaming it doesn't switch to it or change anything the window shows. It works on a server started with `start-server`, with no window.
+
+A line has these keys:
+
+- `boot`, `session` and `revision`: the server's start (see [Contract and compatibility](#contract-and-compatibility)), the `revision` of the latest [`status --follow`](#follow-the-whole-state) line when this one was drawn (0 while nobody follows), and this stream's own counter, from 1, up by one per line. A line from another `boot` is stale. To get a complete baseline again, run the command again: its first line is always complete.
+- `tab`, `cols` and `rows`: what you asked for.
+- `layout`: the tab's whole split tree, as in `status --json`, hidden panes included. `dividers`: each divider with its `dir`, its `path` through `layout` (`false` for the first side, `true` for the second), the region it divides (`area`) and its cells (`line`).
+- `panes`: the panes the surface shows, each with `pane` (its id), `active`, `rect` (`x`, `y`, `cols`, `rows`: where to draw it in the surface), `size` (its terminal's own columns and rows), `cursor` (`x`, `y`, `shape` as `block`, `bar`, `underline` or `block_hollow`, and `blinking`, or `null` when hidden or scrolled out of view), `modes`, `scroll` and `lines`.
+- `modes`: `mouse` (`none`, `press`, `press_release`, `button_motion` or `any_motion`), `mouse_encoding` (`default`, `utf8` or `sgr`), `alternate_screen`, `alternate_scroll`, `bracketed_paste`, `application_cursor`, `focus_events` and `kitty_keyboard` (the flag bits). They are what you need to turn keys and the mouse into what the program expects.
+- `scroll`: `total` rows of history plus screen, `offset` of the view's first row, and `rows` in the view. What is under the view is `total - offset - rows`. A pane scrolled up shows its history in `lines`.
+- `lines`: one entry per row of the pane's terminal (`size.rows`), each a list of runs, `{"style": 1, "cells": ["o", "k"]}`: consecutive cells of one style. A cell is a string, the character with any combining marks. The right half of a wide character is `""`: don't draw it, the cell before covers it. The cells after the last one that isn't a blank in the default style are left out, so an empty line is `[]` and the rest of a line is blank.
+- `styles`: the table the runs' `style` numbers index, shared by all the panes. Entry 0 is `{}`, the terminal's default colours. Others have `fg` and `bg` (absent for the default colour, `{"index": 0-255}` for a palette colour, which your theme decides, or `{"rgb": [r, g, b]}`) and the attributes that are on: `bold`, `dim`, `italic`, `underline`, `blink`, `inverse`, `invisible`, `strikethrough`. A selection made in a window shows as `inverse`.
+
+Things to know:
+
+- The panes are laid out in your `cols` × `rows` the way the window lays out a tab, including when the tab is too small for all its panes: then only the active one shows, over the whole surface. The terminals keep the size the window gives them, though, so a pane's `size` can differ from its `rect`: `lines` and `cursor` follow `size`. Streaming doesn't resize anything.
+- `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab at one size: to change either, start another.
+- It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, an out-of-range size or a missing `--tab` is an error, with status 1.
+- A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
+- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes, input and a terminal size you choose.
 
 #### Find where something was said
 
@@ -428,6 +459,7 @@ cornercase stats --share
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
 | `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
+| `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`. |
 | `todo list` | `todos`: `id`, `text`, `done`. |
 | `contract` | `version`, `contract`, `boot`, `operations` (`name`, `available`, and `reason` when it is not), `features` and `streams` (`name`, `version`). See [Contract and compatibility](#contract-and-compatibility). |
 
@@ -469,12 +501,13 @@ cornercase contract --json
 ```
 
 ```text
-cornercase 0.12.119
+cornercase 0.12.121
 contract 1
 boot 4242-1700000000
-commands 32 (32 available)
+commands 33 (33 available)
 stream events 1
 stream watch 1
+stream surface 1
 features boot, structured-errors, strict-fields
 ```
 
@@ -485,7 +518,7 @@ features boot, structured-errors, strict-fields
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
 - `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`.
-- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) and `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state).
+- `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) and `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals).
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
 
@@ -494,7 +527,7 @@ A server from before `contract` says `the running cornercase server (…) has no
 - Fields are only added, never renamed or removed. Read answers leniently: ignore keys you don't know, and don't depend on their order (`events` lines come out with their keys sorted).
 - A new behaviour that must not be ignored gets a new request name, which an older server refuses with `has no … command` rather than doing something else.
 - `contract` goes up when something that was there changes. Additions show in `operations`, `features` and `streams` instead.
-- The format of each stream has its own version. Format 1 of `events` is the one described in [Follow events](#follow-events), format 1 of `watch` the one in [Follow the whole state](#follow-the-whole-state).
+- The format of each stream has its own version. Format 1 of `events` is the one described in [Follow events](#follow-events), format 1 of `watch` the one in [Follow the whole state](#follow-the-whole-state), format 1 of `surface` the one in [Stream a tab's terminals](#stream-a-tabs-terminals).
 
 ### Errors with a code
 
@@ -520,7 +553,7 @@ With `boot` set to the value from `contract` or `status`, a request kept across 
 
 ### Talking to the socket directly
 
-The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4. Only your own user can connect. Nothing needs to be sent before the request.
+The [socket](../../reference/command-line/#the-socket) takes one request per connection. Each message is framed as its length, 4 bytes little-endian, then its [postcard](https://postcard.jamesmunns.com/) encoding: a request is variant 4 followed by the JSON text (its length as a varint, then its UTF-8 bytes), an answer variant 5 in the same form. `events` sends one answer per event and ends with variant 2, 3 or 4 (its panes closed, the server stopped, or it restarted); `watch`, the request behind `status --follow`, answers with the state and then sends it again in the same form after each change, until variant 3 or 4; `surface` does the same with a tab's frame, and ends with variant 2 when the tab closes. Only your own user can connect. Nothing needs to be sent before the request.
 
 ## Teach your agents
 
