@@ -85,6 +85,7 @@ pub(crate) struct Emulator {
     keys: Encoder<'static>,
     anchor: Option<TrackedGridRef>,
     copied: Rc<RefCell<Vec<String>>>,
+    rung: Rc<std::cell::Cell<u32>>,
     status: status::Status,
     reply: Rc<RefCell<ReplyFn>>,
 }
@@ -103,6 +104,9 @@ impl Emulator {
             }
             Ok(())
         })?;
+        let rung = Rc::new(std::cell::Cell::new(0_u32));
+        let bells = Rc::clone(&rung);
+        vt.on_bell(move |_| bells.set(bells.get().saturating_add(1)))?;
         apply_theme(&mut vt, theme)?;
         Ok(Self {
             vt,
@@ -112,6 +116,7 @@ impl Emulator {
             keys: Encoder::new()?,
             anchor: None,
             copied,
+            rung,
             status: status::Status::default(),
             reply,
         })
@@ -128,6 +133,10 @@ impl Emulator {
 
     pub(crate) fn take_copied(&mut self) -> Vec<String> {
         std::mem::take(&mut self.copied.borrow_mut())
+    }
+
+    pub(crate) fn take_bells(&mut self) -> u32 {
+        self.rung.replace(0)
     }
 
     pub(crate) fn encode_key(&mut self, key: KeyEvent) -> Vec<u8> {

@@ -360,7 +360,7 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
-    fn samples() -> [(Event, &'static str); 5] {
+    fn samples() -> [(Event, &'static str); 7] {
         [
             (
                 event(What::Opened { kind: Kind::Tab }, Ids { pane: None, ..pane() }),
@@ -376,6 +376,11 @@ mod events_v1 {
             ),
             (event(What::Exited { program: "cargo".into() }, pane()), fixture!("control/events/v1/exited.json")),
             (event(What::Dropped { count: 12 }, Ids::default()), fixture!("control/events/v1/dropped.json")),
+            (
+                event(What::Clipboard { text: "hello\nworld".into() }, pane()),
+                fixture!("control/events/v1/clipboard.json"),
+            ),
+            (event(What::Bell { count: 3 }, pane()), fixture!("control/events/v1/bell.json")),
         ]
     }
 
@@ -390,6 +395,8 @@ mod events_v1 {
     #[case::status(2)]
     #[case::exited(3)]
     #[case::dropped(4)]
+    #[case::clipboard(5)]
+    #[case::bell(6)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
@@ -402,10 +409,25 @@ mod events_v1 {
     #[case::status(2)]
     #[case::exited(3)]
     #[case::dropped(4)]
+    #[case::clipboard(5)]
+    #[case::bell(6)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
 
         assert_eq!(&serde_json::from_str::<Event>(fixture).expect("an event"), event);
+    }
+
+    #[rstest]
+    #[case::opened(0, false)]
+    #[case::status(2, false)]
+    #[case::dropped(4, false)]
+    #[case::clipboard(5, true)]
+    #[case::bell(6, true)]
+    fn only_what_programs_ask_is_a_host_event(#[case] index: usize, #[case] host: bool) {
+        let (event, _) = &samples()[index];
+
+        assert_eq!(event.host(), host);
+        assert_eq!(event.kind() == Some(Kind::Pane), host || index == 2);
     }
 
     #[test]
@@ -491,6 +513,7 @@ mod watch_v1 {
             model: Some("Opus 5.5".into()),
             context: Some(23),
             active,
+            title: active.then(|| "✳ Claude Code".into()),
             ..PaneInfo::default()
         }
     }
@@ -631,6 +654,7 @@ mod watch_v1 {
         assert_eq!((workspace.custom_name.as_deref(), workspace.collapsed), (None, false));
         let tab = &workspace.tabs[0];
         assert_eq!((tab.custom_name.as_deref(), tab.layout.as_ref()), (None, None));
+        assert_eq!(tab.panes[0].title, None);
     }
 
     #[test]

@@ -334,7 +334,7 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
         control::What::Closed { .. } => Some("closed"),
         control::What::Status { .. } => Some("status"),
         control::What::Exited { .. } => Some("exited"),
-        control::What::Dropped { .. } => None,
+        control::What::Dropped { .. } | control::What::Clipboard { .. } | control::What::Bell { .. } => None,
     }
 }
 

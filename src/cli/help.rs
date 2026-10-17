@@ -312,6 +312,9 @@ pub(super) const EVENTS_HELP: &str = "It keeps running and prints one line per e
                                       or none once it left the pane
   pane 7  cargo  exited               the program in the foreground ended and the shell is back
   tab 3  opened in workspace 2        a project, workspace, tab or pane opened, or closed
+With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
+  pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
+  pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang
 With --json, each line is a JSON object with the event, the ids, the old and new state and the time.
 
 It ends when the server stops, or once every pane given with --pane has closed. Programs are looked
@@ -321,7 +324,8 @@ A reader that falls far behind loses events, and a line says how many.
 
 Examples:
   cornercase events
-  cornercase events --pane 12 --pane 14 --json";
+  cornercase events --pane 12 --pane 14 --json
+  cornercase events --host --json";
 pub(super) const SURFACE_HELP: &str =
     "For programs that draw cornercase's terminals themselves, such as an editor extension or a
 GUI. It keeps running and prints the tab as one JSON object per line: first as it is now, then again
@@ -376,7 +380,7 @@ pub(super) const SELECTION_HELP: &str =
     "Without --from and --to, prints what is selected in the pane. With them, selects from one cell to
 another of its view, columns and rows from 0 as `cornercase surface` numbers them; the window shows
 the same selection. --copy also copies it to the clipboard through the window, as selecting there
-does.
+does, and prints what it copied, so a program without a window can put it in the clipboard itself.
 
 Examples:
   cornercase selection --pane 12 --from 0,3 --to 79,5

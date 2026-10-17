@@ -158,6 +158,29 @@ fn events_follow_what_opens_ends_and_closes_until_the_server_stops() {
     );
 }
 
+#[test]
+fn events_host_tells_a_programs_clipboard_and_bell_and_the_log_keeps_neither() {
+    let mut app = Harness::open_with(Session::new(), ROWS, COLS, &[("CORNERCASE_LOG", "debug")]);
+    app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));
+    let mut host = app.session.spawn(&["events", "--host", "--json"]);
+    let mut plain = app.session.spawn(&["events", "--json"]);
+    app.session.wait_for_file("server.log", "both follow", |log| log.matches("command=events").count() == 2);
+    let (mut hosted, mut plainly) = (Followed::of(&mut host), Followed::of(&mut plain));
+
+    let pane = app.session.says(&["new-tab", "--", "printf '\\033]52;c;Y2xpcC1tYXJrZXItNDU=\\007\\007'; sleep 1"]);
+    hosted.until("the clipboard write", |e| e["event"] == "clipboard" && e["text"] == "clip-marker-45");
+    hosted.until("the bell", |e| e["event"] == "bell" && e["pane"].as_u64() == pane.parse().ok());
+    hosted.until("sleep ends", |e| told(e, "exited", "program", "sleep", &pane));
+    plainly.until("sleep ends", |e| told(e, "exited", "program", "sleep", &pane));
+    let log = app.session.says(&["logs", "-n", "1000"]);
+    let stopped = app.session.run("kill-server");
+
+    assert!(stopped.status.success(), "{stopped:?}");
+    assert!(plainly.seen.iter().all(|e| e["event"] != "clipboard" && e["event"] != "bell"), "{:?}", plainly.seen);
+    assert!(!log.contains("clip-marker"), "{log}");
+    drop((host, plain));
+}
+
 fn first_tab(snapshot: &serde_json::Value) -> &serde_json::Value {
     &snapshot["projects"][0]["workspaces"][0]["tabs"][0]
 }

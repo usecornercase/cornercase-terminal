@@ -1,10 +1,13 @@
-use std::time::{Duration, Instant};
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
-use crate::control::{Event, Kind, Report, Snapshot, What};
+use crate::control::{Event, Ids, Kind, Report, Snapshot, What};
 use crate::log;
+use crate::project::Hierarchy as _;
 
 pub(super) const SNAPSHOT_EVERY: Duration = Duration::from_millis(500);
+pub(super) const BELL_EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Streamed {
@@ -16,6 +19,7 @@ pub(crate) enum Streamed {
 #[derive(Default)]
 pub(super) struct Events {
     subscribers: Vec<Subscriber>,
+    bells: Bells,
     out: Vec<(u64, Streamed)>,
     pub(super) snapshots: Snapshots,
 }
@@ -85,16 +89,68 @@ impl Snapshots {
     }
 }
 
+struct Ringing {
+    ids: Ids,
+    told: Instant,
+    pending: u64,
+}
+
+#[derive(Default)]
+struct Bells {
+    panes: BTreeMap<u64, Ringing>,
+}
+
+impl Bells {
+    fn ring(&mut self, pane: u64, ids: Ids, count: u64, now: Instant) -> Option<u64> {
+        let Some(ringing) = self.panes.get_mut(&pane) else {
+            self.panes.insert(pane, Ringing { ids, told: now, pending: 0 });
+            return Some(count);
+        };
+        if now.saturating_duration_since(ringing.told) >= BELL_EVERY {
+            ringing.told = now;
+            return Some(count + std::mem::take(&mut ringing.pending));
+        }
+        ringing.pending += count;
+        None
+    }
+
+    fn due(&mut self, now: Instant) -> Vec<(Ids, u64)> {
+        let mut told = Vec::new();
+        self.panes.retain(|_, ringing| {
+            if now.saturating_duration_since(ringing.told) < BELL_EVERY {
+                return true;
+            }
+            if ringing.pending == 0 {
+                return false;
+            }
+            told.push((ringing.ids, std::mem::take(&mut ringing.pending)));
+            ringing.told = now;
+            true
+        });
+        told
+    }
+
+    fn wake(&self, now: Instant) -> Option<Duration> {
+        self.panes
+            .values()
+            .filter(|ringing| ringing.pending > 0)
+            .map(|ringing| BELL_EVERY.saturating_sub(now.saturating_duration_since(ringing.told)))
+            .min()
+    }
+}
+
 struct Subscriber {
     client: u64,
     panes: Option<Vec<u64>>,
+    host: bool,
 }
 
 impl Subscriber {
     fn wants(&self, event: &Event) -> bool {
-        self.panes.as_ref().is_none_or(|panes| {
-            event.kind() == Some(Kind::Pane) && event.ids.pane.is_some_and(|pane| panes.contains(&pane))
-        })
+        (self.host || !event.host())
+            && self.panes.as_ref().is_none_or(|panes| {
+                event.kind() == Some(Kind::Pane) && event.ids.pane.is_some_and(|pane| panes.contains(&pane))
+            })
     }
 }
 
@@ -103,13 +159,24 @@ impl Events {
         !self.subscribers.is_empty()
     }
 
-    pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>) {
+    pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>, host: bool) {
         let panes = (!panes.is_empty()).then_some(panes);
-        self.subscribers.push(Subscriber { client, panes });
+        self.subscribers.push(Subscriber { client, panes, host });
+    }
+
+    fn hosting(&self) -> bool {
+        self.subscribers.iter().any(|subscriber| subscriber.host)
+    }
+
+    pub(super) fn bell_wake(&self, now: Instant) -> Option<Duration> {
+        self.bells.wake(now)
     }
 
     pub(super) fn forget(&mut self, client: u64) {
         self.subscribers.retain(|subscriber| subscriber.client != client);
+        if !self.hosting() {
+            self.bells.panes.clear();
+        }
         self.snapshots.watchers.retain(|watcher| *watcher != client);
         if self.snapshots.watchers.is_empty() {
             self.snapshots.last = None;
@@ -118,7 +185,7 @@ impl Events {
     }
 
     pub(super) fn publish(&mut self, events: &[Event]) {
-        let Self { subscribers, out, .. } = self;
+        let Self { subscribers, out, bells, .. } = self;
         if subscribers.is_empty() {
             return;
         }
@@ -130,6 +197,7 @@ impl Events {
             if event.what == (What::Closed { kind: Kind::Pane })
                 && let Some(pane) = event.ids.pane
             {
+                bells.panes.remove(&pane);
                 for panes in subscribers.iter_mut().filter_map(|subscriber| subscriber.panes.as_mut()) {
                     panes.retain(|watched| *watched != pane);
                 }
@@ -149,6 +217,45 @@ impl Events {
 }
 
 impl App {
+    pub(super) fn tell_host(&mut self, pane: u64, copied: Vec<String>, rang: u32, now: Instant) {
+        if !self.events.hosting() || (copied.is_empty() && rang == 0) {
+            return;
+        }
+        let Some((p, w, t)) = self.projects.tab_of_pane(pane) else { return };
+        let workspace = &self.projects[p].workspaces[w];
+        let ids = Ids {
+            project: Some(self.projects[p].id),
+            workspace: Some(workspace.id),
+            tab: Some(workspace.tabs[t].id),
+            pane: Some(pane),
+        };
+        let time = crate::time::Stamp(SystemTime::now()).to_string();
+        let mut events: Vec<Event> = copied
+            .into_iter()
+            .map(|text| {
+                log::debug!("control", "clipboard", pane = pane, bytes = text.len());
+                Event { time: time.clone(), what: What::Clipboard { text }, ids }
+            })
+            .collect();
+        if rang > 0
+            && let Some(count) = self.events.bells.ring(pane, ids, u64::from(rang), now)
+        {
+            events.push(Event { time, what: What::Bell { count }, ids });
+        }
+        self.events.publish(&events);
+    }
+
+    pub(super) fn ring_bells(&mut self, now: Instant) {
+        let due = self.events.bells.due(now);
+        if due.is_empty() {
+            return;
+        }
+        let time = crate::time::Stamp(SystemTime::now()).to_string();
+        let events: Vec<Event> =
+            due.into_iter().map(|(ids, count)| Event { time: time.clone(), what: What::Bell { count }, ids }).collect();
+        self.events.publish(&events);
+    }
+
     pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
         std::mem::take(&mut self.events.out)
     }

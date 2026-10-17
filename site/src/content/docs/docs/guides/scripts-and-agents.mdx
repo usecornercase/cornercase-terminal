@@ -63,7 +63,7 @@ group 9  personal  collapsed
 | `search TEXT` | Finds the panes where some text was said: in the agents' prompts and replies and in every pane's history. |
 | `read` | Prints a pane's screen, its last lines, or the last messages of one or several agents. |
 | `wait` | Waits until an agent stops working, a program ends, a line shows up or the output stops, in one pane or in the first or every one of several. |
-| `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing. |
+| `events` | Prints what happens as it happens: agents changing state, programs ending, panes, tabs, workspaces and projects opening and closing, and with `--host` programs' clipboard writes and bells. |
 | `surface` | Streams a tab's terminals as cells with their panes and dividers, for [a program that draws them](#stream-a-tabs-terminals). |
 | `view` | Opens a [view of your own](#a-view-of-your-own): its own tab and size, for a program that draws cornercase itself. |
 | `view-set` | Changes a view: its size, whether it is active, or takes back the tab it shows. |
@@ -179,7 +179,7 @@ Things to know:
 - `cols` is 1 to 1000 and `rows` 1 to 500. A connection streams one tab; `cornercase resize --surface ID` changes the size of one given with `--tab` in place, and another tab needs another connection.
 - It ends, with status 0, when the tab closes or the server stops or restarts (stopping it yourself leaves the shells running). A pane whose shell exits drops out of the next line. A tab that doesn't exist, or an out-of-range size is an error, with status 1; a missing `--tab`, `--cols` or `--rows` is wrong usage, with status 2.
 - A reader that falls behind gets fewer lines, each complete, so it never has to repair a picture: the server draws a new line only while little is waiting for it. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client.
-- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, the title, bell and clipboard writes, pixel sizes and a terminal size set pane by pane.
+- Not sent yet: patches (every line is complete), images and hyperlinks, underline styles and colours, a program's own palette changes, pixel sizes and a terminal size set pane by pane. A pane's title is in `status --json`, and its bells and clipboard writes in [`events --host`](#follow-events).
 
 #### A view of your own
 
@@ -222,7 +222,7 @@ cornercase resize --surface 4 --cols 100 --rows 30
 - Events are encoded the way the program in the pane asked for, the way the window encodes what you type: its keyboard protocol, application cursor keys, bracketed paste and mouse mode and encoding, all in the `modes` of a frame. Keys, text and pastes bring the pane's view back to the bottom. They don't set the shared window size and don't answer for the agent: unlike `send` and `keys`, `input` types into an agent's dialogs and answers its permission prompts, because it is a person typing through another UI. Scripts and agents should keep using `send` and `keys`, which check first.
 - A mouse event the program doesn't take in its current mode, or a key release when it didn't ask for event types, is not sent and is listed in the answer's `skipped` (`{"event": 0, "why": "mouse"}`; the command prints a warning). Everything else is encoded first and written in one go: when one event is wrong, or the program isn't reading its input, nothing is sent. Add `"size": {"cols": 80, "rows": 24}` to the request to say which terminal size your coordinates are for: if the pane has another size now, nothing is sent (`conflict`).
 - `scroll` moves the pane's view through its history by `--up` or `--down` rows, or to `--top` or `--bottom`, and answers with its `scroll` as a frame has it. The view is the pane's, so the window shows the same one. On the alternate screen, or when the program reads the mouse, the program scrolls itself: send it keys, or the wheel with `input`; `scroll` refuses with `conflict`.
-- `selection` with `--from X,Y --to X,Y` selects between two cells of the pane's view (columns and rows from 0, as in `lines`; `--rectangle` for a block) and prints the text. Without them it prints what is selected, `--clear` removes the selection, and `--copy` also copies it through the window, as selecting there does. The selection is shared with the window, which shows it as `inverse`, and with every client; the last one to change it wins.
+- `selection` with `--from X,Y --to X,Y` selects between two cells of the pane's view (columns and rows from 0, as in `lines`; `--rectangle` for a block) and prints the text. Without them it prints what is selected, `--clear` removes the selection, and `--copy` also copies it through the window, as selecting there does, and prints what it copied (the answer's `text`), so a program without a window can put it in the clipboard itself. The selection is shared with the window, which shows it as `inverse`, and with every client; the last one to change it wins.
 - `ratio RATIO` sets the share of the first side of a tab's divider, between 0 and 1. `--path` names the divider as the `path` of a frame's `dividers` does (`first` or `second` at each level down; without it, the outermost). The terminals follow at once, with the window's geometry. To open or close splits use `split` and `close`.
 - `resize` lays a running `surface` out at another size without starting it again; `ID` is the `surface` of its lines. Its next line comes at the new size, with the next `revision`. It resizes no terminal: they keep the size of whoever sizes the tab. A surface that follows a view (`surface --view`) takes the view's size, so `resize` refuses it: change the view with `view-set`.
 - Requests on different connections aren't ordered: send the next `input` after the answer to the previous one, or put several events in one request. Unlike the other commands, these five log at debug level, since a program sends them as fast as someone types or drags.
@@ -403,6 +403,7 @@ Repeat `--pane` and `--tab` to wait on several panes, with `--any` or `--all` (s
 ```sh
 cornercase events                          # everything, until the server stops
 cornercase events --pane 12 --pane 14      # only these panes, until they all closed
+cornercase events --host --json            # also clipboard writes and bells of programs
 cornercase events --json | while read -r event; do …; done
 ```
 
@@ -416,6 +417,8 @@ pane 14  claude  idle → working
 pane 12  claude  working → waiting
 pane 14  claude  working → shell
 pane 7  cargo  exited
+pane 7  clipboard  11 bytes
+pane 7  bell  3 times
 pane 14  closed
 tab 15  closed
 ```
@@ -424,11 +427,14 @@ tab 15  closed
 | --- | --- |
 | `pane ID  AGENT  FROM → TO` | An agent changed state: `working`, `shell` (its turn is over, but a [background shell](#look) it started still runs), `waiting` for an answer, `pending` review, `done` while you were elsewhere, `failed`, `idle`, or `none` before it started and once it left the pane. Every recognised agent reporting OSC 7501, or Claude Code, Codex, Gemini CLI, opencode, Grok Build and Cursor CLI through their readers, as for `wait`. |
 | `pane ID  PROGRAM  exited` | The program in the foreground ended and the shell is back, or another program took its place. |
+| `pane ID  clipboard  N bytes` | Only with `--host`: a program wrote to the clipboard (OSC 52, such as a yank in Neovim). The text is in `--json`'s `text`, never in the line. Reads and the primary selection are not told. |
+| `pane ID  bell` | Only with `--host`: a program rang the bell (a BEL character, not one that ends another escape sequence). It reads `bell  N times` when several rang. |
 | `KIND ID  opened in PARENT` | A project, workspace, tab or pane opened. |
 | `KIND ID  closed` | A project, workspace, tab or pane closed. A pane closes when its shell exits, whatever closed it. |
 
 - `--pane ID`, given once or more, keeps only what happens to those panes, and ends the command once they have all closed. Without it, `events` ends when the server stops (`kill-server`, a restart), with status 0.
 - `--json` prints one JSON object per line instead: `event` (`status`, `exited`, `opened`, `closed`), `time` (UTC, as in the [server's log](../../reference/command-line/#cornercase-logs)), the `project`, `workspace`, `tab` and `pane` ids it concerns, and `agent`, `from` and `to` for a `status` (`null` for no agent), `program` for `exited`, `kind` for `opened` and `closed`.
+- `--host` is how a program that draws the panes learns what their programs ask of the terminal: a UI has no window to receive an OSC 52 write, so it puts `text` in the clipboard itself. Readers without `--host` get none of it. Bells come at most one line a second per pane, with how many rang (`count`). A server without the `host-events` feature refuses `--host`; check [`contract`](#contract-and-compatibility) before sending `"host": true`. A reader that falls behind loses these events like any other, clipboard texts included.
 - It only tells what happens after it starts. Start it before what you want to follow, or read `cornercase status` once it runs, so nothing falls in between.
 - cornercase looks at the program in each pane every half second while something follows events, so a program that runs for less than that may not show. To wait for one program, `wait --until shell` is exact.
 - A reader that falls far behind (over a thousand events waiting for it) loses events, and gets a line such as `12 events dropped` when it catches up, so it knows to read `status` again. One that stops reading altogether is disconnected once the server has waited a second to write to it, like any client; the command then says the connection ended and exits with status 1.
@@ -503,7 +509,7 @@ cornercase stats --share
 
 | Command | Fields |
 | --- | --- |
-| `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`). `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
+| `status` | `version`, `boot` (which start of the server this is, see [Contract and compatibility](#contract-and-compatibility)), `caller` (your pane's id, or `null`), `shown` (the ids of what the window shows), `groups` (`id`, `name`, `collapsed`, `icon`, `colour`), `projects` (`id`, `name`, `custom_name`, `path`, `group`, `active`, `collapsed`, `workspaces`), each workspace (`id`, `name`, `custom_name`, `path`, `branch`, `worktree`, `behind`, `pull_request`, `run_dir`, `active`, `collapsed`, `tabs`), each tab (`id`, `name`, `custom_name`, `status`, `active`, `layout`, `panes`), each pane (`id`, `path`, `program`, `agent`, `status`, `background_shell`, `dialog`, `survey`, `at_prompt`, `model`, `context`, `active`, `caller`, `resumes`, `resuming`, `title`). `title` is what the program last set as its title (OSC 0 or 2), as a terminal tab shows it, or `null`; it can change several times a second while an agent works, and `status --follow` sends it at most every half second. `pull_request` is `null`, or the pull request of the workspace's branch: `number`, `title`, `url`, `state` (`open`, `draft`, `merged` or `closed`), `checks` (`failing`, `pending`, `passing`, or `null` without checks) and `failed`, the names of the checks that failed. Groups, projects, workspaces and tabs come in the order of the sidebar. `colour` is a group's palette index (0-255) and `icon` its symbol; `custom_name` is the name given in cornercase, or `null` when the item takes its folder's, branch's or program's; `collapsed` is whether a project or workspace is folded. `layout` is how the tab's panes are split: `{"leaf": PANE}`, or `{"split": {"dir": D, "ratio": R, "first": …, "second": …}}`, where `dir` is `right` (side by side) or `down` (one above the other) and `ratio` is the share of the first side, from 0 to 1. `active` is whether it is the active one of its parent; `status` is `working`, `waiting`, `pending`, `done`, `idle` or `null`; `background_shell` is `true` while the agent's turn is over but a shell it started in the background still runs (its `status` stays `working`); `dialog` is `true` while a Claude Code agent shows a dialog, a panel or its shell mode instead of its input box; `survey` is `true` while it shows its feedback survey above its input box; `resumes` is `true` when the pane's agent conversation comes back after a restart; `resuming` is `true` while it is coming back, and the pane takes no input; `at_prompt` is whether the pane's shell sits at its prompt, with nothing else running in it, so it is `false` whenever an agent runs, whatever the agent shows. While **keep awake** is on, `keep_awake` has `held` (whether the computer is being kept awake now), `by` (the tool holding it) and `unavailable` (why it can't be, on this machine); see [Keep the computer awake](../../reference/agents/#keep-the-computer-awake). |
 | `status --follow` | One object per line: what `status` prints, plus `revision`. |
 | `status --panes` | `panes`: one object per pane, with the [columns of `--panes`](#one-line-per-pane) as keys, in their order: `pane`, `tab`, `workspace`, `project`, `program`, `agent`, `status`, `background_shell`, `dialog`, `at_prompt`, `model`, `context`, `caller`, `shown`, `active`, `tab_name`, `workspace_name`, `branch`, `worktree`, `project_name`, `path`, `survey`, `resuming`. Every object has every key, `null` where there is no value. |
 | `open`, `new-workspace`, `new-tab`, `split`, `start` | `project`, `workspace`, `tab`, `pane`: the ids of what was made (for `open`, the project's shown workspace, tab and pane), and `projection` when `--focus --view` moved a view. |
@@ -513,7 +519,7 @@ cornercase stats --share
 | `search` | `matches`: `pane`, `tab`, `workspace`, `project`, `place`, `who`, `source` (`prompt`, `reply` or `screen`), `line`, `text`, `written`; and `capped`. See [Find where something was said](#find-where-something-was-said). |
 | `read` | `pane` and `text`. With `--last-message`, also `agent` (`claude`, `codex`, `gemini` or `opencode`), `written` (when the agent wrote it, in UTC, such as `2026-10-08T19:56:37.241Z`) and `turn_over` (`true` once the agent stopped working, as [`--until turn-over`](#wait) sees it; missing while cornercase doesn't know yet). |
 | `read --last-message` with several targets | `panes`: the individual `read --last-message` answers above, or entries with `error` and the requested `pane` or `tab` id. |
-| `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind` or `count` (for `dropped`) depending on the event. |
+| `events` | One object per line, see [Follow events](#follow-events): `time`, `event`, `project`, `workspace`, `tab`, `pane`, and `agent`, `from`, `to`, `program`, `kind`, `text` (for `clipboard`) or `count` (for `bell` and `dropped`) depending on the event. |
 | `surface` | One object per line, see [Stream a tab's terminals](#stream-a-tabs-terminals): `boot`, `session`, `surface`, `revision`, `tab`, `cols`, `rows`, `layout`, `dividers`, `styles` and `panes`; for `--view`, also `view` and `projection`. |
 | `view` | One object per line, see [A view of your own](#a-view-of-your-own): what `status --follow` prints, plus `view` (`id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`) and each tab's `controller`. |
 | `view-set` | The view: `id`, `projection`, `active`, `cols`, `rows`, `shown`, `controls`. |
@@ -566,14 +572,15 @@ cornercase contract --json
 ```
 
 ```text
-cornercase 0.12.126
+cornercase 0.12.127
 contract 1
 boot 4242-1700000000
 commands 40 (40 available)
 stream events 1
 stream watch 1
 stream surface 1
-features boot, structured-errors, strict-fields
+stream view 1
+features boot, structured-errors, strict-fields, views, host-events
 ```
 
 `--json` prints an object with:
@@ -582,7 +589,7 @@ features boot, structured-errors, strict-fields
 - `contract`: the version of the rules on this page, an integer starting at 1. It goes up only when something that was there changes meaning or shape, never when something is added.
 - `boot`: which start of the server this is. It changes on every start, `cornercase restart` included, since ids start again from 1. It is the same value as `CORNERCASE_SERVER` in the panes and `boot` in `status --json`.
 - `operations`: every request the server takes, by name, with `available`. A server with `start-server` among them can be started without a window; one without it needs a window before it opens terminals. One that is not available on this server has `available: false` and a `reason`; the others keep working.
-- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server).
+- `features`: what a request can ask for (below): `boot`, `structured-errors`, `strict-fields`, `views` (the `view` field and `--view`; a client checks it before sending a view to a server), `host-events` (the `host` field of `events`, which an older server would ignore; a client checks it before sending it).
 - `streams`: the formats of what the server streams, with their versions: `{"name": "events", "version": 1}` for [`events`](#follow-events) `{"name": "watch", "version": 1}` for [`status --follow`](#follow-the-whole-state) `{"name": "surface", "version": 1}` for [`surface`](#stream-a-tabs-terminals) and `{"name": "view", "version": 1}` for [`view`](#a-view-of-your-own), whose lines are `watch` format 1 plus `view`.
 
 A server from before `contract` says `the running cornercase server (…) has no contract command`, or that it is too old: it knows none of the rest of this section, so don't send it ids you kept from before.
