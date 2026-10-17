@@ -203,7 +203,9 @@ impl App {
         let Some(id) = ratio.tab else {
             return Err(malformed("`ratio` needs the tab whose split to change: pass --tab"));
         };
-        if !(ratio.ratio.is_finite() && ratio.ratio > 0.0 && ratio.ratio < 1.0) {
+        #[expect(clippy::cast_possible_truncation, reason = "a ratio between 0 and 1")]
+        let share = ratio.ratio as f32;
+        if !(share.is_finite() && share > 0.0 && share < 1.0) {
             return Err(malformed(format!(
                 "the ratio is the first side's share, between 0 and 1, such as 0.5, not {}",
                 ratio.ratio
@@ -211,8 +213,7 @@ impl App {
         }
         let (p, w, t) = self.projects.tab_index(id).ok_or_else(|| none("tab", id))?;
         let tab = &mut self.projects[p].workspaces[w].tabs[t];
-        #[expect(clippy::cast_possible_truncation, reason = "a ratio between 0 and 1")]
-        let moved = tab.layout.set_ratio(&ratio.path, ratio.ratio as f32);
+        let moved = tab.layout.set_ratio(&ratio.path, share);
         if !moved {
             return Err(Refusal::new(
                 Code::NotFound,

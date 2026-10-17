@@ -60,10 +60,14 @@ fn line_in(pane: u64, text: &'static str) -> Value {
 }
 
 fn raw_cat(app: &mut App, rx: &Receiver<AppEvent>, pane: u64, setup: &'static str) {
-    let line = format!("stty raw -echo; {setup}echo ready-\"\"now; cat -v");
+    raw_viewer(app, rx, pane, setup, "cat -v");
+}
+
+fn raw_viewer(app: &mut App, rx: &Receiver<AppEvent>, pane: u64, setup: &'static str, viewer: &str) {
+    let line = format!("stty raw -echo; {setup}echo ready-\"\"now; {viewer}");
     let line = Box::leak(line.into_boxed_str());
     sent(app, pane, &line_in(pane, line));
-    pump_until(app, rx, "cat runs", |a| pane_screen(a, pane).contains("ready-now"));
+    pump_until(app, rx, "the viewer runs", |a| pane_screen(a, pane).contains("ready-now"));
 }
 
 #[test]
@@ -129,11 +133,11 @@ fn releases_are_encoded_only_when_the_program_asks_for_event_types() {
 fn committed_text_types_like_the_window() {
     let (mut app, rx) = app();
     let id = first(&app);
-    raw_cat(&mut app, &rx, id, "");
+    raw_viewer(&mut app, &rx, id, "", "cat");
 
     sent(&mut app, id, &json!([{"text": "héllo"}]));
 
-    pump_until(&mut app, &rx, "the text shows", |a| pane_screen(a, id).contains("M-CM-)llo"));
+    pump_until(&mut app, &rx, "the text shows", |a| pane_screen(a, id).contains("héllo"));
 }
 
 #[test]
@@ -356,4 +360,19 @@ fn an_empty_paste_sends_nothing_and_leaves_the_view_where_it_is() {
 
     assert_eq!(answer.bytes, 0);
     assert_eq!(pane(&app, id).emulator.scrollbar().offset, before);
+}
+
+#[test]
+fn a_ratio_that_only_rounds_out_of_range_is_refused_and_changes_nothing() {
+    let (mut app, _rx) = app();
+    let left = first(&app);
+    app.split_pane(left, Dir::Right, AREA, false).expect("split").expect("a pane");
+    let tab = app.projects[0].workspaces[0].tabs[0].id;
+    let before = ok(&mut app, "ratio", &json!({"tab": tab, "ratio": 0.5}))["layout"].clone();
+
+    let refusal = refused(&mut app, "ratio", &json!({"tab": tab, "ratio": 1.0e-60}));
+    let layout = ok(&mut app, "ratio", &json!({"tab": tab, "ratio": 0.5}))["layout"].clone();
+
+    assert_eq!(refusal.code, "malformed", "{}", refusal.message);
+    assert_eq!(layout, before);
 }
