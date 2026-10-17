@@ -18,7 +18,7 @@ The files panel shows the files of the active workspace in a column on the right
 
 Click **`Files`** at the bottom of the sidebar, under `Issues`, to open the panel, and again (or **`×`** in the panel, or `Esc`) to close it. It takes the same column as the [changes panel](../changes/), the [TODO panel](../todo/) and the [Flow panel](../flows/#the-flow-panel), so only one of them shows at a time: opening one closes the others. Drag its left border to make it wider or narrower.
 
-In the [compact layout](../small-terminals/), a **`▤`** button in the top bar opens it over the whole screen.
+In the [compact layout](../small-terminals/), a **`▤`** button in the top bar opens it over the whole screen, and a file shown full screen covers the top bar too.
 
 The panel follows the active workspace, and each workspace keeps its own open folders, search and open file, so switching back finds them as you left them. Worktrees show their own files. The panel works in any folder, git or not; the marks need git.
 
@@ -38,6 +38,15 @@ In a git workspace, a changed file gets its status in its colour: `M` for modifi
 />
 
 The header shows the file's path, its number of lines and its language; **`‹`** goes back to the tree.
+
+**`▢`**, left of **`×`**, shows the file full screen, over the sidebar and your panes, so a long line or a big file has the whole window without dragging the border. **`❐`** or `Esc` puts it back in the panel, at the width it had. The file keeps its place, its selected lines and its highlights both ways, and the wheel, the lines, **open**, **ask agent** and **copy** work as in the panel. Going back to the tree, closing the panel, **open**, **ask agent** (when it finds an agent) and switching to another tab also put it back. Your programs keep their size and keep running underneath.
+
+<Screen
+  name="files-full"
+  alt="The file src/returns/address.rs shown over the whole window: the sidebar and the panes are gone, lines 11 and 12 are selected, and a restore button sits left of the close button"
+  caption="The same file full screen; the restore button is left of the close button."
+  crop={[0, 0, 140, 20]}
+/>
 
 - Code is coloured with your terminal's palette by tree-sitter grammars, for about 60 languages. A language without a grammar of its own borrows a close relative's, so its comments and strings still read right. Files over 2 MB show without colours.
 - Beside the line numbers, git's marks show what changed: a green `▎` on added lines, a blue `▎` on changed ones, and a red `▁` under the line after which lines were deleted (`▔` when they were at the top). A new file is green all the way down.
@@ -62,7 +71,7 @@ Click a line to select it, or press and drag over several. The header says which
 Click a PNG, JPEG, GIF, WebP, BMP or ICO file and the viewer shows the picture itself, drawn by your terminal. cornercase knows an image by its content, not by its name; an SVG file is text, and shows as text.
 
 - The header says what the file is: its format, its size in pixels and its size on disk, such as `PNG · 1280×720 · 245 KB`.
-- The picture sits under the header, centred, made smaller to fit the panel and never larger than it is, so an icon stays small. Drag the panel's border to see it bigger.
+- The picture sits under the header, centred, made smaller to fit the panel and never larger than it is, so an icon stays small. Drag the panel's border, or click **`▢`**, to see it bigger.
 - An animated GIF or WebP shows its first frame.
 - The viewer follows the file: when an agent saves a new screenshot over it, you see the new picture within a second.
 - **ask agent** types the image's path, such as `docs/returns-page.png `, into the agent running in the workspace, which can open the image itself; **copy** copies the path. An image has no **open** and no lines to select.

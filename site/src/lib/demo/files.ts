@@ -60,6 +60,7 @@ export interface FilesPlace {
 export class FilesPanel {
   open = false;
   selecting: number | null = null;
+  full = false;
   private places = new Map<number, FilesPlace>();
 
   place(workspace: number): FilesPlace {
@@ -72,6 +73,7 @@ export class FilesPanel {
 
   close(): void {
     this.open = false;
+    this.full = false;
     this.selecting = null;
     this.unfocus();
   }
@@ -588,7 +590,11 @@ function drawViewer(p: Painter, f: Panel, viewer: FilesViewer, close: Rect): voi
   const back = rect(inner.x, inner.y, 3, 1);
   p.span(back.x, back.y, ' ‹ ', p.hovered(back) ? { fg: 0, bg: 6, add: BOLD } : { fg: 6 });
   p.region({ r: back, click: () => app.closeFile(), cursor: 'pointer' });
-  const end = close.x - 1;
+  const full = rect(close.x - 3, inner.y, 3, 1);
+  const on = app.fileFullScreen();
+  p.span(full.x + 1, full.y, on ? '❐' : '▢', on || p.hovered(full) ? { fg: 6 } : DARK);
+  p.region({ r: full, click: () => app.toggleFullFile(), cursor: 'pointer' });
+  const end = full.x - 1;
   const start = right(back) + 1;
   const shown = truncateLeft(viewer.path, Math.max(0, end - start));
   const cut = shown.lastIndexOf('/') + 1;

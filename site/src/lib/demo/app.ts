@@ -49,6 +49,7 @@ import {
   workspaceDrop,
   workspaceLayout,
   workspaceRows,
+  withFullScreen,
 } from './layout';
 import { render as markdown } from './markdown';
 import {
@@ -797,7 +798,17 @@ export class App {
   }
 
   areas() {
-    return layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop());
+    const areas = layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop());
+    return this.fileFullScreen() ? withFullScreen(areas, this.cols, this.rows) : areas;
+  }
+
+  fileFullScreen(): boolean {
+    return this.files.full && this.filesShown() && !!this.filesPlace()?.viewer;
+  }
+
+  toggleFullFile(): void {
+    this.files.full = !this.files.full;
+    this.dirty();
   }
 
   tabsOnTop(): boolean {
@@ -918,6 +929,7 @@ export class App {
     const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop());
     const focus: Focus = { project: p?.id ?? null, workspace: this.workspace()?.id ?? null, tab: this.tab()?.id ?? null, tree };
     const before = this.followed;
+    if (focus.project !== before.project || focus.workspace !== before.workspace || focus.tab !== before.tab) this.files.full = false;
     if (focus.project === before.project && focus.workspace === before.workspace && focus.tab === before.tab && tree === before.tree) return;
     this.followed = focus;
     if (before.project !== null && (focus.project !== before.project || focus.workspace !== before.workspace)) this.unfoldFocus();
@@ -1164,6 +1176,7 @@ export class App {
     const ws = project?.workspaces[w];
     if (!ws) return;
     this.nav = null;
+    this.files.full = false;
     this.active = p;
     project.active = w;
     if (t !== undefined && ws.tabs[t]) ws.active = t;
@@ -1686,6 +1699,7 @@ export class App {
   showFile(path: string, lines: [number, number] | null = null, find: string | null = null): void {
     const place = this.filesPlace();
     if (place) viewFile(place, path, lines, find);
+    this.files.full = false;
     this.files.selecting = null;
     if (picture(this.filesMap().get(path))) this.emit('narrate', this.narration.image);
     this.dirty();
@@ -1736,6 +1750,7 @@ export class App {
   closeFile(): void {
     const place = this.filesPlace();
     if (place) place.viewer = null;
+    this.files.full = false;
     this.files.selecting = null;
     this.dirty();
   }
@@ -4144,6 +4159,11 @@ export class App {
     }
     if (this.filesTyping()) return this.filesKey(k);
     if (this.filteringChanges()) return this.changesFilterKey(k);
+    if (k.key === 'Escape' && this.fileFullScreen()) {
+      this.files.full = false;
+      this.dirty();
+      return true;
+    }
     if (k.key === 'Escape' && this.panelShown()) return this.closePanel();
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;

@@ -317,6 +317,10 @@ export class Painter {
       return { regions: this.regions, cursor: this.cursor, areas: null };
     }
     const areas = app.areas();
+    if (app.fileFullScreen()) {
+      drawFiles(this, areas);
+      return this.finish(areas);
+    }
     this.pane(areas);
     if (!isEmpty(areas.tabBar) && app.project()) this.tabBar(areas.tabBar);
     if (areas.compact) {
@@ -339,6 +343,11 @@ export class Painter {
       const view = app.flowView();
       if (view) drawFlow(this, areas, view);
     }
+    return this.finish(areas);
+  }
+
+  private finish(areas: Areas): Frame {
+    const app = this.app;
     this.overlay(areas);
     if (app.toast) this.toast(app.toast.text, app.toast.status, app.toast.undo ? [UNDO, app.toast.undo] : app.toast.go ? [GO, app.toast.go] : undefined, app.toast.bug);
     return { regions: this.regions, cursor: this.cursor, areas };
