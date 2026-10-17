@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.132
+
+- **A program that draws cornercase counts as looking at what it shows.** The tab a view shows (`cornercase view`, while it is active and has a size) now counts as seen, like the tab on screen in the window: an agent that finishes there gets no `✓`, one already marked loses it, and one that needs you there sends no toast or desktop notification.
+  - While that program's window is hidden or minimised, `cornercase view-set --view ID --hidden` says so and agents there notify again; `--visible` says it is back, and `cornercase view --hidden` opens a view hidden.
+  - While a view is open, the tab the window shows counts as seen only while a window is attached, so a program running cornercase without a window hears about agents in every tab. With no view open, windows work as before.
+- **Other programs get cornercase's notices about agents.** `cornercase events --notices` also prints a line each time cornercase tells you an agent needs you, failed or finished, with the same rules as the window's toasts (a second's wait, once per change, never for a tab someone is looking at), and with `--json` its token, agent, status, place, message and panes.
+  - `cornercase go TOKEN` does what a click on that notification does, in the window, or with `--view ID` in that view.
+  - See Scripts and agents → Follow events.
+
 ## 0.12.131
 
 - **Programs see the colours of the app that drives cornercase.** `cornercase start-server --theme FILE` (or `-` for standard input) gives the server the foreground, background and 16 ANSI colours that programs in its terminals get when they ask, with no window attached. Claude Code, Neovim and delta pick their light or dark look from them.
