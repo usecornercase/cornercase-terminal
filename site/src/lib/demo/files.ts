@@ -697,6 +697,10 @@ export function lineNear(app: App, y: number): number | null {
   return null;
 }
 
+export function fileMax(app: App): number | null {
+  return shownRows(app)?.max ?? null;
+}
+
 export function lineEdge(app: App, y: number): { delta: number; max: number } | null {
   const shown = shownRows(app);
   if (!shown) return null;

@@ -11,7 +11,7 @@ import { BASES, type ChangesMode, type FileDiff, type HunkAction, hasChanges, wo
 import { TodoPanel, todoWidth } from './todo';
 import { type DiagramHit, type PanelView, fileAge, live, plan, scrolled as flowScrolled } from './flow';
 import { RUN_DIR, type Run } from './flowrun';
-import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
+import { type FileAction, FilesPanel, type FilesPlace, type PathLink, absolutePath, fileMax, foundRows, lineEdge, lineNear, linkAt, ordered, resolveLink, selectable, selectedText, typing, viewFile, wanted, workspaceFiles } from './files';
 import {
   type Border,
   GROUP_STYLES,
@@ -4101,6 +4101,16 @@ export class App {
   }
 
   wheel(x: number, y: number, dy: number): boolean {
+    const from = this.files.selecting;
+    const viewer = this.filesPlace()?.viewer;
+    const max = fileMax(this);
+    if (from !== null && viewer && max !== null) {
+      this.scrollFiles(dy > 0 ? 3 : -3, max);
+      const line = lineNear(this, y);
+      if (line !== null) viewer.selection = [from, line];
+      this.dirty();
+      return true;
+    }
     const region = this.hit(x, y, (r) => !!r.wheel);
     return region?.wheel?.(dy > 0 ? 3 : -3) ?? false;
   }

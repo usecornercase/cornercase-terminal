@@ -120,3 +120,24 @@ test('a selection held at the bottom scrolls the file, and copy without one take
   assert.equal(copied.at(-1), lines.join('\n'));
   app.destroy();
 });
+
+test('the wheel scrolls a selection and moves its end, as the app does', () => {
+  const app = new App();
+  app.virtual = true;
+  app.scripted = true;
+  app.resize(140, 12);
+  world(app, { scripted: true });
+  app.files.open = true;
+  app.showFile(PATH);
+  app.render();
+  const viewer = app.files.place(app.workspace()?.id ?? -1).viewer;
+  assert.ok(viewer);
+  const panel = app.areas().changes;
+  const top = panel.y + 3;
+  app.selectFileLine(1);
+  assert.equal(app.wheel(panel.x + 2, top, 1), true);
+  assert.equal(viewer.scroll, 3);
+  assert.deepEqual(viewer.selection, [1, 4]);
+  app.pointerUp();
+  app.destroy();
+});
