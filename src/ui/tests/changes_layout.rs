@@ -95,6 +95,7 @@ fn with_todo() -> View<'static> {
         light: false,
         muted: Color::DarkGray,
         drag: None,
+        compact: false,
     };
     View { changes: None, todo: Some(panel), todo_pending: true, ..with_panel() }
 }

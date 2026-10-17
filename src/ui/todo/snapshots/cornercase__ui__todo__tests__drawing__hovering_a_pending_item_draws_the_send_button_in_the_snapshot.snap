@@ -1,0 +1,18 @@
+---
+source: src/ui/todo/tests.rs
+expression: "render(&v, Some(row(&v, 1).as_position())).backend()"
+---
+" TODO 2                 clear done   ×  "
+"                                        "
+"  ○  fix the login bug in safari        "
+"     when the cookie expires            "
+"  ○  write docs                   ▸  ×  "
+"  ✓  renew the domain                   "
+"                                        "
+"  + New TODO                            "
+"                                        "
+"                                        "
+"                                        "
+"                                        "
+"                                        "
+"                                        "

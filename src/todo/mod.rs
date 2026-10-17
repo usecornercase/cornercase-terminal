@@ -42,6 +42,8 @@ pub(crate) struct SavedItem {
 pub(crate) struct Panel {
     pub(crate) scroll: usize,
     pub(crate) field: Option<Field>,
+    pub(crate) next_client: u64,
+    pub(crate) sending: std::collections::HashMap<u64, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

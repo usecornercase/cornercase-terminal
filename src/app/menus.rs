@@ -96,6 +96,7 @@ pub(super) enum MenuAction {
     StartFlow(u64),
     ProjectSettings(u64),
     RunSetup(u64),
+    SendTodo { todo: u64, pane: u64 },
     Plugin { spot: Spot, index: u16, revision: u32 },
 }
 
@@ -148,6 +149,7 @@ impl App {
             MenuAction::Away(via) if !self.messenger(via).ready() => format!("set up {}…", via.name()),
             MenuAction::Away(via) if self.messenger(via).away => format!("stop messaging on {}", via.name()),
             MenuAction::Away(via) => format!("continue on {}", via.name()),
+            MenuAction::SendTodo { pane, .. } => self.todo_agent_label(pane),
             MenuAction::Plugin { index, .. } => self.plugin_label(index),
         }
     }
@@ -238,6 +240,7 @@ impl App {
             MenuAction::Browser if self.config.remote => self.open_remote(),
             MenuAction::Browser => self.open_settings_on(&settings::Row::Remote),
             MenuAction::Away(via) => self.toggle_away(via),
+            MenuAction::SendTodo { todo, pane } => self.send_todo_from_panel(todo, pane, std::time::Instant::now()),
             MenuAction::Plugin { spot, index, revision } => self.run_plugin_action(spot, index, revision),
         }
         Ok(())

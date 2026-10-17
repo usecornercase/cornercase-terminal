@@ -7,7 +7,9 @@ use super::{GAP, Rows, Zone, action_style, dim, draw_close, hovered_at as hovere
 use crate::todo::editor::{Editor, wrap};
 
 pub(crate) const TEXT_X: u16 = 5;
-const BUTTONS: u16 = 4;
+const BUTTONS: u16 = 7;
+const DELETE_GAP: u16 = 4;
+const SEND: &str = "▸";
 const BUTTON_WIDTH: u16 = 3;
 const TITLE: &str = "TODO";
 const NEW_TODO: &str = "+ New TODO";
@@ -24,6 +26,7 @@ pub struct View {
     pub light: bool,
     pub muted: Color,
     pub drag: Option<(u64, Option<usize>)>,
+    pub compact: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +45,7 @@ pub(crate) enum Hit {
     Field { item: Option<u64>, line: usize, col: usize },
     Check(u64),
     Delete(u64),
+    Send(u64, Rect),
     Item { id: u64, row: Rect, line: usize, col: usize },
 }
 
@@ -100,6 +104,10 @@ pub(crate) fn check(row: Rect) -> Rect {
 }
 
 pub(crate) fn delete(row: Rect) -> Rect {
+    Rect::new(row.right().saturating_sub(DELETE_GAP), row.y, BUTTON_WIDTH, 1).intersection(row)
+}
+
+pub(crate) fn send(row: Rect) -> Rect {
     Rect::new(row.right().saturating_sub(BUTTONS), row.y, BUTTON_WIDTH, 1).intersection(row)
 }
 
@@ -127,6 +135,8 @@ pub(crate) fn hit(area: Rect, view: &View, pos: Position) -> Option<Hit> {
         Hit::Check(item.id)
     } else if delete(row).contains(pos) {
         Hit::Delete(item.id)
+    } else if !item.done && item.editing.is_none() && send(row).contains(pos) {
+        Hit::Send(item.id, row)
     } else if item.editing.is_some() {
         Hit::Field { item: Some(item.id), line, col }
     } else {
@@ -291,7 +301,16 @@ fn draw_item(
     if lit {
         draw_delete(buf, view, row, hover, bg);
     }
+    if !item.done && (lit || view.compact) {
+        draw_send(buf, view, row, hover, bg);
+    }
     None
+}
+
+fn draw_send(buf: &mut Buffer, view: &View, row: Rect, hover: Option<Position>, bg: Style) {
+    let r = send(row);
+    let style = if hovered(hover, r) { bg.fg(Color::Cyan).add_modifier(Modifier::BOLD) } else { bg.fg(view.muted) };
+    put(buf, r.x + 1, r.y, SEND, style, r.right());
 }
 
 fn draw_delete(buf: &mut Buffer, view: &View, row: Rect, hover: Option<Position>, bg: Style) {

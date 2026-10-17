@@ -85,3 +85,85 @@ mod sending_a_todo_to_an_agent {
         assert!(refused.contains("there is no todo 404"), "{refused}");
     }
 }
+
+mod the_todo_panel_send_button {
+    use super::*;
+    use crate::ui::todo as panel;
+
+    fn panel_area(app: &App) -> Rect {
+        app.layout(AREA).shown(app.nav).changes
+    }
+
+    fn open_and_press_send(app: &mut App, todo_index: usize) {
+        if app.side != Some(Side::Todo) {
+            click(app, app.layout(AREA).todo_button.as_position());
+        }
+        let area = panel_area(app);
+        let row = panel::rows(area, &app.todo_view(area)).item(todo_index);
+        click(app, panel::send(row).as_position());
+    }
+
+    fn pick(app: &mut App, i: usize) {
+        let pos = menu_item_at(app, i);
+        click(app, pos);
+    }
+
+    fn settle(agent: &mut Agent) {
+        let (app, rx) = (&mut agent.app, &agent.rx);
+        refreshing(app, rx, "the toast says how it went", |a| a.toast.is_some());
+    }
+
+    #[test]
+    fn lists_the_agents_and_sends_the_text_to_the_chosen_one() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        agent.until("the agent is seen", |a| !a.agent_places().is_empty());
+        let todo = add(&mut agent.app, "fix the login");
+
+        open_and_press_send(&mut agent.app, 0);
+        let labels = match &agent.app.overlay {
+            Some(Overlay::Menu { actions, .. }) => agent.app.menu_labels(actions),
+            _ => Vec::new(),
+        };
+        assert_eq!(labels.len(), 1, "{labels:?}");
+        assert!(labels[0].ends_with("· claude"), "{labels:?}");
+
+        pick(&mut agent.app, 0);
+        settle(&mut agent);
+
+        let toast = agent.app.toast.as_ref().expect("a toast");
+        assert!(toast.message.starts_with("sent to claude in "), "{}", toast.message);
+        assert_eq!(
+            (toast.icon, is_done(&agent.app, todo), pane(&agent.app, id).agent.status().is_some()),
+            (ui::ToastIcon::Check, true, true)
+        );
+    }
+
+    #[test]
+    fn with_no_agent_it_toasts_instead_of_opening_a_menu() {
+        let (mut app, _rx) = app();
+        add(&mut app, "fix the login");
+
+        open_and_press_send(&mut app, 0);
+
+        let toast = app.toast.as_ref().expect("a toast");
+        assert_eq!((toast.message.as_str(), app.overlay.is_none()), ("no agent is running", true));
+    }
+
+    #[test]
+    fn a_refusal_toasts_its_reason_and_leaves_the_item_pending() {
+        let mut agent = Agent::new();
+        let id = agent.start(None);
+        agent.until("its input box is seen", |a| pane(a, id).input_seen.is_some());
+        done(now(&mut agent.app, None, press_keys(id, &["p", "a", "n", "e", "l", "enter"])));
+        agent.until("the panel shows", |a| pane_screen(a, id).contains("Shell details"));
+        let todo = add(&mut agent.app, "fix the login");
+
+        open_and_press_send(&mut agent.app, 0);
+        pick(&mut agent.app, 0);
+
+        let toast = agent.app.toast.as_ref().expect("a toast");
+        assert!(toast.message.contains("shows a dialog, a panel or its shell mode"), "{}", toast.message);
+        assert_eq!((toast.icon, is_done(&agent.app, todo)), (ui::ToastIcon::Bug, false));
+    }
+}

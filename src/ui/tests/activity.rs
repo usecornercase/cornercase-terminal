@@ -124,8 +124,15 @@ mod drawing {
 
     #[test]
     fn an_open_panel_gets_the_rail() {
-        let todo =
-            todo::View { items: Vec::new(), scroll: 0, adding: None, light: false, muted: Color::DarkGray, drag: None };
+        let todo = todo::View {
+            items: Vec::new(),
+            scroll: 0,
+            adding: None,
+            light: false,
+            muted: Color::DarkGray,
+            drag: None,
+            compact: false,
+        };
         let v = View { todo: Some(todo), ..with_bar(None) };
         let t = render_sized(&v, W, 24);
         let buffer = t.backend().buffer();

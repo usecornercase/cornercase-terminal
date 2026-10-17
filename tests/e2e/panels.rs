@@ -15,6 +15,7 @@ fn a_todo_typed_in_the_panel_is_saved_next_to_the_session() {
         light: false,
         muted: ratatui::style::Color::DarkGray,
         drag: None,
+        compact: false,
     };
     let button = ui::todo::rows(panel, &view).button();
 

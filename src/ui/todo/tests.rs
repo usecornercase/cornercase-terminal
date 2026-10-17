@@ -11,7 +11,7 @@ fn item(id: u64, text: &str, done: bool) -> Item {
 }
 
 fn view(items: Vec<Item>) -> View {
-    View { items, scroll: 0, adding: None, light: false, muted: Color::DarkGray, drag: None }
+    View { items, scroll: 0, adding: None, light: false, muted: Color::DarkGray, drag: None, compact: false }
 }
 
 fn list() -> View {
@@ -38,7 +38,7 @@ mod layout {
     #[test]
     fn long_text_wraps_onto_more_rows() {
         let v = list();
-        assert_eq!((text_width(AREA), row(&v, 0).height, row(&v, 1).height), (31, 2, 1));
+        assert_eq!((text_width(AREA), row(&v, 0).height, row(&v, 1).height), (28, 2, 1));
     }
 
     #[test]
@@ -58,6 +58,14 @@ mod hits {
         let r = row(&v, 0);
         assert_eq!(hit(AREA, &v, check(r).as_position()), Some(Hit::Check(1)));
         assert_eq!(hit(AREA, &v, delete(r).as_position()), Some(Hit::Delete(1)));
+    }
+
+    #[test]
+    fn a_pending_item_has_a_send_button_and_a_done_one_has_none() {
+        let v = list();
+        let (pending, done) = (row(&v, 1), row(&v, 2));
+        assert_eq!(hit(AREA, &v, send(pending).as_position()), Some(Hit::Send(2, pending)));
+        assert!(!matches!(hit(AREA, &v, send(done).as_position()), Some(Hit::Send(..))));
     }
 
     #[test]
@@ -143,6 +151,40 @@ mod drawing {
         let x = delete(r);
         assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].symbol(), "×");
         assert_eq!(t.backend().buffer()[(r.x, r.y)].bg, crate::ui::theme::DARK_HOVER);
+    }
+
+    #[test]
+    fn hovering_a_pending_item_shows_its_send_button_and_a_done_one_has_none() {
+        let v = list();
+        let (pending, done) = (row(&v, 1), row(&v, 2));
+        let t = render(&v, Some(pending.as_position()));
+        let x = send(pending);
+        assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].symbol(), "▸");
+        let t = render(&v, Some(done.as_position()));
+        let x = send(done);
+        assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].symbol(), " ");
+    }
+
+    #[test]
+    fn the_send_button_is_cyan_under_the_pointer() {
+        let v = list();
+        let x = send(row(&v, 1));
+        let t = render(&v, Some(x.as_position()));
+        assert_eq!(t.backend().buffer()[(x.x + 1, x.y)].fg, Color::Cyan);
+    }
+
+    #[test]
+    fn compact_mode_always_shows_the_send_button_dimmed() {
+        let v = View { compact: true, ..list() };
+        insta::assert_snapshot!(render(&v, None).backend());
+        let x = send(row(&v, 1));
+        assert_eq!(render(&v, None).backend().buffer()[(x.x + 1, x.y)].fg, Color::DarkGray);
+    }
+
+    #[test]
+    fn hovering_a_pending_item_draws_the_send_button_in_the_snapshot() {
+        let v = list();
+        insta::assert_snapshot!(render(&v, Some(row(&v, 1).as_position())).backend());
     }
 
     #[test]

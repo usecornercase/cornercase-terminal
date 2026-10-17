@@ -324,6 +324,9 @@ impl App {
         if self.queue_answered(client, &reply) {
             return;
         }
+        if self.todo_answered(client, &reply) {
+            return;
+        }
         if client >= MESSENGER_CLIENTS {
             self.chat_answered(client, reply);
             return;

@@ -113,7 +113,6 @@ impl App {
         self.send_request(client, asker, send, now)
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "the TODO panel calls it in the next step"))]
     pub(in crate::app) fn send_todo(&mut self, client: u64, todo: u64, pane: u64, now: Instant) {
         let command = Command::TodoSend(control::TodoSend { id: todo, pane: Some(pane), ..Default::default() });
         let request = Request { caller: None, server: None, contract: None, boot: None, view: None, command };
