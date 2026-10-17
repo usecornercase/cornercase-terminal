@@ -26,7 +26,16 @@ pub(crate) struct Prefix {
 }
 
 impl Prefix {
+    pub(crate) fn read(text: &str) -> Result<Self, String> {
+        const HOW: &str = "use ctrl or alt with a key, or a function key";
+        Self::spell(text).ok_or_else(|| HOW.to_string()).and_then(Self::from_key)
+    }
+
     pub(crate) fn parse(text: &str) -> Option<Self> {
+        Self::read(text).ok()
+    }
+
+    fn spell(text: &str) -> Option<KeyEvent> {
         let text = text.trim().to_lowercase();
         if text.is_empty() {
             return None;
@@ -50,7 +59,7 @@ impl Prefix {
                 KeyCode::Char(c)
             }
         };
-        Self::from_key(KeyEvent::new(code, modifiers)).ok()
+        Some(KeyEvent::new(code, modifiers))
     }
 
     pub(crate) fn from_key(key: KeyEvent) -> Result<Self, String> {

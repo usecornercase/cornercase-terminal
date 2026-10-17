@@ -463,7 +463,7 @@ impl Settings {
         self.tokens.iter().find(|(s, _)| *s == source).map(|(_, status)| status)
     }
 
-    fn save(&mut self, config: Config, notice: String) -> Action {
+    pub(crate) fn take_config(&mut self, config: Config) {
         if config.asana_workspace != self.config.asana_workspace {
             for (source, status) in &mut self.tokens {
                 if *source == Source::Asana && matches!(status, Status::Saved(_)) {
@@ -471,7 +471,11 @@ impl Settings {
                 }
             }
         }
-        self.config = config.clone();
+        self.config = config;
+    }
+
+    fn save(&mut self, config: Config, notice: String) -> Action {
+        self.take_config(config.clone());
         self.notice = Some(notice);
         Action::Save(Box::new(config))
     }

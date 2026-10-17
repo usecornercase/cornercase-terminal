@@ -271,3 +271,88 @@ fn hiding_a_tab_hides_it_in_the_issues() {
     let b = issues_after_settings(&mut s);
     assert!(!b.tabs.contains(&IssueTab::One(Source::Linear)));
 }
+
+mod config_file {
+    use super::*;
+
+    fn later(s: &mut Setup) {
+        s.app.refresh(Instant::now() + Duration::from_secs(2));
+    }
+
+    fn edit_outside(s: &Setup, change: impl FnOnce(&mut Config)) {
+        let mut config = config::load(&config_path(s));
+        if !config_path(s).exists() {
+            config = s.app.config.clone();
+        }
+        change(&mut config);
+        write_config(s.config.path(), &config);
+    }
+
+    #[test]
+    fn an_edit_from_outside_is_applied_and_shown_in_the_open_modal() {
+        let mut s = open();
+        let before = s.app.config_file.revision;
+        edit_outside(&s, |c| c.counts = false);
+
+        later(&mut s);
+
+        assert_eq!(
+            (s.app.config.counts, form(&s.app).config.counts, s.app.config_file.revision > before),
+            (false, false, true)
+        );
+    }
+
+    #[test]
+    fn the_modal_reads_the_file_before_it_saves() {
+        let mut s = open();
+        edit_outside(&s, |c| c.counts = false);
+
+        click_row(&mut s, &Row::Detail(Detail::Memory));
+
+        let saved = config::load(&config_path(&s));
+        assert_eq!((saved.counts, saved.memory), (false, true));
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_keeps_the_settings_and_is_not_written_over() {
+        let mut s = open();
+        std::fs::write(config_path(&s), "{").expect("write");
+
+        later(&mut s);
+        click_row(&mut s, &Row::Detail(Detail::Memory));
+
+        assert_eq!(
+            (
+                s.app.config.memory,
+                s.app.config_file.problem.is_some(),
+                toast(&s.app).is_some_and(|t| t.contains("cannot be read")),
+                std::fs::read_to_string(config_path(&s)).expect("read").as_str(),
+            ),
+            (false, true, true, "{")
+        );
+    }
+
+    #[test]
+    fn a_fixed_file_is_applied() {
+        let mut s = open();
+        std::fs::write(config_path(&s), "{").expect("write");
+        later(&mut s);
+
+        write_config(s.config.path(), &Config { counts: false, ..s.app.config.clone() });
+        s.app.refresh(Instant::now() + Duration::from_secs(4));
+
+        assert_eq!((s.app.config.counts, s.app.config_file.problem.is_none()), (false, true));
+    }
+
+    #[test]
+    fn a_missing_file_keeps_the_settings() {
+        let mut s = open();
+        write_config(s.config.path(), &Config { counts: false, ..s.app.config.clone() });
+        later(&mut s);
+        std::fs::remove_file(config_path(&s)).expect("remove");
+
+        s.app.refresh(Instant::now() + Duration::from_secs(4));
+
+        assert!(!s.app.config.counts);
+    }
+}

@@ -196,13 +196,12 @@ impl App {
     }
 
     fn save_hidden(&mut self, config: crate::config::Config) -> bool {
-        if let Err(e) = crate::config::save(&self.config_path, &config) {
+        if let Err(e) = self.write_config(config) {
             if let Some(dialog) = self.flows_dialog() {
-                dialog.notice = Some(format!("failed to save the settings: {e}"));
+                dialog.notice = Some(e);
             }
             return false;
         }
-        self.set_config(config);
         true
     }
 

@@ -31,6 +31,13 @@ mod prefix {
         assert_eq!(Prefix::parse(text), None);
     }
 
+    #[rstest]
+    #[case::ctrl_c("ctrl+c", "ctrl+c cannot be the prefix")]
+    #[case::plain_letter("k", "use ctrl or alt with a key, or a function key")]
+    fn read_says_why_not(#[case] text: &str, #[case] why: &str) {
+        assert!(Prefix::read(text).is_err_and(|e| e.starts_with(why)));
+    }
+
     #[test]
     fn is_read_ignoring_case_and_spaces() {
         assert_eq!(Prefix::parse(" Ctrl+Space ").map(|p| p.to_string()).as_deref(), Some("ctrl+space"));

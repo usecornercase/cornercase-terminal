@@ -1,7 +1,5 @@
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
@@ -179,17 +177,10 @@ pub(crate) fn missing(id: &str) -> String {
     format!("no plugin called `{id}`; `cornercase plugin list` shows them")
 }
 
-type Mark = Option<(u64, SystemTime, u64)>;
-
-fn mark(path: &Path) -> Mark {
-    let meta = std::fs::metadata(path).ok()?;
-    Some((meta.ino(), meta.modified().ok()?, meta.len()))
-}
-
 #[derive(Debug)]
 pub(crate) struct Watch {
     path: PathBuf,
-    marks: Option<Vec<Mark>>,
+    marks: Option<Vec<persist::Mark>>,
 }
 
 impl Watch {
@@ -199,8 +190,8 @@ impl Watch {
 
     pub(crate) fn changed(&mut self) -> Option<Vec<Plugin>> {
         let registry = Registry::load(&self.path);
-        let mut marks = vec![mark(&self.path)];
-        marks.extend(registry.entries.iter().map(|entry| mark(&entry.source.root().join(manifest::FILE))));
+        let mut marks = vec![persist::mark(&self.path)];
+        marks.extend(registry.entries.iter().map(|entry| persist::mark(&entry.source.root().join(manifest::FILE))));
         if self.marks.as_ref() == Some(&marks) {
             return None;
         }

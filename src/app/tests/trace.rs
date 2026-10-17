@@ -101,5 +101,5 @@ fn tells_which_settings_changed_but_not_to_what() {
     let mut config = app.config.clone();
     config.memory = !config.memory;
 
-    assert_eq!(changed_keys(&app.config, &config), ["memory"]);
+    assert_eq!(config::Changes::between(&app.config, &config).keys(), ["memory"]);
 }

@@ -18,7 +18,7 @@ use crate::agents::awake::Awake;
 use crate::agents::launch::Launch;
 use crate::agents::usage;
 use crate::changes::{self};
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::control::theme::{ThemeFrom, ThemeInfo};
 use crate::error::{Error, Result};
 use crate::files;
@@ -71,6 +71,7 @@ use worktrees::{SYNC_EVERY, Upstream, WorktreeEvent};
 mod actions;
 mod agent_watch;
 mod changes_panel;
+mod config_file;
 mod control;
 mod dialogs;
 mod event;
@@ -163,6 +164,7 @@ pub(crate) struct App {
     notices: Notices,
     overlay: Option<Overlay>,
     config: Config,
+    config_file: config_file::ConfigFile,
     config_path: PathBuf,
     setup_dir: PathBuf,
     runs_dir: PathBuf,
@@ -208,6 +210,7 @@ impl App {
         let web = Web::new(paths::browsers(&config_path), paths::socket(), tx.clone());
         let messengers = messenger::messengers(&config_path, &secrets_path);
         let plugins = Plugins::new(crate::plugins::Places::new(&config_path, &config_path));
+        let (config, config_file) = config_file::ConfigFile::open(&config_path);
         Self {
             upstream: Upstream::default(),
             pulls: PullRequests::default(),
@@ -235,7 +238,8 @@ impl App {
             star: StarPrompt::default(),
             notices: Notices::default(),
             overlay: None,
-            config: config::load(&config_path),
+            config,
+            config_file,
             setups: std::collections::HashMap::new(),
             setup_dir: config_path.parent().map(std::path::Path::to_path_buf).unwrap_or_default(),
             runs_dir: config_path.with_file_name("runs"),
@@ -432,6 +436,7 @@ impl App {
 
     pub(super) fn refresh_at(&mut self, now: Instant, clock: i64) {
         self.reap();
+        self.watch_config(now);
         self.watch_setups(now);
         self.drive_queue(clock, now);
         self.sync_queued();

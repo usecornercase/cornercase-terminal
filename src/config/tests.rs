@@ -308,3 +308,76 @@ mod fetch_every {
 }
 
 mod sidebar_setting;
+
+mod read {
+    use super::*;
+
+    #[test]
+    fn tells_a_missing_file_from_a_good_one_and_a_broken_one() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        assert_eq!(read(&path), Ok(None));
+
+        std::fs::write(&path, r#"{"counts": false}"#).expect("write");
+        assert_eq!(read(&path).map(|c| c.map(|c| c.counts)), Ok(Some(false)));
+
+        std::fs::write(&path, "{\n  \"counts\": }").expect("write");
+        assert!(read(&path).is_err_and(|why| why.contains("line 2")));
+
+        std::fs::write(&path, r#"{"counts": 3}"#).expect("write");
+        assert!(read(&path).is_err());
+    }
+
+    #[test]
+    fn applies_the_migrations() {
+        let dir = TempDir::new();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, r#"{"context_line": false}"#).expect("write");
+        assert_eq!(read(&path).map(|c| c.map(|c| (c.context, c.model))), Ok(Some((false, false))));
+    }
+
+    #[test]
+    fn refuses_what_is_not_a_regular_file() {
+        let dir = TempDir::new();
+        assert!(read(dir.path()).is_err());
+    }
+}
+
+mod changes {
+    use super::*;
+
+    #[test]
+    fn name_the_keys_that_differ_and_carry_the_new_values() {
+        let new = Config { counts: false, fetch_minutes: 9, ..Config::default() };
+        let changes = Changes::between(&Config::default(), &new);
+        assert_eq!(changes.keys(), ["counts", "fetch_minutes"]);
+        assert!(Changes::between(&new, &new).is_empty());
+    }
+
+    #[test]
+    fn leave_the_other_keys_of_the_target_alone() {
+        let changes = Changes::between(&Config::default(), &Config { counts: false, ..Config::default() });
+        let target = Config { memory: true, ..Config::default() };
+        let merged = changes.apply(&target);
+        assert_eq!((merged.counts, merged.memory), (false, true));
+    }
+
+    #[test]
+    fn take_the_projects_map_as_one_key() {
+        let mut new = Config::default();
+        new.set_project(Path::new("/srv/a"), None, ProjectSettings { setup: "make".into(), teardown: String::new() });
+        assert_eq!(Changes::between(&Config::default(), &new).keys(), ["projects"]);
+    }
+}
+
+mod project_settings {
+    use super::*;
+
+    #[test]
+    fn control_characters_become_spaces_and_line_breaks_stay() {
+        let mut config = Config::default();
+        let settings = ProjectSettings { setup: "a\u{7}b\r\nc\n\n".into(), teardown: String::new() };
+        config.set_project(Path::new("/srv/a"), None, settings);
+        assert_eq!(config.project(Path::new("/srv/a"), None).setup, "a b\nc");
+    }
+}

@@ -1,17 +1,28 @@
 use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::Serialize;
 
 pub(crate) const SETTLE: Duration = Duration::from_secs(2);
+
+pub(crate) type Mark = Option<(u64, SystemTime, u64)>;
+
+pub(crate) fn mark(path: &Path) -> Mark {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.ino(), meta.modified().ok()?, meta.len()))
+}
 
 pub(crate) fn save(path: &Path, value: &impl Serialize) -> io::Result<()> {
     write(path, value, false)
 }
 
 pub(crate) fn write(path: &Path, value: &impl Serialize, private: bool) -> io::Result<()> {
+    write_marked(path, value, private).map(drop)
+}
+
+pub(crate) fn write_marked(path: &Path, value: &impl Serialize, private: bool) -> io::Result<Mark> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -30,7 +41,10 @@ pub(crate) fn write(path: &Path, value: &impl Serialize, private: bool) -> io::R
     if private {
         file.sync_all()?;
     }
-    std::fs::rename(tmp, path)
+    let meta = file.metadata()?;
+    let mark = meta.modified().ok().map(|modified| (meta.ino(), modified, meta.len()));
+    std::fs::rename(tmp, path)?;
+    Ok(mark)
 }
 
 pub(crate) fn back_up(path: &Path) -> io::Result<PathBuf> {

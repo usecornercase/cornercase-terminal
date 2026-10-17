@@ -28,7 +28,6 @@ use super::overlay::UPDATE_SUBMIT;
 use super::panes::pane_cell;
 use super::picker_dialog::PICKER_SUBMIT;
 use super::session::RESUME_GRACE;
-use super::settings_dialog::changed_keys;
 use super::toast::BUG_FOR;
 use super::toast::COPIED;
 #[cfg(target_os = "linux")]

@@ -4,7 +4,6 @@ use ratatui::layout::{Position, Rect};
 use super::App;
 use super::input::wheel;
 use super::overlay::Overlay;
-use crate::config;
 use crate::project::Hierarchy;
 use crate::project::settings::{Action, Field, Form, Hit, Room};
 use crate::ui::{self, ProjectSettingsHit};
@@ -73,16 +72,13 @@ impl App {
                     self.overlay = None;
                     return;
                 };
-                let mut next = self.config.clone();
-                next.set_project(&self.projects[p].path, self.home.as_deref(), settings);
-                match config::save(&self.config_path, &next) {
-                    Ok(()) => {
-                        self.set_config(next);
-                        self.overlay = None;
-                    }
+                let folder = self.projects[p].path.clone();
+                let home = self.home.clone();
+                match self.change_config(|c| c.set_project(&folder, home.as_deref(), settings)) {
+                    Ok(()) => self.overlay = None,
                     Err(e) => {
                         if let Some(form) = self.settings_form() {
-                            form.notice = Some(format!("failed to save the settings: {e}"));
+                            form.notice = Some(e);
                         }
                     }
                 }

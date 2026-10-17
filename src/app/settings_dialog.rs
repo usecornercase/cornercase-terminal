@@ -14,10 +14,13 @@ use crate::ui::{self};
 
 impl App {
     pub(super) fn set_config(&mut self, config: Config) {
+        if config == self.config {
+            return;
+        }
         if log::enabled(Level::Info) {
-            let keys = changed_keys(&self.config, &config);
-            if !keys.is_empty() {
-                log::info!("app", "settings changed", keys = keys.join(","));
+            let changes = config::Changes::between(&self.config, &config);
+            if !changes.is_empty() {
+                log::info!("app", "settings changed", keys = changes.keys().join(","));
             }
         }
         let jira = |c: &Config| (c.jira_site.clone(), c.jira_email.clone(), c.jira_jql.clone());
@@ -36,6 +39,10 @@ impl App {
             self.forget_issues(Source::Gitlab);
         }
         self.config = config;
+        if let Some(Overlay::Settings(s)) = &mut self.overlay {
+            s.take_config(self.config.clone());
+        }
+        self.settings_changed();
     }
 
     pub(super) fn open_settings(&mut self) {
@@ -154,13 +161,11 @@ impl App {
             settings::Action::Close => self.overlay = None,
             settings::Action::Restart => self.open_restart(),
             settings::Action::Save(config) => {
-                if let Err(e) = config::save(&self.config_path, &config) {
+                if let Err(e) = self.write_config(*config) {
                     if let Some(Overlay::Settings(s)) = &mut self.overlay {
-                        s.notice = Some(format!("failed to save the settings: {e}"));
+                        s.notice = Some(e);
                     }
-                    return;
                 }
-                self.set_config(*config);
             }
             settings::Action::CheckToken(source, token) => self.check_token(source, token),
             settings::Action::ForgetBrowsers => {
@@ -201,15 +206,6 @@ impl App {
             }
         }
     }
-}
-
-pub(super) fn changed_keys(old: &Config, new: &Config) -> Vec<String> {
-    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
-        (serde_json::to_value(old), serde_json::to_value(new))
-    else {
-        return Vec::new();
-    };
-    new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).map(|(key, _)| key).collect()
 }
 
 pub(super) fn settings_view(settings: &Settings) -> ui::Settings {

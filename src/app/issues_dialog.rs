@@ -10,7 +10,7 @@ use super::event::Start;
 use super::overlay::Overlay;
 use crate::agents;
 use crate::agents::launch::{self};
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::git;
 use crate::highlight::markdown;
@@ -342,14 +342,11 @@ impl App {
             }
             Action::SetDefaultAgent(kind) => {
                 let config = Config { agent: kind.clone(), ..self.config.clone() };
-                let saved = config::save(&self.config_path, &config);
+                let saved = self.write_config(config);
                 let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
                 match saved {
-                    Ok(()) => {
-                        self.config = config;
-                        b.default_agent_set(kind);
-                    }
-                    Err(e) => b.error = Some(format!("failed to save the settings: {e}")),
+                    Ok(()) => b.default_agent_set(kind),
+                    Err(e) => b.error = Some(e),
                 }
             }
             Action::CheckToken(source, token) => self.check_token(source, token),
@@ -495,13 +492,12 @@ impl App {
     }
 
     fn save_connection(&mut self, source: Source, config: Config, area: Rect) -> Result<()> {
-        let saved = config::save(&self.config_path, &config);
+        let saved = self.write_config(config);
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         if let Err(e) = saved {
-            b.token_rejected(source, format!("failed to save the settings: {e}"));
+            b.token_rejected(source, e);
             return Ok(());
         }
-        self.set_config(config);
         let Some(from_env) = self.connected(source) else { return Ok(()) };
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         b.connected(source, Connection { from_env, account: None });

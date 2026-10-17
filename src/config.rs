@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
-use std::io;
+use std::io::{self, Read};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -134,7 +135,11 @@ pub(crate) struct ProjectSettings {
 
 impl ProjectSettings {
     fn normalised(self) -> Self {
-        let clean = |text: String| text.replace("\r\n", "\n").trim_end().to_string();
+        let clean = |text: String| {
+            let text = text.replace("\r\n", "\n");
+            let text: String = text.chars().map(|c| if c.is_control() && c != '\n' { ' ' } else { c }).collect();
+            text.trim_end().to_string()
+        };
         Self { setup: clean(self.setup), teardown: clean(self.teardown) }
     }
 
@@ -288,14 +293,61 @@ impl Config {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn load(path: &Path) -> Config {
-    let Some(mut value) = std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()) else {
-        return Config::default();
+    read(path).ok().flatten().unwrap_or_default()
+}
+
+const MAX_BYTES: u64 = 4 << 20;
+
+pub(crate) fn read(path: &Path) -> Result<Option<Config>, String> {
+    let file = match std::fs::OpenOptions::new().read(true).custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed()).open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.to_string()),
     };
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("it is not a regular file".into());
+    }
+    let mut text = String::new();
+    file.take(MAX_BYTES + 1).read_to_string(&mut text).map_err(|e| e.to_string())?;
+    if text.len() as u64 > MAX_BYTES {
+        return Err("it is too large".into());
+    }
+    let mut value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     if let Value::Object(keys) = &mut value {
         migrate(keys);
     }
-    serde_json::from_value(value).unwrap_or_default()
+    serde_json::from_value(value).map(Some).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Changes(Vec<(String, Value)>);
+
+impl Changes {
+    pub(crate) fn between(old: &Config, new: &Config) -> Self {
+        let (Value::Object(old), Value::Object(new)) =
+            (serde_json::to_value(old).unwrap_or_default(), serde_json::to_value(new).unwrap_or_default())
+        else {
+            return Self(Vec::new());
+        };
+        Self(new.into_iter().filter(|(key, value)| old.get(key) != Some(value)).collect())
+    }
+
+    pub(crate) fn keys(&self) -> Vec<&str> {
+        self.0.iter().map(|(key, _)| key.as_str()).collect()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) fn apply(&self, config: &Config) -> Config {
+        let Ok(Value::Object(mut keys)) = serde_json::to_value(config) else { return config.clone() };
+        keys.extend(self.0.iter().cloned());
+        serde_json::from_value(Value::Object(keys)).unwrap_or_else(|_| config.clone())
+    }
 }
 
 fn migrate(keys: &mut Map<String, Value>) {
@@ -324,11 +376,11 @@ fn add_tab(keys: &mut Map<String, Value>, written_since: &str, tab: &str, after:
     tabs.insert(at, Value::String(tab.into()));
 }
 
-pub(crate) fn save(path: &Path, config: &Config) -> io::Result<()> {
-    persist::save(path, config)
+pub(crate) fn save(path: &Path, config: &Config) -> io::Result<persist::Mark> {
+    persist::write_marked(path, config, false)
 }
 
-fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
+pub(crate) fn names_folder(key: &str, folder: &Path, home: Option<&Path>) -> bool {
     let key = expand_home(key, home);
     key == folder || key.canonicalize().is_ok_and(|key| key == folder)
 }
