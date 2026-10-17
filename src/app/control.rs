@@ -8,6 +8,7 @@ mod queue;
 mod search;
 mod status;
 mod talk;
+mod terminal;
 mod wait;
 
 use std::collections::{HashMap, HashSet};
@@ -200,11 +201,12 @@ impl App {
             Ok(request) => {
                 let command = request.command.name();
                 self.requests.asked.insert(client, (now, command));
+                let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
                 let mut fields = vec![("client", client.to_string())];
                 fields.extend(request.caller.map(|caller| ("caller", caller.to_string())));
                 fields.extend(request.view.map(|view| ("view", view.to_string())));
                 fields.extend(request.command.fields());
-                log::write_fields(Level::Info, "control", command, &fields);
+                log::write_fields(level, "control", command, &fields);
             }
             Err(_) => log::warning!("control", "unreadable request", client = client, bytes = bytes),
         }
@@ -289,7 +291,16 @@ impl App {
             match &reply {
                 Ok(value) => {
                     let ended = endings(value);
-                    log::info!("control", "answered", client = client, command = command, ms = ms, ended = ended);
+                    let level = if Command::chatty(command) { Level::Debug } else { Level::Info };
+                    log::event!(
+                        level,
+                        "control",
+                        "answered",
+                        client = client,
+                        command = command,
+                        ms = ms,
+                        ended = ended
+                    );
                 }
                 Err(message) => {
                     log::info!("control", "refused", client = client, command = command, ms = ms, error = message);
@@ -345,6 +356,11 @@ impl App {
             Command::Events(events) => self.events_request(client, events),
             Command::Surface(surface) => self.surface_request(client, asker.view, &surface, now),
             Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
+            Command::Input(input) => self.input_request(&input),
+            Command::Scroll(scroll) => self.scroll_request(&scroll),
+            Command::Selection(selection) => self.selection_request(&selection),
+            Command::Resize(resize) => self.resize_surface_request(&resize, now),
+            Command::Ratio(ratio) => self.ratio_request(&ratio, area),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

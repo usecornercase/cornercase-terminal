@@ -23,6 +23,8 @@ pub(crate) enum Code {
     UnknownField,
     Unavailable,
     Failed,
+    Busy,
+    Conflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

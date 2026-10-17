@@ -205,6 +205,10 @@ impl Emulator {
         self.vt.scroll_viewport(ScrollViewport::Bottom);
     }
 
+    pub(crate) fn scroll_to_top(&mut self) {
+        self.vt.scroll_viewport(ScrollViewport::Top);
+    }
+
     pub(crate) fn scrollbar(&self) -> Scrollbar {
         self.vt.scrollbar().map_or_else(
             |_| Scrollbar::default(),
@@ -274,9 +278,27 @@ impl Emulator {
 
     pub(crate) fn finish_selection(&mut self) -> Result<Option<String>> {
         self.anchor = None;
-        let text = self.vt.format_selection_alloc(None, plain())?.map(|b| String::from_utf8_lossy(&b).into_owned());
+        let text = self.selection_text()?;
         self.vt.set_selection(None)?;
+        Ok(text)
+    }
+
+    pub(crate) fn select(&mut self, from: Position, to: Position, rectangle: bool) -> Result<Option<String>> {
+        self.anchor = None;
+        let selection = Selection::new(self.vt.grid_ref(viewport(from))?, self.vt.grid_ref(viewport(to))?, rectangle);
+        self.vt.set_selection(Some(&selection))?;
+        self.selection_text()
+    }
+
+    pub(crate) fn selection_text(&self) -> Result<Option<String>> {
+        let text = self.vt.format_selection_alloc(None, plain())?.map(|b| String::from_utf8_lossy(&b).into_owned());
         Ok(text.filter(|t| !t.is_empty()))
+    }
+
+    pub(crate) fn clear_selection(&mut self) -> Result<()> {
+        self.anchor = None;
+        self.vt.set_selection(None)?;
+        Ok(())
     }
 
     pub(crate) fn screen_text(&self) -> Result<String> {

@@ -35,7 +35,11 @@ pub(crate) fn named(name: &str) -> Option<KeyEvent> {
         mods |= *modifier;
         rest = &rest[prefix.len()..];
     }
-    let mut chars = rest.chars();
+    event(rest, mods, KeyEventKind::Press)
+}
+
+pub(crate) fn event(code: &str, mut mods: KeyModifiers, kind: KeyEventKind) -> Option<KeyEvent> {
+    let mut chars = code.chars();
     let code = match (chars.next(), chars.next()) {
         (Some(c), None) => {
             if c.is_ascii_uppercase() {
@@ -45,12 +49,18 @@ pub(crate) fn named(name: &str) -> Option<KeyEvent> {
         }
         _ => NAMED
             .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(rest))
+            .find(|(n, _)| n.eq_ignore_ascii_case(code))
             .map(|(_, code)| *code)
-            .or_else(|| function(rest))?,
+            .or_else(|| function(code))?,
     };
     let code = if code == KeyCode::Tab && mods.contains(KeyModifiers::SHIFT) { KeyCode::BackTab } else { code };
-    Some(KeyEvent::new(code, mods))
+    Some(KeyEvent::new_with_kind(code, mods, kind))
+}
+
+pub(crate) fn typed(c: char) -> KeyEvent {
+    let mut text = [0; 4];
+    event(c.encode_utf8(&mut text), KeyModifiers::NONE, KeyEventKind::Press)
+        .unwrap_or_else(|| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
 }
 
 fn function(name: &str) -> Option<KeyCode> {
@@ -59,6 +69,9 @@ fn function(name: &str) -> Option<KeyCode> {
 }
 
 pub(crate) fn encode(event: KeyEvent, encoder: &mut Encoder<'_>, kitty: KittyKeyFlags, app_cursor: bool) -> Vec<u8> {
+    if event.kind == KeyEventKind::Release {
+        return release(&event, encoder, kitty);
+    }
     if prefers_legacy(&event, kitty) {
         return legacy(event, app_cursor);
     }
@@ -66,6 +79,17 @@ pub(crate) fn encode(event: KeyEvent, encoder: &mut Encoder<'_>, kitty: KittyKey
     match ghostty_event(&event) {
         Some(ev) if encoder.encode_to_vec(&ev, &mut out).is_ok() && !out.is_empty() => out,
         _ => legacy(event, app_cursor),
+    }
+}
+
+fn release(event: &KeyEvent, encoder: &mut Encoder<'_>, kitty: KittyKeyFlags) -> Vec<u8> {
+    let mut out = Vec::new();
+    if !kitty.contains(KittyKeyFlags::REPORT_EVENTS) {
+        return out;
+    }
+    match ghostty_event(event) {
+        Some(ev) if encoder.encode_to_vec(&ev, &mut out).is_ok() => out,
+        _ => Vec::new(),
     }
 }
 

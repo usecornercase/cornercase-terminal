@@ -6,6 +6,7 @@ use super::App;
 use super::control::{Handled, json, none};
 use crate::control::contract::{Code, Refusal};
 use crate::control::surface::{self, Area, Content, Cursor, Frame, Modes, Pane, Scroll, Size, Styles, Surface, lines};
+use crate::control::terminal::{Resize, Resized};
 use crate::control::{self, Layout};
 use crate::log;
 use crate::project::Hierarchy;
@@ -23,6 +24,7 @@ pub(crate) enum Surfaced {
 #[derive(Default)]
 pub(super) struct Surfaces {
     subscriptions: Vec<Subscription>,
+    issued: u64,
 }
 
 enum Place {
@@ -32,6 +34,7 @@ enum Place {
 }
 
 struct Subscription {
+    id: u64,
     client: u64,
     view: Option<u64>,
     projection: u64,
@@ -101,10 +104,13 @@ impl App {
             return Err(Refusal::from(message));
         }
         let content = self.surface_content(tab, area).ok_or_else(|| none("tab", tab))?;
-        let frame =
-            self.surface_frame(tab, area, 1, projection.map(|p| (view.unwrap_or_default(), p)), content.clone());
-        log::info!("control", "surface", client = client, tab = tab, cols = area.width, rows = area.height);
+        self.surfaces.issued += 1;
+        let id = self.surfaces.issued;
+        let shown = projection.map(|p| (view.unwrap_or_default(), p));
+        let frame = self.surface_frame(id, tab, area, 1, shown, content.clone());
+        log::info!("control", "surface", client = client, surface = id, tab = tab, cols = area.width, rows = area.height);
         self.surfaces.subscriptions.push(Subscription {
+            id,
             client,
             view,
             projection: projection.unwrap_or_default(),
@@ -168,13 +174,22 @@ impl App {
         }
     }
 
-    fn surface_frame(&self, tab: u64, area: Rect, revision: u64, view: Option<(u64, u64)>, content: Content) -> Frame {
+    fn surface_frame(
+        &self,
+        surface: u64,
+        tab: u64,
+        area: Rect,
+        revision: u64,
+        view: Option<(u64, u64)>,
+        content: Content,
+    ) -> Frame {
         Frame {
             view: view.map(|(view, _)| view),
             projection: view.map(|(_, projection)| projection),
             boot: control::server_token().to_string(),
             session: self.events.snapshots.revision(),
             revision,
+            surface,
             tab,
             cols: area.width,
             rows: area.height,
@@ -187,7 +202,7 @@ impl App {
         let mut out = Vec::new();
         let mut at = 0;
         while at < self.surfaces.subscriptions.len() {
-            let client = self.surfaces.subscriptions[at].client;
+            let (id, client) = (self.surfaces.subscriptions[at].id, self.surfaces.subscriptions[at].client);
             let (tab, area, projection) = match self.sub_place(&self.surfaces.subscriptions[at]) {
                 Place::At(tab, area, projection) => (tab, area, projection),
                 Place::Paused(_) => {
@@ -235,7 +250,7 @@ impl App {
                 sub.last = content.clone();
                 sub.tab = tab;
                 sub.area = area;
-                let frame = self.surface_frame(tab, area, revision, view, content);
+                let frame = self.surface_frame(id, tab, area, revision, view, content);
                 if let Some(text) = frame.streamed() {
                     log::debug!("control", "surface frame", client = client, revision = revision, bytes = text.len());
                     out.push((client, Surfaced::Frame(text)));
@@ -244,6 +259,31 @@ impl App {
             at += 1;
         }
         out
+    }
+
+    pub(in crate::app) fn resize_surface_request(&mut self, resize: &Resize, now: Instant) -> Handled {
+        let Some(id) = resize.surface else {
+            return Err(Refusal::new(Code::Malformed, "`resize` needs the surface to lay out again: pass --surface"));
+        };
+        let area = Surface { tab: None, cols: resize.cols, rows: resize.rows }
+            .area()
+            .map_err(|message| Refusal::new(Code::Malformed, message))?;
+        let Some(sub) = self.surfaces.subscriptions.iter_mut().find(|sub| sub.id == id) else {
+            return Err(Refusal::new(
+                Code::NotFound,
+                format!("there is no surface {id}: its stream ended, or it belongs to an earlier start of the server"),
+            ));
+        };
+        if let Some(view) = sub.view {
+            let message = format!("surface {id} follows view {view}, which sizes it: change the view with `view-set`");
+            return Err(Refusal::from(message));
+        }
+        sub.area = area;
+        sub.dirty = true;
+        sub.next = now;
+        sub.last = Content::default();
+        log::debug!("control", "surface resized", surface = id, cols = area.width, rows = area.height);
+        Ok(Some(json(&Resized { surface: id, tab: sub.tab, cols: area.width, rows: area.height })))
     }
 
     fn end_surface(&mut self, at: usize, reason: &str) {

@@ -683,3 +683,60 @@ fn a_tab_the_window_does_not_show_streams_its_cells_until_it_closes() {
     assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
     assert_eq!(finish_within(again, TIMEOUT).status.code(), Some(0));
 }
+
+fn typed(app: &Harness, pane: &str, line: &str) {
+    let enter = r#"{"key":{"code":"enter"}}"#;
+    app.session.says(&["input", "--pane", pane, &serde_json::json!({"text": line}).to_string(), enter]);
+}
+
+#[test]
+fn a_hidden_tab_takes_input_selection_and_scrolling_while_the_window_shows_a_dialog() {
+    let mut app = Harness::start();
+    let pane = app.session.says(&["new-tab"]);
+    app.click(app.position_of(" Settings "));
+    app.wait_for("the dialog opens", |s| s.contains(" restart "));
+    let shown = app.session.report().shown;
+
+    typed(&app, &pane, "printf '\\033[2J\\033[Hinput-ok\\n'");
+    app.session.says(&["wait", "--pane", &pane, "--text", "^input-ok$", "--timeout", "10"]);
+    let selected = app.session.says(&["selection", "--pane", &pane, "--from", "0,0", "--to", "7,0"]);
+    let read_back = app.session.says(&["selection", "--pane", &pane]);
+    typed(&app, &pane, "seq 1 100");
+    app.session.says(&["wait", "--pane", &pane, "--text", "^100$", "--timeout", "10"]);
+    let up = app.session.says(&["scroll", "--pane", &pane, "--up", "5", "--json"]);
+    let bottom = app.session.says(&["scroll", "--pane", &pane, "--bottom", "--json"]);
+
+    let offset =
+        |text: &str| serde_json::from_str::<serde_json::Value>(text).expect("json")["scroll"]["offset"].as_u64();
+    assert!(app.text().contains(" restart "), "the dialog stayed");
+    assert_eq!(app.session.report().shown, shown, "the window shows what it showed");
+    assert_eq!((selected.as_str(), read_back.as_str()), ("input-ok", "input-ok"));
+    assert_eq!(offset(&up).zip(offset(&bottom)).map(|(up, bottom)| bottom - up), Some(5), "{up} {bottom}");
+}
+
+#[test]
+fn a_surface_resizes_in_place_and_a_divider_moves() {
+    let app = Harness::start();
+    let pane = app.session.says(&["new-tab"]);
+    let rows: PaneRows = serde_json::from_str(&app.session.says(&["status", "--panes", "--json"])).expect("pane rows");
+    let tab = rows.panes.iter().find(|row| row.pane.to_string() == pane).expect("the new pane").tab.to_string();
+    let mut streaming = app.session.spawn(&["surface", "--tab", &tab, "--cols", "80", "--rows", "24"]);
+    let mut followed = Followed::of(&mut streaming);
+    followed.until("the first frame", |frame| frame["revision"] == 1);
+    let surface = followed.seen[0]["surface"].as_u64().expect("a surface id").to_string();
+
+    app.session.says(&["resize", "--surface", &surface, "--cols", "100", "--rows", "30"]);
+    followed.until("the larger frame", |frame| frame["cols"] == 100 && frame["rows"] == 30);
+    let resized = followed.seen.last().expect("a frame")["revision"].as_u64().expect("a revision");
+    app.session.says(&["split", "--pane", &pane]);
+    followed.until("two panes", |frame| frame["panes"].as_array().is_some_and(|p| p.len() == 2));
+    app.session.says(&["ratio", "--tab", &tab, "0.25"]);
+    followed.until("a divider moved", |frame| {
+        let width = |pane: usize| frame["panes"][pane]["rect"]["cols"].as_u64().unwrap_or(0);
+        frame["cols"] == 100 && width(0) > 0 && width(0) * 2 < width(1)
+    });
+    app.session.says(&["close", "--tab", &tab]);
+
+    assert_eq!(resized, 2, "the stream kept counting");
+    assert_eq!(finish_within(streaming, TIMEOUT).status.code(), Some(0));
+}

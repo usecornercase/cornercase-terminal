@@ -1,4 +1,5 @@
 pub(crate) mod queue;
+pub(crate) mod terminal;
 
 use std::path::PathBuf;
 
@@ -6,9 +7,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::help::{
     ABOUT, AFTER_HELP, AWAY_HELP, BY_BRANCH, CLOSE_HELP, COMMAND_HELP, CONTRACT_HELP, EVENTS_HELP, FLOW_EXPORT_HELP,
-    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, KEY_NAMES, KEYS_HELP,
+    FLOW_HELP, FLOW_IMPORT_HELP, FLOW_RUN_HELP, FOCUS_HELP, HERE_PANE, HERE_WORKSPACE, INPUT_HELP, KEY_NAMES, KEYS_HELP,
     KILL_SERVER_HELP, LOGS_HELP, LONG_ABOUT, MARK_HELP, NEW_TAB_HELP, NEW_WORKSPACE_HELP, NOTIFY_HELP, OPEN_HELP,
-    PLUGIN_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESTART_HELP, RESTART_TIMEOUT, SEARCH_HELP, SEND_HELP,
+    PLUGIN_HELP, RATIO_HELP, READ_HELP, REMOTE_HELP, RENAME_HELP, RESIZE_HELP, RESTART_HELP, RESTART_TIMEOUT, SCROLL_HELP, SEARCH_HELP, SELECTION_HELP, SEND_HELP,
     SKILL_HELP, SPLIT_HELP, START_HELP, START_SERVER_HELP, STATUS_HELP, SURFACE_HELP, TODO_HELP, UNTIL_AFTER,
     UPDATE_HELP, VIEW_ARG, VIEW_HELP, VIEW_SET_HELP, WAIT_HELP, WAIT_PANE, WAIT_TAB, WHEN_IDLE,
 };
@@ -146,6 +147,19 @@ pub(crate) enum Control {
     View(ViewArgs),
     #[command(about = "Change a view: its size, whether it is active, or take back the tab it shows", after_help = VIEW_SET_HELP)]
     ViewSet(ViewSetArgs),
+    #[command(
+        about = "Type keys, text, pastes and mouse events into a pane, for programs that draw its terminal",
+        after_help = INPUT_HELP
+    )]
+    Input(terminal::InputArgs),
+    #[command(about = "Scroll a pane's view through its history", after_help = SCROLL_HELP)]
+    Scroll(terminal::ScrollArgs),
+    #[command(about = "Select text in a pane, print or copy the selection, or clear it", after_help = SELECTION_HELP)]
+    Selection(terminal::SelectionArgs),
+    #[command(about = "Lay a running `cornercase surface` out at another size", after_help = RESIZE_HELP)]
+    Resize(terminal::ResizeArgs),
+    #[command(about = "Move a divider of a tab's split", after_help = RATIO_HELP)]
+    Ratio(terminal::RatioArgs),
 }
 
 impl Control {

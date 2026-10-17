@@ -330,7 +330,8 @@ replaces the one before. It holds the panes laid out at the given size, each wit
 its terminal's own size (size), its cells, cursor, modes and scroll position, plus the split tree,
 the dividers, and boot, session and revision.
 
-With --tab the surface resizes nothing: terminals keep the size of whoever sizes the tab (the
+Each line names its stream with `surface`, which `cornercase resize` takes to lay a --tab surface out at
+another size. With --tab the surface resizes no terminal: terminals keep the size of whoever sizes the tab (the
 window, or a view), so size can differ from rect. With --view ID it streams the tab that view
 shows, at the view's size, and follows the view to other tabs (each line carries view and
 projection); it pauses while the view is inactive or has no size, and ends when the view closes.
@@ -342,6 +343,60 @@ Examples:
   cornercase surface --tab 3 --cols 120 --rows 40
   cornercase surface --tab 3 --cols 120 --rows 40 | jq -c '[.revision, [.panes[].pane]]'
   cornercase surface --view 41";
+pub(super) const INPUT_HELP: &str = "For programs that draw cornercase's terminals themselves (see `cornercase surface`). Each
+EVENT is one JSON object, sent in order:
+  {\"key\": {\"code\": \"c\", \"mods\": [\"ctrl\"]}}   code as for `keys`; mods ctrl, alt, shift, super; kind press, repeat, release
+  {\"text\": \"héllo\"}                           typed text, without control characters
+  {\"paste\": \"two\\nlines\"}                     bracketed when the program asked for it
+  {\"mouse\": {\"kind\": \"down\", \"button\": \"left\", \"x\": 3, \"y\": 1}}
+                                             kind down, up, drag, moved, scroll-up, scroll-down,
+                                             scroll-left, scroll-right; x and y are cells of the
+                                             pane's terminal, from 0
+- reads one event per line from standard input.
+
+Events are encoded the way the program in the pane asked for (its keyboard protocol, application
+cursor keys, bracketed paste, mouse mode), whatever the window shows: a dialog or a field there
+takes nothing. Keys, text and pastes bring the pane's view back to the bottom. Mouse events and key
+releases that the program does not take are not sent, and said on stderr. When one event is wrong,
+or the program is not reading its input, nothing is sent. Scripts and agents should use `send` and
+`keys`, which check before typing into an agent.
+
+Examples:
+  cornercase input --pane 12 '{\"text\": \"ls\"}' '{\"key\": {\"code\": \"enter\"}}'
+  cornercase input --pane 12 '{\"mouse\": {\"kind\": \"scroll-up\", \"x\": 10, \"y\": 5}}'";
+pub(super) const SCROLL_HELP: &str =
+    "Moves the pane's view through its history, as the wheel does in the window, which shows the same
+view. On its alternate screen, or when it reads the mouse, a program scrolls itself: send it keys or
+the wheel with `cornercase input`.
+
+Examples:
+  cornercase scroll --pane 12 --up 10
+  cornercase scroll --pane 12 --bottom";
+pub(super) const SELECTION_HELP: &str =
+    "Without --from and --to, prints what is selected in the pane. With them, selects from one cell to
+another of its view, columns and rows from 0 as `cornercase surface` numbers them; the window shows
+the same selection. --copy also copies it to the clipboard through the window, as selecting there
+does.
+
+Examples:
+  cornercase selection --pane 12 --from 0,3 --to 79,5
+  cornercase selection --pane 12 --copy
+  cornercase selection --pane 12 --clear";
+pub(super) const RESIZE_HELP: &str =
+    "Lays a running `cornercase surface` out at another size, without starting it again: its next line
+comes at that size. ID is the `surface` of its lines. The terminals keep the size the window gives
+them.
+
+Example:
+  cornercase resize --surface 4 --cols 100 --rows 30";
+pub(super) const RATIO_HELP: &str =
+    "RATIO is the share of the divider's first side, between 0 and 1. --path names the divider as a
+surface line's `path` does, first or second at each level down; without it, the outermost one. The
+terminals follow at once.
+
+Examples:
+  cornercase ratio --tab 3 0.3
+  cornercase ratio --tab 3 --path second 0.5";
 pub(super) const SKILL_HELP: &str = "Install them for Claude Code, Codex and other agents with
   npx skills add usecornercase/cornercase-terminal --skill cornercase -g
 or put this text in an AGENTS.md or CLAUDE.md.";
@@ -416,6 +471,7 @@ Examples:
 pub(super) const WHEN_IDLE: &str = "Wait until no agent is working, then restart";
 pub(super) const RESTART_TIMEOUT: &str =
     "With --when-idle, give up after this many seconds and keep the server running";
+pub(super) const PANE_REQUIRED: &str = "The pane to act on; `cornercase status --panes` lists them";
 pub(super) const HERE_PANE: &str = "The pane [default: the one this runs in, else the shown one]";
 pub(super) const WAIT_PANE: &str = "The pane; repeat it, or add --tab, to wait on several [default: the one this runs in, else \
     the shown one]";

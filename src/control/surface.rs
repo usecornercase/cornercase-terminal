@@ -40,6 +40,7 @@ pub(crate) struct Frame {
     pub(crate) boot: String,
     pub(crate) session: u64,
     pub(crate) revision: u64,
+    pub(crate) surface: u64,
     pub(crate) tab: u64,
     pub(crate) cols: u16,
     pub(crate) rows: u16,

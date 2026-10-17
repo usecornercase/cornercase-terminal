@@ -324,3 +324,72 @@ fn a_frame_names_the_session_revision() {
 
     assert_eq!((first.session, got[0].session), (revision, revision));
 }
+
+mod resizing {
+    use super::*;
+    use crate::control::terminal::Resize;
+
+    fn resize(app: &mut App, client: u64, surface: Option<u64>, cols: u16, rows: u16) -> Response {
+        let command = Command::Resize(Resize { surface, cols, rows });
+        subscribe_as(app, client, Instant::now(), &command)
+    }
+
+    fn refusal(response: Response) -> String {
+        match response {
+            Response::Error(message) => message,
+            Response::Ok(value) => panic!("it was taken: {value}"),
+        }
+    }
+
+    #[test]
+    fn a_surface_is_laid_out_again_in_place() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (pane, tab, t0) = (term(&app, 0).id, tab_of(&app, 0), Instant::now());
+        let first = subscribe(&mut app, t0, tab);
+        let size_before = term(&app, 0).emulator.size().expect("a size");
+        assert_ne!(first.surface, 0);
+
+        let Response::Ok(answer) = resize(&mut app, CLIENT + 1, Some(first.surface), 100, 30) else {
+            panic!("refused")
+        };
+        let got = ready(&mut app, t0 + FRAME_EVERY);
+
+        assert_eq!((answer["surface"].as_u64(), answer["tab"].as_u64()), (Some(first.surface), Some(tab)));
+        let frame = &got[0];
+        assert_eq!((frame.cols, frame.rows, frame.revision, frame.surface), (100, 30, 2, first.surface));
+        assert_eq!(frame.content.panes[0].rect, Area { x: 0, y: 0, cols: 100, rows: 30 });
+        assert_eq!(frame.content.panes[0].pane, pane);
+        assert_eq!(term(&app, 0).emulator.size().expect("a size"), size_before, "no terminal was resized");
+    }
+
+    #[test]
+    fn a_resize_names_a_live_surface_and_a_size_it_can_lay_out() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (tab, t0) = (tab_of(&app, 0), Instant::now());
+        let surface = subscribe(&mut app, t0, tab).surface;
+
+        let missing = refusal(resize(&mut app, CLIENT + 1, None, 80, 24));
+        let unknown = refusal(resize(&mut app, CLIENT + 1, Some(surface + 50), 80, 24));
+        let empty = refusal(resize(&mut app, CLIENT + 1, Some(surface), 0, 0));
+        let wide = refusal(resize(&mut app, CLIENT + 1, Some(surface), 1001, 24));
+        app.forget(CLIENT);
+        let ended = refusal(resize(&mut app, CLIENT + 1, Some(surface), 80, 24));
+
+        assert!(missing.contains("--surface"), "{missing}");
+        assert!(unknown.contains("no surface") && ended.contains("no surface"), "{unknown} / {ended}");
+        assert!(empty.contains("cols") && wide.contains("cols"), "{empty} / {wide}");
+    }
+
+    #[test]
+    fn two_surfaces_have_their_own_ids() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let (tab, t0) = (tab_of(&app, 0), Instant::now());
+        let one = subscribe(&mut app, t0, tab).surface;
+        let two = match subscribe_as(&mut app, CLIENT + 1, t0, &command(tab, 80, 24)) {
+            Response::Ok(value) => serde_json::from_value::<Frame>(value).expect("a frame").surface,
+            Response::Error(message) => panic!("{message}"),
+        };
+
+        assert_ne!(one, two);
+    }
+}

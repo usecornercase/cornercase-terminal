@@ -190,3 +190,63 @@ mod named {
         assert_eq!(encode(key, &mut encoder, NO_KITTY, false), [0x03]);
     }
 }
+
+mod events {
+    use super::*;
+
+    #[rstest]
+    #[case::control("c", CTRL, "ctrl+c")]
+    #[case::back_tab("tab", SHIFT, "shift+tab")]
+    #[case::an_upper_case_letter("A", NONE, "A")]
+    #[case::a_function_key("f5", NONE, "f5")]
+    #[case::space("space", NONE, "space")]
+    fn builds_what_the_named_keys_build(#[case] code: &str, #[case] mods: KeyModifiers, #[case] name: &str) {
+        assert_eq!(event(code, mods, KeyEventKind::Press), named(name));
+    }
+
+    #[test]
+    fn typed_text_is_a_press_of_the_character() {
+        assert_eq!(typed('é'), KeyEvent::new(KeyCode::Char('é'), NONE));
+    }
+
+    fn release(code: KeyCode, kitty: KittyKeyFlags) -> Vec<u8> {
+        let mut encoder = Encoder::new().expect("key encoder");
+        encoder.set_kitty_flags(kitty);
+        let key = KeyEvent::new_with_kind(code, NONE, KeyEventKind::Release);
+        encode(key, &mut encoder, kitty, false)
+    }
+
+    #[test]
+    fn a_release_types_nothing_unless_the_program_asks_for_event_types() {
+        assert_eq!(release(KeyCode::Char('a'), NO_KITTY), Vec::<u8>::new());
+        assert_eq!(release(KeyCode::Char('a'), DISAMBIGUATE), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn a_release_is_reported_to_a_program_that_asked_for_it() {
+        let flags = KittyKeyFlags::DISAMBIGUATE | KittyKeyFlags::REPORT_EVENTS | KittyKeyFlags::REPORT_ALL;
+
+        let bytes = String::from_utf8(release(KeyCode::Char('a'), flags)).expect("text");
+
+        assert!(bytes.ends_with(":3u"), "{bytes:?}");
+    }
+
+    #[test]
+    fn a_repeat_in_legacy_mode_is_the_press() {
+        let mut encoder = Encoder::new().expect("key encoder");
+        let key = KeyEvent::new_with_kind(KeyCode::Up, NONE, KeyEventKind::Repeat);
+
+        assert_eq!(encode(key, &mut encoder, NO_KITTY, false), b"\x1b[A");
+    }
+
+    #[test]
+    fn super_reaches_the_encoder() {
+        let mut encoder = Encoder::new().expect("key encoder");
+        encoder.set_kitty_flags(DISAMBIGUATE);
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::SUPER);
+
+        let bytes = String::from_utf8(encode(key, &mut encoder, DISAMBIGUATE, false)).expect("text");
+
+        assert!(bytes.contains(";9"), "{bytes:?}");
+    }
+}
