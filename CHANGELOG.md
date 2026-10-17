@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.124
+
+- **A pane takes no input while its agent comes back.** After a restart or an update, a pane where Claude Code, Codex, Gemini CLI, Grok Build or Cursor CLI was running shows **resuming claude…** until the agent is back in its conversation. Keys and pastes typed meanwhile are dropped, with a note saying why, instead of landing in front of the resume command or in the agent's start-up, where an Enter could answer a question you never saw. **cancel** gives you the pane back at once, as a plain shell if the command was not typed yet. A trust question still takes your answer.
+- `cornercase send` refuses a pane that is resuming, unless `--force`, and `cornercase status` shows it as `resuming` (also a new last column of `status --panes`).
+
 ## 0.12.123
 
 - **Flows have their own tab in Settings**, right after Agents: every flow with the selected one's diagram beside it, and edit, duplicate, export, delete, import and new, one click away. The flows row left the Agents tab. Settings now opens at the size of that list on every tab, so the diagram fits beside it and the tabs stay where they are.
