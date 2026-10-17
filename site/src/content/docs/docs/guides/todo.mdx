@@ -40,6 +40,14 @@ There is one list, the same whichever project or workspace is active. The header
 
 While a field is open, the keys go to it instead of your program: type, paste, move with `←` `→`, `↑` `↓` across the lines of a long item, `Home` and `End`, and delete with `Backspace` and `Delete`. A pasted text with several lines becomes one item. A click anywhere outside the field saves it and gives the keys back to the program in the active pane.
 
+## Send an item to an agent
+
+An item is often the next thing to tell an agent. Hover an item left to do and click the **`▸`** just left of its `×`: a menu lists every agent running, in the order of the [agents section](../projects-workspaces-tabs/#the-agents-section), each with its status icon, its project, its workspace when the project has several, and the agent, such as `● web-shop › feat/dark-mode · claude`. Pick one and the item's text is typed into that agent and sent, as [`cornercase send --enter`](../scripts-and-agents/#talk-to-a-pane) would do. Once the agent has taken it, the item is checked off and a message at the bottom right says `sent to claude in web-shop › feat/dark-mode`.
+
+What `send` refuses, the button refuses too: an agent waiting for your answer to a question or a permission prompt, one still resuming its conversation after a restart, a Claude Code showing a dialog, a panel, its shell mode or its feedback survey instead of its input box, or a program that stopped reading its input. The message says why and the item stays to do; sort the agent out and send again. The item also stays to do when the agent did not record the prompt within ten seconds: read its pane before sending again. With no agent running, the message says `no agent is running`.
+
+Done items and the item being edited have no button; to send an item again, uncheck it first. In the [compact layout](../small-terminals/) the button always shows, dimmed, since there is no hover. A script or an agent can do the same with [`cornercase todo send`](../scripts-and-agents/#leave-notes).
+
 ## Delete items, and undo
 
 Hover an item and click **`×`** to delete it; the item you are editing shows its `×` all the time. Done items can go all at once with **`clear done`** in the header. Either way nothing asks first: a message at the bottom right says what went, with an **`undo`** button that puts it back where it was for a few seconds.
