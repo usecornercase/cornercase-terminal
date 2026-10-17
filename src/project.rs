@@ -132,8 +132,17 @@ impl Tab {
         let target = self.pane_at(area, pos).filter(|t| *t != pane)?;
         let rect = self.rect(area, target)?;
         let place = Place::at(rect, pos);
-        let layout = self.layout.moved(pane, target, place).filter(|l| l.has_room(area))?;
+        let layout = self.rearranged(area, pane, target, place)?;
         Some(Landing { area: place.area(rect), place, layout })
+    }
+
+    pub(crate) fn rearranged(&self, area: Rect, pane: u64, target: u64, place: Place) -> Option<Node<u64>> {
+        self.layout.moved(pane, target, place).filter(|l| l.has_room(area))
+    }
+
+    pub(crate) fn land(&mut self, pane: u64, layout: Node<u64>) {
+        self.layout = layout;
+        self.focus(pane);
     }
 
     pub(crate) fn can_split(&self, area: Rect, id: u64, dir: Dir) -> bool {

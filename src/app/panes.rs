@@ -221,8 +221,7 @@ impl App {
         let Some(tab) = self.tab_mut().filter(|t| t.id == drag.tab) else { return };
         let Some(landing) = tab.landing(pane, drag.pane, pos) else { return };
         log::info!("app", "pane moved", pane = drag.pane, tab = drag.tab, place = format!("{:?}", landing.place));
-        tab.layout = landing.layout;
-        tab.focus(drag.pane);
+        tab.land(drag.pane, landing.layout);
         self.resize(area);
     }
 

@@ -11,8 +11,8 @@ use crate::app::interaction::Grab;
 use crate::app::interaction::RowDrag;
 use crate::app::menus::Target;
 use crate::log::{self};
+use crate::project::Hierarchy;
 use crate::project::search::Goto;
-use crate::project::{Hierarchy, move_before};
 use crate::ui::{self, SidebarRow, WorkspaceRow};
 
 impl App {
@@ -120,18 +120,14 @@ impl App {
         let Some(row) = self.tree_row_of(target) else { return };
         log::info!("app", "row moved", row = format!("{target:?}"), to = format!("{:?}", landing.spot));
         match (row, landing.spot) {
-            (ui::TreeRow::Group(g), ui::Spot::Group(before)) => move_before(&mut self.groups, g, before, None),
+            (ui::TreeRow::Group(g), ui::Spot::Group(before)) => self.move_group(g, before),
             (ui::TreeRow::Project(p), ui::Spot::Project { group, before }) => {
+                let group = group.and_then(|g| self.groups.get(g)).map(|g| g.id);
+                let before = before.and_then(|q| self.projects.get(q)).map(|q| q.id);
                 self.move_project(self.projects[p].id, group, before);
             }
-            (ui::TreeRow::Workspace(p, w), ui::Spot::Workspace(before)) => {
-                let project = &mut self.projects[p];
-                move_before(&mut project.workspaces, w, before, Some(&mut project.active));
-            }
-            (ui::TreeRow::Tab(p, w, t), ui::Spot::Tab(before)) => {
-                let workspace = &mut self.projects[p].workspaces[w];
-                move_before(&mut workspace.tabs, t, before, Some(&mut workspace.active));
-            }
+            (ui::TreeRow::Workspace(p, w), ui::Spot::Workspace(before)) => self.move_workspace(p, w, before),
+            (ui::TreeRow::Tab(p, w, t), ui::Spot::Tab(before)) => self.move_tab(p, w, t, before),
             _ => {}
         }
     }

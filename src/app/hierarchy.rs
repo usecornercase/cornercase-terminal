@@ -6,7 +6,7 @@ use super::menus::Target;
 use super::overlay::Overlay;
 use crate::log::{self};
 use crate::project::search::Goto;
-use crate::project::{Group, Hierarchy, Phase, Project, Tab, Workspace, group, shift_active};
+use crate::project::{Group, Hierarchy, Phase, Project, Tab, Workspace, group, move_before, shift_active};
 use crate::term::Term;
 
 impl App {
@@ -134,20 +134,37 @@ impl App {
         }
     }
 
-    pub(super) fn toggle_fold(&mut self, target: Target) {
+    pub(super) fn set_collapsed(&mut self, target: Target, collapsed: bool) {
         match target {
+            Target::Group(id) => {
+                if let Some(entry) = self.group_mut(id) {
+                    entry.collapsed = collapsed;
+                }
+            }
             Target::Project(id) => {
                 if let Some(p) = self.projects.project_index(id) {
-                    self.projects[p].collapsed = !self.projects[p].collapsed;
+                    self.projects[p].collapsed = collapsed;
                 }
             }
             Target::Workspace(project, workspace) => {
                 if let Some((p, w)) = self.projects.workspace_in(project, workspace) {
-                    let workspace = &mut self.projects[p].workspaces[w];
-                    workspace.collapsed = !workspace.collapsed;
+                    self.projects[p].workspaces[w].collapsed = collapsed;
                 }
             }
-            Target::Group(_) | Target::Tab(..) => self.click_row(target),
+            Target::Tab(..) => {}
+        }
+    }
+
+    pub(super) fn toggle_fold(&mut self, target: Target) {
+        let collapsed = match target {
+            Target::Project(id) => self.projects.project_index(id).map(|p| self.projects[p].collapsed),
+            Target::Workspace(project, workspace) => {
+                self.projects.workspace_in(project, workspace).map(|(p, w)| self.projects[p].workspaces[w].collapsed)
+            }
+            Target::Group(_) | Target::Tab(..) => return self.click_row(target),
+        };
+        if let Some(collapsed) = collapsed {
+            self.set_collapsed(target, !collapsed);
         }
     }
 
@@ -157,9 +174,7 @@ impl App {
         }
     }
 
-    pub(super) fn move_project(&mut self, id: u64, group: Option<usize>, before: Option<usize>) {
-        let group = group.and_then(|g| self.groups.get(g)).map(|g| g.id);
-        let before = before.and_then(|q| self.projects.get(q)).map(|q| q.id);
+    pub(super) fn move_project(&mut self, id: u64, group: Option<u64>, before: Option<u64>) {
         let active = self.project().map(|p| p.id);
         let Some(p) = self.projects.project_index(id) else { return };
         let mut project = self.projects.remove(p);
@@ -170,6 +185,31 @@ impl App {
         });
         self.projects.insert(at, project);
         self.active = active.and_then(|id| self.projects.project_index(id)).unwrap_or(0);
+    }
+
+    pub(super) fn move_group(&mut self, group: usize, before: usize) {
+        move_before(&mut self.groups, group, before, None);
+    }
+
+    pub(super) fn move_workspace(&mut self, p: usize, w: usize, before: usize) {
+        let project = &mut self.projects[p];
+        move_before(&mut project.workspaces, w, before, Some(&mut project.active));
+    }
+
+    pub(super) fn move_tab(&mut self, p: usize, w: usize, t: usize, before: usize) {
+        let workspace = &mut self.projects[p].workspaces[w];
+        move_before(&mut workspace.tabs, t, before, Some(&mut workspace.active));
+    }
+
+    pub(super) fn style_group(&mut self, id: u64, icon: Option<char>, colour: Option<u8>) -> bool {
+        let Some(entry) = self.group_mut(id) else { return false };
+        if let Some(icon) = icon {
+            entry.icon = icon;
+        }
+        if let Some(colour) = colour {
+            entry.colour = colour;
+        }
+        true
     }
 
     pub(super) fn close_workspace(&mut self, p: usize, w: usize) {
@@ -251,6 +291,9 @@ impl App {
     pub(super) fn delete_group(&mut self, id: u64) {
         self.groups.retain(|g| g.id != id);
         self.deleting_groups.retain(|&g| g != id);
+        if self.overlay.as_ref().is_some_and(|overlay| overlay.names_group(id)) {
+            self.overlay = None;
+        }
         for p in self.projects.iter_mut().filter(|p| p.group == Some(id)) {
             p.group = None;
         }

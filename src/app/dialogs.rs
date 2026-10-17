@@ -124,15 +124,13 @@ impl App {
             return;
         }
         let hit = ui::style_hit(area, pos);
-        let Some(entry) = self.group_mut(group) else {
-            self.overlay = None;
-            return;
+        let known = match hit {
+            Some(ui::StyleHit::Icon(i)) => self.style_group(group, Some(group::GROUP_ICONS[i]), None),
+            Some(ui::StyleHit::Colour(i)) => self.style_group(group, None, Some(group::GROUP_COLOURS[i])),
+            Some(ui::StyleHit::Done) | None => self.group_index(group).is_some(),
         };
-        match hit {
-            Some(ui::StyleHit::Icon(i)) => entry.icon = group::GROUP_ICONS[i],
-            Some(ui::StyleHit::Colour(i)) => entry.colour = group::GROUP_COLOURS[i],
-            Some(ui::StyleHit::Done) => self.overlay = None,
-            None => {}
+        if !known || matches!(hit, Some(ui::StyleHit::Done)) {
+            self.overlay = None;
         }
     }
 

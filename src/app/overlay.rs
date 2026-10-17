@@ -117,6 +117,23 @@ impl Overlay {
         }
     }
 
+    pub(super) fn names_group(&self, id: u64) -> bool {
+        match self {
+            Self::GroupStyle { group } | Self::DeleteGroup { group } => *group == id,
+            Self::Rename { target, .. } => *target == Target::Group(id),
+            Self::Picker { group, .. } => *group == Some(id),
+            Self::Menu { actions, .. } => actions.iter().any(|action| match action {
+                MenuAction::GroupStyle(group) | MenuAction::DeleteGroup(group) | MenuAction::AddProject(group) => {
+                    *group == id
+                }
+                MenuAction::SetGroup(_, group) => *group == Some(id),
+                MenuAction::Rename(target) => *target == Target::Group(id),
+                _ => false,
+            }),
+            _ => false,
+        }
+    }
+
     pub(super) fn submit_label(&self) -> &'static str {
         match self {
             Self::Rename { .. } => RENAME_SUBMIT,
