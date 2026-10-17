@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.134
+
+- **Surfaces can send only what changed.** For programs that draw cornercase's terminals with `cornercase surface`: with `--patches`, the first line is complete and the next ones carry only the rows that changed in each pane, plus its cursor, and its modes, scroll position and colours when they change. Output that scrolls arrives as the rows that moved plus the new ones, so an agent streaming a reply costs a few hundred bytes a line instead of the whole tab. Each such line names the `revision` it applies to (`base`).
+  - A complete line comes again whenever the layout, a size, the panes or the view change, after a reader fell behind, and on request: `cornercase redraw --surface ID`.
+  - Programs that don't ask keep getting complete lines, exactly as before. See Scripts and agents → Stream a tab's terminals.
+
 ## 0.12.133
 
 - **A program that draws cornercase counts as looking at what it shows.** The tab a view shows (`cornercase view`, while it is active and has a size) now counts as seen, like the tab on screen in the window: an agent that finishes there gets no `✓`, one already marked loses it, and one that needs you there sends no toast or desktop notification.
