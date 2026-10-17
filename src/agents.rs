@@ -11,6 +11,7 @@ mod known;
 pub(crate) mod launch;
 pub(crate) mod opencode;
 pub mod stats;
+pub(crate) mod tree;
 pub(crate) mod usage;
 
 pub use known::Known;

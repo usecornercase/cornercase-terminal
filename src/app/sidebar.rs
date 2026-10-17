@@ -89,7 +89,8 @@ impl App {
 
     pub(super) fn agents_view(&self) -> ui::AgentsView {
         let focus = self.focus();
-        let entries = self.agent_places().into_iter().map(|(p, w, t, i)| {
+        let narrow = self.drawn.agents_list.width < ui::MIN_MENU_ROW_WIDTH;
+        let entries = self.agent_tree(narrow).into_iter().map(|((p, w, t, i), node)| {
             let project = &self.projects[p];
             let workspace = &project.workspaces[w];
             let tab = &workspace.tabs[t];
@@ -102,6 +103,9 @@ impl App {
                 workspace: (project.workspaces.len() > 1).then(|| workspace.label()),
                 details: self.details(context, None),
                 active: focus.tab == Some(tab.id) && tab.active == i,
+                depth: node.depth,
+                last: node.last,
+                rails: node.rails,
             }
         });
         ui::AgentsView { entries: entries.collect(), scroll: self.scroll.agents }

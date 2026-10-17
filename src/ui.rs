@@ -93,7 +93,7 @@ pub(crate) use remote_access::{RemoteAccess, button as remote_button, done as re
 pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
-pub(crate) use rows::{ROW_MENU_ICON, Rows, more_above};
+pub(crate) use rows::{MIN_MENU_ROW_WIDTH, ROW_MENU_ICON, Rows, more_above};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, project_rows, sidebar_hit};
 #[cfg(test)]
