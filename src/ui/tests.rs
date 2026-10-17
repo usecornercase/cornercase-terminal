@@ -138,6 +138,7 @@ fn single(screen: Snapshot) -> TabView {
         dragging: None,
         link: None,
         landing: None,
+        resuming: Vec::new(),
     }
 }
 
@@ -164,6 +165,7 @@ mod overlay;
 mod picker;
 mod queue;
 mod reorder;
+mod resuming;
 mod row_hover;
 mod scrollback;
 mod search;

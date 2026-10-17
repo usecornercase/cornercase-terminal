@@ -106,7 +106,7 @@ impl App {
                 }
                 for tab in &workspace.tabs {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
-                    tab.panes.iter().for_each(|term| Self::pane_refreshed(term, &mut hash));
+                    tab.panes.iter().for_each(|term| Self::pane_refreshed(term, self.resume_holds(term.id), &mut hash));
                 }
             }
         }
@@ -116,12 +116,12 @@ impl App {
         hash.finish()
     }
 
-    fn pane_refreshed(term: &Term, hash: &mut DefaultHasher) {
+    fn pane_refreshed(term: &Term, resuming: bool, hash: &mut DefaultHasher) {
         let pid = term.foreground_pid();
         (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
-        (term.dialog(), term.survey(), term.resume.is_some()).hash(hash);
+        (term.dialog(), term.survey(), term.resume.is_some(), resuming).hash(hash);
     }
 
     fn pane_info(&self, term: &Term, active: bool, caller: Option<u64>) -> PaneInfo {
@@ -141,6 +141,7 @@ impl App {
             active,
             caller: caller == Some(term.id),
             resumes: self.config.resume_agents && term.resume.is_some(),
+            resuming: self.resume_holds(term.id),
         }
     }
 

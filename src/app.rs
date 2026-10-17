@@ -679,7 +679,7 @@ impl App {
         let landing = self.pane_landing(pane_area);
         let pointer = self.link_hover();
         let root = self.project().and_then(Project::workspace).map(|w| w.path.clone());
-        let home = self.home.clone();
+        let (home, held) = (self.home.clone(), self.held_panes());
         let tab = self.tab_mut().and_then(|tab| {
             let layout = tab.layout_by_index()?;
             let screens: Vec<_> = tab.panes.iter_mut().map(|t| t.emulator.snapshot().unwrap_or_default()).collect();
@@ -687,7 +687,8 @@ impl App {
             let link = pointer
                 .zip(root.as_deref())
                 .and_then(|(at, root)| Self::hovered_link(tab, &screens, pane_area, at, root, home.as_deref()));
-            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing })
+            let resuming = tab.panes.iter().map(|t| held.contains(&t.id).then(|| session::resumed(t))).collect();
+            Some(ui::TabView { layout, screens, active: tab.active, dim_inactive, dragging, link, landing, resuming })
         });
         self.toast = self.toast.take().filter(|t| t.at.elapsed() < t.lasts());
         let visible = self.visible_tab();

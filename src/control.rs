@@ -711,6 +711,7 @@ impl Report {
                         project_name: project.name.clone(),
                         path: pane.path.clone(),
                         survey: pane.survey,
+                        resuming: pane.resuming,
                     }));
                 }
             }
@@ -751,10 +752,11 @@ pub struct PaneRow {
     pub(crate) project_name: String,
     pub(crate) path: Option<PathBuf>,
     pub(crate) survey: bool,
+    pub(crate) resuming: bool,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 22] = [
+    pub const COLUMNS: [&str; 23] = [
         "pane",
         "tab",
         "workspace",
@@ -777,6 +779,7 @@ impl PaneRow {
         "project_name",
         "path",
         "survey",
+        "resuming",
     ];
 }
 
@@ -876,6 +879,7 @@ pub struct PaneInfo {
     pub(crate) active: bool,
     pub(crate) caller: bool,
     pub(crate) resumes: bool,
+    pub(crate) resuming: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -103,6 +103,7 @@ fn project_lines(lines: &mut Vec<String>, report: &Report, project: &ProjectInfo
                     (pane.background_shell, "background shell"),
                     (pane.dialog, "dialog open"),
                     (pane.survey, "survey open"),
+                    (pane.resuming, "resuming"),
                 ]
                 .into_iter()
                 .filter_map(|(on, note)| on.then_some(note))

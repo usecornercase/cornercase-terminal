@@ -27,7 +27,9 @@ impl App {
         {
             return;
         }
-        if ev.kind == MouseEventKind::Down(MouseButton::Left) && self.press_scrollback_badge(area, pos) {
+        if ev.kind == MouseEventKind::Down(MouseButton::Left)
+            && (self.press_resume_notice(area, pos) || self.press_scrollback_badge(area, pos))
+        {
             return;
         }
         let left = ev.kind == MouseEventKind::Down(MouseButton::Left);
@@ -93,6 +95,9 @@ impl App {
     }
 
     pub(super) fn forward_mouse(&mut self, ev: MouseEvent, at: Position) {
+        if self.term().is_some_and(|term| self.resume_holds(term.id)) {
+            return;
+        }
         let Some(term) = self.term_mut() else { return };
         let bytes = mouse::encode(ev, at.x, at.y, term.emulator.mouse_mode(), term.emulator.mouse_encoding());
         if let Some(bytes) = bytes {
@@ -101,6 +106,7 @@ impl App {
     }
 
     fn wheel_pane(&mut self, area: Rect, pos: Position, delta: isize) -> bool {
+        let held = self.tab().and_then(|tab| tab.pane_at(area, pos)).is_some_and(|id| self.resume_holds(id));
         let Some(tab) = self.tab_mut() else { return true };
         let Some(id) = tab.pane_at(area, pos) else { return true };
         let Some(term) = tab.pane_by_mut(id) else { return true };
@@ -109,6 +115,8 @@ impl App {
         }
         let refused = if !term.emulator.alternate_screen() {
             term.emulator.scroll(delta);
+            false
+        } else if held {
             false
         } else if term.emulator.alt_scroll() {
             let code = if delta < 0 { KeyCode::Up } else { KeyCode::Down };

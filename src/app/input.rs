@@ -60,6 +60,9 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
+        if self.holds_input() {
+            return;
+        }
         let Some(term) = self.term_mut() else { return };
         term.emulator.scroll_to_bottom();
         let bytes = term.emulator.encode_key(key);
@@ -394,6 +397,9 @@ impl App {
         {
             text.chars().filter(|c| !c.is_control()).for_each(|c| filter.push(c));
             self.changes.scroll = 0;
+            return;
+        }
+        if self.holds_input() {
             return;
         }
         if let Some(term) = self.term_mut() {

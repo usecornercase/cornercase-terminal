@@ -19,11 +19,17 @@ fn remembered(app: &mut App, rx: &Receiver<AppEvent>) -> State {
     app.state()
 }
 
+const QUITS: &str = "#!/bin/sh\necho \"resumed: $*\"\n";
+
 fn restored(saved: &State, kind: &str, on: bool) -> (App, Receiver<AppEvent>, TempDir) {
+    restored_running(saved, kind, on, QUITS)
+}
+
+fn restored_running(saved: &State, kind: &str, on: bool, script: &str) -> (App, Receiver<AppEvent>, TempDir) {
     let (mut app, rx) = empty_app();
     let bin = TempDir::new();
     let fake = bin.path().join(kind);
-    write_executable(&fake, "#!/bin/sh\necho \"resumed: $*\"\n");
+    write_executable(&fake, script);
     app.config.agent_commands.insert(kind.into(), fake.display().to_string());
     app.config.resume_agents = on;
     app.restore(saved, AREA);
@@ -167,4 +173,109 @@ fn nothing_resumes_when_it_is_turned_off() {
     let (back, _rx, _bin) = restored(&saved, agents::Known::Claude.name(), false);
 
     assert_eq!((back.agents.launches.len(), saved_agent(&back.state())), (0, None));
+}
+
+mod input_while_resuming {
+    use super::*;
+    use crate::control::{Command, Request, Response, SendText};
+
+    const STAYS: &str = "#!/bin/sh\necho \"resumed: $*\"\nexec sleep 30\n";
+
+    fn resuming(script: &str) -> (App, Receiver<AppEvent>, TempDir, u64) {
+        let (_app, _rx, _dirs, claude, saved) = remembered_claude();
+        claude.signal("quit");
+        let (back, rx, bin) = restored_running(&saved, agents::Known::Claude.name(), true, script);
+        let id = back.term().expect("the restored pane").id;
+        (back, rx, bin, id)
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        text.chars().for_each(|c| app.forward_key(KeyEvent::from(KeyCode::Char(c))));
+    }
+
+    fn send(app: &mut App, pane: u64, force: bool) -> Response {
+        let send = SendText { pane: Some(pane), text: Some("hello".into()), force, ..SendText::default() };
+        let request = Request { caller: None, server: None, contract: None, boot: None, command: Command::Send(send) };
+        let text = serde_json::to_string(&request).expect("json");
+        app.request(1, &text, Some(AREA), Instant::now());
+        let (_, answer) = app.take_answers().pop().expect("an answer");
+        serde_json::from_str(&answer).expect("a response")
+    }
+
+    fn ready(app: &mut App, rx: &Receiver<AppEvent>, pane: u64) {
+        wait_until_within("the pane takes input again", Duration::from_secs(15), || {
+            drain(app, rx);
+            app.refresh(Instant::now());
+            !app.resume_holds(pane)
+        });
+    }
+
+    #[test]
+    fn keys_and_a_paste_are_dropped_and_say_why() {
+        let (mut back, rx, _bin, id) = resuming(STAYS);
+        assert!(back.resume_holds(id));
+
+        type_text(&mut back, "zz");
+        back.handle_paste("pasted-text", AREA);
+
+        assert!(
+            toast(&back).is_some_and(|t| t.starts_with("claude is resuming its conversation")),
+            "{:?}",
+            toast(&back)
+        );
+        ready(&mut back, &rx, id);
+        assert!(!squeezed(&screen(&mut back)).contains("pasted-text"));
+        assert!(!squeezed(&screen(&mut back)).contains("zzclaude"));
+    }
+
+    #[test]
+    fn the_pane_takes_input_again_once_the_agent_has_drawn() {
+        let (mut back, rx, _bin, id) = resuming(STAYS);
+
+        ready(&mut back, &rx, id);
+
+        assert!(back.term().is_some_and(|t| !t.shell_in_foreground()), "the agent still runs");
+    }
+
+    #[test]
+    fn a_resume_whose_agent_exits_gives_the_pane_back() {
+        let (mut back, rx, _bin, id) = resuming(QUITS);
+
+        ready(&mut back, &rx, id);
+
+        assert!(back.term().is_some_and(Term::shell_in_foreground));
+    }
+
+    #[test]
+    fn cancel_before_the_line_is_typed_leaves_a_shell_that_takes_keys() {
+        let (mut back, rx, _bin, id) = resuming(STAYS);
+        let pane = back.tab().and_then(|t| t.shown(back.layout(AREA).pane).first().map(|(_, r)| *r)).expect("a pane");
+        let (_, button) = ui::resume_notice(pane, "claude").expect("the notice fits");
+
+        click(&mut back, button.as_position());
+        type_text(&mut back, "echo ok-$((1+1))");
+        back.forward_key(KeyEvent::from(KeyCode::Enter));
+
+        wait_until("the shell answers", || {
+            drain(&mut back, &rx);
+            back.refresh(Instant::now());
+            screen(&mut back).contains("ok-2")
+        });
+        let (held, resumed) = (back.resume_holds(id), screen(&mut back).contains("resumed:"));
+        assert_eq!((held, resumed, saved_agent(&back.state())), (false, false, None));
+    }
+
+    #[test]
+    fn send_is_refused_unless_forced() {
+        let (mut back, _rx, _bin, id) = resuming(STAYS);
+
+        let refused = send(&mut back, id, false);
+        let forced = send(&mut back, id, true);
+
+        assert!(
+            matches!(&refused, Response::Error(e) if e.contains("is resuming its agent's conversation")),
+            "{refused:?}"
+        );
+        assert!(matches!(forced, Response::Ok(_)), "{forced:?}");
+    }
 }

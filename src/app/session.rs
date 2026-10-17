@@ -1,16 +1,17 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::toast::Toast;
 use crate::agents::AgentState;
+use crate::agents::activity::Status;
 use crate::agents::launch::Launch;
 use crate::error::Result;
 use crate::flows::{Role, folder};
 use crate::log::{self};
-use crate::project::{Tab, Workspace};
+use crate::project::{Hierarchy, Tab, Workspace};
 use crate::state::{TabState, WorkspaceState};
 use crate::term::Term;
 use crate::ui;
@@ -95,11 +96,57 @@ impl App {
         let Some(line) = self.resume_line(role, agent, run) else { return false };
         log::info!("app", "resuming a conversation", pane = term.id, agent = agent.kind);
         let now = Instant::now();
-        self.agents.launches.push(Launch::command(term.id, line, now));
+        self.agents.launches.push(Launch::resume(term.id, line, role.is_some(), now));
         term.resume = Some(agent.clone());
         term.resuming = Some(now + RESUME_GRACE);
         true
     }
+
+    pub(super) fn resume_holds(&self, pane: u64) -> bool {
+        self.agents.launches.iter().any(|launch| launch.term == pane && launch.resume && !launch.waits_for_you())
+    }
+
+    pub(super) fn held_panes(&self) -> Vec<u64> {
+        self.agents.launches.iter().filter(|l| l.resume && !l.waits_for_you()).map(|l| l.term).collect()
+    }
+
+    pub(super) fn holds_input(&mut self) -> bool {
+        let Some(term) = self.term().filter(|term| self.resume_holds(term.id)) else { return false };
+        let message =
+            format!("{} is resuming its conversation in this pane; wait for it, or press cancel", resumed(term));
+        self.toast = Some(Toast::new(message, ui::ToastIcon::Agent(Status::Working)));
+        true
+    }
+
+    pub(super) fn press_resume_notice(&mut self, area: Rect, pos: Position) -> bool {
+        let Some(tab) = self.tab() else { return false };
+        let pressed = tab.shown(area).into_iter().find_map(|(id, rect)| {
+            let term = tab.pane_by(id)?;
+            ui::resume_notice(rect, &resumed(term))
+                .filter(|(_, button)| self.resume_holds(id) && button.contains(pos))
+                .map(|_| id)
+        });
+        let Some(pane) = pressed else { return false };
+        self.cancel_resume(pane);
+        true
+    }
+
+    fn cancel_resume(&mut self, pane: u64) {
+        let Some(i) = self.agents.launches.iter().position(|launch| launch.term == pane && launch.resume) else {
+            return;
+        };
+        let typed = self.agents.launches.remove(i).typed();
+        if !typed && let Some(term) = self.projects.pane_by_mut(pane) {
+            term.resuming = None;
+            term.resume = None;
+            term.agent.give_up();
+        }
+        log::info!("app", "resume cancelled", pane = pane, typed = typed);
+    }
+}
+
+pub(super) fn resumed(term: &Term) -> String {
+    term.resume.as_ref().map_or_else(|| "the agent".to_string(), |agent| agent.kind.clone())
 }
 
 pub(super) fn not_restored(missed: &[(String, usize)]) -> String {

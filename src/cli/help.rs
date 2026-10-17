@@ -20,7 +20,8 @@ Examples:
   cornercase wait --pane \"$pane\" --until shell --timeout 900
   cornercase read --pane \"$pane\" --lines 40
   cornercase start claude --worktree fix-login --prompt 'Fix the login form' --wait";
-pub(super) const STATUS_HELP: &str = "Each pane shows its program and folder, and for a coding agent what it is doing (working,
+pub(super) const STATUS_HELP: &str =
+    "Each pane shows its program and folder, and for a coding agent what it is doing (working,
 waiting for an answer, done out of sight, failed, idle), its model and how full its context is. `(you)`
 marks the pane running the command, `(shown)` what the window shows. `working (background shell)`
 is a Claude Code agent whose turn is over while a shell it started in the background still runs:
@@ -29,13 +30,16 @@ it wakes up when that shell ends (`background_shell` in the JSON, where the stat
 input box, which `cornercase send` refuses (`dialog` in the JSON).
 `(survey open)` is Claude Code's feedback survey above its input box, which `cornercase send`
 refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
+`(resuming)` is a pane whose agent is coming back in its conversation after a restart: until it
+is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
 pane, tab, workspace, project (their ids), program, agent, status, background_shell, dialog,
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
-path and survey (Claude Code's feedback survey shows); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
+path, survey (Claude Code's feedback survey shows) and resuming (the agent is coming back in its
+conversation); new ones only ever go at the end. Values are as in the JSON (true or false, context as a
 number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.
@@ -99,7 +103,9 @@ it; use `cornercase keys` for that. So is a Claude Code agent that shows a dialo
 its shell mode instead of its input box (`dialog` in `cornercase status --json`), unless you pass
 --force. So is its feedback survey above the input box (`1: Bad  2: Fine  3: Good  0: Dismiss`,
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
-`cornercase keys --pane N 0`, or pass --force.
+`cornercase keys --pane N 0`, or pass --force. So is a pane whose agent is resuming its conversation
+after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
+send again once it is back, or pass --force.
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build or Cursor CLI has
 recorded the prompt in its own history, and fails with `not confirmed: the prompt may not have
