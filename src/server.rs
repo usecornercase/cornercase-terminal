@@ -242,11 +242,6 @@ impl Client {
         }
     }
 
-    fn snapshot(&mut self, text: String) {
-        self.held = Some(text);
-        self.catch_up();
-    }
-
     fn catch_up(&mut self) {
         if self.out.queued() < SNAPSHOTS_QUEUED
             && let Some(text) = self.held.take()
@@ -512,9 +507,11 @@ impl Server {
     }
 
     fn step(&mut self, step: Step) -> ControlFlow<()> {
-        let traced = step.traced();
+        let (traced, refresh) = (step.traced(), matches!(step, Step::Refresh));
         let flow = self.run_step(step);
-        if traced {
+        if refresh {
+            self.app.trace_refresh();
+        } else if traced {
             self.app.trace();
         }
         if self.restart.is_none()
@@ -577,7 +574,7 @@ impl Server {
         for (id, streamed) in self.app.take_events() {
             match (self.client_mut(id), streamed) {
                 (Some(client), Streamed::Event(text)) => client.stream(text),
-                (Some(client), Streamed::Snapshot(text)) => client.snapshot(text),
+                (Some(client), Streamed::Snapshot(text)) => client.held = Some(text),
                 (Some(_), Streamed::End) => ended.push(id),
                 (None, _) => {}
             }

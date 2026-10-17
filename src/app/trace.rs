@@ -253,6 +253,11 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 
 impl App {
     pub(crate) fn trace(&mut self) {
+        self.events.snapshots.changed = true;
+        self.trace_refresh();
+    }
+
+    pub(crate) fn trace_refresh(&mut self) {
         let logged = log::enabled(Level::Info);
         if logged || self.following() {
             self.publish(logged);

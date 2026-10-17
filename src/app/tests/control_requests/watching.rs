@@ -38,7 +38,11 @@ fn settled(app: &mut App, rx: &Receiver<AppEvent>, from: u64) -> u64 {
         drain(app, rx);
         let report = app.report(None);
         let mut panes = report.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).flat_map(|t| &t.panes);
-        let shells = panes.all(|pane| pane.program.as_deref().is_some_and(is_sh) && pane.at_prompt == Some(true));
+        let shells = panes.all(|pane| {
+            pane.program.as_deref().is_some_and(is_sh)
+                && pane.at_prompt == Some(true)
+                && !pane_screen(app, pane.id).trim().is_empty()
+        });
         app.trace();
         let got = snapshots(app);
         revision = got.last().map_or(revision, |snapshot| snapshot.revision);
@@ -245,6 +249,30 @@ fn output_alone_publishes_nothing_until_a_step_is_traced() {
 
     assert!(wrote);
     assert_eq!(app.take_events(), []);
+}
+
+#[test]
+fn a_refresh_after_output_alone_does_not_build_the_session_again() {
+    let (mut app, rx, _dirs) = app_with(1);
+    let pane = term(&app, 0).id;
+    let revision = watching(&mut app).revision;
+    settled(&mut app, &rx, revision);
+    app.trace_refresh();
+    let built = app.events.snapshots.built;
+
+    let wrote = app.projects[0].workspaces[0].tabs[0].panes[0].write(b"echo cells-\"\"only\n");
+    wait_until("the shell prints", || {
+        drain(&mut app, &rx);
+        pane_screen(&app, pane).contains("cells-only")
+    });
+    app.trace_refresh();
+    let after_output = (app.events.snapshots.built, app.take_events());
+    app.agents.watched = Some(Instant::now());
+    app.trace_refresh();
+
+    assert!(wrote);
+    assert_eq!(after_output, (built, Vec::new()));
+    assert_ne!(app.events.snapshots.built, built);
 }
 
 #[test]

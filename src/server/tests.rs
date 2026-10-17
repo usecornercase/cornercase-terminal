@@ -407,7 +407,8 @@ mod streaming {
         let (mut client, rx) = client();
         client.out.queued.store(SNAPSHOTS_QUEUED, Ordering::Relaxed);
         for n in 1..=3 {
-            client.snapshot(format!("revision {n}"));
+            client.held = Some(format!("revision {n}"));
+            client.catch_up();
         }
         let full = texts(&rx);
 
@@ -448,8 +449,10 @@ mod streaming {
     #[test]
     fn a_watcher_with_room_gets_each_snapshot_at_once() {
         let (mut client, rx) = client();
-        client.snapshot("revision 1".into());
-        client.snapshot("revision 2".into());
+        client.held = Some("revision 1".into());
+        client.catch_up();
+        client.held = Some("revision 2".into());
+        client.catch_up();
 
         assert_eq!(texts(&rx), ["revision 1", "revision 2"]);
     }

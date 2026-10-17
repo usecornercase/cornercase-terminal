@@ -24,14 +24,25 @@ pub(super) struct Snapshots {
     watchers: Vec<u64>,
     last: Option<Report>,
     revision: u64,
-    built: Option<Instant>,
+    pub(super) built: Option<Instant>,
     due: bool,
+    pub(super) changed: bool,
+    read: Option<Instant>,
     pub(super) every: Duration,
 }
 
 impl Default for Snapshots {
     fn default() -> Self {
-        Self { watchers: Vec::new(), last: None, revision: 0, built: None, due: false, every: SNAPSHOT_EVERY }
+        Self {
+            watchers: Vec::new(),
+            last: None,
+            revision: 0,
+            built: None,
+            due: false,
+            changed: false,
+            read: None,
+            every: SNAPSHOT_EVERY,
+        }
     }
 }
 
@@ -39,6 +50,7 @@ impl Snapshots {
     fn take(&mut self, report: Report, now: Instant) -> Option<Snapshot> {
         self.built = Some(now);
         self.due = false;
+        self.changed = false;
         if self.last.as_ref() == Some(&report) {
             return None;
         }
@@ -63,7 +75,7 @@ impl Snapshots {
 
     pub(super) fn wake(&self, now: Instant) -> Option<Duration> {
         let built = self.built.filter(|_| self.due && !self.watchers.is_empty())?;
-        Some(self.every.saturating_sub(now.saturating_duration_since(built))).filter(|wait| !wait.is_zero())
+        Some(self.every.saturating_sub(now.saturating_duration_since(built)))
     }
 }
 
@@ -139,11 +151,19 @@ impl App {
     }
 
     pub(super) fn publish_snapshot(&mut self, now: Instant) {
-        if self.events.snapshots.watchers.is_empty() {
+        let (read, snapshots) = (self.agents.watched, &mut self.events.snapshots);
+        if snapshots.watchers.is_empty() {
             return;
         }
-        if self.events.snapshots.waits(now) {
-            self.events.snapshots.due = true;
+        if snapshots.read != read {
+            snapshots.read = read;
+            snapshots.changed = true;
+        }
+        if !snapshots.changed {
+            return;
+        }
+        if snapshots.waits(now) {
+            snapshots.due = true;
             return;
         }
         let report = self.report(None);
