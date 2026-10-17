@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.112
+
+- **A role of a flow can work in a worktree of its own.** Set a role's **worktree** to **own** in the flow editor (`worktree = "own"` in its file, which then says `version = 2`) and cornercase makes it a worktree and a branch of its own, `<run's branch>--<role>`, from the run's branch: its tab opens there, the project's setup runs there, and its box in the diagram says ` own worktree `. The orchestrator's brief tells how to read each candidate from its branch, and a role that works in the run's worktree merges or cherry-picks the winner; cornercase never merges for you.
+- The new built-in flow **Arena** puts two or three competing coders, each on a different agent when you have them, in worktrees of their own, then a judge that tests every candidate, an integrator and a reviewer. It is meant for measurable work or an unclear shape, not for everyday features.
+- Two roles that edit the run's worktree side by side in one stage now keep a flow from starting, since they would overwrite each other: give all but one a worktree of their own, or put them in stages of their own. opencode can take several roles when they work apart.
+- A role's worktree goes with the run's workspace: removing the workspace checks all of them for uncommitted changes, runs the project's teardown in each and removes them; their branches are kept. One cannot be removed alone while its run lives.
+
 ## 0.12.111
 
 - A new **Asana** tab in the issues browser reads tasks from Asana and starts an agent on one like on any other tracker's issue. Connect it from the tab: paste a personal access token from **Settings → Apps → Developer apps** in Asana (`ASANA_ACCESS_TOKEN` works too). When the account belongs to several workspaces, cornercase asks which one to use; it is saved in **Settings → Issues → Asana**.
