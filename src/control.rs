@@ -180,7 +180,6 @@ impl Command {
         }]
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per request")]
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {
