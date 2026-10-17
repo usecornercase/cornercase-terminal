@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.12.117
+
+- The TODO button's dot for pending items now sits inside the button, after its name (` TODO ● `), like Remote's (` Remote ● `), and a click on it opens the list.
+
 ## 0.12.116
 
 - **`cornercase start-server`** starts the server without opening a window, or finds the one already running, and returns once its session is restored, so a script or another program can start cornercase and create tabs, split panes and start agents right away. It needs no terminal. New terminals get 160×48 until a window attaches (`--cols` and `--rows` choose another size); the first window then takes over with its own size and colours, and finds the same tabs: nothing is restored twice. Commands that open terminals on a server with no window yet now point to `cornercase start-server`. See Scripts and agents → Start without a window.
