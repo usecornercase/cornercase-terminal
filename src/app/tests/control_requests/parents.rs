@@ -196,7 +196,12 @@ mod live_parent {
         done(now(
             &mut app,
             None,
-            Command::Close(wire::Close { item: Item::Pane(caller), remove_worktree: false, force: false }),
+            Command::Close(wire::Close {
+                item: Item::Pane(caller),
+                remove_worktree: false,
+                force: false,
+                unlock: false,
+            }),
         ));
         refreshing(&mut app, &rx, "the parent's pane is gone", |a| a.projects.pane_by(caller).is_none());
 
