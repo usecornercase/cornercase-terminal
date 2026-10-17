@@ -422,8 +422,8 @@ mod link {
     fn a_path_outside_the_workspace_is_absolute_and_not_inside() {
         let (repo, other) = (repo(), TempDir::new());
         std::fs::write(other.path().join("plan.md"), "# Plan").expect("write");
-        let printed = other.path().join("plan.md").display().to_string();
-        let (mut app, _rx, id) = showing(repo.path(), &printed);
+        let (mut app, _rx, id) = showing(repo.path(), "~/plan.md");
+        app.home = Some(other.path().to_path_buf());
 
         let answer = at(&mut app, id, 2, 0);
 
