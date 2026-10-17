@@ -566,6 +566,8 @@ pub(crate) struct Done {
     pub(crate) todo: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) unconfirmed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) checked: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) panes: Vec<Done>,
     #[serde(skip_serializing_if = "Option::is_none")]

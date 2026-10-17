@@ -202,7 +202,27 @@ impl App {
     }
 
     pub(super) fn todo_agent_label(&self, pane: u64) -> String {
-        self.todo_agent(pane).map(|(icon, place, kind)| format!("{icon} {place} · {kind}")).unwrap_or_default()
+        let base = |id: u64| self.todo_agent(id).map(|(icon, place, kind)| format!("{icon} {place} · {kind}"));
+        let Some(label) = base(pane) else { return String::new() };
+        let others: Vec<u64> = self
+            .agent_places()
+            .into_iter()
+            .map(|(p, w, t, i)| self.projects[p].workspaces[w].tabs[t].panes[i].id)
+            .filter(|id| *id != pane)
+            .collect();
+        let tabbed = |id: u64| {
+            let (p, w, t) = self.projects.tab_of_pane(id)?;
+            let tab = self.projects[p].workspaces[w].tabs[t].label(&self.config);
+            base(id).map(|label| format!("{label} · {tab}"))
+        };
+        if !others.iter().any(|id| base(*id).as_ref() == Some(&label)) {
+            return label;
+        }
+        let with_tab = tabbed(pane).unwrap_or(label);
+        if others.iter().any(|id| tabbed(*id).as_ref() == Some(&with_tab)) {
+            return format!("{with_tab} · pane {pane}");
+        }
+        with_tab
     }
 
     pub(super) fn send_todo_from_panel(&mut self, todo: u64, pane: u64, now: std::time::Instant) {
@@ -224,6 +244,9 @@ impl App {
         self.toast = Some(match reply {
             Ok(value) if value.get("unconfirmed").is_some() => {
                 Toast::new(format!("sent to {place}, not confirmed: stays to do"), ui::ToastIcon::Check)
+            }
+            Ok(value) if value.get("checked") == Some(&Value::Bool(false)) => {
+                Toast::new(format!("sent to {place}, but it changed meanwhile: stays to do"), ui::ToastIcon::Check)
             }
             Ok(_) => Toast::new(format!("sent to {place}"), ui::ToastIcon::Check),
             Err(reason) => Toast::new(reason.clone(), ui::ToastIcon::Bug),

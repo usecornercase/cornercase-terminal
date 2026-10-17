@@ -311,7 +311,11 @@ pub(super) const TODO_HELP: &str = "Examples:
 pub(super) const TODO_SEND_HELP: &str = "Types the item's text into the agent and presses Enter, as
 `cornercase send --enter` does, with the same target, refusals and confirmation that the agent took
 the prompt. Once it did, the item is checked off. A refused or unconfirmed send leaves it pending,
-prints the reason and exits with status 1. Only a pending item can be sent.
+prints the reason and exits with status 1. When cornercase cannot confirm the send at all (a local
+`/` command, an agent it cannot watch), the text is still sent, the item stays to do, and the command
+prints that and exits 0, with `unconfirmed: true` in --json. `checked` in --json says whether the
+item was checked off; it is false when the item was edited or removed while it was sent. Only a
+pending item can be sent.
 
 Examples:
   cornercase todo send 3

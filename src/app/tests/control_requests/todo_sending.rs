@@ -25,6 +25,7 @@ mod sending_a_todo_to_an_agent {
         let sent = done(agent.answered("the agent records the prompt"));
 
         assert_eq!((sent.todo, sent.ids.pane, is_done(&agent.app, todo)), (Some(todo), Some(id), true));
+        assert_eq!(sent.checked, Some(true));
     }
 
     #[test]
@@ -50,9 +51,9 @@ mod sending_a_todo_to_an_agent {
         ask(&mut agent.app, None, todo_send(todo, Some(id)));
         agent.app.todos.edit(todo, "fix the logout");
 
-        done(agent.answered("the agent records the prompt"));
+        let sent = done(agent.answered("the agent records the prompt"));
 
-        assert!(!is_done(&agent.app, todo));
+        assert_eq!((sent.checked, is_done(&agent.app, todo)), (Some(false), false));
     }
 
     #[test]
@@ -64,9 +65,9 @@ mod sending_a_todo_to_an_agent {
         let editor = todo::editor::Editor::new("fix the logout");
         agent.app.todo.field = Some(todo::Field { item: Some(todo), editor });
 
-        done(agent.answered("the agent records the prompt"));
+        let sent = done(agent.answered("the agent records the prompt"));
 
-        assert!(!is_done(&agent.app, todo));
+        assert_eq!((sent.checked, is_done(&agent.app, todo)), (Some(false), false));
     }
 
     #[test]
@@ -203,6 +204,19 @@ mod the_todo_panel_send_button {
             (toast.icon, is_done(&agent.app, todo), pane(&agent.app, id).agent.status().is_some()),
             (ui::ToastIcon::Check, true, true)
         );
+    }
+
+    #[test]
+    fn tells_two_identical_agents_apart_in_the_menu() {
+        let mut agent = Agent::new();
+        let first = agent.start(None);
+        let second = agent.start(None);
+        agent.until("both agents are seen", |a| a.agent_places().len() == 2);
+
+        let labels = [first, second].map(|id| agent.app.todo_agent_label(id));
+
+        assert_ne!(labels[0], labels[1], "{labels:?}");
+        assert!(labels.iter().all(|label| label.contains(" · claude · ")), "{labels:?}");
     }
 
     #[test]

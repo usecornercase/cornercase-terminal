@@ -408,6 +408,9 @@ fn run_todo(action: TodoAction) -> Result<()> {
                         "sent todo {id}{pane}, but cornercase cannot tell whether the agent took it, so it stays to do"
                     )];
                 }
+                if done.checked == Some(false) {
+                    return vec![format!("sent todo {id}{pane}, but it changed while it was sent, so it stays to do")];
+                }
                 vec![format!("sent todo {id}{pane}")]
             })
         }

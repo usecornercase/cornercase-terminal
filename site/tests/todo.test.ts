@@ -69,6 +69,8 @@ test('the send button of a pending TODO picks an agent and sends the text', () =
   assert.ok(labels.length > 0);
   assert.match(labels[0], /^\S .+ · \w+/);
   app.chooseMenu(0);
+  assert.equal(app.todo.items[0].done, false);
+  app.advance(400);
   assert.match(app.toast?.text ?? '', /^sent to \w+ in /);
   assert.equal(app.todo.items[0].done, true);
   app.destroy();

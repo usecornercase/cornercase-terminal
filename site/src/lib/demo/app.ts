@@ -2017,9 +2017,11 @@ export class App {
     const to = this.todoAgent(pane);
     if (!item || !found || !to) return;
     found.pane.shell.paste(item.text);
-    this.after(350, () => found.pane.shell.key({ key: 'Enter' }));
-    if (!item.done) this.todo.toggle(todo);
-    this.notify(`sent to ${to.kind} in ${to.place}`);
+    this.after(350, () => {
+      found.pane.shell.key({ key: 'Enter' });
+      if (!item.done) this.todo.toggle(todo);
+      this.notify(`sent to ${to.kind} in ${to.place}`);
+    });
   }
 
   private markAction(panes: Pane[]): Extract<MenuAction, { kind: 'mark' }> | null {

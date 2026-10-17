@@ -305,11 +305,13 @@ impl App {
                 let editing = self.todo.field.as_ref().filter(|field| field.item == Some(sending.todo));
                 let same = self.todos.item(sending.todo).is_some_and(|item| !item.done && item.text == sending.text)
                     && editing.is_none_or(|field| field.editor.text() == sending.text);
-                if sending.confirmed && same {
+                let checked = sending.confirmed && same;
+                if checked {
                     self.todos.toggle(sending.todo);
                 }
                 if let Some(fields) = value.as_object_mut() {
                     fields.insert("todo".into(), sending.todo.into());
+                    fields.insert("checked".into(), checked.into());
                     if !sending.confirmed {
                         fields.insert("unconfirmed".into(), true.into());
                     }
