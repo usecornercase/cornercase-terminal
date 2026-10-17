@@ -49,7 +49,7 @@ fn rows(text: &str) -> Result<i64, String> {
 pub(crate) struct SelectionArgs {
     #[arg(long, value_name = "ID", required = true, help = PANE_REQUIRED)]
     pub(crate) pane: u64,
-    #[arg(long, value_name = "X,Y", value_parser = point, help = "Where the selection starts: column and row of the view, from 0")]
+    #[arg(long, value_name = "X,Y", value_parser = point, requires = "to", help = "Where the selection starts: column and row of the view, from 0")]
     pub(crate) from: Option<Point>,
     #[arg(long, value_name = "X,Y", value_parser = point, requires = "from", help = "Where the selection ends")]
     pub(crate) to: Option<Point>,

@@ -128,6 +128,7 @@ mod parsing {
     #[case::scrolling_no_rows(&["scroll", "--pane", "1", "--up", "0"])]
     #[case::a_selection_end_alone(&["selection", "--pane", "1", "--to", "1,1"])]
     #[case::clearing_and_copying(&["selection", "--pane", "1", "--clear", "--copy"])]
+    #[case::a_selection_start_alone(&["selection", "--pane", "1", "--from", "1,1"])]
     #[case::a_bad_cell(&["selection", "--pane", "1", "--from", "3", "--to", "4,4"])]
     #[case::a_ratio_over_one(&["ratio", "--tab", "1", "1.5"])]
     #[case::a_divider_in_the_middle(&["ratio", "--tab", "1", "--path", "middle", "0.5"])]
