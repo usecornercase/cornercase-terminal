@@ -221,7 +221,7 @@ fn told(streamed: &[Streamed]) -> Vec<(wire::What, wire::Ids)> {
                 .expect("an event");
                 Some((event.what, event.ids))
             }
-            Streamed::End => None,
+            Streamed::Snapshot(_) | Streamed::End => None,
         })
         .collect()
 }
@@ -390,4 +390,5 @@ mod setup;
 mod start_server;
 mod talking;
 mod telegram;
+mod watching;
 mod worktrees;

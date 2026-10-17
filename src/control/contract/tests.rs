@@ -16,6 +16,15 @@ mod describing {
     }
 
     #[test]
+    fn watching_is_an_available_operation() {
+        let descriptor = describe("1-2", &[]);
+
+        let watch = descriptor.operations.iter().find(|operation| operation.name == "watch").expect("watch");
+
+        assert!(watch.available && watch.reason.is_none());
+    }
+
+    #[test]
     fn it_names_the_version_the_contract_and_the_boot() {
         let descriptor = describe("1-2", &[]);
 
@@ -26,10 +35,11 @@ mod describing {
     }
 
     #[test]
-    fn the_events_stream_is_version_one() {
+    fn the_events_and_watch_streams_are_version_one() {
         let descriptor = describe("1-2", &[]);
 
-        assert_eq!(descriptor.streams, vec![Stream { name: "events".into(), version: 1 }]);
+        let streams = vec![Stream { name: "events".into(), version: 1 }, Stream { name: "watch".into(), version: 1 }];
+        assert_eq!(descriptor.streams, streams);
     }
 
     #[test]
@@ -52,7 +62,7 @@ mod describing {
 
         let keys: Vec<&str> = sent.as_object().expect("an object").keys().map(String::as_str).collect();
         assert_eq!(keys, ["boot", "contract", "features", "operations", "streams", "version"]);
-        assert_eq!(sent["streams"], json!([{"name": "events", "version": 1}]));
+        assert_eq!(sent["streams"], json!([{"name": "events", "version": 1}, {"name": "watch", "version": 1}]));
         assert_eq!(sent["operations"][0], json!({"name": "status", "available": true}));
         let search = sent["operations"].as_array().expect("a list").iter().find(|o| o["name"] == "search").cloned();
         assert_eq!(search, Some(json!({"name": "search", "available": false, "reason": "off"})));
@@ -167,6 +177,7 @@ mod finding_unknown_fields {
         "replace": true}}))]
     #[case::search(json!({"command": "search", "args": {"query": "token"}}))]
     #[case::contract(json!({"contract": 1, "command": "contract", "args": {}}))]
+    #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]
     fn a_request_the_server_knows_has_none(#[case] raw: Value) {
         assert_eq!(stray_in(&raw), None);
     }
@@ -177,6 +188,7 @@ mod finding_unknown_fields {
     #[case::todo_list(json!({"command": "todo", "args": "list"}))]
     #[case::queue_remove(json!({"command": "queue", "args": {"action": "remove", "entry": 7}}))]
     #[case::contract(json!({"contract": 1, "boot": "1-2", "command": "contract", "args": {}}))]
+    #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]
     fn an_extra_key_beside_the_command_is_named(#[case] raw: Value) {
         assert_eq!(stray_in(&with(raw, &[], "extra")).as_deref(), Some("extra"));
     }
@@ -190,6 +202,7 @@ mod finding_unknown_fields {
     #[case::queue_list(json!({"command": "queue", "args": {"action": "list"}}))]
     #[case::flow_run(json!({"command": "flow-run", "args": {"name": "Quick", "prompt": "go"}}))]
     #[case::contract(json!({"command": "contract", "args": {}}))]
+    #[case::watch(json!({"command": "watch", "args": {}}))]
     fn an_extra_argument_is_named(#[case] raw: Value) {
         assert_eq!(stray_in(&with(raw, &["args"], "bogus")).as_deref(), Some("args.bogus"));
     }

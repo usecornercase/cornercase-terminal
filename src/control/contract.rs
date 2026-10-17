@@ -5,6 +5,7 @@ use super::{Command, Request, Response};
 
 pub(crate) const CONTRACT: u32 = 1;
 pub(crate) const EVENTS_VERSION: u32 = 1;
+pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const FEATURES: [&str; 3] = ["boot", "structured-errors", "strict-fields"];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,7 +109,10 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
         boot: boot.to_string(),
         operations,
         features: FEATURES.iter().map(ToString::to_string).collect(),
-        streams: vec![Stream { name: "events".into(), version: EVENTS_VERSION }],
+        streams: vec![
+            Stream { name: "events".into(), version: EVENTS_VERSION },
+            Stream { name: "watch".into(), version: WATCH_VERSION },
+        ],
     }
 }
 

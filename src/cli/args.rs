@@ -145,6 +145,12 @@ pub(crate) struct Print {
 pub(crate) struct StatusArgs {
     #[arg(long, help = "One line per pane, its columns separated by tabs, for scripts")]
     pub(crate) panes: bool,
+    #[arg(
+        long,
+        conflicts_with = "panes",
+        help = "Keep running and print the whole state as one JSON line each time it changes"
+    )]
+    pub(crate) follow: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }

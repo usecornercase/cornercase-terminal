@@ -322,6 +322,7 @@ impl App {
             Command::Todo(todo) => self.todo_request(todo),
             Command::Queue(queue) => self.queue_request(client, caller, queue, area, now),
             Command::Events(events) => self.events_request(client, events),
+            Command::Watch(_) => Ok(Some(json(&self.watch_snapshots(client, now)))),
             Command::LastMessage(last) => self.last_message_request(client, caller, &last),
             Command::RestartWhenIdle(restart) => self.restart_request(client, caller, &restart, now),
             Command::Away(away) => self.away_request(away.off).map_err(Refusal::from),

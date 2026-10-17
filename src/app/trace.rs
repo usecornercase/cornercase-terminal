@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use super::layout::Side;
 use super::{App, Toast};
@@ -253,10 +253,16 @@ fn changes(before: Place, now: Place) -> Vec<Change> {
 
 impl App {
     pub(crate) fn trace(&mut self) {
+        self.events.snapshots.changed = true;
+        self.trace_refresh();
+    }
+
+    pub(crate) fn trace_refresh(&mut self) {
         let logged = log::enabled(Level::Info);
         if logged || self.following() {
             self.publish(logged);
         }
+        self.publish_snapshot(Instant::now());
     }
 
     pub(super) fn publish(&mut self, logged: bool) {

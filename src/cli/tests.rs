@@ -233,6 +233,19 @@ mod parsing {
     }
 
     #[test]
+    fn status_follows_with_or_without_json_but_never_with_panes() {
+        for args in [&["status", "--follow"][..], &["status", "--follow", "--json"]] {
+            let Some(Command::Control(Control::Status(status))) = parse(args).expect("parse").command else {
+                panic!("not status")
+            };
+            assert!(status.follow && !status.panes);
+        }
+
+        let refused = parse(&["status", "--follow", "--panes"]).expect_err("conflict");
+        assert_eq!(refused.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
     fn start_takes_a_model_and_a_mode() {
         let cli = parse(&["start", "claude", "--mode", "plan", "--model", "opus", "--effort", "high"]).expect("parse");
 
@@ -274,6 +287,8 @@ mod output {
             status: Some("working".into()),
             active: true,
             panes: vec![pane(4, "zsh", true), claude],
+            custom_name: None,
+            layout: None,
         };
         let workspace = WorkspaceInfo {
             id: 2,
@@ -286,6 +301,8 @@ mod output {
             setup: None,
             run_dir: None,
             active: true,
+            custom_name: None,
+            collapsed: false,
             tabs: vec![tab],
         };
         let project = |id, name: &str, group| ProjectInfo {
@@ -300,7 +317,7 @@ mod output {
             boot: String::new(),
             caller: Some(5),
             shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
-            groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true }],
+            groups: vec![GroupInfo { id: 8, name: "work".into(), collapsed: true, icon: String::new(), colour: 0 }],
             projects: vec![
                 ProjectInfo { workspaces: vec![workspace], ..project(1, "shop", None) },
                 project(9, "api", Some(8)),

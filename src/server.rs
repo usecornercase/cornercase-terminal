@@ -47,6 +47,7 @@ const FRAME: Duration = Duration::from_millis(16);
 const SAVE_EVERY: Duration = Duration::from_millis(500);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 const EVENTS_QUEUED: usize = 1024;
+const SNAPSHOTS_QUEUED: usize = 4;
 const CLEAR_SCREEN: &[u8] = b"\x1b[H\x1b[2J";
 const OTHER_BUILD: &str = "the running cornercase server comes from another build. \
     Run `cornercase kill-server` (it closes all its terminals) and start cornercase again";
@@ -216,6 +217,7 @@ struct Client {
     out: Outbox,
     writer: JoinHandle<()>,
     dropped: u64,
+    held: Option<String>,
 }
 
 impl Client {
@@ -241,6 +243,11 @@ impl Client {
     }
 
     fn catch_up(&mut self) {
+        if self.out.queued() < SNAPSHOTS_QUEUED
+            && let Some(text) = self.held.take()
+        {
+            self.send(ServerMessage::Response(text));
+        }
         if self.dropped == 0 || self.out.queued() >= EVENTS_QUEUED {
             return;
         }
@@ -500,9 +507,11 @@ impl Server {
     }
 
     fn step(&mut self, step: Step) -> ControlFlow<()> {
-        let traced = step.traced();
+        let (traced, refresh) = (step.traced(), matches!(step, Step::Refresh));
         let flow = self.run_step(step);
-        if traced {
+        if refresh {
+            self.app.trace_refresh();
+        } else if traced {
             self.app.trace();
         }
         if self.restart.is_none()
@@ -565,6 +574,7 @@ impl Server {
         for (id, streamed) in self.app.take_events() {
             match (self.client_mut(id), streamed) {
                 (Some(client), Streamed::Event(text)) => client.stream(text),
+                (Some(client), Streamed::Snapshot(text)) => client.held = Some(text),
                 (Some(_), Streamed::End) => ended.push(id),
                 (None, _) => {}
             }
@@ -754,6 +764,7 @@ impl Server {
             out,
             writer,
             dropped: 0,
+            held: None,
         });
     }
 

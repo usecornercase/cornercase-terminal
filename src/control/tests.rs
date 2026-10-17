@@ -68,6 +68,7 @@ fn every_command_is_listed_by_name() {
         Command::Search(Search::default()),
         Command::Contract(Contract::default()),
         Command::StartServer(StartServer::default()),
+        Command::Watch(Watch::default()),
     ];
 
     let names: Vec<String> = commands
@@ -425,5 +426,146 @@ mod answers {
         let error: contract::Structured = serde_json::from_str(text).expect("an error");
 
         assert_eq!(error, contract::Structured::Error(Refusal::new(Code::NotFound, MISSING)));
+    }
+}
+
+mod watch_v1 {
+    use super::*;
+    use crate::project::split::{Dir, Node};
+    use crate::test_util::fixture;
+
+    fn split() -> Layout {
+        let node = Node::Split {
+            dir: Dir::Right,
+            ratio: 0.6,
+            first: Box::new(Node::Leaf(4)),
+            second: Box::new(Node::Leaf(5)),
+        };
+        Layout::from(&node)
+    }
+
+    fn pane(id: u64, active: bool) -> PaneInfo {
+        PaneInfo {
+            id,
+            path: Some(PathBuf::from("/home/me/web-shop")),
+            program: Some("claude".into()),
+            agent: Some("claude".into()),
+            status: Some("working".into()),
+            model: Some("Opus 5.5".into()),
+            context: Some(23),
+            active,
+            ..PaneInfo::default()
+        }
+    }
+
+    fn snapshot() -> Snapshot {
+        let tab = TabInfo {
+            id: 3,
+            name: "agents".into(),
+            status: Some("working".into()),
+            active: true,
+            panes: vec![pane(4, true), pane(5, false)],
+            custom_name: Some("agents".into()),
+            layout: Some(split()),
+        };
+        let workspace = WorkspaceInfo {
+            id: 2,
+            name: "feat/dark-mode".into(),
+            path: PathBuf::from("/home/me/.cornercase/worktrees/web-shop/feat-dark-mode"),
+            branch: Some("feat/dark-mode".into()),
+            worktree: true,
+            active: true,
+            tabs: vec![tab],
+            collapsed: true,
+            ..WorkspaceInfo::default()
+        };
+        let project = ProjectInfo {
+            id: 1,
+            name: "shop".into(),
+            path: PathBuf::from("/home/me/web-shop"),
+            group: Some(10),
+            active: true,
+            workspaces: vec![workspace],
+            custom_name: Some("shop".into()),
+            collapsed: false,
+        };
+        let group = GroupInfo { id: 10, name: "work".into(), collapsed: false, icon: "●".into(), colour: 33 };
+        Snapshot {
+            revision: 7,
+            report: Report {
+                version: "0.12.111".into(),
+                boot: "4242-1760600000".into(),
+                caller: None,
+                shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
+                groups: vec![group],
+                projects: vec![project],
+                keep_awake: None,
+            },
+        }
+    }
+
+    #[test]
+    fn the_fixture_is_of_the_watch_version_the_contract_names() {
+        assert_eq!(contract::WATCH_VERSION, 1);
+    }
+
+    #[test]
+    fn a_snapshot_is_written_as_its_fixture() {
+        let written = serde_json::to_string_pretty(&snapshot()).expect("json");
+
+        assert_eq!(written, fixture!("control/watch/v1/snapshot.json").trim_end());
+    }
+
+    #[test]
+    fn the_fixture_reads_back_as_its_snapshot() {
+        let read: Snapshot = serde_json::from_str(fixture!("control/watch/v1/snapshot.json")).expect("a snapshot");
+
+        assert_eq!(read, snapshot());
+    }
+
+    #[test]
+    fn a_tab_layout_is_the_split_tree_of_its_pane_ids() {
+        let sent: Value = serde_json::from_str(&serde_json::to_string(&snapshot()).expect("json")).expect("json");
+
+        let layout = &sent["projects"][0]["workspaces"][0]["tabs"][0]["layout"];
+        assert_eq!(
+            *layout,
+            json!({"split": {"dir": "right", "ratio": 0.6, "first": {"leaf": 4}, "second": {"leaf": 5}}})
+        );
+    }
+
+    #[test]
+    fn a_streamed_snapshot_is_one_line_holding_it_under_ok() {
+        let line = snapshot().streamed().expect("a line");
+
+        assert!(line.contains(r#""ratio":0.6,"#), "{line}");
+        let sent: Value = serde_json::from_str(&line).expect("json");
+        let streamed: Snapshot = serde_json::from_value(sent["ok"].clone()).expect("a snapshot under ok");
+        assert_eq!((streamed, line.contains('\n')), (snapshot(), false));
+    }
+
+    #[test]
+    fn a_report_from_before_the_snapshot_fields_takes_their_defaults() {
+        let old = json!({"version": "0.12.110", "boot": "1-2", "shown": {}, "groups": [{"id": 10, "name": "work",
+            "collapsed": true}], "projects": [{"id": 1, "name": "shop", "path": "/p", "workspaces": [{"id": 2,
+            "name": "main", "path": "/p", "tabs": [{"id": 3, "name": "zsh", "panes": [{"id": 4}]}]}]}]});
+
+        let report: Report = serde_json::from_value(old).expect("a report");
+
+        let group = &report.groups[0];
+        assert_eq!((group.icon.as_str(), group.colour), ("", 0));
+        let project = &report.projects[0];
+        assert_eq!((project.custom_name.as_deref(), project.collapsed), (None, false));
+        let workspace = &project.workspaces[0];
+        assert_eq!((workspace.custom_name.as_deref(), workspace.collapsed), (None, false));
+        let tab = &workspace.tabs[0];
+        assert_eq!((tab.custom_name.as_deref(), tab.layout.as_ref()), (None, None));
+    }
+
+    #[test]
+    fn a_snapshot_without_a_revision_reads_as_revision_zero() {
+        let snapshot: Snapshot = serde_json::from_value(json!({"boot": "1-2"})).expect("a snapshot");
+
+        assert_eq!((snapshot.revision, snapshot.report.boot.as_str()), (0, "1-2"));
     }
 }

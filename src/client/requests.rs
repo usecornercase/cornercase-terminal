@@ -65,11 +65,31 @@ pub(crate) fn answered(text: &str) -> Result<Value> {
 pub(crate) fn follow(
     name: &'static str,
     command: control::Command,
+    each: impl FnMut(Value) -> Result<bool>,
+) -> Result<()> {
+    follow_from(name, command, false, each)
+}
+
+pub(crate) fn follow_all(
+    name: &'static str,
+    command: control::Command,
+    each: impl FnMut(Value) -> Result<bool>,
+) -> Result<()> {
+    follow_from(name, command, true, each)
+}
+
+fn follow_from(
+    name: &'static str,
+    command: control::Command,
+    first: bool,
     mut each: impl FnMut(Value) -> Result<bool>,
 ) -> Result<()> {
     let mut stream = connect()?;
     let reader = stream.try_clone()?;
-    ask_on(reader, name, command)?;
+    let answer = ask_on(reader, name, command)?;
+    if first && each(answer)? {
+        return Ok(());
+    }
     loop {
         match protocol::recv::<ServerMessage>(&mut stream) {
             Ok(Some(ServerMessage::Response(text))) => {
@@ -100,7 +120,7 @@ pub(crate) fn running_now() -> Option<Vec<restart::Running>> {
 }
 const STATUS_TIMEOUT: Duration = Duration::from_secs(1);
 const LOST: &str = "the cornercase server closed the connection without stopping: it crashed, or this command \
-    fell too far behind reading its events";
+    stopped reading what it sends";
 
 #[cfg(test)]
 mod tests;

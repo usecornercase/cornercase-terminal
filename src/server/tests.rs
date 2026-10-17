@@ -331,6 +331,7 @@ pub(super) mod a_bug {
 }
 
 mod streaming {
+    use super::a_bug::Attached;
     use super::*;
     use crate::control::{Event, Response};
 
@@ -354,6 +355,7 @@ mod streaming {
                 out,
                 writer,
                 dropped: 0,
+                held: None,
             },
             rx,
         )
@@ -398,6 +400,61 @@ mod streaming {
         client.catch_up();
 
         assert_eq!((full.len(), texts(&rx).len(), client.dropped), (0, 1, 0));
+    }
+
+    #[test]
+    fn a_slow_watcher_keeps_only_the_newest_snapshot_and_gets_it_once_there_is_room() {
+        let (mut client, rx) = client();
+        client.out.queued.store(SNAPSHOTS_QUEUED, Ordering::Relaxed);
+        for n in 1..=3 {
+            client.held = Some(format!("revision {n}"));
+            client.catch_up();
+        }
+        let full = texts(&rx);
+
+        client.out.queued.store(0, Ordering::Relaxed);
+        client.catch_up();
+
+        assert_eq!((full.len(), texts(&rx), client.held), (0, vec!["revision 3".to_string()], None));
+    }
+
+    #[test]
+    fn an_answer_goes_out_before_a_snapshot_streamed_to_the_same_client_in_that_turn() {
+        const WATCH: &str = r#"{"command":"watch","args":{}}"#;
+        let request =
+            |client, text: &str| Step::Event(ServerEvent::Message(client, ClientMessage::Request(text.into())));
+        let mut attached = Attached::new();
+        let _ = attached.server.step(request(1, WATCH));
+        let _ = attached.server.step(Step::Answer);
+        attached.received(|msg| matches!(msg, ServerMessage::Response(text) if text.contains("revision")));
+
+        let _ = attached.server.step(request(1, r#"{"command":"rename","args":{"name":"renamed"}}"#));
+        let _ = attached.server.step(request(2, WATCH));
+        let _ = attached.server.step(Step::Answer);
+
+        let got = attached.received(|msg| matches!(msg, ServerMessage::Response(text) if text.contains("renamed")));
+        let answers: Vec<&str> = got
+            .iter()
+            .filter_map(|msg| match msg {
+                ServerMessage::Response(text) => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            matches!(answers[..], [done, snapshot] if !done.contains("revision") && snapshot.contains("renamed")),
+            "{answers:?}"
+        );
+    }
+
+    #[test]
+    fn a_watcher_with_room_gets_each_snapshot_at_once() {
+        let (mut client, rx) = client();
+        client.held = Some("revision 1".into());
+        client.catch_up();
+        client.held = Some("revision 2".into());
+        client.catch_up();
+
+        assert_eq!(texts(&rx), ["revision 1", "revision 2"]);
     }
 }
 
