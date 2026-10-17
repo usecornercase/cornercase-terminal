@@ -477,11 +477,12 @@ impl App {
     }
 
     pub(crate) fn state(&self) -> State {
+        let parents = state::named_parents(&self.projects);
         let projects = self
             .projects
             .iter()
             .zip(crate::project::group_indices(&self.projects, &self.groups))
-            .map(|(p, group)| ProjectState::of(p, group, &self.runs))
+            .map(|(p, group)| ProjectState::of(p, group, &self.runs, &parents))
             .collect();
         let chosen = self.issues.tab.is_some() || self.issues.closed || self.issues.people != People::default();
         let issues = chosen.then(|| IssuesState {
@@ -540,6 +541,7 @@ impl App {
             self.groups.push(Group { id, entry: group::GroupEntry { icon, ..entry.clone() } });
         }
         let mut missed: Vec<(String, usize)> = Vec::new();
+        let mut parents = session::Parents::default();
         for (i, saved_project) in saved.projects.iter().enumerate() {
             let path = saved_project.path.canonicalize().unwrap_or_else(|_| saved_project.path.clone());
             if !path.is_dir() || self.projects.iter().any(|p| p.path == path) {
@@ -550,7 +552,7 @@ impl App {
             let mut workspaces = Vec::new();
             let mut lost = 0;
             for saved_ws in &saved_project.workspaces {
-                if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area) {
+                if let Some((workspace, missing)) = self.restore_workspace(saved_ws, area, &mut parents) {
                     workspaces.push(workspace);
                     lost += missing;
                 }
@@ -564,6 +566,7 @@ impl App {
             }
             self.projects.push(project);
         }
+        self.adopt_saved(parents);
         self.sync_worktrees();
         if saved.flow {
             self.show_flow();

@@ -69,6 +69,8 @@ mod file {
                                 agent: None,
                                 done: false,
                                 pending: false,
+                                id: None,
+                                parent: None,
                             }],
                             active: 0,
                             layout: None,
@@ -104,6 +106,8 @@ mod file {
                                     }),
                                     done: false,
                                     pending: true,
+                                    id: None,
+                                    parent: None,
                                 },
                                 PaneState {
                                     cwd: Some("worktrees/returns/src".into()),
@@ -115,6 +119,8 @@ mod file {
                                     }),
                                     done: true,
                                     pending: false,
+                                    id: None,
+                                    parent: None,
                                 },
                             ],
                             active: 1,
@@ -164,6 +170,28 @@ mod file {
         assert_eq!(load(&path), Some(expected.clone()));
 
         persist::save(&path, &expected).expect("save the session");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read the saved session"),
+            fixture.strip_suffix('\n').expect("fixture newline")
+        );
+    }
+
+    #[test]
+    fn parents_round_trip_through_their_own_fixture() {
+        let mut saved = state(&["projects/team"]);
+        let pane = |id, parent| PaneState { id, parent, ..PaneState::at(Some("projects/team".into())) };
+        saved.projects[0].workspaces[0].tabs = [pane(Some(4), None), pane(Some(7), Some(4)), pane(None, Some(7))]
+            .into_iter()
+            .map(|pane| TabState { name: None, panes: vec![pane], active: 0, layout: None })
+            .collect();
+        let fixture = crate::test_util::fixture!("session/parents.json");
+        let dir = TempDir::new();
+        let path = dir.path().join("session.json");
+        std::fs::write(&path, fixture).expect("write the session fixture");
+
+        assert_eq!(load(&path), Some(saved.clone()));
+
+        persist::save(&path, &saved).expect("save the session");
         assert_eq!(
             std::fs::read_to_string(&path).expect("read the saved session"),
             fixture.strip_suffix('\n').expect("fixture newline")
@@ -436,14 +464,22 @@ mod mapping {
     }
 
     fn saved_tab(panes: usize, active: usize) -> TabState {
-        let pane = PaneState { cwd: None, right_clicks: false, agent: None, done: false, pending: false };
+        let pane = PaneState {
+            cwd: None,
+            right_clicks: false,
+            agent: None,
+            done: false,
+            pending: false,
+            id: None,
+            parent: None,
+        };
         TabState { name: None, panes: vec![pane; panes], active, layout: None }
     }
 
     #[test]
     fn a_tab_comes_back_with_its_layout_active_pane_and_right_clicks() {
         let tab = split_tab();
-        let saved = TabState::of(&tab);
+        let saved = TabState::of(&tab, &HashSet::new());
         assert_eq!(saved.layout, tab.layout_by_index());
         let panes = vec![spawn_term(16, &[], None).0, spawn_term(17, &[], None).0];
         let back = saved.restore(15, panes);
@@ -463,7 +499,7 @@ mod mapping {
     #[test]
     fn a_single_pane_tab_saves_no_layout() {
         let tab = Tab::new(5, None, spawn_term(6, &[], None).0);
-        assert_eq!(TabState::of(&tab).layout, None);
+        assert_eq!(TabState::of(&tab, &HashSet::new()).layout, None);
     }
 
     #[test]
@@ -474,7 +510,7 @@ mod mapping {
         project.workspaces = vec![first, Workspace::new(3, "/p/w".into(), Some("w".into()), true)];
         project.active = 1;
         project.collapsed = true;
-        let saved = ProjectState::of(&project, Some(2), &[]);
+        let saved = ProjectState::of(&project, Some(2), &[], &HashSet::new());
         assert_eq!((saved.group, saved.active, saved.collapsed), (Some(2), 1, true));
         assert_eq!(saved.name.as_deref(), Some("name"));
         assert_eq!(saved.workspaces.len(), 2);
@@ -486,7 +522,7 @@ mod mapping {
     fn run_folders_are_saved_by_name_and_restored_under_the_runs_folder() {
         let mut workspace = Workspace::new(1, "/p".into(), None, true);
         workspace.run_dirs = vec!["/s/runs/2026-10-17-a".into(), "/s/runs/2026-10-17-a-2".into()];
-        let saved = WorkspaceState::of(&workspace, None);
+        let saved = WorkspaceState::of(&workspace, None, &HashSet::new());
         assert_eq!(saved.run_dirs, ["2026-10-17-a", "2026-10-17-a-2"]);
         let back = saved.restore(2, "/p".into(), Vec::new(), Path::new("/t/runs"));
         assert_eq!(back.run_dirs, [PathBuf::from("/t/runs/2026-10-17-a"), PathBuf::from("/t/runs/2026-10-17-a-2")]);
@@ -513,7 +549,7 @@ mod mapping {
             Path::new("/runs"),
         );
         assert_eq!(restored.active, 0);
-        let project = ProjectState::of(&Project::new(1, "/p".into(), None), None, &[]);
+        let project = ProjectState::of(&Project::new(1, "/p".into(), None), None, &[], &HashSet::new());
         let project = ProjectState { active: 9, ..project };
         assert_eq!(project.restore(1, "/p".into(), Some(7), vec![restored]).active, 0);
         assert_eq!(saved_tab(2, 9).restore(8, vec![spawn_term(9, &[], None).0, spawn_term(10, &[], None).0]).active, 1);
@@ -523,7 +559,7 @@ mod mapping {
     fn a_restored_project_keeps_its_name_group_and_fold() {
         let mut project = Project::new(1, "/p".into(), Some("name".into()));
         project.collapsed = true;
-        let saved = ProjectState::of(&project, Some(0), &[]);
+        let saved = ProjectState::of(&project, Some(0), &[], &HashSet::new());
         let back = saved.restore(8, "/q".into(), Some(7), Vec::new());
         assert_eq!((back.id, back.group, back.collapsed), (8, Some(7), true));
         assert_eq!((back.name.as_deref(), back.path.as_path()), (Some("name"), Path::new("/q")));
@@ -543,7 +579,7 @@ mod mapping {
             .map(|(role, pane)| Member { role: role.into(), pane })
             .collect();
 
-        let saved = WorkspaceState::of(&workspace, Some(&run));
+        let saved = WorkspaceState::of(&workspace, Some(&run), &HashSet::new());
 
         let state = saved.run.as_ref().expect("the run");
         let seats: Vec<(&str, usize, usize)> = state.members.iter().map(|s| (s.role.as_str(), s.tab, s.pane)).collect();
@@ -553,6 +589,6 @@ mod mapping {
         assert_eq!(state.role_at(1, 0), None);
         let text = serde_json::to_string(&saved).expect("json");
         assert_eq!(serde_json::from_str::<WorkspaceState>(&text).expect("read back"), saved);
-        assert_eq!(WorkspaceState::of(&workspace, None).run, None);
+        assert_eq!(WorkspaceState::of(&workspace, None, &HashSet::new()).run, None);
     }
 }

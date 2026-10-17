@@ -67,6 +67,8 @@ pub(super) mod a_bug {
                 agent: None,
                 done: false,
                 pending: false,
+                id: None,
+                parent: None,
             }],
             active: 0,
             layout: None,

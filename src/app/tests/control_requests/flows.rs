@@ -549,6 +549,7 @@ fn a_run_never_opens_in_a_workspace_or_project_that_is_going(
         focus: false,
         note: None,
         trees: Vec::new(),
+        parent: None,
     };
 
     let refused = team.app.open_run(0, 0, starting, AREA, false).expect_err("refused");
@@ -647,6 +648,7 @@ fn a_run_is_saved_and_comes_back_with_its_roles_resumed_and_the_orchestrator_tol
 }
 
 mod own_worktrees;
+mod parents;
 
 fn told_with_folder(order: &[String], dir: &str) -> bool {
     order

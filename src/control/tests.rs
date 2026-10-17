@@ -292,7 +292,8 @@ fn the_columns_of_a_pane_row_are_its_keys_in_order() {
 #[test]
 fn new_columns_of_a_pane_row_go_after_the_released_ones() {
     let released = "pane tab workspace project program agent status background_shell dialog at_prompt model \
-                        context caller shown active tab_name workspace_name branch worktree project_name path";
+                        context caller shown active tab_name workspace_name branch worktree project_name path survey \
+                        resuming";
 
     assert!(PaneRow::COLUMNS.join(" ").starts_with(released), "{:?}", PaneRow::COLUMNS);
 }
@@ -382,10 +383,10 @@ mod events_v1 {
         Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) }
     }
 
-    fn samples() -> [(Event, &'static str); 8] {
+    fn samples() -> [(Event, &'static str); 9] {
         [
             (
-                event(What::Opened { kind: Kind::Tab }, Ids { pane: None, ..pane() }),
+                event(What::Opened { kind: Kind::Tab, parent: None }, Ids { pane: None, ..pane() }),
                 fixture!("control/events/v1/opened.json"),
             ),
             (event(What::Closed { kind: Kind::Pane }, pane()), fixture!("control/events/v1/closed.json")),
@@ -417,6 +418,10 @@ mod events_v1 {
                 ),
                 fixture!("control/events/v1/notice.json"),
             ),
+            (
+                event(What::Opened { kind: Kind::Pane, parent: Some(2) }, pane()),
+                fixture!("control/events/v1/opened-parent.json"),
+            ),
         ]
     }
 
@@ -433,6 +438,7 @@ mod events_v1 {
     #[case::dropped(4)]
     #[case::clipboard(5)]
     #[case::bell(6)]
+    #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
     fn an_event_is_written_as_its_fixture(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
@@ -448,6 +454,7 @@ mod events_v1 {
     #[case::dropped(4)]
     #[case::clipboard(5)]
     #[case::bell(6)]
+    #[case::opened_from_a_pane(8)]
     #[case::notice(7)]
     fn a_fixture_reads_back_as_its_event(#[case] index: usize) {
         let (event, fixture) = &samples()[index];
@@ -562,7 +569,7 @@ mod watch_v1 {
             name: "agents".into(),
             status: Some("working".into()),
             active: true,
-            panes: vec![pane(4, true), pane(5, false)],
+            panes: vec![pane(4, true), PaneInfo { parent: Some(4), ..pane(5, false) }],
             custom_name: Some("agents".into()),
             layout: Some(split()),
             controller: None,

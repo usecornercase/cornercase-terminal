@@ -19,7 +19,7 @@ pub(super) const MENU_BUTTON_WIDTH: u16 = 2;
 
 const COMPACT_MENU_WIDTH: u16 = 4;
 
-pub(super) const MIN_MENU_ROW_WIDTH: u16 = 20;
+pub(crate) const MIN_MENU_ROW_WIDTH: u16 = 20;
 
 pub(crate) const ROW_MENU_ICON: &str = "⋯";
 

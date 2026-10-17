@@ -293,9 +293,10 @@ fn event_line(value: &Value) -> String {
     let named = |kind: control::Kind| kind.id(&event.ids).map(|id| format!("{} {id}", kind.name()));
     let subject = event.kind().and_then(named);
     match (subject, &event.what) {
-        (Some(subject), What::Opened { kind }) => {
+        (Some(subject), What::Opened { kind, parent: opener }) => {
             let parent = kind.parent().and_then(named).map(|parent| format!(" in {parent}")).unwrap_or_default();
-            format!("{subject}  opened{parent}")
+            let opener = opener.map(|pane| format!(" from pane {pane}")).unwrap_or_default();
+            format!("{subject}  opened{parent}{opener}")
         }
         (Some(subject), What::Closed { .. }) => format!("{subject}  closed"),
         (Some(subject), What::Status { agent, from, to }) => {

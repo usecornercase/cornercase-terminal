@@ -10,7 +10,7 @@ use super::layout::{Areas, Border};
 use super::rows::{Rows, draw_hidden, draw_rail, marker, row_close_button};
 use super::theme::status_icon;
 use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
-use super::workspaces::{Details, draw_details};
+use super::workspaces::{Details, Guide, draw_details, draw_guide};
 use crate::agents::activity::Status;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
@@ -23,6 +23,8 @@ const NO_AGENTS: &str = "no agents running";
 const AGENT_LINES: u16 = 2;
 
 const MIN_WORKSPACE_WIDTH: usize = 4;
+
+const GUIDE_STEP: usize = 2;
 
 pub(crate) fn agent_rows(list: Rect, pitch: u16, agents: usize, scroll: usize) -> Rows {
     Rows { list, heights: vec![pitch.max(AGENT_LINES); agents], button: 0, scroll }
@@ -44,6 +46,9 @@ pub(crate) struct AgentEntry {
     pub(crate) workspace: Option<String>,
     pub(crate) details: Details,
     pub(crate) active: bool,
+    pub(crate) depth: usize,
+    pub(crate) last: bool,
+    pub(crate) rails: Vec<bool>,
 }
 
 pub(crate) struct AgentsView {
@@ -84,7 +89,7 @@ pub(super) fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas
 
 pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry: &AgentEntry) {
     let bg = view.row_background(r, entry.active);
-    let mut line = vec![marker(entry.active)];
+    let mut line = vec![marker(entry.active), Span::raw(" ".repeat(GUIDE_STEP * entry.depth))];
     if let Some(status) = entry.status {
         line.extend([status_icon(view.muted, status, view.spin), Span::raw(" ")]);
     }
@@ -94,9 +99,22 @@ pub(super) fn draw_agent(f: &mut Frame, view: &View, r: Rect, pitch: u16, entry:
     line.extend(agent_place(entry, room, Style::default().fg(colour), dim(view.muted)));
     draw_band(f, r, Line::from(line), bg);
     draw_details(f, view.muted, (r, row_close_button(r, pitch)), &entry.details, Some(&entry.agent), indent);
+    draw_guides(f, view.line(), r, entry);
     if entry.active {
         draw_rail(f, r);
     }
+}
+
+fn draw_guides(f: &mut Frame, colour: Color, r: Rect, entry: &AgentEntry) {
+    if entry.depth == 0 {
+        return;
+    }
+    let column = |depth: usize| r.x.saturating_add(u16::try_from(GUIDE_STEP * depth).unwrap_or(u16::MAX));
+    for (k, _) in entry.rails.iter().enumerate().filter(|(_, rail)| **rail) {
+        draw_guide(f, colour, column(k + 1), r, Guide::Bar);
+    }
+    let own = if entry.last { Guide::End } else { Guide::Tee };
+    draw_guide(f, colour, column(entry.depth), r, own);
 }
 
 fn agent_place(entry: &AgentEntry, room: usize, name: Style, separator: Style) -> Vec<Span<'static>> {

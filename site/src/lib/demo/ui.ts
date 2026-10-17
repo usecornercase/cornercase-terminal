@@ -37,6 +37,7 @@ import {
   landingIndent,
   menuArea,
   menuButton,
+  MIN_MENU_ROW_WIDTH,
   moreAbove,
   pickerArea,
   right,
@@ -71,7 +72,7 @@ import {
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
-import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, projectAttention, projectLabel, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
+import { type ConfirmView, type Group, type IssuesOverlay, type Pane, type SettingsOverlay, type Status, type Tab, type Target, attention, highest, isModal, MAX_AGENT_DEPTH, NARROW_AGENT_DEPTH, projectAttention, projectLabel, shapeTree, tabLabel, tabRunning, tabStatus, workspaceLabel } from './model';
 import { type Divider, type PanePlace, dividers, grab, hasRoom, visible } from './split';
 import { type Line, type Seg, drawLine, pad as padTo, seg, truncateLeft, truncateRight, width, wrapAll } from './text';
 
@@ -870,7 +871,7 @@ export class Painter {
     if (areas.compact) this.back(areas, AGENTS_TITLE);
     else this.title(areas.agentsTitle, AGENTS_TITLE);
     const list = areas.agentsList;
-    const entries = app.agentRows();
+    const entries = shapeTree(app.agentRows(), list.w < MIN_MENU_ROW_WIDTH ? NARROW_AGENT_DEPTH : MAX_AGENT_DEPTH);
     const rows = agentLayout(list, areas.pitch, entries.length, app.agentsScroll);
     if (!entries.length) {
       const first = middle(rect(list.x, list.y, list.w, Math.min(areas.pitch, list.h)));
@@ -889,12 +890,17 @@ export class Painter {
 
   private agentRow(r: Rect, pitch: number, entry: AgentRow): void {
     const bg = this.rowBackground(r, entry.active);
-    const line: Line = [marker(entry.active), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
+    const depth = entry.depth;
+    const line: Line = [marker(entry.active), seg(' '.repeat(2 * depth)), statusIcon(entry.status, spinAt(this.app)), seg(' ')];
     const indent = width(line);
     const room = Math.max(0, r.w - indent - 1);
     line.push(...agentPlace(entry, room, { fg: entry.active ? DEFAULT : 7 }));
     this.band(r, line, bg);
     this.details(r, pitch, entry.details, indent, entry.agent);
+    if (depth > 0) {
+      for (const level of entry.bars) this.guide(r.x + 2 * level, r, 'bar');
+      this.guide(r.x + 2 * depth, r, entry.last ? 'end' : 'tee');
+    }
     if (entry.active) this.rail(r);
   }
 

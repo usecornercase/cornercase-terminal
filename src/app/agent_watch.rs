@@ -11,6 +11,7 @@ use crate::agents::activity;
 use crate::agents::awake::{self, Awake};
 use crate::agents::context::Look;
 use crate::agents::launch::Launch;
+use crate::agents::tree;
 use crate::config::Config;
 use crate::host::notify;
 use crate::log::{self};
@@ -207,16 +208,28 @@ impl App {
     }
 
     pub(super) fn agent_places(&self) -> Vec<(usize, usize, usize, usize)> {
+        self.agent_tree(false).into_iter().map(|(place, _)| place).collect()
+    }
+
+    pub(super) fn agent_count(&self) -> usize {
+        self.projects.terms().filter(|term| term.agent.status().is_some()).count()
+    }
+
+    pub(super) fn agent_tree(&self, narrow: bool) -> Vec<((usize, usize, usize, usize), tree::Node)> {
         let mut places = Vec::new();
+        let mut rows = Vec::new();
+        let live = self.pane_ids();
         for p in crate::project::sidebar_order(&self.projects, &self.groups) {
             for (w, workspace) in self.projects[p].workspaces.iter().enumerate() {
                 for (t, tab) in workspace.tabs.iter().enumerate() {
-                    let agents = tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some());
-                    places.extend(agents.map(|(i, _)| (p, w, t, i)));
+                    for (i, term) in tab.panes.iter().enumerate().filter(|(_, term)| term.agent.status().is_some()) {
+                        places.push((p, w, t, i));
+                        rows.push((term.id, Self::live_parent(term, &live)));
+                    }
                 }
             }
         }
-        places
+        tree::order(&rows, narrow).into_iter().map(|node| (places[node.index], node)).collect()
     }
 
     pub(super) fn jump_to_pane(&mut self, pane: u64) {

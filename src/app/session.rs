@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -18,8 +19,19 @@ use crate::ui;
 
 pub(super) const RESUME_GRACE: Duration = Duration::from_secs(30);
 
+#[derive(Default)]
+pub(super) struct Parents {
+    ids: HashMap<u64, u64>,
+    wanted: Vec<(u64, Option<u64>, u64)>,
+}
+
 impl App {
-    pub(super) fn restore_workspace(&mut self, saved: &WorkspaceState, area: Rect) -> Option<(Workspace, usize)> {
+    pub(super) fn restore_workspace(
+        &mut self,
+        saved: &WorkspaceState,
+        area: Rect,
+        parents: &mut Parents,
+    ) -> Option<(Workspace, usize)> {
         let path = saved.path.canonicalize().unwrap_or_else(|_| saved.path.clone());
         if !path.is_dir() {
             return None;
@@ -30,7 +42,7 @@ impl App {
         let mut lost = 0;
         for (t, saved_tab) in saved.tabs.iter().enumerate().filter(|(_, t)| !t.panes.is_empty()) {
             let roles = |pane: usize| saved.run.as_ref().and_then(|run| run.role_at(t, pane));
-            match self.restore_tab(saved_tab, &path, area, roles, run_dir.as_deref()) {
+            match self.restore_tab(saved_tab, &path, area, roles, run_dir.as_deref(), parents) {
                 Ok(tab) => tabs.push((t, tab)),
                 Err(e) => {
                     log::error!("server", "could not restore a tab", workspace = path.display(), error = e);
@@ -39,7 +51,7 @@ impl App {
             }
         }
         if let Some(run) = &saved.run {
-            self.restore_run(id, run, &tabs, run_dir.as_deref());
+            self.restore_run(id, run, &mut tabs, run_dir.as_deref());
         }
         let tabs = tabs.into_iter().map(|(_, tab)| tab).collect();
         let mut workspace = saved.restore(id, path, tabs, &self.runs_dir);
@@ -70,6 +82,7 @@ impl App {
         area: Rect,
         roles: impl Fn(usize) -> Option<&'a Role>,
         run: Option<&Path>,
+        parents: &mut Parents,
     ) -> Result<Tab> {
         let mut panes = Vec::new();
         for (i, pane) in saved.panes.iter().enumerate() {
@@ -86,9 +99,26 @@ impl App {
             } else if self.resume(&mut term, pane.agent.as_ref(), role, run) {
                 term.agent.restore(pane.done, pane.pending);
             }
+            if let Some(old) = pane.id {
+                parents.ids.insert(old, term.id);
+            }
+            if let Some(parent) = pane.parent {
+                parents.wanted.push((term.id, pane.id, parent));
+            }
             panes.push(term);
         }
         Ok(saved.restore(self.take_id(), panes))
+    }
+
+    pub(super) fn adopt_saved(&mut self, parents: Parents) {
+        for (child, old, parent) in parents.wanted {
+            let found = parents.ids.get(&parent).copied().filter(|_| old.is_none_or(|old| parent < old));
+            let found = found.filter(|&new| new != child && self.projects.pane_by(new).is_some());
+            match (found, self.projects.pane_by_mut(child)) {
+                (Some(new), Some(term)) => term.parent = Some(new),
+                _ => log::debug!("server", "a saved parent was dropped", pane = child, parent = parent),
+            }
+        }
     }
 
     fn resume(&mut self, term: &mut Term, agent: Option<&AgentState>, role: Option<&Role>, run: Option<&Path>) -> bool {

@@ -18,6 +18,7 @@ mod flows;
 mod notifications;
 mod osc;
 mod resuming;
+mod tree;
 mod views;
 
 fn working_claude() -> (App, Receiver<AppEvent>, Vec<TempDir>, FakeClaude) {

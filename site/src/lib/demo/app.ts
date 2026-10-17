@@ -69,10 +69,12 @@ import {
   type Status,
   type Tab,
   type Target,
+  type TreeSpot,
   type Workspace,
   NOTIFY_AFTER,
   NOTIFY_CHOICES,
   activePane,
+  agentTree,
   attention,
   defaultConfig,
   markPane,
@@ -271,8 +273,9 @@ interface Focus {
   tree: boolean;
 }
 
-export interface AgentRow {
+export interface AgentRow extends TreeSpot {
   pane: number;
+  parent: number | null;
   status: Status;
   agent: string;
   project: string;
@@ -754,17 +757,18 @@ export class App {
     );
     const c = this.config;
     const focused = this.tab();
-    return order.flatMap((row) => {
+    const flat = order.flatMap((row) => {
       if (row.kind !== 'project') return [];
       const p = this.projects[row.p];
       return p.workspaces.flatMap((w) =>
         w.tabs.flatMap((t) =>
-          t.panes.flatMap((pane): AgentRow[] => {
+          t.panes.flatMap((pane) => {
             const status = paneStatus(pane);
             if (!status) return [];
             return [
               {
                 pane: pane.id,
+                parent: pane.parent ?? null,
                 status,
                 agent: pane.agent ?? '',
                 project: projectLabel(p),
@@ -777,6 +781,7 @@ export class App {
         ),
       );
     });
+    return agentTree(flat, (row) => row.pane, (row) => row.parent);
   }
 
   jumpToPane(id: number): void {

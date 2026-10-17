@@ -11,8 +11,8 @@
       "active": 2,
       "workspaces": [
         { "path": "__HOME__/code/web-shop", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/web-shop" }] }, { "panes": [{ "cwd": "__HOME__/code/web-shop" }] }] },
-        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode" }] }] },
-        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards" }] }] }
+        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-dark-mode", "id": 1 }] }] },
+        { "path": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/web-shop/feat-gift-cards", "id": 2, "parent": 1 }] }] }
       ]
     },
     {
@@ -21,7 +21,7 @@
       "active": 0,
       "workspaces": [
         { "path": "__HOME__/code/orders-api", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/orders-api" }] }] },
-        { "path": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination" }] }] }
+        { "path": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination", "worktree": true, "tabs": [{ "panes": [{ "cwd": "__HOME__/.cornercase/worktrees/orders-api/fix-pagination", "parent": 2 }] }] }
       ]
     },
     { "path": "__HOME__/code/blog", "group": 1, "workspaces": [{ "path": "__HOME__/code/blog", "tabs": [{ "panes": [{ "cwd": "__HOME__/code/blog" }] }] }] },

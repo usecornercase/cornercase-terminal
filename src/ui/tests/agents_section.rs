@@ -14,6 +14,9 @@ fn agent(status: Status, agent: &str, project: &str, workspace: Option<&str>, de
         workspace: workspace.map(String::from),
         details,
         active: false,
+        depth: 0,
+        last: true,
+        rails: Vec::new(),
     }
 }
 
@@ -237,4 +240,79 @@ fn short_terminals_do_not_panic() {
             render_sized(&shown(sidebar, entries()), W, height);
         }
     }
+}
+
+fn child(entry: AgentEntry, depth: usize, last: bool, rails: &[bool]) -> AgentEntry {
+    AgentEntry { depth, last, rails: rails.to_vec(), ..entry }
+}
+
+fn family() -> Vec<AgentEntry> {
+    let [parent, codex, done] = <[AgentEntry; 3]>::try_from(entries()).expect("three entries");
+    vec![
+        parent,
+        child(codex, 1, false, &[]),
+        child(agent(Status::Idle, "gemini", "website", None, Details::default()), 2, true, &[true]),
+        child(done, 1, true, &[]),
+        agent(Status::Working, "claude", "blog", None, details("Sonnet 5", Some(8))),
+    ]
+}
+
+fn deep() -> Vec<AgentEntry> {
+    let leaf = |depth, rails: &[bool]| {
+        child(agent(Status::Idle, "claude", "api", None, Details::default()), depth, false, rails)
+    };
+    vec![
+        agent(Status::Working, "claude", "api", None, Details::default()),
+        leaf(1, &[]),
+        leaf(2, &[true]),
+        leaf(3, &[true, true]),
+        child(agent(Status::Done, "codex", "api", None, Details::default()), 3, true, &[true, true]),
+        child(agent(Status::Idle, "codex", "api", None, Details::default()), 2, true, &[true]),
+        child(agent(Status::Idle, "gemini", "api", None, Details::default()), 1, true, &[]),
+    ]
+}
+
+const ROOMY: u16 = 50;
+
+fn roomy(projects: u16, entries: Vec<AgentEntry>) -> View<'static> {
+    let widths = Widths { projects, agents: Some(ROOMY / 2), ..Widths::default() };
+    View { widths, ..shown(Sidebar::ProjectsOnTop, entries) }
+}
+
+#[test]
+fn renders_children_under_their_parent() {
+    let v = roomy(Widths::default().projects, family());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_a_level_past_the_limit_at_the_limit() {
+    let v = roomy(Widths::default().projects, deep());
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_children_in_a_narrow_column() {
+    let flat = family().into_iter().map(|e| AgentEntry { depth: e.depth.min(1), rails: Vec::new(), ..e }).collect();
+    let v = roomy(MIN_COLUMN_WIDTH + 2, flat);
+    insta::assert_snapshot!(render_sized(&v, W, ROOMY).backend());
+}
+
+#[test]
+fn renders_children_in_the_compact_agents_menu() {
+    let v = View { nav: Some(Nav::Agents), ..shown(Sidebar::ProjectsOnTop, family()) };
+    insta::assert_snapshot!(render_sized(&v, SMALL.width, SMALL.height).backend());
+}
+
+#[test]
+fn the_guides_take_the_line_colour() {
+    let a = with_agents(Sidebar::ProjectsOnTop);
+    let row = agent_row(a.agents_list, 1, 5, 0, 1);
+    let t = render_sized(&shown(Sidebar::ProjectsOnTop, family()), W, TALL.height);
+    let v = shown(Sidebar::ProjectsOnTop, Vec::new());
+    let cells = [(row.x + 2, row.y), (row.x + 2, row.y + 1)].map(|(x, y)| {
+        let cell = &t.backend().buffer()[(x, y)];
+        (cell.symbol().to_string(), cell.fg)
+    });
+    assert_eq!(cells, [("├".to_string(), v.line()), ("│".to_string(), v.line())]);
 }

@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.12.132
+## 0.12.133
 
 - **A program that draws cornercase counts as looking at what it shows.** The tab a view shows (`cornercase view`, while it is active and has a size) now counts as seen, like the tab on screen in the window: an agent that finishes there gets no `✓`, one already marked loses it, and one that needs you there sends no toast or desktop notification.
   - While that program's window is hidden or minimised, `cornercase view-set --view ID --hidden` says so and agents there notify again; `--visible` says it is back, and `cornercase view --hidden` opens a view hidden.
@@ -10,6 +10,11 @@ Every pull request that changes the app adds a section here for its new version.
 - **Other programs get cornercase's notices about agents.** `cornercase events --notices` also prints a line each time cornercase tells you an agent needs you, failed or finished, with the same rules as the window's toasts (a second's wait, once per change, never for a tab someone is looking at), and with `--json` its token, agent, status, place, message and panes.
   - `cornercase go TOKEN` does what a click on that notification does, in the window, or with `--view ID` in that view.
   - See Scripts and agents → Follow events.
+
+## 0.12.132
+
+- **The agents section shows who started whom.** An agent started by another agent (`cornercase start`, `new-tab` or `split` from its pane) is drawn right under it, indented, with lines joining them, and a flow's team hangs under its orchestrator, so you can see which agent works for which. Rows still move only when an agent starts or closes. A child whose parent closes becomes a root again. The tree comes back after a restart or an update.
+- **Scripts see it too.** Every pane in `status --json`, `status --follow` and `view` has `parent`, the pane that started it (`null` when none); `status --panes` has it as its last column and the text tree shows `(parent N)`. A pane's `opened` event in `cornercase events` names its parent.
 
 ## 0.12.131
 
