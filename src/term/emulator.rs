@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell as Counter, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -85,7 +85,7 @@ pub(crate) struct Emulator {
     keys: Encoder<'static>,
     anchor: Option<TrackedGridRef>,
     copied: Rc<RefCell<Vec<String>>>,
-    rung: Rc<std::cell::Cell<u32>>,
+    rung: Rc<Counter<u32>>,
     status: status::Status,
     reply: Rc<RefCell<ReplyFn>>,
 }
@@ -104,7 +104,7 @@ impl Emulator {
             }
             Ok(())
         })?;
-        let rung = Rc::new(std::cell::Cell::new(0_u32));
+        let rung = Rc::new(Counter::new(0_u32));
         let bells = Rc::clone(&rung);
         vt.on_bell(move |_| bells.set(bells.get().saturating_add(1)))?;
         apply_theme(&mut vt, theme)?;
