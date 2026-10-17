@@ -350,7 +350,10 @@ impl Changes {
     pub(crate) fn apply(&self, config: &Config) -> Config {
         let Ok(Value::Object(mut keys)) = serde_json::to_value(config) else { return config.clone() };
         keys.extend(self.0.iter().cloned());
-        serde_json::from_value(Value::Object(keys)).unwrap_or_else(|_| config.clone())
+        serde_json::from_value(Value::Object(keys)).unwrap_or_else(|e| {
+            crate::log::warning!("config", "a change could not be applied", why = e.to_string());
+            config.clone()
+        })
     }
 }
 
