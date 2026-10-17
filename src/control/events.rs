@@ -50,13 +50,31 @@ impl Kind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "lowercase")]
 pub(crate) enum What {
-    Opened { kind: Kind },
-    Closed { kind: Kind },
-    Status { agent: String, from: Option<String>, to: Option<String> },
-    Exited { program: String },
-    Dropped { count: u64 },
-    Clipboard { text: String },
-    Bell { count: u64 },
+    Opened {
+        kind: Kind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent: Option<u64>,
+    },
+    Closed {
+        kind: Kind,
+    },
+    Status {
+        agent: String,
+        from: Option<String>,
+        to: Option<String>,
+    },
+    Exited {
+        program: String,
+    },
+    Dropped {
+        count: u64,
+    },
+    Clipboard {
+        text: String,
+    },
+    Bell {
+        count: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +89,7 @@ pub(crate) struct Event {
 impl Event {
     pub(crate) fn kind(&self) -> Option<Kind> {
         match &self.what {
-            What::Opened { kind } | What::Closed { kind } => Some(*kind),
+            What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
             What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
             What::Dropped { .. } => None,
         }

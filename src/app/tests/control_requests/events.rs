@@ -20,7 +20,10 @@ fn tabs_and_panes_are_told_as_they_open_and_close_with_their_ids() {
     let tab = wire::Ids { pane: None, ..ids };
     assert_eq!(
         opened,
-        [(wire::What::Opened { kind: wire::Kind::Tab }, tab), (wire::What::Opened { kind: wire::Kind::Pane }, ids)]
+        [
+            (wire::What::Opened { kind: wire::Kind::Tab, parent: None }, tab),
+            (wire::What::Opened { kind: wire::Kind::Pane, parent: None }, ids),
+        ]
     );
     assert_eq!(
         told(&gone),

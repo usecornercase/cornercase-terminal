@@ -120,6 +120,23 @@ mod start {
     }
 
     #[test]
+    fn the_event_of_its_pane_names_the_pane_it_was_started_from() {
+        let (mut app, rx, _dirs) = agent_in_a_repository();
+        let caller = first(&app);
+        follow(&mut app, &[]);
+
+        ask(&mut app, Some(caller), start(None));
+        let made = made_pane(answered(&mut app, &rx, "the agent starts"));
+
+        let opened: Vec<_> = told(&streamed(&mut app))
+            .into_iter()
+            .filter(|(what, _)| matches!(what, wire::What::Opened { kind: wire::Kind::Pane, .. }))
+            .collect();
+        let what = wire::What::Opened { kind: wire::Kind::Pane, parent: Some(caller) };
+        assert_eq!(opened.iter().map(|(what, ids)| (what, ids.pane)).collect::<Vec<_>>(), [(&what, Some(made))]);
+    }
+
+    #[test]
     fn an_agent_started_from_another_server_has_no_parent() {
         let (mut app, _rx, _dirs) = agent_in_a_repository();
         let caller = first(&app);

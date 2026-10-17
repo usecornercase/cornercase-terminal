@@ -61,6 +61,7 @@ struct Place {
     parent: Option<u64>,
     phase: &'static str,
     ids: Ids,
+    opener: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -219,7 +220,9 @@ impl Change {
 
     fn event(&self, time: &str) -> Option<control::Event> {
         let (place, what) = match self {
-            Self::Opened { place, .. } => (place, What::Opened { kind: place.key.kind.followed()? }),
+            Self::Opened { place, .. } => {
+                (place, What::Opened { kind: place.key.kind.followed()?, parent: place.opener })
+            }
             Self::Closed { place, .. } => (place, What::Closed { kind: place.key.kind.followed()? }),
             Self::Status { place, agent, from, to } => {
                 let (from, to) = (from.map(str::to_string), to.map(str::to_string));
@@ -288,7 +291,7 @@ impl App {
 
     fn traced_places(&self) -> Vec<(Place, Option<PaneNow<'_>>)> {
         let open = "open";
-        let place = |kind, id, parent, phase, ids| Place { key: Key { kind, id }, parent, phase, ids };
+        let place = |kind, id, parent, phase, ids| Place { key: Key { kind, id }, parent, phase, ids, opener: None };
         let mut places: Vec<(Place, Option<PaneNow>)> =
             self.groups.iter().map(|g| (place(Kind::Group, g.id, None, open, Ids::default()), None)).collect();
         for project in &self.projects {
@@ -304,7 +307,11 @@ impl App {
                     places.push((place(Kind::Tab, tab.id, Some(workspace.id), open, ids), None));
                     places.extend(tab.panes.iter().map(|term| {
                         let ids = Ids { pane: Some(term.id), ..ids };
-                        (place(Kind::Pane, term.id, Some(tab.id), open, ids), Some(PaneNow::of(term)))
+                        let opener = self.live_parent(term);
+                        (
+                            Place { opener, ..place(Kind::Pane, term.id, Some(tab.id), open, ids) },
+                            Some(PaneNow::of(term)),
+                        )
                     }));
                 }
             }

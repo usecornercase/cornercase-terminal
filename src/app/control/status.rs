@@ -109,7 +109,9 @@ impl App {
                 }
                 for tab in &workspace.tabs {
                     (tab.id, tab.status().map(Status::name)).hash(&mut hash);
-                    tab.panes.iter().for_each(|term| Self::pane_refreshed(term, self.resume_holds(term.id), &mut hash));
+                    for term in &tab.panes {
+                        Self::pane_refreshed(term, self.resume_holds(term.id), self.live_parent(term), &mut hash);
+                    }
                 }
             }
         }
@@ -119,12 +121,12 @@ impl App {
         hash.finish()
     }
 
-    fn pane_refreshed(term: &Term, resuming: bool, hash: &mut DefaultHasher) {
+    fn pane_refreshed(term: &Term, resuming: bool, parent: Option<u64>, hash: &mut DefaultHasher) {
         let pid = term.foreground_pid();
         (term.id, pid, pid.and_then(process::name), pid.and_then(process::cwd), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
-        (term.dialog(), term.survey(), term.resume.is_some(), resuming).hash(hash);
+        (term.dialog(), term.survey(), term.resume.is_some(), resuming, parent).hash(hash);
         term.emulator.title().hash(hash);
     }
 
@@ -147,6 +149,7 @@ impl App {
             resumes: self.config.resume_agents && term.resume.is_some(),
             resuming: self.resume_holds(term.id),
             title: Some(term.emulator.title()).filter(|title| !title.is_empty()),
+            parent: self.live_parent(term),
         }
     }
 

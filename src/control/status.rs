@@ -101,6 +101,7 @@ impl Report {
                         path: pane.path.clone(),
                         survey: pane.survey,
                         resuming: pane.resuming,
+                        parent: pane.parent,
                     }));
                 }
             }
@@ -142,10 +143,11 @@ pub struct PaneRow {
     pub(crate) path: Option<PathBuf>,
     pub(crate) survey: bool,
     pub(crate) resuming: bool,
+    pub(crate) parent: Option<u64>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 23] = [
+    pub const COLUMNS: [&str; 24] = [
         "pane",
         "tab",
         "workspace",
@@ -169,6 +171,7 @@ impl PaneRow {
         "path",
         "survey",
         "resuming",
+        "parent",
     ];
 }
 
@@ -272,4 +275,5 @@ pub struct PaneInfo {
     pub(crate) resumes: bool,
     pub(crate) resuming: bool,
     pub(crate) title: Option<String>,
+    pub(crate) parent: Option<u64>,
 }

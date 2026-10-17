@@ -514,11 +514,22 @@ mod output {
     }
 
     #[test]
+    fn a_pane_started_from_another_names_its_parent() {
+        let mut report = report();
+        report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
+
+        let text = render(&report, Some(Path::new("/home/ana")));
+
+        assert!(text.contains("pane 5  claude  working  Opus 5.5 · 23%  ~/shop  (parent 4, you)\n"), "{text}");
+    }
+
+    #[test]
     fn panes_are_one_row_each_under_a_header_with_a_dash_for_what_is_missing() {
         let mut report = report();
         report.projects[0].workspaces[0].tabs[0].panes[0].at_prompt = Some(true);
         report.projects[0].workspaces[0].tabs[0].panes[1].survey = true;
         report.projects[0].workspaces[0].tabs[0].panes[1].resuming = true;
+        report.projects[0].workspaces[0].tabs[0].panes[1].parent = Some(4);
 
         let text = pane_table(&report.panes()).expect("a table");
 
@@ -526,11 +537,11 @@ mod output {
             text,
             "pane\ttab\tworkspace\tproject\tprogram\tagent\tstatus\tbackground_shell\tdialog\tat_prompt\tmodel\t\
                  context\tcaller\tshown\tactive\ttab_name\tworkspace_name\tbranch\tworktree\tproject_name\tpath\t\
-                 survey\tresuming\n\
+                 survey\tresuming\tparent\n\
                  4\t3\t2\t1\tzsh\t-\t-\tfalse\tfalse\ttrue\t-\t-\tfalse\ttrue\ttrue\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\n\
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\tfalse\tfalse\t-\n\
                  5\t3\t2\t1\tclaude\tclaude\tworking\tfalse\tfalse\t-\tOpus 5.5\t23\ttrue\tfalse\tfalse\t\
-                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\n"
+                 claude\tfix/login\tfix/login\ttrue\tshop\t/home/ana/shop\ttrue\ttrue\t4\n"
         );
     }
 
@@ -587,9 +598,14 @@ mod output {
     const TAB: Ids = Ids { pane: None, ..PANE };
 
     #[rstest]
-    #[case::a_pane_opened(What::Opened { kind: control::Kind::Pane }, PANE, "pane 4  opened in tab 3")]
+    #[case::a_pane_opened(What::Opened { kind: control::Kind::Pane, parent: None }, PANE, "pane 4  opened in tab 3")]
+    #[case::a_pane_opened_from_another(
+        What::Opened { kind: control::Kind::Pane, parent: Some(2) },
+        PANE,
+        "pane 4  opened in tab 3 from pane 2"
+    )]
     #[case::a_project_opened(
-        What::Opened { kind: control::Kind::Project },
+        What::Opened { kind: control::Kind::Project, parent: None },
         Ids { project: Some(1), ..Ids::default() },
         "project 1  opened"
     )]
