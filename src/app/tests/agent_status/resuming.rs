@@ -195,7 +195,14 @@ mod input_while_resuming {
 
     fn send(app: &mut App, pane: u64, force: bool) -> Response {
         let send = SendText { pane: Some(pane), text: Some("hello".into()), force, ..SendText::default() };
-        let request = Request { caller: None, server: None, contract: None, boot: None, command: Command::Send(send) };
+        let request = Request {
+            caller: None,
+            server: None,
+            contract: None,
+            boot: None,
+            view: None,
+            command: Command::Send(send),
+        };
         let text = serde_json::to_string(&request).expect("json");
         app.request(1, &text, Some(AREA), Instant::now());
         let (_, answer) = app.take_answers().pop().expect("an answer");

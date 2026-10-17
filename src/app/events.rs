@@ -177,14 +177,20 @@ impl App {
         }
         let own = self.views.changed();
         let snapshots = &mut self.events.snapshots;
+        let paced = snapshots.waits(now);
         if !snapshots.changed && !own {
             return;
         }
-        if snapshots.waits(now) && !own {
+        if paced && !own {
             snapshots.due = true;
             return;
         }
         let report = self.report(None);
+        if paced {
+            self.events.snapshots.due = self.events.snapshots.changed;
+            self.publish_views(&report);
+            return;
+        }
         if watching {
             let Events { snapshots, out, .. } = &mut self.events;
             snapshots.offer(report.clone(), now, out);

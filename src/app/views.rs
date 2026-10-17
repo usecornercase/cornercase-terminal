@@ -188,17 +188,22 @@ impl App {
         let size = control::view::size(set.cols, set.rows).map_err(|message| Refusal::new(Code::Malformed, message))?;
         let Some(view) = self.views.get_mut(id) else { return Err(none("view", id)) };
         let was = view.eligible().is_some();
-        let (before_size, before_active) = (view.size, view.active);
-        view.size = size.or(view.size);
-        view.active = set.active.unwrap_or(view.active);
-        if (view.size, view.active) != (before_size, before_active) {
+        let (new_size, new_active) = (size.or(view.size), set.active.unwrap_or(view.active));
+        let eligible = view.shown.tab.is_some() && new_active && new_size.is_some();
+        if set.claim && !eligible {
+            let why = if !new_active {
+                "it is inactive"
+            } else if new_size.is_none() {
+                "it has no size"
+            } else {
+                "it shows no tab"
+            };
+            return Err(Refusal::from(format!("view {id} cannot size a tab now: {why}")));
+        }
+        if (new_size, new_active) != (view.size, view.active) {
             view.projection += 1;
         }
-        let eligible = view.eligible().is_some();
-        if set.claim && !eligible {
-            let message = format!("view {id} cannot size a tab now: {}", view.why_not());
-            return Err(Refusal::from(message));
-        }
+        (view.size, view.active) = (new_size, new_active);
         if eligible && (!was || set.claim) {
             self.views.claim(id);
         }
@@ -293,6 +298,14 @@ impl App {
         self.size_tabs(area);
     }
 
+    pub(crate) fn window_gone(&mut self) {
+        if self.views.window.take().is_some() {
+            self.views.changed = true;
+            let area = self.views.area;
+            self.size_tabs(area);
+        }
+    }
+
     pub(crate) fn window_used(&mut self) {
         if self.views.list.is_empty() {
             return;
@@ -354,6 +367,7 @@ impl App {
     }
 
     pub(super) fn publish_views(&mut self, report: &Report) {
+        self.views.changed = false;
         for at in 0..self.views.list.len() {
             let view = &self.views.list[at];
             let info = self.view_info(view);
@@ -370,6 +384,5 @@ impl App {
                 self.events.push(client, Streamed::Snapshot(text));
             }
         }
-        self.views.changed = false;
     }
 }

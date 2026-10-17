@@ -58,7 +58,8 @@
                   "context": 23,
                   "active": true,
                   "caller": false,
-                  "resumes": false
+                  "resumes": false,
+                  "resuming": false
                 },
                 {
                   "id": 5,
@@ -74,7 +75,8 @@
                   "context": 23,
                   "active": false,
                   "caller": false,
-                  "resumes": false
+                  "resumes": false,
+                  "resuming": false
                 }
               ],
               "custom_name": "agents",

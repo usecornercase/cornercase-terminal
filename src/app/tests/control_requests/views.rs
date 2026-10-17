@@ -428,3 +428,68 @@ fn a_view_is_one_more_id_and_its_lines_go_to_its_connection() {
     assert_eq!(last["revision"].as_u64(), Some(1 + before + got.len() as u64));
     assert_eq!((last["view"]["cols"].as_u64(), last["view"]["projection"].as_u64()), (Some(70), Some(2)));
 }
+
+fn row_text(buffer: &Buffer, y: u16, from: u16, to: u16) -> String {
+    (from..to).map(|x| buffer[(x, y)].symbol().to_string()).collect()
+}
+
+#[rstest]
+#[case::smaller_than_the_window(20, 5)]
+#[case::larger_than_the_window(150, 40)]
+fn the_window_draws_a_tab_sized_by_a_view_within_its_own_pane(#[case] cols: u16, #[case] rows: u16) {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let tab = app.projects[0].workspaces[0].tabs[0].id;
+    let pane = app.projects[0].workspaces[0].tabs[0].panes[0].id;
+    open(&mut app, A, Some((cols, rows)), Some(tab));
+    app.resize(AREA);
+    let text: String = (0..cols * 2).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+    app.handle_event(AppEvent::Output(pane, format!("\x1b[H{text}").into_bytes()), AREA).expect("output");
+
+    let (buffer, _) = render_frame(&mut app, AREA, &Sight::default());
+
+    let area = app.layout(AREA).pane;
+    let shown = cols.min(area.width);
+    let first = row_text(&buffer, area.y, area.x, area.x + shown);
+    assert_eq!(first, text.chars().take(usize::from(shown)).collect::<String>());
+    if cols < area.width {
+        assert_eq!(buffer[(area.x + cols, area.y)].symbol(), " ");
+    }
+    assert_eq!(size_of(&app, tab), (cols, rows));
+}
+
+#[test]
+fn a_rejected_claim_changes_nothing_and_the_window_leaving_hands_the_tab_back() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let tab = app.projects[0].workspaces[0].tabs[0].id;
+    let view = open(&mut app, A, None, Some(tab));
+
+    let refused = set(&mut app, view.id, A, SetView { claim: true, active: Some(false), ..SetView::default() });
+    let after = info(&mut app, view.id);
+    assert_eq!(code(&refused), "failed");
+    assert_eq!((after.active, after.projection), (true, 1));
+
+    set(&mut app, view.id, A, SetView { cols: Some(30), rows: Some(8), ..SetView::default() });
+    app.window_used();
+    assert!(!info(&mut app, view.id).controls);
+    app.window_gone();
+    assert!(info(&mut app, view.id).controls);
+    assert_eq!(size_of(&app, tab), (30, 8));
+}
+
+#[test]
+fn a_view_change_reaches_the_view_at_once_but_a_watcher_keeps_its_pacing() {
+    let (mut app, _rx, _dirs) = app_with(1);
+    let tab = app.projects[0].workspaces[0].tabs[0].id;
+    let view = open(&mut app, A, Some((60, 12)), Some(tab));
+    ok(call(&mut app, 77, None, Command::Watch(wire::Watch::default()), false));
+    app.events.snapshots.every = Duration::from_secs(60);
+    app.trace();
+    app.take_events();
+
+    set(&mut app, view.id, A, SetView { cols: Some(70), rows: Some(14), ..SetView::default() });
+    app.trace();
+
+    let got = app.take_events();
+    assert!(got.iter().any(|(client, _)| *client == A), "{got:?}");
+    assert!(got.iter().all(|(client, _)| *client != 77), "{got:?}");
+}
