@@ -11,8 +11,8 @@ mod flow;
 mod search;
 pub(crate) mod start_server;
 pub(crate) mod surface;
-pub(crate) mod view;
 pub(crate) mod terminal;
+pub(crate) mod view;
 mod watch;
 
 pub(crate) use contract::Contract;
@@ -23,8 +23,8 @@ pub(crate) use flow::{
 pub(crate) use search::{Hit, Matches, Search};
 pub(crate) use start_server::StartServer;
 pub(crate) use surface::Surface;
-pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use terminal::{Input, Ratio, Resize, Scroll, Selection};
+pub(crate) use view::{OpenView, SetView, ViewInfo};
 pub(crate) use watch::{Layout, Snapshot, Watch};
 
 pub const PANE_ENV: &str = "CORNERCASE_PANE";
@@ -157,7 +157,6 @@ impl Command {
         }]
     }
 
-    #[expect(clippy::too_many_lines, reason = "one arm per command")]
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
         let mut fields = Fields::default();
         match self {

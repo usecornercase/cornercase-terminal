@@ -108,7 +108,15 @@ impl App {
         let id = self.surfaces.issued;
         let shown = projection.map(|p| (view.unwrap_or_default(), p));
         let frame = self.surface_frame(id, tab, area, 1, shown, content.clone());
-        log::info!("control", "surface", client = client, surface = id, tab = tab, cols = area.width, rows = area.height);
+        log::info!(
+            "control",
+            "surface",
+            client = client,
+            surface = id,
+            tab = tab,
+            cols = area.width,
+            rows = area.height
+        );
         self.surfaces.subscriptions.push(Subscription {
             id,
             client,

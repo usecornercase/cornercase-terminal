@@ -134,7 +134,6 @@ pub(super) fn quietly(written: io::Result<()>) -> Result<bool> {
     }
 }
 
-#[expect(clippy::too_many_lines, reason = "one arm per command")]
 fn run_control(command: Control) -> Result<bool> {
     if let Some(view) = command.view() {
         client::use_view(view)?;
